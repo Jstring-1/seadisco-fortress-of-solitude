@@ -96,25 +96,28 @@
     button:hover { background: #ffb833; }
     button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 
-    .parsed-params {
+    .filters {
       display: flex;
-      gap: 0.4rem;
+      gap: 0.5rem;
       flex-wrap: wrap;
-      margin-bottom: 1.25rem;
+      margin-bottom: 1.5rem;
     }
 
-    .param-tag {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      font-size: 0.72rem;
+    .filters input[type="text"] {
+      flex: 1;
+      min-width: 120px;
+      font-size: 0.85rem;
+      padding: 0.45rem 0.75rem;
+    }
+
+    .filters label {
+      font-size: 0.75rem;
       color: var(--muted);
-      padding: 0.2rem 0.55rem;
-    }
-
-    .param-tag span {
-      color: var(--accent);
-      font-weight: 600;
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      flex: 1;
+      min-width: 100px;
     }
 
     /* ── Status / error ── */
@@ -277,11 +280,24 @@
 
 <main>
   <div class="search-row">
-    <input type="text" id="query" placeholder="Ask anything — e.g. "history of ska music" or "Miles Davis albums"" autocomplete="off" />
+    <input type="text" id="query" placeholder="Search artists, releases, labels…" autocomplete="off" />
+    <select id="type">
+      <option value="">All types</option>
+      <option value="release">Release</option>
+      <option value="master">Master</option>
+      <option value="artist">Artist</option>
+      <option value="label">Label</option>
+    </select>
     <button id="search-btn" onclick="doSearch(1)">Search</button>
   </div>
 
-  <div class="parsed-params" id="parsed-params" style="display:none"></div>
+  <div class="filters">
+    <label>Artist <input type="text" id="f-artist" placeholder="e.g. Miles Davis" /></label>
+    <label>Release <input type="text" id="f-release" placeholder="e.g. Kind of Blue" /></label>
+    <label>Year <input type="text" id="f-year" placeholder="e.g. 1973" /></label>
+    <label>Label <input type="text" id="f-label" placeholder="e.g. Blue Note" /></label>
+    <label>Genre <input type="text" id="f-genre" placeholder="e.g. Jazz" /></label>
+  </div>
 
   <div id="blurb"></div>
   <div id="status"></div>
@@ -298,9 +314,8 @@
   const API = "https://discogs-mcp-server-production-c794.up.railway.app";
 
   // ── State ─────────────────────────────────────────────────────────────────
-  let currentPage  = 1;
-  let totalPages   = 1;
-  let parsedParams = {};   // cached from last parse so pagination reuses them
+  let currentPage = 1;
+  let totalPages  = 1;
 
   // ── Search ────────────────────────────────────────────────────────────────
   async function doSearch(page = 1) {
@@ -311,36 +326,24 @@
     document.getElementById("search-btn").disabled = true;
     document.getElementById("pagination").style.display = "none";
     document.getElementById("blurb").style.display = "none";
-    document.getElementById("parsed-params").style.display = "none";
-    setStatus(page === 1 ? "Thinking…" : "Loading…");
+    setStatus("Searching…");
     document.getElementById("results").innerHTML = "";
 
-    // On page 1, ask the AI to parse the query; on subsequent pages reuse
-    if (page === 1) {
-      try {
-        const parseRes = await fetch(`${API}/parse`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ q }),
-        });
-        parsedParams = parseRes.ok ? await parseRes.json() : { q };
-      } catch {
-        parsedParams = { q };
-      }
-      renderParsedParams(parsedParams);
-    }
+    const params = new URLSearchParams({ q, page, per_page: 12 });
 
-    const searchQ = parsedParams.q || q;
-    const params  = new URLSearchParams({ q: searchQ, page, per_page: 12 });
+    const type    = document.getElementById("type").value;
+    const artist  = document.getElementById("f-artist").value.trim();
+    const release = document.getElementById("f-release").value.trim();
+    const year    = document.getElementById("f-year").value.trim();
+    const label   = document.getElementById("f-label").value.trim();
+    const genre   = document.getElementById("f-genre").value.trim();
 
-    if (parsedParams.type)          params.set("type",          parsedParams.type);
-    if (parsedParams.artist)        params.set("artist",        parsedParams.artist);
-    if (parsedParams.release_title) params.set("release_title", parsedParams.release_title);
-    if (parsedParams.year)          params.set("year",          parsedParams.year);
-    if (parsedParams.label)         params.set("label",         parsedParams.label);
-    if (parsedParams.genre)         params.set("genre",         parsedParams.genre);
-
-    setStatus("Searching…");
+    if (type)    params.set("type",          type);
+    if (artist)  params.set("artist",        artist);
+    if (release) params.set("release_title", release);
+    if (year)    params.set("year",          year);
+    if (label)   params.set("label",         label);
+    if (genre)   params.set("genre",         genre);
 
     try {
       const [res, blurbRes] = await Promise.all([
@@ -425,20 +428,6 @@
     document.getElementById("page-info").textContent = `${currentPage} / ${totalPages}`;
     document.getElementById("prev-btn").disabled = currentPage <= 1;
     document.getElementById("next-btn").disabled = currentPage >= totalPages;
-  }
-
-  // ── Parsed param tags ─────────────────────────────────────────────────────
-  function renderParsedParams(p) {
-    const el = document.getElementById("parsed-params");
-    const labels = { q: "query", type: "type", artist: "artist", release_title: "release", year: "year", label: "label", genre: "genre" };
-    const tags = Object.entries(labels)
-      .filter(([key]) => p[key])
-      .map(([key, label]) => `<div class="param-tag"><span>${label}:</span> ${escHtml(String(p[key]))}</div>`)
-      .join("");
-    if (tags) {
-      el.innerHTML = tags;
-      el.style.display = "flex";
-    }
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
