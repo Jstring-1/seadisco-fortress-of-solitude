@@ -12,6 +12,7 @@
     "start:web": "node dist/search-api.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.78.0",
     "@modelcontextprotocol/sdk": "^1.10.1",
     "express": "^4.21.2"
   },
