@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import { DiscogsClient } from "./discogs-client.js";
+import express from "express";
 
 const token = process.env.DISCOGS_TOKEN;
 if (!token) {
@@ -235,7 +236,6 @@ server.tool(
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 
-import express from "express";
 const app = express();
 app.use(express.json());
 const transport = new StreamableHTTPServerTransport({ path: "/mcp" });
