@@ -1,6 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { z } from "zod";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";import { z } from "zod";
 import { DiscogsClient } from "./discogs-client.js";
 
 const token = process.env.DISCOGS_TOKEN;
@@ -235,5 +234,12 @@ server.tool(
 
 // ── Start ─────────────────────────────────────────────────────────────────────
 
-const transport = new StdioServerTransport();
+import express from "express";
+const app = express();
+app.use(express.json());
+const transport = new StreamableHTTPServerTransport({ path: "/mcp" });
+app.post("/mcp", (req, res) => transport.handleRequest(req, res));
+app.get("/mcp", (req, res) => transport.handleRequest(req, res));
 await server.connect(transport);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`MCP server listening on port ${PORT}`));
