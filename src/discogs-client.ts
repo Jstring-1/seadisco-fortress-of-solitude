@@ -34,20 +34,20 @@ export class DiscogsClient {
   async search(query: string, options: {
     type?: "release" | "master" | "artist" | "label";
     artist?: string;
+    releaseTitle?: string;
     label?: string;
     year?: string;
     genre?: string;
-    style?: string;
     page?: number;
     perPage?: number;
   } = {}) {
     const params: Record<string, string> = { q: query };
     if (options.type) params.type = options.type;
     if (options.artist) params.artist = options.artist;
+    if (options.releaseTitle) params.release_title = options.releaseTitle;
     if (options.label) params.label = options.label;
     if (options.year) params.year = options.year;
     if (options.genre) params.genre = options.genre;
-    if (options.style) params.style = options.style;
     params.page = String(options.page ?? 1);
     params.per_page = String(options.perPage ?? 10);
     return this.get("/database/search", params);

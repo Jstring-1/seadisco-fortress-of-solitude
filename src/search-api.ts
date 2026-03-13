@@ -31,10 +31,10 @@ app.get("/search", async (req, res) => {
     const results = await discogs.search(q, {
       type: req.query.type as "release" | "master" | "artist" | "label" | undefined,
       artist: req.query.artist as string | undefined,
+      releaseTitle: req.query.release_title as string | undefined,
       label: req.query.label as string | undefined,
       year: req.query.year as string | undefined,
       genre: req.query.genre as string | undefined,
-      style: req.query.style as string | undefined,
       page: req.query.page ? parseInt(req.query.page as string) : 1,
       perPage: req.query.per_page ? parseInt(req.query.per_page as string) : 12,
     });

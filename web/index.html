@@ -28,21 +28,17 @@
     header {
       padding: 2rem 1.5rem 1rem;
       border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: baseline;
-      gap: 0.75rem;
+    }
+
+    header .inner {
+      max-width: 900px;
+      margin: 0 auto;
     }
 
     header h1 {
       font-size: 1.4rem;
       font-weight: 600;
       letter-spacing: -0.02em;
-    }
-
-    header span {
-      color: var(--accent);
-      font-size: 0.85rem;
-      font-weight: 500;
     }
 
     main {
@@ -258,8 +254,9 @@
 <body>
 
 <header>
-  <h1>Discogs Search</h1>
-  <span>sideman.pro</span>
+  <div class="inner">
+    <h1>Discogs Search</h1>
+  </div>
 </header>
 
 <main>
@@ -277,10 +274,10 @@
 
   <div class="filters">
     <label>Artist <input type="text" id="f-artist" placeholder="e.g. Miles Davis" /></label>
+    <label>Release <input type="text" id="f-release" placeholder="e.g. Kind of Blue" /></label>
     <label>Year <input type="text" id="f-year" placeholder="e.g. 1973" /></label>
-    <label>Genre <input type="text" id="f-genre" placeholder="e.g. Jazz" /></label>
-    <label>Style <input type="text" id="f-style" placeholder="e.g. Hard Bop" /></label>
     <label>Label <input type="text" id="f-label" placeholder="e.g. Blue Note" /></label>
+    <label>Genre <input type="text" id="f-genre" placeholder="e.g. Jazz" /></label>
   </div>
 
   <div id="blurb"></div>
@@ -315,19 +312,19 @@
 
     const params = new URLSearchParams({ q, page, per_page: 12 });
 
-    const type   = document.getElementById("type").value;
-    const artist = document.getElementById("f-artist").value.trim();
-    const year   = document.getElementById("f-year").value.trim();
-    const genre  = document.getElementById("f-genre").value.trim();
-    const style  = document.getElementById("f-style").value.trim();
-    const label  = document.getElementById("f-label").value.trim();
+    const type    = document.getElementById("type").value;
+    const artist  = document.getElementById("f-artist").value.trim();
+    const release = document.getElementById("f-release").value.trim();
+    const year    = document.getElementById("f-year").value.trim();
+    const label   = document.getElementById("f-label").value.trim();
+    const genre   = document.getElementById("f-genre").value.trim();
 
-    if (type)   params.set("type",   type);
-    if (artist) params.set("artist", artist);
-    if (year)   params.set("year",   year);
-    if (genre)  params.set("genre",  genre);
-    if (style)  params.set("style",  style);
-    if (label)  params.set("label",  label);
+    if (type)    params.set("type",          type);
+    if (artist)  params.set("artist",        artist);
+    if (release) params.set("release_title", release);
+    if (year)    params.set("year",          year);
+    if (label)   params.set("label",         label);
+    if (genre)   params.set("genre",         genre);
 
     try {
       const [res, blurbRes] = await Promise.all([
