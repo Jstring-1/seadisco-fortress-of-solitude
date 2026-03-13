@@ -238,7 +238,7 @@ server.tool(
 
 const app = express();
 app.use(express.json());
-const transport = new StreamableHTTPServerTransport({ path: "/mcp" });
+const transport = new StreamableHTTPServerTransport({});
 app.post("/mcp", (req, res) => transport.handleRequest(req, res));
 app.get("/mcp", (req, res) => transport.handleRequest(req, res));
 await server.connect(transport);
