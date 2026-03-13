@@ -146,7 +146,7 @@
     /* ── Results grid ── */
     #results {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
       gap: 1rem;
     }
 
@@ -187,19 +187,29 @@
     }
 
     .card-body {
-      padding: 0.65rem 0.75rem 0.8rem;
+      padding: 0.75rem 0.85rem 0.9rem;
       flex: 1;
       display: flex;
       flex-direction: column;
-      gap: 0.2rem;
+      gap: 0.25rem;
+    }
+
+    .card-artist {
+      font-size: 0.75rem;
+      color: var(--accent);
+      font-weight: 500;
+      display: -webkit-box;
+      -webkit-line-clamp: 1;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
     }
 
     .card-title {
-      font-size: 0.85rem;
+      font-size: 0.875rem;
       font-weight: 600;
-      line-height: 1.3;
+      line-height: 1.35;
       display: -webkit-box;
-      -webkit-line-clamp: 2;
+      -webkit-line-clamp: 3;
       -webkit-box-orient: vertical;
       overflow: hidden;
     }
@@ -213,11 +223,20 @@
       overflow: hidden;
     }
 
+    .card-format {
+      font-size: 0.72rem;
+      color: var(--muted);
+      display: -webkit-box;
+      -webkit-line-clamp: 1;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
     .card-meta {
       margin-top: auto;
-      padding-top: 0.4rem;
+      padding-top: 0.5rem;
       font-size: 0.7rem;
-      color: var(--accent);
+      color: #666;
       text-transform: uppercase;
       letter-spacing: 0.04em;
     }
@@ -363,11 +382,25 @@
   function renderResults(items) {
     const grid = document.getElementById("results");
     grid.innerHTML = items.map(item => {
-      const url   = item.uri ? `https://www.discogs.com${item.uri}` : "#";
-      const title = item.title ?? "Unknown";
-      const year  = item.year  ? `· ${item.year}` : "";
-      const type  = item.type  ?? "";
-      const label = (item.label ?? []).join(", ");
+      const url  = item.uri ? `https://www.discogs.com${item.uri}` : "#";
+      const type = item.type ?? "";
+
+      // Split "Artist – Title" for release/master results
+      let artist = "";
+      let title  = item.title ?? "Unknown";
+      if ((type === "release" || type === "master") && title.includes(" - ")) {
+        const idx = title.indexOf(" - ");
+        artist = title.slice(0, idx);
+        title  = title.slice(idx + 3);
+      }
+
+      const label   = (item.label   ?? []).slice(0, 2).join(", ");
+      const formats = (item.format  ?? []).slice(0, 3).join(" · ");
+      const genre   = (item.genre   ?? []).slice(0, 1).join("");
+      const country = item.country ?? "";
+      const year    = item.year    ?? "";
+
+      const metaParts = [type, [year, country].filter(Boolean).join(" · ")].filter(Boolean);
 
       const thumb = item.cover_image
         ? `<img src="${item.cover_image}" alt="${escHtml(title)}" loading="lazy" />`
@@ -377,9 +410,12 @@
         <a class="card" href="${url}" target="_blank" rel="noopener">
           ${thumb}
           <div class="card-body">
+            ${artist ? `<div class="card-artist">${escHtml(artist)}</div>` : ""}
             <div class="card-title">${escHtml(title)}</div>
-            ${label ? `<div class="card-sub">${escHtml(label)}</div>` : ""}
-            <div class="card-meta">${escHtml(type)}${year}</div>
+            ${label   ? `<div class="card-sub">${escHtml(label)}</div>`   : ""}
+            ${formats ? `<div class="card-format">${escHtml(formats)}</div>` : ""}
+            ${genre   ? `<div class="card-format">${escHtml(genre)}</div>`   : ""}
+            <div class="card-meta">${metaParts.map(escHtml).join(" · ")}</div>
           </div>
         </a>`;
     }).join("");
