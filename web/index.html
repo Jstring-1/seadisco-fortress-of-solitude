@@ -338,7 +338,8 @@
     const label   = document.getElementById("f-label").value.trim();
     const genre   = document.getElementById("f-genre").value.trim();
 
-    if (type)    params.set("type",          type);
+    const effectiveType = type || (artist ? "master" : "");
+    if (effectiveType) params.set("type",   effectiveType);
     if (artist)  params.set("artist",        artist);
     if (release) params.set("release_title", release);
     if (year)    params.set("year",          year);
