@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Discogs Search — sideman.pro</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f0f0f;
+      --surface:   #1a1a1a;
+      --border:    #2e2e2e;
+      --accent:    #e8a020;
+      --accent-dim:#a06c10;
+      --text:      #e2e2e2;
+      --muted:     #888;
+      --radius:    8px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, sans-serif;
+      min-height: 100vh;
+    }
+
+    header {
+      padding: 2rem 1.5rem 1rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: baseline;
+      gap: 0.75rem;
+    }
+
+    header h1 {
+      font-size: 1.4rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+    }
+
+    header span {
+      color: var(--accent);
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    main {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+
+    /* ── Search form ── */
+    .search-row {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 1rem;
+      padding: 0.65rem 1rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    input[type="text"]:focus {
+      border-color: var(--accent);
+    }
+
+    select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      font-size: 0.9rem;
+      padding: 0.65rem 0.75rem;
+      outline: none;
+      cursor: pointer;
+    }
+
+    button {
+      background: var(--accent);
+      border: none;
+      border-radius: var(--radius);
+      color: #000;
+      cursor: pointer;
+      font-size: 0.95rem;
+      font-weight: 600;
+      padding: 0.65rem 1.4rem;
+      transition: background 0.15s;
+    }
+
+    button:hover { background: #ffb833; }
+    button:disabled { background: var(--accent-dim); cursor: not-allowed; }
+
+    .filters {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+    }
+
+    .filters input[type="text"] {
+      flex: 1;
+      min-width: 120px;
+      font-size: 0.85rem;
+      padding: 0.45rem 0.75rem;
+    }
+
+    .filters label {
+      font-size: 0.75rem;
+      color: var(--muted);
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      flex: 1;
+      min-width: 100px;
+    }
+
+    /* ── Status / error ── */
+    #status {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 1.25rem;
+      min-height: 1.2em;
+    }
+
+    #status.error { color: #e05555; }
+
+    /* ── Results grid ── */
+    #results {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 1rem;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      transition: border-color 0.15s, transform 0.15s;
+      cursor: pointer;
+      text-decoration: none;
+      color: inherit;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+
+    .card img {
+      width: 100%;
+      aspect-ratio: 1;
+      object-fit: cover;
+      background: #222;
+    }
+
+    .card .thumb-placeholder {
+      width: 100%;
+      aspect-ratio: 1;
+      background: #222;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--border);
+      font-size: 2.5rem;
+    }
+
+    .card-body {
+      padding: 0.65rem 0.75rem 0.8rem;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .card-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      line-height: 1.3;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .card-sub {
+      font-size: 0.75rem;
+      color: var(--muted);
+      display: -webkit-box;
+      -webkit-line-clamp: 1;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .card-meta {
+      margin-top: auto;
+      padding-top: 0.4rem;
+      font-size: 0.7rem;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    /* ── Pagination ── */
+    #pagination {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 1rem;
+      margin-top: 2rem;
+    }
+
+    #pagination button {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-weight: 500;
+      padding: 0.5rem 1.2rem;
+    }
+
+    #pagination button:hover:not(:disabled) {
+      border-color: var(--accent);
+      background: var(--surface);
+      color: var(--accent);
+    }
+
+    #page-info {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Discogs Search</h1>
+  <span>sideman.pro</span>
+</header>
+
+<main>
+  <div class="search-row">
+    <input type="text" id="query" placeholder="Search artists, releases, labels…" autocomplete="off" />
+    <select id="type">
+      <option value="">All types</option>
+      <option value="release">Release</option>
+      <option value="master">Master</option>
+      <option value="artist">Artist</option>
+      <option value="label">Label</option>
+    </select>
+    <button id="search-btn" onclick="doSearch(1)">Search</button>
+  </div>
+
+  <div class="filters">
+    <label>Artist <input type="text" id="f-artist" placeholder="e.g. Miles Davis" /></label>
+    <label>Year <input type="text" id="f-year" placeholder="e.g. 1973" /></label>
+    <label>Genre <input type="text" id="f-genre" placeholder="e.g. Jazz" /></label>
+    <label>Style <input type="text" id="f-style" placeholder="e.g. Hard Bop" /></label>
+    <label>Label <input type="text" id="f-label" placeholder="e.g. Blue Note" /></label>
+  </div>
+
+  <div id="status"></div>
+  <div id="results"></div>
+  <div id="pagination" style="display:none">
+    <button id="prev-btn" onclick="doSearch(currentPage - 1)">← Prev</button>
+    <span id="page-info"></span>
+    <button id="next-btn" onclick="doSearch(currentPage + 1)">Next →</button>
+  </div>
+</main>
+
+<script>
+  // ── Config ────────────────────────────────────────────────────────────────
+  const API = "https://REPLACE_WITH_YOUR_RAILWAY_SEARCH_API_URL";
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  let currentPage = 1;
+  let totalPages  = 1;
+
+  // ── Search ────────────────────────────────────────────────────────────────
+  async function doSearch(page = 1) {
+    const q = document.getElementById("query").value.trim();
+    if (!q) { setStatus("Enter a search term.", false); return; }
+
+    currentPage = page;
+    document.getElementById("search-btn").disabled = true;
+    document.getElementById("pagination").style.display = "none";
+    setStatus("Searching…");
+    document.getElementById("results").innerHTML = "";
+
+    const params = new URLSearchParams({ q, page, per_page: 12 });
+
+    const type   = document.getElementById("type").value;
+    const artist = document.getElementById("f-artist").value.trim();
+    const year   = document.getElementById("f-year").value.trim();
+    const genre  = document.getElementById("f-genre").value.trim();
+    const style  = document.getElementById("f-style").value.trim();
+    const label  = document.getElementById("f-label").value.trim();
+
+    if (type)   params.set("type",   type);
+    if (artist) params.set("artist", artist);
+    if (year)   params.set("year",   year);
+    if (genre)  params.set("genre",  genre);
+    if (style)  params.set("style",  style);
+    if (label)  params.set("label",  label);
+
+    try {
+      const res  = await fetch(`${API}/search?${params}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+
+      const items = data.results ?? [];
+      totalPages  = data.pagination?.pages ?? 1;
+
+      if (!items.length) { setStatus("No results found."); return; }
+
+      setStatus(`${data.pagination?.items ?? items.length} results — page ${currentPage} of ${totalPages}`);
+      renderResults(items);
+      renderPagination();
+    } catch (e) {
+      setStatus("Search failed: " + e.message, true);
+    } finally {
+      document.getElementById("search-btn").disabled = false;
+    }
+  }
+
+  // ── Render cards ──────────────────────────────────────────────────────────
+  function renderResults(items) {
+    const grid = document.getElementById("results");
+    grid.innerHTML = items.map(item => {
+      const url   = item.uri ? `https://www.discogs.com${item.uri}` : "#";
+      const title = item.title ?? "Unknown";
+      const year  = item.year  ? `· ${item.year}` : "";
+      const type  = item.type  ?? "";
+      const label = (item.label ?? []).join(", ");
+
+      const thumb = item.cover_image
+        ? `<img src="${item.cover_image}" alt="${escHtml(title)}" loading="lazy" />`
+        : `<div class="thumb-placeholder">♪</div>`;
+
+      return `
+        <a class="card" href="${url}" target="_blank" rel="noopener">
+          ${thumb}
+          <div class="card-body">
+            <div class="card-title">${escHtml(title)}</div>
+            ${label ? `<div class="card-sub">${escHtml(label)}</div>` : ""}
+            <div class="card-meta">${escHtml(type)}${year}</div>
+          </div>
+        </a>`;
+    }).join("");
+  }
+
+  // ── Pagination ────────────────────────────────────────────────────────────
+  function renderPagination() {
+    if (totalPages <= 1) return;
+    document.getElementById("pagination").style.display = "flex";
+    document.getElementById("page-info").textContent = `${currentPage} / ${totalPages}`;
+    document.getElementById("prev-btn").disabled = currentPage <= 1;
+    document.getElementById("next-btn").disabled = currentPage >= totalPages;
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  function setStatus(msg, isError = false) {
+    const el = document.getElementById("status");
+    el.textContent = msg;
+    el.className = isError ? "error" : "";
+  }
+
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  // Submit on Enter
+  document.getElementById("query").addEventListener("keydown", e => {
+    if (e.key === "Enter") doSearch(1);
+  });
+</script>
+</body>
+</html>
