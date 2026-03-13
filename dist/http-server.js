@@ -161,9 +161,11 @@ function buildMcpServer() {
     return server;
 }
 // ── Express app ───────────────────────────────────────────────────────────────
-const serverUrl = process.env.MCP_SERVER_URL;
+// Railway provides RAILWAY_PUBLIC_DOMAIN automatically; fall back to MCP_SERVER_URL
+const railwayDomain = process.env.RAILWAY_PUBLIC_DOMAIN;
+const serverUrl = process.env.MCP_SERVER_URL ?? (railwayDomain ? `https://${railwayDomain}` : undefined);
 if (!serverUrl) {
-    console.error("Error: MCP_SERVER_URL environment variable is required (e.g. https://your-app.railway.app)");
+    console.error("Error: Set MCP_SERVER_URL (e.g. https://your-app.railway.app) or deploy to Railway.");
     process.exit(1);
 }
 const issuerUrl = new URL(serverUrl);
