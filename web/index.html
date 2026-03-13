@@ -125,6 +125,19 @@
     }
 
     /* ── Status / error ── */
+    #blurb {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: var(--radius);
+      padding: 0.9rem 1.1rem;
+      font-size: 0.9rem;
+      line-height: 1.6;
+      color: var(--text);
+      margin-bottom: 1.25rem;
+      display: none;
+    }
+
     #status {
       color: var(--muted);
       font-size: 0.9rem;
@@ -270,6 +283,7 @@
     <label>Label <input type="text" id="f-label" placeholder="e.g. Blue Note" /></label>
   </div>
 
+  <div id="blurb"></div>
   <div id="status"></div>
   <div id="results"></div>
   <div id="pagination" style="display:none">
@@ -295,6 +309,7 @@
     currentPage = page;
     document.getElementById("search-btn").disabled = true;
     document.getElementById("pagination").style.display = "none";
+    document.getElementById("blurb").style.display = "none";
     setStatus("Searching…");
     document.getElementById("results").innerHTML = "";
 
@@ -315,9 +330,22 @@
     if (label)  params.set("label",  label);
 
     try {
-      const res  = await fetch(`${API}/search?${params}`);
+      const [res, blurbRes] = await Promise.all([
+        fetch(`${API}/search?${params}`),
+        page === 1 ? fetch(`${API}/blurb?q=${encodeURIComponent(q)}`) : Promise.resolve(null),
+      ]);
+
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+
+      if (blurbRes) {
+        const blurbData = await blurbRes.json().catch(() => null);
+        const blurbEl = document.getElementById("blurb");
+        if (blurbData?.blurb) {
+          blurbEl.textContent = blurbData.blurb;
+          blurbEl.style.display = "block";
+        }
+      }
 
       const items = data.results ?? [];
       totalPages  = data.pagination?.pages ?? 1;
