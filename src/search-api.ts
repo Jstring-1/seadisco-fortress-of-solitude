@@ -7,6 +7,8 @@ if (!token) {
   process.exit(1);
 }
 
+const anthropicKey = process.env.ANTHROPIC_API_KEY ?? "";
+
 const discogs = new DiscogsClient(token);
 const app = express();
 
@@ -30,6 +32,8 @@ app.get("/search", async (req, res) => {
       label: req.query.label as string | undefined,
       year: req.query.year as string | undefined,
       genre: req.query.genre as string | undefined,
+      sort: req.query.sort as string | undefined,
+      sortOrder: req.query.sort_order as "asc" | "desc" | undefined,
       page: req.query.page ? parseInt(req.query.page as string) : 1,
       perPage: req.query.per_page ? parseInt(req.query.per_page as string) : 12,
     });
@@ -88,46 +92,104 @@ app.get("/artist-bio", async (req, res) => {
 
     const artist = await discogs.getArtist(first.id) as any;
     let profile: string | null = artist?.profile ?? null;
-
-    if (profile) {
-      // Find all ID-only references: [r=123], [m=123], [a123], [a=123]
-      const idPattern = /\[([rma])=?(\d+)\]/g;
-      const matches: { tag: string; type: string; id: string }[] = [];
-      const seen = new Set<string>();
-      let m;
-      while ((m = idPattern.exec(profile)) !== null) {
-        if (!seen.has(m[0])) {
-          seen.add(m[0]);
-          matches.push({ tag: m[0], type: m[1], id: m[2] });
-        }
-      }
-
-      // Resolve all IDs in parallel
-      const resolved = await Promise.all(matches.map(async ({ tag, type, id }) => {
-        try {
-          let displayName = "";
-          if (type === "r") {
-            const r = await discogs.getRelease(id) as any;
-            displayName = r?.title ?? "";
-          } else if (type === "m") {
-            const r = await discogs.getMasterRelease(id) as any;
-            displayName = r?.title ?? "";
-          } else {
-            const r = await discogs.getArtist(id) as any;
-            displayName = r?.name ?? "";
-          }
-          return { tag, displayName };
-        } catch {
-          return { tag, displayName: "" };
-        }
-      }));
-
-      for (const { tag, displayName } of resolved) {
-        profile = profile.split(tag).join(displayName);
-      }
-    }
+    if (profile) profile = await resolveDiscogsIds(profile);
 
     res.json({ profile, name: artist?.name ?? name });
+  } catch (err) {
+    console.error(err);
+    res.json({ profile: null });
+  }
+});
+
+// Helper: resolve Discogs ID tags in a profile string
+async function resolveDiscogsIds(profile: string): Promise<string> {
+  const idPattern = /\[([rma])=?(\d+)\]/g;
+  const matches: { tag: string; type: string; id: string }[] = [];
+  const seen = new Set<string>();
+  let m;
+  while ((m = idPattern.exec(profile)) !== null) {
+    if (!seen.has(m[0])) {
+      seen.add(m[0]);
+      matches.push({ tag: m[0], type: m[1], id: m[2] });
+    }
+  }
+  const resolved = await Promise.all(matches.map(async ({ tag, type, id }) => {
+    try {
+      let displayName = "";
+      if (type === "r") {
+        const r = await discogs.getRelease(id) as any;
+        displayName = r?.title ?? "";
+      } else if (type === "m") {
+        const r = await discogs.getMasterRelease(id) as any;
+        displayName = r?.title ?? "";
+      } else {
+        const r = await discogs.getArtist(id) as any;
+        displayName = r?.name ?? "";
+      }
+      return { tag, displayName };
+    } catch {
+      return { tag, displayName: "" };
+    }
+  }));
+  for (const { tag, displayName } of resolved) {
+    profile = profile.split(tag).join(displayName);
+  }
+  return profile;
+}
+
+// GET /label-bio?name=Blue+Note — searches for label, returns their Discogs profile
+app.get("/label-bio", async (req, res) => {
+  const name = req.query.name as string;
+  if (!name || !name.trim()) {
+    res.status(400).json({ error: "Missing required query parameter: name" });
+    return;
+  }
+
+  try {
+    const results = await discogs.search(name, { type: "label", perPage: 1 }) as any;
+    const first = results?.results?.[0];
+    if (!first?.id) { res.json({ profile: null }); return; }
+
+    const label = await discogs.getLabel(first.id) as any;
+    let profile: string | null = label?.profile ?? null;
+    if (profile) profile = await resolveDiscogsIds(profile);
+
+    res.json({ profile, name: label?.name ?? name });
+  } catch (err) {
+    console.error(err);
+    res.json({ profile: null });
+  }
+});
+
+// GET /genre-info?genre=Jazz — returns a factual AI-generated genre description
+app.get("/genre-info", async (req, res) => {
+  const genre = req.query.genre as string;
+  if (!genre || !genre.trim()) {
+    res.status(400).json({ error: "Missing required query parameter: genre" });
+    return;
+  }
+  if (!anthropicKey) { res.json({ profile: null }); return; }
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": anthropicKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 220,
+        messages: [{
+          role: "user",
+          content: `Write 2–3 sentences describing "${genre}" as a music genre. State only well-established, verifiable facts: its geographic or cultural origins, defining musical characteristics, and time period it emerged. Do not name specific artists or albums. Do not speculate.`,
+        }],
+      }),
+    });
+    const data = await response.json() as any;
+    const profile = data?.content?.[0]?.text?.trim() ?? null;
+    res.json({ profile, name: genre });
   } catch (err) {
     console.error(err);
     res.json({ profile: null });
