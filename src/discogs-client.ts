@@ -39,6 +39,8 @@ export class DiscogsClient {
     year?: string;
     genre?: string;
     style?: string;
+    sort?: string;
+    sortOrder?: "asc" | "desc";
     page?: number;
     perPage?: number;
   } = {}) {
@@ -50,6 +52,8 @@ export class DiscogsClient {
     if (options.year) params.year = options.year;
     if (options.genre) params.genre = options.genre;
     if (options.style) params.style = options.style;
+    if (options.sort) params.sort = options.sort;
+    if (options.sortOrder) params.sort_order = options.sortOrder;
     params.page = String(options.page ?? 1);
     params.per_page = String(options.perPage ?? 10);
     return this.get("/database/search", params);
