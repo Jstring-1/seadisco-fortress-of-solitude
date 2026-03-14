@@ -253,15 +253,27 @@ app.get("/upcoming-shows", async (req, res) => {
     const r = await fetch(url.toString());
     const data = await r.json() as any;
     const events = data?._embedded?.events ?? [];
-    const shows = events.map((e: any) => ({
-      name:    e.name ?? "",
-      date:    e.dates?.start?.localDate ?? "",
-      time:    e.dates?.start?.localTime ?? "",
-      venue:   e._embedded?.venues?.[0]?.name ?? "",
-      city:    e._embedded?.venues?.[0]?.city?.name ?? "",
-      country: e._embedded?.venues?.[0]?.country?.name ?? "",
-      url:     e.url ?? "",
-    }));
+
+    const tributeTerms = [
+      'tribute', 'salute to', 'celebrating', 'the music of', 'songs of',
+      'in memory', 'memorial', 'legacy of', 'a night of', 'versus', ' vs ',
+      'experience', 'performed by', 'celebration of',
+    ];
+
+    const shows = events
+      .filter((e: any) => {
+        const name = (e.name ?? "").toLowerCase();
+        return !tributeTerms.some(t => name.includes(t));
+      })
+      .map((e: any) => ({
+        name:    e.name ?? "",
+        date:    e.dates?.start?.localDate ?? "",
+        time:    e.dates?.start?.localTime ?? "",
+        venue:   e._embedded?.venues?.[0]?.name ?? "",
+        city:    e._embedded?.venues?.[0]?.city?.name ?? "",
+        country: e._embedded?.venues?.[0]?.country?.name ?? "",
+        url:     e.url ?? "",
+      }));
     res.json({ shows });
   } catch (err) {
     console.error(err);
