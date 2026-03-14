@@ -134,14 +134,57 @@
       display: none;
     }
 
-    #album-info {
+    /* ── Modal ── */
+    #modal-overlay {
       display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    #modal-overlay.open { display: flex; }
+
+    #modal-box {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      margin-bottom: 1.25rem;
-      overflow: hidden;
+      max-width: 620px;
+      width: 100%;
+      max-height: 88vh;
+      overflow-y: auto;
+      position: relative;
     }
+
+    #modal-close {
+      position: sticky;
+      top: 0.5rem;
+      float: right;
+      margin: 0.5rem 0.6rem 0 0;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 1.5rem;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      z-index: 1;
+    }
+
+    #modal-close:hover { color: var(--text); background: #333; }
+
+    #modal-loading {
+      padding: 2rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    #album-info { overflow: hidden; }
 
     #album-info .album-header {
       display: flex;
@@ -432,7 +475,6 @@
   </div>
 
   <div id="blurb"></div>
-  <div id="album-info"></div>
   <div id="status"></div>
   <div id="results"></div>
   <div id="pagination" style="display:none">
@@ -441,6 +483,14 @@
     <button id="next-btn" onclick="doSearch(currentPage + 1)">Next →</button>
   </div>
 </main>
+
+<div id="modal-overlay">
+  <div id="modal-box">
+    <button id="modal-close" onclick="closeModal()">×</button>
+    <div id="modal-loading">Loading…</div>
+    <div id="album-info"></div>
+  </div>
+</div>
 
 <script>
   // ── Config ────────────────────────────────────────────────────────────────
@@ -469,7 +519,6 @@
     document.getElementById("search-btn").disabled = true;
     document.getElementById("pagination").style.display = "none";
     document.getElementById("blurb").style.display = "none";
-    document.getElementById("album-info").style.display = "none";
     setStatus("Searching…");
     document.getElementById("results").innerHTML = "";
 
@@ -513,16 +562,6 @@
         }
       }
 
-      // Album info: fetch full details for first result when release filter is set
-      if (page === 1 && release && items.length > 0) {
-        const first = items[0];
-        const endpoint = first.type === "master" ? "master" : "release";
-        fetch(`${API}/${endpoint}/${first.id}`)
-          .then(r => r.json())
-          .then(d => renderAlbumInfo(d, first))
-          .catch(() => {});
-      }
-
       if (!items.length) { setStatus("No results found."); return; }
 
       setStatus(`${data.pagination?.items ?? items.length} results — page ${currentPage} of ${totalPages}`);
@@ -563,8 +602,13 @@
         ? `<img src="${item.cover_image}" alt="${escHtml(title)}" loading="lazy" />`
         : `<div class="thumb-placeholder">♪</div>`;
 
+      const isRelease = type === "release" || type === "master";
+      const cardAttrs = isRelease
+        ? `class="card" href="#" onclick="openModal(event,'${item.id}','${type}','${url.replace(/'/g, "\\'")}')" `
+        : `class="card" href="${url}" target="_blank" rel="noopener"`;
+
       return `
-        <a class="card" href="${url}" target="_blank" rel="noopener">
+        <a ${cardAttrs}>
           ${thumb}
           <div class="card-body">
             ${artist ? `<div class="card-artist">${escHtml(artist)}</div>` : ""}
@@ -587,8 +631,40 @@
     document.getElementById("next-btn").disabled = currentPage >= totalPages;
   }
 
+  // ── Modal ─────────────────────────────────────────────────────────────────
+  function openModal(event, id, type, discogsUrl) {
+    event.preventDefault();
+    const overlay = document.getElementById("modal-overlay");
+    document.getElementById("album-info").innerHTML = "";
+    document.getElementById("modal-loading").style.display = "block";
+    overlay.classList.add("open");
+
+    const endpoint = type === "master" ? "master" : "release";
+    fetch(`${API}/${endpoint}/${id}`)
+      .then(r => r.json())
+      .then(d => {
+        document.getElementById("modal-loading").style.display = "none";
+        renderAlbumInfo(d, { type, cover_image: null }, discogsUrl);
+      })
+      .catch(() => {
+        document.getElementById("modal-loading").textContent = "Failed to load.";
+      });
+  }
+
+  function closeModal() {
+    document.getElementById("modal-overlay").classList.remove("open");
+  }
+
+  document.getElementById("modal-overlay").addEventListener("click", e => {
+    if (e.target === document.getElementById("modal-overlay")) closeModal();
+  });
+
+  document.addEventListener("keydown", e => {
+    if (e.key === "Escape") closeModal();
+  });
+
   // ── Album info panel ──────────────────────────────────────────────────────
-  function renderAlbumInfo(d, searchResult) {
+  function renderAlbumInfo(d, searchResult, discogsUrl = "") {
     const el = document.getElementById("album-info");
 
     const title    = d.title ?? searchResult.title ?? "";
@@ -656,12 +732,11 @@
           <h2>${escHtml(title)}</h2>
           ${artists ? `<div class="album-artist">${escHtml(artists)}</div>` : ""}
           <div class="album-details">${detailParts.map(escHtml).join(" · ")}</div>
+          ${discogsUrl ? `<a href="${discogsUrl}" target="_blank" rel="noopener" style="font-size:0.75rem;color:var(--accent);text-decoration:none;margin-top:0.4rem;display:inline-block">View on Discogs ↗</a>` : ""}
         </div>
       </div>
       ${trackHTML}
       ${metaRows ? `<div class="album-extra">${metaRows}</div>` : ""}`;
-
-    el.style.display = "block";
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
