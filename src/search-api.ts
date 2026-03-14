@@ -75,11 +75,11 @@ app.get("/artist-bio", async (req, res) => {
   }
 
   try {
-    const results = await discogs.search(name, { type: "artist", perPage: 1 });
+    const results = await discogs.search(name, { type: "artist", perPage: 1 }) as any;
     const first = results?.results?.[0];
     if (!first?.id) { res.json({ profile: null }); return; }
 
-    const artist = await discogs.getArtist(first.id);
+    const artist = await discogs.getArtist(first.id) as any;
     res.json({ profile: artist?.profile ?? null, name: artist?.name ?? name });
   } catch (err) {
     console.error(err);
