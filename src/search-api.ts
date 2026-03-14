@@ -20,11 +20,7 @@ app.use((_req, res, next) => {
 
 // GET /search?q=pink+floyd&type=master&year=1973&page=1&per_page=10
 app.get("/search", async (req, res) => {
-  const q = req.query.q as string;
-  if (!q || !q.trim()) {
-    res.status(400).json({ error: "Missing required query parameter: q" });
-    return;
-  }
+  const q = (req.query.q as string) ?? "";
 
   try {
     const results = await discogs.search(q, {

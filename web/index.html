@@ -411,8 +411,18 @@
 
   // ── Search ────────────────────────────────────────────────────────────────
   async function doSearch(page = 1) {
-    const q = document.getElementById("query").value.trim();
-    if (!q) { setStatus("Enter a search term.", false); return; }
+    const q       = document.getElementById("query").value.trim();
+    const type    = document.getElementById("type").value;
+    const artist  = document.getElementById("f-artist").value.trim();
+    const release = document.getElementById("f-release").value.trim();
+    const year    = document.getElementById("f-year").value.trim();
+    const label   = document.getElementById("f-label").value.trim();
+    const genre   = document.getElementById("f-genre").value.trim();
+
+    if (!q && !artist && !release && !year && !label && !genre) {
+      setStatus("Enter a search term or fill in at least one filter.", false);
+      return;
+    }
 
     currentPage = page;
     document.getElementById("search-btn").disabled = true;
@@ -423,13 +433,6 @@
     document.getElementById("results").innerHTML = "";
 
     const params = new URLSearchParams({ q, page, per_page: 12 });
-
-    const type    = document.getElementById("type").value;
-    const artist  = document.getElementById("f-artist").value.trim();
-    const release = document.getElementById("f-release").value.trim();
-    const year    = document.getElementById("f-year").value.trim();
-    const label   = document.getElementById("f-label").value.trim();
-    const genre   = document.getElementById("f-genre").value.trim();
 
     const effectiveType = type || (artist ? "master" : "");
     if (effectiveType) params.set("type",   effectiveType);

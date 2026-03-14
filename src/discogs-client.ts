@@ -31,7 +31,7 @@ export class DiscogsClient {
     return response.json() as Promise<T>;
   }
 
-  async search(query: string, options: {
+  async search(query: string = "", options: {
     type?: "release" | "master" | "artist" | "label";
     artist?: string;
     releaseTitle?: string;
