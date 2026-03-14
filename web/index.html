@@ -371,7 +371,7 @@
           }
         }
         if (bioData?.profile) {
-          blurbEl.textContent = bioData.profile;
+          blurbEl.textContent = stripDiscogsMarkup(bioData.profile);
           blurbEl.style.display = "block";
         }
       }
@@ -445,6 +445,15 @@
     const el = document.getElementById("status");
     el.textContent = msg;
     el.className = isError ? "error" : "";
+  }
+
+  function stripDiscogsMarkup(text) {
+    return text
+      .replace(/\[a=([^\]]+)\]/g, '$1')           // [a=Name] → Name
+      .replace(/\[l=([^\]]+)\]/g, '$1')           // [l=Label] → Label
+      .replace(/\[url=[^\]]*\]([^\[]*)\[\/url\]/g, '$1') // [url=...]text[/url] → text
+      .replace(/\[[a-z]\]([^\[]*)\[\/[a-z]\]/g, '$1')    // [i]...[/i] etc → text
+      .replace(/\[[^\]]+\]/g, '');                // remove remaining tags [r=123], [m=123], [a123] etc
   }
 
   function escHtml(str) {
