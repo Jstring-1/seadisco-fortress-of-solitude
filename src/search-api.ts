@@ -89,13 +89,20 @@ app.get("/artist-bio", async (req, res) => {
   }
 
   try {
-    // 1. Search MusicBrainz for the artist
-    const mbSearchUrl = `https://musicbrainz.org/ws/2/artist/?query=artist:${encodeURIComponent(name)}&fmt=json&limit=1`;
+    // 1. Search MusicBrainz for the artist (get top 5 for disambiguation)
+    const mbSearchUrl = `https://musicbrainz.org/ws/2/artist/?query=artist:${encodeURIComponent(name)}&fmt=json&limit=5`;
     const mbSearchRes = await fetch(mbSearchUrl, { headers: { "User-Agent": MB_UA } });
     const mbSearchData = await mbSearchRes.json() as any;
-    const mbArtist = mbSearchData?.artists?.[0];
-    const mbid     = mbArtist?.id;
-    const mbName   = mbArtist?.name ?? name;
+    const mbArtists = mbSearchData?.artists ?? [];
+    const mbArtist  = mbArtists[0];
+    const mbid      = mbArtist?.id;
+    const mbName    = mbArtist?.name ?? name;
+
+    // Collect alternatives: other results with the same or similar name
+    const alternatives = mbArtists.slice(1).map((a: any) => ({
+      name:           a.name ?? "",
+      disambiguation: a.disambiguation ?? "",
+    })).filter((a: any) => a.name);
 
     if (mbid) {
       // 2. Get URL relations to find Wikipedia link
@@ -115,7 +122,7 @@ app.get("/artist-bio", async (req, res) => {
         );
         const wikiData = await wikiRes.json() as any;
         const profile  = wikiData?.extract ?? null;
-        if (profile) { res.json({ profile, name: mbName }); return; }
+        if (profile) { res.json({ profile, name: mbName, alternatives }); return; }
       }
     }
 
@@ -126,7 +133,7 @@ app.get("/artist-bio", async (req, res) => {
     const artist = await discogs.getArtist(first.id) as any;
     let profile: string | null = artist?.profile ?? null;
     if (profile) profile = await resolveDiscogsIds(profile);
-    res.json({ profile, name: artist?.name ?? mbName ?? name });
+    res.json({ profile, name: artist?.name ?? mbName ?? name, alternatives });
   } catch (err) {
     console.error(err);
     res.json({ profile: null });
