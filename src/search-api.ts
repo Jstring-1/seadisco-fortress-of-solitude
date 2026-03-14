@@ -124,25 +124,43 @@ app.get("/artist-bio", async (req, res) => {
     res.status(400).json({ error: "Missing required query parameter: name" });
     return;
   }
-  const name = nameRaw.replace(/\s*\(\d+\)$/, "").trim();
+  // Strip suffix for the Discogs search query, but keep original for exact matching
+  const nameForSearch = nameRaw.replace(/\s*\(\d+\)$/, "").trim();
+  const nameForMatch  = nameRaw.trim();
 
   try {
-    const results = await discogs.search(name, { type: "artist", perPage: 5 }) as any;
+    const results = await discogs.search(nameForSearch, { type: "artist", perPage: 5 }) as any;
     const candidates: any[] = results?.results ?? [];
 
     const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
-    const searchNorm = norm(name);
-    const best = candidates.find(a => norm(a.title) === searchNorm)
-              ?? candidates.find(a => {
-                   const an = norm(a.title);
-                   return an.startsWith(searchNorm) || searchNorm.startsWith(an);
-                 })
-              ?? candidates[0];
+    // Match against the full name (including suffix) so "Snail Mail (2)" finds the right entry
+    const searchNorm = norm(nameForMatch);
+    let best = candidates.find(a => norm(a.title) === searchNorm)
+            ?? candidates.find(a => {
+                 const an = norm(a.title);
+                 return an.startsWith(norm(nameForSearch)) || norm(nameForSearch).startsWith(an);
+               })
+            ?? candidates[0];
 
-    if (!best?.id) { res.json({ profile: null, name }); return; }
+    if (!best?.id) { res.json({ profile: null, name: nameForMatch }); return; }
 
-    const artist = await discogs.getArtist(best.id) as any;
+    let artist = await discogs.getArtist(best.id) as any;
     let profile: string | null = artist?.profile ?? null;
+
+    // If best match has no profile, check remaining candidates in parallel
+    if (!profile && candidates.length > 1) {
+      const rest = candidates.filter(c => c.id !== best.id);
+      const restArtists = await Promise.all(
+        rest.map(c => (discogs.getArtist(c.id) as Promise<any>).catch(() => null))
+      );
+      const idx = restArtists.findIndex(a => a?.profile);
+      if (idx >= 0) {
+        artist = restArtists[idx];
+        best   = rest[idx];
+        profile = artist.profile;
+      }
+    }
+
     if (profile) profile = await resolveDiscogsIds(profile);
 
     const alternatives = candidates
@@ -150,7 +168,7 @@ app.get("/artist-bio", async (req, res) => {
       .slice(0, 4)
       .map(a => ({ name: a.title as string, id: a.id as number }));
 
-    res.json({ profile, name: artist?.name ?? name, alternatives });
+    res.json({ profile, name: artist?.name ?? nameForMatch, alternatives });
   } catch (err) {
     console.error(err);
     res.json({ profile: null });

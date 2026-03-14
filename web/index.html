@@ -781,7 +781,8 @@
   async function doSearch(page = 1) {
     const q       = document.getElementById("query").value.trim();
     const type    = document.getElementById("type").value;
-    const artist  = document.getElementById("f-artist").value.trim().replace(/\s*\(\d+\)$/, "");
+    const artistRaw = document.getElementById("f-artist").value.trim();
+    const artist    = artistRaw.replace(/\s*\(\d+\)$/, ""); // stripped for search params
     const release = document.getElementById("f-release").value.trim();
     const year    = document.getElementById("f-year").value.trim();
     const label   = document.getElementById("f-label").value.trim();
@@ -827,8 +828,8 @@
       let bioFetch   = null;
       let showsFetch = null;
       if (page === 1) {
-        if (artist) {
-          bioFetch   = fetch(`${API}/artist-bio?name=${encodeURIComponent(artist)}`);
+        if (artistRaw) {
+          bioFetch   = fetch(`${API}/artist-bio?name=${encodeURIComponent(artistRaw)}`);
           showsFetch = fetch(`${API}/upcoming-shows?artist=${encodeURIComponent(artist)}`);
         } else if (label) {
           bioFetch = fetch(`${API}/label-bio?name=${encodeURIComponent(label)}`);
