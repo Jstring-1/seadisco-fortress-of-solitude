@@ -889,26 +889,14 @@
             ? `<strong style="display:block;margin-bottom:0.4rem;color:var(--accent)">${escHtml(bioData.name)}${showsLink}</strong>`
             : "";
 
-          // Alternatives (disambiguation)
-          const alts = bioData.alternatives ?? [];
-          const altsHtml = alts.length > 0
-            ? `<div style="margin-top:0.6rem;font-size:0.75rem;color:var(--muted)">Also: ${
-                alts.map(a => {
-                  const label = escHtml(a.name) + (a.disambiguation ? ` <span style="color:#555">(${escHtml(a.disambiguation)})</span>` : "");
-                  return `<a href="#" onclick="searchAltArtist(event,'${a.name.replace(/'/g,"\\'")}')" style="color:var(--muted);text-decoration:none">${label}</a>`;
-                }).join(' &middot; ')
-              }</div>`
-            : "";
-
           let discogsHref = "";
           if (entityType === 'artist') discogsHref = `https://www.discogs.com/search/?q=${encodeURIComponent(bioData.name)}&type=artist`;
           else if (entityType === 'label') discogsHref = `https://www.discogs.com/search/?q=${encodeURIComponent(bioData.name)}&type=label`;
           const discogsLink = discogsHref
-            ? `<a href="${discogsHref}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#666;text-decoration:none;margin-top:0.5rem;display:inline-block">View on Discogs ↗</a>`
+            ? `<div style="margin-top:0.3rem"><a href="${discogsHref}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#666;text-decoration:none">View on Discogs ↗</a></div>`
             : "";
 
-          blurbEl.innerHTML = heading + escHtml(shortText) + readMore + altsHtml
-            + (discogsLink ? `<div style="margin-top:0.3rem">${discogsLink}</div>` : "");
+          blurbEl.innerHTML = heading + escHtml(shortText) + readMore + discogsLink;
           blurbEl.style.display = "block";
         }
       }
@@ -1205,19 +1193,6 @@
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
-  }
-
-  // ── Alt artist bio link ───────────────────────────────────────────────────
-  function searchAltArtist(event, name) {
-    event.preventDefault();
-    document.getElementById("query").value     = "";
-    document.getElementById("type").value      = "";
-    document.getElementById("f-artist").value  = name;
-    document.getElementById("f-release").value = "";
-    document.getElementById("f-year").value    = "";
-    document.getElementById("f-label").value   = "";
-    document.getElementById("f-genre").value   = "";
-    doSearch(1);
   }
 
   // ── Entity card click → new search ───────────────────────────────────────
