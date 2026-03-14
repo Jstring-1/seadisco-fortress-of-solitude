@@ -134,6 +134,97 @@
       display: none;
     }
 
+    #album-info {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 1.25rem;
+      overflow: hidden;
+    }
+
+    #album-info .album-header {
+      display: flex;
+      gap: 1rem;
+      padding: 1rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    #album-info .album-cover {
+      width: 90px;
+      height: 90px;
+      object-fit: cover;
+      border-radius: 4px;
+      flex-shrink: 0;
+      background: #222;
+    }
+
+    #album-info .album-cover-placeholder {
+      width: 90px;
+      height: 90px;
+      background: #222;
+      border-radius: 4px;
+      flex-shrink: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--border);
+      font-size: 2rem;
+    }
+
+    #album-info .album-meta h2 {
+      font-size: 1rem;
+      font-weight: 700;
+      margin-bottom: 0.2rem;
+    }
+
+    #album-info .album-meta .album-artist {
+      color: var(--accent);
+      font-size: 0.85rem;
+      margin-bottom: 0.4rem;
+    }
+
+    #album-info .album-meta .album-details {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    #album-info .album-tracklist {
+      padding: 0.75rem 1rem;
+    }
+
+    #album-info .tracklist-heading {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 0.5rem;
+    }
+
+    #album-info .track {
+      display: flex;
+      gap: 0.6rem;
+      font-size: 0.82rem;
+      padding: 0.2rem 0;
+      border-bottom: 1px solid #222;
+    }
+
+    #album-info .track:last-child { border-bottom: none; }
+
+    #album-info .track-pos {
+      color: var(--muted);
+      min-width: 2rem;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    #album-info .track-title { flex: 1; }
+
+    #album-info .track-dur {
+      color: var(--muted);
+      flex-shrink: 0;
+    }
+
     #status {
       color: var(--muted);
       font-size: 0.9rem;
@@ -300,6 +391,7 @@
   </div>
 
   <div id="blurb"></div>
+  <div id="album-info"></div>
   <div id="status"></div>
   <div id="results"></div>
   <div id="pagination" style="display:none">
@@ -326,6 +418,7 @@
     document.getElementById("search-btn").disabled = true;
     document.getElementById("pagination").style.display = "none";
     document.getElementById("blurb").style.display = "none";
+    document.getElementById("album-info").style.display = "none";
     setStatus("Searching…");
     document.getElementById("results").innerHTML = "";
 
@@ -374,6 +467,16 @@
           blurbEl.textContent = stripDiscogsMarkup(bioData.profile);
           blurbEl.style.display = "block";
         }
+      }
+
+      // Album info: fetch full details for first result when release filter is set
+      if (page === 1 && release && items.length > 0) {
+        const first = items[0];
+        const endpoint = first.type === "master" ? "master" : "release";
+        fetch(`${API}/${endpoint}/${first.id}`)
+          .then(r => r.json())
+          .then(d => renderAlbumInfo(d, first))
+          .catch(() => {});
       }
 
       if (!items.length) { setStatus("No results found."); return; }
@@ -440,6 +543,49 @@
     document.getElementById("next-btn").disabled = currentPage >= totalPages;
   }
 
+  // ── Album info panel ──────────────────────────────────────────────────────
+  function renderAlbumInfo(d, searchResult) {
+    const el = document.getElementById("album-info");
+
+    const title   = d.title ?? searchResult.title ?? "";
+    const artists = (d.artists ?? []).map(a => a.name).join(", ")
+                    || (searchResult.title ?? "").split(" - ")[0] || "";
+    const year    = d.year ?? searchResult.year ?? "";
+    const labels  = (d.labels ?? []).map(l => l.name).slice(0, 2).join(", ")
+                    || (searchResult.label ?? []).slice(0, 2).join(", ");
+    const genres  = [...(d.genres ?? []), ...(d.styles ?? [])].slice(0, 4).join(" · ");
+    const country = d.country ?? searchResult.country ?? "";
+    const img     = d.images?.[0]?.uri ?? searchResult.cover_image ?? "";
+
+    const detailParts = [year, labels, country, genres].filter(Boolean);
+
+    const tracks = (d.tracklist ?? []).filter(t => t.type_ !== "heading");
+    const trackHTML = tracks.length ? `
+      <div class="album-tracklist">
+        <div class="tracklist-heading">Tracklist</div>
+        ${tracks.map(t => `
+          <div class="track">
+            <span class="track-pos">${escHtml(t.position || "")}</span>
+            <span class="track-title">${escHtml(t.title || "")}</span>
+            ${t.duration ? `<span class="track-dur">${escHtml(t.duration)}</span>` : ""}
+          </div>`).join("")}
+      </div>` : "";
+
+    el.innerHTML = `
+      <div class="album-header">
+        ${img ? `<img class="album-cover" src="${img}" alt="${escHtml(title)}" loading="lazy" />`
+               : `<div class="album-cover-placeholder">♪</div>`}
+        <div class="album-meta">
+          <h2>${escHtml(title)}</h2>
+          ${artists ? `<div class="album-artist">${escHtml(artists)}</div>` : ""}
+          <div class="album-details">${detailParts.map(escHtml).join(" · ")}</div>
+        </div>
+      </div>
+      ${trackHTML}`;
+
+    el.style.display = "block";
+  }
+
   // ── Helpers ───────────────────────────────────────────────────────────────
   function setStatus(msg, isError = false) {
     const el = document.getElementById("status");
@@ -449,11 +595,14 @@
 
   function stripDiscogsMarkup(text) {
     return text
-      .replace(/\[a=([^\]]+)\]/g, '$1')           // [a=Name] → Name
-      .replace(/\[l=([^\]]+)\]/g, '$1')           // [l=Label] → Label
-      .replace(/\[url=[^\]]*\]([^\[]*)\[\/url\]/g, '$1') // [url=...]text[/url] → text
-      .replace(/\[[a-z]\]([^\[]*)\[\/[a-z]\]/g, '$1')    // [i]...[/i] etc → text
-      .replace(/\[[^\]]+\]/g, '');                // remove remaining tags [r=123], [m=123], [a123] etc
+      .replace(/\[a=([^\]]+)\]/g, '$1')                   // [a=Name] → Name
+      .replace(/\[l=([^\]]+)\]/g, '$1')                   // [l=Label] → Label
+      .replace(/\[url=[^\]]*\]([^\[]*)\[\/url\]/g, '$1')  // [url=...]text[/url] → text
+      .replace(/\[[a-z]\]([^\[]*)\[\/[a-z]\]/g, '$1')     // [i]...[/i] etc → text
+      .replace(/\[[^\]]+\]/g, '')                          // remove ID-only tags [r=123], [m=123], [a123]
+      .replace(/\s+([.,])/g, '$1')                         // fix "word ." → "word."
+      .replace(/\s{2,}/g, ' ')                             // collapse multiple spaces
+      .trim();
   }
 
   function escHtml(str) {

@@ -55,6 +55,17 @@ app.get("/release/:id", async (req, res) => {
   }
 });
 
+// GET /master/:id
+app.get("/master/:id", async (req, res) => {
+  try {
+    const result = await discogs.getMasterRelease(req.params.id);
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Discogs API error" });
+  }
+});
+
 // GET /artist/:id
 app.get("/artist/:id", async (req, res) => {
   try {
