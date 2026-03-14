@@ -354,18 +354,27 @@
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      const items = data.results ?? [];
+      totalPages  = data.pagination?.pages ?? 1;
 
+      // Artist bio: from filter field (already fetched in parallel), or extracted from first result
       const blurbEl = document.getElementById("blurb");
-      if (bioRes) {
-        const bioData = await bioRes.json().catch(() => null);
+      if (page === 1) {
+        let bioData = null;
+        if (bioRes) {
+          bioData = await bioRes.json().catch(() => null);
+        } else if (items.length > 0) {
+          const first = items[0];
+          if ((first.type === "release" || first.type === "master") && first.title?.includes(" - ")) {
+            const derivedArtist = first.title.slice(0, first.title.indexOf(" - "));
+            bioData = await fetch(`${API}/artist-bio?name=${encodeURIComponent(derivedArtist)}`).then(r => r.json()).catch(() => null);
+          }
+        }
         if (bioData?.profile) {
           blurbEl.textContent = bioData.profile;
           blurbEl.style.display = "block";
         }
       }
-
-      const items = data.results ?? [];
-      totalPages  = data.pagination?.pages ?? 1;
 
       if (!items.length) { setStatus("No results found."); return; }
 
