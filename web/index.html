@@ -917,6 +917,13 @@
           altsEl.innerHTML = "";
         }
 
+        // Validate: if an artist was searched, make sure the bio is actually for that artist
+        const searchedArtistName = artistRaw || (!label && !genre && items.length > 0 && items[0].title?.includes(" - ")
+          ? items[0].title.slice(0, items[0].title.indexOf(" - ")) : "");
+        if (bioData && artistNamesMatch(searchedArtistName, bioData.name) === false) {
+          bioData = null; // name mismatch — suppress bio
+        }
+
         if (bioData?.profile) {
           const shows = showsData?.shows ?? [];
           window._upcomingShows = { name: bioData.name, shows };
@@ -1301,6 +1308,17 @@
       i++;
     }
     return rawText;
+  }
+
+  // Returns true if two artist names share at least one significant word (length > 3),
+  // or if either name is empty/short (skip check). Returns false on clear mismatch.
+  function artistNamesMatch(searched, returned) {
+    if (!searched || !returned) return true; // can't compare — allow
+    const words = s => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim().split(/\s+/).filter(w => w.length > 3);
+    const a = words(searched);
+    const b = new Set(words(returned));
+    if (a.length === 0 || b.size === 0) return true; // all short words — allow
+    return a.some(w => b.has(w));
   }
 
   function stripDiscogsMarkup(text) {

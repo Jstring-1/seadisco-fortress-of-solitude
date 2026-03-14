@@ -155,8 +155,15 @@ app.get("/artist-bio", async (req, res) => {
     let profile: string | null = artist?.profile ?? null;
 
     // If best match has no profile, check remaining candidates in parallel
+    // but only accept a fallback whose name has word overlap with the search
     if (!profile && candidates.length > 1) {
-      const rest = candidates.filter(c => c.id !== best.id);
+      const sigWords = (s: string) => new Set(
+        s.toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter(w => w.length > 3)
+      );
+      const searchWords = sigWords(nameForSearch);
+      const nameMatches = (title: string) => [...sigWords(title)].some(w => searchWords.has(w));
+
+      const rest = candidates.filter(c => c.id !== best.id && nameMatches(c.title ?? ""));
       const restArtists = await Promise.all(
         rest.map(c => (discogs.getArtist(c.id) as Promise<any>).catch(() => null))
       );
