@@ -129,7 +129,13 @@ app.get("/artist-bio", async (req, res) => {
   const nameForMatch  = nameRaw.trim();
 
   try {
-    const results = await discogs.search(nameForSearch, { type: "artist", perPage: 5 }) as any;
+    // Fetch Discogs candidates and Wikipedia in parallel
+    const [discogsResults, wikiResult] = await Promise.all([
+      discogs.search(nameForSearch, { type: "artist", perPage: 5 }),
+      fetchWikiSummary(nameForSearch).then(r => r ?? searchWiki(`${nameForSearch} musician`, nameForSearch)),
+    ]) as [any, any];
+
+    const results = discogsResults;
     const candidates: any[] = results?.results ?? [];
 
     const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
@@ -168,7 +174,12 @@ app.get("/artist-bio", async (req, res) => {
       .slice(0, 4)
       .map(a => ({ name: a.title as string, id: a.id as number }));
 
-    res.json({ profile, name: artist?.name ?? nameForMatch, alternatives });
+    res.json({
+      profile,
+      name: artist?.name ?? nameForMatch,
+      alternatives,
+      wikiExtract: wikiResult?.extract ?? null,
+    });
   } catch (err) {
     console.error(err);
     res.json({ profile: null });

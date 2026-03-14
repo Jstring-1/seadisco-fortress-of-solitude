@@ -789,7 +789,31 @@
   const itemCache = new Map(); // id → search result item
 
   // ── Search ────────────────────────────────────────────────────────────────
-  async function doSearch(page = 1) {
+  // ── URL state helpers ────────────────────────────────────────────────────
+  function pushSearchState(q, type, artistRaw, release, year, label, genre, page) {
+    const p = new URLSearchParams();
+    if (q)        p.set("q",       q);
+    if (type)     p.set("type",    type);
+    if (artistRaw) p.set("artist", artistRaw);
+    if (release)  p.set("release", release);
+    if (year)     p.set("year",    year);
+    if (label)    p.set("label",   label);
+    if (genre)    p.set("genre",   genre);
+    if (page > 1) p.set("page",    String(page));
+    history.pushState({}, "", p.toString() ? "?" + p.toString() : location.pathname);
+  }
+
+  function restoreFromParams(p) {
+    document.getElementById("query").value     = p.get("q")       ?? "";
+    document.getElementById("type").value      = p.get("type")    ?? "";
+    document.getElementById("f-artist").value  = p.get("artist")  ?? "";
+    document.getElementById("f-release").value = p.get("release") ?? "";
+    document.getElementById("f-year").value    = p.get("year")    ?? "";
+    document.getElementById("f-label").value   = p.get("label")   ?? "";
+    document.getElementById("f-genre").value   = p.get("genre")   ?? "";
+  }
+
+  async function doSearch(page = 1, skipPushState = false) {
     const q       = document.getElementById("query").value.trim();
     const type    = document.getElementById("type").value;
     const artistRaw = document.getElementById("f-artist").value.trim();
@@ -803,6 +827,8 @@
       setStatus("Enter a search term or fill in at least one filter.", false);
       return;
     }
+
+    if (!skipPushState) pushSearchState(q, type, artistRaw, release, year, label, genre, page);
 
     currentPage = page;
     document.getElementById("search-btn").disabled = true;
@@ -897,7 +923,7 @@
           const fullText = stripDiscogsMarkup(bioData.profile);
           const entityType = artist ? 'artist' : label ? 'label' : genre ? 'genre' : 'artist';
           // Store raw profile so the full-bio popup can render [a=Name] as links
-          window._currentBio = { name: bioData.name, text: bioData.profile };
+          window._currentBio = { name: bioData.name, text: bioData.profile, wiki: bioData.wikiExtract ?? null };
 
           const TRUNCATE = 300;
           const needsMore = fullText.length > TRUNCATE;
@@ -1034,9 +1060,15 @@
   // ── Bio full popup ────────────────────────────────────────────────────────
   function openBioFull(event) {
     event.preventDefault();
-    const { name, text } = window._currentBio ?? { name: "", text: "" };
-    document.getElementById("bio-full-name").textContent = name;
-    document.getElementById("bio-full-text").innerHTML = renderBioMarkup(text);
+    const { name, text, wiki } = window._currentBio ?? {};
+    document.getElementById("bio-full-name").textContent = name ?? "";
+    let html = renderBioMarkup(text ?? "");
+    if (wiki) {
+      html += `<hr style="border:none;border-top:1px solid var(--border);margin:1.25rem 0 1rem">
+               <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.6rem">Wikipedia</div>
+               <div style="font-size:0.87rem;line-height:1.65">${escHtml(wiki)}</div>`;
+    }
+    document.getElementById("bio-full-text").innerHTML = html;
     document.getElementById("bio-full-overlay").classList.add("open");
   }
 
@@ -1315,6 +1347,32 @@
     if (type === "label")  document.getElementById("f-label").value  = name;
     doSearch(1);
   }
+
+  // ── Browser back / forward ───────────────────────────────────────────────
+  window.addEventListener("popstate", () => {
+    const p = new URLSearchParams(location.search);
+    restoreFromParams(p);
+    if (p.toString()) {
+      doSearch(parseInt(p.get("page") ?? "1"), true);
+    } else {
+      // Back to blank state — clear everything
+      document.getElementById("results").innerHTML = "";
+      document.getElementById("blurb").style.display = "none";
+      document.getElementById("artist-alts").innerHTML = "";
+      document.getElementById("status").textContent = "";
+      document.getElementById("pagination").style.display = "none";
+      document.getElementById("search-desc").textContent = "";
+    }
+  });
+
+  // ── Restore from URL on page load ────────────────────────────────────────
+  (function () {
+    const p = new URLSearchParams(location.search);
+    if (p.toString()) {
+      restoreFromParams(p);
+      doSearch(parseInt(p.get("page") ?? "1"), true);
+    }
+  })();
 
   // Submit on Enter (all text inputs)
   ["query", "f-artist", "f-release", "f-year", "f-label"].forEach(id => {
