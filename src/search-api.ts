@@ -1,5 +1,4 @@
 import express from "express";
-import Anthropic from "@anthropic-ai/sdk";
 import { DiscogsClient } from "./discogs-client.js";
 
 const token = process.env.DISCOGS_TOKEN;
@@ -67,35 +66,24 @@ app.get("/artist/:id", async (req, res) => {
   }
 });
 
-// GET /blurb?q=ska+music
-app.get("/blurb", async (req, res) => {
-  const q = req.query.q as string;
-  if (!q || !q.trim()) {
-    res.status(400).json({ error: "Missing required query parameter: q" });
-    return;
-  }
-
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    res.status(503).json({ blurb: null });
+// GET /artist-bio?name=Miles+Davis — searches for artist, returns their Discogs profile
+app.get("/artist-bio", async (req, res) => {
+  const name = req.query.name as string;
+  if (!name || !name.trim()) {
+    res.status(400).json({ error: "Missing required query parameter: name" });
     return;
   }
 
   try {
-    const anthropic = new Anthropic({ apiKey });
-    const message = await anthropic.messages.create({
-      model: "claude-haiku-4-5",
-      max_tokens: 200,
-      messages: [{
-        role: "user",
-        content: `Write 2-3 sentences about "${q}" in the context of music, artists, and vinyl records. Be informative and engaging. Plain text only, no headers or formatting.`,
-      }],
-    });
-    const blurb = message.content[0].type === "text" ? message.content[0].text : null;
-    res.json({ blurb });
+    const results = await discogs.search(name, { type: "artist", perPage: 1 });
+    const first = results?.results?.[0];
+    if (!first?.id) { res.json({ profile: null }); return; }
+
+    const artist = await discogs.getArtist(first.id);
+    res.json({ profile: artist?.profile ?? null, name: artist?.name ?? name });
   } catch (err) {
     console.error(err);
-    res.json({ blurb: null });
+    res.json({ profile: null });
   }
 });
 
