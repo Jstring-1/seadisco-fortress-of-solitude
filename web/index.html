@@ -215,20 +215,49 @@
       font-size: 2rem;
     }
 
+    #album-info .album-cover {
+      width: 130px;
+      height: 130px;
+    }
+
+    #album-info .album-cover-placeholder {
+      width: 130px;
+      height: 130px;
+    }
+
+    #album-info .album-type-badge {
+      font-size: 0.65rem;
+      text-transform: uppercase;
+      letter-spacing: 0.07em;
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 3px;
+      padding: 0.1rem 0.4rem;
+      display: inline-block;
+      margin-bottom: 0.35rem;
+    }
+
     #album-info .album-meta h2 {
-      font-size: 1rem;
+      font-size: 1.05rem;
       font-weight: 700;
       margin-bottom: 0.2rem;
+      line-height: 1.3;
     }
 
     #album-info .album-meta .album-artist {
       color: var(--accent);
-      font-size: 0.85rem;
-      margin-bottom: 0.4rem;
+      font-size: 0.9rem;
+      margin-bottom: 0.5rem;
     }
 
-    #album-info .album-meta .album-details {
+    #album-info .album-detail-grid {
+      display: grid;
+      grid-template-columns: 4.5rem 1fr;
+      gap: 0.15rem 0.5rem;
       font-size: 0.78rem;
+    }
+
+    #album-info .detail-label {
       color: var(--muted);
     }
 
@@ -499,6 +528,7 @@
   // ── State ─────────────────────────────────────────────────────────────────
   let currentPage = 1;
   let totalPages  = 1;
+  const itemCache = new Map(); // id → search result item
 
   // ── Search ────────────────────────────────────────────────────────────────
   async function doSearch(page = 1) {
@@ -557,7 +587,8 @@
           }
         }
         if (bioData?.profile) {
-          blurbEl.textContent = stripDiscogsMarkup(bioData.profile);
+          blurbEl.innerHTML = (bioData.name ? `<strong style="display:block;margin-bottom:0.4rem;color:var(--accent)">${escHtml(bioData.name)}</strong>` : "")
+            + escHtml(stripDiscogsMarkup(bioData.profile));
           blurbEl.style.display = "block";
         }
       }
@@ -603,6 +634,7 @@
         : `<div class="thumb-placeholder">♪</div>`;
 
       const isRelease = type === "release" || type === "master";
+      if (isRelease) itemCache.set(String(item.id), item);
       const cardAttrs = isRelease
         ? `class="card" href="#" onclick="openModal(event,'${item.id}','${type}','${url.replace(/'/g, "\\'")}')" `
         : `class="card" href="${url}" target="_blank" rel="noopener"`;
@@ -639,12 +671,13 @@
     document.getElementById("modal-loading").style.display = "block";
     overlay.classList.add("open");
 
+    const cachedItem = itemCache.get(String(id)) ?? { type };
     const endpoint = type === "master" ? "master" : "release";
     fetch(`${API}/${endpoint}/${id}`)
       .then(r => r.json())
       .then(d => {
         document.getElementById("modal-loading").style.display = "none";
-        renderAlbumInfo(d, { type, cover_image: null }, discogsUrl);
+        renderAlbumInfo(d, cachedItem, discogsUrl);
       })
       .catch(() => {
         document.getElementById("modal-loading").textContent = "Failed to load.";
@@ -676,14 +709,15 @@
     const genres   = [...(d.genres ?? []), ...(d.styles ?? [])].slice(0, 4).join(" · ");
     const country  = d.country ?? searchResult.country ?? "";
     const img      = d.images?.[0]?.uri ?? searchResult.cover_image ?? "";
-    const released = d.released ?? "";
-    const formats  = (d.formats ?? []).map(f =>
+    const released    = d.released ?? "";
+    const formats     = (d.formats ?? []).map(f =>
       [f.name, ...(f.descriptions ?? [])].filter(Boolean).join(" · ")
-    ).join("; ");
-    const credits  = (d.extraartists ?? [])
+    ).join("; ") || (searchResult.format ?? []).join(" · ");
+    const credits     = (d.extraartists ?? [])
       .map(a => `${escHtml(a.name)}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}`)
       .join(" · ");
-    const notes    = d.notes ? stripDiscogsMarkup(d.notes) : "";
+    const notes       = d.notes ? stripDiscogsMarkup(d.notes) : "";
+    const typeLabel   = searchResult.type === "master" ? "Master Release" : searchResult.type === "release" ? "Release" : "";
 
     // Build video title → URL map for matching to tracks
     const videoMap = new Map();
@@ -698,7 +732,13 @@
       return null;
     }
 
-    const detailParts = [year, labels, country, genres].filter(Boolean);
+    const detailRows = [
+      labels  ? `<span class="detail-label">Label</span><span>${escHtml(labels)}</span>`   : "",
+      formats ? `<span class="detail-label">Format</span><span>${escHtml(formats)}</span>` : "",
+      country ? `<span class="detail-label">Country</span><span>${escHtml(country)}</span>` : "",
+      genres  ? `<span class="detail-label">Genre</span><span>${escHtml(genres)}</span>`   : "",
+      year    ? `<span class="detail-label">Year</span><span>${escHtml(String(year))}</span>` : "",
+    ].filter(Boolean).join("");
 
     const tracks = (d.tracklist ?? []).filter(t => t.type_ !== "heading");
     const trackHTML = tracks.length ? `
@@ -729,10 +769,11 @@
         ${img ? `<img class="album-cover" src="${img}" alt="${escHtml(title)}" loading="lazy" />`
                : `<div class="album-cover-placeholder">♪</div>`}
         <div class="album-meta">
+          ${typeLabel ? `<div class="album-type-badge">${escHtml(typeLabel)}</div>` : ""}
           <h2>${escHtml(title)}</h2>
           ${artists ? `<div class="album-artist">${escHtml(artists)}</div>` : ""}
-          <div class="album-details">${detailParts.map(escHtml).join(" · ")}</div>
-          ${discogsUrl ? `<a href="${discogsUrl}" target="_blank" rel="noopener" style="font-size:0.75rem;color:var(--accent);text-decoration:none;margin-top:0.4rem;display:inline-block">View on Discogs ↗</a>` : ""}
+          ${detailRows ? `<div class="album-detail-grid">${detailRows}</div>` : ""}
+          ${discogsUrl ? `<a href="${discogsUrl}" target="_blank" rel="noopener" style="font-size:0.75rem;color:var(--accent);text-decoration:none;margin-top:0.5rem;display:inline-block">View on Discogs ↗</a>` : ""}
         </div>
       </div>
       ${trackHTML}
