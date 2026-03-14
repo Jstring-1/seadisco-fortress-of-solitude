@@ -80,7 +80,47 @@ app.get("/artist-bio", async (req, res) => {
     if (!first?.id) { res.json({ profile: null }); return; }
 
     const artist = await discogs.getArtist(first.id) as any;
-    res.json({ profile: artist?.profile ?? null, name: artist?.name ?? name });
+    let profile: string | null = artist?.profile ?? null;
+
+    if (profile) {
+      // Find all ID-only references: [r=123], [m=123], [a123], [a=123]
+      const idPattern = /\[([rma])=?(\d+)\]/g;
+      const matches: { tag: string; type: string; id: string }[] = [];
+      const seen = new Set<string>();
+      let m;
+      while ((m = idPattern.exec(profile)) !== null) {
+        if (!seen.has(m[0])) {
+          seen.add(m[0]);
+          matches.push({ tag: m[0], type: m[1], id: m[2] });
+        }
+      }
+
+      // Resolve all IDs in parallel
+      const resolved = await Promise.all(matches.map(async ({ tag, type, id }) => {
+        try {
+          let displayName = "";
+          if (type === "r") {
+            const r = await discogs.getRelease(id) as any;
+            displayName = r?.title ?? "";
+          } else if (type === "m") {
+            const r = await discogs.getMasterRelease(id) as any;
+            displayName = r?.title ?? "";
+          } else {
+            const r = await discogs.getArtist(id) as any;
+            displayName = r?.name ?? "";
+          }
+          return { tag, displayName };
+        } catch {
+          return { tag, displayName: "" };
+        }
+      }));
+
+      for (const { tag, displayName } of resolved) {
+        profile = profile.split(tag).join(displayName);
+      }
+    }
+
+    res.json({ profile, name: artist?.name ?? name });
   } catch (err) {
     console.error(err);
     res.json({ profile: null });
