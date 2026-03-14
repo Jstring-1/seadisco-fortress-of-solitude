@@ -198,7 +198,8 @@ async function resolveDiscogsIds(profile: string): Promise<string> {
         displayName = r?.title ?? "";
       } else {
         const r = await discogs.getArtist(id) as any;
-        displayName = r?.name ?? "";
+        // Wrap in [a=Name] so the frontend can render it as a clickable link
+        displayName = r?.name ? `[a=${r.name}]` : "";
       }
       return { tag, displayName };
     } catch {

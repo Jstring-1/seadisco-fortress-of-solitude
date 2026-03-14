@@ -668,7 +668,18 @@
       font-size: 0.88rem;
       line-height: 1.65;
       color: var(--text);
-      white-space: pre-wrap;
+    }
+
+    .bio-artist-link {
+      color: var(--accent);
+      text-decoration: none;
+      border-bottom: 1px dotted var(--accent-dim);
+      cursor: pointer;
+    }
+
+    .bio-artist-link:hover {
+      color: #ffb833;
+      border-bottom-color: #ffb833;
     }
   </style>
 </head>
@@ -885,7 +896,8 @@
           window._upcomingShows = { name: bioData.name, shows };
           const fullText = stripDiscogsMarkup(bioData.profile);
           const entityType = artist ? 'artist' : label ? 'label' : genre ? 'genre' : 'artist';
-          window._currentBio = { name: bioData.name, text: fullText };
+          // Store raw profile so the full-bio popup can render [a=Name] as links
+          window._currentBio = { name: bioData.name, text: bioData.profile };
 
           const TRUNCATE = 300;
           const needsMore = fullText.length > TRUNCATE;
@@ -1024,7 +1036,7 @@
     event.preventDefault();
     const { name, text } = window._currentBio ?? { name: "", text: "" };
     document.getElementById("bio-full-name").textContent = name;
-    document.getElementById("bio-full-text").textContent = text;
+    document.getElementById("bio-full-text").innerHTML = renderBioMarkup(text);
     document.getElementById("bio-full-overlay").classList.add("open");
   }
 
@@ -1192,6 +1204,43 @@
     const el = document.getElementById("status");
     el.textContent = msg;
     el.className = isError ? "error" : "";
+  }
+
+  // Converts raw Discogs profile text to HTML, making [a=Name] tags into clickable links
+  function renderBioMarkup(text) {
+    if (!text) return '';
+    const parts = [];
+    let lastIndex = 0;
+    const re = /\[a=([^\]]+)\]/g;
+    let match;
+    while ((match = re.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(escHtml(text.slice(lastIndex, match.index)));
+      }
+      const name = match[1];
+      parts.push(`<a href="#" class="bio-artist-link" onclick="searchBioArtist(event,this)" data-artist="${escHtml(name)}">${escHtml(name)}</a>`);
+      lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < text.length) parts.push(escHtml(text.slice(lastIndex)));
+    let html = parts.join('');
+    // Strip remaining BBCode tags
+    html = html.replace(/\[[^\]]+\]/g, '');
+    // Convert newlines to line breaks
+    html = html.replace(/\n/g, '<br>');
+    return html;
+  }
+
+  function searchBioArtist(event, el) {
+    event.preventDefault();
+    closeBioFull();
+    document.getElementById("f-artist").value  = el.dataset.artist;
+    document.getElementById("query").value     = "";
+    document.getElementById("f-release").value = "";
+    document.getElementById("f-year").value    = "";
+    document.getElementById("f-label").value   = "";
+    document.getElementById("f-genre").value   = "";
+    document.getElementById("type").value      = "";
+    doSearch(1);
   }
 
   function stripDiscogsMarkup(text) {
