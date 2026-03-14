@@ -985,11 +985,13 @@
 
     const cachedItem = itemCache.get(String(id)) ?? { type };
     const endpoint = type === "master" ? "master" : "release";
-    fetch(`${API}/${endpoint}/${id}`)
-      .then(r => r.json())
-      .then(d => {
+    Promise.all([
+      fetch(`${API}/${endpoint}/${id}`).then(r => r.json()),
+      fetch(`${API}/marketplace-stats/${id}?type=${type}`).then(r => r.json()).catch(() => null),
+    ])
+      .then(([d, stats]) => {
         document.getElementById("modal-loading").style.display = "none";
-        renderAlbumInfo(d, cachedItem, discogsUrl);
+        renderAlbumInfo(d, cachedItem, discogsUrl, stats);
       })
       .catch(() => {
         document.getElementById("modal-loading").textContent = "Failed to load.";
@@ -1085,7 +1087,7 @@
   });
 
   // ── Album info panel ──────────────────────────────────────────────────────
-  function renderAlbumInfo(d, searchResult, discogsUrl = "") {
+  function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null) {
     const el = document.getElementById("album-info");
 
     const title    = d.title ?? searchResult.title ?? "";
@@ -1162,6 +1164,10 @@
           ${artists ? `<div class="album-artist">${escHtml(artists)}</div>` : ""}
           ${detailRows ? `<div class="album-detail-grid">${detailRows}</div>` : ""}
           ${discogsUrl ? `<a href="${discogsUrl}" target="_blank" rel="noopener" style="font-size:0.75rem;color:var(--accent);text-decoration:none;margin-top:0.5rem;display:inline-block">View on Discogs ↗</a>` : ""}
+          ${stats?.numForSale > 0 && stats?.lowestPrice != null
+            ? `<a href="https://www.discogs.com/sell/list?release_id=${escHtml(String(stats.releaseId))}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#888;text-decoration:none;margin-top:0.2rem;display:block">${escHtml(String(stats.numForSale))} available from $${parseFloat(stats.lowestPrice).toFixed(2)}</a>`
+            : (stats?.numForSale === 0 ? `<div style="font-size:0.75rem;color:#555;margin-top:0.2rem">Not currently available on Discogs marketplace</div>` : "")
+          }
         </div>
       </div>
       ${trackHTML}

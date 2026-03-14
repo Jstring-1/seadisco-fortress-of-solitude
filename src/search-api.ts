@@ -281,6 +281,35 @@ app.get("/upcoming-shows", async (req, res) => {
   }
 });
 
+// GET /marketplace-stats/:id?type=release|master
+app.get("/marketplace-stats/:id", async (req, res) => {
+  const { id } = req.params;
+  const type = (req.query.type as string) ?? "release";
+
+  try {
+    let releaseId = id;
+    if (type === "master") {
+      const master = await discogs.getMasterRelease(id) as any;
+      releaseId = String(master?.main_release ?? id);
+    }
+
+    const statsRes = await fetch(
+      `https://api.discogs.com/marketplace/stats/${releaseId}?curr_abbr=USD`,
+      { headers: { "Authorization": `Discogs token=${token}`, "User-Agent": MB_UA } }
+    );
+    const stats = await statsRes.json() as any;
+    res.json({
+      numForSale:  stats?.num_for_sale ?? 0,
+      lowestPrice: stats?.lowest_price?.value ?? null,
+      currency:    stats?.lowest_price?.currency ?? "USD",
+      releaseId,
+    });
+  } catch (err) {
+    console.error(err);
+    res.json({ numForSale: 0, lowestPrice: null });
+  }
+});
+
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Discogs search API listening on port ${PORT}`);
