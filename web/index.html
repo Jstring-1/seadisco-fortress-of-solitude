@@ -901,8 +901,8 @@
 
           const TRUNCATE = 300;
           const needsMore = fullText.length > TRUNCATE;
-          const cut = needsMore ? fullText.lastIndexOf(' ', TRUNCATE) : -1;
-          const shortText = needsMore ? fullText.slice(0, cut > 0 ? cut : TRUNCATE) + '…' : fullText;
+          // Truncate on raw text so links are never cut; append ellipsis if needed
+          const truncatedRaw = needsMore ? truncateRaw(bioData.profile, TRUNCATE) + '\u2026' : bioData.profile;
 
           const showsLink = shows.length > 0
             ? ` <a href="#" onclick="openShowsPopup(event)" style="font-size:0.75rem;color:var(--accent);font-weight:400;margin-left:0.4rem;text-decoration:none">(upcoming shows)</a>`
@@ -921,7 +921,7 @@
             ? `<div style="margin-top:0.3rem"><a href="${discogsHref}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#666;text-decoration:none">View on Discogs ↗</a></div>`
             : "";
 
-          blurbEl.innerHTML = heading + escHtml(shortText) + readMore + discogsLink;
+          blurbEl.innerHTML = heading + renderBioMarkup(truncatedRaw) + readMore + discogsLink;
           blurbEl.style.display = "block";
         }
       }
@@ -1241,6 +1241,34 @@
     document.getElementById("f-genre").value   = "";
     document.getElementById("type").value      = "";
     doSearch(1);
+  }
+
+  // Truncate raw Discogs profile text so its plain-text equivalent is <= plainLimit chars,
+  // returning at the last word boundary. Never cuts inside a BBCode tag.
+  function truncateRaw(rawText, plainLimit) {
+    let plainCount = 0;
+    let i = 0;
+    let lastSpace = -1;
+    while (i < rawText.length) {
+      if (rawText[i] === '[') {
+        const end = rawText.indexOf(']', i);
+        if (end !== -1) {
+          const tag = rawText.slice(i, end + 1);
+          const nameMatch = tag.match(/^\[a=([^\]]+)\]$/);
+          if (nameMatch) plainCount += nameMatch[1].length;
+          // other BBCode tags count as 0 display chars
+          i = end + 1;
+          continue;
+        }
+      }
+      if (rawText[i] === ' ' && plainCount <= plainLimit) lastSpace = i;
+      if (plainCount >= plainLimit) {
+        return lastSpace > 0 ? rawText.slice(0, lastSpace) : rawText.slice(0, i);
+      }
+      plainCount++;
+      i++;
+    }
+    return rawText;
   }
 
   function stripDiscogsMarkup(text) {
