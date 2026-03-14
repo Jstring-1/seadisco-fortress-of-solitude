@@ -130,13 +130,14 @@ app.get("/artist-bio", async (req, res) => {
 
   try {
     // Fetch Discogs candidates and Wikipedia in parallel
-    const [discogsResults, wikiResult] = await Promise.all([
+    const pAll = await Promise.all([
       discogs.search(nameForSearch, { type: "artist", perPage: 5 }),
       fetchWikiSummary(nameForSearch).then(r => r ?? searchWiki(`${nameForSearch} musician`, nameForSearch)),
-    ]) as [any, any];
+    ]);
+    const discogsResults = pAll[0] as any;
+    const wikiResult     = pAll[1] as any;
 
-    const results = discogsResults;
-    const candidates: any[] = results?.results ?? [];
+    const candidates: any[] = discogsResults?.results ?? [];
 
     const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
     // Match against the full name (including suffix) so "Snail Mail (2)" finds the right entry
