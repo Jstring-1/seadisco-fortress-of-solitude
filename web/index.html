@@ -718,7 +718,8 @@
       </select>
     </label>
   </div>
-  <button id="search-btn" onclick="doSearch(1)" style="width:100%;margin-bottom:1.5rem">Search</button>
+  <button id="search-btn" onclick="doSearch(1)" style="width:100%;margin-bottom:0.75rem">Search</button>
+  <div id="search-desc" style="font-size:0.78rem;color:#555;margin-bottom:1.25rem;min-height:1em"></div>
 
   <div id="blurb"></div>
   <div id="status"></div>
@@ -797,6 +798,19 @@
     setStatus("Searching…");
     document.getElementById("results").innerHTML = "";
 
+    if (page === 1) {
+      const parts = [];
+      if (q)       parts.push(q);
+      if (artist)  parts.push(`Artist: ${artist}`);
+      if (release) parts.push(`Release: ${release}`);
+      if (year)    parts.push(`Year: ${year}`);
+      if (label)   parts.push(`Label: ${label}`);
+      if (genre)   parts.push(`Genre: ${genre}`);
+      const typeLabel = document.getElementById("type").options[document.getElementById("type").selectedIndex].text;
+      if (type)    parts.push(`Type: ${typeLabel}`);
+      document.getElementById("search-desc").textContent = parts.length ? "Search :: " + parts.join(", ") : "";
+    }
+
     const params = new URLSearchParams({ q, page, per_page: 12 });
 
     const effectiveType = type || (artist ? "master" : "");
@@ -857,6 +871,7 @@
           const shows = showsData?.shows ?? [];
           window._upcomingShows = { name: bioData.name, shows };
           const fullText = stripDiscogsMarkup(bioData.profile);
+          const entityType = artist ? 'artist' : label ? 'label' : genre ? 'genre' : 'artist';
           window._currentBio = { name: bioData.name, text: fullText };
 
           const TRUNCATE = 300;
@@ -873,7 +888,15 @@
           const heading = bioData.name
             ? `<strong style="display:block;margin-bottom:0.4rem;color:var(--accent)">${escHtml(bioData.name)}${showsLink}</strong>`
             : "";
-          blurbEl.innerHTML = heading + escHtml(shortText) + readMore;
+
+          let discogsHref = "";
+          if (entityType === 'artist') discogsHref = `https://www.discogs.com/search/?q=${encodeURIComponent(bioData.name)}&type=artist`;
+          else if (entityType === 'label') discogsHref = `https://www.discogs.com/search/?q=${encodeURIComponent(bioData.name)}&type=label`;
+          const discogsLink = discogsHref
+            ? `<br><a href="${discogsHref}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#666;text-decoration:none;margin-top:0.5rem;display:inline-block">View on Discogs ↗</a>`
+            : "";
+
+          blurbEl.innerHTML = heading + escHtml(shortText) + readMore + discogsLink;
           blurbEl.style.display = "block";
         }
       }
