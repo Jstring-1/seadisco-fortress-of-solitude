@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Discogs Search — sideman.pro</title>
+  <title>Search Discogs</title>
+  <meta name="robots" content="noindex, nofollow" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -23,10 +24,11 @@
       color: var(--text);
       font-family: system-ui, -apple-system, sans-serif;
       min-height: 100vh;
+      overflow-x: hidden;
     }
 
     header {
-      padding: 2rem 1.5rem 1rem;
+      padding: 0.6rem 1.5rem;
       border-bottom: 1px solid var(--border);
     }
 
@@ -36,22 +38,35 @@
     }
 
     header h1 {
-      font-size: 1.4rem;
+      font-size: 1rem;
       font-weight: 600;
-      letter-spacing: -0.02em;
+      letter-spacing: -0.01em;
     }
 
     main {
       max-width: 900px;
       margin: 0 auto;
-      padding: 2rem 1.5rem;
+      padding: 1.5rem 1.5rem;
     }
+
+    footer {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 1.5rem 1.5rem 2rem;
+      font-size: 0.75rem;
+      color: #555;
+      border-top: 1px solid var(--border);
+    }
+
+    footer a { color: #666; text-decoration: none; }
+    footer a:hover { color: var(--muted); }
 
     /* ── Search form ── */
     .search-row {
       display: flex;
       gap: 0.5rem;
       margin-bottom: 1rem;
+      flex-wrap: wrap;
     }
 
     input[type="text"] {
@@ -132,6 +147,49 @@
       color: var(--text);
       margin-bottom: 1.25rem;
       display: none;
+    }
+
+    /* ── Video popup ── */
+    #video-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    #video-overlay.open { display: flex; }
+
+    #video-box {
+      position: relative;
+      width: 100%;
+      max-width: 720px;
+      aspect-ratio: 16/9;
+      background: #000;
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    #video-box iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+
+    #video-close {
+      position: absolute;
+      top: -2rem;
+      right: 0;
+      background: none;
+      border: none;
+      color: #fff;
+      font-size: 1.6rem;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0.1rem 0.4rem;
     }
 
     /* ── Modal ── */
@@ -350,7 +408,7 @@
     /* ── Results grid ── */
     #results {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
       gap: 1rem;
     }
 
@@ -472,13 +530,95 @@
       font-size: 0.85rem;
       color: var(--muted);
     }
+
+    /* ── Shows popup ── */
+    #shows-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      z-index: 150;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    #shows-overlay.open { display: flex; }
+
+    #shows-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      max-width: 500px;
+      width: 100%;
+      max-height: 80vh;
+      overflow-y: auto;
+      position: relative;
+      padding: 1.25rem 1.25rem 1rem;
+    }
+
+    #shows-close {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.6rem;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 1.4rem;
+      cursor: pointer;
+      padding: 0.1rem 0.4rem;
+      line-height: 1;
+      border-radius: 4px;
+    }
+
+    #shows-close:hover { color: var(--text); background: #333; }
+
+    #shows-title {
+      font-size: 0.9rem;
+      font-weight: 600;
+      color: var(--accent);
+      margin-bottom: 1rem;
+      padding-right: 2rem;
+    }
+
+    .show-row {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.55rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.82rem;
+    }
+
+    .show-row:last-child { border-bottom: none; }
+
+    .show-date {
+      color: var(--muted);
+      min-width: 5rem;
+      flex-shrink: 0;
+      font-size: 0.78rem;
+    }
+
+    .show-info { flex: 1; }
+    .show-venue { font-weight: 500; }
+    .show-location { color: var(--muted); font-size: 0.75rem; }
+
+    .show-ticket {
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.75rem;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+
+    .show-ticket:hover { text-decoration: underline; }
   </style>
 </head>
 <body>
 
 <header>
   <div class="inner">
-    <h1>Discogs Search</h1>
+    <h1>Search Discogs</h1>
   </div>
 </header>
 
@@ -492,7 +632,6 @@
       <option value="artist">Artist</option>
       <option value="label">Label</option>
     </select>
-    <button id="search-btn" onclick="doSearch(1)">Search</button>
   </div>
 
   <div class="filters">
@@ -500,8 +639,28 @@
     <label>Release <input type="text" id="f-release" placeholder="e.g. Kind of Blue" /></label>
     <label>Year <input type="text" id="f-year" placeholder="e.g. 1973" /></label>
     <label>Label <input type="text" id="f-label" placeholder="e.g. Blue Note" /></label>
-    <label>Genre <input type="text" id="f-genre" placeholder="e.g. Jazz" /></label>
+    <label>Genre
+      <select id="f-genre">
+        <option value="">Any</option>
+        <option>Blues</option>
+        <option>Brass &amp; Military</option>
+        <option>Children's</option>
+        <option>Classical</option>
+        <option>Electronic</option>
+        <option>Folk, World, &amp; Country</option>
+        <option>Funk / Soul</option>
+        <option>Hip Hop</option>
+        <option>Jazz</option>
+        <option>Latin</option>
+        <option>Non-Music</option>
+        <option>Pop</option>
+        <option>Reggae</option>
+        <option>Rock</option>
+        <option>Stage &amp; Screen</option>
+      </select>
+    </label>
   </div>
+  <button id="search-btn" onclick="doSearch(1)" style="width:100%;margin-bottom:1.5rem">Search</button>
 
   <div id="blurb"></div>
   <div id="status"></div>
@@ -513,11 +672,31 @@
   </div>
 </main>
 
+<footer>
+  Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener">Discogs</a>
+  &amp; <a href="https://www.anthropic.com" target="_blank" rel="noopener">Claude</a>
+</footer>
+
 <div id="modal-overlay">
   <div id="modal-box">
     <button id="modal-close" onclick="closeModal()">×</button>
     <div id="modal-loading">Loading…</div>
     <div id="album-info"></div>
+  </div>
+</div>
+
+<div id="shows-overlay">
+  <div id="shows-box">
+    <button id="shows-close" onclick="closeShows()">×</button>
+    <div id="shows-title"></div>
+    <div id="shows-list"></div>
+  </div>
+</div>
+
+<div id="video-overlay">
+  <div id="video-box">
+    <button id="video-close" onclick="closeVideo()">×</button>
+    <iframe id="video-iframe" allow="autoplay; encrypted-media" allowfullscreen></iframe>
   </div>
 </div>
 
@@ -562,10 +741,24 @@
     if (label)   params.set("label",         label);
     if (genre)   params.set("genre",         genre);
 
+
     try {
-      const [res, bioRes] = await Promise.all([
+      let bioFetch   = null;
+      let showsFetch = null;
+      if (page === 1) {
+        if (artist) {
+          bioFetch   = fetch(`${API}/artist-bio?name=${encodeURIComponent(artist)}`);
+          showsFetch = fetch(`${API}/upcoming-shows?artist=${encodeURIComponent(artist)}`);
+        } else if (label) {
+          bioFetch = fetch(`${API}/label-bio?name=${encodeURIComponent(label)}`);
+        } else if (genre) {
+          bioFetch = fetch(`${API}/genre-info?genre=${encodeURIComponent(genre)}`);
+        }
+      }
+      const [res, bioRes, showsRes] = await Promise.all([
         fetch(`${API}/search?${params}`),
-        (page === 1 && artist) ? fetch(`${API}/artist-bio?name=${encodeURIComponent(artist)}`) : Promise.resolve(null),
+        bioFetch   ?? Promise.resolve(null),
+        showsFetch ?? Promise.resolve(null),
       ]);
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -573,22 +766,37 @@
       const items = data.results ?? [];
       totalPages  = data.pagination?.pages ?? 1;
 
-      // Artist bio: from filter field (already fetched in parallel), or extracted from first result
+      // Artist bio + shows: from filter (fetched in parallel) or derived from first result
       const blurbEl = document.getElementById("blurb");
       if (page === 1) {
-        let bioData = null;
+        let bioData   = null;
+        let showsData = null;
         if (bioRes) {
           bioData = await bioRes.json().catch(() => null);
-        } else if (items.length > 0) {
+        }
+        if (showsRes) {
+          showsData = await showsRes.json().catch(() => null);
+        }
+        if (!bioData && !artist && !label && !genre && items.length > 0) {
           const first = items[0];
           if ((first.type === "release" || first.type === "master") && first.title?.includes(" - ")) {
             const derivedArtist = first.title.slice(0, first.title.indexOf(" - "));
-            bioData = await fetch(`${API}/artist-bio?name=${encodeURIComponent(derivedArtist)}`).then(r => r.json()).catch(() => null);
+            [bioData, showsData] = await Promise.all([
+              fetch(`${API}/artist-bio?name=${encodeURIComponent(derivedArtist)}`).then(r => r.json()).catch(() => null),
+              fetch(`${API}/upcoming-shows?artist=${encodeURIComponent(derivedArtist)}`).then(r => r.json()).catch(() => null),
+            ]);
           }
         }
         if (bioData?.profile) {
-          blurbEl.innerHTML = (bioData.name ? `<strong style="display:block;margin-bottom:0.4rem;color:var(--accent)">${escHtml(bioData.name)}</strong>` : "")
-            + escHtml(stripDiscogsMarkup(bioData.profile));
+          const shows = showsData?.shows ?? [];
+          window._upcomingShows = { name: bioData.name, shows };
+          const showsLink = shows.length > 0
+            ? ` <a href="#" onclick="openShowsPopup(event)" style="font-size:0.75rem;color:var(--accent);font-weight:400;margin-left:0.4rem;text-decoration:none">(upcoming shows)</a>`
+            : "";
+          const heading = bioData.name
+            ? `<strong style="display:block;margin-bottom:0.4rem;color:var(--accent)">${escHtml(bioData.name)}${showsLink}</strong>`
+            : "";
+          blurbEl.innerHTML = heading + escHtml(stripDiscogsMarkup(bioData.profile));
           blurbEl.style.display = "block";
         }
       }
@@ -692,8 +900,66 @@
     if (e.target === document.getElementById("modal-overlay")) closeModal();
   });
 
+  // ── Shows popup ───────────────────────────────────────────────────────────
+  function openShowsPopup(event) {
+    event.preventDefault();
+    const { name, shows } = window._upcomingShows ?? { name: "", shows: [] };
+    document.getElementById("shows-title").textContent = `Upcoming Shows — ${name}`;
+    document.getElementById("shows-list").innerHTML = shows.length === 0
+      ? `<p style="color:var(--muted);padding:0.5rem 0">No upcoming shows found on Ticketmaster.</p>`
+      : shows.map(s => `
+        <div class="show-row">
+          <div class="show-date">${escHtml(s.date)}${s.time ? "<br>" + escHtml(s.time.slice(0,5)) : ""}</div>
+          <div class="show-info">
+            <div class="show-venue">${escHtml(s.venue)}</div>
+            <div class="show-location">${[s.city, s.country].filter(Boolean).map(escHtml).join(", ")}</div>
+          </div>
+          ${s.url ? `<a href="${s.url}" target="_blank" rel="noopener" class="show-ticket">Tickets ↗</a>` : ""}
+        </div>`).join("");
+    document.getElementById("shows-overlay").classList.add("open");
+  }
+
+  function closeShows() {
+    document.getElementById("shows-overlay").classList.remove("open");
+  }
+
+  document.getElementById("shows-overlay").addEventListener("click", e => {
+    if (e.target === document.getElementById("shows-overlay")) closeShows();
+  });
+
+  // ── Video popup ────────────────────────────────────────────────────────────
+  function openVideo(event, url) {
+    event.preventDefault();
+    event.stopPropagation();
+    const id = extractYouTubeId(url);
+    if (!id) { window.open(url, "_blank", "noopener"); return; }
+    document.getElementById("video-iframe").src = `https://www.youtube.com/embed/${id}?autoplay=1`;
+    document.getElementById("video-overlay").classList.add("open");
+  }
+
+  function closeVideo() {
+    document.getElementById("video-overlay").classList.remove("open");
+    document.getElementById("video-iframe").src = "";
+  }
+
+  function extractYouTubeId(url) {
+    try {
+      const u = new URL(url);
+      if (u.hostname === "youtu.be") return u.pathname.slice(1);
+      return u.searchParams.get("v");
+    } catch { return null; }
+  }
+
+  document.getElementById("video-overlay").addEventListener("click", e => {
+    if (e.target === document.getElementById("video-overlay")) closeVideo();
+  });
+
   document.addEventListener("keydown", e => {
-    if (e.key === "Escape") closeModal();
+    if (e.key === "Escape") {
+      closeVideo();
+      closeModal();
+      closeShows();
+    }
   });
 
   // ── Album info panel ──────────────────────────────────────────────────────
@@ -747,7 +1013,7 @@
         ${tracks.map(t => {
           const url = findVideo(t.title || "");
           const titleEl = url
-            ? `<a class="track-link" href="${url}" target="_blank" rel="noopener">${escHtml(t.title || "")}</a>`
+            ? `<a class="track-link" href="#" onclick="openVideo(event,'${url.replace(/'/g, "\\'")}')">${escHtml(t.title || "")} ▶</a>`
             : escHtml(t.title || "");
           return `<div class="track">
             <span class="track-pos">${escHtml(t.position || "")}</span>
@@ -807,9 +1073,11 @@
       .replace(/"/g, "&quot;");
   }
 
-  // Submit on Enter
-  document.getElementById("query").addEventListener("keydown", e => {
-    if (e.key === "Enter") doSearch(1);
+  // Submit on Enter (all text inputs)
+  ["query", "f-artist", "f-release", "f-year", "f-label"].forEach(id => {
+    document.getElementById(id).addEventListener("keydown", e => {
+      if (e.key === "Enter") doSearch(1);
+    });
   });
 </script>
 </body>

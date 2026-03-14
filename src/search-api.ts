@@ -7,7 +7,8 @@ if (!token) {
   process.exit(1);
 }
 
-const anthropicKey = process.env.ANTHROPIC_API_KEY ?? "";
+const anthropicKey     = process.env.ANTHROPIC_API_KEY     ?? "";
+const ticketmasterKey  = process.env.TICKETMASTER_API_KEY  ?? "";
 
 const discogs = new DiscogsClient(token);
 const app = express();
@@ -193,6 +194,42 @@ app.get("/genre-info", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.json({ profile: null });
+  }
+});
+
+// GET /upcoming-shows?artist=Dead+Milkmen — returns upcoming Ticketmaster events
+app.get("/upcoming-shows", async (req, res) => {
+  const artist = req.query.artist as string;
+  if (!artist || !artist.trim()) {
+    res.status(400).json({ error: "Missing required query parameter: artist" });
+    return;
+  }
+  if (!ticketmasterKey) { res.json({ shows: [] }); return; }
+
+  try {
+    const url = new URL("https://app.ticketmaster.com/discovery/v2/events.json");
+    url.searchParams.set("apikey", ticketmasterKey);
+    url.searchParams.set("keyword", artist);
+    url.searchParams.set("classificationName", "music");
+    url.searchParams.set("size", "10");
+    url.searchParams.set("sort", "date,asc");
+
+    const r = await fetch(url.toString());
+    const data = await r.json() as any;
+    const events = data?._embedded?.events ?? [];
+    const shows = events.map((e: any) => ({
+      name:    e.name ?? "",
+      date:    e.dates?.start?.localDate ?? "",
+      time:    e.dates?.start?.localTime ?? "",
+      venue:   e._embedded?.venues?.[0]?.name ?? "",
+      city:    e._embedded?.venues?.[0]?.city?.name ?? "",
+      country: e._embedded?.venues?.[0]?.country?.name ?? "",
+      url:     e.url ?? "",
+    }));
+    res.json({ shows });
+  } catch (err) {
+    console.error(err);
+    res.json({ shows: [] });
   }
 });
 
