@@ -84,7 +84,40 @@ app.get("/artist/:id", async (req, res) => {
 
 const MB_UA = "DiscogsMCPSearch/1.0 ( search@sideman.pro )";
 
-// GET /artist-bio?name=Miles+Davis — fetches bio via MusicBrainz → Wikipedia, falls back to Discogs
+// Helper: fetch a Wikipedia extract by article title
+async function fetchWikiSummary(title: string): Promise<{ extract: string; displayTitle: string } | null> {
+  try {
+    const r = await fetch(
+      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
+      { headers: { "User-Agent": MB_UA } }
+    );
+    if (!r.ok) return null;
+    const d = await r.json() as any;
+    if (d.type === "standard" && d.extract) return { extract: d.extract, displayTitle: d.title ?? title };
+  } catch { /* fall through */ }
+  return null;
+}
+
+// Helper: search Wikipedia and return best-matching article summary
+async function searchWiki(query: string, name: string): Promise<{ extract: string; displayTitle: string } | null> {
+  try {
+    const r = await fetch(
+      `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&utf8=1&srlimit=5`,
+      { headers: { "User-Agent": MB_UA } }
+    );
+    const d = await r.json() as any;
+    const hits: any[] = d?.query?.search ?? [];
+    if (!hits.length) return null;
+
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
+    const target = norm(name);
+    // Prefer exact title match, otherwise use top result
+    const best = hits.find(h => norm(h.title) === target) ?? hits[0];
+    return fetchWikiSummary(best.title);
+  } catch { return null; }
+}
+
+// GET /artist-bio?name=Miles+Davis — Wikipedia first, Discogs fallback
 app.get("/artist-bio", async (req, res) => {
   const nameRaw = req.query.name as string;
   if (!nameRaw || !nameRaw.trim()) {
@@ -94,56 +127,29 @@ app.get("/artist-bio", async (req, res) => {
   const name = nameRaw.replace(/\s*\(\d+\)$/, "").trim();
 
   try {
-    // 1. Search MusicBrainz — fetch top 5 results and prefer the closest name match
-    const mbSearchUrl = `https://musicbrainz.org/ws/2/artist/?query=artist:${encodeURIComponent(name)}&fmt=json&limit=5`;
-    const mbSearchRes = await fetch(mbSearchUrl, { headers: { "User-Agent": MB_UA } });
-    const mbSearchData = await mbSearchRes.json() as any;
-    const mbCandidates: any[] = mbSearchData?.artists ?? [];
+    // 1. Try Wikipedia direct (works when article title matches artist name exactly)
+    let wiki = await fetchWikiSummary(name);
 
-    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
-    const searchNorm = norm(name);
-    // Exact match first, then starts-with / contained-by, then fall back to rank #1
-    const mbArtist =
-      mbCandidates.find(a => norm(a.name) === searchNorm) ??
-      mbCandidates.find(a => {
-        const an = norm(a.name);
-        return an.startsWith(searchNorm) || searchNorm.startsWith(an);
-      }) ??
-      mbCandidates[0];
-
-    const mbid      = mbArtist?.id;
-    const mbName    = mbArtist?.name ?? name;
-
-    if (mbid) {
-      // 2. Get URL relations to find Wikipedia link
-      const mbArtistUrl = `https://musicbrainz.org/ws/2/artist/${mbid}?inc=url-rels&fmt=json`;
-      const mbArtistRes = await fetch(mbArtistUrl, { headers: { "User-Agent": MB_UA } });
-      const mbArtistData = await mbArtistRes.json() as any;
-
-      const wikiRel = (mbArtistData?.relations ?? []).find((r: any) =>
-        r.url?.resource?.includes("en.wikipedia.org/wiki/")
-      );
-
-      if (wikiRel) {
-        // 3. Fetch Wikipedia summary
-        const wikiTitle = decodeURIComponent(wikiRel.url.resource.split("/wiki/")[1]);
-        const wikiRes = await fetch(
-          `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiTitle)}`
-        );
-        const wikiData = await wikiRes.json() as any;
-        const profile  = wikiData?.extract ?? null;
-        if (profile) { res.json({ profile, name: mbName }); return; }
-      }
+    // 2. If no direct hit (disambiguation page, 404, etc.), search Wikipedia
+    if (!wiki) {
+      wiki = await searchWiki(`${name} musician`, name)
+          ?? await searchWiki(`${name} singer`, name)
+          ?? await searchWiki(name, name);
     }
 
-    // Fallback: Discogs profile
+    if (wiki) {
+      res.json({ profile: wiki.extract, name: wiki.displayTitle });
+      return;
+    }
+
+    // 3. Fallback: Discogs profile
     const results = await discogs.search(name, { type: "artist", perPage: 1 }) as any;
     const first = results?.results?.[0];
-    if (!first?.id) { res.json({ profile: null, name: mbName ?? name }); return; }
+    if (!first?.id) { res.json({ profile: null, name }); return; }
     const artist = await discogs.getArtist(first.id) as any;
     let profile: string | null = artist?.profile ?? null;
     if (profile) profile = await resolveDiscogsIds(profile);
-    res.json({ profile, name: artist?.name ?? mbName ?? name });
+    res.json({ profile, name: artist?.name ?? name });
   } catch (err) {
     console.error(err);
     res.json({ profile: null });
@@ -186,7 +192,7 @@ async function resolveDiscogsIds(profile: string): Promise<string> {
   return profile;
 }
 
-// GET /label-bio?name=Blue+Note — searches for label, returns their Discogs profile
+// GET /label-bio?name=Blue+Note — Wikipedia first, Discogs fallback
 app.get("/label-bio", async (req, res) => {
   const name = req.query.name as string;
   if (!name || !name.trim()) {
@@ -195,14 +201,23 @@ app.get("/label-bio", async (req, res) => {
   }
 
   try {
+    // 1. Try Wikipedia direct, then search with "record label" context
+    let wiki = await fetchWikiSummary(name)
+            ?? await searchWiki(`${name} record label`, name)
+            ?? await searchWiki(`${name} records`, name);
+
+    if (wiki) {
+      res.json({ profile: wiki.extract, name: wiki.displayTitle });
+      return;
+    }
+
+    // 2. Fallback: Discogs label profile
     const results = await discogs.search(name, { type: "label", perPage: 1 }) as any;
     const first = results?.results?.[0];
-    if (!first?.id) { res.json({ profile: null }); return; }
-
+    if (!first?.id) { res.json({ profile: null, name }); return; }
     const label = await discogs.getLabel(first.id) as any;
     let profile: string | null = label?.profile ?? null;
     if (profile) profile = await resolveDiscogsIds(profile);
-
     res.json({ profile, name: label?.name ?? name });
   } catch (err) {
     console.error(err);
