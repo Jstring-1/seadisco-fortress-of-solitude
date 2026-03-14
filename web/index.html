@@ -347,19 +347,19 @@
     if (genre)   params.set("genre",         genre);
 
     try {
-      const [res, blurbRes] = await Promise.all([
+      const [res, bioRes] = await Promise.all([
         fetch(`${API}/search?${params}`),
-        page === 1 ? fetch(`${API}/blurb?q=${encodeURIComponent(q)}`) : Promise.resolve(null),
+        (page === 1 && artist) ? fetch(`${API}/artist-bio?name=${encodeURIComponent(artist)}`) : Promise.resolve(null),
       ]);
 
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
 
-      if (blurbRes) {
-        const blurbData = await blurbRes.json().catch(() => null);
-        const blurbEl = document.getElementById("blurb");
-        if (blurbData?.blurb) {
-          blurbEl.textContent = blurbData.blurb;
+      const blurbEl = document.getElementById("blurb");
+      if (bioRes) {
+        const bioData = await bioRes.json().catch(() => null);
+        if (bioData?.profile) {
+          blurbEl.textContent = bioData.profile;
           blurbEl.style.display = "block";
         }
       }
