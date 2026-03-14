@@ -78,7 +78,9 @@ app.get("/artist/:id", async (req, res) => {
   }
 });
 
-// GET /artist-bio?name=Miles+Davis — searches for artist, returns their Discogs profile
+const MB_UA = "DiscogsMCPSearch/1.0 ( search@sideman.pro )";
+
+// GET /artist-bio?name=Miles+Davis — fetches bio via MusicBrainz → Wikipedia, falls back to Discogs
 app.get("/artist-bio", async (req, res) => {
   const name = req.query.name as string;
   if (!name || !name.trim()) {
@@ -87,15 +89,44 @@ app.get("/artist-bio", async (req, res) => {
   }
 
   try {
+    // 1. Search MusicBrainz for the artist
+    const mbSearchUrl = `https://musicbrainz.org/ws/2/artist/?query=artist:${encodeURIComponent(name)}&fmt=json&limit=1`;
+    const mbSearchRes = await fetch(mbSearchUrl, { headers: { "User-Agent": MB_UA } });
+    const mbSearchData = await mbSearchRes.json() as any;
+    const mbArtist = mbSearchData?.artists?.[0];
+    const mbid     = mbArtist?.id;
+    const mbName   = mbArtist?.name ?? name;
+
+    if (mbid) {
+      // 2. Get URL relations to find Wikipedia link
+      const mbArtistUrl = `https://musicbrainz.org/ws/2/artist/${mbid}?inc=url-rels&fmt=json`;
+      const mbArtistRes = await fetch(mbArtistUrl, { headers: { "User-Agent": MB_UA } });
+      const mbArtistData = await mbArtistRes.json() as any;
+
+      const wikiRel = (mbArtistData?.relations ?? []).find((r: any) =>
+        r.url?.resource?.includes("en.wikipedia.org/wiki/")
+      );
+
+      if (wikiRel) {
+        // 3. Fetch Wikipedia summary
+        const wikiTitle = decodeURIComponent(wikiRel.url.resource.split("/wiki/")[1]);
+        const wikiRes = await fetch(
+          `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiTitle)}`
+        );
+        const wikiData = await wikiRes.json() as any;
+        const profile  = wikiData?.extract ?? null;
+        if (profile) { res.json({ profile, name: mbName }); return; }
+      }
+    }
+
+    // Fallback: Discogs profile
     const results = await discogs.search(name, { type: "artist", perPage: 1 }) as any;
     const first = results?.results?.[0];
-    if (!first?.id) { res.json({ profile: null }); return; }
-
+    if (!first?.id) { res.json({ profile: null, name: mbName ?? name }); return; }
     const artist = await discogs.getArtist(first.id) as any;
     let profile: string | null = artist?.profile ?? null;
     if (profile) profile = await resolveDiscogsIds(profile);
-
-    res.json({ profile, name: artist?.name ?? name });
+    res.json({ profile, name: artist?.name ?? mbName ?? name });
   } catch (err) {
     console.error(err);
     res.json({ profile: null });

@@ -612,6 +612,64 @@
     }
 
     .show-ticket:hover { text-decoration: underline; }
+
+    /* ── Bio full popup ── */
+    #bio-full-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.75);
+      z-index: 160;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+
+    #bio-full-overlay.open { display: flex; }
+
+    #bio-full-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--accent);
+      border-radius: var(--radius);
+      max-width: 620px;
+      width: 100%;
+      max-height: 82vh;
+      overflow-y: auto;
+      position: relative;
+      padding: 1.25rem 1.4rem 1.4rem;
+    }
+
+    #bio-full-close {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.6rem;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 1.4rem;
+      cursor: pointer;
+      padding: 0.1rem 0.4rem;
+      line-height: 1;
+      border-radius: 4px;
+    }
+
+    #bio-full-close:hover { color: var(--text); background: #333; }
+
+    #bio-full-name {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--accent);
+      margin-bottom: 0.75rem;
+      padding-right: 2rem;
+    }
+
+    #bio-full-text {
+      font-size: 0.88rem;
+      line-height: 1.65;
+      color: var(--text);
+      white-space: pre-wrap;
+    }
   </style>
 </head>
 <body>
@@ -682,6 +740,14 @@
     <button id="modal-close" onclick="closeModal()">×</button>
     <div id="modal-loading">Loading…</div>
     <div id="album-info"></div>
+  </div>
+</div>
+
+<div id="bio-full-overlay">
+  <div id="bio-full-box">
+    <button id="bio-full-close" onclick="closeBioFull()">×</button>
+    <div id="bio-full-name"></div>
+    <div id="bio-full-text"></div>
   </div>
 </div>
 
@@ -790,13 +856,24 @@
         if (bioData?.profile) {
           const shows = showsData?.shows ?? [];
           window._upcomingShows = { name: bioData.name, shows };
+          const fullText = stripDiscogsMarkup(bioData.profile);
+          window._currentBio = { name: bioData.name, text: fullText };
+
+          const TRUNCATE = 300;
+          const needsMore = fullText.length > TRUNCATE;
+          const cut = needsMore ? fullText.lastIndexOf(' ', TRUNCATE) : -1;
+          const shortText = needsMore ? fullText.slice(0, cut > 0 ? cut : TRUNCATE) + '…' : fullText;
+
           const showsLink = shows.length > 0
             ? ` <a href="#" onclick="openShowsPopup(event)" style="font-size:0.75rem;color:var(--accent);font-weight:400;margin-left:0.4rem;text-decoration:none">(upcoming shows)</a>`
+            : "";
+          const readMore = needsMore
+            ? ` <a href="#" onclick="openBioFull(event)" style="font-size:0.8rem;color:var(--accent);white-space:nowrap;text-decoration:none">read more</a>`
             : "";
           const heading = bioData.name
             ? `<strong style="display:block;margin-bottom:0.4rem;color:var(--accent)">${escHtml(bioData.name)}${showsLink}</strong>`
             : "";
-          blurbEl.innerHTML = heading + escHtml(stripDiscogsMarkup(bioData.profile));
+          blurbEl.innerHTML = heading + escHtml(shortText) + readMore;
           blurbEl.style.display = "block";
         }
       }
@@ -842,10 +919,14 @@
         : `<div class="thumb-placeholder">♪</div>`;
 
       const isRelease = type === "release" || type === "master";
+      const isArtist  = type === "artist";
+      const isLabel   = type === "label";
       if (isRelease) itemCache.set(String(item.id), item);
       const cardAttrs = isRelease
         ? `class="card" href="#" onclick="openModal(event,'${item.id}','${type}','${url.replace(/'/g, "\\'")}')" `
-        : `class="card" href="${url}" target="_blank" rel="noopener"`;
+        : (isArtist || isLabel)
+          ? `class="card" href="#" data-entity-type="${escHtml(type)}" data-entity-name="${escHtml(title)}" onclick="searchByEntity(event,this)"`
+          : `class="card" href="${url}" target="_blank" rel="noopener"`;
 
       return `
         <a ${cardAttrs}>
@@ -898,6 +979,23 @@
 
   document.getElementById("modal-overlay").addEventListener("click", e => {
     if (e.target === document.getElementById("modal-overlay")) closeModal();
+  });
+
+  // ── Bio full popup ────────────────────────────────────────────────────────
+  function openBioFull(event) {
+    event.preventDefault();
+    const { name, text } = window._currentBio ?? { name: "", text: "" };
+    document.getElementById("bio-full-name").textContent = name;
+    document.getElementById("bio-full-text").textContent = text;
+    document.getElementById("bio-full-overlay").classList.add("open");
+  }
+
+  function closeBioFull() {
+    document.getElementById("bio-full-overlay").classList.remove("open");
+  }
+
+  document.getElementById("bio-full-overlay").addEventListener("click", e => {
+    if (e.target === document.getElementById("bio-full-overlay")) closeBioFull();
   });
 
   // ── Shows popup ───────────────────────────────────────────────────────────
@@ -959,6 +1057,7 @@
       closeVideo();
       closeModal();
       closeShows();
+      closeBioFull();
     }
   });
 
@@ -1071,6 +1170,23 @@
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;");
+  }
+
+  // ── Entity card click → new search ───────────────────────────────────────
+  function searchByEntity(event, el) {
+    event.preventDefault();
+    const type = el.dataset.entityType;
+    const name = el.dataset.entityName;
+    document.getElementById("query").value = "";
+    document.getElementById("type").value  = "";
+    document.getElementById("f-artist").value  = "";
+    document.getElementById("f-release").value = "";
+    document.getElementById("f-year").value    = "";
+    document.getElementById("f-label").value   = "";
+    document.getElementById("f-genre").value   = "";
+    if (type === "artist") document.getElementById("f-artist").value = name;
+    if (type === "label")  document.getElementById("f-label").value  = name;
+    doSearch(1);
   }
 
   // Submit on Enter (all text inputs)
