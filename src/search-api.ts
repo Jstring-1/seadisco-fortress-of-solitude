@@ -94,11 +94,23 @@ app.get("/artist-bio", async (req, res) => {
   const name = nameRaw.replace(/\s*\(\d+\)$/, "").trim();
 
   try {
-    // 1. Search MusicBrainz for the artist
-    const mbSearchUrl = `https://musicbrainz.org/ws/2/artist/?query=artist:${encodeURIComponent(name)}&fmt=json&limit=1`;
+    // 1. Search MusicBrainz — fetch top 5 results and prefer the closest name match
+    const mbSearchUrl = `https://musicbrainz.org/ws/2/artist/?query=artist:${encodeURIComponent(name)}&fmt=json&limit=5`;
     const mbSearchRes = await fetch(mbSearchUrl, { headers: { "User-Agent": MB_UA } });
     const mbSearchData = await mbSearchRes.json() as any;
-    const mbArtist  = mbSearchData?.artists?.[0];
+    const mbCandidates: any[] = mbSearchData?.artists ?? [];
+
+    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
+    const searchNorm = norm(name);
+    // Exact match first, then starts-with / contained-by, then fall back to rank #1
+    const mbArtist =
+      mbCandidates.find(a => norm(a.name) === searchNorm) ??
+      mbCandidates.find(a => {
+        const an = norm(a.name);
+        return an.startsWith(searchNorm) || searchNorm.startsWith(an);
+      }) ??
+      mbCandidates[0];
+
     const mbid      = mbArtist?.id;
     const mbName    = mbArtist?.name ?? name;
 
