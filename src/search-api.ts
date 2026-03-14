@@ -21,6 +21,10 @@ app.use((_req, res, next) => {
   next();
 });
 
+function stripArtistSuffix(name: string | undefined): string | undefined {
+  return name ? name.replace(/\s*\(\d+\)$/, "").trim() : undefined;
+}
+
 // GET /search?q=pink+floyd&type=master&year=1973&page=1&per_page=10
 app.get("/search", async (req, res) => {
   const q = (req.query.q as string) ?? "";
@@ -28,7 +32,7 @@ app.get("/search", async (req, res) => {
   try {
     const results = await discogs.search(q, {
       type: req.query.type as "release" | "master" | "artist" | "label" | undefined,
-      artist: req.query.artist as string | undefined,
+      artist: stripArtistSuffix(req.query.artist as string | undefined),
       releaseTitle: req.query.release_title as string | undefined,
       label: req.query.label as string | undefined,
       year: req.query.year as string | undefined,
@@ -82,11 +86,12 @@ const MB_UA = "DiscogsMCPSearch/1.0 ( search@sideman.pro )";
 
 // GET /artist-bio?name=Miles+Davis — fetches bio via MusicBrainz → Wikipedia, falls back to Discogs
 app.get("/artist-bio", async (req, res) => {
-  const name = req.query.name as string;
-  if (!name || !name.trim()) {
+  const nameRaw = req.query.name as string;
+  if (!nameRaw || !nameRaw.trim()) {
     res.status(400).json({ error: "Missing required query parameter: name" });
     return;
   }
+  const name = nameRaw.replace(/\s*\(\d+\)$/, "").trim();
 
   try {
     // 1. Search MusicBrainz for the artist (get top 5 for disambiguation)

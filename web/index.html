@@ -780,7 +780,7 @@
   async function doSearch(page = 1) {
     const q       = document.getElementById("query").value.trim();
     const type    = document.getElementById("type").value;
-    const artist  = document.getElementById("f-artist").value.trim();
+    const artist  = document.getElementById("f-artist").value.trim().replace(/\s*\(\d+\)$/, "");
     const release = document.getElementById("f-release").value.trim();
     const year    = document.getElementById("f-year").value.trim();
     const label   = document.getElementById("f-label").value.trim();
