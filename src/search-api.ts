@@ -1,5 +1,9 @@
 import express from "express";
+import { fileURLToPath } from "url";
+import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const token = process.env.DISCOGS_TOKEN;
 if (!token) {
@@ -12,6 +16,9 @@ const ticketmasterKey  = process.env.TICKETMASTER_API_KEY  ?? "";
 
 const discogs = new DiscogsClient(token);
 const app = express();
+
+// Serve static files from web/ (logo, etc.)
+app.use(express.static(path.join(__dirname, "../web")));
 
 // Allow any webpage to call this API
 app.use((_req, res, next) => {
