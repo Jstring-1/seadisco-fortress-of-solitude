@@ -435,11 +435,11 @@
       display: inline-flex;
       align-items: center;
       margin-left: 0.4em;
-      opacity: 0.4;
-      transition: opacity 0.15s;
       flex-shrink: 0;
+      filter: grayscale(1) brightness(0.6);
+      transition: filter 0.15s;
     }
-    #album-info .yt-search:hover { opacity: 1; }
+    #album-info .yt-search:hover { filter: none; }
 
     #album-info .album-extra {
       border-top: 1px solid var(--border);
