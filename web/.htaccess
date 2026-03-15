@@ -1,0 +1,9 @@
+# Block search engines and crawlers
+Header set X-Robots-Tag "noindex, nofollow"
+
+# Block common crawler user agents
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteCond %{HTTP_USER_AGENT} (Googlebot|Bingbot|Slurp|DuckDuckBot|Baiduspider|YandexBot|Sogou|Exabot|facebot|ia_archiver|AhrefsBot|SemrushBot|MJ12bot|DotBot|rogerbot) [NC]
+  RewriteRule .* - [F,L]
+</IfModule>

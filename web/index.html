@@ -29,7 +29,6 @@
 
     header {
       padding: 0.6rem 1.5rem;
-      border-bottom: 1px solid var(--border);
     }
 
     header .inner {
@@ -44,7 +43,7 @@
       line-height: 1;
     }
     header h1 a img {
-      height: 52px;
+      height: 80px;
       width: auto;
       display: block;
     }
@@ -52,13 +51,13 @@
     main {
       max-width: 900px;
       margin: 0 auto;
-      padding: 1.5rem 1.5rem;
+      padding: 0.6rem 1.5rem 1.5rem;
     }
 
     footer {
       max-width: 900px;
       margin: 0 auto;
-      padding: 1.5rem 1.5rem 2rem;
+      padding: 0.6rem 1.5rem 0.8rem;
       font-size: 0.75rem;
       color: #555;
       border-top: 1px solid var(--border);
@@ -185,6 +184,8 @@
       background: #000;
       border-radius: var(--radius);
       overflow: hidden;
+      padding-bottom: 5rem;
+      box-sizing: content-box;
     }
 
     #video-box iframe, #video-player {
@@ -206,9 +207,16 @@
       padding: 0.1rem 0.4rem;
     }
 
+    #video-footer {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      background: rgba(0,0,0,0.82);
+      padding: 0.5rem 0.75rem 0.6rem;
+    }
+
     #video-title {
       text-align: center;
-      padding: 0.4rem 0.25rem 0.1rem;
+      padding: 0.1rem 0.25rem 0.1rem;
       color: #e0e0e0;
       font-size: 0.82rem;
       line-height: 1.4;
@@ -222,7 +230,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-top: 0.4rem;
+      margin-top: 0.5rem;
       gap: 0.5rem;
     }
 
@@ -866,8 +874,9 @@
 </main>
 
 <footer>
-  Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener">Discogs</a>
-  &amp; <a href="https://www.anthropic.com" target="_blank" rel="noopener">Claude</a>
+  SeaDisco is powered by <a href="https://www.discogs.com" target="_blank" rel="noopener">Discogs</a>,
+  <a href="https://www.anthropic.com" target="_blank" rel="noopener">Claude</a>,
+  and <a href="https://www.wikipedia.org" target="_blank" rel="noopener">Wikipedia</a>
 </footer>
 
 <div id="modal-overlay">
@@ -903,11 +912,13 @@
       <button id="video-close" onclick="closeVideo()">×</button>
       <button class="popup-share" onclick="sharePopup(this)">share</button>
       <div id="video-player"></div>
-    </div>
-    <div id="video-title"></div>
-    <div id="video-nav">
-      <button id="video-prev" onclick="videoPrev()" disabled>&#8592; prev</button>
-      <button id="video-next" onclick="playNextVideo()" disabled>next &#8594;</button>
+      <div id="video-footer">
+        <div id="video-title"></div>
+        <div id="video-nav">
+          <button id="video-prev" onclick="videoPrev()" disabled>&#8592; prev</button>
+          <button id="video-next" onclick="playNextVideo()" disabled>next &#8594;</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
