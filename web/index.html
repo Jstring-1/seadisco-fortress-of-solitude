@@ -825,9 +825,9 @@
   </div>
 
   <div class="filters">
-    <label>Artist <input type="text" id="f-artist" placeholder="e.g. Miles Davis" oninput="autoTypeDisabled=false;currentArtistId=null" /></label>
+    <label>Artist <input type="text" id="f-artist" placeholder="e.g. Miles Davis" oninput="currentArtistId=null" /></label>
     <label>Release <input type="text" id="f-release" placeholder="e.g. Kind of Blue" /></label>
-    <label>Label <input type="text" id="f-label" placeholder="e.g. Blue Note" oninput="autoTypeDisabled=false" /></label>
+    <label>Label <input type="text" id="f-label" placeholder="e.g. Blue Note" /></label>
     <label>Year <input type="text" id="f-year" placeholder="e.g. 1973" /></label>
     <label>Genre
       <select id="f-genre">
@@ -941,7 +941,6 @@
   let currentPage = 1;
   let totalPages  = 1;
   const itemCache = new Map(); // id → search result item
-  let autoTypeDisabled = false; // persists through pagination, reset on manual search
   let currentArtistId  = null;  // Discogs artist ID when navigating from a known card/link
 
   // ── Search ────────────────────────────────────────────────────────────────
@@ -977,7 +976,7 @@
     document.getElementById("f-sort").value = "";
   }
 
-  async function doSearch(page = 1, skipPushState = false, skipAutoType = false) {
+  async function doSearch(page = 1, skipPushState = false) {
     const q         = document.getElementById("query").value.trim();
     const artistRaw = document.getElementById("f-artist").value.trim();
     const artist    = artistRaw.replace(/\s*\(\d+\)$/, ""); // stripped for search params
@@ -1016,29 +1015,14 @@
       document.getElementById("search-pipe").style.display = descText ? "inline" : "none";
     }
 
-    // Auto-force type when only a single filter field is filled.
-    // For artist/label, Discogs expects the name in q (not the filter param) when searching by type.
-    const filledFilters = [q && 'q', artist && 'artist', release && 'release',
-      year && 'year', label && 'label', genre && 'genre'].filter(Boolean);
-    let effectiveType = "";
-    let searchQ       = q;
-    let searchArtist  = artist;
-    let searchLabel   = label;
-    if (!skipAutoType && !autoTypeDisabled && filledFilters.length === 1) {
-      if (filledFilters[0] === 'artist')       { effectiveType = 'artist';  searchQ = artist; searchArtist = ""; }
-      else if (filledFilters[0] === 'label')   { effectiveType = 'label';   searchQ = label;  searchLabel  = ""; }
-      else if (filledFilters[0] === 'release') { effectiveType = 'release'; }
-    }
+    const params = new URLSearchParams({ q: q || artist || label || release, page, per_page: 12 });
 
-    const params = new URLSearchParams({ q: searchQ, page, per_page: 12 });
-
-    if (effectiveType) params.set("type",          effectiveType);
-    if (searchArtist)  params.set("artist",        searchArtist);
-    if (release)       params.set("release_title", release);
-    if (year)          params.set("year",          year);
-    if (searchLabel)   params.set("label",         searchLabel);
-    if (genre)         params.set("genre",         genre);
-    if (sort && effectiveType !== "artist" && effectiveType !== "label") {
+    if (artist)  params.set("artist",        artist);
+    if (release) params.set("release_title", release);
+    if (year)    params.set("year",          year);
+    if (label)   params.set("label",         label);
+    if (genre)   params.set("genre",         genre);
+    if (sort) {
       const [sortField, sortOrder] = sort.split(":");
       params.set("sort",       sortField);
       params.set("sort_order", sortOrder);
@@ -1649,8 +1633,7 @@
     document.getElementById("f-label").value   = "";
     document.getElementById("f-genre").value   = "";
     currentArtistId = el.dataset.artistId || null;
-    autoTypeDisabled = true;
-    doSearch(1, false, true);
+    doSearch(1);
   }
 
   // Truncate raw Discogs profile text so its plain-text equivalent is <= plainLimit chars,
@@ -1722,8 +1705,7 @@
     document.getElementById("f-year").value    = "";
     document.getElementById("f-label").value   = "";
     document.getElementById("f-genre").value   = "";
-    autoTypeDisabled = true;
-    doSearch(1, false, true);
+    doSearch(1);
   }
 
   function selectAltArtist(event, el) {
@@ -1731,8 +1713,7 @@
     document.getElementById("f-artist").value = el.dataset.altName;
     document.getElementById("query").value = "";
     currentArtistId = el.dataset.altId || null;
-    autoTypeDisabled = true;
-    doSearch(1, false, true);
+    doSearch(1);
   }
 
   function openAltsPopup(event) {
@@ -1763,8 +1744,7 @@
       currentArtistId = el.dataset.entityId || null;
     }
     if (type === "label")  document.getElementById("f-label").value  = name;
-    autoTypeDisabled = true;
-    doSearch(1, false, true);
+    doSearch(1);
   }
 
   // ── Browser back / forward ───────────────────────────────────────────────
