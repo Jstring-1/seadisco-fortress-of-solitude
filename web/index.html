@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Search Discogs</title>
+  <title>SeaDisco</title>
   <meta name="robots" content="noindex, nofollow" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -94,6 +94,7 @@
       padding: 0.65rem 0.75rem;
       outline: none;
       cursor: pointer;
+      color-scheme: dark;
     }
 
     button {
@@ -163,17 +164,24 @@
 
     #video-overlay.open { display: flex; }
 
+    #video-wrap {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      width: 100%;
+      max-width: 720px;
+    }
+
     #video-box {
       position: relative;
       width: 100%;
-      max-width: 720px;
       aspect-ratio: 16/9;
       background: #000;
       border-radius: var(--radius);
       overflow: hidden;
     }
 
-    #video-box iframe {
+    #video-box iframe, #video-player {
       width: 100%;
       height: 100%;
       border: none;
@@ -191,6 +199,41 @@
       cursor: pointer;
       padding: 0.1rem 0.4rem;
     }
+
+    #video-title {
+      text-align: center;
+      padding: 0.4rem 0.25rem 0.1rem;
+      color: #e0e0e0;
+      font-size: 0.82rem;
+      line-height: 1.4;
+      min-height: 1.2em;
+    }
+
+    #video-title .vt-track { font-weight: 600; color: #fff; }
+    #video-title .vt-sep   { color: #666; margin: 0 0.3em; }
+
+    #video-nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 0.4rem;
+      gap: 0.5rem;
+    }
+
+    #video-nav button {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.2);
+      color: #fff;
+      font-size: 1.2rem;
+      padding: 0.3rem 1rem;
+      border-radius: var(--radius);
+      cursor: pointer;
+      transition: background 0.15s;
+      flex: 1;
+    }
+
+    #video-nav button:hover:not(:disabled) { background: rgba(255,255,255,0.2); }
+    #video-nav button:disabled { opacity: 0.3; cursor: default; }
 
     /* ── Modal ── */
     #modal-overlay {
@@ -234,6 +277,13 @@
     }
 
     #modal-close:hover { color: var(--text); background: #333; }
+    .popup-share {
+      background: none; border: none; cursor: pointer;
+      font-size: 0.72rem; color: var(--muted); padding: 0.2rem 0.5rem;
+      border-radius: 4px; float: right; margin: 0.6rem 0.2rem 0 0;
+      letter-spacing: 0.03em;
+    }
+    .popup-share:hover { color: var(--accent); background: #222; }
 
     #modal-loading {
       padding: 2rem;
@@ -304,9 +354,11 @@
 
     #album-info .album-meta .album-artist {
       color: var(--accent);
-      font-size: 0.9rem;
+      font-size: 0.75rem;
       margin-bottom: 0.5rem;
     }
+    .modal-artist-link { color: var(--accent); text-decoration: none; font-size: 0.75rem; }
+    .modal-artist-link:hover { text-decoration: underline; }
 
     #album-info .album-detail-grid {
       display: grid;
@@ -503,6 +555,16 @@
       letter-spacing: 0.04em;
     }
 
+    /* ── Card type border colours ── */
+    .card-type-artist  { border-bottom: 3px solid #4b0082; }
+    .card-type-label   { border-bottom: 3px solid #228b22; }
+    .card-type-master  { border-bottom: 3px solid #cc2200; }
+    .card-type-release { border-bottom: 3px solid #8b2020; }
+    .card-type-artist:hover  { border-color: #4b0082; }
+    .card-type-label:hover   { border-color: #228b22; }
+    .card-type-master:hover  { border-color: #cc2200; }
+    .card-type-release:hover { border-color: #8b2020; }
+
     /* ── Pagination ── */
     #pagination {
       display: flex;
@@ -687,27 +749,20 @@
 
 <header>
   <div class="inner">
-    <h1>Search Discogs</h1>
+    <h1><a href="https://ai.sideman.pro" style="color:inherit;text-decoration:none">SeaDisco</a></h1>
   </div>
 </header>
 
 <main>
   <div class="search-row">
     <input type="text" id="query" placeholder="Search artists, releases, labels…" autocomplete="off" />
-    <select id="type">
-      <option value="">All types</option>
-      <option value="release">Release</option>
-      <option value="master">Master</option>
-      <option value="artist">Artist</option>
-      <option value="label">Label</option>
-    </select>
   </div>
 
   <div class="filters">
-    <label>Artist <input type="text" id="f-artist" placeholder="e.g. Miles Davis" /></label>
+    <label>Artist <input type="text" id="f-artist" placeholder="e.g. Miles Davis" oninput="autoTypeDisabled=false" /></label>
     <label>Release <input type="text" id="f-release" placeholder="e.g. Kind of Blue" /></label>
+    <label>Label <input type="text" id="f-label" placeholder="e.g. Blue Note" oninput="autoTypeDisabled=false" /></label>
     <label>Year <input type="text" id="f-year" placeholder="e.g. 1973" /></label>
-    <label>Label <input type="text" id="f-label" placeholder="e.g. Blue Note" /></label>
     <label>Genre
       <select id="f-genre">
         <option value="">Any</option>
@@ -729,8 +784,25 @@
       </select>
     </label>
   </div>
-  <button id="search-btn" onclick="doSearch(1)" style="width:100%;margin-bottom:0.75rem">Search</button>
-  <div id="search-desc" style="font-size:0.78rem;color:#555;margin-bottom:1.25rem;min-height:1em"></div>
+  <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;align-items:center">
+    <button id="search-btn" onclick="doSearch(1)" style="flex:1">Search</button>
+    <label style="font-size:0.78rem;color:var(--muted);display:flex;align-items:center;gap:0.3rem;white-space:nowrap">
+      Sort
+      <select id="f-sort" style="font-size:0.78rem;padding:0.3rem 0.4rem">
+        <option value="">Relevance</option>
+        <option value="year:asc">Year ↑</option>
+        <option value="year:desc">Year ↓</option>
+        <option value="title:asc">Title A→Z</option>
+        <option value="title:desc">Title Z→A</option>
+        <option value="label:asc">Label A→Z</option>
+      </select>
+    </label>
+  </div>
+  <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:#555;margin-bottom:1.25rem;min-height:1em">
+    <button type="button" onclick="clearForm()" title="Clear form" style="background:none;border:none;padding:0;margin:0;font-size:0.92rem;color:#555;cursor:pointer;line-height:1;display:flex;align-items:center" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
+    <span id="search-pipe" style="color:#333;display:none">|</span>
+    <span id="search-desc"></span>
+  </div>
 
   <div id="artist-alts"></div>
   <div id="blurb"></div>
@@ -751,6 +823,7 @@
 <div id="modal-overlay">
   <div id="modal-box">
     <button id="modal-close" onclick="closeModal()">×</button>
+    <button class="popup-share" onclick="sharePopup(this)">share</button>
     <div id="modal-loading">Loading…</div>
     <div id="album-info"></div>
   </div>
@@ -759,6 +832,7 @@
 <div id="bio-full-overlay">
   <div id="bio-full-box">
     <button id="bio-full-close" onclick="closeBioFull()">×</button>
+    <button class="popup-share" onclick="sharePopup(this)">share</button>
     <div id="bio-full-name"></div>
     <div id="bio-full-text"></div>
   </div>
@@ -767,15 +841,24 @@
 <div id="shows-overlay">
   <div id="shows-box">
     <button id="shows-close" onclick="closeShows()">×</button>
+    <button class="popup-share" onclick="sharePopup(this)">share</button>
     <div id="shows-title"></div>
     <div id="shows-list"></div>
   </div>
 </div>
 
 <div id="video-overlay">
-  <div id="video-box">
-    <button id="video-close" onclick="closeVideo()">×</button>
-    <iframe id="video-iframe" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+  <div id="video-wrap">
+    <div id="video-box">
+      <button id="video-close" onclick="closeVideo()">×</button>
+      <button class="popup-share" onclick="sharePopup(this)">share</button>
+      <div id="video-player"></div>
+    </div>
+    <div id="video-title"></div>
+    <div id="video-nav">
+      <button id="video-prev" onclick="videoPrev()" disabled>&#8592; prev</button>
+      <button id="video-next" onclick="playNextVideo()" disabled>next &#8594;</button>
+    </div>
   </div>
 </div>
 
@@ -787,48 +870,57 @@
   let currentPage = 1;
   let totalPages  = 1;
   const itemCache = new Map(); // id → search result item
+  let autoTypeDisabled = false; // persists through pagination, reset on manual search
 
   // ── Search ────────────────────────────────────────────────────────────────
   // ── URL state helpers ────────────────────────────────────────────────────
-  function pushSearchState(q, type, artistRaw, release, year, label, genre, page) {
+  function pushSearchState(q, artistRaw, release, year, label, genre, sort, page) {
     const p = new URLSearchParams();
     if (q)        p.set("q",       q);
-    if (type)     p.set("type",    type);
     if (artistRaw) p.set("artist", artistRaw);
     if (release)  p.set("release", release);
     if (year)     p.set("year",    year);
     if (label)    p.set("label",   label);
     if (genre)    p.set("genre",   genre);
+    if (sort)     p.set("sort",    sort);
     if (page > 1) p.set("page",    String(page));
     history.pushState({}, "", p.toString() ? "?" + p.toString() : location.pathname);
   }
 
   function restoreFromParams(p) {
     document.getElementById("query").value     = p.get("q")       ?? "";
-    document.getElementById("type").value      = p.get("type")    ?? "";
     document.getElementById("f-artist").value  = p.get("artist")  ?? "";
     document.getElementById("f-release").value = p.get("release") ?? "";
     document.getElementById("f-year").value    = p.get("year")    ?? "";
     document.getElementById("f-label").value   = p.get("label")   ?? "";
     document.getElementById("f-genre").value   = p.get("genre")   ?? "";
+    document.getElementById("f-sort").value    = p.get("sort")    ?? "";
   }
 
-  async function doSearch(page = 1, skipPushState = false) {
-    const q       = document.getElementById("query").value.trim();
-    const type    = document.getElementById("type").value;
+  function clearForm() {
+    ["query","f-artist","f-release","f-year","f-label","f-genre"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = "";
+    });
+    document.getElementById("f-sort").value = "";
+  }
+
+  async function doSearch(page = 1, skipPushState = false, skipAutoType = false) {
+    const q         = document.getElementById("query").value.trim();
     const artistRaw = document.getElementById("f-artist").value.trim();
     const artist    = artistRaw.replace(/\s*\(\d+\)$/, ""); // stripped for search params
     const release = document.getElementById("f-release").value.trim();
     const year    = document.getElementById("f-year").value.trim();
     const label   = document.getElementById("f-label").value.trim();
     const genre   = document.getElementById("f-genre").value.trim();
+    const sort    = document.getElementById("f-sort").value;
 
     if (!q && !artist && !release && !year && !label && !genre) {
       setStatus("Enter a search term or fill in at least one filter.", false);
       return;
     }
 
-    if (!skipPushState) pushSearchState(q, type, artistRaw, release, year, label, genre, page);
+    if (!skipPushState) pushSearchState(q, artistRaw, release, year, label, genre, sort, page);
 
     currentPage = page;
     document.getElementById("search-btn").disabled = true;
@@ -846,19 +938,38 @@
       if (year)    parts.push(`Year: ${year}`);
       if (label)   parts.push(`Label: ${label}`);
       if (genre)   parts.push(`Genre: ${genre}`);
-      const typeLabel = document.getElementById("type").options[document.getElementById("type").selectedIndex].text;
-      if (type)    parts.push(`Type: ${typeLabel}`);
-      document.getElementById("search-desc").textContent = parts.length ? "Search :: " + parts.join(", ") : "";
+      const descText = parts.length ? "Search :: " + parts.join(", ") : "";
+      document.getElementById("search-desc").textContent = descText;
+      document.getElementById("search-pipe").style.display = descText ? "inline" : "none";
     }
 
-    const params = new URLSearchParams({ q, page, per_page: 12 });
+    // Auto-force type when only a single filter field is filled.
+    // For artist/label, Discogs expects the name in q (not the filter param) when searching by type.
+    const filledFilters = [q && 'q', artist && 'artist', release && 'release',
+      year && 'year', label && 'label', genre && 'genre'].filter(Boolean);
+    let effectiveType = "";
+    let searchQ       = q;
+    let searchArtist  = artist;
+    let searchLabel   = label;
+    if (!skipAutoType && !autoTypeDisabled && filledFilters.length === 1) {
+      if (filledFilters[0] === 'artist')       { effectiveType = 'artist';  searchQ = artist; searchArtist = ""; }
+      else if (filledFilters[0] === 'label')   { effectiveType = 'label';   searchQ = label;  searchLabel  = ""; }
+      else if (filledFilters[0] === 'release') { effectiveType = 'release'; }
+    }
 
-    if (type) params.set("type", type);
-    if (artist)  params.set("artist",        artist);
-    if (release) params.set("release_title", release);
-    if (year)    params.set("year",          year);
-    if (label)   params.set("label",         label);
-    if (genre)   params.set("genre",         genre);
+    const params = new URLSearchParams({ q: searchQ, page, per_page: 12 });
+
+    if (effectiveType) params.set("type",          effectiveType);
+    if (searchArtist)  params.set("artist",        searchArtist);
+    if (release)       params.set("release_title", release);
+    if (year)          params.set("year",          year);
+    if (searchLabel)   params.set("label",         searchLabel);
+    if (genre)         params.set("genre",         genre);
+    if (sort && effectiveType !== "artist" && effectiveType !== "label") {
+      const [sortField, sortOrder] = sort.split(":");
+      params.set("sort",       sortField);
+      params.set("sort_order", sortOrder);
+    }
 
 
     try {
@@ -930,7 +1041,10 @@
           const fullText = stripDiscogsMarkup(bioData.profile);
           const entityType = artist ? 'artist' : label ? 'label' : genre ? 'genre' : 'artist';
           // Store raw profile so the full-bio popup can render [a=Name] as links
-          window._currentBio = { name: bioData.name, text: bioData.profile, wiki: bioData.wikiExtract ?? null };
+          window._currentBio = {
+            name: bioData.name, text: bioData.profile, wiki: bioData.wikiExtract ?? null,
+            members: bioData.members ?? [], groups: bioData.groups ?? [], aliases: bioData.aliases ?? [],
+          };
 
           const TRUNCATE = 300;
           const needsMore = fullText.length > TRUNCATE;
@@ -954,7 +1068,8 @@
             ? `<div style="margin-top:0.3rem"><a href="${discogsHref}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#666;text-decoration:none">View on Discogs ↗</a></div>`
             : "";
 
-          blurbEl.innerHTML = heading + renderBioMarkup(truncatedRaw) + readMore + discogsLink;
+          const relLinks = renderArtistRelations(bioData.members ?? [], bioData.groups ?? [], bioData.aliases ?? []);
+          blurbEl.innerHTML = heading + renderBioMarkup(truncatedRaw) + readMore + relLinks + discogsLink;
           blurbEl.style.display = "block";
         }
       }
@@ -964,6 +1079,25 @@
       setStatus(`${data.pagination?.items ?? items.length} results — page ${currentPage} of ${totalPages}`);
       renderResults(items);
       renderPagination();
+
+      // Auto-open popup/bio if URL params are present (e.g. from a shared link)
+      const urlP = new URLSearchParams(location.search);
+      const openParam  = urlP.get("open");
+      const videoParam = urlP.get("video");
+      if (openParam) {
+        const colon = openParam.indexOf(":");
+        const pType = openParam.slice(0, colon);
+        const pId   = openParam.slice(colon + 1);
+        const pUrl  = `https://www.discogs.com/${pType}/${pId}`;
+        openModal(null, pId, pType, pUrl);
+        if (videoParam) {
+          setTimeout(() => openVideo(null, `https://www.youtube.com/watch?v=${videoParam}`), 1200);
+        }
+      } else if (urlP.get("bio") === "1") {
+        openBioFull(null);
+      } else if (videoParam) {
+        openVideo(null, `https://www.youtube.com/watch?v=${videoParam}`);
+      }
     } catch (e) {
       setStatus("Search failed: " + e.message, true);
     } finally {
@@ -993,7 +1127,7 @@
       const country = item.country ?? "";
       const year    = item.year    ?? "";
 
-      const metaParts = [type, [year, country].filter(Boolean).join(" · ")].filter(Boolean);
+      const metaParts = [year, type, country].filter(Boolean);
 
       const thumb = item.cover_image
         ? `<img src="${item.cover_image}" alt="${escHtml(title)}" loading="lazy" />`
@@ -1003,11 +1137,12 @@
       const isArtist  = type === "artist";
       const isLabel   = type === "label";
       if (isRelease) itemCache.set(String(item.id), item);
+      const typeClass = `card card-type-${type}`;
       const cardAttrs = isRelease
-        ? `class="card" href="#" onclick="openModal(event,'${item.id}','${type}','${url.replace(/'/g, "\\'")}')" `
+        ? `class="${typeClass}" href="#" onclick="openModal(event,'${item.id}','${type}','${url.replace(/'/g, "\\'")}')" `
         : (isArtist || isLabel)
-          ? `class="card" href="#" data-entity-type="${escHtml(type)}" data-entity-name="${escHtml(title)}" onclick="searchByEntity(event,this)"`
-          : `class="card" href="${url}" target="_blank" rel="noopener"`;
+          ? `class="${typeClass}" href="#" data-entity-type="${escHtml(type)}" data-entity-name="${escHtml(title)}" onclick="searchByEntity(event,this)"`
+          : `class="${typeClass}" href="${url}" target="_blank" rel="noopener"`;
 
       return `
         <a ${cardAttrs}>
@@ -1035,7 +1170,10 @@
 
   // ── Modal ─────────────────────────────────────────────────────────────────
   function openModal(event, id, type, discogsUrl) {
-    event.preventDefault();
+    if (event) event.preventDefault();
+    const u = new URL(window.location.href);
+    u.searchParams.set("open", `${type}:${id}`);
+    history.replaceState({}, "", u.toString());
     const overlay = document.getElementById("modal-overlay");
     document.getElementById("album-info").innerHTML = "";
     document.getElementById("modal-loading").style.display = "block";
@@ -1058,6 +1196,9 @@
 
   function closeModal() {
     document.getElementById("modal-overlay").classList.remove("open");
+    const u = new URL(window.location.href);
+    u.searchParams.delete("open");
+    history.replaceState({}, "", u.toString());
   }
 
   document.getElementById("modal-overlay").addEventListener("click", e => {
@@ -1066,10 +1207,15 @@
 
   // ── Bio full popup ────────────────────────────────────────────────────────
   function openBioFull(event) {
-    event.preventDefault();
-    const { name, text, wiki } = window._currentBio ?? {};
+    if (event) event.preventDefault();
+    const u = new URL(window.location.href);
+    u.searchParams.set("bio", "1");
+    history.replaceState({}, "", u.toString());
+    const { name, text, wiki, members = [], groups = [], aliases = [] } = window._currentBio ?? {};
     document.getElementById("bio-full-name").textContent = name ?? "";
     let html = renderBioMarkup(text ?? "");
+    const relLinks = renderArtistRelations(members, groups, aliases);
+    if (relLinks) html += relLinks;
     if (wiki) {
       html += `<hr style="border:none;border-top:1px solid var(--border);margin:1.25rem 0 1rem">
                <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.6rem">Wikipedia</div>
@@ -1081,6 +1227,9 @@
 
   function closeBioFull() {
     document.getElementById("bio-full-overlay").classList.remove("open");
+    const u = new URL(window.location.href);
+    u.searchParams.delete("bio");
+    history.replaceState({}, "", u.toString());
   }
 
   document.getElementById("bio-full-overlay").addEventListener("click", e => {
@@ -1115,18 +1264,118 @@
   });
 
   // ── Video popup ────────────────────────────────────────────────────────────
+  let ytPlayer = null;
+  window.onYouTubeIframeAPIReady = function() { window._ytAPIReady = true; };
+
+  function setVideoUrl(id) {
+    const u = new URL(window.location.href);
+    u.searchParams.set("video", id);
+    history.replaceState({}, "", u.toString());
+  }
+
+  function loadYTVideo(id) {
+    if (ytPlayer && typeof ytPlayer.loadVideoById === "function") {
+      ytPlayer.loadVideoById(id);
+      return;
+    }
+    if (window._ytAPIReady && typeof YT !== "undefined") {
+      document.getElementById("video-player").innerHTML = "";
+      ytPlayer = new YT.Player("video-player", {
+        height: "100%", width: "100%", videoId: id,
+        playerVars: { autoplay: 1, rel: 0 },
+        events: { onStateChange: function(e) { if (e.data === 0) playNextVideo(); } }
+      });
+    } else {
+      // API not yet ready — plain iframe fallback, retry with API after load
+      document.getElementById("video-player").innerHTML =
+        `<iframe src="https://www.youtube.com/embed/${id}?autoplay=1&enablejsapi=1" style="width:100%;height:100%;border:none" allow="autoplay;encrypted-media" allowfullscreen></iframe>`;
+    }
+  }
+
+  function updateVideoNavButtons() {
+    const queue = window._videoQueue ?? [];
+    const idx   = window._videoQueueIndex ?? 0;
+    const prevBtn  = document.getElementById("video-prev");
+    const nextBtn  = document.getElementById("video-next");
+    const titleEl  = document.getElementById("video-title");
+    if (prevBtn) prevBtn.disabled = idx <= 0;
+    if (nextBtn) nextBtn.disabled = idx >= queue.length - 1;
+    if (titleEl) {
+      const meta = (window._videoQueueMeta ?? [])[idx];
+      if (meta) {
+        const parts = [];
+        if (meta.track)  parts.push(`<span class="vt-track">${escHtml(meta.track)}</span>`);
+        if (meta.album)  parts.push(`<span>${escHtml(meta.album)}</span>`);
+        if (meta.artist) parts.push(`<span>${escHtml(meta.artist)}</span>`);
+        titleEl.innerHTML = parts.join(`<span class="vt-sep">·</span>`);
+      } else {
+        titleEl.innerHTML = "";
+      }
+    }
+  }
+
   function openVideo(event, url) {
-    event.preventDefault();
-    event.stopPropagation();
+    if (event) { event.preventDefault(); event.stopPropagation(); }
     const id = extractYouTubeId(url);
     if (!id) { window.open(url, "_blank", "noopener"); return; }
-    document.getElementById("video-iframe").src = `https://www.youtube.com/embed/${id}?autoplay=1`;
+    const trackLinks = [...document.querySelectorAll(".track-link[data-video]")];
+    window._videoQueue      = trackLinks.map(a => a.dataset.video);
+    window._videoQueueMeta  = trackLinks.map(a => ({
+      track:  a.dataset.track  || "",
+      album:  a.dataset.album  || "",
+      artist: a.dataset.artist || "",
+    }));
+    window._videoQueueIndex = window._videoQueue.indexOf(url);
+    if (window._videoQueueIndex === -1) window._videoQueueIndex = 0;
+    setVideoUrl(id);
     document.getElementById("video-overlay").classList.add("open");
+    loadYTVideo(id);
+    updateVideoNavButtons();
+  }
+
+  function videoPrev() {
+    const queue = window._videoQueue ?? [];
+    let prev = (window._videoQueueIndex ?? 0) - 1;
+    while (prev >= 0) {
+      const id = extractYouTubeId(queue[prev]);
+      if (id) {
+        window._videoQueueIndex = prev;
+        setVideoUrl(id);
+        loadYTVideo(id);
+        updateVideoNavButtons();
+        return;
+      }
+      prev--;
+    }
+  }
+
+  function playNextVideo() {
+    const queue = window._videoQueue ?? [];
+    let next = (window._videoQueueIndex ?? -1) + 1;
+    while (next < queue.length) {
+      const id = extractYouTubeId(queue[next]);
+      if (id) {
+        window._videoQueueIndex = next;
+        setVideoUrl(id);
+        loadYTVideo(id);
+        updateVideoNavButtons();
+        return;
+      }
+      next++;
+    }
   }
 
   function closeVideo() {
     document.getElementById("video-overlay").classList.remove("open");
-    document.getElementById("video-iframe").src = "";
+    if (ytPlayer && typeof ytPlayer.stopVideo === "function") {
+      ytPlayer.stopVideo();
+      ytPlayer.destroy();
+      ytPlayer = null;
+    }
+    document.getElementById("video-player").innerHTML = "";
+    const u = new URL(window.location.href);
+    u.searchParams.delete("video");
+    history.replaceState({}, "", u.toString());
   }
 
   function extractYouTubeId(url) {
@@ -1154,9 +1403,12 @@
   function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null) {
     const el = document.getElementById("album-info");
 
-    const title    = d.title ?? searchResult.title ?? "";
-    const artists  = (d.artists ?? []).map(a => a.name).join(", ")
-                     || (searchResult.title ?? "").split(" - ")[0] || "";
+    const rawTitle = d.title ?? searchResult.title ?? "";
+    const title    = rawTitle.includes(" - ") && !d.title
+                     ? rawTitle.slice(rawTitle.indexOf(" - ") + 3) : rawTitle;
+    const artistNames = (d.artists ?? []).map(a => a.name);
+    const artists  = artistNames.length ? artistNames
+                     : ((searchResult.title ?? "").split(" - ")[0] ? [(searchResult.title ?? "").split(" - ")[0]] : []);
     const year     = d.year ?? searchResult.year ?? "";
     const labels   = (d.labels ?? []).map(l => l.name).slice(0, 2).join(", ")
                      || (searchResult.label ?? []).slice(0, 2).join(", ");
@@ -1200,8 +1452,9 @@
         <div class="tracklist-heading">Tracklist</div>
         ${tracks.map(t => {
           const url = findVideo(t.title || "");
+          const trackArtist = artists.length ? artists[0] : "";
           const titleEl = url
-            ? `<a class="track-link" href="#" onclick="openVideo(event,'${url.replace(/'/g, "\\'")}')">${escHtml(t.title || "")} ▶</a>`
+            ? `<a class="track-link" href="#" data-video="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" onclick="openVideo(event,'${url.replace(/'/g, "\\'")}')">${escHtml(t.title || "")} ▶</a>`
             : escHtml(t.title || "");
           return `<div class="track">
             <span class="track-pos">${escHtml(t.position || "")}</span>
@@ -1225,7 +1478,7 @@
         <div class="album-meta">
           ${typeLabel ? `<div class="album-type-badge">${escHtml(typeLabel)}</div>` : ""}
           <h2>${escHtml(title)}</h2>
-          ${artists ? `<div class="album-artist">${escHtml(artists)}</div>` : ""}
+          ${artists.length ? `<div class="album-artist">${artists.map(n => `<a href="#" class="modal-artist-link" data-artist="${escHtml(n)}" onclick="searchArtistFromModal(event,this)">${escHtml(n)}</a>`).join(", ")}</div>` : ""}
           ${detailRows ? `<div class="album-detail-grid">${detailRows}</div>` : ""}
           ${discogsUrl ? `<a href="${discogsUrl}" target="_blank" rel="noopener" style="font-size:0.75rem;color:var(--accent);text-decoration:none;margin-top:0.5rem;display:inline-block">View on Discogs ↗</a>` : ""}
           ${stats?.numForSale > 0 && stats?.lowestPrice != null
@@ -1239,10 +1492,36 @@
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
+  function sharePopup(btn) {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      const orig = btn.textContent;
+      btn.textContent = "copied!";
+      btn.style.color = "var(--accent)";
+      setTimeout(() => { btn.textContent = orig; btn.style.color = ""; }, 1800);
+    }).catch(() => {
+      prompt("Copy this link:", window.location.href);
+    });
+  }
+
   function setStatus(msg, isError = false) {
     const el = document.getElementById("status");
     el.textContent = msg;
     el.className = isError ? "error" : "";
+  }
+
+  // Renders members/groups/aliases as labeled rows of clickable artist-search links
+  function renderArtistRelations(members, groups, aliases) {
+    const row = (label, items) => {
+      if (!items.length) return "";
+      const links = items.map(a =>
+        `<a href="#" class="bio-artist-link" onclick="searchBioArtist(event,this)" data-artist="${escHtml(a.name)}">${escHtml(a.name)}</a>`
+      ).join('<span style="color:#555;margin:0 0.2em">·</span>');
+      return `<div style="font-size:0.78rem;margin-top:0.55rem;line-height:1.6">
+                <span style="color:#777;margin-right:0.4em">${label}:</span>${links}
+              </div>`;
+    };
+    const html = row("Members", members) + row("Also in", groups) + row("Aliases", aliases);
+    return html ? `<div style="margin-top:0.6rem;padding-top:0.5rem;border-top:1px solid var(--border)">${html}</div>` : "";
   }
 
   // Converts raw Discogs profile text to HTML, making [a=Name] tags into clickable links
@@ -1278,8 +1557,8 @@
     document.getElementById("f-year").value    = "";
     document.getElementById("f-label").value   = "";
     document.getElementById("f-genre").value   = "";
-    document.getElementById("type").value      = "";
-    doSearch(1);
+    autoTypeDisabled = true;
+    doSearch(1, false, true);
   }
 
   // Truncate raw Discogs profile text so its plain-text equivalent is <= plainLimit chars,
@@ -1342,11 +1621,25 @@
   }
 
   // ── Alt artist link → new search ─────────────────────────────────────────
+  function searchArtistFromModal(event, el) {
+    event.preventDefault();
+    closeModal();
+    document.getElementById("f-artist").value  = el.dataset.artist;
+    document.getElementById("query").value     = "";
+    document.getElementById("f-release").value = "";
+    document.getElementById("f-year").value    = "";
+    document.getElementById("f-label").value   = "";
+    document.getElementById("f-genre").value   = "";
+    autoTypeDisabled = true;
+    doSearch(1, false, true);
+  }
+
   function selectAltArtist(event, el) {
     event.preventDefault();
     document.getElementById("f-artist").value = el.dataset.altName;
     document.getElementById("query").value = "";
-    doSearch(1);
+    autoTypeDisabled = true;
+    doSearch(1, false, true);
   }
 
   // ── Entity card click → new search ───────────────────────────────────────
@@ -1355,7 +1648,6 @@
     const type = el.dataset.entityType;
     const name = el.dataset.entityName;
     document.getElementById("query").value = "";
-    document.getElementById("type").value  = "";
     document.getElementById("f-artist").value  = "";
     document.getElementById("f-release").value = "";
     document.getElementById("f-year").value    = "";
@@ -1363,7 +1655,8 @@
     document.getElementById("f-genre").value   = "";
     if (type === "artist") document.getElementById("f-artist").value = name;
     if (type === "label")  document.getElementById("f-label").value  = name;
-    doSearch(1);
+    autoTypeDisabled = true;
+    doSearch(1, false, true);
   }
 
   // ── Browser back / forward ───────────────────────────────────────────────
@@ -1380,6 +1673,7 @@
       document.getElementById("status").textContent = "";
       document.getElementById("pagination").style.display = "none";
       document.getElementById("search-desc").textContent = "";
+      document.getElementById("search-pipe").style.display = "none";
     }
   });
 
@@ -1399,5 +1693,6 @@
     });
   });
 </script>
+<script src="https://www.youtube.com/iframe_api"></script>
 </body>
 </html>
