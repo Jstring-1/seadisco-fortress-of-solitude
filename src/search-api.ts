@@ -27,12 +27,15 @@ function stripArtistSuffix(name: string | undefined): string | undefined {
 
 // GET /search?q=pink+floyd&type=master&year=1973&page=1&per_page=10
 app.get("/search", async (req, res) => {
-  const q = (req.query.q as string) ?? "";
+  const rawQ   = (req.query.q as string) ?? "";
+  const artist = stripArtistSuffix(req.query.artist as string | undefined);
+  // Discogs requires a non-empty q; fall back to the artist filter if q is blank
+  const q = rawQ || artist || "";
 
   try {
     const results = await discogs.search(q, {
       type: req.query.type as "release" | "master" | "artist" | "label" | undefined,
-      artist: stripArtistSuffix(req.query.artist as string | undefined),
+      artist,
       releaseTitle: req.query.release_title as string | undefined,
       label: req.query.label as string | undefined,
       year: req.query.year as string | undefined,
@@ -162,7 +165,7 @@ app.get("/artist-bio", async (req, res) => {
   try {
     // Fetch Discogs candidates and Wikipedia in parallel
     const pAll = await Promise.all([
-      discogs.search(nameForSearch, { type: "artist", perPage: 5 }),
+      discogs.search(nameForSearch, { type: "artist", perPage: 20 }),
       fetchWikiSummary(nameForSearch).then(r => r ?? searchWiki(`${nameForSearch} musician`, nameForSearch)),
     ]);
     const discogsResults = pAll[0] as any;
@@ -210,7 +213,7 @@ app.get("/artist-bio", async (req, res) => {
 
     const alternatives = candidates
       .filter(a => a.id !== best.id && a.title)
-      .slice(0, 4)
+      .slice(0, 19)
       .map(a => ({ name: a.title as string, id: a.id as number }));
 
     res.json({
