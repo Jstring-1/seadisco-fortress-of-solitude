@@ -854,7 +854,7 @@
     <button id="search-btn" onclick="doSearch(1)" style="flex:1">Search</button>
     <label style="font-size:0.78rem;color:var(--muted);display:flex;align-items:center;gap:0.3rem;white-space:nowrap">
       Sort
-      <select id="f-sort" style="font-size:0.78rem;padding:0.3rem 0.4rem">
+      <select id="f-sort" style="font-size:0.78rem;padding:0.3rem 0.4rem;color-scheme:dark">
         <option value="">Relevance</option>
         <option value="year:asc">Year ↑</option>
         <option value="year:desc">Year ↓</option>
@@ -868,6 +868,8 @@
     <button type="button" onclick="clearForm()" title="Clear form" style="background:none;border:none;padding:0;margin:0;font-size:0.92rem;color:#555;cursor:pointer;line-height:1;display:flex;align-items:center" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
     <span id="search-pipe" style="color:#333;display:none">|</span>
     <span id="search-desc"></span>
+    <span id="sort-pipe" style="color:#333;display:none">|</span>
+    <span id="sort-desc"></span>
   </div>
 
   <div id="artist-alts"></div>
@@ -1013,6 +1015,10 @@
       const descText = parts.length ? "Search :: " + parts.join(", ") : "";
       document.getElementById("search-desc").textContent = descText;
       document.getElementById("search-pipe").style.display = descText ? "inline" : "none";
+      const sortLabels = { "year:asc":"Year ↑", "year:desc":"Year ↓", "title:asc":"Title A→Z", "title:desc":"Title Z→A", "label:asc":"Label A→Z" };
+      const sortLabel = sortLabels[sort] ?? "";
+      document.getElementById("sort-desc").textContent = sortLabel ? `Sort: ${sortLabel}` : "";
+      document.getElementById("sort-pipe").style.display = (descText && sortLabel) ? "inline" : "none";
     }
 
     const params = new URLSearchParams({ q: q || artist || label || release, page, per_page: 12 });
@@ -1762,6 +1768,8 @@
       document.getElementById("pagination").style.display = "none";
       document.getElementById("search-desc").textContent = "";
       document.getElementById("search-pipe").style.display = "none";
+      document.getElementById("sort-desc").textContent = "";
+      document.getElementById("sort-pipe").style.display = "none";
     }
   });
 
