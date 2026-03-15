@@ -1504,7 +1504,12 @@
       [f.name, ...(f.descriptions ?? [])].filter(Boolean).join(" · ")
     ).join("; ") || (searchResult.format ?? []).join(" · ");
     const credits     = (d.extraartists ?? [])
-      .map(a => `${escHtml(a.name)}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}`)
+      .map(a => {
+        const nameEl = a.id
+          ? `<a href="#" data-alt-name="${escHtml(a.name)}" data-alt-id="${a.id}" onclick="selectAltArtist(event,this);closeModal()" style="color:var(--accent);text-decoration:none">${escHtml(a.name)}</a>`
+          : escHtml(a.name);
+        return `${nameEl}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}`;
+      })
       .join(" · ");
     const notes       = d.notes ? stripDiscogsMarkup(d.notes) : "";
     const typeLabel   = searchResult.type === "master" ? "Master Release" : searchResult.type === "release" ? "Release" : "";
