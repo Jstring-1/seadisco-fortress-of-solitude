@@ -34,6 +34,13 @@
     header .inner {
       max-width: 900px;
       margin: 0 auto;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    header .inner input[type="text"] {
+      flex: 1;
     }
 
     header h1 {
@@ -41,6 +48,7 @@
       font-weight: 600;
       letter-spacing: -0.01em;
       line-height: 1;
+      flex-shrink: 0;
     }
     header h1 a img {
       height: 80px;
@@ -815,14 +823,12 @@
 
 <header>
   <div class="inner">
+    <input type="text" id="query" placeholder="Search artists, releases, labels…" autocomplete="off" />
     <h1><a href="https://seadisco.com" style="color:inherit;text-decoration:none"><img src="/seadisco-logo.png" alt="SeaDisco" /></a></h1>
   </div>
 </header>
 
 <main>
-  <div class="search-row">
-    <input type="text" id="query" placeholder="Search artists, releases, labels…" autocomplete="off" />
-  </div>
 
   <div class="filters">
     <label>Artist <input type="text" id="f-artist" placeholder="e.g. Miles Davis" oninput="currentArtistId=null" /></label>
