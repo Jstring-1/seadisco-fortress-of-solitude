@@ -182,11 +182,17 @@ app.get("/artist-bio", async (req, res) => {
       .slice(0, 4)
       .map(a => ({ name: a.title as string, id: a.id as number }));
 
+    const mapNames = (arr: any[]) =>
+      (arr ?? []).filter(x => x?.name).map(x => ({ name: x.name as string, active: x.active }));
+
     res.json({
       profile,
       name: artist?.name ?? nameForMatch,
       alternatives,
       wikiExtract: wikiResult?.extract ?? null,
+      members: mapNames(artist?.members ?? []),
+      groups:  mapNames(artist?.groups  ?? []),
+      aliases: mapNames(artist?.aliases ?? []),
     });
   } catch (err) {
     console.error(err);

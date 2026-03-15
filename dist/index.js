@@ -1,7 +1,8 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import { DiscogsClient } from "./discogs-client.js";
+import express from "express";
 const token = process.env.DISCOGS_TOKEN;
 if (!token) {
     console.error("Error: DISCOGS_TOKEN environment variable is required.");
@@ -163,5 +164,11 @@ server.tool("get_price_suggestions", "Get Discogs suggested price ranges for eac
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
 });
 // ── Start ─────────────────────────────────────────────────────────────────────
-const transport = new StdioServerTransport();
+const app = express();
+app.use(express.json());
+const transport = new StreamableHTTPServerTransport({});
+app.post("/mcp", (req, res) => transport.handleRequest(req, res));
+app.get("/mcp", (req, res) => transport.handleRequest(req, res));
 await server.connect(transport);
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`MCP server listening on port ${PORT}`));
