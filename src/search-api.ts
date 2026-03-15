@@ -117,13 +117,44 @@ async function searchWiki(query: string, name: string): Promise<{ extract: strin
   } catch { return null; }
 }
 
-// GET /artist-bio?name=Miles+Davis — Discogs bio, best name match from top 5 results
+// GET /artist-bio?name=Miles+Davis[&id=123456] — Discogs bio
+// If `id` is supplied the artist is fetched directly (no ambiguous name search).
 app.get("/artist-bio", async (req, res) => {
   const nameRaw = req.query.name as string;
+  const idParam = req.query.id ? parseInt(req.query.id as string, 10) : null;
+
   if (!nameRaw || !nameRaw.trim()) {
     res.status(400).json({ error: "Missing required query parameter: name" });
     return;
   }
+
+  const mapNames = (arr: any[]) =>
+    (arr ?? []).filter(x => x?.name)
+               .map(x => ({ name: x.name as string, active: x.active, id: x.id as number | undefined }));
+
+  // ── Fast path: direct lookup by Discogs ID ──────────────────────────────
+  if (idParam) {
+    try {
+      const artist = await discogs.getArtist(idParam) as any;
+      let profile: string | null = artist?.profile ?? null;
+      if (profile) profile = await resolveDiscogsIds(profile);
+      res.json({
+        profile,
+        name: artist?.name ?? nameRaw,
+        alternatives: [],
+        wikiExtract: null,
+        members: mapNames(artist?.members ?? []),
+        groups:  mapNames(artist?.groups  ?? []),
+        aliases: mapNames(artist?.aliases ?? []),
+      });
+    } catch (err) {
+      console.error(err);
+      res.json({ profile: null });
+    }
+    return;
+  }
+
+  // ── Slow path: name search + best-match heuristics ─────────────────────
   // Strip suffix for the Discogs search query, but keep original for exact matching
   const nameForSearch = nameRaw.replace(/\s*\(\d+\)$/, "").trim();
   const nameForMatch  = nameRaw.trim();
@@ -181,9 +212,6 @@ app.get("/artist-bio", async (req, res) => {
       .filter(a => a.id !== best.id && a.title)
       .slice(0, 4)
       .map(a => ({ name: a.title as string, id: a.id as number }));
-
-    const mapNames = (arr: any[]) =>
-      (arr ?? []).filter(x => x?.name).map(x => ({ name: x.name as string, active: x.active }));
 
     res.json({
       profile,

@@ -759,7 +759,7 @@
   </div>
 
   <div class="filters">
-    <label>Artist <input type="text" id="f-artist" placeholder="e.g. Miles Davis" oninput="autoTypeDisabled=false" /></label>
+    <label>Artist <input type="text" id="f-artist" placeholder="e.g. Miles Davis" oninput="autoTypeDisabled=false;currentArtistId=null" /></label>
     <label>Release <input type="text" id="f-release" placeholder="e.g. Kind of Blue" /></label>
     <label>Label <input type="text" id="f-label" placeholder="e.g. Blue Note" oninput="autoTypeDisabled=false" /></label>
     <label>Year <input type="text" id="f-year" placeholder="e.g. 1973" /></label>
@@ -871,6 +871,7 @@
   let totalPages  = 1;
   const itemCache = new Map(); // id → search result item
   let autoTypeDisabled = false; // persists through pagination, reset on manual search
+  let currentArtistId  = null;  // Discogs artist ID when navigating from a known card/link
 
   // ── Search ────────────────────────────────────────────────────────────────
   // ── URL state helpers ────────────────────────────────────────────────────
@@ -977,7 +978,9 @@
       let showsFetch = null;
       if (page === 1) {
         if (artistRaw) {
-          bioFetch   = fetch(`${API}/artist-bio?name=${encodeURIComponent(artistRaw)}`);
+          const bioUrl = `${API}/artist-bio?name=${encodeURIComponent(artistRaw)}`
+                       + (currentArtistId ? `&id=${currentArtistId}` : "");
+          bioFetch   = fetch(bioUrl);
           showsFetch = fetch(`${API}/upcoming-shows?artist=${encodeURIComponent(artist)}`);
         } else if (label) {
           bioFetch = fetch(`${API}/label-bio?name=${encodeURIComponent(label)}`);
@@ -1022,7 +1025,7 @@
         const alts = (bioData?.alternatives ?? []).filter(a => a.name);
         if (alts.length > 0) {
           altsEl.innerHTML = `<div style="font-size:0.78rem;color:#555;margin-bottom:0.6rem">Also: ${
-            alts.map(a => `<a href="#" data-alt-name="${escHtml(a.name)}" onclick="selectAltArtist(event,this)" style="color:#666;text-decoration:none;border-bottom:1px dotted #444">${escHtml(a.name)}</a>`).join(' &middot; ')
+            alts.map(a => `<a href="#" data-alt-name="${escHtml(a.name)}"${a.id ? ` data-alt-id="${a.id}"` : ""} onclick="selectAltArtist(event,this)" style="color:#666;text-decoration:none;border-bottom:1px dotted #444">${escHtml(a.name)}</a>`).join(' &middot; ')
           }</div>`;
         } else {
           altsEl.innerHTML = "";
@@ -1141,7 +1144,7 @@
       const cardAttrs = isRelease
         ? `class="${typeClass}" href="#" onclick="openModal(event,'${item.id}','${type}','${url.replace(/'/g, "\\'")}')" `
         : (isArtist || isLabel)
-          ? `class="${typeClass}" href="#" data-entity-type="${escHtml(type)}" data-entity-name="${escHtml(title)}" onclick="searchByEntity(event,this)"`
+          ? `class="${typeClass}" href="#" data-entity-type="${escHtml(type)}" data-entity-name="${escHtml(title)}" data-entity-id="${item.id}" onclick="searchByEntity(event,this)"`
           : `class="${typeClass}" href="${url}" target="_blank" rel="noopener"`;
 
       return `
@@ -1514,7 +1517,7 @@
     const row = (label, items) => {
       if (!items.length) return "";
       const links = items.map(a =>
-        `<a href="#" class="bio-artist-link" onclick="searchBioArtist(event,this)" data-artist="${escHtml(a.name)}">${escHtml(a.name)}</a>`
+        `<a href="#" class="bio-artist-link" onclick="searchBioArtist(event,this)" data-artist="${escHtml(a.name)}"${a.id ? ` data-artist-id="${a.id}"` : ""}>${escHtml(a.name)}</a>`
       ).join('<span style="color:#555;margin:0 0.2em">·</span>');
       return `<div style="font-size:0.78rem;margin-top:0.55rem;line-height:1.6">
                 <span style="color:#777;margin-right:0.4em">${label}:</span>${links}
@@ -1557,6 +1560,7 @@
     document.getElementById("f-year").value    = "";
     document.getElementById("f-label").value   = "";
     document.getElementById("f-genre").value   = "";
+    currentArtistId = el.dataset.artistId || null;
     autoTypeDisabled = true;
     doSearch(1, false, true);
   }
@@ -1638,6 +1642,7 @@
     event.preventDefault();
     document.getElementById("f-artist").value = el.dataset.altName;
     document.getElementById("query").value = "";
+    currentArtistId = el.dataset.altId || null;
     autoTypeDisabled = true;
     doSearch(1, false, true);
   }
@@ -1653,7 +1658,10 @@
     document.getElementById("f-year").value    = "";
     document.getElementById("f-label").value   = "";
     document.getElementById("f-genre").value   = "";
-    if (type === "artist") document.getElementById("f-artist").value = name;
+    if (type === "artist") {
+      document.getElementById("f-artist").value = name;
+      currentArtistId = el.dataset.entityId || null;
+    }
     if (type === "label")  document.getElementById("f-label").value  = name;
     autoTypeDisabled = true;
     doSearch(1, false, true);
