@@ -1148,7 +1148,7 @@
 
     const isYearSort  = sort.startsWith("year:");
     const skipSort    = resultType === "artist" || resultType === "label";
-    const dualFetch   = isYearSort && !skipSort && (resultType === "" || resultType === "master" || resultType === "release");
+    const dualFetch   = isYearSort && !skipSort && resultType === "";
 
     const baseParams = (typeOverride, perPage) => {
       const p = new URLSearchParams({ q: q || artist || label || release, page, per_page: perPage });
