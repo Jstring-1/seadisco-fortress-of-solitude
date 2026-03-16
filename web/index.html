@@ -1727,9 +1727,18 @@
       return null;
     }
 
-    const identifierRows = (d.identifiers ?? [])
-      .filter(i => i.value && ["Barcode","Matrix / Runout","ASIN","Catalog Number","Label Code"].includes(i.type))
-      .map(i => `<span class="detail-label">${escHtml(i.type)}</span><span>${escHtml(i.value)}</span>`)
+    const identifierTypes = ["Barcode","Matrix / Runout","ASIN","Catalog Number","Label Code"];
+    const identifierGroups = {};
+    for (const i of (d.identifiers ?? [])) {
+      if (i.value && identifierTypes.includes(i.type)) {
+        identifierGroups[i.type] = identifierGroups[i.type]
+          ? identifierGroups[i.type] + ", " + i.value
+          : i.value;
+      }
+    }
+    const identifierRows = identifierTypes
+      .filter(t => identifierGroups[t])
+      .map(t => `<span class="detail-label">${escHtml(t)}</span><span>${escHtml(identifierGroups[t])}</span>`)
       .join("");
 
     const isMaster = searchResult.type === "master";
