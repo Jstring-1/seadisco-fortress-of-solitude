@@ -1232,6 +1232,8 @@
         }
       } else if (urlP.get("bio") === "1") {
         openBioFull(null);
+      } else if (urlP.get("shows") === "1") {
+        renderShowsPopup();
       } else if (videoParam) {
         openVideo(null, `https://www.youtube.com/watch?v=${videoParam}`);
       }
@@ -1402,6 +1404,9 @@
           </div>
           ${s.url ? `<a href="${s.url}" target="_blank" rel="noopener" class="show-ticket">Tickets ↗</a>` : ""}
         </div>`).join("");
+    const u = new URL(window.location.href);
+    u.searchParams.set("shows", "1");
+    history.replaceState({}, "", u.toString());
     document.getElementById("shows-overlay").classList.add("open");
   }
 
@@ -1412,6 +1417,9 @@
 
   function closeShows() {
     document.getElementById("shows-overlay").classList.remove("open");
+    const u = new URL(window.location.href);
+    u.searchParams.delete("shows");
+    history.replaceState({}, "", u.toString());
   }
 
   document.getElementById("shows-overlay").addEventListener("click", e => {
