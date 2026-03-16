@@ -9,14 +9,14 @@
 </head>
 <body>
 
-<header>
-  <div class="inner">
-    <input type="text" id="query" placeholder="Search artists, releases, labels…" autocomplete="off" />
-    <h1><a href="https://seadisco.com" style="color:inherit;text-decoration:none"><img src="/seadisco-logo.png" alt="SeaDisco" /></a></h1>
-  </div>
-</header>
+<div id="site-header">
+  <a href="https://seadisco.com"><img src="/seadisco-logo.png" alt="SeaDisco" /></a>
+</div>
 
 <main>
+  <div class="search-row">
+    <input type="text" id="query" placeholder="Search artists, releases, labels…" autocomplete="off" />
+  </div>
 
   <div class="filters">
     <label>Artist <input type="text" id="f-artist" placeholder="e.g. Miles Davis" oninput="currentArtistId=null" /></label>
@@ -84,6 +84,7 @@
   </div>
   <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:#555;margin-bottom:1.25rem;min-height:1em">
     <button type="button" onclick="clearForm()" title="Clear form" style="background:none;border:none;padding:0;margin:0;font-size:0.92rem;color:#555;cursor:pointer;line-height:1;display:flex;align-items:center" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
+    <span id="powered-by">Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:#666;text-decoration:none">Discogs</a>, <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:#666;text-decoration:none">Claude</a>, and <a href="https://www.wikipedia.org" target="_blank" rel="noopener" style="color:#666;text-decoration:none">Wikipedia</a></span>
     <span id="search-pipe" style="color:#333;display:none">|</span>
     <span id="search-desc"></span>
     <span id="type-pipe" style="color:#333;display:none">|</span>
@@ -105,11 +106,6 @@
   </div>
 </main>
 
-<footer>
-  Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener">Discogs</a>,
-  <a href="https://www.anthropic.com" target="_blank" rel="noopener">Claude</a>,
-  and <a href="https://www.wikipedia.org" target="_blank" rel="noopener">Wikipedia</a>
-</footer>
 
 <div id="modal-overlay">
   <div id="modal-box">
