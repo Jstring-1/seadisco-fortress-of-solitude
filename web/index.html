@@ -836,7 +836,7 @@
     <label>Label <input type="text" id="f-label" placeholder="e.g. Blue Note" /></label>
     <label>Year <input type="text" id="f-year" placeholder="e.g. 1973" /></label>
     <label>Genre
-      <select id="f-genre">
+      <select id="f-genre" onchange="populateStyles()">
         <option value="">Any</option>
         <option>Blues</option>
         <option>Brass &amp; Military</option>
@@ -853,6 +853,11 @@
         <option>Reggae</option>
         <option>Rock</option>
         <option>Stage &amp; Screen</option>
+      </select>
+    </label>
+    <label id="f-style-label" style="display:none">Style
+      <select id="f-style">
+        <option value="">Any</option>
       </select>
     </label>
   </div>
@@ -951,6 +956,36 @@
   const itemCache = new Map(); // id → search result item
   let currentArtistId  = null;  // Discogs artist ID when navigating from a known card/link
 
+  // ── Genre → Style mapping ─────────────────────────────────────────────────
+  const GENRE_STYLES = {
+    "Blues":                 ["Acoustic","Boogie Woogie","Chicago Blues","Country Blues","Delta Blues","East Coast Blues","Electric Blues","Harmonica Blues","Hill Country Blues","Jump Blues","Louisiana Blues","Memphis Blues","Modern Electric Blues","Piano Blues","Piedmont Blues","Texas Blues"],
+    "Brass & Military":      ["Brass Band","Concert Band","Dixieland","Marches","Military","Pipe & Drum"],
+    "Children's":            ["Educational","Holiday","Lullaby","Nursery Rhymes","Story"],
+    "Classical":             ["Baroque","Chamber Music","Choral","Contemporary","Electroacoustic","Impressionist","Medieval","Modern Classical","Musique Concrète","Neo-Classical","Opera","Renaissance","Romantic","Sound Art","Symphony"],
+    "Electronic":            ["Acid","Acid House","Ambient","Ambient House","Bass Music","Berlin-School","Big Beat","Bitpop","Breakbeat","Breakcore","Chillwave","Chiptune","Coldwave","Cut-up/DJ","Dark Ambient","Dark Electro","Darkwave","Deep House","Doomcore","Downtempo","Drone","Drum n Bass","Dub Techno","Dubstep","EBM","Electro","Electro House","Eurodance","Euro House","Field Recording","Future Bass","Future House","Gabber","Glitch","Glitch Hop","Happy Hardcore","Hard House","Hard Techno","Hard Trance","Hardstyle","Hi NRG","House","IDM","Industrial","Italodance","Italo-Disco","Jersey Club","Jumpstyle","Leftfield","Minimal","Minimal Techno","New Beat","Noise","Nu-Disco","Progressive House","Progressive Trance","Psy-Trance","Rhythmic Noise","Schranz","Speedcore","Synthwave","Tech House","Techno","Trance","Trip Hop","Tropical House","UK Funky","UK Garage","Vaporwave","Witch House"],
+    "Folk, World, & Country":["Aboriginal","African","Afrobeat","Antifolk","Appalachian Music","Bakersfield Sound","Basque Music","Bhangra","Bluegrass","Cajun","Calypso","Celtic","Country","Fado","Field Recording","Flamenco","Folk","Folk Rock","Galician Traditional","Hawaiian","Highlife","Hillbilly","Klezmer","Mouth Music","Neofolk","Nordic","Occitan","Pacific","Polka","Romani","Sea Shanties","Skiffle","Soca","Western Swing","Zydeco"],
+    "Funk / Soul":            ["Bayou Funk","Boogie","Contemporary R&B","Disco","Free Funk","Funk","Funk Metal","Go-Go","Gospel","Jazz-Funk","Minneapolis Sound","Neo Soul","New Jack Swing","P.Funk","Rhythm & Blues","RnB/Swing","Soul","Swingbeat"],
+    "Hip Hop":               ["Abstract","Boom Bap","Cloud Rap","Conscious","Crunk","Cut-up/DJ","Drill","G-Funk","Gangsta","Grime","Hardcore Hip-Hop","Hip-House","Horrorcore","Hyphy","Jazzy Hip-Hop","Miami Bass","Pop Rap","Ragga HipHop","Screw","Thug Rap","Trap","Turntablism"],
+    "Jazz":                  ["Acid Jazz","Afro-Cuban Jazz","Avant-garde Jazz","Big Band","Bop","Bossa Nova","Cape Jazz","Contemporary Jazz","Cool Jazz","Dark Jazz","Dixieland","Free Improvisation","Free Jazz","Fusion","Future Jazz","Gypsy Jazz","Hard Bop","Jazz-Funk","Jazz-Rock","Latin Jazz","Modal","Post Bop","Smooth Jazz","Soul-Jazz","Spiritual Jazz","Swing"],
+    "Latin":                 ["Afro-Cuban","Axé","Bachata","Baião","Bolero","Bossa Nova","Candombe","Cha-Cha","Chacarera","Chamamé","Charanga","Choro","Conjunto","Corrido","Cubano","Cumbia","Danzon","Descarga","Forró","Guaguancó","Guaracha","Guarania","Joropo","Latin Jazz","Latin Pop","Lambada","Mambo","Mariachi","Merengue","Milonga","MPB","Norteño","Nueva Cancion","Nueva Trova","Pachanga","Pasodoble","Porro","Ranchera","Reggaeton","Rumba","Salsa","Samba","Samba-Canção","Sertanejo","Son","Son Montuno","Tango","Tejano","Timba","Trova","Vallenato","Zamba"],
+    "Non-Music":             ["Audiobook","Comedy","Dialogue","Dub Poetry","Educational","Erotic","Interview","Medical","Monolog","Novelty","Parody","Poetry","Political","Promotional","Public Broadcast","Public Service Announcement","Radioplay","Religious","Sermon","Sound Collage","Speech","Spoken Word","Story","Therapy"],
+    "Pop":                   ["Alt-Pop","Anison","AOR","Ballad","Baroque Pop","Britpop","Bubblegum","Cantopop","City Pop","Dance-pop","Dream Pop","Easy Listening","Ethno-pop","Europop","Hyperpop","Indie Pop","J-pop","Jangle Pop","K-pop","Kayōkyoku","Lo-Fi","Lounge","Mandopop","New Wave","Power Pop","Schlager","Soft Rock","Sunshine Pop","Synth-pop","Vocal","Yé-Yé"],
+    "Reggae":                ["Calypso","Dancehall","Dub","Dub Poetry","Lovers Rock","Mento","Ragga","Reggae Gospel","Reggae-Pop","Rocksteady","Roots Reggae","Ska"],
+    "Rock":                  ["Acid Rock","Alternative Metal","Alternative Rock","Anatolian Rock","Arena Rock","Art Rock","Atmospheric Black Metal","Black Metal","Blues Rock","Classic Rock","Country Rock","Death Metal","Deathcore","Deathrock","Doom Metal","Emo","Folk Metal","Folk Rock","Funk Metal","Garage Rock","Glam","Goth Rock","Gothic Metal","Grunge","Hard Rock","Hardcore","Heavy Metal","Horror Rock","Industrial Metal","Indie Rock","J-Rock","Jazz-Rock","K-Rock","Krautrock","Lo-Fi","Math Rock","Metalcore","Mod","Neofolk","New Wave","Nintendocore","Noise Rock","No Wave","Nu Metal","Pop Punk","Post-Grunge","Post-Hardcore","Post-Metal","Post Rock","Post-Punk","Power Metal","Prog Rock","Psychedelic Rock","Psychobilly","Pub Rock","Punk","Rock & Roll","Rock Opera","Rockabilly","Shoegaze","Slowcore","Southern Rock","Space Rock","Speed Metal","Stoner Rock","Surf","Symphonic Metal","Symphonic Rock","Thrash","Viking Metal"],
+    "Stage & Screen":        ["Ballet","Bollywood","Concert Film","Karaoke","Music Video","Musical","Opera","Radioplay","Rock Opera","Score","Soundtrack","Theme","Video Game Music"]
+  };
+
+  function populateStyles() {
+    const genre = document.getElementById("f-genre").value;
+    const styleSelect = document.getElementById("f-style");
+    const styleLabel  = document.getElementById("f-style-label");
+    const styles = GENRE_STYLES[genre] ?? [];
+    styleSelect.innerHTML = '<option value="">Any</option>' +
+      styles.map(s => `<option value="${s}">${s}</option>`).join("");
+    styleLabel.style.display = styles.length ? "" : "none";
+    styleSelect.value = "";
+  }
+
   // ── Search ────────────────────────────────────────────────────────────────
   // ── URL state helpers ────────────────────────────────────────────────────
   function pushSearchState(q, artistRaw, release, year, label, genre, sort, page) {
@@ -974,14 +1009,17 @@
     document.getElementById("f-label").value   = p.get("label")   ?? "";
     document.getElementById("f-genre").value   = p.get("genre")   ?? "";
     document.getElementById("f-sort").value    = p.get("sort")    ?? "";
+    populateStyles();
+    document.getElementById("f-style").value   = p.get("style")   ?? "";
   }
 
   function clearForm() {
-    ["query","f-artist","f-release","f-year","f-label","f-genre"].forEach(id => {
+    ["query","f-artist","f-release","f-year","f-label","f-genre","f-style"].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = "";
     });
     document.getElementById("f-sort").value = "";
+    document.getElementById("f-style-label").style.display = "none";
   }
 
   async function doSearch(page = 1, skipPushState = false) {
@@ -992,6 +1030,7 @@
     const year    = document.getElementById("f-year").value.trim();
     const label   = document.getElementById("f-label").value.trim();
     const genre   = document.getElementById("f-genre").value.trim();
+    const style   = document.getElementById("f-style")?.value.trim() ?? "";
     const sort    = document.getElementById("f-sort").value;
 
     if (!q && !artist && !release && !year && !label && !genre) {
@@ -1018,6 +1057,7 @@
       if (year)    parts.push(`Year: ${year}`);
       if (label)   parts.push(`Label: ${label}`);
       if (genre)   parts.push(`Genre: ${genre}`);
+      if (style)   parts.push(`Style: ${style}`);
       const descText = parts.length ? "Search :: " + parts.join(", ") : "";
       document.getElementById("search-desc").textContent = descText;
       document.getElementById("search-pipe").style.display = descText ? "inline" : "none";
@@ -1034,6 +1074,7 @@
     if (year)    params.set("year",          year);
     if (label)   params.set("label",         label);
     if (genre)   params.set("genre",         genre);
+    if (style)   params.set("style",         style);
     if (sort) {
       const [sortField, sortOrder] = sort.split(":");
       params.set("sort",       sortField);
