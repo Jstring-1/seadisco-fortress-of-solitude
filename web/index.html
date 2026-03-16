@@ -1050,34 +1050,34 @@
   // ── URL state helpers ────────────────────────────────────────────────────
   function pushSearchState(q, artistRaw, release, year, label, genre, sort, resultType, page) {
     const p = new URLSearchParams();
-    if (q)          p.set("q",       q);
-    if (artistRaw)  p.set("artist",  artistRaw);
-    if (release)    p.set("release", release);
-    if (year)       p.set("year",    year);
-    if (label)      p.set("label",   label);
-    if (genre)      p.set("genre",   genre);
+    if (q)          p.set("q",  q);
+    if (artistRaw)  p.set("ar", artistRaw);
+    if (release)    p.set("re", release);
+    if (year)       p.set("yr", year);
+    if (label)      p.set("lb", label);
+    if (genre)      p.set("gn", genre);
     const style  = document.getElementById("f-style")?.value ?? "";
     const format = document.getElementById("f-format")?.value ?? "";
-    if (style)      p.set("style",   style);
-    if (format && format !== "Vinyl") p.set("format", format); // Vinyl is default, no need to include
-    if (sort)       p.set("sort",    sort);
-    if (resultType) p.set("rtype",   resultType);
-    if (page > 1)   p.set("page",    String(page));
+    if (style)      p.set("st", style);
+    if (format) p.set("fm", format);
+    if (sort)       p.set("sr", sort);
+    if (resultType) p.set("rt", resultType);
+    if (page > 1)   p.set("pg", String(page));
     history.pushState({}, "", p.toString() ? "?" + p.toString() : location.pathname);
   }
 
   function restoreFromParams(p) {
-    document.getElementById("query").value     = p.get("q")       ?? "";
-    document.getElementById("f-artist").value  = p.get("artist")  ?? "";
-    document.getElementById("f-release").value = p.get("release") ?? "";
-    document.getElementById("f-year").value    = p.get("year")    ?? "";
-    document.getElementById("f-label").value   = p.get("label")   ?? "";
-    document.getElementById("f-genre").value   = p.get("genre")   ?? "";
-    document.getElementById("f-sort").value    = p.get("sort")    ?? "";
-    document.getElementById("f-format").value  = p.get("format")  || "Vinyl";
+    document.getElementById("query").value     = p.get("q")  ?? "";
+    document.getElementById("f-artist").value  = p.get("ar") ?? "";
+    document.getElementById("f-release").value = p.get("re") ?? "";
+    document.getElementById("f-year").value    = p.get("yr") ?? "";
+    document.getElementById("f-label").value   = p.get("lb") ?? "";
+    document.getElementById("f-genre").value   = p.get("gn") ?? "";
+    document.getElementById("f-sort").value    = p.get("sr") ?? "";
+    document.getElementById("f-format").value  = p.get("fm") || "Vinyl";
     populateStyles();
-    document.getElementById("f-style").value   = p.get("style")   ?? "";
-    const rtype = p.get("rtype") ?? "";
+    document.getElementById("f-style").value   = p.get("st") ?? "";
+    const rtype = p.get("rt") ?? "";
     const radio = document.querySelector(`input[name="result-type"][value="${rtype}"]`);
     if (radio) radio.checked = true;
   }
@@ -1302,24 +1302,24 @@
 
       // Auto-open popup/bio if URL params are present (e.g. from a shared link)
       const urlP = new URLSearchParams(location.search);
-      const openParam  = urlP.get("open");
-      const videoParam = urlP.get("video");
+      const openParam  = urlP.get("op");
+      const videoParam = urlP.get("vd");
       if (openParam) {
         const colon = openParam.indexOf(":");
         const pType = openParam.slice(0, colon);
         const pId   = openParam.slice(colon + 1);
         const pUrl  = `https://www.discogs.com/${pType}/${pId}`;
         openModal(null, pId, pType, pUrl);
-        const versionParam = urlP.get("version");
+        const versionParam = urlP.get("vr");
         if (versionParam) {
           setTimeout(() => openVersionPopup(null, versionParam), 1200);
         }
         if (videoParam) {
           setTimeout(() => openVideo(null, `https://www.youtube.com/watch?v=${videoParam}`), 1200);
         }
-      } else if (urlP.get("bio") === "1") {
+      } else if (urlP.get("bi") === "1") {
         openBioFull(null);
-      } else if (urlP.get("shows") === "1") {
+      } else if (urlP.get("sh") === "1") {
         renderShowsPopup();
       } else if (videoParam) {
         openVideo(null, `https://www.youtube.com/watch?v=${videoParam}`);
@@ -1398,7 +1398,7 @@
   function openModal(event, id, type, discogsUrl) {
     if (event) event.preventDefault();
     const u = new URL(window.location.href);
-    u.searchParams.set("open", `${type}:${id}`);
+    u.searchParams.set("op", `${type}:${id}`);
     history.replaceState({}, "", u.toString());
     const overlay = document.getElementById("modal-overlay");
     document.getElementById("album-info").innerHTML = "";
@@ -1423,7 +1423,7 @@
   function closeModal() {
     document.getElementById("modal-overlay").classList.remove("open");
     const u = new URL(window.location.href);
-    u.searchParams.delete("open");
+    u.searchParams.delete("op");
     history.replaceState({}, "", u.toString());
   }
 
@@ -1441,7 +1441,7 @@
     loading.style.display = "block";
     overlay.classList.add("open");
     const u = new URL(window.location.href);
-    u.searchParams.set("version", releaseId);
+    u.searchParams.set("vr", releaseId);
     history.replaceState({}, "", u.toString());
     try {
       const discogsUrl = `https://www.discogs.com/release/${releaseId}`;
@@ -1461,7 +1461,7 @@
   function closeVersionPopup() {
     document.getElementById("version-overlay").classList.remove("open");
     const u = new URL(window.location.href);
-    u.searchParams.delete("version");
+    u.searchParams.delete("vr");
     history.replaceState({}, "", u.toString());
   }
 
@@ -1473,7 +1473,7 @@
   function openBioFull(event) {
     if (event) event.preventDefault();
     const u = new URL(window.location.href);
-    u.searchParams.set("bio", "1");
+    u.searchParams.set("bi", "1");
     history.replaceState({}, "", u.toString());
     const { name, text, wiki, members = [], groups = [], aliases = [], discogsId = null } = window._currentBio ?? {};
     document.getElementById("bio-full-name").textContent = name ?? "";
@@ -1495,7 +1495,7 @@
   function closeBioFull() {
     document.getElementById("bio-full-overlay").classList.remove("open");
     const u = new URL(window.location.href);
-    u.searchParams.delete("bio");
+    u.searchParams.delete("bi");
     history.replaceState({}, "", u.toString());
   }
 
@@ -1533,7 +1533,7 @@
           ${s.url ? `<a href="${s.url}" target="_blank" rel="noopener" class="show-ticket">Tickets ↗</a>` : ""}
         </div>`).join("");
     const u = new URL(window.location.href);
-    u.searchParams.set("shows", "1");
+    u.searchParams.set("sh", "1");
     history.replaceState({}, "", u.toString());
     document.getElementById("shows-overlay").classList.add("open");
   }
@@ -1546,7 +1546,7 @@
   function closeShows() {
     document.getElementById("shows-overlay").classList.remove("open");
     const u = new URL(window.location.href);
-    u.searchParams.delete("shows");
+    u.searchParams.delete("sh");
     history.replaceState({}, "", u.toString());
   }
 
@@ -1560,7 +1560,7 @@
 
   function setVideoUrl(id) {
     const u = new URL(window.location.href);
-    u.searchParams.set("video", id);
+    u.searchParams.set("vd", id);
     history.replaceState({}, "", u.toString());
   }
 
@@ -1665,7 +1665,7 @@
     }
     document.getElementById("video-player").innerHTML = "";
     const u = new URL(window.location.href);
-    u.searchParams.delete("video");
+    u.searchParams.delete("vd");
     history.replaceState({}, "", u.toString());
   }
 
@@ -2023,7 +2023,7 @@
     const p = new URLSearchParams(location.search);
     restoreFromParams(p);
     if (p.toString()) {
-      doSearch(parseInt(p.get("page") ?? "1"), true);
+      doSearch(parseInt(p.get("pg") ?? "1"), true);
     } else {
       // Back to blank state — clear everything
       document.getElementById("results").innerHTML = "";
@@ -2045,7 +2045,7 @@
     const p = new URLSearchParams(location.search);
     if (p.toString()) {
       restoreFromParams(p);
-      doSearch(parseInt(p.get("page") ?? "1"), true);
+      doSearch(parseInt(p.get("pg") ?? "1"), true);
     }
   })();
 
