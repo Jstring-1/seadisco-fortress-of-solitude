@@ -1381,14 +1381,13 @@
       const data = await fetch(`${API}/upcoming-shows?artist=${encodeURIComponent(artistName)}`).then(r => r.json());
       window._upcomingShows = { name: artistName, shows: data.shows ?? [] };
       link.textContent = "(upcoming shows)";
-      openShowsPopup(event);
+      renderShowsPopup();
     } catch(e) {
       link.textContent = "(upcoming shows)";
     }
   }
 
-  function openShowsPopup(event) {
-    event.preventDefault();
+  function renderShowsPopup() {
     const { name, shows } = window._upcomingShows ?? { name: "", shows: [] };
     document.getElementById("shows-title").textContent = `Upcoming Shows — ${name}`;
     document.getElementById("shows-list").innerHTML = shows.length === 0
@@ -1403,6 +1402,11 @@
           ${s.url ? `<a href="${s.url}" target="_blank" rel="noopener" class="show-ticket">Tickets ↗</a>` : ""}
         </div>`).join("");
     document.getElementById("shows-overlay").classList.add("open");
+  }
+
+  function openShowsPopup(event) {
+    event.preventDefault();
+    renderShowsPopup();
   }
 
   function closeShows() {
