@@ -20,6 +20,23 @@ const app = express();
 // Serve static files from web/ (logo, etc.)
 app.use(express.static(path.join(__dirname, "../web")));
 
+// Block crawlers and AI scrapers at the HTTP level
+app.use((req, res, next) => {
+  res.setHeader("X-Robots-Tag", "noindex, nofollow, noarchive, nosnippet");
+  const ua = req.headers["user-agent"] ?? "";
+  const blocked = [
+    "Googlebot","Bingbot","Slurp","DuckDuckBot","Baiduspider","YandexBot",
+    "Sogou","Exabot","facebot","ia_archiver","AhrefsBot","SemrushBot",
+    "MJ12bot","DotBot","BLEXBot","GPTBot","ClaudeBot","anthropic-ai",
+    "CCBot","DataForSeoBot","PetalBot","Bytespider",
+  ];
+  if (blocked.some(b => ua.includes(b))) {
+    res.status(403).send("Forbidden");
+    return;
+  }
+  next();
+});
+
 // Allow any webpage to call this API
 app.use((_req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
