@@ -1105,7 +1105,7 @@
       if (isYearSort) {
         // Dual fetch: master + release merged and sorted by year client-side
         const [masterRes, releaseRes, bioRes2] = await Promise.all([
-          fetch(`${API}/search?${baseParams("master",  6)}`),
+          fetch(`${API}/search?${baseParams("master",  18)}`),
           fetch(`${API}/search?${baseParams("release", 6)}`),
           bioFetch ?? Promise.resolve(null),
         ]);
