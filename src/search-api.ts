@@ -411,6 +411,32 @@ app.get("/marketplace-stats/:id", async (req, res) => {
   }
 });
 
+// GET /master-versions/:id — all pressings/versions of a master release
+app.get("/master-versions/:id", async (req, res) => {
+  const { id } = req.params;
+  try {
+    const r = await fetch(
+      `https://api.discogs.com/masters/${id}/versions?per_page=100&sort=released&sort_order=asc`,
+      { headers: { "Authorization": `Discogs token=${token}`, "User-Agent": MB_UA } }
+    );
+    const data = await r.json() as any;
+    const versions = (data.versions ?? []).map((v: any) => ({
+      id:      v.id,
+      title:   v.title,
+      label:   v.label,
+      catno:   v.catno,
+      country: v.country,
+      year:    v.released,
+      format:  v.format,
+      url:     v.resource_url ? `https://www.discogs.com/release/${v.id}` : null,
+    }));
+    res.json({ versions });
+  } catch (err) {
+    console.error(err);
+    res.json({ versions: [] });
+  }
+});
+
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Discogs search API listening on port ${PORT}`);
