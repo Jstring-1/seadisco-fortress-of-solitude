@@ -1628,12 +1628,18 @@
       return null;
     }
 
+    const identifierRows = (d.identifiers ?? [])
+      .filter(i => i.value && ["Barcode","Matrix / Runout","ASIN","Catalog Number","Label Code"].includes(i.type))
+      .map(i => `<span class="detail-label">${escHtml(i.type)}</span><span>${escHtml(i.value)}</span>`)
+      .join("");
+
     const detailRows = [
       labels  ? `<span class="detail-label">Label</span><span>${escHtml(labels)}</span>`   : "",
       formats ? `<span class="detail-label">Format</span><span>${escHtml(formats)}</span>` : "",
       country ? `<span class="detail-label">Country</span><span>${escHtml(country)}</span>` : "",
       genres  ? `<span class="detail-label">Genre</span><span>${escHtml(genres)}</span>`   : "",
       year    ? `<span class="detail-label">Year</span><span>${escHtml(String(year))}</span>` : "",
+      identifierRows,
     ].filter(Boolean).join("");
 
     const tracks = (d.tracklist ?? []).filter(t => t.type_ !== "heading");
