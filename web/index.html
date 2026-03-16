@@ -837,6 +837,15 @@
     <label>Year <input type="text" id="f-year" placeholder="e.g. 1973" /></label>
   </div>
   <div class="filters" style="margin-top:0.4rem">
+    <label>Format
+      <select id="f-format">
+        <option value="Vinyl">Vinyl</option>
+        <option value="">All Formats</option>
+        <option value="CD">CD</option>
+        <option value="Cassette">Cassette</option>
+        <option value="Digital">Digital</option>
+      </select>
+    </label>
     <label>Genre
       <select id="f-genre" onchange="populateStyles()">
         <option value="">Any</option>
@@ -1032,6 +1041,7 @@
       if (el) el.value = "";
     });
     document.getElementById("f-sort").value = "";
+    document.getElementById("f-format").value = "Vinyl";
     document.getElementById("f-style").innerHTML = '<option value="">Any</option>';
     document.getElementById("f-style").disabled = true;
     document.querySelector('input[name="result-type"][value=""]').checked = true;
@@ -1046,6 +1056,7 @@
     const label     = document.getElementById("f-label").value.trim();
     const genre     = document.getElementById("f-genre").value.trim();
     const style     = document.getElementById("f-style")?.value.trim() ?? "";
+    const format    = document.getElementById("f-format").value;
     const sort      = document.getElementById("f-sort").value;
     const resultType = document.querySelector('input[name="result-type"]:checked')?.value ?? "";
 
@@ -1074,6 +1085,7 @@
       if (label)   parts.push(`Label: ${label}`);
       if (genre)   parts.push(`Genre: ${genre}`);
       if (style)   parts.push(`Style: ${style}`);
+      if (format)  parts.push(`Format: ${format}`);
       const descText = parts.length ? "Search :: " + parts.join(", ") : "";
       document.getElementById("search-desc").textContent = descText;
       document.getElementById("search-pipe").style.display = descText ? "inline" : "none";
@@ -1097,6 +1109,7 @@
       if (label)   p.set("label",         label);
       if (genre)   p.set("genre",         genre);
       if (style)   p.set("style",         style);
+      if (format)  p.set("format",        format);
       if (sort && !skipSort) {
         const [sortField, sortOrder] = sort.split(":");
         p.set("sort",       sortField);
