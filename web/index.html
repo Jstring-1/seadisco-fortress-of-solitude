@@ -863,6 +863,14 @@
       </select>
     </label>
   </div>
+  <div style="display:flex;flex-wrap:wrap;gap:0.5rem;align-items:center;margin-bottom:0.5rem;font-size:0.78rem;color:var(--muted)">
+    <span>Results:</span>
+    <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="" checked> All</label>
+    <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="master"> Masters</label>
+    <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="release"> Releases</label>
+    <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="artist"> Artists</label>
+    <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="label"> Labels</label>
+  </div>
   <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;align-items:center">
     <button id="search-btn" onclick="doSearch(1)" style="flex:1">Search</button>
     <label style="font-size:0.78rem;color:var(--muted);display:flex;align-items:center;gap:0.3rem;white-space:nowrap">
@@ -989,16 +997,17 @@
 
   // ── Search ────────────────────────────────────────────────────────────────
   // ── URL state helpers ────────────────────────────────────────────────────
-  function pushSearchState(q, artistRaw, release, year, label, genre, sort, page) {
+  function pushSearchState(q, artistRaw, release, year, label, genre, sort, resultType, page) {
     const p = new URLSearchParams();
-    if (q)        p.set("q",       q);
-    if (artistRaw) p.set("artist", artistRaw);
-    if (release)  p.set("release", release);
-    if (year)     p.set("year",    year);
-    if (label)    p.set("label",   label);
-    if (genre)    p.set("genre",   genre);
-    if (sort)     p.set("sort",    sort);
-    if (page > 1) p.set("page",    String(page));
+    if (q)          p.set("q",       q);
+    if (artistRaw)  p.set("artist",  artistRaw);
+    if (release)    p.set("release", release);
+    if (year)       p.set("year",    year);
+    if (label)      p.set("label",   label);
+    if (genre)      p.set("genre",   genre);
+    if (sort)       p.set("sort",    sort);
+    if (resultType) p.set("rtype",   resultType);
+    if (page > 1)   p.set("page",    String(page));
     history.pushState({}, "", p.toString() ? "?" + p.toString() : location.pathname);
   }
 
@@ -1012,6 +1021,9 @@
     document.getElementById("f-sort").value    = p.get("sort")    ?? "";
     populateStyles();
     document.getElementById("f-style").value   = p.get("style")   ?? "";
+    const rtype = p.get("rtype") ?? "";
+    const radio = document.querySelector(`input[name="result-type"][value="${rtype}"]`);
+    if (radio) radio.checked = true;
   }
 
   function clearForm() {
@@ -1022,25 +1034,27 @@
     document.getElementById("f-sort").value = "";
     document.getElementById("f-style").innerHTML = '<option value="">Any</option>';
     document.getElementById("f-style").disabled = true;
+    document.querySelector('input[name="result-type"][value=""]').checked = true;
   }
 
   async function doSearch(page = 1, skipPushState = false) {
     const q         = document.getElementById("query").value.trim();
     const artistRaw = document.getElementById("f-artist").value.trim();
     const artist    = artistRaw.replace(/\s*\(\d+\)$/, ""); // stripped for search params
-    const release = document.getElementById("f-release").value.trim();
-    const year    = document.getElementById("f-year").value.trim();
-    const label   = document.getElementById("f-label").value.trim();
-    const genre   = document.getElementById("f-genre").value.trim();
-    const style   = document.getElementById("f-style")?.value.trim() ?? "";
-    const sort    = document.getElementById("f-sort").value;
+    const release   = document.getElementById("f-release").value.trim();
+    const year      = document.getElementById("f-year").value.trim();
+    const label     = document.getElementById("f-label").value.trim();
+    const genre     = document.getElementById("f-genre").value.trim();
+    const style     = document.getElementById("f-style")?.value.trim() ?? "";
+    const sort      = document.getElementById("f-sort").value;
+    const resultType = document.querySelector('input[name="result-type"]:checked')?.value ?? "";
 
     if (!q && !artist && !release && !year && !label && !genre) {
       setStatus("Enter a search term or fill in at least one filter.", false);
       return;
     }
 
-    if (!skipPushState) pushSearchState(q, artistRaw, release, year, label, genre, sort, page);
+    if (!skipPushState) pushSearchState(q, artistRaw, release, year, label, genre, sort, resultType, page);
 
     currentPage = page;
     document.getElementById("search-btn").disabled = true;
@@ -1069,17 +1083,21 @@
       document.getElementById("sort-pipe").style.display = (descText && sortLabel) ? "inline" : "none";
     }
 
-    const isYearSort = sort.startsWith("year:");
-    const baseParams = (extraType, perPage) => {
+    const isYearSort  = sort.startsWith("year:");
+    const skipSort    = resultType === "artist" || resultType === "label";
+    const dualFetch   = isYearSort && !skipSort && (resultType === "" || resultType === "master" || resultType === "release");
+
+    const baseParams = (typeOverride, perPage) => {
       const p = new URLSearchParams({ q: q || artist || label || release, page, per_page: perPage });
-      if (extraType) p.set("type", extraType);
+      const t = typeOverride ?? resultType;
+      if (t) p.set("type", t);
       if (artist)  p.set("artist",        artist);
       if (release) p.set("release_title", release);
       if (year)    p.set("year",          year);
       if (label)   p.set("label",         label);
       if (genre)   p.set("genre",         genre);
       if (style)   p.set("style",         style);
-      if (sort) {
+      if (sort && !skipSort) {
         const [sortField, sortOrder] = sort.split(":");
         p.set("sort",       sortField);
         p.set("sort_order", sortOrder);
@@ -1102,11 +1120,11 @@
       }
 
       let items, totalPages_new;
-      if (isYearSort) {
+      if (dualFetch) {
         // Dual fetch: master + release merged and sorted by year client-side
         const [masterRes, releaseRes, bioRes2] = await Promise.all([
           fetch(`${API}/search?${baseParams("master",  18)}`),
-          fetch(`${API}/search?${baseParams("release", 6)}`),
+          fetch(`${API}/search?${baseParams("release",  6)}`),
           bioFetch ?? Promise.resolve(null),
         ]);
         bioFetch = bioRes2 ? { json: () => bioRes2.json() } : null;
