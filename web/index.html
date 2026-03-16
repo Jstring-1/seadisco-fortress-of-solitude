@@ -1646,9 +1646,10 @@
       .map(i => `<span class="detail-label">${escHtml(i.type)}</span><span>${escHtml(i.value)}</span>`)
       .join("");
 
+    const isMaster = searchResult.type === "master";
     const detailRows = [
       labels  ? `<span class="detail-label">Label</span><span>${escHtml(labels)}</span>`   : "",
-      formats ? `<span class="detail-label">Format</span><span>${escHtml(formats)}</span>` : "",
+      (!isMaster && formats) ? `<span class="detail-label">Format</span><span>${escHtml(formats)}</span>` : "",
       country ? `<span class="detail-label">Country</span><span>${escHtml(country)}</span>` : "",
       genres  ? `<span class="detail-label">Genre</span><span>${escHtml(genres)}</span>`   : "",
       year    ? `<span class="detail-label">Year</span><span>${escHtml(String(year))}</span>` : "",
@@ -1677,7 +1678,7 @@
 
     const metaRows = [
       released ? `<div class="album-meta-row"><span class="meta-label">Released</span><span>${escHtml(released)}</span></div>` : "",
-      formats  ? `<div class="album-meta-row"><span class="meta-label">Format</span><span>${escHtml(formats)}</span></div>` : "",
+      (!isMaster && formats) ? `<div class="album-meta-row"><span class="meta-label">Format</span><span>${escHtml(formats)}</span></div>` : "",
       credits  ? `<div class="album-meta-row"><span class="meta-label">Credits</span><span>${credits}</span></div>` : "",
       notes    ? `<div class="album-notes"><div class="tracklist-heading" style="margin-top:0.5rem">Notes</div>${escHtml(notes)}</div>` : "",
     ].filter(Boolean).join("");
@@ -1691,7 +1692,6 @@
           <h2>${escHtml(title)}</h2>
           ${artists.length ? `<div class="album-artist">${artists.map(n => `<a href="#" class="modal-artist-link" data-artist="${escHtml(n)}" onclick="searchArtistFromModal(event,this)">${escHtml(n)}</a>`).join(", ")}</div>` : ""}
           ${detailRows ? `<div class="album-detail-grid">${detailRows}</div>` : ""}
-          ${searchResult.type === "master" ? `<a href="#" onclick="loadMasterVersions(event,${searchResult.id})" style="font-size:0.75rem;color:#888;text-decoration:none;margin-top:0.5rem;display:inline-block" id="master-versions-btn">All pressings/versions ↓</a><div id="master-versions-list" style="margin-top:0.4rem"></div>` : ""}
           ${discogsUrl ? `<a href="${discogsUrl}" target="_blank" rel="noopener" style="font-size:0.75rem;color:var(--accent);text-decoration:none;margin-top:0.5rem;display:inline-block">View on Discogs ↗</a>` : ""}
           ${stats?.numForSale > 0 && stats?.lowestPrice != null
             ? `<a href="https://www.discogs.com/sell/list?release_id=${escHtml(String(stats.releaseId))}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#888;text-decoration:none;margin-top:0.2rem;display:block">${escHtml(String(stats.numForSale))} available from $${parseFloat(stats.lowestPrice).toFixed(2)}</a>`
@@ -1700,22 +1700,23 @@
         </div>
       </div>
       ${trackHTML}
-      ${metaRows ? `<div class="album-extra">${metaRows}</div>` : ""}`;
+      ${metaRows ? `<div class="album-extra">${metaRows}</div>` : ""}
+      ${isMaster ? `<div id="master-versions-list" style="padding:0.75rem 1rem 0.5rem;font-size:0.78rem;color:var(--muted)">Loading pressings…</div>` : ""}`;
+
+    if (isMaster) loadMasterVersions(null, searchResult.id);
   }
 
   async function loadMasterVersions(event, masterId) {
-    event.preventDefault();
-    const btn  = document.getElementById("master-versions-btn");
+    if (event) event.preventDefault();
     const list = document.getElementById("master-versions-list");
-    btn.textContent = "Loading…";
+    if (!list) return;
     try {
       const data = await fetch(`${API}/master-versions/${masterId}`).then(r => r.json());
       const versions = data.versions ?? [];
-      if (!versions.length) { btn.textContent = "No versions found"; return; }
-      btn.style.display = "none";
+      if (!versions.length) { list.textContent = "No pressings found."; return; }
       list.innerHTML = `
-        <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.4rem">All Pressings / Versions</div>
-        <div style="display:grid;grid-template-columns:auto auto auto auto 1fr;gap:0.2rem 0.7rem;font-size:0.75rem;max-height:220px;overflow-y:auto">
+        <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem">Pressings / Versions</div>
+        <div style="display:grid;grid-template-columns:auto auto auto auto 1fr;gap:0.2rem 0.7rem;font-size:0.75rem;max-height:240px;overflow-y:auto">
           ${versions.map(v => `
             <span style="color:#888">${escHtml(v.year ?? "—")}</span>
             <span style="color:#aaa">${escHtml(v.country ?? "—")}</span>
@@ -1725,7 +1726,7 @@
           `).join("")}
         </div>`;
     } catch(e) {
-      btn.textContent = "Failed to load versions";
+      list.textContent = "Failed to load pressings.";
     }
   }
 
