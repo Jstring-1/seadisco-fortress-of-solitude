@@ -1815,7 +1815,7 @@
         <div style="display:grid;grid-template-columns:auto auto auto auto 1fr;gap:0.2rem 0.7rem;font-size:0.75rem">
           ${versions.map(v => `
             <span style="color:#888">${escHtml(!v.year || v.year === "0" ? "?" : String(v.year))}</span>
-            <span style="color:#aaa">${escHtml(v.country ?? "—")}</span>
+            <span style="color:#aaa">${escHtml(v.country || "?")}</span>
             <span style="color:#888">${escHtml(v.format ?? "—")}</span>
             <span style="color:#aaa">${escHtml(v.catno ?? "—")}</span>
             <span><a href="#" onclick="openVersionPopup(event,${v.id})" style="color:var(--accent);text-decoration:none">${escHtml(v.label ?? v.title ?? "—")}</a></span>
