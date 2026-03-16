@@ -1056,6 +1056,10 @@
     if (year)       p.set("year",    year);
     if (label)      p.set("label",   label);
     if (genre)      p.set("genre",   genre);
+    const style  = document.getElementById("f-style")?.value ?? "";
+    const format = document.getElementById("f-format")?.value ?? "";
+    if (style)      p.set("style",   style);
+    if (format && format !== "Vinyl") p.set("format", format); // Vinyl is default, no need to include
     if (sort)       p.set("sort",    sort);
     if (resultType) p.set("rtype",   resultType);
     if (page > 1)   p.set("page",    String(page));
@@ -1070,6 +1074,7 @@
     document.getElementById("f-label").value   = p.get("label")   ?? "";
     document.getElementById("f-genre").value   = p.get("genre")   ?? "";
     document.getElementById("f-sort").value    = p.get("sort")    ?? "";
+    document.getElementById("f-format").value  = p.get("format")  || "Vinyl";
     populateStyles();
     document.getElementById("f-style").value   = p.get("style")   ?? "";
     const rtype = p.get("rtype") ?? "";
