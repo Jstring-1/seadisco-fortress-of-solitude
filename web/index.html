@@ -857,8 +857,8 @@
         <option>Stage &amp; Screen</option>
       </select>
     </label>
-    <label id="f-style-label" style="display:none">Style
-      <select id="f-style">
+    <label>Style
+      <select id="f-style" disabled>
         <option value="">Any</option>
       </select>
     </label>
@@ -980,11 +980,10 @@
   function populateStyles() {
     const genre = document.getElementById("f-genre").value;
     const styleSelect = document.getElementById("f-style");
-    const styleLabel  = document.getElementById("f-style-label");
     const styles = GENRE_STYLES[genre] ?? [];
     styleSelect.innerHTML = '<option value="">Any</option>' +
       styles.map(s => `<option value="${s}">${s}</option>`).join("");
-    styleLabel.style.display = styles.length ? "" : "none";
+    styleSelect.disabled = !styles.length;
     styleSelect.value = "";
   }
 
@@ -1021,7 +1020,8 @@
       if (el) el.value = "";
     });
     document.getElementById("f-sort").value = "";
-    document.getElementById("f-style-label").style.display = "none";
+    document.getElementById("f-style").innerHTML = '<option value="">Any</option>';
+    document.getElementById("f-style").disabled = true;
   }
 
   async function doSearch(page = 1, skipPushState = false) {
