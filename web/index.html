@@ -1708,10 +1708,10 @@
       })
       .join(" · ");
     const notes       = d.notes ? stripDiscogsMarkup(d.notes) : "";
-    const catno       = (d.labels ?? [])[0]?.catno ?? "";
-    const versionParts = [year ? String(year) : "", catno, labels].filter(Boolean);
-    const typeLabel   = targetId === "version-info"
-      ? `Version${versionParts.length ? ": " + versionParts.join(", ") : ""}`
+    const catno     = (d.labels ?? [])[0]?.catno ?? "";
+    const releaseId = d.id ?? searchResult.id ?? "";
+    const typeLabel = targetId === "version-info"
+      ? `Version: ${releaseId}`
       : searchResult.type === "master" ? "Master Release" : searchResult.type === "release" ? "Release" : "";
 
     // Build video title → URL map for matching to tracks
@@ -1738,6 +1738,7 @@
       (!isMaster && formats) ? `<span class="detail-label">Format</span><span>${escHtml(formats)}</span>` : "",
       country ? `<span class="detail-label">Country</span><span>${escHtml(country)}</span>` : "",
       genres  ? `<span class="detail-label">Genre</span><span>${escHtml(genres)}</span>`   : "",
+      (!isMaster && catno) ? `<span class="detail-label">Cat#</span><span>${escHtml(catno)}</span>` : "",
       year    ? `<span class="detail-label">Year</span><span>${escHtml(String(year))}</span>` : "",
       identifierRows,
     ].filter(Boolean).join("");
