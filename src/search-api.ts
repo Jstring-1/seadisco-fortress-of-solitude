@@ -47,6 +47,7 @@ app.get("/search", async (req, res) => {
       label: req.query.label as string | undefined,
       year: req.query.year as string | undefined,
       genre: req.query.genre as string | undefined,
+      style: req.query.style as string | undefined,
       sort: req.query.sort as string | undefined,
       sortOrder: req.query.sort_order as "asc" | "desc" | undefined,
       page: req.query.page ? parseInt(req.query.page as string) : 1,
