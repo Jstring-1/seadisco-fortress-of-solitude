@@ -227,6 +227,7 @@ app.get("/artist-bio", async (req, res) => {
     res.json({
       profile,
       name: artist?.name ?? nameForMatch,
+      discogsId: best.id ?? null,
       alternatives,
       wikiExtract: wikiResult?.extract ?? null,
       members: mapNames(artist?.members ?? []),
