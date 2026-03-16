@@ -1812,7 +1812,7 @@
       if (!versions.length) { list.textContent = "No pressings found."; return; }
       list.innerHTML = `
         <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem">Pressings / Versions</div>
-        <div style="display:grid;grid-template-columns:auto auto auto auto 1fr;gap:0.2rem 0.7rem;font-size:0.75rem;max-height:240px;overflow-y:auto">
+        <div style="display:grid;grid-template-columns:auto auto auto auto 1fr;gap:0.2rem 0.7rem;font-size:0.75rem">
           ${versions.map(v => `
             <span style="color:#888">${escHtml(v.year ?? "—")}</span>
             <span style="color:#aaa">${escHtml(v.country ?? "—")}</span>
