@@ -1443,42 +1443,14 @@
     u.searchParams.set("version", releaseId);
     history.replaceState({}, "", u.toString());
     try {
+      const discogsUrl = `https://www.discogs.com/release/${releaseId}`;
       const [d, stats] = await Promise.all([
         fetch(`${API}/release/${releaseId}`).then(r => r.json()),
         fetch(`${API}/marketplace-stats/${releaseId}?type=release`).then(r => r.json()).catch(() => null),
       ]);
       loading.style.display = "none";
-      const title   = d.title ?? "Unknown";
-      const artists = (d.artists ?? []).map(a => a.name.replace(/\s*\(\d+\)$/, "")).filter(Boolean);
-      const labels  = (d.labels ?? []).map(l => l.name).filter(Boolean).slice(0,2).join(", ");
-      const country = d.country ?? "";
-      const year    = d.year ?? "";
-      const img     = d.images?.[0]?.uri ?? "";
-      const formats = (d.formats ?? []).map(f => [f.name, ...(f.descriptions ?? [])].filter(Boolean).join(" · ")).join("; ");
-      const catno   = (d.labels ?? [])[0]?.catno ?? "";
-      const tracks  = (d.tracklist ?? []).filter(t => t.type_ !== "heading");
-      const discogsUrl = d.uri ? `https://www.discogs.com${d.uri}` : `https://www.discogs.com/release/${releaseId}`;
-      info.innerHTML = `
-        <div class="album-header">
-          ${img ? `<img class="album-cover" src="${img}" alt="${escHtml(title)}" loading="lazy" />` : `<div class="album-cover-placeholder">♪</div>`}
-          <div class="album-meta">
-            <div class="album-type-badge">Release</div>
-            <h2>${escHtml(title)}</h2>
-            ${artists.length ? `<div class="album-artist">${artists.map(n => `<a href="#" class="modal-artist-link" data-artist="${escHtml(n)}" onclick="searchArtistFromModal(event,this)">${escHtml(n)}</a>`).join(", ")}</div>` : ""}
-            <div class="album-detail-grid">
-              ${labels  ? `<span class="detail-label">Label</span><span>${escHtml(labels)}</span>` : ""}
-              ${catno   ? `<span class="detail-label">Cat#</span><span>${escHtml(catno)}</span>` : ""}
-              ${formats ? `<span class="detail-label">Format</span><span>${escHtml(formats)}</span>` : ""}
-              ${country ? `<span class="detail-label">Country</span><span>${escHtml(country)}</span>` : ""}
-              ${year    ? `<span class="detail-label">Year</span><span>${escHtml(String(year))}</span>` : ""}
-            </div>
-            <a href="${discogsUrl}" target="_blank" rel="noopener" style="font-size:0.75rem;color:var(--accent);text-decoration:none;margin-top:0.5rem;display:inline-block">View on Discogs ↗</a>
-            ${stats?.numForSale > 0 && stats?.lowestPrice != null
-              ? `<a href="https://www.discogs.com/sell/list?release_id=${releaseId}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#888;text-decoration:none;margin-top:0.2rem;display:block">${stats.numForSale} available from $${parseFloat(stats.lowestPrice).toFixed(2)}</a>`
-              : (stats?.numForSale === 0 ? `<div style="font-size:0.75rem;color:#555;margin-top:0.2rem">Not currently available on Discogs marketplace</div>` : "")}
-          </div>
-        </div>
-        ${tracks.length ? `<div class="album-tracklist"><div class="tracklist-heading">Tracklist</div>${tracks.map(t => `<div class="track"><span class="track-pos">${escHtml(t.position||"")}</span><span class="track-title">${escHtml(t.title||"")}</span>${t.duration?`<span class="track-dur">${escHtml(t.duration)}</span>`:""}</div>`).join("")}</div>` : ""}`;
+      const fakeResult = { type: "release", id: releaseId, title: d.title ?? "", cover_image: d.images?.[0]?.uri ?? "", format: [], country: d.country ?? "", year: d.year ?? "" };
+      renderAlbumInfo(d, fakeResult, discogsUrl, stats, "version-info");
     } catch(e) {
       loading.style.display = "none";
       info.innerHTML = `<div style="padding:1rem;color:var(--muted)">Failed to load release details.</div>`;
@@ -1718,8 +1690,8 @@
   });
 
   // ── Album info panel ──────────────────────────────────────────────────────
-  function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null) {
-    const el = document.getElementById("album-info");
+  function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetId = "album-info") {
+    const el = document.getElementById(targetId);
 
     const rawTitle = d.title ?? searchResult.title ?? "";
     const title    = rawTitle.includes(" - ") && !d.title
