@@ -929,6 +929,8 @@
     <button type="button" onclick="clearForm()" title="Clear form" style="background:none;border:none;padding:0;margin:0;font-size:0.92rem;color:#555;cursor:pointer;line-height:1;display:flex;align-items:center" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
     <span id="search-pipe" style="color:#333;display:none">|</span>
     <span id="search-desc"></span>
+    <span id="type-pipe" style="color:#333;display:none">|</span>
+    <span id="type-desc"></span>
     <span id="sort-pipe" style="color:#333;display:none">|</span>
     <span id="sort-desc"></span>
   </div>
@@ -1129,6 +1131,10 @@
       const descText = parts.length ? "Search :: " + parts.join(", ") : "";
       document.getElementById("search-desc").textContent = descText;
       document.getElementById("search-pipe").style.display = descText ? "inline" : "none";
+      const typeLabels = { "master":"Masters", "release":"Releases", "artist":"Artists", "label":"Labels" };
+      const typeLabel = typeLabels[resultType] ?? "";
+      document.getElementById("type-desc").textContent = typeLabel ? `Results: ${typeLabel}` : "";
+      document.getElementById("type-pipe").style.display = (descText && typeLabel) ? "inline" : "none";
       const sortLabels = { "year:asc":"Year ↑", "year:desc":"Year ↓", "title:asc":"Title A→Z", "title:desc":"Title Z→A", "label:asc":"Label A→Z" };
       const sortLabel = sortLabels[sort] ?? "";
       document.getElementById("sort-desc").textContent = sortLabel ? `Sort: ${sortLabel}` : "";
@@ -2022,6 +2028,8 @@
       document.getElementById("pagination").style.display = "none";
       document.getElementById("search-desc").textContent = "";
       document.getElementById("search-pipe").style.display = "none";
+      document.getElementById("type-desc").textContent = "";
+      document.getElementById("type-pipe").style.display = "none";
       document.getElementById("sort-desc").textContent = "";
       document.getElementById("sort-pipe").style.display = "none";
     }
