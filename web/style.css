@@ -19,52 +19,28 @@ body {
   overflow-x: hidden;
 }
 
-header {
-  padding: 0.6rem 0;
+#site-header {
+  text-align: center;
+  padding: 1.5rem 0 0.4rem;
 }
 
-header .inner {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 0 1.5rem;
-  display: flex;
-  align-items: flex-end;
-  gap: 1rem;
-}
-
-header .inner input[type="text"] {
-  flex: 1;
-}
-
-header h1 {
-  font-size: 1rem;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  line-height: 1;
-  flex-shrink: 0;
-}
-header h1 a img {
+#site-header img {
   height: 80px;
   width: auto;
-  display: block;
+  display: inline-block;
 }
 
 main {
   max-width: 900px;
   margin: 0 auto;
-  padding: 0.6rem 1.5rem 1.5rem;
+  padding: 0.4rem 1.5rem 1.5rem;
 }
 
-footer {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 0.6rem 1.5rem 0.8rem;
-  font-size: 0.75rem;
-  color: #555;
+.search-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
 }
-
-footer a { color: #666; text-decoration: none; }
-footer a:hover { color: var(--muted); }
 
 /* ── Search form ── */
 .search-row {

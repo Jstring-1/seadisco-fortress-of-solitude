@@ -81,6 +81,13 @@ function clearForm() {
   document.getElementById("f-style").innerHTML = '<option value="">Any</option>';
   document.getElementById("f-style").disabled = true;
   document.querySelector('input[name="result-type"][value=""]').checked = true;
+  document.getElementById("powered-by").style.display = "";
+  document.getElementById("search-desc").textContent = "";
+  document.getElementById("search-pipe").style.display = "none";
+  document.getElementById("type-desc").textContent = "";
+  document.getElementById("type-pipe").style.display = "none";
+  document.getElementById("sort-desc").textContent = "";
+  document.getElementById("sort-pipe").style.display = "none";
 }
 
 async function doSearch(page = 1, skipPushState = false) {
@@ -123,6 +130,7 @@ async function doSearch(page = 1, skipPushState = false) {
     if (style)   parts.push(`Style: ${style}`);
     if (format)  parts.push(`Format: ${format}`);
     const descText = parts.length ? "Search :: " + parts.join(", ") : "";
+    document.getElementById("powered-by").style.display = descText ? "none" : "";
     document.getElementById("search-desc").textContent = descText;
     document.getElementById("search-pipe").style.display = descText ? "inline" : "none";
     const typeLabels = { "master":"Masters", "release":"Releases", "artist":"Artists", "label":"Labels" };
@@ -1005,6 +1013,7 @@ window.addEventListener("popstate", () => {
     document.getElementById("type-pipe").style.display = "none";
     document.getElementById("sort-desc").textContent = "";
     document.getElementById("sort-pipe").style.display = "none";
+    document.getElementById("powered-by").style.display = "";
   }
 });
 
