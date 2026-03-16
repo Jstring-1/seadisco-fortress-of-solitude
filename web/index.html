@@ -355,27 +355,27 @@
       font-size: 0.9rem;
     }
 
-    #album-info { overflow: hidden; }
+    #album-info, #version-info { overflow: hidden; }
 
-    #album-info .album-header {
+    #album-info .album-header, #version-info .album-header {
       display: flex;
       gap: 1rem;
       padding: 1rem;
       border-bottom: 1px solid var(--border);
     }
 
-    #album-info .album-cover {
-      width: 90px;
-      height: 90px;
+    #album-info .album-cover, #version-info .album-cover {
+      width: 130px;
+      height: 130px;
       object-fit: cover;
       border-radius: 4px;
       flex-shrink: 0;
       background: #222;
     }
 
-    #album-info .album-cover-placeholder {
-      width: 90px;
-      height: 90px;
+    #album-info .album-cover-placeholder, #version-info .album-cover-placeholder {
+      width: 130px;
+      height: 130px;
       background: #222;
       border-radius: 4px;
       flex-shrink: 0;
@@ -386,17 +386,7 @@
       font-size: 2rem;
     }
 
-    #album-info .album-cover {
-      width: 130px;
-      height: 130px;
-    }
-
-    #album-info .album-cover-placeholder {
-      width: 130px;
-      height: 130px;
-    }
-
-    #album-info .album-type-badge {
+    #album-info .album-type-badge, #version-info .album-type-badge {
       font-size: 0.65rem;
       text-transform: uppercase;
       letter-spacing: 0.07em;
@@ -408,14 +398,14 @@
       margin-bottom: 0.35rem;
     }
 
-    #album-info .album-meta h2 {
+    #album-info .album-meta h2, #version-info .album-meta h2 {
       font-size: 1.05rem;
       font-weight: 700;
       margin-bottom: 0.2rem;
       line-height: 1.3;
     }
 
-    #album-info .album-meta .album-artist {
+    #album-info .album-meta .album-artist, #version-info .album-meta .album-artist {
       color: var(--accent);
       font-size: 0.75rem;
       margin-bottom: 0.5rem;
@@ -423,22 +413,22 @@
     .modal-artist-link { color: var(--accent); text-decoration: none; font-size: 0.75rem; }
     .modal-artist-link:hover { text-decoration: underline; }
 
-    #album-info .album-detail-grid {
+    #album-info .album-detail-grid, #version-info .album-detail-grid {
       display: grid;
       grid-template-columns: 4.5rem 1fr;
       gap: 0.15rem 0.5rem;
       font-size: 0.78rem;
     }
 
-    #album-info .detail-label {
+    #album-info .detail-label, #version-info .detail-label {
       color: var(--muted);
     }
 
-    #album-info .album-tracklist {
+    #album-info .album-tracklist, #version-info .album-tracklist {
       padding: 0.75rem 1rem;
     }
 
-    #album-info .tracklist-heading {
+    #album-info .tracklist-heading, #version-info .tracklist-heading {
       font-size: 0.7rem;
       text-transform: uppercase;
       letter-spacing: 0.06em;
@@ -446,7 +436,7 @@
       margin-bottom: 0.5rem;
     }
 
-    #album-info .track {
+    #album-info .track, #version-info .track {
       display: flex;
       gap: 0.6rem;
       font-size: 0.82rem;
@@ -454,33 +444,33 @@
       border-bottom: 1px solid #222;
     }
 
-    #album-info .track:last-child { border-bottom: none; }
+    #album-info .track:last-child, #version-info .track:last-child { border-bottom: none; }
 
-    #album-info .track-pos {
+    #album-info .track-pos, #version-info .track-pos {
       color: var(--muted);
       min-width: 2rem;
       text-align: right;
       flex-shrink: 0;
     }
 
-    #album-info .track-title { flex: 1; }
+    #album-info .track-title, #version-info .track-title { flex: 1; }
 
-    #album-info .track-dur {
+    #album-info .track-dur, #version-info .track-dur {
       color: var(--muted);
       flex-shrink: 0;
     }
 
-    #album-info .track-link {
+    #album-info .track-link, #version-info .track-link {
       color: inherit;
       text-decoration: none;
     }
 
-    #album-info .track-link:hover {
+    #album-info .track-link:hover, #version-info .track-link:hover {
       color: var(--accent);
       text-decoration: underline;
     }
 
-    #album-info .yt-search {
+    #album-info .yt-search, #version-info .yt-search {
       display: inline-flex;
       align-items: center;
       margin-left: 0.4em;
@@ -488,9 +478,9 @@
       filter: grayscale(1) brightness(0.6);
       transition: filter 0.15s;
     }
-    #album-info .yt-search:hover { filter: none; }
+    #album-info .yt-search:hover, #version-info .yt-search:hover { filter: none; }
 
-    #album-info .album-extra {
+    #album-info .album-extra, #version-info .album-extra {
       border-top: 1px solid var(--border);
       padding: 0.75rem 1rem;
       display: flex;
@@ -498,23 +488,23 @@
       gap: 0.4rem;
     }
 
-    #album-info .album-meta-row {
+    #album-info .album-meta-row, #version-info .album-meta-row {
       display: flex;
       gap: 0.75rem;
       font-size: 0.8rem;
     }
 
-    #album-info .meta-label {
+    #album-info .meta-label, #version-info .meta-label {
       color: var(--muted);
       min-width: 5rem;
       flex-shrink: 0;
     }
 
-    #album-info .credit-role {
+    #album-info .credit-role, #version-info .credit-role {
       color: var(--muted);
     }
 
-    #album-info .album-notes {
+    #album-info .album-notes, #version-info .album-notes {
       margin-top: 0.25rem;
       font-size: 0.8rem;
       line-height: 1.55;
@@ -1718,7 +1708,7 @@
       })
       .join(" · ");
     const notes       = d.notes ? stripDiscogsMarkup(d.notes) : "";
-    const typeLabel   = searchResult.type === "master" ? "Master Release" : searchResult.type === "release" ? "Release" : "";
+    const typeLabel   = targetId === "version-info" ? "Version" : searchResult.type === "master" ? "Master Release" : searchResult.type === "release" ? "Release" : "";
 
     // Build video title → URL map for matching to tracks
     const videoMap = new Map();
