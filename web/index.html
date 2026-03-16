@@ -269,6 +269,47 @@
       padding: 1rem;
     }
 
+    /* ── Version overlay (layered over master popup) ── */
+    #version-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.55);
+      z-index: 200;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+    }
+    #version-overlay.open { display: flex; }
+    #version-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      max-width: 560px;
+      width: 100%;
+      max-height: 82vh;
+      overflow-y: auto;
+      position: relative;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+    }
+    #version-close {
+      position: sticky;
+      top: 0.5rem;
+      float: right;
+      margin: 0.5rem 0.6rem 0 0;
+      background: none;
+      border: none;
+      color: var(--muted);
+      font-size: 1.5rem;
+      line-height: 1;
+      cursor: pointer;
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      z-index: 1;
+    }
+    #version-close:hover { color: var(--text); background: #333; }
+    #version-info { overflow: hidden; }
+
     #modal-overlay.open { display: flex; }
 
     #modal-box {
@@ -930,6 +971,15 @@
   </div>
 </div>
 
+<div id="version-overlay">
+  <div id="version-box">
+    <button id="version-close" onclick="closeVersionPopup()">×</button>
+    <button class="popup-share" onclick="sharePopup(this)">share</button>
+    <div id="version-loading" style="padding:2rem;text-align:center;color:var(--muted)">Loading…</div>
+    <div id="version-info"></div>
+  </div>
+</div>
+
 <div id="bio-full-overlay">
   <div id="bio-full-box">
     <button id="bio-full-close" onclick="closeBioFull()">×</button>
@@ -1259,6 +1309,10 @@
         const pId   = openParam.slice(colon + 1);
         const pUrl  = `https://www.discogs.com/${pType}/${pId}`;
         openModal(null, pId, pType, pUrl);
+        const versionParam = urlP.get("version");
+        if (versionParam) {
+          setTimeout(() => openVersionPopup(null, versionParam), 1200);
+        }
         if (videoParam) {
           setTimeout(() => openVideo(null, `https://www.youtube.com/watch?v=${videoParam}`), 1200);
         }
@@ -1374,6 +1428,72 @@
 
   document.getElementById("modal-overlay").addEventListener("click", e => {
     if (e.target === document.getElementById("modal-overlay")) closeModal();
+  });
+
+  // ── Version popup (layered over master popup) ─────────────────────────────
+  async function openVersionPopup(event, releaseId) {
+    if (event) event.preventDefault();
+    const overlay = document.getElementById("version-overlay");
+    const info    = document.getElementById("version-info");
+    const loading = document.getElementById("version-loading");
+    info.innerHTML = "";
+    loading.style.display = "block";
+    overlay.classList.add("open");
+    const u = new URL(window.location.href);
+    u.searchParams.set("version", releaseId);
+    history.replaceState({}, "", u.toString());
+    try {
+      const [d, stats] = await Promise.all([
+        fetch(`${API}/release/${releaseId}`).then(r => r.json()),
+        fetch(`${API}/marketplace-stats/${releaseId}?type=release`).then(r => r.json()).catch(() => null),
+      ]);
+      loading.style.display = "none";
+      const title   = d.title ?? "Unknown";
+      const artists = (d.artists ?? []).map(a => a.name.replace(/\s*\(\d+\)$/, "")).filter(Boolean);
+      const labels  = (d.labels ?? []).map(l => l.name).filter(Boolean).slice(0,2).join(", ");
+      const country = d.country ?? "";
+      const year    = d.year ?? "";
+      const img     = d.images?.[0]?.uri ?? "";
+      const formats = (d.formats ?? []).map(f => [f.name, ...(f.descriptions ?? [])].filter(Boolean).join(" · ")).join("; ");
+      const catno   = (d.labels ?? [])[0]?.catno ?? "";
+      const tracks  = (d.tracklist ?? []).filter(t => t.type_ !== "heading");
+      const discogsUrl = d.uri ? `https://www.discogs.com${d.uri}` : `https://www.discogs.com/release/${releaseId}`;
+      info.innerHTML = `
+        <div class="album-header">
+          ${img ? `<img class="album-cover" src="${img}" alt="${escHtml(title)}" loading="lazy" />` : `<div class="album-cover-placeholder">♪</div>`}
+          <div class="album-meta">
+            <div class="album-type-badge">Release</div>
+            <h2>${escHtml(title)}</h2>
+            ${artists.length ? `<div class="album-artist">${artists.map(n => `<a href="#" class="modal-artist-link" data-artist="${escHtml(n)}" onclick="searchArtistFromModal(event,this)">${escHtml(n)}</a>`).join(", ")}</div>` : ""}
+            <div class="album-detail-grid">
+              ${labels  ? `<span class="detail-label">Label</span><span>${escHtml(labels)}</span>` : ""}
+              ${catno   ? `<span class="detail-label">Cat#</span><span>${escHtml(catno)}</span>` : ""}
+              ${formats ? `<span class="detail-label">Format</span><span>${escHtml(formats)}</span>` : ""}
+              ${country ? `<span class="detail-label">Country</span><span>${escHtml(country)}</span>` : ""}
+              ${year    ? `<span class="detail-label">Year</span><span>${escHtml(String(year))}</span>` : ""}
+            </div>
+            <a href="${discogsUrl}" target="_blank" rel="noopener" style="font-size:0.75rem;color:var(--accent);text-decoration:none;margin-top:0.5rem;display:inline-block">View on Discogs ↗</a>
+            ${stats?.numForSale > 0 && stats?.lowestPrice != null
+              ? `<a href="https://www.discogs.com/sell/list?release_id=${releaseId}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#888;text-decoration:none;margin-top:0.2rem;display:block">${stats.numForSale} available from $${parseFloat(stats.lowestPrice).toFixed(2)}</a>`
+              : (stats?.numForSale === 0 ? `<div style="font-size:0.75rem;color:#555;margin-top:0.2rem">Not currently available on Discogs marketplace</div>` : "")}
+          </div>
+        </div>
+        ${tracks.length ? `<div class="album-tracklist"><div class="tracklist-heading">Tracklist</div>${tracks.map(t => `<div class="track"><span class="track-pos">${escHtml(t.position||"")}</span><span class="track-title">${escHtml(t.title||"")}</span>${t.duration?`<span class="track-dur">${escHtml(t.duration)}</span>`:""}</div>`).join("")}</div>` : ""}`;
+    } catch(e) {
+      loading.style.display = "none";
+      info.innerHTML = `<div style="padding:1rem;color:var(--muted)">Failed to load release details.</div>`;
+    }
+  }
+
+  function closeVersionPopup() {
+    document.getElementById("version-overlay").classList.remove("open");
+    const u = new URL(window.location.href);
+    u.searchParams.delete("version");
+    history.replaceState({}, "", u.toString());
+  }
+
+  document.getElementById("version-overlay").addEventListener("click", e => {
+    if (e.target === document.getElementById("version-overlay")) closeVersionPopup();
   });
 
   // ── Bio full popup ────────────────────────────────────────────────────────
@@ -1722,7 +1842,7 @@
             <span style="color:#aaa">${escHtml(v.country ?? "—")}</span>
             <span style="color:#888">${escHtml(v.format ?? "—")}</span>
             <span style="color:#aaa">${escHtml(v.catno ?? "—")}</span>
-            <span>${v.url ? `<a href="${escHtml(v.url)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${escHtml(v.label ?? v.title ?? "—")} ↗</a>` : escHtml(v.label ?? v.title ?? "—")}</span>
+            <span><a href="#" onclick="openVersionPopup(event,${v.id})" style="color:var(--accent);text-decoration:none">${escHtml(v.label ?? v.title ?? "—")}</a></span>
           `).join("")}
         </div>`;
     } catch(e) {
