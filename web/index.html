@@ -1708,7 +1708,11 @@
       })
       .join(" · ");
     const notes       = d.notes ? stripDiscogsMarkup(d.notes) : "";
-    const typeLabel   = targetId === "version-info" ? "Version" : searchResult.type === "master" ? "Master Release" : searchResult.type === "release" ? "Release" : "";
+    const catno       = (d.labels ?? [])[0]?.catno ?? "";
+    const versionParts = [year ? String(year) : "", catno, labels].filter(Boolean);
+    const typeLabel   = targetId === "version-info"
+      ? `Version${versionParts.length ? ": " + versionParts.join(", ") : ""}`
+      : searchResult.type === "master" ? "Master Release" : searchResult.type === "release" ? "Release" : "";
 
     // Build video title → URL map for matching to tracks
     const videoMap = new Map();
