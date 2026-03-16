@@ -1088,14 +1088,12 @@
     };
 
     try {
-      let bioFetch   = null;
-      let showsFetch = null;
+      let bioFetch = null;
       if (page === 1) {
         if (artistRaw) {
           const bioUrl = `${API}/artist-bio?name=${encodeURIComponent(artistRaw)}`
                        + (currentArtistId ? `&id=${currentArtistId}` : "");
-          bioFetch   = fetch(bioUrl);
-          showsFetch = fetch(`${API}/upcoming-shows?artist=${encodeURIComponent(artist)}`);
+          bioFetch = fetch(bioUrl);
         } else if (label) {
           bioFetch = fetch(`${API}/label-bio?name=${encodeURIComponent(label)}`);
         } else if (genre) {
@@ -1106,14 +1104,12 @@
       let items, totalPages_new;
       if (isYearSort) {
         // Dual fetch: master + release merged and sorted by year client-side
-        const [masterRes, releaseRes, bioRes2, showsRes2] = await Promise.all([
+        const [masterRes, releaseRes, bioRes2] = await Promise.all([
           fetch(`${API}/search?${baseParams("master",  6)}`),
           fetch(`${API}/search?${baseParams("release", 6)}`),
-          bioFetch   ?? Promise.resolve(null),
-          showsFetch ?? Promise.resolve(null),
+          bioFetch ?? Promise.resolve(null),
         ]);
-        bioFetch   = bioRes2   ? { json: () => bioRes2.json()   } : null;
-        showsFetch = showsRes2 ? { json: () => showsRes2.json() } : null;
+        bioFetch = bioRes2 ? { json: () => bioRes2.json() } : null;
         const [md, rd] = await Promise.all([masterRes.json(), releaseRes.json()]);
         const merged = [...(md.results ?? []), ...(rd.results ?? [])];
         const asc = sort === "year:asc";
@@ -1125,13 +1121,11 @@
         items = merged;
         totalPages_new = Math.max(md.pagination?.pages ?? 1, rd.pagination?.pages ?? 1);
       } else {
-        const [res, bioRes, showsRes] = await Promise.all([
+        const [res, bioRes] = await Promise.all([
           fetch(`${API}/search?${baseParams(null, 12)}`),
-          bioFetch   ?? Promise.resolve(null),
-          showsFetch ?? Promise.resolve(null),
+          bioFetch ?? Promise.resolve(null),
         ]);
-        bioFetch   = bioRes   ? { json: () => bioRes.json()   } : null;
-        showsFetch = showsRes ? { json: () => showsRes.json() } : null;
+        bioFetch = bioRes ? { json: () => bioRes.json() } : null;
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         items = data.results ?? [];
@@ -1142,22 +1136,15 @@
       // Artist bio + shows: from filter (fetched in parallel) or derived from first result
       const blurbEl = document.getElementById("blurb");
       if (page === 1) {
-        let bioData   = null;
-        let showsData = null;
+        let bioData = null;
         if (bioFetch) {
           bioData = await bioFetch.json().catch(() => null);
-        }
-        if (showsFetch) {
-          showsData = await showsFetch.json().catch(() => null);
         }
         if (!bioData && !artist && !label && !genre && items.length > 0) {
           const first = items[0];
           if ((first.type === "release" || first.type === "master") && first.title?.includes(" - ")) {
             const derivedArtist = first.title.slice(0, first.title.indexOf(" - "));
-            [bioData, showsData] = await Promise.all([
-              fetch(`${API}/artist-bio?name=${encodeURIComponent(derivedArtist)}`).then(r => r.json()).catch(() => null),
-              fetch(`${API}/upcoming-shows?artist=${encodeURIComponent(derivedArtist)}`).then(r => r.json()).catch(() => null),
-            ]);
+            bioData = await fetch(`${API}/artist-bio?name=${encodeURIComponent(derivedArtist)}`).then(r => r.json()).catch(() => null);
           }
         }
         // Render alternatives above bio box (first 3 inline, rest in popup)
@@ -1188,8 +1175,7 @@
         }
 
         if (bioData?.profile) {
-          const shows = showsData?.shows ?? [];
-          window._upcomingShows = { name: bioData.name, shows };
+          window._upcomingShows = { name: bioData.name, shows: [] };
           const fullText = stripDiscogsMarkup(bioData.profile);
           const entityType = artist ? 'artist' : label ? 'label' : genre ? 'genre' : 'artist';
           // Store raw profile so the full-bio popup can render [a=Name] as links
@@ -1203,9 +1189,7 @@
           // Truncate on raw text so links are never cut; append ellipsis if needed
           const truncatedRaw = needsMore ? truncateRaw(bioData.profile, TRUNCATE) + '\u2026' : bioData.profile;
 
-          const showsLink = shows.length > 0
-            ? ` <a href="#" onclick="openShowsPopup(event)" style="font-size:0.75rem;color:var(--accent);font-weight:400;margin-left:0.4rem;text-decoration:none">(upcoming shows)</a>`
-            : "";
+          const showsLink = ` <a href="#" onclick="fetchAndShowUpcoming(event,${JSON.stringify(bioData.name)})" style="font-size:0.75rem;color:#666;font-weight:400;margin-left:0.4rem;text-decoration:none">(upcoming shows)</a>`;
           const readMore = needsMore
             ? ` <a href="#" onclick="openBioFull(event)" style="font-size:0.8rem;color:var(--accent);white-space:nowrap;text-decoration:none">read more</a>`
             : "";
@@ -1389,6 +1373,20 @@
   });
 
   // ── Shows popup ───────────────────────────────────────────────────────────
+  async function fetchAndShowUpcoming(event, artistName) {
+    event.preventDefault();
+    const link = event.target;
+    link.textContent = "(loading…)";
+    try {
+      const data = await fetch(`${API}/upcoming-shows?artist=${encodeURIComponent(artistName)}`).then(r => r.json());
+      window._upcomingShows = { name: artistName, shows: data.shows ?? [] };
+      link.textContent = "(upcoming shows)";
+      openShowsPopup(event);
+    } catch(e) {
+      link.textContent = "(upcoming shows)";
+    }
+  }
+
   function openShowsPopup(event) {
     event.preventDefault();
     const { name, shows } = window._upcomingShows ?? { name: "", shows: [] };
