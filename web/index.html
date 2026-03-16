@@ -1189,7 +1189,8 @@
           // Truncate on raw text so links are never cut; append ellipsis if needed
           const truncatedRaw = needsMore ? truncateRaw(bioData.profile, TRUNCATE) + '\u2026' : bioData.profile;
 
-          const showsLink = ` <a href="#" data-artist="${escHtml(bioData.name)}" onclick="fetchAndShowUpcoming(event,this.dataset.artist)" style="font-size:0.75rem;color:#666;font-weight:400;margin-left:0.4rem;text-decoration:none">(upcoming shows)</a>`;
+          const showsArtist = bioData.name.replace(/\s*\(\d+\)$/, "").trim();
+          const showsLink = ` <a href="#" data-artist="${escHtml(showsArtist)}" onclick="fetchAndShowUpcoming(event,this.dataset.artist)" style="font-size:0.75rem;color:#666;font-weight:400;margin-left:0.4rem;text-decoration:none">(upcoming shows)</a>`;
           const readMore = needsMore
             ? ` <a href="#" onclick="openBioFull(event)" style="font-size:0.8rem;color:var(--accent);white-space:nowrap;text-decoration:none">read more</a>`
             : "";
