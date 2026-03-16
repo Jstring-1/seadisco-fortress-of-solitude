@@ -1200,6 +1200,7 @@
           window._currentBio = {
             name: bioData.name, text: bioData.profile, wiki: bioData.wikiExtract ?? null,
             members: bioData.members ?? [], groups: bioData.groups ?? [], aliases: bioData.aliases ?? [],
+            discogsId: bioData.discogsId ?? null,
           };
 
           const TRUNCATE = 300;
@@ -1368,7 +1369,7 @@
     const u = new URL(window.location.href);
     u.searchParams.set("bio", "1");
     history.replaceState({}, "", u.toString());
-    const { name, text, wiki, members = [], groups = [], aliases = [] } = window._currentBio ?? {};
+    const { name, text, wiki, members = [], groups = [], aliases = [], discogsId = null } = window._currentBio ?? {};
     document.getElementById("bio-full-name").textContent = name ?? "";
     let html = renderBioMarkup(text ?? "");
     const relLinks = renderArtistRelations(members, groups, aliases);
@@ -1377,6 +1378,9 @@
       html += `<hr style="border:none;border-top:1px solid var(--border);margin:1.25rem 0 1rem">
                <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.6rem">Wikipedia</div>
                <div style="font-size:0.87rem;line-height:1.65">${escHtml(wiki)}</div>`;
+    }
+    if (discogsId) {
+      html += `<div style="margin-top:1.1rem"><a href="https://www.discogs.com/artist/${discogsId}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#666;text-decoration:none">View profile on Discogs ↗</a></div>`;
     }
     document.getElementById("bio-full-text").innerHTML = html;
     document.getElementById("bio-full-overlay").classList.add("open");
