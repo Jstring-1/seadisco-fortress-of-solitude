@@ -867,7 +867,7 @@
     <button id="search-btn" onclick="doSearch(1)" style="flex:1">Search</button>
     <label style="font-size:0.78rem;color:var(--muted);display:flex;align-items:center;gap:0.3rem;white-space:nowrap">
       Sort
-      <select id="f-sort" style="font-size:0.78rem;padding:0.3rem 0.4rem;color-scheme:dark">
+      <select id="f-sort" style="font-size:0.78rem;padding:0.3rem 0.4rem;color-scheme:dark" onchange="doSearch(1)">
         <option value="">Relevance</option>
         <option value="year:asc">Year ↑</option>
         <option value="year:desc">Year ↓</option>
@@ -1069,20 +1069,23 @@
       document.getElementById("sort-pipe").style.display = (descText && sortLabel) ? "inline" : "none";
     }
 
-    const params = new URLSearchParams({ q: q || artist || label || release, page, per_page: 12 });
-
-    if (artist)  params.set("artist",        artist);
-    if (release) params.set("release_title", release);
-    if (year)    params.set("year",          year);
-    if (label)   params.set("label",         label);
-    if (genre)   params.set("genre",         genre);
-    if (style)   params.set("style",         style);
-    if (sort) {
-      const [sortField, sortOrder] = sort.split(":");
-      params.set("sort",       sortField);
-      params.set("sort_order", sortOrder);
-    }
-
+    const isYearSort = sort.startsWith("year:");
+    const baseParams = (extraType, perPage) => {
+      const p = new URLSearchParams({ q: q || artist || label || release, page, per_page: perPage });
+      if (extraType) p.set("type", extraType);
+      if (artist)  p.set("artist",        artist);
+      if (release) p.set("release_title", release);
+      if (year)    p.set("year",          year);
+      if (label)   p.set("label",         label);
+      if (genre)   p.set("genre",         genre);
+      if (style)   p.set("style",         style);
+      if (sort) {
+        const [sortField, sortOrder] = sort.split(":");
+        p.set("sort",       sortField);
+        p.set("sort_order", sortOrder);
+      }
+      return p;
+    };
 
     try {
       let bioFetch   = null;
@@ -1099,27 +1102,53 @@
           bioFetch = fetch(`${API}/genre-info?genre=${encodeURIComponent(genre)}`);
         }
       }
-      const [res, bioRes, showsRes] = await Promise.all([
-        fetch(`${API}/search?${params}`),
-        bioFetch   ?? Promise.resolve(null),
-        showsFetch ?? Promise.resolve(null),
-      ]);
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const items = data.results ?? [];
-      totalPages  = data.pagination?.pages ?? 1;
+      let items, totalPages_new;
+      if (isYearSort) {
+        // Dual fetch: master + release merged and sorted by year client-side
+        const [masterRes, releaseRes, bioRes2, showsRes2] = await Promise.all([
+          fetch(`${API}/search?${baseParams("master",  6)}`),
+          fetch(`${API}/search?${baseParams("release", 6)}`),
+          bioFetch   ?? Promise.resolve(null),
+          showsFetch ?? Promise.resolve(null),
+        ]);
+        bioFetch   = bioRes2   ? { json: () => bioRes2.json()   } : null;
+        showsFetch = showsRes2 ? { json: () => showsRes2.json() } : null;
+        const [md, rd] = await Promise.all([masterRes.json(), releaseRes.json()]);
+        const merged = [...(md.results ?? []), ...(rd.results ?? [])];
+        const asc = sort === "year:asc";
+        merged.sort((a, b) => {
+          const ya = parseInt(a.year ?? "0") || 0;
+          const yb = parseInt(b.year ?? "0") || 0;
+          return asc ? ya - yb : yb - ya;
+        });
+        items = merged;
+        totalPages_new = Math.max(md.pagination?.pages ?? 1, rd.pagination?.pages ?? 1);
+      } else {
+        const [res, bioRes, showsRes] = await Promise.all([
+          fetch(`${API}/search?${baseParams(null, 12)}`),
+          bioFetch   ?? Promise.resolve(null),
+          showsFetch ?? Promise.resolve(null),
+        ]);
+        bioFetch   = bioRes   ? { json: () => bioRes.json()   } : null;
+        showsFetch = showsRes ? { json: () => showsRes.json() } : null;
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        items = data.results ?? [];
+        totalPages_new = data.pagination?.pages ?? 1;
+      }
+      totalPages = totalPages_new;
 
       // Artist bio + shows: from filter (fetched in parallel) or derived from first result
       const blurbEl = document.getElementById("blurb");
       if (page === 1) {
         let bioData   = null;
         let showsData = null;
-        if (bioRes) {
-          bioData = await bioRes.json().catch(() => null);
+        if (bioFetch) {
+          bioData = await bioFetch.json().catch(() => null);
         }
-        if (showsRes) {
-          showsData = await showsRes.json().catch(() => null);
+        if (showsFetch) {
+          showsData = await showsFetch.json().catch(() => null);
         }
         if (!bioData && !artist && !label && !genre && items.length > 0) {
           const first = items[0];
