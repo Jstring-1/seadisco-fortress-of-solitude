@@ -1228,7 +1228,7 @@
 
       if (!items.length) { setStatus("No results found."); return; }
 
-      setStatus(`${data.pagination?.items ?? items.length} results — page ${currentPage} of ${totalPages}`);
+      setStatus(`${items.length} results — page ${currentPage} of ${totalPages}`);
       renderResults(items);
       renderPagination();
 
