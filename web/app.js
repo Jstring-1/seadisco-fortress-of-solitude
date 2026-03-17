@@ -236,6 +236,22 @@ async function doSearch(page = 1, skipPushState = false) {
       const data = await res.json();
       items = data.results ?? [];
       totalPages_new = data.pagination?.pages ?? 1;
+
+      // If no results but a format filter is active, retry without format so the artist's
+      // releases still appear (e.g. artist has no vinyl but does have CDs/masters)
+      if (items.length === 0 && format && (artist || q)) {
+        const fallbackP = baseParams(null, 48);
+        fallbackP.delete("format");
+        const fallbackRes = await fetch(`${API}/search?${fallbackP}`);
+        if (fallbackRes.ok) {
+          const fd = await fallbackRes.json();
+          if ((fd.results ?? []).length > 0) {
+            items = fd.results;
+            totalPages_new = fd.pagination?.pages ?? 1;
+            setStatus(`No ${format} releases found — showing all formats.`);
+          }
+        }
+      }
     }
     totalPages = totalPages_new;
 
