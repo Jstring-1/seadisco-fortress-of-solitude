@@ -245,7 +245,7 @@ async function doSearch(page = 1, skipPushState = false) {
       if (bioFetch) {
         bioData = await bioFetch.json().catch(() => null);
       }
-      if (!bioData && !artist && !release && !label && !genre && items.length > 0) {
+      if (!bioData && !q && !artist && !release && !label && !genre && items.length > 0) {
         const firstMedia = items.find(it => (it.type === "release" || it.type === "master") && it.title?.includes(" - "));
         if (firstMedia) {
           const derivedArtist = firstMedia.title.slice(0, firstMedia.title.indexOf(" - "));
