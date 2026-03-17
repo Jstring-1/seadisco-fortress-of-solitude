@@ -1,7 +1,7 @@
 import express from "express";
 import { fileURLToPath } from "url";
 import path from "path";
-import { clerkMiddleware, getAuth } from "@clerk/express";
+import { verifyToken } from "@clerk/backend";
 import { DiscogsClient } from "./discogs-client.js";
 import { initDb, getUserToken, setUserToken, deleteUserToken } from "./db.js";
 
@@ -10,20 +10,30 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sharedToken = process.env.DISCOGS_TOKEN ?? "";
 const anthropicKey     = process.env.ANTHROPIC_API_KEY     ?? "";
 const ticketmasterKey  = process.env.TICKETMASTER_API_KEY  ?? "";
-const clerkPublishableKey = process.env.AUTH_PK ?? process.env.CLERK_PUBLISHABLE_KEY ?? "";
+// Publishable key is sent to the frontend; use AUTH_PK to avoid Railpack build-secret detection
+const authPk = process.env.AUTH_PK ?? "";
 
 // Shared Discogs client (used as fallback when user has no personal token)
 const discogs = sharedToken ? new DiscogsClient(sharedToken) : null;
 
+// Extract and verify the Clerk session JWT from the Authorization header
+async function getClerkUserId(req: express.Request): Promise<string | null> {
+  if (!process.env.CLERK_SECRET_KEY) return null;
+  const auth = req.headers.authorization as string | undefined;
+  if (!auth?.startsWith("Bearer ")) return null;
+  try {
+    const payload = await verifyToken(auth.slice(7), { secretKey: process.env.CLERK_SECRET_KEY });
+    return payload.sub ?? null;
+  } catch { return null; }
+}
+
 // Resolve Discogs token for the current request: user token → shared env token
 async function getTokenForRequest(req: express.Request): Promise<string | null> {
-  try {
-    const { userId } = getAuth(req);
-    if (userId) {
-      const userToken = await getUserToken(userId);
-      if (userToken) return userToken;
-    }
-  } catch { /* not authenticated */ }
+  const userId = await getClerkUserId(req);
+  if (userId) {
+    const userToken = await getUserToken(userId);
+    if (userToken) return userToken;
+  }
   return sharedToken || null;
 }
 
@@ -61,11 +71,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Clerk auth middleware (runs on every request; populates req.auth)
-if (clerkPublishableKey) {
-  app.use(clerkMiddleware());
-}
-
 // Allow any webpage to call this API
 app.use((_req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -79,12 +84,12 @@ app.use((_req, res, next) => {
 
 // GET /api/config — public config for the frontend
 app.get("/api/config", (_req, res) => {
-  res.json({ clerkPublishableKey });
+  res.json({ clerkPublishableKey: authPk });
 });
 
 // GET /api/user/token — returns whether the user has a token saved
 app.get("/api/user/token", async (req, res) => {
-  const { userId } = getAuth(req);
+  const userId = await getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   const t = await getUserToken(userId);
   res.json({ hasToken: !!t, masked: t ? `****${t.slice(-4)}` : null });
@@ -92,7 +97,7 @@ app.get("/api/user/token", async (req, res) => {
 
 // POST /api/user/token — save user's Discogs personal access token
 app.post("/api/user/token", express.json(), async (req, res) => {
-  const { userId } = getAuth(req);
+  const userId = await getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   const { token } = req.body ?? {};
   if (!token || typeof token !== "string" || token.trim().length < 8) {
@@ -104,7 +109,7 @@ app.post("/api/user/token", express.json(), async (req, res) => {
 
 // DELETE /api/user/token — remove user's saved token
 app.delete("/api/user/token", async (req, res) => {
-  const { userId } = getAuth(req);
+  const userId = await getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   await deleteUserToken(userId);
   res.json({ ok: true });
