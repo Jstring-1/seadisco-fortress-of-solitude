@@ -1,5 +1,6 @@
 // ── Config ────────────────────────────────────────────────────────────────
-const API = "https://discogs-mcp-server-production-c794.up.railway.app";
+// Use relative URLs so this works on any deployment (production, test, local)
+const API = "";
 
 // ── Auth helpers ─────────────────────────────────────────────────────────
 // apiFetch wraps fetch() and automatically attaches the Clerk session token
