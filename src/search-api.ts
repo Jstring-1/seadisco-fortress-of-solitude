@@ -163,14 +163,18 @@ app.get("/artist-bio", async (req, res) => {
   // ── Fast path: direct lookup by Discogs ID ──────────────────────────────
   if (idParam) {
     try {
-      const artist = await discogs.getArtist(idParam) as any;
+      const nameForWiki = nameRaw.replace(/\s*\(\d+\)$/, "").trim();
+      const [artist, wikiResult] = await Promise.all([
+        discogs.getArtist(idParam) as Promise<any>,
+        fetchWikiSummary(nameForWiki).then(r => r ?? searchWiki(`${nameForWiki} musician`, nameForWiki)),
+      ]);
       let profile: string | null = artist?.profile ?? null;
       if (profile) profile = await resolveDiscogsIds(profile);
       res.json({
         profile,
         name: artist?.name ?? nameRaw,
         alternatives: [],
-        wikiExtract: null,
+        wikiExtract: wikiResult?.extract ?? null,
         members: mapNames(artist?.members ?? []),
         groups:  mapNames(artist?.groups  ?? []),
         aliases: mapNames(artist?.aliases ?? []),
