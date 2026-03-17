@@ -10,8 +10,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sharedToken = process.env.DISCOGS_TOKEN ?? "";
 const anthropicKey     = process.env.ANTHROPIC_API_KEY     ?? "";
 const ticketmasterKey  = process.env.TICKETMASTER_API_KEY  ?? "";
-// Publishable key is sent to the frontend; use AUTH_PK to avoid Railpack build-secret detection
-const authPk = process.env.AUTH_PK ?? "";
+// Publishable key sent to frontend. AUTH_PK avoids Railpack build-secret detection;
+// falls back to CLERK_PUBLISHABLE_KEY if AUTH_PK is not set.
+const authPk = process.env.AUTH_PK ?? process.env.CLERK_PUBLISHABLE_KEY ?? "";
 
 // Shared Discogs client (used as fallback when user has no personal token)
 const discogs = sharedToken ? new DiscogsClient(sharedToken) : null;
