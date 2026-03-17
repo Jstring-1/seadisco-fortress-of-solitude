@@ -1,20 +1,44 @@
 import express from "express";
 import { fileURLToPath } from "url";
 import path from "path";
+import { clerkMiddleware, getAuth } from "@clerk/express";
 import { DiscogsClient } from "./discogs-client.js";
+import { initDb, getUserToken, setUserToken, deleteUserToken } from "./db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const token = process.env.DISCOGS_TOKEN;
-if (!token) {
-  console.error("Error: DISCOGS_TOKEN environment variable is required.");
-  process.exit(1);
-}
-
+const sharedToken = process.env.DISCOGS_TOKEN ?? "";
 const anthropicKey     = process.env.ANTHROPIC_API_KEY     ?? "";
 const ticketmasterKey  = process.env.TICKETMASTER_API_KEY  ?? "";
+const clerkPublishableKey = process.env.CLERK_PUBLISHABLE_KEY ?? "";
 
-const discogs = new DiscogsClient(token);
+// Shared Discogs client (used as fallback when user has no personal token)
+const discogs = sharedToken ? new DiscogsClient(sharedToken) : null;
+
+// Resolve Discogs token for the current request: user token → shared env token
+async function getTokenForRequest(req: express.Request): Promise<string | null> {
+  try {
+    const { userId } = getAuth(req);
+    if (userId) {
+      const userToken = await getUserToken(userId);
+      if (userToken) return userToken;
+    }
+  } catch { /* not authenticated */ }
+  return sharedToken || null;
+}
+
+async function getDiscogsForRequest(req: express.Request): Promise<DiscogsClient | null> {
+  const t = await getTokenForRequest(req);
+  if (!t) return null;
+  if (t === sharedToken && discogs) return discogs;
+  return new DiscogsClient(t);
+}
+
+// Boot DB if DATABASE_URL is configured
+if (process.env.DATABASE_URL) {
+  initDb().catch(err => console.error("DB init failed:", err));
+}
+
 const app = express();
 
 // Serve static files from web/ (logo, etc.)
@@ -37,12 +61,53 @@ app.use((req, res, next) => {
   next();
 });
 
+// Clerk auth middleware (runs on every request; populates req.auth)
+if (clerkPublishableKey) {
+  app.use(clerkMiddleware());
+}
+
 // Allow any webpage to call this API
 app.use((_req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
-  res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (_req.method === "OPTIONS") { res.sendStatus(204); return; }
   next();
+});
+
+// ── Auth / account endpoints ──────────────────────────────────────────────
+
+// GET /api/config — public config for the frontend
+app.get("/api/config", (_req, res) => {
+  res.json({ clerkPublishableKey });
+});
+
+// GET /api/user/token — returns whether the user has a token saved
+app.get("/api/user/token", async (req, res) => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const t = await getUserToken(userId);
+  res.json({ hasToken: !!t, masked: t ? `****${t.slice(-4)}` : null });
+});
+
+// POST /api/user/token — save user's Discogs personal access token
+app.post("/api/user/token", express.json(), async (req, res) => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { token } = req.body ?? {};
+  if (!token || typeof token !== "string" || token.trim().length < 8) {
+    res.status(400).json({ error: "Invalid token" }); return;
+  }
+  await setUserToken(userId, token.trim());
+  res.json({ ok: true });
+});
+
+// DELETE /api/user/token — remove user's saved token
+app.delete("/api/user/token", async (req, res) => {
+  const { userId } = getAuth(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  await deleteUserToken(userId);
+  res.json({ ok: true });
 });
 
 function stripArtistSuffix(name: string | undefined): string | undefined {
@@ -53,11 +118,13 @@ function stripArtistSuffix(name: string | undefined): string | undefined {
 app.get("/search", async (req, res) => {
   const rawQ   = (req.query.q as string) ?? "";
   const artist = stripArtistSuffix(req.query.artist as string | undefined);
-  // Discogs requires a non-empty q; fall back to the artist filter if q is blank
   const q = rawQ || artist || "";
 
+  const dc = await getDiscogsForRequest(req);
+  if (!dc) { res.status(503).json({ error: "No Discogs token configured" }); return; }
+
   try {
-    const results = await discogs.search(q, {
+    const results = await dc.search(q, {
       type: req.query.type as "release" | "master" | "artist" | "label" | undefined,
       artist,
       releaseTitle: req.query.release_title as string | undefined,
@@ -79,8 +146,10 @@ app.get("/search", async (req, res) => {
 
 // GET /release/:id
 app.get("/release/:id", async (req, res) => {
+  const dc = await getDiscogsForRequest(req);
+  if (!dc) { res.status(503).json({ error: "No Discogs token configured" }); return; }
   try {
-    const result = await discogs.getRelease(req.params.id);
+    const result = await dc.getRelease(req.params.id);
     res.json(result);
   } catch (err) {
     console.error(err);
@@ -90,8 +159,10 @@ app.get("/release/:id", async (req, res) => {
 
 // GET /master/:id
 app.get("/master/:id", async (req, res) => {
+  const dc = await getDiscogsForRequest(req);
+  if (!dc) { res.status(503).json({ error: "No Discogs token configured" }); return; }
   try {
-    const result = await discogs.getMasterRelease(req.params.id);
+    const result = await dc.getMasterRelease(req.params.id);
     res.json(result);
   } catch (err) {
     console.error(err);
@@ -101,8 +172,10 @@ app.get("/master/:id", async (req, res) => {
 
 // GET /artist/:id
 app.get("/artist/:id", async (req, res) => {
+  const dc = await getDiscogsForRequest(req);
+  if (!dc) { res.status(503).json({ error: "No Discogs token configured" }); return; }
   try {
-    const result = await discogs.getArtist(req.params.id);
+    const result = await dc.getArtist(req.params.id);
     res.json(result);
   } catch (err) {
     console.error(err);
@@ -156,6 +229,9 @@ app.get("/artist-bio", async (req, res) => {
     return;
   }
 
+  const dc = await getDiscogsForRequest(req);
+  if (!dc) { res.json({ profile: null }); return; }
+
   const mapNames = (arr: any[]) =>
     (arr ?? []).filter(x => x?.name)
                .map(x => ({ name: x.name as string, active: x.active, id: x.id as number | undefined }));
@@ -165,11 +241,11 @@ app.get("/artist-bio", async (req, res) => {
     try {
       const nameForWiki = nameRaw.replace(/\s*\(\d+\)$/, "").trim();
       const [artist, wikiResult] = await Promise.all([
-        discogs.getArtist(idParam) as Promise<any>,
+        dc.getArtist(idParam) as Promise<any>,
         fetchWikiSummary(nameForWiki).then(r => r ?? searchWiki(`${nameForWiki} musician`, nameForWiki)),
       ]);
       let profile: string | null = artist?.profile ?? null;
-      if (profile) profile = await resolveDiscogsIds(profile);
+      if (profile) profile = await resolveDiscogsIds(profile, dc);
       res.json({
         profile,
         name: artist?.name ?? nameRaw,
@@ -194,7 +270,7 @@ app.get("/artist-bio", async (req, res) => {
   try {
     // Fetch Discogs candidates and Wikipedia in parallel
     const pAll = await Promise.all([
-      discogs.search(nameForSearch, { type: "artist", perPage: 20 }),
+      dc.search(nameForSearch, { type: "artist", perPage: 20 }),
       fetchWikiSummary(nameForSearch).then(r => r ?? searchWiki(`${nameForSearch} musician`, nameForSearch)),
     ]);
     const discogsResults = pAll[0] as any;
@@ -214,7 +290,7 @@ app.get("/artist-bio", async (req, res) => {
 
     if (!best?.id) { res.json({ profile: null, name: nameForMatch }); return; }
 
-    let artist = await discogs.getArtist(best.id) as any;
+    let artist = await dc.getArtist(best.id) as any;
     let profile: string | null = artist?.profile ?? null;
 
     // If best match has no profile, check remaining candidates in parallel
@@ -228,7 +304,7 @@ app.get("/artist-bio", async (req, res) => {
 
       const rest = candidates.filter(c => c.id !== best.id && nameMatches(c.title ?? ""));
       const restArtists = await Promise.all(
-        rest.map(c => (discogs.getArtist(c.id) as Promise<any>).catch(() => null))
+        rest.map(c => (dc.getArtist(c.id) as Promise<any>).catch(() => null))
       );
       const idx = restArtists.findIndex(a => a?.profile);
       if (idx >= 0) {
@@ -238,7 +314,7 @@ app.get("/artist-bio", async (req, res) => {
       }
     }
 
-    if (profile) profile = await resolveDiscogsIds(profile);
+    if (profile) profile = await resolveDiscogsIds(profile, dc);
 
     const alternatives = candidates
       .filter(a => a.id !== best.id && a.title)
@@ -262,7 +338,7 @@ app.get("/artist-bio", async (req, res) => {
 });
 
 // Helper: resolve Discogs ID tags in a profile string
-async function resolveDiscogsIds(profile: string): Promise<string> {
+async function resolveDiscogsIds(profile: string, dc: DiscogsClient = discogs!): Promise<string> {
   const idPattern = /\[([rma])=?(\d+)\]/g;
   const matches: { tag: string; type: string; id: string }[] = [];
   const seen = new Set<string>();
@@ -277,13 +353,13 @@ async function resolveDiscogsIds(profile: string): Promise<string> {
     try {
       let displayName = "";
       if (type === "r") {
-        const r = await discogs.getRelease(id) as any;
+        const r = await dc.getRelease(id) as any;
         displayName = r?.title ?? "";
       } else if (type === "m") {
-        const r = await discogs.getMasterRelease(id) as any;
+        const r = await dc.getMasterRelease(id) as any;
         displayName = r?.title ?? "";
       } else {
-        const r = await discogs.getArtist(id) as any;
+        const r = await dc.getArtist(id) as any;
         // Wrap in [a=Name] so the frontend can render it as a clickable link
         displayName = r?.name ? `[a=${r.name}]` : "";
       }
@@ -306,13 +382,16 @@ app.get("/label-bio", async (req, res) => {
     return;
   }
 
+  const dc = await getDiscogsForRequest(req);
+  if (!dc) { res.json({ profile: null }); return; }
+
   try {
-    const results = await discogs.search(name, { type: "label", perPage: 1 }) as any;
+    const results = await dc.search(name, { type: "label", perPage: 1 }) as any;
     const first = results?.results?.[0];
     if (!first?.id) { res.json({ profile: null, name }); return; }
-    const label = await discogs.getLabel(first.id) as any;
+    const label = await dc.getLabel(first.id) as any;
     let profile: string | null = label?.profile ?? null;
-    if (profile) profile = await resolveDiscogsIds(profile);
+    if (profile) profile = await resolveDiscogsIds(profile, dc);
     res.json({ profile, name: label?.name ?? name });
   } catch (err) {
     console.error(err);
@@ -407,17 +486,20 @@ app.get("/upcoming-shows", async (req, res) => {
 app.get("/marketplace-stats/:id", async (req, res) => {
   const { id } = req.params;
   const type = (req.query.type as string) ?? "release";
+  const dc = await getDiscogsForRequest(req);
+  const reqToken = await getTokenForRequest(req);
+  if (!dc || !reqToken) { res.json({ numForSale: 0, lowestPrice: null }); return; }
 
   try {
     let releaseId = id;
     if (type === "master") {
-      const master = await discogs.getMasterRelease(id) as any;
+      const master = await dc.getMasterRelease(id) as any;
       releaseId = String(master?.main_release ?? id);
     }
 
     const statsRes = await fetch(
       `https://api.discogs.com/marketplace/stats/${releaseId}?curr_abbr=USD`,
-      { headers: { "Authorization": `Discogs token=${token}`, "User-Agent": MB_UA } }
+      { headers: { "Authorization": `Discogs token=${reqToken}`, "User-Agent": MB_UA } }
     );
     const stats = await statsRes.json() as any;
     res.json({
@@ -435,10 +517,12 @@ app.get("/marketplace-stats/:id", async (req, res) => {
 // GET /master-versions/:id — all pressings/versions of a master release
 app.get("/master-versions/:id", async (req, res) => {
   const { id } = req.params;
+  const reqToken = await getTokenForRequest(req);
+  if (!reqToken) { res.json({ versions: [] }); return; }
   try {
     const r = await fetch(
       `https://api.discogs.com/masters/${id}/versions?per_page=100&sort=released&sort_order=asc`,
-      { headers: { "Authorization": `Discogs token=${token}`, "User-Agent": MB_UA } }
+      { headers: { "Authorization": `Discogs token=${reqToken}`, "User-Agent": MB_UA } }
     );
     const data = await r.json() as any;
     const versions = (data.versions ?? []).map((v: any) => ({
