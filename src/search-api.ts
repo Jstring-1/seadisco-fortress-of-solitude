@@ -10,7 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sharedToken = process.env.DISCOGS_TOKEN ?? "";
 const anthropicKey     = process.env.ANTHROPIC_API_KEY     ?? "";
 const ticketmasterKey  = process.env.TICKETMASTER_API_KEY  ?? "";
-const clerkPublishableKey = process.env.CLERK_PUBLISHABLE_KEY ?? "";
+const clerkPublishableKey = process.env.AUTH_PK ?? process.env.CLERK_PUBLISHABLE_KEY ?? "";
 
 // Shared Discogs client (used as fallback when user has no personal token)
 const discogs = sharedToken ? new DiscogsClient(sharedToken) : null;
