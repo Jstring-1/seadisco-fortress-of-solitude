@@ -198,6 +198,26 @@ async function doSearch(page = 1, skipPushState = false) {
       });
       items = merged;
       totalPages_new = Math.max(md.pagination?.pages ?? 1, rd.pagination?.pages ?? 1);
+    } else if (artistRaw && resultType === "label") {
+      // Special case: artist + Labels radio → show labels that artist recorded on
+      const rp = new URLSearchParams({ q: q || artist, artist, type: "master", per_page: 50, page: 1 });
+      const [relRes, bioRes] = await Promise.all([
+        fetch(`${API}/search?${rp}`),
+        bioFetch ?? Promise.resolve(null),
+      ]);
+      bioFetch = bioRes ? { json: () => bioRes.json() } : null;
+      const relData = await relRes.json();
+      const labelNames = [...new Set(
+        (relData.results ?? []).flatMap(r => r.label ?? []).filter(Boolean)
+      )].slice(0, 12);
+      const labelCards = await Promise.all(
+        labelNames.map(name =>
+          fetch(`${API}/search?q=${encodeURIComponent(name)}&type=label&per_page=1`)
+            .then(r => r.json()).then(d => d.results?.[0]).catch(() => null)
+        )
+      );
+      items = labelCards.filter(Boolean);
+      totalPages_new = 1;
     } else {
       const [res, bioRes] = await Promise.all([
         fetch(`${API}/search?${baseParams(null, 12)}`),
