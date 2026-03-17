@@ -191,8 +191,8 @@ async function doSearch(page = 1, skipPushState = false) {
     let items, totalPages_new;
     if (dualFetch) {
       const [masterRes, releaseRes, bioRes2] = await Promise.all([
-        fetch(`${API}/search?${baseParams("master",  18)}`),
-        fetch(`${API}/search?${baseParams("release",  6)}`),
+        fetch(`${API}/search?${baseParams("master",  36)}`),
+        fetch(`${API}/search?${baseParams("release", 12)}`),
         bioFetch ?? Promise.resolve(null),
       ]);
       bioFetch = bioRes2 ? { json: () => bioRes2.json() } : null;
@@ -228,7 +228,7 @@ async function doSearch(page = 1, skipPushState = false) {
       totalPages_new = 1;
     } else {
       const [res, bioRes] = await Promise.all([
-        fetch(`${API}/search?${baseParams(null, 12)}`),
+        fetch(`${API}/search?${baseParams(null, 48)}`),
         bioFetch ?? Promise.resolve(null),
       ]);
       bioFetch = bioRes ? { json: () => bioRes.json() } : null;
@@ -282,7 +282,7 @@ async function doSearch(page = 1, skipPushState = false) {
         const constrainedArtist = bioData.name.replace(/\s*\(\d+\)$/, "").trim();
         detectedArtist = constrainedArtist; // saved so pages 2+ use it directly in baseParams
         try {
-          const cp = new URLSearchParams({ q: q || constrainedArtist, page, per_page: dualFetch ? 24 : 12, artist: constrainedArtist });
+          const cp = new URLSearchParams({ q: q || constrainedArtist, page, per_page: 48, artist: constrainedArtist });
           if (resultType) cp.set("type", resultType);
           if (release)    cp.set("release_title", release);
           if (year)       cp.set("year", year);
