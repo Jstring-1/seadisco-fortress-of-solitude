@@ -237,7 +237,7 @@ async function doSearch(page = 1, skipPushState = false) {
       if (bioFetch) {
         bioData = await bioFetch.json().catch(() => null);
       }
-      if (!bioData && !artist && !label && !genre && items.length > 0) {
+      if (!bioData && !artist && !release && !label && !genre && items.length > 0) {
         const firstMedia = items.find(it => (it.type === "release" || it.type === "master") && it.title?.includes(" - "));
         if (firstMedia) {
           const derivedArtist = firstMedia.title.slice(0, firstMedia.title.indexOf(" - "));
@@ -270,7 +270,7 @@ async function doSearch(page = 1, skipPushState = false) {
       }
 
       // If bio was auto-detected (no explicit artist filter), re-fetch constrained to that artist
-      if (bioData?.name && !artistRaw && !label && !genre) {
+      if (bioData?.name && !artistRaw && !release && !label && !genre) {
         const constrainedArtist = bioData.name.replace(/\s*\(\d+\)$/, "").trim();
         try {
           const cp = new URLSearchParams({ q: q || constrainedArtist, page, per_page: dualFetch ? 24 : 12, artist: constrainedArtist });
