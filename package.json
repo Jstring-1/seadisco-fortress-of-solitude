@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "start": "node dist/http-server.js",
+    "start": "node dist/search-api.js",
     "start:stdio": "node dist/index.js",
     "start:web": "node dist/search-api.js"
   },
