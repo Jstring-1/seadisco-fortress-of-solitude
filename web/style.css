@@ -30,6 +30,14 @@ body {
   display: inline-block;
 }
 
+#site-tagline {
+  font-size: 0.78rem;
+  color: #555;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-top: 0.4rem;
+}
+
 main {
   max-width: 900px;
   margin: 0 auto;
