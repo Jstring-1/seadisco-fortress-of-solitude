@@ -52,7 +52,7 @@ if (process.env.DATABASE_URL) {
 const app = express();
 
 // Serve static files from web/ (logo, etc.)
-app.use(express.static(path.join(__dirname, "../web")));
+app.use(express.static(path.join(__dirname, "../web"), { extensions: ["html"] }));
 
 // Block crawlers and AI scrapers at the HTTP level
 app.use((req, res, next) => {
