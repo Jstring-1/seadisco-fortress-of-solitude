@@ -160,8 +160,6 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   background: #000;
   border-radius: var(--radius);
   overflow: hidden;
-  padding-bottom: 5rem;
-  box-sizing: content-box;
 }
 
 #video-box iframe, #video-player {
@@ -184,10 +182,7 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 }
 
 #video-footer {
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
-  background: rgba(0,0,0,0.82);
-  padding: 0.5rem 0.75rem 0.6rem;
+  padding: 0.5rem 0.25rem 0.1rem;
 }
 
 #video-title {
@@ -206,7 +201,7 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: 0.5rem;
+  margin-top: 0.4rem;
   gap: 0.5rem;
 }
 
