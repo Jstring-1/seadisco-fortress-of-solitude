@@ -248,6 +248,27 @@ async function doSearch(page = 1, skipPushState = false) {
         bioData = null;
       }
 
+      // If bio was auto-detected (no explicit artist filter), re-fetch constrained to that artist
+      if (bioData?.name && !artistRaw && !label && !genre) {
+        const constrainedArtist = bioData.name.replace(/\s*\(\d+\)$/, "").trim();
+        try {
+          const cp = new URLSearchParams({ q: q || constrainedArtist, page, per_page: dualFetch ? 24 : 12, artist: constrainedArtist });
+          if (resultType) cp.set("type", resultType);
+          if (release)    cp.set("release_title", release);
+          if (year)       cp.set("year", year);
+          if (format)     cp.set("format", format);
+          if (sort && !skipSort) { const [sf, so] = sort.split(":"); cp.set("sort", sf); cp.set("sort_order", so); }
+          const cr = await fetch(`${API}/search?${cp}`);
+          if (cr.ok) {
+            const cd = await cr.json();
+            if ((cd.results ?? []).length > 0) {
+              items = cd.results;
+              totalPages = cd.pagination?.pages ?? totalPages;
+            }
+          }
+        } catch { /* keep original results */ }
+      }
+
       if (bioData?.profile) {
         window._upcomingShows = { name: bioData.name, shows: [] };
         const fullText = stripDiscogsMarkup(bioData.profile);
