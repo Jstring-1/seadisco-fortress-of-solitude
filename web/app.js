@@ -1,6 +1,20 @@
 // ── Config ────────────────────────────────────────────────────────────────
 const API = "https://discogs-mcp-server-production-c794.up.railway.app";
 
+// ── Auth helpers ─────────────────────────────────────────────────────────
+// apiFetch wraps fetch() and automatically attaches the Clerk session token
+// when the user is signed in, so the backend can identify them.
+async function apiFetch(url, options = {}) {
+  const headers = { ...(options.headers ?? {}) };
+  try {
+    if (window._clerk?.session) {
+      const t = await window._clerk.session.getToken();
+      if (t) headers["Authorization"] = `Bearer ${t}`;
+    }
+  } catch { /* not signed in */ }
+  return fetch(url, { ...options, headers });
+}
+
 // ── State ─────────────────────────────────────────────────────────────────
 let currentPage = 1;
 let totalPages  = 1;
@@ -182,17 +196,17 @@ async function doSearch(page = 1, skipPushState = false) {
                      + (currentArtistId ? `&id=${currentArtistId}` : "");
         bioFetch = fetch(bioUrl);
       } else if (label) {
-        bioFetch = fetch(`${API}/label-bio?name=${encodeURIComponent(label)}`);
+        bioFetch = apiFetch(`${API}/label-bio?name=${encodeURIComponent(label)}`);
       } else if (genre) {
-        bioFetch = fetch(`${API}/genre-info?genre=${encodeURIComponent(genre)}`);
+        bioFetch = apiFetch(`${API}/genre-info?genre=${encodeURIComponent(genre)}`);
       }
     }
 
     let items, totalPages_new;
     if (dualFetch) {
       const [masterRes, releaseRes, bioRes2] = await Promise.all([
-        fetch(`${API}/search?${baseParams("master",  36)}`),
-        fetch(`${API}/search?${baseParams("release", 12)}`),
+        apiFetch(`${API}/search?${baseParams("master",  36)}`),
+        apiFetch(`${API}/search?${baseParams("release", 12)}`),
         bioFetch ?? Promise.resolve(null),
       ]);
       bioFetch = bioRes2 ? { json: () => bioRes2.json() } : null;
@@ -210,7 +224,7 @@ async function doSearch(page = 1, skipPushState = false) {
       // Special case: artist + Labels radio → show labels that artist recorded on
       const rp = new URLSearchParams({ q: q || artist, artist, type: "master", per_page: 50, page: 1 });
       const [relRes, bioRes] = await Promise.all([
-        fetch(`${API}/search?${rp}`),
+        apiFetch(`${API}/search?${rp}`),
         bioFetch ?? Promise.resolve(null),
       ]);
       bioFetch = bioRes ? { json: () => bioRes.json() } : null;
@@ -220,7 +234,7 @@ async function doSearch(page = 1, skipPushState = false) {
       )].slice(0, 12);
       const labelCards = await Promise.all(
         labelNames.map(name =>
-          fetch(`${API}/search?q=${encodeURIComponent(name)}&type=label&per_page=1`)
+          apiFetch(`${API}/search?q=${encodeURIComponent(name)}&type=label&per_page=1`)
             .then(r => r.json()).then(d => d.results?.[0]).catch(() => null)
         )
       );
@@ -228,7 +242,7 @@ async function doSearch(page = 1, skipPushState = false) {
       totalPages_new = 1;
     } else {
       const [res, bioRes] = await Promise.all([
-        fetch(`${API}/search?${baseParams(null, 48)}`),
+        apiFetch(`${API}/search?${baseParams(null, 48)}`),
         bioFetch ?? Promise.resolve(null),
       ]);
       bioFetch = bioRes ? { json: () => bioRes.json() } : null;
@@ -242,7 +256,7 @@ async function doSearch(page = 1, skipPushState = false) {
       if (items.length === 0 && format && (artist || q)) {
         const fallbackP = baseParams(null, 48);
         fallbackP.delete("format");
-        const fallbackRes = await fetch(`${API}/search?${fallbackP}`);
+        const fallbackRes = await apiFetch(`${API}/search?${fallbackP}`);
         if (fallbackRes.ok) {
           const fd = await fallbackRes.json();
           if ((fd.results ?? []).length > 0) {
@@ -265,7 +279,7 @@ async function doSearch(page = 1, skipPushState = false) {
         const firstMedia = items.find(it => (it.type === "release" || it.type === "master") && it.title?.includes(" - "));
         if (firstMedia) {
           const derivedArtist = firstMedia.title.slice(0, firstMedia.title.indexOf(" - "));
-          bioData = await fetch(`${API}/artist-bio?name=${encodeURIComponent(derivedArtist)}`).then(r => r.json()).catch(() => null);
+          bioData = await apiFetch(`${API}/artist-bio?name=${encodeURIComponent(derivedArtist)}`).then(r => r.json()).catch(() => null);
         }
       }
       const altsEl = document.getElementById("artist-alts");
@@ -304,7 +318,7 @@ async function doSearch(page = 1, skipPushState = false) {
           if (year)       cp.set("year", year);
           if (format)     cp.set("format", format);
           if (sort && !skipSort) { const [sf, so] = sort.split(":"); cp.set("sort", sf); cp.set("sort_order", so); }
-          const cr = await fetch(`${API}/search?${cp}`);
+          const cr = await apiFetch(`${API}/search?${cp}`);
           if (cr.ok) {
             const cd = await cr.json();
             if ((cd.results ?? []).length > 0) {
@@ -469,8 +483,8 @@ function openModal(event, id, type, discogsUrl) {
   const cachedItem = itemCache.get(String(id)) ?? { type };
   const endpoint = type === "master" ? "master" : "release";
   Promise.all([
-    fetch(`${API}/${endpoint}/${id}`).then(r => r.json()),
-    fetch(`${API}/marketplace-stats/${id}?type=${type}`).then(r => r.json()).catch(() => null),
+    apiFetch(`${API}/${endpoint}/${id}`).then(r => r.json()),
+    apiFetch(`${API}/marketplace-stats/${id}?type=${type}`).then(r => r.json()).catch(() => null),
   ])
     .then(([d, stats]) => {
       document.getElementById("modal-loading").style.display = "none";
@@ -507,8 +521,8 @@ async function openVersionPopup(event, releaseId) {
   try {
     const discogsUrl = `https://www.discogs.com/release/${releaseId}`;
     const [d, stats] = await Promise.all([
-      fetch(`${API}/release/${releaseId}`).then(r => r.json()),
-      fetch(`${API}/marketplace-stats/${releaseId}?type=release`).then(r => r.json()).catch(() => null),
+      apiFetch(`${API}/release/${releaseId}`).then(r => r.json()),
+      apiFetch(`${API}/marketplace-stats/${releaseId}?type=release`).then(r => r.json()).catch(() => null),
     ]);
     loading.style.display = "none";
     const fakeResult = { type: "release", id: releaseId, title: d.title ?? "", cover_image: d.images?.[0]?.uri ?? "", format: [], country: d.country ?? "", year: d.year ?? "" };
@@ -570,7 +584,7 @@ async function fetchAndShowUpcoming(event, artistName) {
   const link = event.target;
   link.textContent = "(loading…)";
   try {
-    const data = await fetch(`${API}/upcoming-shows?artist=${encodeURIComponent(artistName)}`).then(r => r.json());
+    const data = await apiFetch(`${API}/upcoming-shows?artist=${encodeURIComponent(artistName)}`).then(r => r.json());
     window._upcomingShows = { name: artistName, shows: data.shows ?? [] };
     link.textContent = "(upcoming shows)";
     renderShowsPopup();
@@ -877,7 +891,7 @@ async function loadMasterVersions(event, masterId) {
   const list = document.getElementById("master-versions-list");
   if (!list) return;
   try {
-    const data = await fetch(`${API}/master-versions/${masterId}`).then(r => r.json());
+    const data = await apiFetch(`${API}/master-versions/${masterId}`).then(r => r.json());
     const versions = data.versions ?? [];
     if (!versions.length) { list.textContent = "No pressings found."; return; }
     list.innerHTML = `
@@ -1105,3 +1119,32 @@ window.addEventListener("popstate", () => {
     if (e.key === "Enter") doSearch(1);
   });
 });
+
+// ── Clerk auth init ───────────────────────────────────────────────────────
+(async function initAuth() {
+  try {
+    const cfg = await fetch("/api/config").then(r => r.json()).catch(() => ({}));
+    const pk = cfg.clerkPublishableKey;
+    if (!pk) return; // auth not configured on this server
+
+    await new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js";
+      s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+
+    window._clerk = new window.Clerk(pk);
+    await window._clerk.load();
+
+    const authBar = document.getElementById("auth-status");
+    if (!authBar) return;
+
+    if (window._clerk.user) {
+      const email = window._clerk.user.primaryEmailAddress?.emailAddress ?? "account";
+      authBar.innerHTML = `<a href="/account.html">${email}</a>`;
+    } else {
+      authBar.innerHTML = `<a href="/account.html">sign in</a>`;
+    }
+  } catch { /* auth unavailable — site works fine without it */ }
+})();

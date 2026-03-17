@@ -1,5 +1,16 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+#auth-bar {
+  position: fixed;
+  top: 0.5rem;
+  right: 0.75rem;
+  z-index: 100;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+#auth-bar a { color: #666; text-decoration: none; }
+#auth-bar a:hover { color: #aaa; }
+
 :root {
   --bg:        #0f0f0f;
   --surface:   #1a1a1a;

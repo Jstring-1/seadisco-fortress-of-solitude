@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SeaDisco — Account</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="stylesheet" href="/style.css" />
+  <style>
+    .account-box {
+      max-width: 480px;
+      margin: 2rem auto;
+      background: var(--surface);
+      border-radius: var(--radius);
+      padding: 2rem;
+    }
+    .account-box h2 { margin-top: 0; font-size: 1.2rem; color: var(--fg); }
+    .account-box p  { color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
+    .account-box a  { color: #aaa; }
+    .token-form { display: flex; flex-direction: column; gap: 0.6rem; margin-top: 1.2rem; }
+    .token-form input[type="text"] { font-family: monospace; font-size: 0.85rem; }
+    .token-status { font-size: 0.82rem; color: var(--muted); margin-top: 0.3rem; }
+    .token-status.ok { color: #7ec87e; }
+    .danger-btn { background: #5a1a1a; border-color: #7a2a2a; color: #e88; }
+    .danger-btn:hover { background: #7a2a2a; }
+    #clerk-sign-in { margin-top: 1rem; }
+    #auth-section { display: none; }
+    #signed-out-section { display: none; }
+    .user-email { color: #aaa; font-size: 0.85rem; margin-bottom: 1.2rem; }
+    .section-divider { border: none; border-top: 1px solid #333; margin: 1.5rem 0; }
+  </style>
+</head>
+<body>
+
+<div id="site-header">
+  <a href="/"><img src="/seadisco-logo.png" alt="SeaDisco" /></a>
+  <div id="site-tagline">Music Rabbit Hole Pathway</div>
+</div>
+
+<main>
+  <div class="account-box">
+    <h2>Account</h2>
+
+    <div id="loading-section">
+      <p style="color:var(--muted)">Loading…</p>
+    </div>
+
+    <div id="signed-out-section">
+      <p>Sign in to save your personal Discogs API token so you use your own rate limits.</p>
+      <div id="clerk-sign-in"></div>
+    </div>
+
+    <div id="auth-section">
+      <div class="user-email" id="user-email"></div>
+
+      <h2 style="margin-top:0">Your Discogs Token</h2>
+      <p>
+        Enter your
+        <a href="https://www.discogs.com/settings/developers" target="_blank" rel="noopener">Discogs Personal Access Token</a>.
+        It's stored securely and used for all your searches so you have your own rate limits.
+      </p>
+
+      <div id="token-status" class="token-status"></div>
+
+      <div class="token-form">
+        <input type="text" id="token-input" placeholder="Paste your Discogs token here" autocomplete="off" spellcheck="false" />
+        <button id="save-btn" onclick="saveToken()">Save token</button>
+        <button id="remove-btn" class="danger-btn" onclick="removeToken()" style="display:none">Remove saved token</button>
+      </div>
+
+      <hr class="section-divider" />
+      <button onclick="signOut()" style="background:none;border:none;color:#666;cursor:pointer;font-size:0.82rem;padding:0">Sign out</button>
+    </div>
+  </div>
+</main>
+
+<script>
+let clerk = null;
+
+async function initClerk() {
+  const cfg = await fetch("/api/config").then(r => r.json()).catch(() => ({}));
+  const pk = cfg.clerkPublishableKey;
+  if (!pk) {
+    document.getElementById("loading-section").innerHTML =
+      '<p style="color:#e88">Auth is not configured on this server.</p>';
+    return;
+  }
+
+  // Dynamically load Clerk JS
+  await new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js";
+    s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+
+  clerk = new window.Clerk(pk);
+  await clerk.load();
+
+  document.getElementById("loading-section").style.display = "none";
+
+  if (clerk.user) {
+    showAuthSection();
+  } else {
+    document.getElementById("signed-out-section").style.display = "block";
+    clerk.mountSignIn(document.getElementById("clerk-sign-in"), {
+      afterSignInUrl: "/account.html",
+      afterSignUpUrl: "/account.html",
+    });
+  }
+}
+
+async function showAuthSection() {
+  document.getElementById("auth-section").style.display = "block";
+  document.getElementById("user-email").textContent =
+    clerk.user?.primaryEmailAddress?.emailAddress ?? "";
+
+  // Check if they already have a token saved
+  const sessionToken = await clerk.session?.getToken();
+  const data = await fetch("/api/user/token", {
+    headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
+  }).then(r => r.json()).catch(() => null);
+
+  const statusEl = document.getElementById("token-status");
+  const removeBtn = document.getElementById("remove-btn");
+
+  if (data?.hasToken) {
+    statusEl.textContent = `Saved token: ${data.masked}`;
+    statusEl.className = "token-status ok";
+    removeBtn.style.display = "block";
+  } else {
+    statusEl.textContent = "No token saved — using shared server token.";
+    statusEl.className = "token-status";
+  }
+}
+
+async function saveToken() {
+  const token = document.getElementById("token-input").value.trim();
+  if (!token) { alert("Please paste your Discogs token first."); return; }
+
+  const sessionToken = await clerk.session?.getToken();
+  const r = await fetch("/api/user/token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
+    },
+    body: JSON.stringify({ token }),
+  });
+
+  if (r.ok) {
+    document.getElementById("token-input").value = "";
+    await showAuthSection();
+  } else {
+    const err = await r.json().catch(() => ({}));
+    alert("Error saving token: " + (err.error ?? r.status));
+  }
+}
+
+async function removeToken() {
+  if (!confirm("Remove your saved Discogs token?")) return;
+  const sessionToken = await clerk.session?.getToken();
+  await fetch("/api/user/token", {
+    method: "DELETE",
+    headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
+  });
+  await showAuthSection();
+}
+
+async function signOut() {
+  await clerk.signOut();
+  window.location.href = "/";
+}
+
+initClerk();
+</script>
+
+</body>
+</html>
