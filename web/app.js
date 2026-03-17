@@ -6,6 +6,7 @@ let currentPage = 1;
 let totalPages  = 1;
 const itemCache = new Map(); // id → search result item
 let currentArtistId  = null;  // Discogs artist ID when navigating from a known card/link
+let detectedArtist   = null;  // artist name auto-detected from bio on page 1, used for consistent pagination
 
 // ── Genre → Style mapping ─────────────────────────────────────────────────
 const GENRE_STYLES = {
@@ -110,6 +111,9 @@ async function doSearch(page = 1, skipPushState = false) {
 
   if (!skipPushState) pushSearchState(q, artistRaw, release, year, label, genre, sort, resultType, page);
 
+  // Clear auto-detected artist on every new page-1 search so it doesn't bleed into unrelated searches
+  if (page === 1) detectedArtist = null;
+
   currentPage = page;
   document.getElementById("search-btn").disabled = true;
   document.getElementById("pagination").style.display = "none";
@@ -148,13 +152,15 @@ async function doSearch(page = 1, skipPushState = false) {
   const dualFetch   = isYearSort && !skipSort && resultType === "";
 
   const baseParams = (typeOverride, perPage) => {
-    const p = new URLSearchParams({ q: q || artist || label || release, page, per_page: perPage });
+    // For pages 2+, use the auto-detected artist (saved from page 1) for consistent Discogs pagination
+    const effectiveArtist = artist || (page > 1 ? detectedArtist : null) || "";
+    const p = new URLSearchParams({ q: q || effectiveArtist || label || release, page, per_page: perPage });
     const t = typeOverride ?? resultType;
     if (t) p.set("type", t);
-    if (artist)  p.set("artist",        artist);
+    if (effectiveArtist) p.set("artist", effectiveArtist);
     // Only use strict release_title filter when artist is also set;
     // without an artist it ranks by one title's popularity and one artist dominates
-    if (release && artist) p.set("release_title", release);
+    if (release && effectiveArtist) p.set("release_title", release);
     if (year)    p.set("year",          year);
     if (label)   p.set("label",         label);
     if (genre)   p.set("genre",         genre);
@@ -271,9 +277,10 @@ async function doSearch(page = 1, skipPushState = false) {
         bioData = null;
       }
 
-      // If bio was auto-detected (no explicit artist filter), re-fetch constrained to that artist
-      if (bioData?.name && !artistRaw && !release && !label && !genre) {
+      // If bio was auto-detected on page 1, re-fetch constrained to that artist and save for pagination
+      if (bioData?.name && !artistRaw && !release && !label && !genre && page === 1) {
         const constrainedArtist = bioData.name.replace(/\s*\(\d+\)$/, "").trim();
+        detectedArtist = constrainedArtist; // saved so pages 2+ use it directly in baseParams
         try {
           const cp = new URLSearchParams({ q: q || constrainedArtist, page, per_page: dualFetch ? 24 : 12, artist: constrainedArtist });
           if (resultType) cp.set("type", resultType);
