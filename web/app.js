@@ -238,9 +238,9 @@ async function doSearch(page = 1, skipPushState = false) {
         bioData = await bioFetch.json().catch(() => null);
       }
       if (!bioData && !artist && !label && !genre && items.length > 0) {
-        const first = items[0];
-        if ((first.type === "release" || first.type === "master") && first.title?.includes(" - ")) {
-          const derivedArtist = first.title.slice(0, first.title.indexOf(" - "));
+        const firstMedia = items.find(it => (it.type === "release" || it.type === "master") && it.title?.includes(" - "));
+        if (firstMedia) {
+          const derivedArtist = firstMedia.title.slice(0, firstMedia.title.indexOf(" - "));
           bioData = await fetch(`${API}/artist-bio?name=${encodeURIComponent(derivedArtist)}`).then(r => r.json()).catch(() => null);
         }
       }
@@ -262,8 +262,9 @@ async function doSearch(page = 1, skipPushState = false) {
         document.getElementById("alts-popup").innerHTML = "<h4>Other artists</h4>";
       }
 
-      const searchedArtistName = artistRaw || (!label && !genre && items.length > 0 && items[0].title?.includes(" - ")
-        ? items[0].title.slice(0, items[0].title.indexOf(" - ")) : "");
+      const firstMediaItem = items.find(it => (it.type === "release" || it.type === "master") && it.title?.includes(" - "));
+      const searchedArtistName = artistRaw || (!label && !genre && firstMediaItem
+        ? firstMediaItem.title.slice(0, firstMediaItem.title.indexOf(" - ")) : "");
       if (bioData && artistNamesMatch(searchedArtistName, bioData.name) === false) {
         bioData = null;
       }
@@ -289,19 +290,24 @@ async function doSearch(page = 1, skipPushState = false) {
         } catch { /* keep original results */ }
       }
 
-      if (bioData?.profile) {
+      if (bioData?.profile || bioData?.wikiExtract) {
         window._upcomingShows = { name: bioData.name, shows: [] };
-        const fullText = stripDiscogsMarkup(bioData.profile);
         const entityType = artist ? 'artist' : label ? 'label' : genre ? 'genre' : 'artist';
         window._currentBio = {
-          name: bioData.name, text: bioData.profile, wiki: bioData.wikiExtract ?? null,
+          name: bioData.name, text: bioData.profile ?? null, wiki: bioData.wikiExtract ?? null,
           members: bioData.members ?? [], groups: bioData.groups ?? [], aliases: bioData.aliases ?? [],
           discogsId: bioData.discogsId ?? null,
         };
 
+        // Use Discogs profile if available, otherwise fall back to Wikipedia extract
+        const rawBioText  = bioData.profile ?? null;
+        const wikiText    = bioData.wikiExtract ?? null;
+        const displayText = rawBioText ? stripDiscogsMarkup(rawBioText) : (wikiText ?? "");
         const TRUNCATE = 300;
-        const needsMore = fullText.length > TRUNCATE;
-        const truncatedRaw = needsMore ? truncateRaw(bioData.profile, TRUNCATE) + '\u2026' : bioData.profile;
+        const needsMore = displayText.length > TRUNCATE;
+        const truncatedRaw = rawBioText
+          ? (needsMore ? truncateRaw(rawBioText, TRUNCATE) + '\u2026' : rawBioText)
+          : (needsMore ? displayText.slice(0, TRUNCATE) + '\u2026' : displayText);
 
         const showsArtist = bioData.name.replace(/\s*\(\d+\)$/, "").trim();
         const showsLink = ` <a href="#" data-artist="${escHtml(showsArtist)}" onclick="fetchAndShowUpcoming(event,this.dataset.artist)" style="font-size:0.75rem;color:#666;font-weight:400;margin-left:0.4rem;text-decoration:none">(upcoming shows)</a>`;
@@ -320,7 +326,8 @@ async function doSearch(page = 1, skipPushState = false) {
           : "";
 
         const relLinks = renderArtistRelations(bioData.members ?? [], bioData.groups ?? [], bioData.aliases ?? []);
-        blurbEl.innerHTML = heading + renderBioMarkup(truncatedRaw) + readMore + relLinks + discogsLink;
+        const bioHtml  = rawBioText ? renderBioMarkup(truncatedRaw) : escHtml(truncatedRaw);
+        blurbEl.innerHTML = heading + bioHtml + readMore + relLinks + discogsLink;
         blurbEl.style.display = "block";
       }
     }
