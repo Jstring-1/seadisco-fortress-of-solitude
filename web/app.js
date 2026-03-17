@@ -152,7 +152,9 @@ async function doSearch(page = 1, skipPushState = false) {
     const t = typeOverride ?? resultType;
     if (t) p.set("type", t);
     if (artist)  p.set("artist",        artist);
-    if (release) p.set("release_title", release);
+    // Only use strict release_title filter when artist is also set;
+    // without an artist it ranks by one title's popularity and one artist dominates
+    if (release && artist) p.set("release_title", release);
     if (year)    p.set("year",          year);
     if (label)   p.set("label",         label);
     if (genre)   p.set("genre",         genre);
