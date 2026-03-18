@@ -1286,6 +1286,11 @@ async function loadRecentFeed() {
   } catch { /* no feed available */ }
 }
 
+// Auth-ready promise — declared here so the page-load IIFE below can await it
+// before initAuth (which resolves it) is defined further down the file.
+let _authReady;
+const authReadyPromise = new Promise(res => { _authReady = res; });
+
 // ── Restore from URL on page load ────────────────────────────────────────
 (async function () {
   const p = new URLSearchParams(location.search);
@@ -1317,9 +1322,6 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
 });
 
 // ── Clerk auth init ───────────────────────────────────────────────────────
-let _authReady; // resolves when Clerk is loaded (or skipped)
-const authReadyPromise = new Promise(res => { _authReady = res; });
-
 (async function initAuth() {
   try {
     const cfg = await fetch("/api/config").then(r => r.json()).catch(() => ({}));
