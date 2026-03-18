@@ -82,11 +82,8 @@ if (process.env.APP_DB_URL) {
 const app = express();
 app.set("trust proxy", true); // respect X-Forwarded-For from Railway's proxy
 
-// Serve static files from web/ (logo, etc.)
-app.use(express.static(path.join(__dirname, "../web"), { extensions: ["html"] }));
-
-
-// Content-Security-Policy — 'unsafe-eval' required by Clerk JS SDK
+// Content-Security-Policy — must come BEFORE express.static so headers apply to HTML pages too
+// 'unsafe-eval' is required by Clerk JS SDK
 app.use((_req, res, next) => {
   res.setHeader("Content-Security-Policy", [
     "default-src 'self'",
@@ -107,6 +104,9 @@ app.use((_req, res, next) => {
   ].join("; "));
   next();
 });
+
+// Serve static files from web/ (logo, etc.)
+app.use(express.static(path.join(__dirname, "../web"), { extensions: ["html"] }));
 
 // Allow any webpage to call this API
 app.use((_req, res, next) => {
