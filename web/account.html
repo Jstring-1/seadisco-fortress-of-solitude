@@ -86,16 +86,20 @@ async function initClerk() {
     return;
   }
 
-  // Load Clerk JS v4 (stable API: new window.Clerk(pk))
+  // Decode frontend API host from publishable key
+  const frontendApi = atob(pk.replace(/^pk_(test|live)_/, "")).replace(/\$$/, "");
+
+  // Load Clerk JS from the instance's own CDN
   await new Promise((resolve, reject) => {
     const s = document.createElement("script");
-    s.src = "https://cdn.jsdelivr.net/npm/@clerk/clerk-js@4/dist/clerk.browser.js";
+    s.src = `https://${frontendApi}/npm/@clerk/clerk-js@4/dist/clerk.browser.js`;
     s.onload = resolve; s.onerror = reject;
     document.head.appendChild(s);
   });
 
-  clerk = new window.Clerk(pk);
-  await clerk.load();
+  // window.Clerk is a pre-created instance, not a constructor
+  clerk = window.Clerk;
+  await clerk.load({ publishableKey: pk });
 
   document.getElementById("loading-section").style.display = "none";
 
