@@ -1279,8 +1279,10 @@ async function loadRecentFeed() {
     if (!authBar) return;
 
     if (window._clerk.user) {
-      const email = window._clerk.user.primaryEmailAddress?.emailAddress ?? "account";
-      authBar.innerHTML = `<a href="/account">${email}</a>`;
+      const email = window._clerk.user.primaryEmailAddress?.emailAddress ?? "";
+      const [local, domain] = email.split("@");
+      const truncated = email ? local.slice(0, 3) + "***@" + domain : "account";
+      authBar.innerHTML = `<a href="/account">${truncated}</a>`;
     } else {
       authBar.innerHTML = `<a href="/account">Add your Discogs API Token for More Searches</a>`;
     }
