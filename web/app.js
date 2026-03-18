@@ -677,7 +677,7 @@ async function doAiSearch(q) {
           return `<div style="padding:0.75rem 0;border-bottom:1px solid #222">
             <div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem">
               <span style="color:var(--fg);font-weight:600">${rec.name}</span>
-              <a href="${href}" style="font-size:0.78rem;color:var(--accent);white-space:nowrap;flex-shrink:0">Search Discogs →</a>
+              <a href="${href}" style="font-size:0.78rem;color:var(--accent);white-space:nowrap;flex-shrink:0">New Search →</a>
             </div>
             <div style="font-size:0.83rem;color:var(--muted);margin-top:0.25rem">${rec.description}</div>
           </div>`;
