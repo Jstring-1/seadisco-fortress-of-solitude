@@ -1286,10 +1286,11 @@ async function loadRecentFeed() {
 }
 
 // ── Restore from URL on page load ────────────────────────────────────────
-(function () {
+(async function () {
   const p = new URLSearchParams(location.search);
   if (p.toString()) {
     restoreFromParams(p);
+    await authReadyPromise; // wait for Clerk so Bearer token is attached
     doSearch(parseInt(p.get("pg") ?? "1"), true);
   }
   loadRecentFeed();
@@ -1315,11 +1316,14 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
 });
 
 // ── Clerk auth init ───────────────────────────────────────────────────────
+let _authReady; // resolves when Clerk is loaded (or skipped)
+const authReadyPromise = new Promise(res => { _authReady = res; });
+
 (async function initAuth() {
   try {
     const cfg = await fetch("/api/config").then(r => r.json()).catch(() => ({}));
     const pk = cfg.clerkPublishableKey;
-    if (!pk) return; // Clerk not configured — no account UI
+    if (!pk) { _authReady(); return; }
 
     const frontendApi = atob(pk.replace(/^pk_(test|live)_/, "")).replace(/\$$/, "");
     await new Promise((resolve, reject) => {
@@ -1333,19 +1337,20 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
 
     await new Promise(r => setTimeout(r, 50));
     window._clerk = window.Clerk;
-    if (!window._clerk) return;
+    if (!window._clerk) { _authReady(); return; }
     await window._clerk.load();
 
     const authBar = document.getElementById("auth-status");
-    if (!authBar) return;
-
-    if (window._clerk.user) {
-      const email = window._clerk.user.primaryEmailAddress?.emailAddress ?? "";
-      const [local, domain] = email.split("@");
-      const truncated = email ? local.slice(0, 3) + "***@" + domain : "account";
-      authBar.innerHTML = `<a href="/account">${truncated}</a>`;
-    } else {
-      authBar.innerHTML = `<a href="/account">Add your Discogs API Token for More Searches</a>`;
+    if (authBar) {
+      if (window._clerk.user) {
+        const email = window._clerk.user.primaryEmailAddress?.emailAddress ?? "";
+        const [local, domain] = email.split("@");
+        const truncated = email ? local.slice(0, 3) + "***@" + domain : "account";
+        authBar.innerHTML = `<a href="/account">${truncated}</a>`;
+      } else {
+        authBar.innerHTML = `<a href="/account">Add your Discogs API Token for More Searches</a>`;
+      }
     }
   } catch { /* auth unavailable — site works fine without it */ }
+  finally { _authReady(); }
 })();
