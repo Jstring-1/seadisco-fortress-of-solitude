@@ -1,4 +1,4 @@
-// ── Config ────────────────────────────────────────────────────────────────
+// ── Config ─────────────────────────────────────────────────────────────────
 // Use relative URLs so this works on any deployment (production, test, local)
 const API = "";
 
