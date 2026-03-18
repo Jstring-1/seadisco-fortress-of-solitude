@@ -1186,7 +1186,7 @@ async function loadMasterVersions(event, masterId) {
           <span style="color:#aaa">${escHtml(v.country || "?")}</span>
           <span style="color:#888">${escHtml(v.format ?? "—")}</span>
           <span style="color:#aaa">${escHtml(v.catno ?? "—")}</span>
-          <span>${badge}<a href="#" onclick="openVersionPopup(event,${v.id})" style="color:var(--accent);text-decoration:none">${escHtml(v.label ?? v.title ?? "—")}</a></span>`;
+          <span><a href="#" onclick="openVersionPopup(event,${v.id})" style="color:var(--accent);text-decoration:none">${escHtml(v.label ?? v.title ?? "—")}</a>${badge}</span>`;
       }).join("")}
       </div>`;
   } catch(e) {
