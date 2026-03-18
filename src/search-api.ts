@@ -153,7 +153,18 @@ app.get("/api/user/history", async (req, res) => {
 app.get("/api/recent-searches", async (_req, res) => {
   if (!process.env.APP_DB_URL) { res.json({ searches: [] }); return; }
   try {
-    const searches = await getRecentSearches(100);
+    const raw = await getRecentSearches(500);
+    // Deduplicate by normalised content: lowercase q/artist/label/release/genre/style/year
+    // Searches differing only in format, type, or sort are treated as the same
+    const seen = new Set<string>();
+    const searches = raw.filter(({ params }) => {
+      const sig = [params.q, params.artist, params.release_title, params.label, params.genre, params.style, params.year]
+        .map(v => (v ?? "").toLowerCase().trim())
+        .join("|");
+      if (!sig.replace(/\|/g, "").trim() || seen.has(sig)) return false;
+      seen.add(sig);
+      return true;
+    }).slice(0, 100);
     res.json({ searches });
   } catch { res.json({ searches: [] }); }
 });
