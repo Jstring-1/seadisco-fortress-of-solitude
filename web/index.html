@@ -128,7 +128,7 @@
   </div>
   <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:#555;margin-bottom:1.25rem;min-height:1em">
     <button type="button" onclick="clearForm()" title="Clear form" style="background:none;border:none;padding:0;margin:0;font-size:0.92rem;color:#555;cursor:pointer;line-height:1;display:flex;align-items:center" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
-    <span id="powered-by">Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:#666;text-decoration:none">Discogs</a>, <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:#666;text-decoration:none">Claude</a>, and <a href="https://www.wikipedia.org" target="_blank" rel="noopener" style="color:#666;text-decoration:none">Wikipedia</a></span>
+    <span id="powered-by">Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:#666;text-decoration:none">Discogs</a>, <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:#666;text-decoration:none">Claude</a>, and <a href="https://www.wikipedia.org" target="_blank" rel="noopener" style="color:#666;text-decoration:none">Wikipedia</a> | <a href="#" onclick="document.getElementById('info-overlay').style.display='flex';return false;" style="color:#666;text-decoration:none">Info</a></span>
     <span id="search-pipe" style="color:#333;display:none">|</span>
     <span id="search-desc"></span>
     <span id="type-pipe" style="color:#333;display:none">|</span>
@@ -206,5 +206,52 @@
 
 <script src="/app.js"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
+
+<!-- Info popup -->
+<div id="info-overlay" onclick="if(event.target===this)this.style.display='none'" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:2000;align-items:center;justify-content:center;padding:1rem">
+  <div style="background:#1a1a1a;border:1px solid #2e2e2e;border-radius:10px;padding:1.75rem;max-width:560px;width:100%;max-height:85vh;overflow-y:auto;position:relative">
+    <button onclick="document.getElementById('info-overlay').style.display='none'" style="position:absolute;top:0.75rem;right:1rem;background:none;border:none;color:#666;font-size:1.2rem;cursor:pointer">✕</button>
+    <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">How SeaDisco Works</h2>
+
+    <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">Basic Search</h3>
+    <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem">Type anything into the main search box — artist name, album title, label, genre, or a mix. SeaDisco searches the entire Discogs database of over 15 million releases.</p>
+
+    <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">Advanced Search</h3>
+    <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem">Click <strong style="color:#ccc">Advanced</strong> to unlock targeted fields:</p>
+    <ul style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem;padding-left:1.25rem;line-height:1.8">
+      <li><strong style="color:#ccc">Artist</strong> — search specifically by artist name</li>
+      <li><strong style="color:#ccc">Release Title</strong> — search by album or single title</li>
+      <li><strong style="color:#ccc">Label</strong> — filter by record label (e.g. Blue Note, Trojan)</li>
+      <li><strong style="color:#ccc">Year</strong> — narrow to a specific release year</li>
+      <li><strong style="color:#ccc">Genre &amp; Style</strong> — filter by broad genre, then drill into sub-styles</li>
+      <li><strong style="color:#ccc">Format</strong> — Vinyl, CD, Cassette, and more</li>
+    </ul>
+
+    <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">Result Types</h3>
+    <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem">Use the radio buttons to filter what kind of results appear:</p>
+    <ul style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem;padding-left:1.25rem;line-height:1.8">
+      <li><strong style="color:#ccc">All</strong> — mix of releases, artists, labels, and masters</li>
+      <li><strong style="color:#ccc">Masters</strong> — canonical versions of recordings (groups all pressings)</li>
+      <li><strong style="color:#ccc">Releases</strong> — specific pressings (country, year, format)</li>
+      <li><strong style="color:#ccc">Artists</strong> — artist pages with discography</li>
+      <li><strong style="color:#ccc">Labels</strong> — record label pages with full catalogue</li>
+    </ul>
+
+    <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">✦ AI Search</h3>
+    <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem">Select <strong style="color:#ccc">AI</strong> to ask Claude for music recommendations in plain language — "obscure 70s Nigerian funk", "music like early Miles Davis", "best post-war Chicago blues guitarists". Claude returns 6–8 curated picks, each linking directly to a Discogs search. Requires a free account.</p>
+
+    <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">Sort</h3>
+    <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem">Sort results by relevance, year (newest or oldest first), title, or artist. Sort applies when you click Search.</p>
+
+    <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">Result Cards</h3>
+    <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem">Click any result card to see full release details — tracklist, credits, pressing info, market price, and photos. Click the cover photo to browse all available images. Artist and label names link to their full Discogs pages within SeaDisco.</p>
+
+    <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">Recent Searches Feed</h3>
+    <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem">The strip at the bottom shows recent searches from all SeaDisco users — click any pill to run that search instantly.</p>
+
+    <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">Your Account</h3>
+    <p style="font-size:0.84rem;color:#aaa;margin:0">Create a free account and connect your own Discogs API token for unlimited searches and a personal search history. Get your token at <strong style="color:#ccc">discogs.com → Settings → Developers → Generate new token</strong>.</p>
+  </div>
+</div>
 </body>
 </html>
