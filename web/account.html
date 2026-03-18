@@ -123,8 +123,37 @@ async function initClerk() {
   } else {
     document.getElementById("signed-out-section").style.display = "block";
     clerk.mountSignIn(document.getElementById("clerk-sign-in"), {
-      afterSignInUrl: "/account.html",
-      afterSignUpUrl: "/account.html",
+      afterSignInUrl: "/account",
+      afterSignUpUrl: "/account",
+      appearance: {
+        baseTheme: undefined,
+        variables: {
+          colorBackground:        "#1a1a1a",
+          colorInputBackground:   "#0f0f0f",
+          colorInputText:         "#e2e2e2",
+          colorText:              "#e2e2e2",
+          colorTextSecondary:     "#888888",
+          colorPrimary:           "#e8a020",
+          colorDanger:            "#e05050",
+          colorNeutral:           "#888888",
+          borderRadius:           "8px",
+          fontFamily:             "system-ui, -apple-system, sans-serif",
+        },
+        elements: {
+          card:               "background:#1a1a1a; border:1px solid #2e2e2e; box-shadow:none;",
+          headerTitle:        "color:#e2e2e2;",
+          headerSubtitle:     "color:#888;",
+          socialButtonsBlockButton: "background:#0f0f0f; border:1px solid #2e2e2e; color:#e2e2e2;",
+          socialButtonsBlockButtonText: "color:#e2e2e2;",
+          dividerLine:        "background:#2e2e2e;",
+          dividerText:        "color:#888;",
+          formFieldLabel:     "color:#888;",
+          formFieldInput:     "background:#0f0f0f; border:1px solid #2e2e2e; color:#e2e2e2;",
+          footerActionLink:   "color:#e8a020;",
+          identityPreviewText: "color:#e2e2e2;",
+          identityPreviewEditButton: "color:#e8a020;",
+        },
+      },
     });
   }
 }
