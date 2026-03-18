@@ -37,7 +37,7 @@ const seeds = [
   { artist: "Slim Harpo" },
   { artist: "Lazy Lester" },
   { artist: "Lonesome Sundown" },
-  { artist: "Clarence "Gatemouth" Brown" },
+  { artist: "Clarence Gatemouth Brown" },
   { artist: "Guitar Slim" },
   { artist: "Earl Hooker" },
   { artist: "Snooky Pryor" },
