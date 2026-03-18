@@ -36,6 +36,16 @@ export async function initDb() {
 }
 
 export async function saveSearch(clerkUserId: string, params: Record<string, string>): Promise<void> {
+  // Skip if identical params were saved in the last 5 minutes (prevents double-saves)
+  const recent = await getPool().query(
+    `SELECT 1 FROM search_history
+     WHERE clerk_user_id = $1 AND params = $2
+       AND searched_at > NOW() - INTERVAL '5 minutes'
+     LIMIT 1`,
+    [clerkUserId, JSON.stringify(params)]
+  );
+  if (recent.rows.length) return;
+
   await getPool().query(
     `INSERT INTO search_history (clerk_user_id, params) VALUES ($1, $2)`,
     [clerkUserId, JSON.stringify(params)]
@@ -56,9 +66,12 @@ export async function saveSearch(clerkUserId: string, params: Record<string, str
 
 export async function getSearchHistory(clerkUserId: string, limit = 50): Promise<Array<{ params: Record<string, string>; searched_at: string }>> {
   const r = await getPool().query(
-    `SELECT params, searched_at FROM search_history
+    `SELECT params, MAX(searched_at) AS searched_at
+     FROM search_history
      WHERE clerk_user_id = $1
-     ORDER BY searched_at DESC LIMIT $2`,
+     GROUP BY params
+     ORDER BY MAX(searched_at) DESC
+     LIMIT $2`,
     [clerkUserId, limit]
   );
   return r.rows;
