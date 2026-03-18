@@ -1183,12 +1183,16 @@ window.addEventListener("popstate", () => {
 });
 
 // ── Recent searches feed ─────────────────────────────────────────────────
+function toTitleCase(s) {
+  return s.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1));
+}
 function feedLabel(p) {
+  const tc = s => toTitleCase(s);
   const parts = [];
-  if (p.q && (!p.artist || p.q.toLowerCase() !== p.artist.toLowerCase())) parts.push(p.q);
-  if (p.artist)        parts.push(p.artist);
-  if (p.release_title) parts.push(`"${p.release_title}"`);
-  if (p.label)         parts.push(`${p.label} label`);
+  if (p.q && (!p.artist || p.q.toLowerCase() !== p.artist.toLowerCase())) parts.push(tc(p.q));
+  if (p.artist)        parts.push(tc(p.artist));
+  if (p.release_title) parts.push(`"${tc(p.release_title)}"`);
+  if (p.label)         parts.push(`${tc(p.label)} label`);
   if (p.genre)         parts.push(p.genre);
   if (p.style)         parts.push(p.style);
   if (p.format && p.format !== "Vinyl") parts.push(p.format);
