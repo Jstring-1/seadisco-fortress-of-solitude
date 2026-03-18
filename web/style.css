@@ -21,13 +21,10 @@
   align-items: center;
   gap: 0.3rem;
   color: #555;
-  flex-shrink: 0;
-  margin-left: 0.5rem;
 }
 @media (max-width: 480px) {
   .type-sort-row > span { display: none; } /* hide "Results:" label to save space */
   .type-radios { gap: 0.15rem; }
-  .sort-label { margin-left: auto; margin-top: 0.3rem; width: 100%; justify-content: flex-end; }
 }
 
 #auth-bar {
