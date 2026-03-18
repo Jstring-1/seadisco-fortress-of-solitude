@@ -46,7 +46,19 @@
     </div>
 
     <div id="signed-out-section">
-      <p>Sign in to save your personal Discogs API token so you use your own rate limits.</p>
+      <p style="color:var(--text);font-size:1rem;margin-bottom:1rem">
+        SeaDisco is powered by the Discogs music database. Free visitors get a handful of searches —
+        connect your own free Discogs token and you get <strong style="color:var(--accent)">your own unlimited search quota</strong>.
+      </p>
+      <p style="margin-bottom:0.6rem"><strong style="color:var(--text)">Here's all it takes:</strong></p>
+      <ol style="color:var(--muted);font-size:0.9rem;line-height:1.9;padding-left:1.2rem;margin-bottom:1.2rem">
+        <li>Create a free account at <a href="https://www.discogs.com/users/register" target="_blank" rel="noopener" style="color:var(--accent)">discogs.com</a> (if you don't have one)</li>
+        <li>Go to <a href="https://www.discogs.com/settings/developers" target="_blank" rel="noopener" style="color:var(--accent)">Settings → Developers</a> and click <strong style="color:var(--text)">Generate new token</strong></li>
+        <li>Come back here, paste it in, and you're done</li>
+      </ol>
+      <p style="color:#555;font-size:0.8rem;margin-bottom:1.4rem">
+        Your token is stored securely and only used to make Discogs searches on your behalf. We never see your Discogs password.
+      </p>
       <div id="clerk-sign-in"></div>
     </div>
 
