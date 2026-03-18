@@ -54,6 +54,37 @@ body {
   text-transform: uppercase;
 }
 
+#recent-feed {
+  margin-bottom: 1.25rem;
+}
+#recent-feed .feed-label {
+  font-size: 0.7rem;
+  color: #444;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 0.45rem;
+}
+#recent-feed .feed-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+#recent-feed .feed-pill {
+  background: #1a1a1a;
+  border: 1px solid #2a2a2a;
+  border-radius: 20px;
+  padding: 0.25rem 0.65rem;
+  font-size: 0.75rem;
+  color: #777;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s;
+}
+#recent-feed .feed-pill:hover {
+  border-color: #444;
+  color: #bbb;
+}
+
 main {
   max-width: 900px;
   margin: 0 auto;
