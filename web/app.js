@@ -852,12 +852,12 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
 
   // Companies — group by entity type, show vinyl-relevant ones
   const companyTypes = ["Pressed By","Manufactured By","Mastered At","Recorded At","Mixed At","Distributed By","Licensed From","Phonographic Copyright (p)"];
-  const companyGroups: Record<string,string[]> = {};
+  const companyGroups = {};
   for (const c of (d.companies ?? [])) {
-    const t = c.entity_type_name as string;
+    const t = c.entity_type_name;
     if (companyTypes.includes(t)) {
       if (!companyGroups[t]) companyGroups[t] = [];
-      companyGroups[t].push(c.name as string);
+      companyGroups[t].push(c.name);
     }
   }
   const companyRows = companyTypes
@@ -866,7 +866,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     .join("");
 
   const seriesText = (d.series ?? [])
-    .map((s: any) => s.catno ? `${s.name} (${s.catno})` : s.name)
+    .map(s => s.catno ? `${s.name} (${s.catno})` : s.name)
     .filter(Boolean).join(", ");
 
   const isMaster = searchResult.type === "master";
