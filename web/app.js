@@ -1004,9 +1004,9 @@ function renderArtistRelations(members = [], groups = [], aliases = [], namevari
   const urlRow = (label, items) => {
     if (!items.length) return "";
     const links = items.map(u =>
-      `<a href="${escHtml(u)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${escHtml(u.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</a>`
-    ).join('<span style="color:#555;margin:0 0.2em">·</span>');
-    return `<div style="font-size:0.78rem;margin-top:0.55rem;line-height:1.6">
+      `<div><a href="${escHtml(u)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${escHtml(u.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</a></div>`
+    ).join("");
+    return `<div style="font-size:0.78rem;margin-top:0.55rem;line-height:1.8">
               <span style="color:#777;margin-right:0.4em">${label}:</span>${links}
             </div>`;
   };
