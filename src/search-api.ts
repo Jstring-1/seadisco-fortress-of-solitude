@@ -102,6 +102,28 @@ app.use((req, res, next) => {
   next();
 });
 
+// Content-Security-Policy — 'unsafe-eval' required by Clerk JS SDK
+app.use((_req, res, next) => {
+  res.setHeader("Content-Security-Policy", [
+    "default-src 'self'",
+    // Scripts: self + Clerk CDN (*.clerk.accounts.dev, *.clerk.com) + YouTube
+    "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://*.clerk.accounts.dev https://*.clerk.com https://www.youtube.com https://s.ytimg.com",
+    // Styles: self + inline (Clerk injects styles)
+    "style-src 'self' 'unsafe-inline' https://*.clerk.accounts.dev https://*.clerk.com",
+    // Images: self + Discogs + Clerk profile images + YouTube thumbnails + data URIs
+    "img-src 'self' data: https://i.discogs.com https://*.discogs.com https://img.discogs.com https://*.clerk.accounts.dev https://*.clerk.com https://img.youtube.com https://i.ytimg.com",
+    // Frames: YouTube embeds
+    "frame-src https://www.youtube.com https://www.youtube-nocookie.com",
+    // Connections: our own API + Discogs + Wikipedia + Anthropic + Clerk
+    "connect-src 'self' https://api.discogs.com https://en.wikipedia.org https://api.anthropic.com https://*.clerk.accounts.dev https://*.clerk.com",
+    // Fonts: self + Clerk
+    "font-src 'self' https://*.clerk.accounts.dev https://*.clerk.com",
+    // Workers: Clerk uses service workers
+    "worker-src 'self' blob:",
+  ].join("; "));
+  next();
+});
+
 // Allow any webpage to call this API
 app.use((_req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
