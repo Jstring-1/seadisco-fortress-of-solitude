@@ -2,7 +2,7 @@ import express from "express";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getUserToken, setUserToken, deleteUserToken } from "./db.js";
+import { initDb, getUserToken, setUserToken, deleteUserToken, saveSearch, getSearchHistory } from "./db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -118,6 +118,14 @@ function stripArtistSuffix(name: string | undefined): string | undefined {
   return name ? name.replace(/\s*\(\d+\)$/, "").trim() : undefined;
 }
 
+// GET /api/user/history — recent searches for the logged-in user
+app.get("/api/user/history", async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const history = await getSearchHistory(userId);
+  res.json({ history });
+});
+
 // GET /search?q=pink+floyd&type=master&year=1973&page=1&per_page=10
 app.get("/search", async (req, res) => {
   const rawQ   = (req.query.q as string) ?? "";
@@ -142,6 +150,24 @@ app.get("/search", async (req, res) => {
       perPage: req.query.per_page ? parseInt(req.query.per_page as string) : 12,
     });
     res.json(results);
+
+    // Record search history for logged-in users (fire-and-forget, page 1 only)
+    const userId = getClerkUserId(req);
+    const isFirstPage = !req.query.page || req.query.page === "1";
+    if (userId && isFirstPage) {
+      const p: Record<string, string> = {};
+      if (rawQ)                  p.q             = rawQ;
+      if (req.query.artist)      p.artist        = String(req.query.artist);
+      if (req.query.release_title) p.release_title = String(req.query.release_title);
+      if (req.query.label)       p.label         = String(req.query.label);
+      if (req.query.year)        p.year          = String(req.query.year);
+      if (req.query.genre)       p.genre         = String(req.query.genre);
+      if (req.query.style)       p.style         = String(req.query.style);
+      if (req.query.format)      p.format        = String(req.query.format);
+      if (req.query.type)        p.type          = String(req.query.type);
+      if (req.query.sort)        p.sort          = String(req.query.sort);
+      if (Object.keys(p).length) saveSearch(userId, p).catch(() => {});
+    }
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Discogs API error" });
