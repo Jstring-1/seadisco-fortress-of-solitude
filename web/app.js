@@ -109,7 +109,6 @@ function clearForm() {
   document.getElementById("f-style").innerHTML = '<option value="">Any</option>';
   document.getElementById("f-style").disabled = true;
   document.querySelector('input[name="result-type"][value=""]').checked = true;
-  toggleAdvanced(false);
   document.getElementById("powered-by").style.display = "";
   document.getElementById("search-desc").textContent = "";
   document.getElementById("search-pipe").style.display = "none";
