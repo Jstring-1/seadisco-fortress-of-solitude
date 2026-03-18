@@ -86,10 +86,14 @@ async function initClerk() {
     return;
   }
 
-  // Dynamically load Clerk JS
+  // Extract frontend API host from publishable key (base64 encoded after prefix)
+  const b64part = pk.replace(/^pk_(test|live)_/, "");
+  const frontendApi = atob(b64part).replace(/\$$/, "");
+
+  // Load Clerk JS from Clerk's own CDN for this instance
   await new Promise((resolve, reject) => {
     const s = document.createElement("script");
-    s.src = "https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js";
+    s.src = `https://${frontendApi}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js`;
     s.onload = resolve; s.onerror = reject;
     document.head.appendChild(s);
   });
