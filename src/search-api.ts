@@ -26,18 +26,24 @@ function getClerkUserId(req: express.Request): string | null {
   } catch { return null; }
 }
 
-// Resolve Discogs token for the current request: user token → shared env token
+// Resolve Discogs token for the current request: user token only (no shared fallback)
 async function getTokenForRequest(req: express.Request): Promise<string | null> {
   const userId = getClerkUserId(req);
   if (userId) {
     const userToken = await getUserToken(userId);
     if (userToken) return userToken;
   }
-  return sharedToken || null;
+  return null;
 }
 
-async function getDiscogsForRequest(req: express.Request): Promise<DiscogsClient | null> {
+// For endpoints that can work without auth (bio lookups etc.) fall back to shared token
+async function getTokenForRequestWithFallback(req: express.Request): Promise<string | null> {
   const t = await getTokenForRequest(req);
+  return t ?? (sharedToken || null);
+}
+
+async function getDiscogsForRequest(req: express.Request, allowFallback = false): Promise<DiscogsClient | null> {
+  const t = allowFallback ? await getTokenForRequestWithFallback(req) : await getTokenForRequest(req);
   if (!t) return null;
   if (t === sharedToken && discogs) return discogs;
   return new DiscogsClient(t);
@@ -132,8 +138,11 @@ app.get("/search", async (req, res) => {
   const artist = stripArtistSuffix(req.query.artist as string | undefined);
   const q = rawQ || artist || "";
 
-  const dc = await getDiscogsForRequest(req);
-  if (!dc) { res.status(503).json({ error: "No Discogs token configured" }); return; }
+  const dc = await getDiscogsForRequest(req, false);
+  if (!dc) {
+    res.status(401).json({ error: "no_token", message: "Sign in and add your Discogs API token to search." });
+    return;
+  }
 
   try {
     const results = await dc.search(q, {
@@ -176,7 +185,7 @@ app.get("/search", async (req, res) => {
 
 // GET /release/:id
 app.get("/release/:id", async (req, res) => {
-  const dc = await getDiscogsForRequest(req);
+  const dc = await getDiscogsForRequest(req, true);
   if (!dc) { res.status(503).json({ error: "No Discogs token configured" }); return; }
   try {
     const result = await dc.getRelease(req.params.id);
@@ -189,7 +198,7 @@ app.get("/release/:id", async (req, res) => {
 
 // GET /master/:id
 app.get("/master/:id", async (req, res) => {
-  const dc = await getDiscogsForRequest(req);
+  const dc = await getDiscogsForRequest(req, true);
   if (!dc) { res.status(503).json({ error: "No Discogs token configured" }); return; }
   try {
     const result = await dc.getMasterRelease(req.params.id);
@@ -202,7 +211,7 @@ app.get("/master/:id", async (req, res) => {
 
 // GET /artist/:id
 app.get("/artist/:id", async (req, res) => {
-  const dc = await getDiscogsForRequest(req);
+  const dc = await getDiscogsForRequest(req, true);
   if (!dc) { res.status(503).json({ error: "No Discogs token configured" }); return; }
   try {
     const result = await dc.getArtist(req.params.id);
@@ -259,7 +268,7 @@ app.get("/artist-bio", async (req, res) => {
     return;
   }
 
-  const dc = await getDiscogsForRequest(req);
+  const dc = await getDiscogsForRequest(req, true);
   if (!dc) { res.json({ profile: null }); return; }
 
   const mapNames = (arr: any[]) =>
@@ -412,7 +421,7 @@ app.get("/label-bio", async (req, res) => {
     return;
   }
 
-  const dc = await getDiscogsForRequest(req);
+  const dc = await getDiscogsForRequest(req, true);
   if (!dc) { res.json({ profile: null }); return; }
 
   try {
@@ -516,7 +525,7 @@ app.get("/upcoming-shows", async (req, res) => {
 app.get("/marketplace-stats/:id", async (req, res) => {
   const { id } = req.params;
   const type = (req.query.type as string) ?? "release";
-  const dc = await getDiscogsForRequest(req);
+  const dc = await getDiscogsForRequest(req, true);
   const reqToken = await getTokenForRequest(req);
   if (!dc || !reqToken) { res.json({ numForSale: 0, lowestPrice: null }); return; }
 
