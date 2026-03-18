@@ -26,61 +26,67 @@
     <input type="text" id="query" placeholder="Search artists, releases, labels…" autocomplete="off" />
   </div>
 
-  <div class="filters">
-    <label>Artist <input type="text" id="f-artist" placeholder="e.g. Miles Davis" oninput="currentArtistId=null" /></label>
-    <label>Release <input type="text" id="f-release" placeholder="e.g. Kind of Blue" /></label>
-    <label>Label <input type="text" id="f-label" placeholder="e.g. Columbia" /></label>
-    <label>Year <input type="text" id="f-year" placeholder="e.g. 1959" /></label>
+  <div style="margin-bottom:0.5rem">
+    <button type="button" id="advanced-toggle" onclick="toggleAdvanced()" style="background:none;border:none;padding:0;font-size:0.78rem;color:#666;cursor:pointer;display:flex;align-items:center;gap:0.3rem" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#666'">
+      <span id="advanced-arrow">▶</span> Advanced
+    </button>
   </div>
-  <div class="filters" style="margin-top:0.4rem">
-    <label>Format
-      <select id="f-format">
-        <option value="Vinyl">Vinyl</option>
-        <option value="">All Formats</option>
-        <option value="CD">CD</option>
-        <option value="Cassette">Cassette</option>
-        <option value="Digital">Digital</option>
-      </select>
-    </label>
-    <label>Genre
-      <select id="f-genre" onchange="populateStyles()">
-        <option value="">Any</option>
-        <option>Blues</option>
-        <option>Brass &amp; Military</option>
-        <option>Children's</option>
-        <option>Classical</option>
-        <option>Electronic</option>
-        <option>Folk, World, &amp; Country</option>
-        <option>Funk / Soul</option>
-        <option>Hip Hop</option>
-        <option>Jazz</option>
-        <option>Latin</option>
-        <option>Non-Music</option>
-        <option>Pop</option>
-        <option>Reggae</option>
-        <option>Rock</option>
-        <option>Stage &amp; Screen</option>
-      </select>
-    </label>
-    <label>Style
-      <select id="f-style" disabled>
-        <option value="">Any</option>
-      </select>
-    </label>
+  <div id="advanced-panel" style="display:none">
+    <div class="filters">
+      <label>Artist <input type="text" id="f-artist" placeholder="e.g. Miles Davis" oninput="currentArtistId=null" /></label>
+      <label>Release <input type="text" id="f-release" placeholder="e.g. Kind of Blue" /></label>
+      <label>Label <input type="text" id="f-label" placeholder="e.g. Columbia" /></label>
+      <label>Year <input type="text" id="f-year" placeholder="e.g. 1959" /></label>
+    </div>
+    <div class="filters" style="margin-top:0.4rem">
+      <label>Format
+        <select id="f-format">
+          <option value="Vinyl">Vinyl</option>
+          <option value="">All Formats</option>
+          <option value="CD">CD</option>
+          <option value="Cassette">Cassette</option>
+          <option value="Digital">Digital</option>
+        </select>
+      </label>
+      <label>Genre
+        <select id="f-genre" onchange="populateStyles()">
+          <option value="">Any</option>
+          <option>Blues</option>
+          <option>Brass &amp; Military</option>
+          <option>Children's</option>
+          <option>Classical</option>
+          <option>Electronic</option>
+          <option>Folk, World, &amp; Country</option>
+          <option>Funk / Soul</option>
+          <option>Hip Hop</option>
+          <option>Jazz</option>
+          <option>Latin</option>
+          <option>Non-Music</option>
+          <option>Pop</option>
+          <option>Reggae</option>
+          <option>Rock</option>
+          <option>Stage &amp; Screen</option>
+        </select>
+      </label>
+      <label>Style
+        <select id="f-style" disabled>
+          <option value="">Any</option>
+        </select>
+      </label>
+    </div>
   </div>
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem;font-size:0.78rem;color:var(--muted)">
-    <span style="text-transform:uppercase;letter-spacing:0.05em;color:#555;flex-shrink:0;margin-right:0.4rem">Results:</span>
-    <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="" checked> All</label>
-    <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="master"> Masters</label>
-    <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="release"> Releases</label>
-    <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="artist"> Artists</label>
-    <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="label"> Labels</label>
-  </div>
-  <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;align-items:center">
-    <button id="search-btn" onclick="doSearch(1)" style="flex:1">Search</button>
-    <label style="font-size:0.78rem;color:var(--muted);display:flex;align-items:center;gap:0.3rem;white-space:nowrap">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:0.4rem;margin-bottom:0.5rem;font-size:0.78rem;color:var(--muted)">
+    <div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap">
+      <span style="text-transform:uppercase;letter-spacing:0.05em;color:#555;flex-shrink:0">Results:</span>
+      <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="" checked> All</label>
+      <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="master"> Masters</label>
+      <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="release"> Releases</label>
+      <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="artist"> Artists</label>
+      <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="label"> Labels</label>
+    </div>
+    <label style="display:flex;align-items:center;gap:0.3rem;color:#555;flex-shrink:0">
       Sort
-      <select id="f-sort" style="font-size:0.78rem;padding:0.3rem 0.4rem;color-scheme:dark" onchange="doSearch(1)">
+      <select id="f-sort" style="font-size:0.78rem;padding:0.3rem 0.4rem;color-scheme:dark">
         <option value="">Relevance</option>
         <option value="year:asc">Year ↑</option>
         <option value="year:desc">Year ↓</option>
@@ -89,6 +95,9 @@
         <option value="label:asc">Label A→Z</option>
       </select>
     </label>
+  </div>
+  <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;align-items:center">
+    <button id="search-btn" onclick="doSearch(1)" style="flex:1">Search</button>
   </div>
   <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:#555;margin-bottom:1.25rem;min-height:1em">
     <button type="button" onclick="clearForm()" title="Clear form" style="background:none;border:none;padding:0;margin:0;font-size:0.92rem;color:#555;cursor:pointer;line-height:1;display:flex;align-items:center" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>

@@ -52,6 +52,15 @@ function populateStyles() {
   styleSelect.value = "";
 }
 
+// ── Advanced panel toggle ─────────────────────────────────────────────────
+function toggleAdvanced(forceOpen) {
+  const panel = document.getElementById("advanced-panel");
+  const arrow = document.getElementById("advanced-arrow");
+  const open  = forceOpen !== undefined ? forceOpen : panel.style.display === "none";
+  panel.style.display = open ? "" : "none";
+  arrow.textContent   = open ? "▼" : "▶";
+}
+
 // ── URL state helpers ────────────────────────────────────────────────────
 function pushSearchState(q, artistRaw, release, year, label, genre, sort, resultType, page) {
   const p = new URLSearchParams();
@@ -85,6 +94,9 @@ function restoreFromParams(p) {
   const rtype = p.get("rt") ?? "";
   const radio = document.querySelector(`input[name="result-type"][value="${rtype}"]`);
   if (radio) radio.checked = true;
+  // Auto-open advanced panel if any advanced fields are in use
+  const hasAdvanced = p.get("ar") || p.get("re") || p.get("yr") || p.get("lb") || p.get("gn") || p.get("st") || (p.get("fm") && p.get("fm") !== "Vinyl");
+  if (hasAdvanced) toggleAdvanced(true);
 }
 
 function clearForm() {
@@ -97,6 +109,7 @@ function clearForm() {
   document.getElementById("f-style").innerHTML = '<option value="">Any</option>';
   document.getElementById("f-style").disabled = true;
   document.querySelector('input[name="result-type"][value=""]').checked = true;
+  toggleAdvanced(false);
   document.getElementById("powered-by").style.display = "";
   document.getElementById("search-desc").textContent = "";
   document.getElementById("search-pipe").style.display = "none";
