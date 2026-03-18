@@ -88,3 +88,8 @@ export async function deleteUserToken(clerkUserId: string): Promise<void> {
     [clerkUserId]
   );
 }
+
+export async function deleteUserData(clerkUserId: string): Promise<void> {
+  await getPool().query("DELETE FROM user_tokens    WHERE clerk_user_id = $1", [clerkUserId]);
+  await getPool().query("DELETE FROM search_history WHERE clerk_user_id = $1", [clerkUserId]);
+}

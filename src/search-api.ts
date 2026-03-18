@@ -2,7 +2,7 @@ import express from "express";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getUserToken, setUserToken, deleteUserToken, saveSearch, getSearchHistory } from "./db.js";
+import { initDb, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, getSearchHistory } from "./db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -126,6 +126,14 @@ app.delete("/api/user/token", async (req, res) => {
   const userId = getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   await deleteUserToken(userId);
+  res.json({ ok: true });
+});
+
+// DELETE /api/user/account — wipe all user data from our DB (Clerk deletion handled client-side)
+app.delete("/api/user/account", async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  await deleteUserData(userId);
   res.json({ ok: true });
 });
 

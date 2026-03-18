@@ -95,7 +95,10 @@
       <div id="history-list" style="font-size:0.85rem;color:var(--muted)">Loading…</div>
 
       <hr class="section-divider" />
-      <button onclick="signOut()" style="background:none;border:none;color:#666;cursor:pointer;font-size:0.82rem;padding:0">Sign out</button>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <button onclick="signOut()" style="background:none;border:none;color:#666;cursor:pointer;font-size:0.82rem;padding:0">Sign out</button>
+        <button onclick="deleteAccount()" class="danger-btn" style="font-size:0.82rem;padding:0.3rem 0.7rem">Delete account</button>
+      </div>
     </div>
   </div>
 </main>
@@ -292,6 +295,23 @@ function paramsToUrl(p) {
 async function signOut() {
   await clerk.signOut();
   window.location.href = "/";
+}
+
+async function deleteAccount() {
+  if (!confirm("Permanently delete your account and all saved data? This cannot be undone.")) return;
+  try {
+    // Delete our DB records first
+    const sessionToken = await clerk.session?.getToken();
+    await fetch("/api/user/account", {
+      method: "DELETE",
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
+    });
+    // Then delete the Clerk account
+    await clerk.user.delete();
+    window.location.href = "/";
+  } catch (err) {
+    alert("Error deleting account: " + (err?.message ?? err));
+  }
 }
 
 initClerk().catch(err => {
