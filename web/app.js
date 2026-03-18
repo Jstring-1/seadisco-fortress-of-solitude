@@ -344,7 +344,6 @@ async function doSearch(page = 1, skipPushState = false) {
       }
 
       if (bioData?.profile || bioData?.wikiExtract) {
-        window._upcomingShows = { name: bioData.name, shows: [] };
         const entityType = artist ? 'artist' : label ? 'label' : genre ? 'genre' : 'artist';
         window._currentBio = {
           name: bioData.name, text: bioData.profile ?? null, wiki: bioData.wikiExtract ?? null,
@@ -362,13 +361,11 @@ async function doSearch(page = 1, skipPushState = false) {
           ? (needsMore ? truncateRaw(rawBioText, TRUNCATE) + '\u2026' : rawBioText)
           : (needsMore ? displayText.slice(0, TRUNCATE) + '\u2026' : displayText);
 
-        const showsArtist = bioData.name.replace(/\s*\(\d+\)$/, "").trim();
-        const showsLink = ` <a href="#" data-artist="${escHtml(showsArtist)}" onclick="fetchAndShowUpcoming(event,this.dataset.artist)" style="font-size:0.75rem;color:#666;font-weight:400;margin-left:0.4rem;text-decoration:none">(upcoming shows)</a>`;
         const readMore = needsMore
           ? ` <a href="#" onclick="openBioFull(event)" style="font-size:0.8rem;color:var(--accent);white-space:nowrap;text-decoration:none">read more</a>`
           : "";
         const heading = bioData.name
-          ? `<strong style="display:block;margin-bottom:0.4rem;color:var(--accent)">${escHtml(bioData.name)}${showsLink}</strong>`
+          ? `<strong style="display:block;margin-bottom:0.4rem;color:var(--accent)">${escHtml(bioData.name)}</strong>`
           : "";
 
         let discogsHref = "";
@@ -409,8 +406,6 @@ async function doSearch(page = 1, skipPushState = false) {
       }
     } else if (urlP.get("bi") === "1") {
       openBioFull(null);
-    } else if (urlP.get("sh") === "1") {
-      renderShowsPopup();
     } else if (videoParam) {
       openVideo(null, `https://www.youtube.com/watch?v=${videoParam}`);
     }
@@ -592,57 +587,6 @@ document.getElementById("bio-full-overlay").addEventListener("click", e => {
   if (e.target === document.getElementById("bio-full-overlay")) closeBioFull();
 });
 
-// ── Shows popup ───────────────────────────────────────────────────────────
-async function fetchAndShowUpcoming(event, artistName) {
-  event.preventDefault();
-  const link = event.target;
-  link.textContent = "(loading…)";
-  try {
-    const data = await apiFetch(`${API}/upcoming-shows?artist=${encodeURIComponent(artistName)}`).then(r => r.json());
-    window._upcomingShows = { name: artistName, shows: data.shows ?? [] };
-    link.textContent = "(upcoming shows)";
-    renderShowsPopup();
-  } catch(e) {
-    link.textContent = "(upcoming shows)";
-  }
-}
-
-function renderShowsPopup() {
-  const { name, shows } = window._upcomingShows ?? { name: "", shows: [] };
-  document.getElementById("shows-title").textContent = `Upcoming Shows — ${name}`;
-  document.getElementById("shows-list").innerHTML = shows.length === 0
-    ? `<p style="color:var(--muted);padding:0.5rem 0">No upcoming shows found on Ticketmaster.</p>`
-    : shows.map(s => `
-      <div class="show-row">
-        <div class="show-date">${escHtml(s.date)}${s.time ? "<br>" + escHtml(s.time.slice(0,5)) : ""}</div>
-        <div class="show-info">
-          <div class="show-venue">${escHtml(s.venue)}</div>
-          <div class="show-location">${[s.city, s.country].filter(Boolean).map(escHtml).join(", ")}</div>
-        </div>
-        ${s.url ? `<a href="${s.url}" target="_blank" rel="noopener" class="show-ticket">Tickets ↗</a>` : ""}
-      </div>`).join("");
-  const u = new URL(window.location.href);
-  u.searchParams.set("sh", "1");
-  history.replaceState({}, "", u.toString());
-  document.getElementById("shows-overlay").classList.add("open");
-}
-
-function openShowsPopup(event) {
-  event.preventDefault();
-  renderShowsPopup();
-}
-
-function closeShows() {
-  document.getElementById("shows-overlay").classList.remove("open");
-  const u = new URL(window.location.href);
-  u.searchParams.delete("sh");
-  history.replaceState({}, "", u.toString());
-}
-
-document.getElementById("shows-overlay").addEventListener("click", e => {
-  if (e.target === document.getElementById("shows-overlay")) closeShows();
-});
-
 // ── Video popup ────────────────────────────────────────────────────────────
 let ytPlayer = null;
 window.onYouTubeIframeAPIReady = function() { window._ytAPIReady = true; };
@@ -773,7 +717,6 @@ document.addEventListener("keydown", e => {
   if (e.key === "Escape") {
     closeVideo();
     closeModal();
-    closeShows();
     closeBioFull();
   }
 });
