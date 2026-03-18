@@ -2,7 +2,7 @@ import express from "express";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, getSearchHistory, getRecentSearches } from "./db.js";
+import { initDb, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, getSearchHistory, getRecentSearches, saveFeedback, getFeedback } from "./db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -147,6 +147,25 @@ app.get("/api/user/history", async (req, res) => {
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   const history = await getSearchHistory(userId);
   res.json({ history });
+});
+
+// POST /api/feedback — save feedback from signed-in user
+app.post("/api/feedback", express.json(), async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { message, userEmail } = req.body;
+  if (!message?.trim()) { res.status(400).json({ error: "Message required" }); return; }
+  await saveFeedback(userId, userEmail ?? "", message.trim());
+  res.json({ ok: true });
+});
+
+// GET /api/admin/feedback — inbox, only for admin user
+app.get("/api/admin/feedback", async (req, res) => {
+  const userId = getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  const items = await getFeedback();
+  res.json({ items });
 });
 
 // GET /api/recent-searches — anonymous global feed

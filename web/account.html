@@ -107,13 +107,39 @@
       <div id="history-list" style="font-size:0.85rem;color:var(--muted)">Loading…</div>
 
       <hr class="section-divider" />
+
+      <!-- Admin inbox — only rendered for admin user -->
+      <div id="admin-inbox" style="display:none">
+        <h2 style="margin-bottom:0.5rem">Feedback Inbox</h2>
+        <div id="feedback-list" style="font-size:0.85rem;color:var(--muted)">Loading…</div>
+        <hr class="section-divider" />
+      </div>
+
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <button onclick="signOut()" style="background:none;border:none;color:#666;cursor:pointer;font-size:0.82rem;padding:0">Sign out</button>
+        <div style="display:flex;gap:1rem;align-items:center">
+          <button onclick="signOut()" style="background:none;border:none;color:#666;cursor:pointer;font-size:0.82rem;padding:0">Sign out</button>
+          <button onclick="openFeedback()" style="background:none;border:none;color:#e8a020;cursor:pointer;font-size:0.82rem;padding:0">Send feedback</button>
+        </div>
         <button onclick="deleteAccount()" class="danger-btn" style="font-size:0.82rem;padding:0.3rem 0.7rem">Delete account</button>
       </div>
     </div>
   </div>
 </main>
+
+<!-- Feedback modal -->
+<div id="feedback-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;display:none;align-items:center;justify-content:center">
+  <div style="background:#1a1a1a;border:1px solid #2e2e2e;border-radius:8px;padding:1.5rem;max-width:420px;width:90%;position:relative">
+    <h2 style="margin-top:0;font-size:1rem;color:var(--fg)">Send Feedback</h2>
+    <p style="font-size:0.82rem;color:var(--muted);margin-bottom:1rem">Bug reports, suggestions, anything — we read it all.</p>
+    <textarea id="feedback-text" placeholder="Your feedback…" rows="5"
+      style="width:100%;box-sizing:border-box;background:#0f0f0f;border:1px solid #2e2e2e;border-radius:6px;color:#e2e2e2;font-size:0.88rem;padding:0.6rem;resize:vertical;font-family:inherit"></textarea>
+    <div style="display:flex;justify-content:flex-end;gap:0.6rem;margin-top:0.8rem">
+      <button onclick="closeFeedback()" style="background:none;border:1px solid #444;color:#aaa;font-size:0.85rem">Cancel</button>
+      <button id="feedback-submit-btn" onclick="submitFeedback()">Send</button>
+    </div>
+    <p id="feedback-msg" style="font-size:0.82rem;color:#7ec87e;margin:0.5rem 0 0;display:none"></p>
+  </div>
+</div>
 
 <script>
 let clerk = null;
@@ -197,8 +223,8 @@ async function initClerk() {
 
 async function showAuthSection() {
   document.getElementById("auth-section").style.display = "block";
-  document.getElementById("user-email").textContent =
-    clerk.user?.primaryEmailAddress?.emailAddress ?? "";
+  const email = clerk.user?.primaryEmailAddress?.emailAddress ?? "";
+  document.getElementById("user-email").textContent = email;
 
   // Check if they already have a token saved
   const sessionToken = await clerk.session?.getToken();
@@ -219,6 +245,7 @@ async function showAuthSection() {
   }
 
   loadHistory();
+  loadAdminInbox();
 }
 
 async function saveToken() {
@@ -302,6 +329,69 @@ function paramsToUrl(p) {
   if (p.type)          u.set("rt", p.type);
   if (p.sort)          u.set("sr", p.sort);
   return "/?" + u.toString();
+}
+
+function openFeedback() {
+  const ov = document.getElementById("feedback-overlay");
+  ov.style.display = "flex";
+  document.getElementById("feedback-text").focus();
+}
+
+function closeFeedback() {
+  document.getElementById("feedback-overlay").style.display = "none";
+  document.getElementById("feedback-text").value = "";
+  document.getElementById("feedback-msg").style.display = "none";
+}
+
+async function submitFeedback() {
+  const message = document.getElementById("feedback-text").value.trim();
+  if (!message) return;
+  const btn = document.getElementById("feedback-submit-btn");
+  btn.disabled = true; btn.textContent = "Sending…";
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const userEmail = clerk.user?.primaryEmailAddress?.emailAddress ?? "";
+    const r = await fetch("/api/feedback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
+      body: JSON.stringify({ message, userEmail }),
+    });
+    if (r.ok) {
+      const msg = document.getElementById("feedback-msg");
+      msg.textContent = "Thanks — feedback sent!";
+      msg.style.display = "block";
+      document.getElementById("feedback-text").value = "";
+      setTimeout(closeFeedback, 1500);
+    } else {
+      alert("Error sending feedback.");
+    }
+  } finally {
+    btn.disabled = false; btn.textContent = "Send";
+  }
+}
+
+async function loadAdminInbox() {
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const r = await fetch("/api/admin/feedback", {
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
+    });
+    if (!r.ok) return; // not admin — stay hidden
+    const { items } = await r.json();
+    document.getElementById("admin-inbox").style.display = "block";
+    const el = document.getElementById("feedback-list");
+    if (!items.length) { el.textContent = "No feedback yet."; return; }
+    el.innerHTML = items.map(({ user_email, message, created_at }) => {
+      const date = new Date(created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+      return `<div style="padding:0.6rem 0;border-bottom:1px solid #222">
+        <div style="display:flex;justify-content:space-between;margin-bottom:0.25rem">
+          <span style="color:#aaa;font-size:0.8rem">${user_email || "unknown"}</span>
+          <span style="color:#555;font-size:0.75rem">${date}</span>
+        </div>
+        <div style="color:var(--fg)">${message.replace(/</g,"&lt;")}</div>
+      </div>`;
+    }).join("");
+  } catch { /* not admin or error — ignore */ }
 }
 
 async function signOut() {
