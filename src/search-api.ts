@@ -6,11 +6,13 @@ import { initDb, getUserToken, setUserToken, deleteUserToken, saveSearch, getSea
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const sharedToken = process.env.DISCOGS_TOKEN ?? "";
-const anthropicKey     = process.env.ANTHROPIC_API_KEY     ?? "";
-const ticketmasterKey  = process.env.TICKETMASTER_API_KEY  ?? "";
+const sharedToken     = process.env.DISCOGS_TOKEN ?? "";
+const anthropicKey    = process.env.ANTHROPIC_API_KEY    ?? "";
+const ticketmasterKey = process.env.TICKETMASTER_API_KEY ?? "";
 // Publishable key sent to frontend via /api/config
-const authPk = process.env.AUTH_PK ?? "";
+const authPk      = process.env.AUTH_PK ?? "";
+// Set REQUIRE_AUTH=true to require users to sign in and provide their own Discogs token
+const requireAuth = process.env.REQUIRE_AUTH === "true";
 
 // Shared Discogs client (used as fallback when user has no personal token)
 const discogs = sharedToken ? new DiscogsClient(sharedToken) : null;
@@ -26,24 +28,20 @@ function getClerkUserId(req: express.Request): string | null {
   } catch { return null; }
 }
 
-// Resolve Discogs token for the current request: user token only (no shared fallback)
-async function getTokenForRequest(req: express.Request): Promise<string | null> {
+// Resolve Discogs token: user token → (if auth not required) shared token → null
+async function getTokenForRequest(req: express.Request, allowFallback = false): Promise<string | null> {
   const userId = getClerkUserId(req);
   if (userId) {
     const userToken = await getUserToken(userId);
     if (userToken) return userToken;
   }
+  // Fall back to shared token when auth is disabled OR when explicitly allowed (bio endpoints)
+  if (!requireAuth || allowFallback) return sharedToken || null;
   return null;
 }
 
-// For endpoints that can work without auth (bio lookups etc.) fall back to shared token
-async function getTokenForRequestWithFallback(req: express.Request): Promise<string | null> {
-  const t = await getTokenForRequest(req);
-  return t ?? (sharedToken || null);
-}
-
 async function getDiscogsForRequest(req: express.Request, allowFallback = false): Promise<DiscogsClient | null> {
-  const t = allowFallback ? await getTokenForRequestWithFallback(req) : await getTokenForRequest(req);
+  const t = await getTokenForRequest(req, allowFallback);
   if (!t) return null;
   if (t === sharedToken && discogs) return discogs;
   return new DiscogsClient(t);
@@ -89,7 +87,7 @@ app.use((_req, res, next) => {
 
 // GET /api/config — public config for the frontend
 app.get("/api/config", (_req, res) => {
-  res.json({ clerkPublishableKey: authPk });
+  res.json({ clerkPublishableKey: authPk, authEnabled: requireAuth });
 });
 
 // GET /api/user/token — returns whether the user has a token saved
