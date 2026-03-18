@@ -194,7 +194,7 @@ For each item include:
 - name: artist name, or "Album Title by Artist"
 - type: "artist" or "release"
 - description: one compelling sentence explaining why this fits
-- discogsParams: object with relevant Discogs search fields only (choose from: q, artist, label, genre, style, year)
+- discogsParams: object with relevant Discogs search fields only (choose from: q, artist, label, genre, style, year). year must be a single 4-digit year, never a range.
 
 Return ONLY a valid JSON array, no markdown, no explanation.`;
 

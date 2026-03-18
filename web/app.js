@@ -672,7 +672,8 @@ async function doAiSearch(q) {
           if (p.label)  params.set("lb", p.label);
           if (p.genre)  params.set("gn", p.genre);
           if (p.style)  params.set("st", p.style);
-          if (p.year)   params.set("yr", p.year);
+          const yr = p.year ? String(p.year).split(/[-–]/)[0].trim() : "";
+          if (/^\d{4}$/.test(yr)) params.set("yr", yr);
           const href = "/?" + params.toString();
           return `<div style="padding:0.75rem 0;border-bottom:1px solid #222">
             <div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem">
