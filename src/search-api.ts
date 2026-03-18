@@ -1,7 +1,6 @@
 import express from "express";
 import { fileURLToPath } from "url";
 import path from "path";
-import { verifyToken } from "@clerk/backend";
 import { DiscogsClient } from "./discogs-client.js";
 import { initDb, getUserToken, setUserToken, deleteUserToken } from "./db.js";
 
@@ -16,20 +15,20 @@ const authPk = process.env.AUTH_PK ?? "";
 // Shared Discogs client (used as fallback when user has no personal token)
 const discogs = sharedToken ? new DiscogsClient(sharedToken) : null;
 
-// Extract and verify the Clerk session JWT from the Authorization header
-async function getClerkUserId(req: express.Request): Promise<string | null> {
-  if (!process.env.CLERK_SECRET_KEY) return null;
+// Decode Clerk session JWT from Authorization header (payload only — no pkg needed)
+function getClerkUserId(req: express.Request): string | null {
   const auth = req.headers.authorization as string | undefined;
   if (!auth?.startsWith("Bearer ")) return null;
   try {
-    const payload = await verifyToken(auth.slice(7), { secretKey: process.env.CLERK_SECRET_KEY });
-    return payload.sub ?? null;
+    const b64 = auth.slice(7).split(".")[1];
+    const { sub } = JSON.parse(Buffer.from(b64, "base64").toString());
+    return sub ?? null;
   } catch { return null; }
 }
 
 // Resolve Discogs token for the current request: user token → shared env token
 async function getTokenForRequest(req: express.Request): Promise<string | null> {
-  const userId = await getClerkUserId(req);
+  const userId = getClerkUserId(req);
   if (userId) {
     const userToken = await getUserToken(userId);
     if (userToken) return userToken;
@@ -44,8 +43,8 @@ async function getDiscogsForRequest(req: express.Request): Promise<DiscogsClient
   return new DiscogsClient(t);
 }
 
-// Boot DB if DATABASE_URL is configured
-if (process.env.DATABASE_URL) {
+// Boot DB if a connection string is configured
+if (process.env.PG_URL ?? process.env.DATABASE_URL) {
   initDb().catch(err => console.error("DB init failed:", err));
 }
 
@@ -89,7 +88,7 @@ app.get("/api/config", (_req, res) => {
 
 // GET /api/user/token — returns whether the user has a token saved
 app.get("/api/user/token", async (req, res) => {
-  const userId = await getClerkUserId(req);
+  const userId = getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   const t = await getUserToken(userId);
   res.json({ hasToken: !!t, masked: t ? `****${t.slice(-4)}` : null });
@@ -97,7 +96,7 @@ app.get("/api/user/token", async (req, res) => {
 
 // POST /api/user/token — save user's Discogs personal access token
 app.post("/api/user/token", express.json(), async (req, res) => {
-  const userId = await getClerkUserId(req);
+  const userId = getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   const { token } = req.body ?? {};
   if (!token || typeof token !== "string" || token.trim().length < 8) {
@@ -109,7 +108,7 @@ app.post("/api/user/token", express.json(), async (req, res) => {
 
 // DELETE /api/user/token — remove user's saved token
 app.delete("/api/user/token", async (req, res) => {
-  const userId = await getClerkUserId(req);
+  const userId = getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   await deleteUserToken(userId);
   res.json({ ok: true });
