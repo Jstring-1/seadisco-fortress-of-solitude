@@ -1128,14 +1128,19 @@ window.addEventListener("popstate", () => {
     const pk = cfg.clerkPublishableKey;
     if (!pk) return; // auth not configured on this server
 
+    const frontendApi = atob(pk.replace(/^pk_(test|live)_/, "")).replace(/\$$/, "");
     await new Promise((resolve, reject) => {
       const s = document.createElement("script");
-      s.src = "https://cdn.jsdelivr.net/npm/@clerk/clerk-js@latest/dist/clerk.browser.js";
+      s.src = `https://${frontendApi}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js`;
+      s.setAttribute("data-clerk-publishable-key", pk);
+      s.setAttribute("crossorigin", "anonymous");
       s.onload = resolve; s.onerror = reject;
       document.head.appendChild(s);
     });
 
-    window._clerk = new window.Clerk(pk);
+    await new Promise(r => setTimeout(r, 50));
+    window._clerk = window.Clerk;
+    if (!window._clerk) return;
     await window._clerk.load();
 
     const authBar = document.getElementById("auth-status");
@@ -1143,9 +1148,9 @@ window.addEventListener("popstate", () => {
 
     if (window._clerk.user) {
       const email = window._clerk.user.primaryEmailAddress?.emailAddress ?? "account";
-      authBar.innerHTML = `<a href="/account.html">${email}</a>`;
+      authBar.innerHTML = `<a href="/account">${email}</a>`;
     } else {
-      authBar.innerHTML = `<a href="/account.html">sign in</a>`;
+      authBar.innerHTML = `<a href="/account">sign in</a>`;
     }
   } catch { /* auth unavailable — site works fine without it */ }
 })();
