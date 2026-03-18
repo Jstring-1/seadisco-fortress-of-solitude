@@ -1133,9 +1133,8 @@ window.addEventListener("popstate", () => {
 (async function initAuth() {
   try {
     const cfg = await fetch("/api/config").then(r => r.json()).catch(() => ({}));
-    if (!cfg.authEnabled) return; // auth disabled server-side — hide account UI entirely
     const pk = cfg.clerkPublishableKey;
-    if (!pk) return;
+    if (!pk) return; // Clerk not configured — no account UI
 
     const frontendApi = atob(pk.replace(/^pk_(test|live)_/, "")).replace(/\$$/, "");
     await new Promise((resolve, reject) => {
