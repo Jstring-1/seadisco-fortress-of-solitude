@@ -2,7 +2,7 @@ import express from "express";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, getSearchHistory, getRecentSearches, saveFeedback, getFeedback, deleteFeedback } from "./db.js";
+import { initDb, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, getSearchHistory, getRecentSearches, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, upsertCollectionItems, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, updateCollectionSyncedAt, updateWantlistSyncedAt } from "./db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -118,6 +118,16 @@ app.post("/api/user/token", express.json(), async (req, res) => {
     res.status(400).json({ error: "Invalid token" }); return;
   }
   await setUserToken(userId, token.trim());
+  // Fetch Discogs username from /oauth/identity using the user's token
+  try {
+    const identRes = await fetch("https://api.discogs.com/oauth/identity", {
+      headers: { "Authorization": `Discogs token=${token.trim()}`, "User-Agent": "SeaDisco/1.0" }
+    });
+    if (identRes.ok) {
+      const ident = await identRes.json() as { username?: string };
+      if (ident.username) await setDiscogsUsername(userId, ident.username);
+    }
+  } catch {}
   res.json({ ok: true });
 });
 
@@ -135,6 +145,123 @@ app.delete("/api/user/account", async (req, res) => {
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   await deleteUserData(userId);
   res.json({ ok: true });
+});
+
+// POST /api/user/sync — sync collection and/or wantlist from Discogs
+app.post("/api/user/sync", express.json(), async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const { type = "both" } = req.body ?? {};
+  const syncCollection = type === "collection" || type === "both";
+  const syncWantlist   = type === "wantlist"   || type === "both";
+
+  // Check cooldown: skip if synced within last hour
+  const syncStatus = await getSyncStatus(userId);
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+  const collectionRecent = syncCollection && syncStatus.collectionSyncedAt && syncStatus.collectionSyncedAt > oneHourAgo;
+  const wantlistRecent   = syncWantlist   && syncStatus.wantlistSyncedAt   && syncStatus.wantlistSyncedAt   > oneHourAgo;
+  if ((syncCollection && collectionRecent) || (syncWantlist && wantlistRecent)) {
+    res.json({ ok: true, skipped: true, reason: "Recently synced" });
+    return;
+  }
+
+  const token    = await getUserToken(userId);
+  const username = await getDiscogsUsername(userId);
+  if (!token || !username) {
+    res.status(400).json({ error: "No Discogs token or username found" });
+    return;
+  }
+
+  const headers = { "Authorization": `Discogs token=${token}`, "User-Agent": "SeaDisco/1.0" };
+  const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+  let collectionCount = 0;
+  let wantlistCount   = 0;
+
+  try {
+    if (syncCollection && !collectionRecent) {
+      for (let page = 1; page <= 10; page++) {
+        if (page > 1) await delay(1000);
+        const r = await fetch(
+          `https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=100&page=${page}`,
+          { headers }
+        );
+        if (!r.ok) break;
+        const data = await r.json() as any;
+        const releases: any[] = data.releases ?? [];
+        if (!releases.length) break;
+        const items = releases.map((item: any) => ({
+          id:      item.basic_information?.id as number,
+          data:    item.basic_information as object,
+          addedAt: item.date_added ? new Date(item.date_added) : undefined,
+        })).filter(i => i.id);
+        await upsertCollectionItems(userId, items);
+        collectionCount += items.length;
+        if (releases.length < 100) break;
+      }
+      await updateCollectionSyncedAt(userId);
+    }
+
+    if (syncWantlist && !wantlistRecent) {
+      for (let page = 1; page <= 10; page++) {
+        if (page > 1) await delay(1000);
+        const r = await fetch(
+          `https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=100&page=${page}`,
+          { headers }
+        );
+        if (!r.ok) break;
+        const data = await r.json() as any;
+        const wants: any[] = data.wants ?? [];
+        if (!wants.length) break;
+        const items = wants.map((item: any) => ({
+          id:      item.id as number,
+          data:    item.basic_information as object,
+          addedAt: item.date_added ? new Date(item.date_added) : undefined,
+        })).filter(i => i.id);
+        await upsertWantlistItems(userId, items);
+        wantlistCount += items.length;
+        if (wants.length < 100) break;
+      }
+      await updateWantlistSyncedAt(userId);
+    }
+
+    res.json({ ok: true, collectionCount, wantlistCount });
+  } catch (err) {
+    console.error("Sync error:", err);
+    res.status(500).json({ error: "Sync failed" });
+  }
+});
+
+// GET /api/user/collection — paginated cached collection
+app.get("/api/user/collection", async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const page    = parseInt(req.query.page    as string) || 1;
+  const perPage = parseInt(req.query.per_page as string) || 25;
+  const { items, total } = await getCollectionPage(userId, page, perPage);
+  res.json({ items, total, page, pages: Math.ceil(total / perPage) });
+});
+
+// GET /api/user/wantlist — paginated cached wantlist
+app.get("/api/user/wantlist", async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const page    = parseInt(req.query.page    as string) || 1;
+  const perPage = parseInt(req.query.per_page as string) || 25;
+  const { items, total } = await getWantlistPage(userId, page, perPage);
+  res.json({ items, total, page, pages: Math.ceil(total / perPage) });
+});
+
+// GET /api/user/discogs-ids — collection and wantlist IDs for badge rendering
+app.get("/api/user/discogs-ids", async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const [collectionIds, wantlistIds] = await Promise.all([
+    getCollectionIds(userId),
+    getWantlistIds(userId),
+  ]);
+  res.json({ collectionIds, wantlistIds });
 });
 
 function stripArtistSuffix(name: string | undefined): string | undefined {
