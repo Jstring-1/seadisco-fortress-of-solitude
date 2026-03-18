@@ -130,13 +130,21 @@ async function initClerk() {
 
   document.getElementById("loading-section").style.display = "none";
 
+  // Listen for auth state changes — handles sign-in completing inside the embedded widget
+  clerk.addListener(({ user }) => {
+    if (user && document.getElementById("auth-section").style.display !== "block") {
+      document.getElementById("signed-out-section").style.display = "none";
+      showAuthSection();
+    }
+  });
+
   if (clerk.user) {
     showAuthSection();
   } else {
     document.getElementById("signed-out-section").style.display = "block";
     clerk.mountSignIn(document.getElementById("clerk-sign-in"), {
-      afterSignInUrl: "/account",
-      afterSignUpUrl: "/account",
+      fallbackRedirectUrl: "/account",
+      forceRedirectUrl: "/account",
       appearance: {
         baseTheme: undefined,
         variables: {
