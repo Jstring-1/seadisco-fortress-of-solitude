@@ -2,7 +2,7 @@ import express from "express";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, getSearchHistory } from "./db.js";
+import { initDb, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, getSearchHistory, getRecentSearches } from "./db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -147,6 +147,15 @@ app.get("/api/user/history", async (req, res) => {
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   const history = await getSearchHistory(userId);
   res.json({ history });
+});
+
+// GET /api/recent-searches — anonymous global feed
+app.get("/api/recent-searches", async (_req, res) => {
+  if (!process.env.APP_DB_URL) { res.json({ searches: [] }); return; }
+  try {
+    const searches = await getRecentSearches(20);
+    res.json({ searches });
+  } catch { res.json({ searches: [] }); }
 });
 
 // GET /search?q=pink+floyd&type=master&year=1973&page=1&per_page=10

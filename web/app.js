@@ -98,6 +98,7 @@ function clearForm() {
   document.getElementById("f-style").disabled = true;
   document.querySelector('input[name="result-type"][value=""]').checked = true;
   document.getElementById("powered-by").style.display = "";
+  document.getElementById("recent-feed").style.display = "block";
   document.getElementById("search-desc").textContent = "";
   document.getElementById("search-pipe").style.display = "none";
   document.getElementById("type-desc").textContent = "";
@@ -130,6 +131,7 @@ async function doSearch(page = 1, skipPushState = false) {
   if (page === 1) detectedArtist = null;
 
   currentPage = page;
+  document.getElementById("recent-feed").style.display = "none";
   document.getElementById("search-btn").disabled = true;
   document.getElementById("pagination").style.display = "none";
   document.getElementById("blurb").style.display = "none";
@@ -1061,12 +1063,64 @@ window.addEventListener("popstate", () => {
   }
 });
 
+// ── Recent searches feed ─────────────────────────────────────────────────
+function feedLabel(p) {
+  const parts = [];
+  if (p.q)             parts.push(p.q);
+  if (p.artist)        parts.push(p.artist);
+  if (p.release_title) parts.push(`"${p.release_title}"`);
+  if (p.label)         parts.push(`${p.label} label`);
+  if (p.genre)         parts.push(p.genre);
+  if (p.style)         parts.push(p.style);
+  if (p.format && p.format !== "Vinyl") parts.push(p.format);
+  if (p.year)          parts.push(p.year);
+  return parts.join(" · ") || "Search";
+}
+
+function feedApply(p) {
+  document.getElementById("query").value     = p.q             ?? "";
+  document.getElementById("f-artist").value  = p.artist        ?? "";
+  document.getElementById("f-release").value = p.release_title ?? "";
+  document.getElementById("f-year").value    = p.year          ?? "";
+  document.getElementById("f-label").value   = p.label         ?? "";
+  document.getElementById("f-format").value  = p.format        || "Vinyl";
+  document.getElementById("f-genre").value   = p.genre         ?? "";
+  populateStyles();
+  document.getElementById("f-style").value   = p.style         ?? "";
+  const radio = document.querySelector(`input[name="result-type"][value="${p.type ?? ""}"]`);
+  if (radio) radio.checked = true;
+  document.getElementById("f-sort").value    = p.sort          ?? "";
+  doSearch(1);
+}
+
+async function loadRecentFeed() {
+  const el = document.getElementById("recent-feed");
+  if (!el) return;
+  try {
+    const data = await fetch("/api/recent-searches").then(r => r.json());
+    const searches = data.searches ?? [];
+    if (!searches.length) return;
+    el.innerHTML = `<div class="feed-label">Recent searches</div>
+      <div class="feed-pills">${
+        searches.map((s, i) =>
+          `<span class="feed-pill" data-idx="${i}">${feedLabel(s.params)}</span>`
+        ).join("")
+      }</div>`;
+    el.querySelectorAll(".feed-pill").forEach((pill, i) => {
+      pill.addEventListener("click", () => feedApply(searches[i].params));
+    });
+    el.style.display = "block";
+  } catch { /* no feed available */ }
+}
+
 // ── Restore from URL on page load ────────────────────────────────────────
 (function () {
   const p = new URLSearchParams(location.search);
   if (p.toString()) {
     restoreFromParams(p);
     doSearch(parseInt(p.get("pg") ?? "1"), true);
+  } else {
+    loadRecentFeed();
   }
 })();
 

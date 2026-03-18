@@ -89,6 +89,18 @@ export async function deleteUserToken(clerkUserId: string): Promise<void> {
   );
 }
 
+export async function getRecentSearches(limit = 20): Promise<Array<{ params: Record<string, string>; searched_at: string }>> {
+  const r = await getPool().query(
+    `SELECT params, MAX(searched_at) AS searched_at
+     FROM search_history
+     GROUP BY params
+     ORDER BY MAX(searched_at) DESC
+     LIMIT $1`,
+    [limit]
+  );
+  return r.rows;
+}
+
 export async function deleteUserData(clerkUserId: string): Promise<void> {
   await getPool().query("DELETE FROM user_tokens    WHERE clerk_user_id = $1", [clerkUserId]);
   await getPool().query("DELETE FROM search_history WHERE clerk_user_id = $1", [clerkUserId]);
