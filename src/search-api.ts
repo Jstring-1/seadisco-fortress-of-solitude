@@ -44,7 +44,7 @@ async function getDiscogsForRequest(req: express.Request): Promise<DiscogsClient
 }
 
 // Boot DB if a connection string is configured
-if (process.env.PG_URL ?? process.env.DATABASE_URL) {
+if (process.env.APP_DB_URL) {
   initDb().catch(err => console.error("DB init failed:", err));
 }
 
