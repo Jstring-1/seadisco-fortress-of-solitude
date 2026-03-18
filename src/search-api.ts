@@ -2,7 +2,7 @@ import express from "express";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, getSearchHistory, getRecentSearches, saveFeedback, getFeedback } from "./db.js";
+import { initDb, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, getSearchHistory, getRecentSearches, saveFeedback, getFeedback, deleteFeedback } from "./db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -166,6 +166,15 @@ app.get("/api/admin/feedback", async (req, res) => {
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   const items = await getFeedback();
   res.json({ items });
+});
+
+// DELETE /api/admin/feedback/:id — delete a feedback item, admin only
+app.delete("/api/admin/feedback/:id", async (req, res) => {
+  const userId = getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  await deleteFeedback(parseInt(req.params.id));
+  res.json({ ok: true });
 });
 
 // GET /api/recent-searches — anonymous global feed

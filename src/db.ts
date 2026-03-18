@@ -137,6 +137,10 @@ export async function getFeedback(): Promise<Array<{ id: number; user_email: str
   return r.rows;
 }
 
+export async function deleteFeedback(id: number): Promise<void> {
+  await getPool().query(`DELETE FROM feedback WHERE id = $1`, [id]);
+}
+
 export async function deleteUserData(clerkUserId: string): Promise<void> {
   await getPool().query("DELETE FROM user_tokens    WHERE clerk_user_id = $1", [clerkUserId]);
   await getPool().query("DELETE FROM search_history WHERE clerk_user_id = $1", [clerkUserId]);
