@@ -21,6 +21,47 @@ export async function initDb() {
       updated_at    TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS search_history (
+      id            SERIAL PRIMARY KEY,
+      clerk_user_id TEXT NOT NULL,
+      params        JSONB NOT NULL,
+      searched_at   TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await getPool().query(`
+    CREATE INDEX IF NOT EXISTS search_history_user_idx
+    ON search_history (clerk_user_id, searched_at DESC)
+  `);
+}
+
+export async function saveSearch(clerkUserId: string, params: Record<string, string>): Promise<void> {
+  await getPool().query(
+    `INSERT INTO search_history (clerk_user_id, params) VALUES ($1, $2)`,
+    [clerkUserId, JSON.stringify(params)]
+  );
+  // Keep only the most recent 50 searches per user
+  await getPool().query(
+    `DELETE FROM search_history
+     WHERE clerk_user_id = $1
+       AND id NOT IN (
+         SELECT id FROM search_history
+         WHERE clerk_user_id = $1
+         ORDER BY searched_at DESC
+         LIMIT 50
+       )`,
+    [clerkUserId]
+  );
+}
+
+export async function getSearchHistory(clerkUserId: string, limit = 25): Promise<Array<{ params: Record<string, string>; searched_at: string }>> {
+  const r = await getPool().query(
+    `SELECT params, searched_at FROM search_history
+     WHERE clerk_user_id = $1
+     ORDER BY searched_at DESC LIMIT $2`,
+    [clerkUserId, limit]
+  );
+  return r.rows;
 }
 
 export async function getUserToken(clerkUserId: string): Promise<string | null> {
