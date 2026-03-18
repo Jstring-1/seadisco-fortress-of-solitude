@@ -667,8 +667,16 @@ async function doAiSearch(q) {
         ${recommendations.map(rec => {
           const params = new URLSearchParams();
           const p = rec.discogsParams ?? {};
-          if (p.q)      params.set("q",  p.q);
-          if (p.artist) params.set("ar", p.artist);
+          // For artist-type recs use ar= directly; for releases use q= or re=
+          if (rec.type === "artist" && p.artist) {
+            params.set("ar", p.artist);
+          } else if (rec.type === "release" && p.artist) {
+            params.set("ar", p.artist);
+            if (p.q) params.set("re", p.q);
+          } else {
+            if (p.q)      params.set("q",  p.q);
+            if (p.artist) params.set("ar", p.artist);
+          }
           if (p.label)  params.set("lb", p.label);
           if (p.genre)  params.set("gn", p.genre);
           if (p.style)  params.set("st", p.style);
