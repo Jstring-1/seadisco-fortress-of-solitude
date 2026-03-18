@@ -359,7 +359,13 @@ async function doSearch(page = 1, skipPushState = false) {
         const entityType = artist ? 'artist' : label ? 'label' : genre ? 'genre' : 'artist';
         window._currentBio = {
           name: bioData.name, text: bioData.profile ?? null, wiki: bioData.wikiExtract ?? null,
-          members: bioData.members ?? [], groups: bioData.groups ?? [], aliases: bioData.aliases ?? [],
+          members:        bioData.members        ?? [],
+          groups:         bioData.groups         ?? [],
+          aliases:        bioData.aliases        ?? [],
+          namevariations: bioData.namevariations ?? [],
+          urls:           bioData.urls           ?? [],
+          parentLabel:    bioData.parentLabel    ?? null,
+          sublabels:      bioData.sublabels      ?? [],
           discogsId: bioData.discogsId ?? null,
         };
 
@@ -387,7 +393,11 @@ async function doSearch(page = 1, skipPushState = false) {
           ? `<div style="margin-top:0.3rem"><a href="${discogsHref}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#666;text-decoration:none">View on Discogs ↗</a></div>`
           : "";
 
-        const relLinks = renderArtistRelations(bioData.members ?? [], bioData.groups ?? [], bioData.aliases ?? []);
+        const relLinks = renderArtistRelations(
+          bioData.members        ?? [], bioData.groups    ?? [], bioData.aliases  ?? [],
+          bioData.namevariations ?? [], bioData.urls      ?? [],
+          bioData.parentLabel    ?? null, bioData.sublabels ?? []
+        );
         const bioHtml  = rawBioText ? renderBioMarkup(truncatedRaw) : escHtml(truncatedRaw);
         blurbEl.innerHTML = heading + bioHtml + readMore + relLinks + discogsLink;
         blurbEl.style.display = "block";
@@ -610,10 +620,15 @@ function openBioFull(event) {
   const u = new URL(window.location.href);
   u.searchParams.set("bi", "1");
   history.replaceState({}, "", u.toString());
-  const { name, text, wiki, members = [], groups = [], aliases = [], discogsId = null } = window._currentBio ?? {};
+  const {
+    name, text, wiki, discogsId = null,
+    members = [], groups = [], aliases = [],
+    namevariations = [], urls = [],
+    parentLabel = null, sublabels = [],
+  } = window._currentBio ?? {};
   document.getElementById("bio-full-name").textContent = name ?? "";
   let html = renderBioMarkup(text ?? "");
-  const relLinks = renderArtistRelations(members, groups, aliases);
+  const relLinks = renderArtistRelations(members, groups, aliases, namevariations, urls, parentLabel, sublabels);
   if (relLinks) html += relLinks;
   if (wiki) {
     html += `<hr style="border:none;border-top:1px solid var(--border);margin:1.25rem 0 1rem">
@@ -790,7 +805,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const allImages = (d.images ?? []).map(i => i.uri).filter(Boolean);
   if (allImages.length === 0 && searchResult.cover_image) allImages.push(searchResult.cover_image);
   const img      = allImages[0] ?? "";
-  const released    = d.released ?? "";
+  const released    = d.released_formatted ?? d.released ?? "";
   const formats     = (d.formats ?? []).map(f =>
     [f.name, ...(f.descriptions ?? [])].filter(Boolean).join(" · ")
   ).join("; ") || (searchResult.format ?? []).join(" · ");
@@ -835,6 +850,25 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     .map(t => `<span class="detail-label">${escHtml(t)}</span><span>${escHtml(identifierGroups[t])}</span>`)
     .join("");
 
+  // Companies — group by entity type, show vinyl-relevant ones
+  const companyTypes = ["Pressed By","Manufactured By","Mastered At","Recorded At","Mixed At","Distributed By","Licensed From","Phonographic Copyright (p)"];
+  const companyGroups: Record<string,string[]> = {};
+  for (const c of (d.companies ?? [])) {
+    const t = c.entity_type_name as string;
+    if (companyTypes.includes(t)) {
+      if (!companyGroups[t]) companyGroups[t] = [];
+      companyGroups[t].push(c.name as string);
+    }
+  }
+  const companyRows = companyTypes
+    .filter(t => companyGroups[t])
+    .map(t => `<span class="detail-label">${escHtml(t)}</span><span>${escHtml(companyGroups[t].join(", "))}</span>`)
+    .join("");
+
+  const seriesText = (d.series ?? [])
+    .map((s: any) => s.catno ? `${s.name} (${s.catno})` : s.name)
+    .filter(Boolean).join(", ");
+
   const isMaster = searchResult.type === "master";
   const detailRows = [
     labels  ? `<span class="detail-label">Label</span><span>${escHtml(labels)}</span>`   : "",
@@ -843,6 +877,8 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     genres  ? `<span class="detail-label">Genre</span><span>${escHtml(genres)}</span>`   : "",
     (!isMaster && catno) ? `<span class="detail-label">Cat#</span><span>${escHtml(catno)}</span>` : "",
     year    ? `<span class="detail-label">Year</span><span>${escHtml(String(year))}</span>` : "",
+    seriesText ? `<span class="detail-label">Series</span><span>${escHtml(seriesText)}</span>` : "",
+    companyRows,
     identifierRows,
   ].filter(Boolean).join("");
 
@@ -884,6 +920,15 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         <h2>${escHtml(title)}</h2>
         ${artists.length ? `<div class="album-artist">${artists.map(n => `<a href="#" class="modal-artist-link" data-artist="${escHtml(n)}" onclick="searchArtistFromModal(event,this)">${escHtml(n)}</a>`).join(", ")}</div>` : ""}
         ${detailRows ? `<div class="album-detail-grid">${detailRows}</div>` : ""}
+        ${(() => {
+          const r = d.community?.rating;
+          const have = d.community?.have;
+          const want = d.community?.want;
+          const parts = [];
+          if (r?.count > 0) parts.push(`★ ${parseFloat(r.average).toFixed(2)} <span style="color:#555">(${r.count.toLocaleString()} ratings)</span>`);
+          if (have || want) parts.push(`${(have ?? 0).toLocaleString()} have · ${(want ?? 0).toLocaleString()} want`);
+          return parts.length ? `<div style="font-size:0.72rem;color:#888;margin-top:0.35rem">${parts.join('<span style="color:#444;margin:0 0.35em">·</span>')}</div>` : "";
+        })()}
         ${discogsUrl ? `<a href="${discogsUrl}" target="_blank" rel="noopener" style="font-size:0.75rem;color:var(--accent);text-decoration:none;margin-top:0.5rem;display:inline-block">View on Discogs ↗</a>` : ""}
         ${stats?.numForSale > 0 && stats?.lowestPrice != null
           ? `<a href="https://www.discogs.com/sell/list?release_id=${escHtml(String(stats.releaseId))}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#888;text-decoration:none;margin-top:0.2rem;display:block">${escHtml(String(stats.numForSale))} available from $${parseFloat(stats.lowestPrice).toFixed(2)}</a>`
@@ -940,7 +985,7 @@ function setStatus(msg, isError = false) {
   el.className = isError ? "error" : "";
 }
 
-function renderArtistRelations(members, groups, aliases) {
+function renderArtistRelations(members = [], groups = [], aliases = [], namevariations = [], urls = [], parentLabel = null, sublabels = []) {
   const row = (label, items) => {
     if (!items.length) return "";
     const links = items.map(a =>
@@ -950,7 +995,28 @@ function renderArtistRelations(members, groups, aliases) {
               <span style="color:#777;margin-right:0.4em">${label}:</span>${links}
             </div>`;
   };
-  const html = row("Members", members) + row("Also in", groups) + row("Aliases", aliases);
+  const textRow = (label, items) => {
+    if (!items.length) return "";
+    return `<div style="font-size:0.78rem;margin-top:0.55rem;line-height:1.6">
+              <span style="color:#777;margin-right:0.4em">${label}:</span>${escHtml(items.join(" · "))}
+            </div>`;
+  };
+  const urlRow = (label, items) => {
+    if (!items.length) return "";
+    const links = items.map(u =>
+      `<a href="${escHtml(u)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${escHtml(u.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</a>`
+    ).join('<span style="color:#555;margin:0 0.2em">·</span>');
+    return `<div style="font-size:0.78rem;margin-top:0.55rem;line-height:1.6">
+              <span style="color:#777;margin-right:0.4em">${label}:</span>${links}
+            </div>`;
+  };
+  const html = row("Members", members)
+    + row("Also in", groups)
+    + row("Aliases", aliases)
+    + textRow("Also known as", namevariations)
+    + (parentLabel ? row("Part of", [parentLabel]) : "")
+    + row("Sub-labels", sublabels)
+    + urlRow("Links", urls);
   return html ? `<div style="margin-top:0.6rem;padding-top:0.5rem;border-top:1px solid var(--border)">${html}</div>` : "";
 }
 
