@@ -84,7 +84,9 @@
       <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="artist"> Artists</label>
       <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="label"> Labels</label>
     </div>
-    <label class="sort-label">
+  </div>
+  <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;align-items:center">
+    <label class="sort-label" style="flex-shrink:0">
       Sort
       <select id="f-sort" style="font-size:0.78rem;padding:0.3rem 0.4rem;color-scheme:dark">
         <option value="">Relevance</option>
@@ -95,8 +97,6 @@
         <option value="label:asc">Label A→Z</option>
       </select>
     </label>
-  </div>
-  <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;align-items:center">
     <button id="search-btn" onclick="doSearch(1)" style="flex:1">Search</button>
   </div>
   <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:#555;margin-bottom:1.25rem;min-height:1em">
