@@ -348,9 +348,11 @@ app.get("/artist-bio", async (req, res) => {
         name: artist?.name ?? nameRaw,
         alternatives: [],
         wikiExtract: wikiResult?.extract ?? null,
-        members: mapNames(artist?.members ?? []),
-        groups:  mapNames(artist?.groups  ?? []),
-        aliases: mapNames(artist?.aliases ?? []),
+        members:        mapNames(artist?.members ?? []),
+        groups:         mapNames(artist?.groups  ?? []),
+        aliases:        mapNames(artist?.aliases ?? []),
+        namevariations: (artist?.namevariations ?? []).filter(Boolean),
+        urls:           (artist?.urls ?? []).filter(Boolean),
       });
     } catch (err) {
       console.error(err);
@@ -424,9 +426,11 @@ app.get("/artist-bio", async (req, res) => {
       discogsId: best.id ?? null,
       alternatives,
       wikiExtract: wikiResult?.extract ?? null,
-      members: mapNames(artist?.members ?? []),
-      groups:  mapNames(artist?.groups  ?? []),
-      aliases: mapNames(artist?.aliases ?? []),
+      members:        mapNames(artist?.members ?? []),
+      groups:         mapNames(artist?.groups  ?? []),
+      aliases:        mapNames(artist?.aliases ?? []),
+      namevariations: (artist?.namevariations ?? []).filter(Boolean),
+      urls:           (artist?.urls ?? []).filter(Boolean),
     });
   } catch (err) {
     console.error(err);
@@ -489,7 +493,16 @@ app.get("/label-bio", async (req, res) => {
     const label = await dc.getLabel(first.id) as any;
     let profile: string | null = label?.profile ?? null;
     if (profile) profile = await resolveDiscogsIds(profile, dc);
-    res.json({ profile, name: label?.name ?? name });
+    res.json({
+      profile,
+      name:        label?.name ?? name,
+      urls:        (label?.urls ?? []).filter(Boolean),
+      parentLabel: label?.parent_label?.name
+                     ? { name: label.parent_label.name, id: label.parent_label.id }
+                     : null,
+      sublabels:   (label?.sublabels ?? []).filter((x: any) => x?.name)
+                     .map((x: any) => ({ name: x.name as string, id: x.id as number })),
+    });
   } catch (err) {
     console.error(err);
     res.json({ profile: null });
