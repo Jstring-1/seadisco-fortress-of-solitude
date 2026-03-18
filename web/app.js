@@ -1321,6 +1321,7 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
 document.querySelectorAll('input[name="result-type"]').forEach(radio => {
   radio.addEventListener("change", () => {
     const isAi = document.querySelector('input[name="result-type"]:checked')?.value === "ai";
+    if (isAi) toggleAdvanced(false);
     const advancedFields = document.getElementById("advanced-options");
     const sortLabel = document.querySelector("label.sort-label");
     [advancedFields, sortLabel].forEach(el => {
