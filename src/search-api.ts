@@ -164,7 +164,7 @@ app.get("/api/recent-searches", async (_req, res) => {
       if (!sig.replace(/\|/g, "").trim() || seen.has(sig)) return false;
       seen.add(sig);
       return true;
-    }).slice(0, 100);
+    }).slice(0, 200);
     res.json({ searches });
   } catch { res.json({ searches: [] }); }
 });
