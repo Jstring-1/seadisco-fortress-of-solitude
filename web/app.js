@@ -1158,7 +1158,7 @@ window.addEventListener("popstate", () => {
       const email = window._clerk.user.primaryEmailAddress?.emailAddress ?? "account";
       authBar.innerHTML = `<a href="/account">${email}</a>`;
     } else {
-      authBar.innerHTML = `<a href="/account">Get your own Discogs rate limits →</a>`;
+      authBar.innerHTML = `<a href="/account">Add your Discogs API Token for More Searches</a>`;
     }
   } catch { /* auth unavailable — site works fine without it */ }
 })();
