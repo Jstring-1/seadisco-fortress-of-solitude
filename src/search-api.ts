@@ -259,21 +259,26 @@ app.get("/search", async (req, res) => {
   const userToken = userId ? await getUserToken(userId) : null;
   const usingSharedToken = !userToken;
 
-  // Rate-limit unauthenticated users on the shared token
-  if (usingSharedToken && sharedToken) {
+  // Rate-limit unauthenticated users — allow 5 free searches/day via shared token
+  if (usingSharedToken) {
+    if (!sharedToken) {
+      res.status(401).json({ error: "no_token", message: "Sign in and add your Discogs API token to search." });
+      return;
+    }
     const ip = clientIp(req);
     const { allowed, remaining } = checkRateLimit(ip);
     if (!allowed) {
       res.status(429).json({
         error: "rate_limited",
-        message: `Free searches used up for today. Add your own Discogs token for unlimited searches.`,
+        message: `Free searches used up for today. Sign in and add your own Discogs token for unlimited searches.`,
       });
       return;
     }
     res.setHeader("X-RateLimit-Remaining", remaining);
   }
 
-  const dc = await getDiscogsForRequest(req, false);
+  // allowFallback=true for unauthenticated users — they passed the rate limit check above
+  const dc = await getDiscogsForRequest(req, usingSharedToken);
   if (!dc) {
     res.status(401).json({ error: "no_token", message: "Sign in and add your Discogs API token to search." });
     return;
