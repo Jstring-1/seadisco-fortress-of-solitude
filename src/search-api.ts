@@ -219,17 +219,20 @@ app.get("/search", async (req, res) => {
     const userId = getClerkUserId(req);
     const isFirstPage = !req.query.page || req.query.page === "1";
     if (userId && isFirstPage) {
+      const artistParam = req.query.artist ? String(req.query.artist) : "";
       const p: Record<string, string> = {};
-      if (rawQ)                  p.q             = rawQ;
-      if (req.query.artist)      p.artist        = String(req.query.artist);
+      // Skip q if it duplicates artist (case-insensitive); skip default Vinyl format
+      if (rawQ && rawQ.toLowerCase() !== artistParam.toLowerCase()) p.q = rawQ;
+      if (artistParam)             p.artist        = artistParam;
       if (req.query.release_title) p.release_title = String(req.query.release_title);
-      if (req.query.label)       p.label         = String(req.query.label);
-      if (req.query.year)        p.year          = String(req.query.year);
-      if (req.query.genre)       p.genre         = String(req.query.genre);
-      if (req.query.style)       p.style         = String(req.query.style);
-      if (req.query.format)      p.format        = String(req.query.format);
-      if (req.query.type)        p.type          = String(req.query.type);
-      if (req.query.sort)        p.sort          = String(req.query.sort);
+      if (req.query.label)         p.label         = String(req.query.label);
+      if (req.query.year)          p.year          = String(req.query.year);
+      if (req.query.genre)         p.genre         = String(req.query.genre);
+      if (req.query.style)         p.style         = String(req.query.style);
+      const fmt = req.query.format ? String(req.query.format) : "";
+      if (fmt && fmt !== "Vinyl")  p.format        = fmt;
+      if (req.query.type)          p.type          = String(req.query.type);
+      if (req.query.sort)          p.sort          = String(req.query.sort);
       if (Object.keys(p).length) saveSearch(userId, p).catch(() => {});
     }
   } catch (err) {
