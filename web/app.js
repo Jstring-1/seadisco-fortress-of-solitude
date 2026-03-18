@@ -1307,8 +1307,8 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
   radio.addEventListener("change", () => {
     const isAi = document.querySelector('input[name="result-type"]:checked')?.value === "ai";
     const advancedFields = document.getElementById("advanced-options");
-    const sortRow = document.querySelector(".type-sort-row + div");
-    [advancedFields, sortRow].forEach(el => {
+    const sortLabel = document.querySelector("label.sort-label");
+    [advancedFields, sortLabel].forEach(el => {
       if (el) el.style.opacity = isAi ? "0.35" : "";
     });
   });
