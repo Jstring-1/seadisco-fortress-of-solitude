@@ -169,6 +169,14 @@
   </div>
 </div>
 
+<div id="lightbox-overlay" onclick="closeLightbox()">
+  <button id="lightbox-close" onclick="closeLightbox()">×</button>
+  <button id="lightbox-prev" onclick="lightboxStep(event,-1)">&#8592;</button>
+  <img id="lightbox-img" src="" alt="" />
+  <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
+  <div id="lightbox-counter"></div>
+</div>
+
 <script src="/app.js"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
 </body>

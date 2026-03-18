@@ -523,6 +523,45 @@ function closeModal() {
   history.replaceState({}, "", u.toString());
 }
 
+// ── Image lightbox / carousel ─────────────────────────────────────────────
+let _lbImages = [], _lbIdx = 0;
+
+function openLightbox(images, startIdx) {
+  _lbImages = images;
+  _lbIdx = startIdx ?? 0;
+  _renderLightbox();
+  document.getElementById("lightbox-overlay").classList.add("open");
+  document.addEventListener("keydown", _lbKey);
+}
+
+function closeLightbox() {
+  document.getElementById("lightbox-overlay").classList.remove("open");
+  document.removeEventListener("keydown", _lbKey);
+}
+
+function lightboxStep(e, dir) {
+  e.stopPropagation();
+  _lbIdx = Math.max(0, Math.min(_lbImages.length - 1, _lbIdx + dir));
+  _renderLightbox();
+}
+
+function _lbKey(e) {
+  if (e.key === "ArrowLeft")  { _lbIdx = Math.max(0, _lbIdx - 1); _renderLightbox(); }
+  if (e.key === "ArrowRight") { _lbIdx = Math.min(_lbImages.length - 1, _lbIdx + 1); _renderLightbox(); }
+  if (e.key === "Escape")     closeLightbox();
+}
+
+function _renderLightbox() {
+  document.getElementById("lightbox-img").src = _lbImages[_lbIdx] ?? "";
+  document.getElementById("lightbox-counter").textContent =
+    _lbImages.length > 1 ? `${_lbIdx + 1} / ${_lbImages.length}` : "";
+  document.getElementById("lightbox-prev").disabled = _lbIdx === 0;
+  document.getElementById("lightbox-next").disabled = _lbIdx === _lbImages.length - 1;
+  const single = _lbImages.length <= 1;
+  document.getElementById("lightbox-prev").style.display = single ? "none" : "";
+  document.getElementById("lightbox-next").style.display = single ? "none" : "";
+}
+
 document.getElementById("modal-overlay").addEventListener("click", e => {
   if (e.target === document.getElementById("modal-overlay")) closeModal();
 });
@@ -748,7 +787,9 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
                    || (searchResult.label ?? []).slice(0, 2).join(", ");
   const genres   = [...(d.genres ?? []), ...(d.styles ?? [])].slice(0, 4).join(" · ");
   const country  = d.country ?? searchResult.country ?? "";
-  const img      = d.images?.[0]?.uri ?? searchResult.cover_image ?? "";
+  const allImages = (d.images ?? []).map(i => i.uri).filter(Boolean);
+  if (allImages.length === 0 && searchResult.cover_image) allImages.push(searchResult.cover_image);
+  const img      = allImages[0] ?? "";
   const released    = d.released ?? "";
   const formats     = (d.formats ?? []).map(f =>
     [f.name, ...(f.descriptions ?? [])].filter(Boolean).join(" · ")
@@ -834,7 +875,9 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
 
   el.innerHTML = `
     <div class="album-header">
-      ${img ? `<img class="album-cover" src="${img}" alt="${escHtml(title)}" loading="lazy" />`
+      ${img ? `<img class="album-cover" src="${img}" alt="${escHtml(title)}" loading="lazy"
+               onclick="openLightbox(${escHtml(JSON.stringify(allImages))},0)"
+               title="${allImages.length > 1 ? `View ${allImages.length} photos` : 'View photo'}" />`
              : `<div class="album-cover-placeholder">♪</div>`}
       <div class="album-meta">
         ${typeLabel ? `<div class="album-type-badge">${escHtml(typeLabel)}</div>` : ""}
