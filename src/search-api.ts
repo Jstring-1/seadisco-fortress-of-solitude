@@ -153,7 +153,7 @@ app.get("/api/user/history", async (req, res) => {
 app.get("/api/recent-searches", async (_req, res) => {
   if (!process.env.APP_DB_URL) { res.json({ searches: [] }); return; }
   try {
-    const searches = await getRecentSearches(20);
+    const searches = await getRecentSearches(100);
     res.json({ searches });
   } catch { res.json({ searches: [] }); }
 });
