@@ -1139,7 +1139,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
              : `<div class="album-cover-placeholder">♪</div>`}
       <div class="album-meta">
         ${typeLabel ? `<div class="album-type-badge">${escHtml(typeLabel)}</div>` : ""}
-        <h2>${escHtml(title)}</h2>
+        <h2>${escHtml(title)}${window._collectionIds?.has(Number(releaseId)) ? ` <span class="collection-badge">✓ Collection</span>` : ""}${window._wantlistIds?.has(Number(releaseId)) ? ` <span class="wantlist-badge">♡ Wantlist</span>` : ""}</h2>
         ${artists.length ? `<div class="album-artist">${artists.map(n => `<a href="#" class="modal-artist-link" data-artist="${escHtml(n)}" onclick="searchArtistFromModal(event,this)">${escHtml(n)}</a>`).join(", ")}</div>` : ""}
         ${detailRows ? `<div class="album-detail-grid">${detailRows}</div>` : ""}
         ${(() => {
@@ -1176,13 +1176,18 @@ async function loadMasterVersions(event, masterId) {
     list.innerHTML = `
       <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem">Pressings / Versions</div>
       <div style="display:grid;grid-template-columns:auto auto auto auto 1fr;gap:0.2rem 0.7rem;font-size:0.75rem">
-        ${versions.map(v => `
+        ${versions.map(v => {
+        const inCol  = window._collectionIds?.has(v.id);
+        const inWant = window._wantlistIds?.has(v.id);
+        const badge  = inCol  ? `<span class="collection-badge">✓</span>` :
+                       inWant ? `<span class="wantlist-badge">♡</span>` : "";
+        return `
           <span style="color:#888">${escHtml(!v.year || v.year === "0" ? "?" : String(v.year))}</span>
           <span style="color:#aaa">${escHtml(v.country || "?")}</span>
           <span style="color:#888">${escHtml(v.format ?? "—")}</span>
           <span style="color:#aaa">${escHtml(v.catno ?? "—")}</span>
-          <span><a href="#" onclick="openVersionPopup(event,${v.id})" style="color:var(--accent);text-decoration:none">${escHtml(v.label ?? v.title ?? "—")}</a></span>
-        `).join("")}
+          <span>${badge}<a href="#" onclick="openVersionPopup(event,${v.id})" style="color:var(--accent);text-decoration:none">${escHtml(v.label ?? v.title ?? "—")}</a></span>`;
+      }).join("")}
       </div>`;
   } catch(e) {
     list.textContent = "Failed to load pressings.";
