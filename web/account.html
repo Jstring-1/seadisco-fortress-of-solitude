@@ -89,6 +89,11 @@ let clerk = null;
 
 async function initClerk() {
   const cfg = await fetch("/api/config").then(r => r.json()).catch(() => ({}));
+  if (!cfg.authEnabled) {
+    document.getElementById("loading-section").innerHTML =
+      '<p style="color:var(--muted)">Accounts are not enabled on this server.</p>';
+    return;
+  }
   const pk = cfg.clerkPublishableKey;
   if (!pk) {
     document.getElementById("loading-section").innerHTML =
