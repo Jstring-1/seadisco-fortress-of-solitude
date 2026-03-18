@@ -177,6 +177,51 @@ app.delete("/api/admin/feedback/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
+// POST /api/ai-search — Claude music recommendations
+app.post("/api/ai-search", express.json(), async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "no_token" }); return; }
+  if (!anthropicKey) { res.status(503).json({ error: "AI not configured" }); return; }
+
+  const q = (req.body.q as string ?? "").trim();
+  if (!q) { res.status(400).json({ error: "Query required" }); return; }
+
+  const prompt = `You are a music expert specializing in vinyl records, rare and world music.
+The user is searching for: "${q}"
+
+Return a JSON array of 6-8 music recommendations (artists or albums/releases) that best match this query.
+For each item include:
+- name: artist name, or "Album Title by Artist"
+- type: "artist" or "release"
+- description: one compelling sentence explaining why this fits
+- discogsParams: object with relevant Discogs search fields only (choose from: q, artist, label, genre, style, year)
+
+Return ONLY a valid JSON array, no markdown, no explanation.`;
+
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": anthropicKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 1024,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    const data = await r.json() as any;
+    const text = data.content?.[0]?.text ?? "[]";
+    const recommendations = JSON.parse(text);
+    res.json({ recommendations });
+  } catch (err) {
+    console.error("AI search error:", err);
+    res.status(500).json({ error: "AI search failed" });
+  }
+});
+
 // GET /api/recent-searches — anonymous global feed
 app.get("/api/recent-searches", async (_req, res) => {
   if (!process.env.APP_DB_URL) { res.json({ searches: [] }); return; }
