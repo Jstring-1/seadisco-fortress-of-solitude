@@ -156,22 +156,36 @@ app.post("/api/user/sync", express.json(), async (req, res) => {
   const syncCollection = type === "collection" || type === "both";
   const syncWantlist   = type === "wantlist"   || type === "both";
 
-  // Check cooldown: skip if synced within last hour
+  // Check cooldown: skip individual types if synced within last hour
   const syncStatus = await getSyncStatus(userId);
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-  const collectionRecent = syncCollection && syncStatus.collectionSyncedAt && syncStatus.collectionSyncedAt > oneHourAgo;
-  const wantlistRecent   = syncWantlist   && syncStatus.wantlistSyncedAt   && syncStatus.wantlistSyncedAt   > oneHourAgo;
-  if ((syncCollection && collectionRecent) || (syncWantlist && wantlistRecent)) {
+  const collectionRecent = syncCollection && !!syncStatus.collectionSyncedAt && syncStatus.collectionSyncedAt > oneHourAgo;
+  const wantlistRecent   = syncWantlist   && !!syncStatus.wantlistSyncedAt   && syncStatus.wantlistSyncedAt   > oneHourAgo;
+  if (collectionRecent && wantlistRecent) {
     res.json({ ok: true, skipped: true, reason: "Recently synced" });
     return;
   }
 
-  const token    = await getUserToken(userId);
-  const username = await getDiscogsUsername(userId);
-  if (!token || !username) {
-    res.status(400).json({ error: "No Discogs token or username found" });
-    return;
+  const token = await getUserToken(userId);
+  if (!token) { res.status(400).json({ error: "No Discogs token found" }); return; }
+
+  let username = await getDiscogsUsername(userId);
+  if (!username) {
+    // Auto-fetch username from Discogs identity endpoint (token saved before this feature)
+    try {
+      const identRes = await fetch("https://api.discogs.com/oauth/identity", {
+        headers: { "Authorization": `Discogs token=${token}`, "User-Agent": "SeaDisco/1.0" }
+      });
+      if (identRes.ok) {
+        const ident = await identRes.json() as { username?: string };
+        if (ident.username) {
+          await setDiscogsUsername(userId, ident.username);
+          username = ident.username;
+        }
+      }
+    } catch {}
   }
+  if (!username) { res.status(400).json({ error: "Could not determine Discogs username" }); return; }
 
   const headers = { "Authorization": `Discogs token=${token}`, "User-Agent": "SeaDisco/1.0" };
   const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
