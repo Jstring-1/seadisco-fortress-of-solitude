@@ -131,6 +131,8 @@ async function doSearch(page = 1, skipPushState = false) {
   const sort      = document.getElementById("f-sort").value;
   const resultType = document.querySelector('input[name="result-type"]:checked')?.value ?? "";
 
+  if (resultType === "ai") { doAiSearch(q); return; }
+
   if (!q && !artist && !release && !year && !label && !genre) {
     setStatus("Enter a search term or fill in at least one filter.", false);
     return;
@@ -640,6 +642,53 @@ function openBioFull(event) {
   }
   document.getElementById("bio-full-text").innerHTML = html;
   document.getElementById("bio-full-overlay").classList.add("open");
+}
+
+async function doAiSearch(q) {
+  if (!q) { setStatus("Enter a question or description to search with AI.", false); return; }
+  const blurbEl = document.getElementById("blurb");
+  document.getElementById("results").innerHTML = "";
+  document.getElementById("pagination").style.display = "none";
+  document.getElementById("artist-alts").innerHTML = "";
+  blurbEl.style.display = "none";
+  setStatus("Asking Claude…");
+  document.getElementById("search-btn").disabled = true;
+  try {
+    const r = await apiFetch("/api/ai-search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ q }) });
+    if (r.status === 401) { setStatus("Sign in and add your Discogs token to use AI search.", false); return; }
+    if (!r.ok) { setStatus("AI search failed. Try again.", false); return; }
+    const { recommendations } = await r.json();
+    if (!recommendations?.length) { setStatus("No recommendations returned.", false); return; }
+    setStatus("");
+
+    blurbEl.innerHTML = `
+      <div style="margin-bottom:1rem">
+        <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:#666;margin-bottom:0.5rem">✦ AI Recommendations for "${q}"</div>
+        ${recommendations.map(rec => {
+          const params = new URLSearchParams();
+          const p = rec.discogsParams ?? {};
+          if (p.q)      params.set("q",  p.q);
+          if (p.artist) params.set("ar", p.artist);
+          if (p.label)  params.set("lb", p.label);
+          if (p.genre)  params.set("gn", p.genre);
+          if (p.style)  params.set("st", p.style);
+          if (p.year)   params.set("yr", p.year);
+          const href = "/?" + params.toString();
+          return `<div style="padding:0.75rem 0;border-bottom:1px solid #222">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem">
+              <span style="color:var(--fg);font-weight:600">${rec.name}</span>
+              <a href="${href}" style="font-size:0.78rem;color:var(--accent);white-space:nowrap;flex-shrink:0">Search Discogs →</a>
+            </div>
+            <div style="font-size:0.83rem;color:var(--muted);margin-top:0.25rem">${rec.description}</div>
+          </div>`;
+        }).join("")}
+      </div>`;
+    blurbEl.style.display = "block";
+  } catch (err) {
+    setStatus("AI search error: " + err.message, false);
+  } finally {
+    document.getElementById("search-btn").disabled = false;
+  }
 }
 
 function closeBioFull() {
@@ -1250,6 +1299,18 @@ async function loadRecentFeed() {
 ["query", "f-artist", "f-release", "f-year", "f-label"].forEach(id => {
   document.getElementById(id).addEventListener("keydown", e => {
     if (e.key === "Enter") doSearch(1);
+  });
+});
+
+// Grey out advanced fields when AI mode is selected
+document.querySelectorAll('input[name="result-type"]').forEach(radio => {
+  radio.addEventListener("change", () => {
+    const isAi = document.querySelector('input[name="result-type"]:checked')?.value === "ai";
+    const advancedFields = document.getElementById("advanced-options");
+    const sortRow = document.querySelector(".type-sort-row + div");
+    [advancedFields, sortRow].forEach(el => {
+      if (el) el.style.opacity = isAi ? "0.35" : "";
+    });
   });
 });
 
