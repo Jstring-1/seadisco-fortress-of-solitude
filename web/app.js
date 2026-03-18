@@ -98,7 +98,6 @@ function clearForm() {
   document.getElementById("f-style").disabled = true;
   document.querySelector('input[name="result-type"][value=""]').checked = true;
   document.getElementById("powered-by").style.display = "";
-  document.getElementById("recent-feed").style.display = "block";
   document.getElementById("search-desc").textContent = "";
   document.getElementById("search-pipe").style.display = "none";
   document.getElementById("type-desc").textContent = "";
@@ -131,7 +130,6 @@ async function doSearch(page = 1, skipPushState = false) {
   if (page === 1) detectedArtist = null;
 
   currentPage = page;
-  document.getElementById("recent-feed").style.display = "none";
   document.getElementById("search-btn").disabled = true;
   document.getElementById("pagination").style.display = "none";
   document.getElementById("blurb").style.display = "none";
@@ -1119,9 +1117,8 @@ async function loadRecentFeed() {
   if (p.toString()) {
     restoreFromParams(p);
     doSearch(parseInt(p.get("pg") ?? "1"), true);
-  } else {
-    loadRecentFeed();
   }
+  loadRecentFeed();
 })();
 
 // Submit on Enter (all text inputs)
