@@ -5,8 +5,9 @@ let pool: InstanceType<typeof Pool> | null = null;
 
 function getPool() {
   if (!pool) {
-    if (!process.env.DATABASE_URL) throw new Error("DATABASE_URL not set");
-    pool = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    const connStr = process.env.PG_URL ?? process.env.DATABASE_URL;
+    if (!connStr) throw new Error("PG_URL or DATABASE_URL not set");
+    pool = new Pool({ connectionString: connStr, ssl: { rejectUnauthorized: false } });
   }
   return pool;
 }
