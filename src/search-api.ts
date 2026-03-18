@@ -313,7 +313,8 @@ app.get("/search", async (req, res) => {
       if (fmt && fmt !== "Vinyl")  p.format        = fmt;
       if (req.query.type)          p.type          = String(req.query.type);
       if (req.query.sort)          p.sort          = String(req.query.sort);
-      if (Object.keys(p).length) saveSearch(userId, p).catch(() => {});
+      const hasResults = (results as any)?.results?.length > 0;
+      if (Object.keys(p).length && hasResults) saveSearch(userId, p).catch(() => {});
     }
   } catch (err) {
     console.error(err);
