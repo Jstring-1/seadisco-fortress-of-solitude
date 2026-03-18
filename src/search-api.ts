@@ -213,12 +213,19 @@ Return ONLY a valid JSON array, no markdown, no explanation.`;
       }),
     });
     const data = await r.json() as any;
-    const text = data.content?.[0]?.text ?? "[]";
+    if (!r.ok) {
+      console.error("Anthropic API error:", data);
+      res.status(502).json({ error: `AI error: ${data.error?.message ?? r.status}` });
+      return;
+    }
+    let text = (data.content?.[0]?.text ?? "[]").trim();
+    // Strip markdown code fences if present
+    text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
     const recommendations = JSON.parse(text);
     res.json({ recommendations });
   } catch (err) {
     console.error("AI search error:", err);
-    res.status(500).json({ error: "AI search failed" });
+    res.status(500).json({ error: "AI search failed: " + (err as Error).message });
   }
 });
 
