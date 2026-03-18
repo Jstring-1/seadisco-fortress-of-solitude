@@ -101,6 +101,14 @@
         <button id="remove-btn" class="danger-btn" onclick="removeToken()" style="display:none">Remove saved token</button>
       </div>
 
+      <hr class="section-divider" />
+
+      <div id="sync-section" style="display:none">
+        <h2 style="margin-bottom:0.4rem">Collection &amp; Wantlist</h2>
+        <div id="account-sync-status" style="font-size:0.82rem;color:var(--muted);margin-bottom:0.5rem">Loading sync status…</div>
+        <button id="account-sync-btn" onclick="accountSync()" style="font-size:0.82rem;padding:0.3rem 0.9rem;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-weight:600">Sync Now</button>
+      </div>
+
       <!-- Admin inbox — only rendered for admin user -->
       <div id="admin-inbox" style="display:none">
         <hr class="section-divider" />
@@ -244,8 +252,59 @@ async function showAuthSection() {
     statusEl.className = "token-status";
   }
 
+  if (data?.hasToken) loadSyncStatus();
   loadHistory();
   loadAdminInbox();
+}
+
+async function loadSyncStatus() {
+  const syncSection = document.getElementById("sync-section");
+  const statusEl = document.getElementById("account-sync-status");
+  syncSection.style.display = "block";
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const d = await fetch("/api/user/sync-status", {
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
+    }).then(r => r.json());
+    const fmt = ts => {
+      if (!ts) return "never";
+      const diff = Math.round((Date.now() - new Date(ts)) / 60000);
+      if (diff < 1) return "just now";
+      if (diff < 60) return `${diff}m ago`;
+      const h = Math.round(diff / 60);
+      if (h < 24) return `${h}h ago`;
+      return `${Math.round(h / 24)}d ago`;
+    };
+    statusEl.textContent = `Collection: synced ${fmt(d.collectionSyncedAt)} · Wantlist: synced ${fmt(d.wantlistSyncedAt)}`;
+    if (d.discogsUsername) statusEl.textContent += ` · @${d.discogsUsername}`;
+  } catch {
+    statusEl.textContent = "Could not load sync status.";
+  }
+}
+
+async function accountSync() {
+  const btn = document.getElementById("account-sync-btn");
+  const statusEl = document.getElementById("account-sync-status");
+  btn.disabled = true;
+  btn.textContent = "Syncing…";
+  statusEl.textContent = "Syncing your collection and wantlist…";
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const r = await fetch("/api/user/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
+      body: JSON.stringify({ type: "both" })
+    }).then(r => r.json());
+    if (r.skipped) {
+      statusEl.textContent = "Synced recently — try again in an hour.";
+    } else {
+      statusEl.textContent = `Synced ${r.collectionCount ?? 0} collection + ${r.wantlistCount ?? 0} wantlist records.`;
+    }
+  } catch {
+    statusEl.textContent = "Sync failed. Please try again.";
+  }
+  btn.disabled = false;
+  btn.textContent = "Sync Now";
 }
 
 async function saveToken() {

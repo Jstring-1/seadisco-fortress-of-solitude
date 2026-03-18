@@ -264,6 +264,21 @@ app.get("/api/user/discogs-ids", async (req, res) => {
   res.json({ collectionIds, wantlistIds });
 });
 
+// GET /api/user/sync-status — last sync timestamps + Discogs username
+app.get("/api/user/sync-status", async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const [syncStatus, username] = await Promise.all([
+    getSyncStatus(userId),
+    getDiscogsUsername(userId),
+  ]);
+  res.json({
+    collectionSyncedAt: syncStatus.collectionSyncedAt,
+    wantlistSyncedAt:   syncStatus.wantlistSyncedAt,
+    discogsUsername:    username,
+  });
+});
+
 function stripArtistSuffix(name: string | undefined): string | undefined {
   return name ? name.replace(/\s*\(\d+\)$/, "").trim() : undefined;
 }
