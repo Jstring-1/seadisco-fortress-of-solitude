@@ -55,9 +55,14 @@
 
       <h2 style="margin-top:0">Your Discogs Token</h2>
       <p>
-        Enter your
-        <a href="https://www.discogs.com/settings/developers" target="_blank" rel="noopener">Discogs Personal Access Token</a>.
-        It's stored securely and used for all your searches so you have your own rate limits.
+        A Discogs Personal Access Token lets SeaDisco search Discogs on your behalf using your own rate limits.
+        Without one, searches won't work.
+      </p>
+      <p style="margin-top:0.75rem">
+        <strong style="color:var(--fg)">How to get your token:</strong><br />
+        1. Go to <a href="https://www.discogs.com/settings/developers" target="_blank" rel="noopener">discogs.com/settings/developers</a><br />
+        2. Click <strong style="color:var(--fg)">Generate new token</strong><br />
+        3. Copy and paste it below
       </p>
 
       <div id="token-status" class="token-status"></div>
@@ -143,7 +148,7 @@ async function showAuthSection() {
     statusEl.className = "token-status ok";
     removeBtn.style.display = "block";
   } else {
-    statusEl.textContent = "No token saved — using shared server token.";
+    statusEl.textContent = "No token saved — searches won't work until you add one.";
     statusEl.className = "token-status";
   }
 

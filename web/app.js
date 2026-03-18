@@ -247,6 +247,14 @@ async function doSearch(page = 1, skipPushState = false) {
         bioFetch ?? Promise.resolve(null),
       ]);
       bioFetch = bioRes ? { json: () => bioRes.json() } : null;
+      if (res.status === 401) {
+        const errData = await res.json().catch(() => ({}));
+        if (errData.error === "no_token") {
+          document.getElementById("status").innerHTML =
+            `<a href="/account" style="color:var(--accent)">Sign in and add your Discogs token</a> to start searching.`;
+          return;
+        }
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       items = data.results ?? [];
