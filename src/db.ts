@@ -33,6 +33,15 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS search_history_user_idx
     ON search_history (clerk_user_id, searched_at DESC)
   `);
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS feedback (
+      id            SERIAL PRIMARY KEY,
+      clerk_user_id TEXT NOT NULL,
+      user_email    TEXT NOT NULL,
+      message       TEXT NOT NULL,
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
 }
 
 export async function saveSearch(clerkUserId: string, params: Record<string, string>): Promise<void> {
@@ -110,6 +119,20 @@ export async function getRecentSearches(limit = 20): Promise<Array<{ params: Rec
      ORDER BY MAX(searched_at) DESC
      LIMIT $1`,
     [limit]
+  );
+  return r.rows;
+}
+
+export async function saveFeedback(clerkUserId: string, userEmail: string, message: string): Promise<void> {
+  await getPool().query(
+    `INSERT INTO feedback (clerk_user_id, user_email, message) VALUES ($1, $2, $3)`,
+    [clerkUserId, userEmail, message]
+  );
+}
+
+export async function getFeedback(): Promise<Array<{ id: number; user_email: string; message: string; created_at: string }>> {
+  const r = await getPool().query(
+    `SELECT id, user_email, message, created_at FROM feedback ORDER BY created_at DESC`
   );
   return r.rows;
 }
