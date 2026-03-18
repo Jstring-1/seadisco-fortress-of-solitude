@@ -17,6 +17,34 @@ const requireAuth = process.env.REQUIRE_AUTH === "true";
 // Shared Discogs client (used as fallback when user has no personal token)
 const discogs = sharedToken ? new DiscogsClient(sharedToken) : null;
 
+// ── IP rate limiter for unauthenticated (shared-token) searches ───────────
+const UNAUTH_LIMIT     = 5;
+const LIMIT_WINDOW_MS  = 24 * 60 * 60 * 1000; // 24 hours
+const ipCounts = new Map<string, { count: number; resetAt: number }>();
+
+function clientIp(req: express.Request): string {
+  const fwd = req.headers["x-forwarded-for"] as string | undefined;
+  return (fwd ? fwd.split(",")[0] : req.ip ?? "unknown").replace(/^::ffff:/, "").trim();
+}
+
+function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
+  const now = Date.now();
+  const entry = ipCounts.get(ip);
+  if (!entry || now > entry.resetAt) {
+    ipCounts.set(ip, { count: 1, resetAt: now + LIMIT_WINDOW_MS });
+    return { allowed: true, remaining: UNAUTH_LIMIT - 1 };
+  }
+  if (entry.count >= UNAUTH_LIMIT) return { allowed: false, remaining: 0 };
+  entry.count++;
+  return { allowed: true, remaining: UNAUTH_LIMIT - entry.count };
+}
+
+// Prune expired entries hourly to prevent memory growth
+setInterval(() => {
+  const now = Date.now();
+  for (const [ip, entry] of ipCounts) if (now > entry.resetAt) ipCounts.delete(ip);
+}, 60 * 60 * 1000);
+
 // Decode Clerk session JWT from Authorization header (payload only — no pkg needed)
 function getClerkUserId(req: express.Request): string | null {
   const auth = req.headers.authorization as string | undefined;
@@ -53,6 +81,7 @@ if (process.env.APP_DB_URL) {
 }
 
 const app = express();
+app.set("trust proxy", true); // respect X-Forwarded-For from Railway's proxy
 
 // Serve static files from web/ (logo, etc.)
 app.use(express.static(path.join(__dirname, "../web"), { extensions: ["html"] }));
@@ -135,6 +164,24 @@ app.get("/search", async (req, res) => {
   const rawQ   = (req.query.q as string) ?? "";
   const artist = stripArtistSuffix(req.query.artist as string | undefined);
   const q = rawQ || artist || "";
+
+  const userId = getClerkUserId(req);
+  const userToken = userId ? await getUserToken(userId) : null;
+  const usingSharedToken = !userToken;
+
+  // Rate-limit unauthenticated users on the shared token
+  if (usingSharedToken && sharedToken) {
+    const ip = clientIp(req);
+    const { allowed, remaining } = checkRateLimit(ip);
+    if (!allowed) {
+      res.status(429).json({
+        error: "rate_limited",
+        message: `Free searches used up for today. Add your own Discogs token for unlimited searches.`,
+      });
+      return;
+    }
+    res.setHeader("X-RateLimit-Remaining", remaining);
+  }
 
   const dc = await getDiscogsForRequest(req, false);
   if (!dc) {

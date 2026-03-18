@@ -247,11 +247,16 @@ async function doSearch(page = 1, skipPushState = false) {
         bioFetch ?? Promise.resolve(null),
       ]);
       bioFetch = bioRes ? { json: () => bioRes.json() } : null;
-      if (res.status === 401) {
+      if (res.status === 401 || res.status === 429) {
         const errData = await res.json().catch(() => ({}));
         if (errData.error === "no_token") {
           document.getElementById("status").innerHTML =
             `<a href="/account" style="color:var(--accent)">Sign in and add your Discogs token</a> to start searching.`;
+          return;
+        }
+        if (errData.error === "rate_limited") {
+          document.getElementById("status").innerHTML =
+            `You've used your 5 free searches for today. <a href="/account" style="color:var(--accent)">Add your Discogs token</a> for unlimited searches.`;
           return;
         }
       }
