@@ -142,6 +142,14 @@
   <div id="alts-popup-backdrop" onclick="closeAltsPopup()"></div>
   <div id="alts-popup"><h4>Other artists</h4></div>
   <div id="status"></div>
+  <div id="collection-tabs" style="display:none">
+    <div class="result-tabs">
+      <button class="result-tab active" data-tab="search">Search Results</button>
+      <button class="result-tab" data-tab="collection">My Collection</button>
+      <button class="result-tab" data-tab="wantlist">My Wantlist</button>
+    </div>
+    <div id="sync-status" style="font-size:0.75rem;color:var(--muted);margin:0.25rem 0 0.5rem;min-height:1.2em"></div>
+  </div>
   <div id="results"></div>
   <div id="pagination" style="display:none">
     <button id="prev-btn" onclick="doSearch(currentPage - 1)">← Prev</button>
@@ -251,6 +259,9 @@
 
     <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">Sharing a Search</h3>
     <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem">Every search lives in the URL — just copy it from your browser and send it to anyone. They'll land on exactly the same results, no account needed.</p>
+
+    <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">My Collection &amp; Wantlist</h3>
+    <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem">Signed-in users with a Discogs token can browse their Discogs collection and wantlist directly from the main page using the tabs above results. Records are synced from Discogs (up to 1,000 at a time) and cached locally for fast browsing. Green ✓ Collection and red ♡ Wantlist badges appear on search results. Click 'Sync now' to refresh.</p>
 
     <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">Your Account</h3>
     <p style="font-size:0.84rem;color:#aaa;margin:0">Create a free account and connect your own Discogs API token for unlimited searches and a personal search history. Get your token at <strong style="color:#ccc">discogs.com → Settings → Developers → Generate new token</strong>.</p>

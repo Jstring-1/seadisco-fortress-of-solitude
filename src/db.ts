@@ -42,6 +42,32 @@ export async function initDb() {
       created_at    TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  // Collection / wantlist columns on user_tokens
+  await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS discogs_username TEXT`);
+  await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS collection_synced_at TIMESTAMP`);
+  await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS wantlist_synced_at TIMESTAMP`);
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_collection (
+      id                 SERIAL PRIMARY KEY,
+      clerk_user_id      TEXT NOT NULL,
+      discogs_release_id INTEGER NOT NULL,
+      data               JSONB NOT NULL,
+      added_at           TIMESTAMP,
+      synced_at          TIMESTAMP DEFAULT NOW(),
+      UNIQUE(clerk_user_id, discogs_release_id)
+    )
+  `);
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_wantlist (
+      id                 SERIAL PRIMARY KEY,
+      clerk_user_id      TEXT NOT NULL,
+      discogs_release_id INTEGER NOT NULL,
+      data               JSONB NOT NULL,
+      added_at           TIMESTAMP,
+      synced_at          TIMESTAMP DEFAULT NOW(),
+      UNIQUE(clerk_user_id, discogs_release_id)
+    )
+  `);
 }
 
 export async function saveSearch(clerkUserId: string, params: Record<string, string>): Promise<void> {
@@ -144,4 +170,134 @@ export async function deleteFeedback(id: number): Promise<void> {
 export async function deleteUserData(clerkUserId: string): Promise<void> {
   await getPool().query("DELETE FROM user_tokens    WHERE clerk_user_id = $1", [clerkUserId]);
   await getPool().query("DELETE FROM search_history WHERE clerk_user_id = $1", [clerkUserId]);
+  await getPool().query("DELETE FROM user_collection WHERE clerk_user_id = $1", [clerkUserId]);
+  await getPool().query("DELETE FROM user_wantlist   WHERE clerk_user_id = $1", [clerkUserId]);
+}
+
+export async function getDiscogsUsername(clerkUserId: string): Promise<string | null> {
+  const r = await getPool().query(
+    "SELECT discogs_username FROM user_tokens WHERE clerk_user_id = $1",
+    [clerkUserId]
+  );
+  return r.rows[0]?.discogs_username ?? null;
+}
+
+export async function setDiscogsUsername(clerkUserId: string, username: string): Promise<void> {
+  await getPool().query(
+    `UPDATE user_tokens SET discogs_username = $2 WHERE clerk_user_id = $1`,
+    [clerkUserId, username]
+  );
+}
+
+export async function getSyncStatus(clerkUserId: string): Promise<{ collectionSyncedAt: Date | null; wantlistSyncedAt: Date | null }> {
+  const r = await getPool().query(
+    "SELECT collection_synced_at, wantlist_synced_at FROM user_tokens WHERE clerk_user_id = $1",
+    [clerkUserId]
+  );
+  return {
+    collectionSyncedAt: r.rows[0]?.collection_synced_at ?? null,
+    wantlistSyncedAt:   r.rows[0]?.wantlist_synced_at   ?? null,
+  };
+}
+
+export async function upsertCollectionItems(
+  clerkUserId: string,
+  items: Array<{ id: number; data: object; addedAt?: Date }>
+): Promise<void> {
+  for (const item of items) {
+    await getPool().query(
+      `INSERT INTO user_collection (clerk_user_id, discogs_release_id, data, added_at, synced_at)
+       VALUES ($1, $2, $3, $4, NOW())
+       ON CONFLICT (clerk_user_id, discogs_release_id)
+       DO UPDATE SET data = $3, added_at = $4, synced_at = NOW()`,
+      [clerkUserId, item.id, JSON.stringify(item.data), item.addedAt ?? null]
+    );
+  }
+}
+
+export async function upsertWantlistItems(
+  clerkUserId: string,
+  items: Array<{ id: number; data: object; addedAt?: Date }>
+): Promise<void> {
+  for (const item of items) {
+    await getPool().query(
+      `INSERT INTO user_wantlist (clerk_user_id, discogs_release_id, data, added_at, synced_at)
+       VALUES ($1, $2, $3, $4, NOW())
+       ON CONFLICT (clerk_user_id, discogs_release_id)
+       DO UPDATE SET data = $3, added_at = $4, synced_at = NOW()`,
+      [clerkUserId, item.id, JSON.stringify(item.data), item.addedAt ?? null]
+    );
+  }
+}
+
+export async function getCollectionPage(
+  clerkUserId: string,
+  page: number,
+  perPage: number
+): Promise<{ items: any[]; total: number }> {
+  const offset = (page - 1) * perPage;
+  const [dataR, countR] = await Promise.all([
+    getPool().query(
+      `SELECT data FROM user_collection WHERE clerk_user_id = $1
+       ORDER BY added_at DESC NULLS LAST, id DESC
+       LIMIT $2 OFFSET $3`,
+      [clerkUserId, perPage, offset]
+    ),
+    getPool().query(
+      "SELECT COUNT(*)::int AS total FROM user_collection WHERE clerk_user_id = $1",
+      [clerkUserId]
+    ),
+  ]);
+  return { items: dataR.rows.map(r => r.data), total: countR.rows[0]?.total ?? 0 };
+}
+
+export async function getWantlistPage(
+  clerkUserId: string,
+  page: number,
+  perPage: number
+): Promise<{ items: any[]; total: number }> {
+  const offset = (page - 1) * perPage;
+  const [dataR, countR] = await Promise.all([
+    getPool().query(
+      `SELECT data FROM user_wantlist WHERE clerk_user_id = $1
+       ORDER BY added_at DESC NULLS LAST, id DESC
+       LIMIT $2 OFFSET $3`,
+      [clerkUserId, perPage, offset]
+    ),
+    getPool().query(
+      "SELECT COUNT(*)::int AS total FROM user_wantlist WHERE clerk_user_id = $1",
+      [clerkUserId]
+    ),
+  ]);
+  return { items: dataR.rows.map(r => r.data), total: countR.rows[0]?.total ?? 0 };
+}
+
+export async function getCollectionIds(clerkUserId: string): Promise<number[]> {
+  const r = await getPool().query(
+    "SELECT discogs_release_id FROM user_collection WHERE clerk_user_id = $1",
+    [clerkUserId]
+  );
+  return r.rows.map(row => row.discogs_release_id);
+}
+
+export async function getWantlistIds(clerkUserId: string): Promise<number[]> {
+  const r = await getPool().query(
+    "SELECT discogs_release_id FROM user_wantlist WHERE clerk_user_id = $1",
+    [clerkUserId]
+  );
+  return r.rows.map(row => row.discogs_release_id);
+}
+
+export async function updateCollectionSyncedAt(clerkUserId: string): Promise<void> {
+  await getPool().query(
+    "UPDATE user_tokens SET collection_synced_at = NOW() WHERE clerk_user_id = $1",
+    [clerkUserId]
+  );
+}
+
+export async function updateWantlistSyncedAt(clerkUserId: string): Promise<void> {
+  await getPool().query(
+    "UPDATE user_tokens SET wantlist_synced_at = NOW() WHERE clerk_user_id = $1",
+    [clerkUserId]
+  );
 }

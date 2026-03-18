@@ -138,6 +138,12 @@ async function doSearch(page = 1, skipPushState = false) {
     return;
   }
 
+  // Switch back to search tab if on collection/wantlist tab
+  if (_activeTab !== "search") {
+    setActiveTab("search");
+    document.getElementById("sync-status").textContent = "";
+  }
+
   if (!skipPushState) pushSearchState(q, artistRaw, release, year, label, genre, sort, resultType, page);
 
   // Clear auto-detected artist on every new page-1 search so it doesn't bleed into unrelated searches
@@ -443,54 +449,212 @@ async function doSearch(page = 1, skipPushState = false) {
 // ── Render cards ──────────────────────────────────────────────────────────
 function renderResults(items) {
   const grid = document.getElementById("results");
-  grid.innerHTML = items.map(item => {
-    const url  = item.uri ? `https://www.discogs.com${item.uri}` : "#";
-    const type = item.type ?? "";
+  grid.innerHTML = items.map(item => renderCard(item)).join("");
+}
 
-    let artist = "";
-    let title  = item.title ?? "Unknown";
-    if ((type === "release" || type === "master") && title.includes(" - ")) {
-      const idx = title.indexOf(" - ");
-      artist = title.slice(0, idx);
-      title  = title.slice(idx + 3);
+function renderCard(item) {
+  const url  = item.uri ? `https://www.discogs.com${item.uri}` : "#";
+  const type = item.type ?? "";
+
+  let artist = "";
+  let title  = item.title ?? "Unknown";
+  if ((type === "release" || type === "master") && title.includes(" - ")) {
+    const idx = title.indexOf(" - ");
+    artist = title.slice(0, idx);
+    title  = title.slice(idx + 3);
+  }
+
+  const label   = (item.label   ?? []).slice(0, 2).join(", ");
+  const formats = (item.format  ?? []).slice(0, 3).join(" · ");
+  const genre   = (item.genre   ?? []).slice(0, 1).join("");
+  const country = item.country ?? "";
+  const year    = item.year    ?? "";
+
+  const metaParts = [year, type, country].filter(Boolean);
+
+  const thumb = item.cover_image
+    ? `<img src="${item.cover_image}" alt="${escHtml(title)}" loading="lazy" />`
+    : `<div class="thumb-placeholder">♪</div>`;
+
+  const isRelease = type === "release" || type === "master";
+  const isArtist  = type === "artist";
+  const isLabel   = type === "label";
+  if (isRelease) itemCache.set(String(item.id), item);
+  const typeClass = `card card-type-${type}`;
+  const cardAttrs = isRelease
+    ? `class="${typeClass}" href="#" onclick="openModal(event,'${item.id}','${type}','${url.replace(/'/g, "\\'")}')" `
+    : (isArtist || isLabel)
+      ? `class="${typeClass}" href="#" data-entity-type="${escHtml(type)}" data-entity-name="${escHtml(title)}" data-entity-id="${item.id}" onclick="searchByEntity(event,this)"`
+      : `class="${typeClass}" href="${url}" target="_blank" rel="noopener"`;
+
+  // Collection / wantlist badges
+  let badges = "";
+  const releaseId = item.id;
+  if (releaseId) {
+    if (window._collectionIds?.has(releaseId)) badges += `<span class="collection-badge">✓ Collection</span>`;
+    if (window._wantlistIds?.has(releaseId))   badges += `<span class="wantlist-badge">♡ Wantlist</span>`;
+  }
+
+  return `
+    <a ${cardAttrs}>
+      ${thumb}
+      <div class="card-body">
+        ${artist ? `<div class="card-artist">${escHtml(artist)}${badges}</div>` : (badges ? `<div class="card-artist">${badges}</div>` : "")}
+        <div class="card-title">${escHtml(title)}</div>
+        ${label   ? `<div class="card-sub">${escHtml(label)}</div>`   : ""}
+        ${formats ? `<div class="card-format">${escHtml(formats)}</div>` : ""}
+        ${genre   ? `<div class="card-format">${escHtml(genre)}</div>`   : ""}
+        <div class="card-meta">${metaParts.map(escHtml).join(" · ")}</div>
+      </div>
+    </a>`;
+}
+
+// ── Collection / Wantlist tab state ───────────────────────────────────────
+let _activeTab = "search"; // "search" | "collection" | "wantlist"
+let _colPage = 1, _wlPage = 1;
+
+function renderCardFromBasicInfo(basicInfo) {
+  // Map Discogs basic_information format to what renderCard expects
+  const artistName = (basicInfo.artists ?? []).map(a => a.name).join(", ");
+  const labelStr   = (basicInfo.labels  ?? []).map(l => l.name).join(", ");
+  const formatStr  = (basicInfo.formats ?? []).map(f => f.name + (f.descriptions?.length ? ` (${f.descriptions.join(", ")})` : "")).join(" · ");
+  const genreStr   = (basicInfo.genres  ?? [])[0] ?? "";
+
+  const syntheticItem = {
+    id:           basicInfo.id,
+    type:         "release",
+    title:        artistName ? `${artistName} - ${basicInfo.title}` : basicInfo.title,
+    cover_image:  basicInfo.cover_image || basicInfo.thumb || "",
+    label:        (basicInfo.labels ?? []).map(l => l.name),
+    format:       (basicInfo.formats ?? []).map(f => f.name),
+    genre:        basicInfo.genres ?? [],
+    year:         String(basicInfo.year ?? ""),
+    country:      "",
+    uri:          basicInfo.id ? `/release/${basicInfo.id}` : "",
+  };
+  return renderCard(syntheticItem);
+}
+
+function showCollectionTabs(show) {
+  const tabsEl = document.getElementById("collection-tabs");
+  if (tabsEl) tabsEl.style.display = show ? "" : "none";
+}
+
+function setActiveTab(tab) {
+  _activeTab = tab;
+  document.querySelectorAll(".result-tab").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.tab === tab);
+  });
+}
+
+async function loadCollectionTab(page = 1) {
+  _colPage = page;
+  setActiveTab("collection");
+  document.getElementById("results").innerHTML = "";
+  document.getElementById("pagination").style.display = "none";
+  setStatus("Loading collection…");
+  await showSyncStatus("collection");
+  try {
+    const r = await apiFetch(`/api/user/collection?page=${page}&per_page=24`);
+    const data = await r.json();
+    const items = data.items ?? [];
+    if (!items.length) {
+      setStatus("No collection items synced yet. Click 'Sync now' to fetch from Discogs.");
+      return;
     }
+    setStatus(`${data.total} items in collection — page ${page} of ${data.pages}`);
+    document.getElementById("results").innerHTML = items.map(renderCardFromBasicInfo).join("");
+    totalPages = data.pages;
+    currentPage = page;
+    renderCollectionPagination("collection");
+  } catch (e) {
+    setStatus("Failed to load collection: " + e.message, true);
+  }
+}
 
-    const label   = (item.label   ?? []).slice(0, 2).join(", ");
-    const formats = (item.format  ?? []).slice(0, 3).join(" · ");
-    const genre   = (item.genre   ?? []).slice(0, 1).join("");
-    const country = item.country ?? "";
-    const year    = item.year    ?? "";
+async function loadWantlistTab(page = 1) {
+  _wlPage = page;
+  setActiveTab("wantlist");
+  document.getElementById("results").innerHTML = "";
+  document.getElementById("pagination").style.display = "none";
+  setStatus("Loading wantlist…");
+  await showSyncStatus("wantlist");
+  try {
+    const r = await apiFetch(`/api/user/wantlist?page=${page}&per_page=24`);
+    const data = await r.json();
+    const items = data.items ?? [];
+    if (!items.length) {
+      setStatus("No wantlist items synced yet. Click 'Sync now' to fetch from Discogs.");
+      return;
+    }
+    setStatus(`${data.total} items in wantlist — page ${page} of ${data.pages}`);
+    document.getElementById("results").innerHTML = items.map(renderCardFromBasicInfo).join("");
+    totalPages = data.pages;
+    currentPage = page;
+    renderCollectionPagination("wantlist");
+  } catch (e) {
+    setStatus("Failed to load wantlist: " + e.message, true);
+  }
+}
 
-    const metaParts = [year, type, country].filter(Boolean);
+function renderCollectionPagination(tab) {
+  if (totalPages <= 1) return;
+  const prevFn = tab === "collection" ? `loadCollectionTab(${currentPage - 1})` : `loadWantlistTab(${currentPage - 1})`;
+  const nextFn = tab === "collection" ? `loadCollectionTab(${currentPage + 1})` : `loadWantlistTab(${currentPage + 1})`;
+  const pag = document.getElementById("pagination");
+  pag.style.display = "flex";
+  document.getElementById("page-info").textContent = `${currentPage} / ${totalPages}`;
+  document.getElementById("prev-btn").disabled = currentPage <= 1;
+  document.getElementById("next-btn").disabled = currentPage >= totalPages;
+  document.getElementById("prev-btn").onclick = currentPage > 1
+    ? () => { tab === "collection" ? loadCollectionTab(currentPage - 1) : loadWantlistTab(currentPage - 1); }
+    : null;
+  document.getElementById("next-btn").onclick = currentPage < totalPages
+    ? () => { tab === "collection" ? loadCollectionTab(currentPage + 1) : loadWantlistTab(currentPage + 1); }
+    : null;
+}
 
-    const thumb = item.cover_image
-      ? `<img src="${item.cover_image}" alt="${escHtml(title)}" loading="lazy" />`
-      : `<div class="thumb-placeholder">♪</div>`;
+async function showSyncStatus(type) {
+  const el = document.getElementById("sync-status");
+  if (!el) return;
+  try {
+    const r = await apiFetch("/api/user/collection?page=1&per_page=1");
+    // We just need to display last synced time; fetch it from sync endpoint status
+  } catch {}
+  el.innerHTML = `<a href="#" onclick="triggerSync('${type}');return false;" style="color:var(--accent);text-decoration:none">Sync now</a>`;
+}
 
-    const isRelease = type === "release" || type === "master";
-    const isArtist  = type === "artist";
-    const isLabel   = type === "label";
-    if (isRelease) itemCache.set(String(item.id), item);
-    const typeClass = `card card-type-${type}`;
-    const cardAttrs = isRelease
-      ? `class="${typeClass}" href="#" onclick="openModal(event,'${item.id}','${type}','${url.replace(/'/g, "\\'")}')" `
-      : (isArtist || isLabel)
-        ? `class="${typeClass}" href="#" data-entity-type="${escHtml(type)}" data-entity-name="${escHtml(title)}" data-entity-id="${item.id}" onclick="searchByEntity(event,this)"`
-        : `class="${typeClass}" href="${url}" target="_blank" rel="noopener"`;
+async function triggerSync(type = "both") {
+  const el = document.getElementById("sync-status");
+  if (el) el.textContent = "Syncing…";
+  try {
+    const r = await apiFetch("/api/user/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type }),
+    });
+    const data = await r.json();
+    if (data.skipped) {
+      if (el) el.innerHTML = `Recently synced &nbsp;·&nbsp; <a href="#" onclick="triggerSync('${type}');return false;" style="color:var(--accent);text-decoration:none">Sync now</a>`;
+      return;
+    }
+    // Reload badge IDs after sync
+    await loadDiscogsIds();
+    if (_activeTab === "collection") loadCollectionTab(1);
+    else if (_activeTab === "wantlist") loadWantlistTab(1);
+  } catch (e) {
+    if (el) el.textContent = "Sync failed: " + e.message;
+  }
+}
 
-    return `
-      <a ${cardAttrs}>
-        ${thumb}
-        <div class="card-body">
-          ${artist ? `<div class="card-artist">${escHtml(artist)}</div>` : ""}
-          <div class="card-title">${escHtml(title)}</div>
-          ${label   ? `<div class="card-sub">${escHtml(label)}</div>`   : ""}
-          ${formats ? `<div class="card-format">${escHtml(formats)}</div>` : ""}
-          ${genre   ? `<div class="card-format">${escHtml(genre)}</div>`   : ""}
-          <div class="card-meta">${metaParts.map(escHtml).join(" · ")}</div>
-        </div>
-      </a>`;
-  }).join("");
+async function loadDiscogsIds() {
+  try {
+    const r = await apiFetch("/api/user/discogs-ids");
+    if (!r.ok) return;
+    const data = await r.json();
+    window._collectionIds = new Set(data.collectionIds ?? []);
+    window._wantlistIds   = new Set(data.wantlistIds   ?? []);
+  } catch { /* ignore */ }
 }
 
 // ── Pagination ────────────────────────────────────────────────────────────
@@ -1362,6 +1526,37 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
       } else {
         authBar.innerHTML = `<a href="/account">Add your Discogs API Token for More Searches</a>`;
       }
+    }
+
+    // If user is signed in, check if they have a token and set up collection tabs
+    if (window._clerk.user) {
+      try {
+        const tokenCheck = await apiFetch("/api/user/token");
+        if (tokenCheck.ok) {
+          const tokenData = await tokenCheck.json();
+          if (tokenData.hasToken) {
+            showCollectionTabs(true);
+            await loadDiscogsIds();
+            // Wire up tab click handlers
+            document.querySelectorAll(".result-tab").forEach(btn => {
+              btn.addEventListener("click", () => {
+                const tab = btn.dataset.tab;
+                if (tab === "search") {
+                  setActiveTab("search");
+                  document.getElementById("sync-status").textContent = "";
+                  document.getElementById("pagination").style.display = "none";
+                  document.getElementById("results").innerHTML = "";
+                  setStatus("");
+                } else if (tab === "collection") {
+                  loadCollectionTab(1);
+                } else if (tab === "wantlist") {
+                  loadWantlistTab(1);
+                }
+              });
+            });
+          }
+        }
+      } catch { /* collection tabs optional */ }
     }
   } catch { /* auth unavailable — site works fine without it */ }
   finally { _authReady(); }
