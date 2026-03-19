@@ -65,12 +65,17 @@ html { overflow-x: hidden; }
     padding: 0.65rem 0.5rem;
   }
 
-  /* Type/sort row — wrap gracefully, hide "Results:" text label */
+  /* Type/sort row — radios on top, Advanced+Sort+Clear on bottom */
   .type-sort-row {
+    flex-wrap: wrap;
     gap: 0.4rem;
-    row-gap: 0.45rem;
+    row-gap: 0.5rem;
   }
-  .type-sort-row > span:not([style*="color:#333"]) { display: none; }
+  .type-sort-row > span { display: none; }
+  .type-radios   { order: 1; }
+  #advanced-toggle { order: 10; }
+  .sort-label      { order: 10; }
+  #clear-btn       { order: 10; }
 
   .type-radios {
     gap: 0.3rem;
@@ -211,8 +216,8 @@ body {
 
 #site-header {
   text-align: center;
-  padding-top: 82px;
-  padding-bottom: 40px;
+  padding-top: 55px;
+  padding-bottom: 27px;
 }
 
 #site-header img {
