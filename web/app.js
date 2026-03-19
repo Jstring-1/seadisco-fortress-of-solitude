@@ -58,7 +58,7 @@ function toggleAdvanced(forceOpen) {
   const arrow = document.getElementById("advanced-arrow");
   const open  = forceOpen !== undefined ? forceOpen : panel.style.display === "none";
   panel.style.display = open ? "" : "none";
-  arrow.textContent   = open ? "▲" : "▶";
+  arrow.textContent   = open ? "▼" : "▶";
 }
 
 // ── URL state helpers ────────────────────────────────────────────────────
