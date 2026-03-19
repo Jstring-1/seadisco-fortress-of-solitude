@@ -326,6 +326,18 @@ button {
 button:hover { background: var(--accent2); }
 button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 
+/* Advanced panel — smooth open/close via max-height transition */
+#advanced-panel {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+  opacity: 0;
+}
+#advanced-panel[data-open="true"] {
+  max-height: 600px;
+  opacity: 1;
+}
+
 .filters {
   display: flex;
   gap: 0.5rem;

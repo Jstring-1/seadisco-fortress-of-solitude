@@ -72,9 +72,9 @@ function toggleAdvanced(forceOpen) {
   }
   const panel = document.getElementById("advanced-panel");
   const arrow = document.getElementById("advanced-arrow");
-  const open  = forceOpen !== undefined ? forceOpen : panel.style.display === "none";
-  panel.style.display = open ? "" : "none";
-  arrow.textContent   = open ? "▼" : "▶";
+  const open  = forceOpen !== undefined ? forceOpen : panel.dataset.open !== "true";
+  panel.dataset.open = open ? "true" : "false";
+  arrow.textContent  = open ? "▼" : "▶";
 }
 
 // ── URL state helpers ────────────────────────────────────────────────────
@@ -565,7 +565,7 @@ function renderCardFromBasicInfo(basicInfo) {
 
 function showCollectionTabs(show) {
   const tabsEl = document.getElementById("collection-tabs");
-  if (tabsEl) tabsEl.style.display = show ? "" : "none";
+  if (tabsEl) tabsEl.style.visibility = show ? "visible" : "hidden";
 }
 
 function setActiveTab(tab) {
@@ -1530,7 +1530,7 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
       // Close panel and grey out the toggle button
       const panel = document.getElementById("advanced-panel");
       const arrow = document.getElementById("advanced-arrow");
-      panel.style.display = "none";
+      panel.dataset.open = "false";
       arrow.textContent = "▶";
     }
     const toggleBtn = document.getElementById("advanced-toggle");
