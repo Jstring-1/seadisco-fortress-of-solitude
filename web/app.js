@@ -494,11 +494,13 @@ function renderCard(item) {
     if (window._wantlistIds?.has(releaseId))   badges += `<span class="wantlist-badge" title="In your wantlist">♡</span>`;
   }
 
+  const thumbWrap = `<div class="card-thumb-wrap">${thumb}${badges ? `<div class="card-thumb-badges">${badges}</div>` : ""}</div>`;
+
   return `
     <a ${cardAttrs}>
-      ${thumb}
+      ${thumbWrap}
       <div class="card-body">
-        ${artist ? `<div class="card-artist">${escHtml(artist)}${badges}</div>` : (badges ? `<div class="card-artist">${badges}</div>` : "")}
+        ${artist ? `<div class="card-artist">${escHtml(artist)}</div>` : ""}
         <div class="card-title">${escHtml(title)}</div>
         ${label   ? `<div class="card-sub">${escHtml(label)}</div>`   : ""}
         ${formats ? `<div class="card-format">${escHtml(formats)}</div>` : ""}
