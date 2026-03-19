@@ -334,11 +334,13 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   row-gap: 1.5rem;
 }
 
-.filters input[type="text"] {
+.filters input[type="text"],
+.filters select {
   flex: 1;
   min-width: 120px;
   font-size: 0.85rem;
   padding: 0.55rem 0.75rem;
+  color-scheme: dark;
 }
 
 .filters label {
