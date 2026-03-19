@@ -46,13 +46,14 @@
 }
 
 :root {
-  --bg:        #0f0f0f;
-  --surface:   #1a1a1a;
-  --border:    #2e2e2e;
-  --accent:    #e8a020;
-  --accent-dim:#a06c10;
+  --bg:        #0c1015;
+  --surface:   #141c22;
+  --border:    #1e2d38;
+  --accent:    #00c8d4;
+  --accent-dim:#007a82;
+  --accent2:   #4de8f0;
   --text:      #e2e2e2;
-  --muted:     #888;
+  --muted:     #7a9aaa;
   --radius:    8px;
 }
 
@@ -87,7 +88,7 @@ body {
 }
 #recent-feed .feed-label {
   font-size: 0.7rem;
-  color: #444;
+  color: #3a5a6a;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   margin-bottom: 0.45rem;
@@ -99,8 +100,8 @@ body {
   justify-content: center;
 }
 #recent-feed .feed-pill {
-  background: #1a1a1a;
-  border: 1px solid #2a2a2a;
+  background: var(--surface);
+  border: 1px solid var(--border);
   border-radius: 20px;
   padding: 0.25rem 0.65rem;
   font-size: 0.75rem;
@@ -110,7 +111,7 @@ body {
   transition: border-color 0.15s, color 0.15s;
 }
 #recent-feed .feed-pill:hover {
-  border-color: #444;
+  border-color: #3a5a6a;
   color: #bbb;
 }
 
@@ -174,7 +175,7 @@ button {
   transition: background 0.15s;
 }
 
-button:hover { background: #ffb833; }
+button:hover { background: var(--accent2); }
 button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 
 .filters {
@@ -362,7 +363,7 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   border-radius: 4px;
   z-index: 1;
 }
-#version-close:hover { color: var(--text); background: #333; }
+#version-close:hover { color: var(--text); background: #1e2d38; }
 #version-info { overflow: hidden; }
 
 #modal-overlay.open { display: flex; }
@@ -394,14 +395,14 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   z-index: 1;
 }
 
-#modal-close:hover { color: var(--text); background: #333; }
+#modal-close:hover { color: var(--text); background: #1e2d38; }
 .popup-share {
   background: none; border: none; cursor: pointer;
   font-size: 0.72rem; color: var(--muted); padding: 0.2rem 0.5rem;
   border-radius: 4px; float: right; margin: 0.6rem 0.2rem 0 0;
   letter-spacing: 0.03em;
 }
-.popup-share:hover { color: var(--accent); background: #222; }
+.popup-share:hover { color: var(--accent); background: var(--surface); }
 
 #modal-loading {
   padding: 2rem;
@@ -425,7 +426,7 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   object-fit: cover;
   border-radius: 4px;
   flex-shrink: 0;
-  background: #222;
+  background: var(--surface);
   cursor: pointer;
   transition: opacity 0.15s;
 }
@@ -483,7 +484,7 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 #album-info .album-cover-placeholder, #version-info .album-cover-placeholder {
   width: 130px;
   height: 130px;
-  background: #222;
+  background: var(--surface);
   border-radius: 4px;
   flex-shrink: 0;
   display: flex;
@@ -548,7 +549,7 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   gap: 0.6rem;
   font-size: 0.82rem;
   padding: 0.2rem 0;
-  border-bottom: 1px solid #222;
+  border-bottom: 1px solid var(--border);
 }
 
 #album-info .track:last-child, #version-info .track:last-child { border-bottom: none; }
@@ -656,13 +657,13 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   width: 100%;
   aspect-ratio: 1;
   object-fit: cover;
-  background: #222;
+  background: var(--surface);
 }
 
 .card .thumb-placeholder {
   width: 100%;
   aspect-ratio: 1;
-  background: #222;
+  background: var(--surface);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -804,7 +805,7 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   border-radius: 4px;
 }
 
-#bio-full-close:hover { color: var(--text); background: #333; }
+#bio-full-close:hover { color: var(--text); background: #1e2d38; }
 
 #bio-full-name {
   font-size: 0.95rem;
@@ -828,8 +829,8 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 }
 
 .bio-artist-link:hover {
-  color: #ffb833;
-  border-bottom-color: #ffb833;
+  color: var(--accent2);
+  border-bottom-color: var(--accent2);
 }
 
 /* ── Alternatives "more" popup ── */
@@ -838,7 +839,7 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   position: fixed;
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
-  background: #1a1a1a;
+  background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 1rem 1.2rem;
@@ -872,7 +873,7 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   border-bottom: 1px solid var(--border);
 }
 #alts-popup a:last-child { border-bottom: none; }
-#alts-popup a:hover { color: #ffb833; }
+#alts-popup a:hover { color: var(--accent2); }
 
 /* ── Collection / Wantlist tabs ── */
 .result-tabs {
@@ -880,8 +881,8 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   justify-content: center;
   gap: 0;
   margin: 0.75rem 0;
-  background: #111;
-  border: 1px solid #2a2a2a;
+  background: #0c1218;
+  border: 1px solid var(--border);
   border-radius: 8px;
   padding: 0.25rem;
 }
@@ -899,14 +900,14 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   text-align: center;
 }
 .result-tab.active {
-  background: #222;
+  background: var(--surface);
   color: var(--accent);
   font-weight: 600;
   box-shadow: 0 1px 4px rgba(0,0,0,0.4);
 }
 .result-tab:hover:not(.active) {
   color: var(--fg);
-  background: #1a1a1a;
+  background: var(--surface);
 }
 .collection-badge {
   font-size: 0.65rem;
