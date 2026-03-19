@@ -32,7 +32,7 @@ html { overflow-x: hidden; }
 @media (max-width: 860px) {
   #site-header {
     padding-top: 28px;
-    padding-bottom: 28px;
+    padding-bottom: 20px;
   }
   #site-header img { height: 130px; }
 }
@@ -41,16 +41,16 @@ html { overflow-x: hidden; }
 @media (max-width: 640px) {
   #site-header {
     padding-top: 18px;
-    padding-bottom: 24px;
+    padding-bottom: 18px;
   }
   #site-header img { height: 96px; }
 
   #header-bar {
-    padding: 0 1rem;
     flex-direction: column;
     align-items: center;
     gap: 0.2rem;
     text-align: center;
+    margin-bottom: 0.5rem;
   }
   #auth-bar { text-align: center; }
 
@@ -186,13 +186,7 @@ html { overflow-x: hidden; }
   display: flex;
   justify-content: space-between;
   align-items: center;
-  max-width: 900px;
-  padding: 0 1.5rem;
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  margin: 0 auto;
+  margin-bottom: 0.6rem;
 }
 
 :root {
@@ -217,9 +211,8 @@ body {
 
 #site-header {
   text-align: center;
-  position: relative;
   padding-top: 82px;
-  padding-bottom: 83px;
+  padding-bottom: 40px;
 }
 
 #site-header img {
@@ -325,6 +318,8 @@ button {
 
 button:hover { background: var(--accent2); }
 button:disabled { background: var(--accent-dim); cursor: not-allowed; }
+
+#search-btn { width: 120px; flex-shrink: 0; }
 
 /* Advanced panel — smooth open/close via max-height transition */
 #advanced-panel {

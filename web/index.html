@@ -41,13 +41,9 @@
 
 <div id="site-header">
   <a href="https://seadisco.com"><img src="/seadisco-logo.png" alt="SeaDisco" /></a>
-  <div id="header-bar">
-    <div id="site-tagline">Music Rabbit Hole Pathway</div>
-    <div id="auth-bar"><span id="auth-status"></span></div>
-  </div>
 </div>
 
-<div id="collection-tabs" style="visibility:hidden;max-width:900px;margin:0 auto;padding:0 1.5rem 2.25rem">
+<div id="collection-tabs" style="visibility:hidden;max-width:900px;margin:0 auto;padding:0 1.5rem 1rem">
   <div class="result-tabs">
     <button class="result-tab active" data-tab="search">Search Results</button>
     <button class="result-tab" data-tab="collection">My Collection</button>
@@ -56,9 +52,13 @@
 </div>
 
 <main>
+  <div id="header-bar">
+    <div id="site-tagline">Music Rabbit Hole Pathway</div>
+    <div id="auth-bar"><span id="auth-status"></span></div>
+  </div>
   <div class="search-row">
     <input type="text" id="query" placeholder="Search artists, releases, labels…" autocomplete="off" />
-    <button id="search-btn" onclick="doSearch(1)" style="flex-shrink:0;width:120px">Search</button>
+    <button id="search-btn" onclick="doSearch(1)" style="flex-shrink:0">Search</button>
   </div>
 
   <div class="type-sort-row">
