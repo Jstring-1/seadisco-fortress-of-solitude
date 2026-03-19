@@ -85,8 +85,6 @@ html { overflow-x: hidden; }
     margin-bottom: 0.75rem;
   }
   .filters label { min-width: 80px; }
-  /* Force Format/Year on line 1, Genre/Style on line 2 */
-  .filters-pair label { flex: 1 1 45%; }
 
   /* Recent feed */
   #recent-feed { margin-top: 30px; }
@@ -1091,4 +1089,9 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   border-radius: 3px;
   padding: 1px 5px;
   line-height: 1.4;
+}
+
+/* ── Mobile: force Format/Year on line 1, Genre/Style on line 2 ── */
+@media (max-width: 640px) {
+  .filters-pair label { flex: 1 1 45%; min-width: 0; }
 }

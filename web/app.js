@@ -54,6 +54,22 @@ function populateStyles() {
 
 // ── Advanced panel toggle ─────────────────────────────────────────────────
 function toggleAdvanced(forceOpen) {
+  const isAi = document.querySelector('input[name="result-type"]:checked')?.value === "ai";
+  if (isAi) {
+    // Show inline hint then fade it out
+    const btn = document.getElementById("advanced-toggle");
+    const existing = document.getElementById("ai-adv-hint");
+    if (!existing) {
+      const hint = document.createElement("span");
+      hint.id = "ai-adv-hint";
+      hint.textContent = "Not available in AI mode";
+      hint.style.cssText = "font-size:0.72rem;color:#888;margin-left:0.5rem;transition:opacity 1.5s";
+      btn.parentNode.insertBefore(hint, btn.nextSibling);
+      setTimeout(() => hint.style.opacity = "0", 1500);
+      setTimeout(() => hint.remove(), 3000);
+    }
+    return;
+  }
   const panel = document.getElementById("advanced-panel");
   const arrow = document.getElementById("advanced-arrow");
   const open  = forceOpen !== undefined ? forceOpen : panel.style.display === "none";
@@ -1506,16 +1522,22 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
   });
 });
 
-// Grey out advanced fields when AI mode is selected
+// Grey out advanced toggle when AI mode is selected
 document.querySelectorAll('input[name="result-type"]').forEach(radio => {
   radio.addEventListener("change", () => {
     const isAi = document.querySelector('input[name="result-type"]:checked')?.value === "ai";
-    if (isAi) toggleAdvanced(false);
-    const advancedFields = document.getElementById("advanced-options");
-    const sortLabel = document.querySelector("label.sort-label");
-    [advancedFields, sortLabel].forEach(el => {
-      if (el) el.style.opacity = isAi ? "0.35" : "";
-    });
+    if (isAi) {
+      // Close panel and grey out the toggle button
+      const panel = document.getElementById("advanced-panel");
+      const arrow = document.getElementById("advanced-arrow");
+      panel.style.display = "none";
+      arrow.textContent = "▶";
+    }
+    const toggleBtn = document.getElementById("advanced-toggle");
+    if (toggleBtn) {
+      toggleBtn.style.opacity  = isAi ? "0.35" : "";
+      toggleBtn.style.cursor   = isAi ? "default" : "";
+    }
   });
 });
 
