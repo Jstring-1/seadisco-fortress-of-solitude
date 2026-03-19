@@ -1,4 +1,5 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { overflow-x: hidden; }
 
 /* Results type + sort row */
 .type-sort-row {
@@ -23,9 +24,154 @@
   gap: 0.3rem;
   color: #555;
 }
-@media (max-width: 480px) {
-  .type-sort-row > span { display: none; } /* hide "Results:" label to save space */
-  .type-radios { gap: 0.15rem; }
+/* ══════════════════════════════════════════════
+   RESPONSIVE / MOBILE
+   ══════════════════════════════════════════════ */
+
+/* ── Tablet (≤ 860px) ── */
+@media (max-width: 860px) {
+  #site-header {
+    padding-top: 56px;
+    padding-bottom: 56px;
+  }
+  #site-header img { height: 130px; }
+}
+
+/* ── Mobile (≤ 640px) ── */
+@media (max-width: 640px) {
+  #site-header {
+    padding-top: 36px;
+    padding-bottom: 48px;
+  }
+  #site-header img { height: 96px; }
+
+  #header-bar {
+    padding: 0 1rem;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.2rem;
+    text-align: center;
+  }
+  #auth-bar { text-align: center; }
+
+  #collection-tabs { padding: 0 1rem 1.25rem; }
+
+  main { padding: 0.4rem 0.9rem 1rem; }
+
+  /* Search row — shrink button */
+  #search-btn {
+    width: 82px;
+    font-size: 0.85rem;
+    padding: 0.65rem 0.5rem;
+  }
+
+  /* Type/sort row — wrap gracefully, hide "Results:" text label */
+  .type-sort-row {
+    gap: 0.4rem;
+    row-gap: 0.45rem;
+  }
+  .type-sort-row > span:not([style*="color:#333"]) { display: none; }
+
+  .type-radios {
+    gap: 0.3rem;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .type-radios label { font-size: 0.72rem; }
+
+  /* Advanced filters */
+  .filters {
+    row-gap: 0.75rem;
+    margin-bottom: 0.75rem;
+  }
+  .filters label { min-width: 80px; }
+
+  /* Recent feed */
+  #recent-feed { margin-top: 30px; }
+  #recent-feed .feed-pill { font-size: 0.7rem; padding: 0.2rem 0.5rem; }
+
+  /* Results grid — tighter */
+  #results {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 0.65rem;
+  }
+
+  /* Collection tabs */
+  .result-tab {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.76rem;
+  }
+
+  /* Album popup — stack cover + meta vertically */
+  #album-info .album-header,
+  #version-info .album-header {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    gap: 0.75rem;
+  }
+  #album-info .album-cover,
+  #version-info .album-cover,
+  #album-info .album-cover-placeholder,
+  #version-info .album-cover-placeholder {
+    width: 100px;
+    height: 100px;
+  }
+
+  /* Modal boxes — full width with breathing room */
+  #modal-box,
+  #bio-full-box,
+  #version-box {
+    max-width: 100%;
+    margin: 0;
+    border-radius: var(--radius);
+  }
+  #modal-overlay,
+  #bio-full-overlay,
+  #version-overlay {
+    padding: 0.5rem;
+    align-items: flex-end;  /* slide up from bottom on mobile */
+  }
+  #modal-box,
+  #bio-full-box,
+  #version-box {
+    max-height: 92vh;
+    border-radius: var(--radius) var(--radius) 0 0;
+  }
+
+  /* Video overlay */
+  #video-overlay { padding: 0.5rem; }
+  #video-wrap { padding: 0.4rem; }
+
+  /* Pagination */
+  #pagination { gap: 0.5rem; }
+  #pagination button { padding: 0.45rem 0.9rem; font-size: 0.85rem; }
+}
+
+/* ── Small phone (≤ 400px) ── */
+@media (max-width: 400px) {
+  #site-header img { height: 76px; }
+  #site-header {
+    padding-top: 28px;
+    padding-bottom: 40px;
+  }
+
+  .type-sort-row { font-size: 0.7rem; }
+
+  /* Force 2-column grid so cards aren't tiny */
+  #results {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.5rem;
+  }
+
+  .result-tab {
+    padding: 0.35rem 0.4rem;
+    font-size: 0.7rem;
+    letter-spacing: 0;
+  }
+
+  /* Tighten blurb/bio padding */
+  #blurb { padding: 0.65rem 0.85rem; font-size: 0.85rem; }
 }
 
 #auth-bar {
