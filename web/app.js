@@ -490,8 +490,8 @@ function renderCard(item) {
   let badges = "";
   const releaseId = item.id;
   if (releaseId) {
-    if (window._collectionIds?.has(releaseId)) badges += `<span class="collection-badge">✓ Collection</span>`;
-    if (window._wantlistIds?.has(releaseId))   badges += `<span class="wantlist-badge">♡ Wantlist</span>`;
+    if (window._collectionIds?.has(releaseId)) badges += `<span class="collection-badge" title="In your collection">✓</span>`;
+    if (window._wantlistIds?.has(releaseId))   badges += `<span class="wantlist-badge" title="In your wantlist">♡</span>`;
   }
 
   return `
@@ -1138,7 +1138,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
              : `<div class="album-cover-placeholder">♪</div>`}
       <div class="album-meta">
         ${typeLabel ? `<div class="album-type-badge">${escHtml(typeLabel)}</div>` : ""}
-        <h2>${escHtml(title)}${window._collectionIds?.has(Number(releaseId)) ? ` <span class="collection-badge">✓ Collection</span>` : ""}${window._wantlistIds?.has(Number(releaseId)) ? ` <span class="wantlist-badge">♡ Wantlist</span>` : ""}</h2>
+        <h2>${escHtml(title)}${window._collectionIds?.has(Number(releaseId)) ? ` <span class="collection-badge" title="In your collection">✓</span>` : ""}${window._wantlistIds?.has(Number(releaseId)) ? ` <span class="wantlist-badge" title="In your wantlist">♡</span>` : ""}</h2>
         ${artists.length ? `<div class="album-artist">${artists.map(n => `<a href="#" class="modal-artist-link" data-artist="${escHtml(n)}" onclick="searchArtistFromModal(event,this)">${escHtml(n)}</a>`).join(", ")}</div>` : ""}
         ${detailRows ? `<div class="album-detail-grid">${detailRows}</div>` : ""}
         ${(() => {
