@@ -116,6 +116,7 @@ function clearForm() {
   document.getElementById("type-pipe").style.display = "none";
   document.getElementById("sort-desc").textContent = "";
   document.getElementById("sort-pipe").style.display = "none";
+  document.getElementById("site-info").style.display = "";
 }
 
 async function doSearch(page = 1, skipPushState = false) {
@@ -154,6 +155,7 @@ async function doSearch(page = 1, skipPushState = false) {
   document.getElementById("blurb").style.display = "none";
   document.getElementById("artist-alts").innerHTML = "";
   closeAltsPopup();
+  document.getElementById("site-info").style.display = "none";
   setStatus("Searching…");
   document.getElementById("results").innerHTML = "";
 
