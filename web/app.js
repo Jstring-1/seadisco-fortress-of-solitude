@@ -417,6 +417,17 @@ async function doSearch(page = 1, skipPushState = false) {
     renderResults(items);
     renderPagination();
 
+    // GA4: track search as virtual page view + search event
+    if (typeof gtag === "function") {
+      gtag("event", "page_view", {
+        page_location: window.location.href,
+        page_title: document.title
+      });
+      gtag("event", "search", {
+        search_term: [q, artist, label, genre].filter(Boolean).join(" | ") || "(filters only)"
+      });
+    }
+
     const urlP = new URLSearchParams(location.search);
     const openParam  = urlP.get("op");
     const videoParam = urlP.get("vd");
@@ -858,6 +869,15 @@ async function doAiSearch(q) {
         }).join("")}
       </div>`;
     blurbEl.style.display = "block";
+
+    // GA4: track AI search
+    if (typeof gtag === "function") {
+      gtag("event", "page_view", {
+        page_location: window.location.href,
+        page_title: document.title
+      });
+      gtag("event", "ai_search", { search_term: q });
+    }
   } catch (err) {
     setStatus("AI search error: " + err.message, false);
   } finally {
