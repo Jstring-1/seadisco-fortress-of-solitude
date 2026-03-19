@@ -91,10 +91,14 @@
   </div>
 
   <div id="advanced-panel" style="display:none;margin-top:0.5rem">
-    <!-- Row 1: Artist · Label · Format -->
+    <!-- Row 1: Artist · Release · Label -->
     <div class="filters">
       <label>Artist <input type="text" id="f-artist" placeholder="e.g. Miles Davis" oninput="currentArtistId=null" /></label>
+      <label>Release <input type="text" id="f-release" placeholder="e.g. Kind of Blue" /></label>
       <label>Label <input type="text" id="f-label" placeholder="e.g. Columbia" /></label>
+    </div>
+    <!-- Row 2: Format · Year -->
+    <div class="filters" style="margin-top:0.4rem">
       <label>Format
         <select id="f-format">
           <option value="Vinyl">Vinyl</option>
@@ -104,10 +108,6 @@
           <option value="Digital">Digital</option>
         </select>
       </label>
-    </div>
-    <!-- Row 2: Release · Year -->
-    <div class="filters" style="margin-top:0.4rem">
-      <label>Release <input type="text" id="f-release" placeholder="e.g. Kind of Blue" /></label>
       <label>Year <input type="text" id="f-year" placeholder="e.g. 1959" /></label>
     </div>
     <!-- Row 3: Genre · Style -->
