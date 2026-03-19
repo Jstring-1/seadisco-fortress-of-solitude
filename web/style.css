@@ -85,6 +85,8 @@ html { overflow-x: hidden; }
     margin-bottom: 0.75rem;
   }
   .filters label { min-width: 80px; }
+  /* Force Format/Year on line 1, Genre/Style on line 2 */
+  .filters-pair label { flex: 1 1 45%; }
 
   /* Recent feed */
   #recent-feed { margin-top: 30px; }
