@@ -96,6 +96,7 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
+  justify-content: center;
 }
 #recent-feed .feed-pill {
   background: #1a1a1a;
