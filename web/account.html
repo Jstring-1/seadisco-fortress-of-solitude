@@ -101,9 +101,8 @@
         <button id="remove-btn" class="danger-btn" onclick="removeToken()" style="display:none">Remove saved token</button>
       </div>
 
-      <hr class="section-divider" />
-
       <div id="sync-section" style="display:none">
+      <hr class="section-divider" />
         <h2 style="margin-bottom:0.4rem">Collection &amp; Wantlist</h2>
         <div id="account-sync-status" style="font-size:0.82rem;color:var(--muted);margin-bottom:0.5rem">Loading sync status…</div>
         <button id="account-sync-btn" onclick="accountSync()" style="font-size:0.82rem;padding:0.3rem 0.9rem;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-weight:600">Sync Now</button>
@@ -117,13 +116,14 @@
       </div>
 
       <hr class="section-divider" />
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem">
+      <div style="display:flex;justify-content:space-between;align-items:center">
         <div style="display:flex;gap:1rem;align-items:center">
           <button onclick="signOut()" style="background:none;border:none;color:#666;cursor:pointer;font-size:0.82rem;padding:0">Sign out</button>
           <button onclick="openFeedback()" style="background:none;border:none;color:#00c8d4;cursor:pointer;font-size:0.82rem;padding:0">Send feedback</button>
         </div>
         <button onclick="deleteAccount()" class="danger-btn" style="font-size:0.82rem;padding:0.3rem 0.7rem">Delete account</button>
       </div>
+      <hr class="section-divider" />
       <h2 style="margin-bottom:0.5rem">Recent Searches</h2>
       <div id="history-list" style="font-size:0.85rem;color:var(--muted)">Loading…</div>
     </div>
