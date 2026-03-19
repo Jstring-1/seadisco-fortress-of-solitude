@@ -875,10 +875,6 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 #alts-popup a:hover { color: #ffb833; }
 
 /* ── Collection / Wantlist tabs ── */
-#collection-tabs {
-  max-width: 560px;
-  margin: 0 auto;
-}
 .result-tabs {
   display: flex;
   justify-content: center;
