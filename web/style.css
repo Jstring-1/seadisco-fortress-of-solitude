@@ -1058,23 +1058,33 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   color: var(--fg);
   background: var(--surface);
 }
+.card-thumb-wrap {
+  position: relative;
+}
+.card-thumb-badges {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
 .collection-badge {
-  font-size: 0.65rem;
-  background: #1a3a1a;
+  font-size: 0.7rem;
+  background: rgba(26, 58, 26, 0.88);
   color: #4caf50;
   border: 1px solid #4caf50;
   border-radius: 3px;
   padding: 1px 5px;
-  margin-left: 0.4rem;
-  vertical-align: middle;
+  line-height: 1.4;
 }
 .wantlist-badge {
-  font-size: 0.65rem;
-  background: #3a1a1a;
+  font-size: 0.7rem;
+  background: rgba(58, 26, 26, 0.88);
   color: #e57373;
   border: 1px solid #e57373;
   border-radius: 3px;
   padding: 1px 5px;
-  margin-left: 0.4rem;
-  vertical-align: middle;
+  line-height: 1.4;
 }
