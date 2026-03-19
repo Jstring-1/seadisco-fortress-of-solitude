@@ -13,8 +13,7 @@
 }
 .type-radios {
   display: flex;
-  flex: 1;
-  justify-content: space-between;
+  gap: 0.5rem;
   align-items: center;
 }
 .sort-label {
