@@ -72,8 +72,8 @@ body {
 #site-header {
   text-align: center;
   position: relative;
-  padding-top: 120px;
-  padding-bottom: 120px;
+  padding-top: 82px;
+  padding-bottom: 83px;
 }
 
 #site-header img {
@@ -129,18 +129,12 @@ main {
 }
 
 
-.search-row {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-}
-
 /* ── Search form ── */
 .search-row {
   display: flex;
   gap: 0.5rem;
   margin-bottom: 1rem;
-  flex-wrap: wrap;
+  align-items: center;
 }
 
 input[type="text"] {
