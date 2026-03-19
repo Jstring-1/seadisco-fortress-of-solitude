@@ -125,9 +125,9 @@
       </select>
     </label>
     <button id="search-btn" onclick="doSearch(1)" style="flex:1">Search</button>
+    <button type="button" onclick="clearForm()" title="Clear form" style="background:none;border:none;padding:0.3rem 0.5rem;font-size:1rem;color:#555;cursor:pointer;line-height:1;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
   </div>
   <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:#555;margin-bottom:1.25rem;min-height:1em">
-    <button type="button" onclick="clearForm()" title="Clear form" style="background:none;border:none;padding:0;margin:0;font-size:0.92rem;color:#555;cursor:pointer;line-height:1;display:flex;align-items:center" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
     <span id="powered-by"></span>
     <span id="search-pipe" style="color:#333;display:none">|</span>
     <span id="search-desc"></span>
