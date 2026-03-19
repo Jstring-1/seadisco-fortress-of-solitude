@@ -141,7 +141,6 @@ async function doSearch(page = 1, skipPushState = false) {
   // Switch back to search tab if on collection/wantlist tab
   if (_activeTab !== "search") {
     setActiveTab("search");
-    document.getElementById("sync-status").textContent = "";
   }
 
   if (!skipPushState) pushSearchState(q, artistRaw, release, year, label, genre, sort, resultType, page);
@@ -550,10 +549,10 @@ function setActiveTab(tab) {
 async function loadCollectionTab(page = 1) {
   _colPage = page;
   setActiveTab("collection");
+  document.getElementById("blurb").style.display = "none";
   document.getElementById("results").innerHTML = "";
   document.getElementById("pagination").style.display = "none";
   setStatus("Loading collection…");
-  await showSyncStatus("collection");
   try {
     const r = await apiFetch(`/api/user/collection?page=${page}&per_page=24`);
     const data = await r.json();
@@ -575,10 +574,10 @@ async function loadCollectionTab(page = 1) {
 async function loadWantlistTab(page = 1) {
   _wlPage = page;
   setActiveTab("wantlist");
+  document.getElementById("blurb").style.display = "none";
   document.getElementById("results").innerHTML = "";
   document.getElementById("pagination").style.display = "none";
   setStatus("Loading wantlist…");
-  await showSyncStatus("wantlist");
   try {
     const r = await apiFetch(`/api/user/wantlist?page=${page}&per_page=24`);
     const data = await r.json();
@@ -1548,7 +1547,6 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
                 const tab = btn.dataset.tab;
                 if (tab === "search") {
                   setActiveTab("search");
-                  document.getElementById("sync-status").textContent = "";
                   document.getElementById("pagination").style.display = "none";
                   document.getElementById("results").innerHTML = "";
                   setStatus("");
