@@ -60,11 +60,6 @@
     <input type="text" id="query" placeholder="Search artists, releases, labels…" autocomplete="off" />
   </div>
 
-  <div style="margin-bottom:0.75rem;margin-top:0.25rem">
-    <button type="button" id="advanced-toggle" onclick="toggleAdvanced()" style="background:none;border:none;padding:0;font-size:0.78rem;color:#666;cursor:pointer;display:flex;align-items:center;gap:0.3rem" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#666'">
-      <span id="advanced-arrow">▶</span> Advanced
-    </button>
-  </div>
   <div id="advanced-panel" style="display:none">
     <div class="filters">
       <label>Artist <input type="text" id="f-artist" placeholder="e.g. Miles Davis" oninput="currentArtistId=null" /></label>
@@ -119,6 +114,10 @@
       <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="label"> Labels</label>
       <label style="display:flex;align-items:center;gap:0.25rem;margin-left:0.5rem;padding-left:0.75rem;border-left:1px solid #333" title="Ask Claude for music recommendations"><input type="radio" name="result-type" value="ai" id="ai-radio"> ✦ AI</label>
     </div>
+    <span style="color:#333;margin:0 0.5rem">|</span>
+    <button type="button" id="advanced-toggle" onclick="toggleAdvanced()" style="background:none;border:none;padding:0;font-size:0.78rem;color:#666;cursor:pointer;display:flex;align-items:center;gap:0.3rem;white-space:nowrap" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#666'">
+      <span id="advanced-arrow">▶</span> Advanced
+    </button>
   </div>
   <div style="display:flex;gap:0.5rem;margin-bottom:0.75rem;margin-top:0.5rem;align-items:center">
     <label class="sort-label" style="flex-shrink:0">
