@@ -121,6 +121,15 @@ main {
   padding: 0.4rem 1.5rem 1.5rem;
 }
 
+#site-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 32vh;
+  line-height: 2;
+}
+
 .search-row {
   display: flex;
   gap: 0.5rem;
