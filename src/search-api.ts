@@ -400,8 +400,13 @@ app.get("/api/recent-searches", async (_req, res) => {
       if (!sig.replace(/\|/g, "").trim() || seen.has(sig)) return false;
       seen.add(sig);
       return true;
-    }).slice(0, 200);
-    res.json({ searches });
+    });
+    // Shuffle and return 20 random entries
+    for (let i = searches.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [searches[i], searches[j]] = [searches[j], searches[i]];
+    }
+    res.json({ searches: searches.slice(0, 20) });
   } catch { res.json({ searches: [] }); }
 });
 
