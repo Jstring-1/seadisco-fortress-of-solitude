@@ -47,7 +47,7 @@
   </div>
 </div>
 
-<div id="collection-tabs" style="display:none;max-width:900px;margin:0 auto;padding:0 1.5rem">
+<div id="collection-tabs" style="display:none;max-width:900px;margin:0 auto;padding:0 1.5rem 0.75rem">
   <div class="result-tabs">
     <button class="result-tab active" data-tab="search">Search Results</button>
     <button class="result-tab" data-tab="collection">My Collection</button>
@@ -157,12 +157,12 @@
     <button id="next-btn" onclick="doSearch(currentPage + 1)">Next →</button>
   </div>
   <div id="recent-feed" style="display:none"></div>
+  <div id="site-info" style="text-align:center;padding:2rem 1rem 1rem;font-size:0.72rem;color:var(--muted)">
+    <span style="display:inline-block;margin-bottom:0.4rem;color:#555;font-style:italic">DISCLAIMER: AI be funky sometimes</span><br>
+    Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Discogs</a>, <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Claude</a>, and <a href="https://www.wikipedia.org" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Wikipedia</a> &nbsp;|&nbsp; <a href="#" onclick="document.getElementById('info-overlay').style.display='flex';return false;" style="color:#3a5a6a;text-decoration:none">Info</a><br>
+    <span style="margin-top:0.4rem;display:inline-block">© 2026 SeaDisco &nbsp;·&nbsp; Music data courtesy of Discogs API &nbsp;·&nbsp; Not affiliated with Discogs &nbsp;·&nbsp; Jimmy Witherfork Strikes Again</span>
+  </div>
 </main>
-<footer style="text-align:center;padding:1.5rem 1rem;font-size:0.72rem;color:var(--muted);margin-top:2rem">
-  <span style="display:inline-block;margin-bottom:0.4rem;color:#555;font-style:italic">DISCLAIMER: AI be funky sometimes</span><br>
-  Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:#666;text-decoration:none">Discogs</a>, <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:#666;text-decoration:none">Claude</a>, and <a href="https://www.wikipedia.org" target="_blank" rel="noopener" style="color:#666;text-decoration:none">Wikipedia</a> &nbsp;|&nbsp; <a href="#" onclick="document.getElementById('info-overlay').style.display='flex';return false;" style="color:#666;text-decoration:none">Info</a><br>
-  <span style="margin-top:0.4rem;display:inline-block">© 2026 SeaDisco &nbsp;·&nbsp; Music data courtesy of Discogs API &nbsp;·&nbsp; Not affiliated with Discogs &nbsp;·&nbsp; Jimmy Witherfork Strikes Again</span>
-</footer>
 
 
 <div id="modal-overlay">
