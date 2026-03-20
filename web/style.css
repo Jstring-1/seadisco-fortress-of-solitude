@@ -231,7 +231,7 @@ body {
   text-transform: uppercase;
 }
 
-/* ── Main nav (Search / Drops / Collection / Wantlist / Info) ───────────── */
+/* ── Main nav ────────────────────────────────────────────────────────────── */
 #main-nav {
   display: flex;
   align-items: center;
@@ -239,33 +239,55 @@ body {
   padding: 0 1.5rem 2.5rem;
   position: relative;
 }
-/* Wrapper gives popup a positioning context without affecting overflow */
+/* Wrapper is the positioning context for the auth popup */
 #nav-tabs-wrap {
   position: relative;
   display: inline-flex;
 }
+/* Outer container: rounded pill group with overflow:hidden to clip button backgrounds */
 #main-nav-tabs {
   display: flex;
-  /* No outer border or border-radius — borders live on each button instead,
-     which avoids the rounded-corner / internal-border rendering artifact */
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
 }
+/* ─ Tab buttons ─────────────────────────────────────────────────────────── */
+.main-nav-tab {
+  background: none;
+  border: none;
+  border-radius: 0;          /* MUST override global button{border-radius:8px} */
+  box-shadow: inset -1px 0 0 var(--border);  /* separator — never curves */
+  color: var(--muted);
+  padding: 0.45rem 1.2rem;
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: normal;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  transition: color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+#main-nav-tabs > .main-nav-tab:first-child { border-radius: 6px 0 0 6px; }
+#main-nav-tabs > button:last-of-type { box-shadow: none; } /* Info: no right separator, auth-wrap provides it */
+.main-nav-tab.active      { color: var(--accent); font-weight: 600; background: rgba(0,200,212,0.05); }
+.main-nav-tab:hover:not(.active):not(.nav-disabled) { color: var(--text); background: rgba(255,255,255,0.03); }
+.main-nav-tab.nav-disabled { color: #2a3a40; cursor: default; }
+/* ─ Auth wrap + button ──────────────────────────────────────────────────── */
 #nav-auth-wrap {
-  position: relative;
   display: flex;
   align-items: stretch;
+  box-shadow: inset 1px 0 0 var(--border); /* left separator before Account */
 }
 .nav-auth-btn {
   background: none;
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  border-right: 1px solid var(--border);
-  border-left: none;
+  border: none;
   border-radius: 0 6px 6px 0;
   color: var(--muted);
   font-size: 0.78rem;
+  font-weight: normal;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 0.4rem 1.3rem;
+  padding: 0.45rem 1.2rem;
   cursor: pointer;
   text-decoration: none;
   white-space: nowrap;
@@ -273,7 +295,8 @@ body {
   align-items: center;
   transition: color 0.15s, background 0.15s;
 }
-.nav-auth-btn:hover { color: var(--fg); background: var(--surface); }
+.nav-auth-btn:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+/* ─ Auth popup ──────────────────────────────────────────────────────────── */
 #nav-auth-popup {
   display: none;
   position: absolute;
@@ -290,61 +313,11 @@ body {
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
   z-index: 300;
 }
-/* :has() lets us trigger popup from a sibling context */
 #nav-tabs-wrap:has(#nav-auth-wrap:hover) #nav-auth-popup { display: block; }
-.main-nav-tab {
-  background: none;
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  border-right: 1px solid var(--border);
-  border-left: none;
-  color: var(--muted);
-  padding: 0.4rem 1.3rem;
-  cursor: pointer;
-  font-size: 0.78rem;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  transition: all 0.15s;
-  white-space: nowrap;
-}
-/* First tab gets left border + rounded left corners */
-#main-nav-tabs > .main-nav-tab:first-child {
-  border-left: 1px solid var(--border);
-  border-radius: 6px 0 0 6px;
-}
-/* Info (last button) keeps its border-right — it's the separator before Account */
-.main-nav-tab.active      { background: var(--surface); color: var(--accent); font-weight: 600; }
-.main-nav-tab:hover:not(.active):not(.nav-disabled) { color: var(--fg); background: var(--surface); }
-.main-nav-tab.nav-disabled { color: #333; cursor: default; }
 
-/* ── Mobile nav override — MUST come after desktop nav styles ───────────── */
-@media (max-width: 640px) {
-  #main-nav { padding: 0 1rem 1.5rem; justify-content: center; }
-  #nav-hamburger { display: flex; }
-  #nav-tabs-wrap { position: absolute; top: 2.4rem; z-index: 200; display: block; }
-  #main-nav-tabs { display: none; flex-direction: column; min-width: 190px;
-                   border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-  #main-nav-tabs.mobile-open { display: flex; }
-  .main-nav-tab {
-    border-top: none; border-left: none; border-right: none;
-    border-bottom: 1px solid var(--border);
-    border-radius: 0 !important;
-    padding: 0.65rem 1.2rem; font-size: 0.82rem;
-    letter-spacing: 0.03em; text-align: left; width: 100%;
-  }
-  #main-nav-tabs > .main-nav-tab:first-child { border-left: none; border-radius: 0 !important; }
-  #nav-auth-wrap { border-left: none; }
-  .nav-auth-btn {
-    border: none; border-radius: 0 !important;
-    padding: 0.65rem 1.2rem; font-size: 0.82rem;
-    width: 100%; justify-content: flex-start;
-  }
-  #nav-auth-popup { display: none !important; }
-}
-
-/* ── Hamburger button (mobile only) ────────────────────────────────────── */
+/* ─ Hamburger (desktop: hidden; defined BEFORE mobile override) ─────────── */
 #nav-hamburger {
-  display: none;
+  display: none;                /* hidden on desktop */
   flex-direction: column;
   justify-content: space-between;
   width: 36px;
@@ -358,11 +331,42 @@ body {
 #nav-hamburger span {
   display: block;
   height: 2px;
-  background: var(--muted);
+  background: var(--accent);   /* teal lines — clearly visible */
   border-radius: 2px;
-  transition: background 0.15s;
 }
-#nav-hamburger:hover span { background: var(--accent); }
+/* ─ Mobile nav (AFTER hamburger default so display:flex wins) ──────────── */
+@media (max-width: 640px) {
+  #main-nav { padding: 0 1rem 1.5rem; justify-content: center; }
+  #nav-hamburger { display: flex !important; }
+  #nav-tabs-wrap { position: absolute; top: 2.8rem; z-index: 200; min-width: 190px; }
+  #main-nav-tabs {
+    display: none !important;
+    flex-direction: column;
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  #main-nav-tabs.mobile-open { display: flex !important; }
+  .main-nav-tab {
+    box-shadow: none;
+    border-radius: 0 !important;
+    border-bottom: 1px solid var(--border);
+    padding: 0.65rem 1.2rem;
+    font-size: 0.82rem;
+    letter-spacing: 0.03em;
+    text-align: left;
+    width: 100%;
+  }
+  #main-nav-tabs > .main-nav-tab:first-child { border-radius: 0 !important; }
+  #nav-auth-wrap { box-shadow: none; border-top: 1px solid var(--border); }
+  .nav-auth-btn {
+    border-radius: 0 !important;
+    padding: 0.65rem 1.2rem;
+    font-size: 0.82rem;
+    width: 100%;
+    justify-content: flex-start;
+  }
+  #nav-auth-popup { display: none !important; }
+}
 
 /* ── Recent Searches pills (inline under results) ───────────────────────── */
 #recent-feed {
