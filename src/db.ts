@@ -388,15 +388,16 @@ export async function getFreshReleasesByTag(tag: string, limit = 48): Promise<an
 }
 
 export async function getFreshTopTags(limit = 36): Promise<Array<{ tag: string; cnt: number }>> {
-  // Fetch extra candidates then deduplicate tags whose top-20 release sets are identical.
-  const candidateLimit = limit * 3;
+  // Random selection from all tags with ≥2 releases, then deduplicate identical result sets.
+  const candidateLimit = limit * 4;
   const r = await getPool().query(
-    `WITH top_tags AS (
+    `WITH all_tags AS (
        SELECT unnest(tags) AS tag, COUNT(*)::int AS cnt
        FROM fresh_releases
        WHERE fetched_at > NOW() - INTERVAL '14 days'
        GROUP BY tag
-       ORDER BY cnt DESC
+       HAVING COUNT(*) >= 2
+       ORDER BY RANDOM()
        LIMIT $1
      ),
      ranked AS (
@@ -405,7 +406,7 @@ export async function getFreshTopTags(limit = 36): Promise<Array<{ tag: string; 
            PARTITION BY tt.tag
            ORDER BY fr.release_date DESC NULLS LAST, fr.fetched_at DESC
          ) AS rn
-       FROM top_tags tt
+       FROM all_tags tt
        JOIN fresh_releases fr
          ON tt.tag = ANY(fr.tags)
         AND fr.fetched_at > NOW() - INTERVAL '14 days'
@@ -424,7 +425,7 @@ export async function getFreshTopTags(limit = 36): Promise<Array<{ tag: string; 
      )
      SELECT tag, cnt
      FROM deduped
-     ORDER BY cnt DESC
+     ORDER BY RANDOM()
      LIMIT $2`,
     [candidateLimit, limit]
   );
