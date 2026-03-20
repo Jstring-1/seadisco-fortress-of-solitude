@@ -361,7 +361,7 @@ export async function pruneFreshReleases(): Promise<number> {
 const FRESH_TAGS = ['folk', 'traditional', 'acoustic', 'indie'];
 
 export async function getFreshReleases(limit = 48): Promise<any[]> {
-  // Random sample from last 24 hours, filtered to preferred genres
+  // Random sample from last 14 days, filtered to preferred genres
   const r = await getPool().query(
     `SELECT release_mbid, release_name, artist_credit_name, release_date,
             primary_type, secondary_type, tags, caa_release_mbid, cover_url
@@ -371,6 +371,36 @@ export async function getFreshReleases(limit = 48): Promise<any[]> {
      ORDER BY RANDOM()
      LIMIT $1`,
     [limit, FRESH_TAGS]
+  );
+  return r.rows;
+}
+
+export async function getFreshReleasesByTag(tag: string, limit = 48): Promise<any[]> {
+  // Most recent releases with a specific tag
+  const r = await getPool().query(
+    `SELECT release_mbid, release_name, artist_credit_name, release_date,
+            primary_type, secondary_type, tags, caa_release_mbid, cover_url
+     FROM fresh_releases
+     WHERE fetched_at > NOW() - INTERVAL '14 days'
+       AND tags && $3
+       AND $2 = ANY(tags)
+     ORDER BY release_date DESC NULLS LAST, fetched_at DESC
+     LIMIT $1`,
+    [limit, tag, FRESH_TAGS]
+  );
+  return r.rows;
+}
+
+export async function getFreshTopTags(limit = 12): Promise<Array<{ tag: string; cnt: number }>> {
+  const r = await getPool().query(
+    `SELECT unnest(tags) AS tag, COUNT(*)::int AS cnt
+     FROM fresh_releases
+     WHERE fetched_at > NOW() - INTERVAL '14 days'
+       AND tags && $1
+     GROUP BY tag
+     ORDER BY cnt DESC
+     LIMIT $2`,
+    [FRESH_TAGS, limit]
   );
   return r.rows;
 }

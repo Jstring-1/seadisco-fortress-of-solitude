@@ -267,6 +267,35 @@ body {
 }
 
 /* ── Latest Drops / Fresh Releases ─────────────────────────────────────── */
+.fresh-tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+}
+.fresh-tag-pill {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 0.2rem 0.65rem;
+  font-size: 0.72rem;
+  color: #666;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  user-select: none;
+}
+.fresh-tag-pill:hover {
+  border-color: var(--accent-dim);
+  color: #bbb;
+}
+.fresh-tag-pill.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: #0a2028;
+}
+
 .fresh-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
