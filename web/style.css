@@ -58,11 +58,15 @@ html { overflow-x: hidden; }
 
   main { padding: 0.4rem 0.9rem 1rem; }
 
-  /* Search row — shrink button */
+  /* Search row — allow button to flex so it never clips in narrow viewports */
+  main { overflow-x: hidden; }
+  .search-row { width: 100%; }
   #search-btn {
-    width: 82px;
+    width: auto;
+    min-width: 70px;
+    flex: 0 0 auto;
     font-size: 0.85rem;
-    padding: 0.65rem 0.5rem;
+    padding: 0.65rem 0.6rem;
   }
 
   /* Type/sort row — radios on top, Advanced+Sort+Clear on bottom */
