@@ -353,7 +353,7 @@ export async function upsertFreshRelease(r: {
 
 export async function pruneFreshReleases(): Promise<number> {
   const r = await getPool().query(
-    `DELETE FROM fresh_releases WHERE fetched_at < NOW() - INTERVAL '14 days'`
+    `DELETE FROM fresh_releases WHERE fetched_at < NOW() - INTERVAL '28 days'`
   );
   return r.rowCount ?? 0;
 }
@@ -364,7 +364,7 @@ export async function getFreshReleases(limit = 48): Promise<any[]> {
     `SELECT release_mbid, release_name, artist_credit_name, release_date,
             primary_type, secondary_type, tags, caa_release_mbid, cover_url
      FROM fresh_releases
-     WHERE fetched_at > NOW() - INTERVAL '14 days'
+     WHERE fetched_at > NOW() - INTERVAL '28 days'
      ORDER BY RANDOM()
      LIMIT $1`,
     [limit]
@@ -378,7 +378,7 @@ export async function getFreshReleasesByTag(tag: string, limit = 48): Promise<an
     `SELECT release_mbid, release_name, artist_credit_name, release_date,
             primary_type, secondary_type, tags, caa_release_mbid, cover_url
      FROM fresh_releases
-     WHERE fetched_at > NOW() - INTERVAL '14 days'
+     WHERE fetched_at > NOW() - INTERVAL '28 days'
        AND $2 = ANY(tags)
      ORDER BY release_date DESC NULLS LAST, fetched_at DESC
      LIMIT $1`,
@@ -392,7 +392,7 @@ export async function getFreshTopTags(limit = 24): Promise<Array<{ tag: string; 
   const r = await getPool().query(
     `SELECT unnest(tags) AS tag, COUNT(*)::int AS cnt
      FROM fresh_releases
-     WHERE fetched_at > NOW() - INTERVAL '14 days'
+     WHERE fetched_at > NOW() - INTERVAL '28 days'
      GROUP BY tag
      ORDER BY RANDOM()
      LIMIT $1`,
