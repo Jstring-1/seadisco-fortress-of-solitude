@@ -1,6 +1,6 @@
 // sync-fresh-releases.ts
 // Fetches fresh releases from ListenBrainz, saves to DB.
-// On first run (DB sparse): fetches 14 days to backfill.
+// On first run (DB sparse): fetches 28 days to backfill.
 // On subsequent runs: fetches 1 day incrementally.
 // Called on server startup and every 6 hours thereafter.
 
@@ -13,9 +13,9 @@ const CAA_URL = (mbid: string) => `https://coverartarchive.org/release/${mbid}/f
 const UA      = "SeaDisco/1.0 (https://seadisco.com)";
 const INTERVAL_MS   = 6 * 60 * 60 * 1000; // 6 hours
 const DELAY_MS      = 350;                 // ~3 req/sec to CAA
-const BACKFILL_DAYS = 14;
+const BACKFILL_DAYS = 28;
 const NORMAL_DAYS   = 1;
-const SPARSE_THRESHOLD = 20;              // below this → treat as fresh DB, do backfill
+const SPARSE_THRESHOLD = 400;             // below this → treat as sparse, do backfill
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
