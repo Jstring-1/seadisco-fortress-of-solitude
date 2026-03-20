@@ -336,20 +336,32 @@ body {
 }
 /* ─ Mobile nav (AFTER hamburger default so display:flex wins) ──────────── */
 @media (max-width: 640px) {
-  #main-nav { padding: 0 1rem 1.5rem; justify-content: flex-end; }
-  #nav-hamburger { display: flex !important; background: var(--surface); border-color: var(--accent); }
-  #nav-tabs-wrap { position: absolute; top: 2.8rem; right: 1rem; z-index: 200; min-width: 190px; }
+  #main-nav { padding: 0 1rem 1.5rem; }
+  /* Hamburger: fixed top-right of viewport */
+  #nav-hamburger {
+    display: flex !important;
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 400;
+    background: var(--surface);
+    border-color: var(--accent);
+  }
+  /* Dropdown: fixed just below the hamburger, right-aligned */
+  #nav-tabs-wrap { position: fixed; top: 3.5rem; right: 1rem; z-index: 400; min-width: 200px; }
   #main-nav-tabs {
     display: none !important;
     flex-direction: column;
     border-radius: var(--radius);
     overflow: hidden;
+    background: var(--surface);
   }
   #main-nav-tabs.mobile-open { display: flex !important; }
   .main-nav-tab {
     box-shadow: none;
     border-radius: 0 !important;
     border-bottom: 1px solid var(--border);
+    background: var(--surface);
     padding: 0.65rem 1.2rem;
     font-size: 0.82rem;
     letter-spacing: 0.03em;
@@ -357,9 +369,10 @@ body {
     width: 100%;
   }
   #main-nav-tabs > .main-nav-tab:first-child { border-radius: 0 !important; }
-  #nav-auth-wrap { box-shadow: none; border-top: 1px solid var(--border); }
+  #nav-auth-wrap { box-shadow: none; border-top: 1px solid var(--border); background: var(--surface); }
   .nav-auth-btn {
     border-radius: 0 !important;
+    background: var(--surface);
     padding: 0.65rem 1.2rem;
     font-size: 0.82rem;
     width: 100%;
