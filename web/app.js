@@ -1741,12 +1741,6 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
   loadFreshReleases();
 })();
 
-// Close auth popup on outside click
-document.addEventListener("click", (e) => {
-  const wrap = document.getElementById("nav-auth-wrap");
-  if (wrap && !wrap.contains(e.target)) wrap.classList.remove("popup-open");
-});
-
 // Submit on Enter (all text inputs)
 ["query", "f-artist", "f-release", "f-year", "f-label"].forEach(id => {
   document.getElementById(id).addEventListener("keydown", e => {
@@ -1803,7 +1797,7 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
         navWrap.innerHTML = `<a href="/account" class="nav-auth-btn">ACCOUNT: ${truncated}</a>`;
       } else {
         navWrap.innerHTML = `
-          <button class="nav-auth-btn nav-signup-btn" onclick="this.parentElement.classList.toggle('popup-open')">Sign Up</button>
+          <a href="/account" class="nav-auth-btn nav-signup-btn">Sign Up</a>
           <div id="nav-auth-popup">Sign up and add your Discogs API token for unlimited searches</div>`;
       }
     }
