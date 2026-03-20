@@ -557,9 +557,22 @@ async function searchWiki(query: string, name: string): Promise<{ extract: strin
 
     const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
     const target = norm(name);
-    // Prefer exact title match, otherwise use top result
-    const best = hits.find(h => norm(h.title) === target) ?? hits[0];
-    return fetchWikiSummary(best.title);
+    const targetWords = target.split(/\s+/).filter(w => w.length > 2);
+    // Prefer exact title match; otherwise require at least one meaningful word in common
+    const exact = hits.find(h => norm(h.title) === target);
+    const partial = hits.find(h => {
+      const t = norm(h.title);
+      return targetWords.some(w => t.includes(w));
+    });
+    const best = exact ?? partial;
+    if (!best) return null; // no article title resembles the artist name
+    const result = await fetchWikiSummary(best.title);
+    if (!result) return null;
+    // Final sanity check: the article must mention the artist name somewhere in the extract
+    const extractNorm = norm(result.extract.slice(0, 400));
+    const anyWordMatches = targetWords.some(w => extractNorm.includes(w));
+    if (!anyWordMatches) return null;
+    return result;
   } catch { return null; }
 }
 
