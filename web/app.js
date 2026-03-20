@@ -1570,14 +1570,7 @@ function feedApply(p) {
   // Open advanced panel if any advanced fields are populated so doSearch picks them up
   const needsAdv = p.artist || p.release_title || p.year || p.label || p.genre || p.style || p.format;
   if (needsAdv) toggleAdvanced(true);
-  // Scroll to top immediately so results are visible, then refine to bio if one loads
-  window.scrollTo({ top: 0, behavior: "smooth" });
-  doSearch(1).then(() => {
-    const blurb = document.getElementById("blurb");
-    if (blurb && blurb.style.display !== "none" && blurb.innerHTML.trim()) {
-      blurb.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  });
+  doSearch(1);
 }
 
 let _recentSearches = [];
