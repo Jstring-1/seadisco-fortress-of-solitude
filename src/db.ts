@@ -366,7 +366,7 @@ export async function getFreshReleases(limit = 48): Promise<any[]> {
     `SELECT release_mbid, release_name, artist_credit_name, release_date,
             primary_type, secondary_type, tags, caa_release_mbid, cover_url
      FROM fresh_releases
-     WHERE fetched_at > NOW() - INTERVAL '24 hours'
+     WHERE fetched_at > NOW() - INTERVAL '14 days'
        AND tags && $2
      ORDER BY RANDOM()
      LIMIT $1`,
