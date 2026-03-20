@@ -230,11 +230,13 @@ body {
   text-transform: uppercase;
 }
 
-/* ── Main nav (Search / Drops / Collection / Wantlist) ─────────────────── */
+/* ── Main nav (Search / Drops / Collection / Wantlist / Info) ───────────── */
 #main-nav {
   display: flex;
+  align-items: center;
   justify-content: center;
   padding: 0 1.5rem 0.75rem;
+  position: relative;
 }
 #main-nav-tabs {
   display: flex;
@@ -242,6 +244,44 @@ body {
   border-radius: 7px;
   overflow: hidden;
 }
+#nav-auth-wrap {
+  position: absolute;
+  right: 1.5rem;
+  display: flex;
+  align-items: center;
+}
+.nav-auth-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.3rem 0.75rem;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: color 0.15s, border-color 0.15s;
+}
+.nav-auth-btn:hover { color: var(--fg); border-color: #3a5a6a; }
+#nav-auth-popup {
+  display: none;
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  padding: 0.65rem 0.9rem;
+  font-size: 0.78rem;
+  color: #aaa;
+  line-height: 1.5;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  z-index: 300;
+}
+#nav-auth-wrap.popup-open #nav-auth-popup { display: block; }
 .main-nav-tab {
   background: none;
   border: none;

@@ -1741,6 +1741,12 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
   loadFreshReleases();
 })();
 
+// Close auth popup on outside click
+document.addEventListener("click", (e) => {
+  const wrap = document.getElementById("nav-auth-wrap");
+  if (wrap && !wrap.contains(e.target)) wrap.classList.remove("popup-open");
+});
+
 // Submit on Enter (all text inputs)
 ["query", "f-artist", "f-release", "f-year", "f-label"].forEach(id => {
   document.getElementById(id).addEventListener("keydown", e => {
@@ -1789,15 +1795,16 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
     if (!window._clerk) { _authReady(); return; }
     await window._clerk.load();
 
-    const authBar = document.getElementById("auth-status");
-    if (authBar) {
+    const navWrap = document.getElementById("nav-auth-wrap");
+    if (navWrap) {
       if (window._clerk.user) {
         const email = window._clerk.user.primaryEmailAddress?.emailAddress ?? "";
-        const [local, domain] = email.split("@");
         const truncated = email ? email.slice(0, 2) + "***" + email.slice(-2) : "account";
-        authBar.innerHTML = `<a href="/account">ACCOUNT: ${truncated}</a>`;
+        navWrap.innerHTML = `<a href="/account" class="nav-auth-btn">ACCOUNT: ${truncated}</a>`;
       } else {
-        authBar.innerHTML = `<a href="/account">Add your Discogs API Token for More Searches</a>`;
+        navWrap.innerHTML = `
+          <button class="nav-auth-btn nav-signup-btn" onclick="this.parentElement.classList.toggle('popup-open')">Sign Up</button>
+          <div id="nav-auth-popup">Sign up and add your Discogs API token for unlimited searches</div>`;
       }
     }
 

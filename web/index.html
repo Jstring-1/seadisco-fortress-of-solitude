@@ -26,7 +26,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="/style.css?v=20260320i" />
+  <link rel="stylesheet" href="/style.css?v=20260320j" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -51,14 +51,14 @@
     <button class="main-nav-tab nav-disabled" data-view="wantlist" onclick="switchView('wantlist')" title="Sign in to access your wantlist">Wantlist</button>
     <button class="main-nav-tab" data-view="info" onclick="switchView('info')">Info</button>
   </div>
+  <div id="nav-auth-wrap">
+    <div id="nav-auth-popup">Sign up and add your Discogs API token for unlimited searches</div>
+  </div>
 </nav>
 <div id="search-view">
 
 <main>
-  <div id="header-bar">
-    <div id="site-tagline">Music Rabbit Hole Pathway</div>
-    <div id="auth-bar"><span id="auth-status"></span></div>
-  </div>
+  <span id="auth-status" style="display:none"></span>
   <div class="search-row">
     <input type="text" id="query" placeholder="Search artists, releases, labels…" autocomplete="off" />
     <button id="search-btn" onclick="doSearch(1)" style="flex-shrink:0">Search</button>
@@ -303,7 +303,7 @@
   <div id="lightbox-counter"></div>
 </div>
 
-<script src="/app.js?v=20260320i"></script>
+<script src="/app.js?v=20260320j"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
 
 </body>
