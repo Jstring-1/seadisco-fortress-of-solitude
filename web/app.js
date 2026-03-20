@@ -1630,8 +1630,8 @@ function renderFreshGrid(releases) {
       ? new Date(dateStr + "T12:00:00").toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
       : "";
 
-    const mbUrl      = `https://musicbrainz.org/release/${encodeURIComponent(rel.release_mbid)}`;
-    const discogsUrl = `/?q=${encodeURIComponent(rel.release_name ?? "")}&ar=${encodeURIComponent(rel.artist_credit_name ?? "")}`;
+    const googleQ   = [rel.artist_credit_name, rel.release_name, "new release"].filter(Boolean).join(" ");
+    const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(googleQ)}`;
 
     return `<div class="fresh-card">
       <div class="fresh-card-img">${img}</div>
@@ -1641,8 +1641,7 @@ function renderFreshGrid(releases) {
         ${date ? `<div class="fresh-card-date">${date}</div>` : ""}
         ${types ? `<div class="fresh-card-type">${escHtml(types)}</div>` : ""}
         <div class="fresh-card-links">
-          <a href="${mbUrl}" target="_blank" rel="noopener">Info at MusicBrainz ↗</a>
-          <a href="${discogsUrl}">Search SeaDisco →</a>
+          <a href="${googleUrl}" target="_blank" rel="noopener">Search →</a>
         </div>
       </div>
     </div>`;
