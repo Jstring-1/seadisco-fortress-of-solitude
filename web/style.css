@@ -40,10 +40,16 @@ html { overflow-x: hidden; }
 /* ── Mobile (≤ 640px) ── */
 @media (max-width: 640px) {
   #site-header {
-    padding-top: 18px;
+    padding-top: 9px;
     padding-bottom: 18px;
   }
   #site-header img { height: 96px; }
+
+  /* Navbar — shrink tabs to fit, allow horizontal scroll if still too wide */
+  #main-nav { padding: 0 0.25rem 2rem; }
+  #main-nav-tabs { overflow-x: auto; overflow-y: visible; max-width: 100%; }
+  .main-nav-tab { padding: 0.4rem 0.6rem; font-size: 0.7rem; letter-spacing: 0.03em; }
+  .nav-auth-btn  { padding: 0.4rem 0.6rem; font-size: 0.7rem; letter-spacing: 0.03em; }
 
   #header-bar {
     flex-direction: column;
@@ -154,9 +160,11 @@ html { overflow-x: hidden; }
 @media (max-width: 400px) {
   #site-header img { height: 76px; }
   #site-header {
-    padding-top: 14px;
+    padding-top: 7px;
     padding-bottom: 20px;
   }
+  .main-nav-tab { padding: 0.35rem 0.45rem; font-size: 0.66rem; }
+  .nav-auth-btn  { padding: 0.35rem 0.45rem; font-size: 0.66rem; }
 
   .type-sort-row { font-size: 0.7rem; }
 
@@ -250,7 +258,6 @@ body {
   position: relative;
   display: flex;
   align-items: stretch;
-  border-left: 1px solid var(--border);
 }
 .nav-auth-btn {
   background: none;
@@ -299,7 +306,7 @@ body {
   transition: all 0.15s;
   white-space: nowrap;
 }
-.main-nav-tab:last-child  { border-right: none; }
+#main-nav-tabs > button:last-of-type { border-right: none; }
 .main-nav-tab.active      { background: var(--surface); color: var(--accent); font-weight: 600; }
 .main-nav-tab:hover:not(.active):not(.nav-disabled) { color: var(--fg); background: var(--surface); }
 .main-nav-tab.nav-disabled { color: #333; cursor: default; }
