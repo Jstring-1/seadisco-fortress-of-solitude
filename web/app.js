@@ -1816,6 +1816,8 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
       if (window._clerk.user) {
         navBtn.textContent = "Account";
         navBtn.classList.remove("nav-signup-btn");
+        const popup = document.getElementById("nav-auth-popup");
+        if (popup) popup.remove();
       } else {
         navBtn.textContent = "Sign Up";
         navBtn.classList.add("nav-signup-btn");
