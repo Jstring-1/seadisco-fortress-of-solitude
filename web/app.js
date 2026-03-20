@@ -1622,7 +1622,7 @@ function renderFreshGrid(releases) {
         ${tagsHtml}
         <div class="fresh-card-links">
           <a href="${mbUrl}" target="_blank" rel="noopener">Info at MusicBrainz ↗</a>
-          <a href="${discogsUrl}">Search Discogs →</a>
+          <a href="${discogsUrl}">Search SeaDisco →</a>
         </div>
       </div>
     </div>`;
