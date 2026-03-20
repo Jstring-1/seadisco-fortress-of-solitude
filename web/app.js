@@ -601,12 +601,19 @@ function addNavTab(view, label) {
   container.appendChild(btn);
 }
 
-function switchView(view) {
+function switchView(view, skipPushState = false) {
   document.querySelectorAll(".main-nav-tab").forEach(btn =>
     btn.classList.toggle("active", btn.dataset.view === view)
   );
   const searchView = document.getElementById("search-view");
   const dropsView  = document.getElementById("drops-view");
+  if (!skipPushState) {
+    if (view === "drops" || view === "collection" || view === "wantlist") {
+      history.pushState({ view }, "", "?view=" + view);
+    } else {
+      history.pushState({}, "", location.pathname);
+    }
+  }
   if (view === "drops") {
     if (searchView) searchView.style.display = "none";
     if (dropsView)  dropsView.style.display  = "block";
@@ -1546,21 +1553,26 @@ function searchByEntity(event, el) {
 // ── Browser back / forward ───────────────────────────────────────────────
 window.addEventListener("popstate", () => {
   const p = new URLSearchParams(location.search);
-  restoreFromParams(p);
-  if (p.toString()) {
-    doSearch(parseInt(p.get("pg") ?? "1"), true);
+  const view = p.get("view");
+  if (view === "drops" || view === "collection" || view === "wantlist") {
+    switchView(view, true);
   } else {
-    document.getElementById("results").innerHTML = "";
-    document.getElementById("blurb").style.display = "none";
-    document.getElementById("artist-alts").innerHTML = "";
-    document.getElementById("status").textContent = "";
-    document.getElementById("pagination").style.display = "none";
-    document.getElementById("search-desc").textContent = "";
-    document.getElementById("type-desc").textContent = "";
-    document.getElementById("type-pipe").style.display = "none";
-    document.getElementById("sort-desc").textContent = "";
-    document.getElementById("sort-pipe").style.display = "none";
-    
+    switchView("search", true);
+    restoreFromParams(p);
+    if (p.toString()) {
+      doSearch(parseInt(p.get("pg") ?? "1"), true);
+    } else {
+      document.getElementById("results").innerHTML = "";
+      document.getElementById("blurb").style.display = "none";
+      document.getElementById("artist-alts").innerHTML = "";
+      document.getElementById("status").textContent = "";
+      document.getElementById("pagination").style.display = "none";
+      document.getElementById("search-desc").textContent = "";
+      document.getElementById("type-desc").textContent = "";
+      document.getElementById("type-pipe").style.display = "none";
+      document.getElementById("sort-desc").textContent = "";
+      document.getElementById("sort-pipe").style.display = "none";
+    }
   }
 });
 
@@ -1710,9 +1722,15 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
 // ── Restore from URL on page load ────────────────────────────────────────
 (async function () {
   const p = new URLSearchParams(location.search);
-  if (p.toString()) {
+  const view = p.get("view");
+  if (view === "drops") {
+    switchView("drops", true);
+  } else if (view === "collection" || view === "wantlist") {
+    await authReadyPromise;
+    switchView(view, true);
+  } else if (p.toString()) {
     restoreFromParams(p);
-    await authReadyPromise; // wait for Clerk so Bearer token is attached
+    await authReadyPromise;
     doSearch(parseInt(p.get("pg") ?? "1"), true);
   }
   loadRecentFeed();
