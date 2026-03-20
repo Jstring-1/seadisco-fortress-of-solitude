@@ -3,6 +3,7 @@ import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
 import { initDb, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, getSearchHistory, getRecentSearches, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, upsertCollectionItems, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases } from "./db.js";
+import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -865,4 +866,5 @@ app.get("/api/fresh-releases", async (_req, res) => {
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Discogs search API listening on port ${PORT}`);
+  if (process.env.APP_DB_URL) startFreshSyncSchedule();
 });
