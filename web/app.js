@@ -1623,24 +1623,31 @@ function feedLabel(p) {
 }
 
 function feedApply(p) {
-  document.getElementById("query").value     = p.q             ?? "";
-  document.getElementById("f-artist").value  = p.artist        ?? "";
-  document.getElementById("f-release").value = p.release_title ?? "";
-  document.getElementById("f-year").value    = p.year          ?? "";
-  document.getElementById("f-label").value   = p.label         ?? "";
-  document.getElementById("f-format").value  = p.format        || "";
-  document.getElementById("f-genre").value   = p.genre         ?? "";
-  populateStyles();
-  document.getElementById("f-style").value   = p.style         ?? "";
-  const radio = document.querySelector(`input[name="result-type"][value="${p.type ?? ""}"]`);
-  if (radio) radio.checked = true;
-  const feedSortEl = document.getElementById("f-sort");
-  feedSortEl.value = p.sort ?? "";
-  if (!feedSortEl.value) feedSortEl.selectedIndex = 0;
-  // Open advanced panel if any advanced fields are populated so doSearch picks them up
-  const needsAdv = p.artist || p.release_title || p.year || p.label || p.genre || p.style || p.format;
-  if (needsAdv) toggleAdvanced(true);
-  doSearch(1);
+  if (!p) return;
+  try {
+    switchView("search", true);
+    document.getElementById("query").value     = p.q             ?? "";
+    document.getElementById("f-artist").value  = p.artist        ?? "";
+    document.getElementById("f-release").value = p.release_title ?? "";
+    document.getElementById("f-year").value    = p.year          ?? "";
+    document.getElementById("f-label").value   = p.label         ?? "";
+    document.getElementById("f-format").value  = p.format        || "";
+    document.getElementById("f-genre").value   = p.genre         ?? "";
+    populateStyles();
+    document.getElementById("f-style").value   = p.style         ?? "";
+    const typeVal = p.type ?? "";
+    const radio = document.querySelector(`input[name="result-type"][value="${typeVal}"]`);
+    if (radio) radio.checked = true;
+    const feedSortEl = document.getElementById("f-sort");
+    feedSortEl.value = p.sort ?? "";
+    if (!feedSortEl.value) feedSortEl.selectedIndex = 0;
+    // Open advanced panel if any advanced fields are populated so doSearch picks them up
+    const needsAdv = p.artist || p.release_title || p.year || p.label || p.genre || p.style || p.format;
+    if (needsAdv) toggleAdvanced(true);
+    doSearch(1);
+  } catch (e) {
+    setStatus("Could not restore search: " + e.message, false);
+  }
 }
 
 let _recentSearches = [];
