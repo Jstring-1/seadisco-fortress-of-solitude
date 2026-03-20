@@ -590,47 +590,51 @@ function renderCardFromBasicInfo(basicInfo) {
   return renderCard(syntheticItem);
 }
 
-function addNavTab(view, label) {
-  const container = document.getElementById("main-nav-tabs");
-  if (!container || container.querySelector(`[data-view="${view}"]`)) return;
-  const btn = document.createElement("button");
-  btn.className = "main-nav-tab";
-  btn.dataset.view = view;
-  btn.textContent = label;
-  btn.onclick = () => switchView(view);
-  container.appendChild(btn);
+function addNavTab(view) {
+  // Tabs are always in the DOM; this just enables a greyed-out one
+  const btn = document.querySelector(`#main-nav-tabs [data-view="${view}"]`);
+  if (btn) btn.classList.remove("nav-disabled");
 }
 
 function switchView(view, skipPushState = false) {
+  // Block disabled tabs
+  const tabBtn = document.querySelector(`#main-nav-tabs [data-view="${view}"]`);
+  if (tabBtn?.classList.contains("nav-disabled")) return;
+
   document.querySelectorAll(".main-nav-tab").forEach(btn =>
     btn.classList.toggle("active", btn.dataset.view === view)
   );
   const searchView = document.getElementById("search-view");
   const dropsView  = document.getElementById("drops-view");
+  const infoView   = document.getElementById("info-view");
   if (!skipPushState) {
-    if (view === "drops" || view === "collection" || view === "wantlist") {
+    if (view === "drops" || view === "collection" || view === "wantlist" || view === "info") {
       history.pushState({ view }, "", "?view=" + view);
     } else {
       history.pushState({}, "", location.pathname);
     }
   }
+  // Hide all views first
+  if (searchView) searchView.style.display = "none";
+  if (dropsView)  dropsView.style.display  = "none";
+  if (infoView)   infoView.style.display   = "none";
+
   if (view === "drops") {
-    if (searchView) searchView.style.display = "none";
-    if (dropsView)  dropsView.style.display  = "block";
+    if (dropsView) dropsView.style.display = "block";
+  } else if (view === "info") {
+    if (infoView) infoView.style.display = "block";
+  } else if (view === "collection") {
+    if (searchView) searchView.style.display = "";
+    loadCollectionTab(1);
+  } else if (view === "wantlist") {
+    if (searchView) searchView.style.display = "";
+    loadWantlistTab(1);
   } else {
     if (searchView) searchView.style.display = "";
-    if (dropsView)  dropsView.style.display  = "none";
-    if (view === "collection") {
-      loadCollectionTab(1);
-    } else if (view === "wantlist") {
-      loadWantlistTab(1);
-    } else {
-      // Search — clear any collection/wantlist content
-      document.getElementById("results").innerHTML = "";
-      document.getElementById("pagination").style.display = "none";
-      setStatus("");
-      document.getElementById("blurb").style.display = "none";
-    }
+    document.getElementById("results").innerHTML = "";
+    document.getElementById("pagination").style.display = "none";
+    setStatus("");
+    document.getElementById("blurb").style.display = "none";
   }
 }
 
@@ -1554,7 +1558,7 @@ function searchByEntity(event, el) {
 window.addEventListener("popstate", () => {
   const p = new URLSearchParams(location.search);
   const view = p.get("view");
-  if (view === "drops" || view === "collection" || view === "wantlist") {
+  if (view === "drops" || view === "collection" || view === "wantlist" || view === "info") {
     switchView(view, true);
   } else {
     switchView("search", true);
@@ -1723,8 +1727,8 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
 (async function () {
   const p = new URLSearchParams(location.search);
   const view = p.get("view");
-  if (view === "drops") {
-    switchView("drops", true);
+  if (view === "drops" || view === "info") {
+    switchView(view, true);
   } else if (view === "collection" || view === "wantlist") {
     await authReadyPromise;
     switchView(view, true);
@@ -1804,8 +1808,8 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
         if (tokenCheck.ok) {
           const tokenData = await tokenCheck.json();
           if (tokenData.hasToken) {
-            addNavTab("collection", "Collection");
-            addNavTab("wantlist", "Wantlist");
+            addNavTab("collection");
+            addNavTab("wantlist");
             await loadDiscogsIds();
           }
         }
