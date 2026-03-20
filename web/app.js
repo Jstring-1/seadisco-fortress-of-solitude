@@ -240,8 +240,8 @@ async function doSearch(page = 1, skipPushState = false) {
     let items, totalPages_new;
     if (dualFetch) {
       const [masterRes, releaseRes, bioRes2] = await Promise.all([
-        apiFetch(`${API}/search?${baseParams("master",  36)}`),
-        apiFetch(`${API}/search?${baseParams("release", 12)}`),
+        apiFetch(`${API}/search?${baseParams("master",  18)}`),
+        apiFetch(`${API}/search?${baseParams("release",  6)}`),
         bioFetch ?? Promise.resolve(null),
       ]);
       bioFetch = bioRes2 ? { json: () => bioRes2.json() } : null;
@@ -277,7 +277,7 @@ async function doSearch(page = 1, skipPushState = false) {
       totalPages_new = 1;
     } else {
       const [res, bioRes] = await Promise.all([
-        apiFetch(`${API}/search?${baseParams(null, 48)}`),
+        apiFetch(`${API}/search?${baseParams(null, 24)}`),
         bioFetch ?? Promise.resolve(null),
       ]);
       bioFetch = bioRes ? { json: () => bioRes.json() } : null;
@@ -431,9 +431,17 @@ async function doSearch(page = 1, skipPushState = false) {
     renderResults(items);
     renderPagination();
 
-    // Async Claude quality phrase (fire-and-forget, page 1 only)
-    if (page === 1) {
-      const qualityQuery = [q, artist ? `Artist: ${artist}` : "", release ? `Release: ${release}` : ""].filter(Boolean).join(", ");
+    // Async Claude quality phrase (fire-and-forget, every page)
+    {
+      const qualityQuery = [
+        q,
+        artist  ? `Artist: ${artist}`   : "",
+        release ? `Release: ${release}` : "",
+        year    ? `Year: ${year}`       : "",
+        label   ? `Label: ${label}`     : "",
+        genre   ? `Genre: ${genre}`     : "",
+        style   ? `Style: ${style}`     : "",
+      ].filter(Boolean).join(", ");
       const qualityTitles = items.slice(0, 6).map(it => it.title ?? it.name ?? "").filter(Boolean);
       if (qualityQuery && qualityTitles.length) {
         fetch("/api/result-quality", {
@@ -1572,24 +1580,58 @@ function feedApply(p) {
   });
 }
 
+let _recentSearches = [];
+
 async function loadRecentFeed() {
-  const el = document.getElementById("recent-feed");
-  if (!el) return;
   try {
     const data = await fetch("/api/recent-searches").then(r => r.json());
     const searches = data.searches ?? [];
     if (!searches.length) return;
-    el.innerHTML = `<div style="text-align:center;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.12em;color:#3a5a6a;margin-bottom:0.5rem">Recent Searches</div><div class="feed-pills">${
-        searches.map((s, i) =>
-          `<span class="feed-pill" data-idx="${i}">${feedLabel(s.params)}</span>`
-        ).join("")
+    _recentSearches = searches;
+
+    const link = document.getElementById("recent-searches-link");
+    if (link) link.style.display = "";
+
+    const popup = document.getElementById("recent-searches-popup");
+    if (popup) {
+      popup.innerHTML = `<div class="rsp-label">Recent Searches</div><div class="feed-pills">${
+        searches.map((s, i) => `<span class="feed-pill" data-idx="${i}">${feedLabel(s.params)}</span>`).join("")
       }</div>`;
-    el.querySelectorAll(".feed-pill").forEach((pill, i) => {
-      pill.addEventListener("click", () => feedApply(searches[i].params));
-    });
-    el.style.display = "block";
+      popup.querySelectorAll(".feed-pill").forEach((pill, i) => {
+        pill.addEventListener("click", () => {
+          closeRecentPopup();
+          feedApply(searches[i].params);
+        });
+      });
+    }
   } catch { /* no feed available */ }
 }
+
+function toggleRecentPopup(e) {
+  e.preventDefault();
+  e.stopPropagation();
+  const popup = document.getElementById("recent-searches-popup");
+  if (!popup) return;
+  const open = popup.style.display !== "none" && popup.style.display !== "";
+  if (open) {
+    popup.style.display = "none";
+  } else {
+    popup.style.display = "block";
+  }
+}
+
+function closeRecentPopup() {
+  const popup = document.getElementById("recent-searches-popup");
+  if (popup) popup.style.display = "none";
+}
+
+document.addEventListener("click", (e) => {
+  const popup = document.getElementById("recent-searches-popup");
+  const link  = document.getElementById("recent-searches-link");
+  if (popup && !popup.contains(e.target) && e.target !== link) {
+    popup.style.display = "none";
+  }
+});
 
 function renderFreshGrid(releases) {
   const grid = document.getElementById("fresh-releases-grid");
@@ -1744,7 +1786,7 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
         const email = window._clerk.user.primaryEmailAddress?.emailAddress ?? "";
         const [local, domain] = email.split("@");
         const truncated = email ? email.slice(0, 2) + "***" + email.slice(-2) : "account";
-        authBar.innerHTML = `<a href="/account">${truncated}</a>`;
+        authBar.innerHTML = `<a href="/account">ACCOUNT: ${truncated}</a>`;
       } else {
         authBar.innerHTML = `<a href="/account">Add your Discogs API Token for More Searches</a>`;
       }

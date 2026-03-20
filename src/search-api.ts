@@ -421,9 +421,16 @@ In 4–7 words, give a single honest phrase describing how well these results ma
       }),
     });
     const data = await r.json() as any;
+    if (!r.ok) {
+      console.error("[result-quality] Anthropic API error:", JSON.stringify(data));
+      res.json({ phrase: null });
+      return;
+    }
     const phrase = (data.content?.[0]?.text ?? "").trim().replace(/[.!?]+$/, "") || null;
+    console.log("[result-quality] phrase:", phrase);
     res.json({ phrase });
-  } catch {
+  } catch (err) {
+    console.error("[result-quality] fetch error:", err);
     res.json({ phrase: null });
   }
 });
@@ -856,7 +863,7 @@ app.get("/api/fresh-releases", async (req, res) => {
   try {
     const tag = req.query.tag ? String(req.query.tag) : "";
     const [releases, topTags] = await Promise.all([
-      tag ? getFreshReleasesByTag(tag, 48) : getFreshReleases(48),
+      tag ? getFreshReleasesByTag(tag, 36) : getFreshReleases(36),
       getFreshTopTags(24),
     ]);
     res.json({ releases, topTags });

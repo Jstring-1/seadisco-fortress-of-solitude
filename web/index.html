@@ -26,7 +26,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/style.css?v=20260319" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -158,13 +158,15 @@
     </div>
   </div>
 
-  <div style="display:flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:#555;margin-bottom:1.25rem;min-height:1em">
+  <div style="position:relative;display:flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:#555;margin-bottom:1.25rem;min-height:1em">
     <span id="powered-by"></span>
     <span id="search-desc" onclick="copySearchUrl(this)" title="Click to copy search link" style="cursor:pointer"></span>
     <span id="type-pipe" style="color:#333;display:none">|</span>
     <span id="type-desc"></span>
     <span id="sort-pipe" style="color:#333;display:none">|</span>
     <span id="sort-desc"></span>
+    <a id="recent-searches-link" href="#" onclick="toggleRecentPopup(event)" style="display:none;margin-left:auto;color:#3a5a6a;text-decoration:none;white-space:nowrap;font-size:0.72rem">Recent Searches</a>
+    <div id="recent-searches-popup"></div>
   </div>
 
   <div id="artist-alts"></div>
@@ -178,13 +180,12 @@
     <span id="page-info"></span>
     <button id="next-btn" onclick="doSearch(currentPage + 1)">Next →</button>
   </div>
-  <div id="fresh-releases-section" style="display:none">
+  <div id="fresh-releases-section" style="display:none;margin-top:2.5rem">
     <div style="text-align:center;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.12em;color:#3a5a6a;margin-bottom:0.75rem">Latest Drops from MusicBrainz</div>
     <div id="fresh-tag-cloud" class="fresh-tag-cloud"></div>
     <div id="fresh-releases-grid" class="fresh-grid"></div>
   </div>
 </main>
-<div id="recent-feed" style="display:none;max-width:900px;margin:0 auto;padding:0 1.5rem"></div>
 <footer style="text-align:center;padding:2rem 1rem 1.5rem;font-size:0.72rem;color:var(--muted);line-height:1.4">
   <div style="color:#555;font-style:italic">DISCLAIMER: AI be funky sometimes</div>
   Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Discogs</a>, <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Claude</a>, and <a href="https://listenbrainz.org" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">ListenBrainz</a> &nbsp;|&nbsp; <a href="#" onclick="document.getElementById('info-overlay').style.display='flex';return false;" style="color:#3a5a6a;text-decoration:none">Info</a>
@@ -244,7 +245,7 @@
   <div id="lightbox-counter"></div>
 </div>
 
-<script src="/app.js"></script>
+<script src="/app.js?v=20260319"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
 
 <!-- Info popup -->
