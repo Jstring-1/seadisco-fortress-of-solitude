@@ -370,7 +370,7 @@ Return ONLY a valid JSON array, no markdown, no explanation.`;
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
+        model: "claude-haiku-4-5",
         max_tokens: 1024,
         messages: [{ role: "user", content: prompt }],
       }),
@@ -415,7 +415,7 @@ In 4–7 words, give a single honest phrase describing how well these results ma
         "content-type": "application/json",
       },
       body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
+        model: "claude-haiku-4-5",
         max_tokens: 24,
         messages: [{ role: "user", content: prompt }],
       }),
