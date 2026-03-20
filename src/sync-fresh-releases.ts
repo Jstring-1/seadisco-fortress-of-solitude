@@ -1,20 +1,37 @@
 // sync-fresh-releases.ts
-// Fetches fresh releases from ListenBrainz (last 1 day),
-// keeps only those with Cover Art Archive artwork, saves to DB.
+// Fetches fresh releases from ListenBrainz, saves to DB.
+// On first run (DB sparse): fetches 14 days to backfill.
+// On subsequent runs: fetches 1 day incrementally.
 // Called on server startup and every 6 hours thereafter.
 
+import pg from "pg";
+const { Pool } = pg;
 import { upsertFreshRelease, pruneFreshReleases } from "./db.js";
 
 const LB_API  = "https://api.listenbrainz.org/1/explore/fresh-releases/";
 const CAA_URL = (mbid: string) => `https://coverartarchive.org/release/${mbid}/front-250`;
 const UA      = "SeaDisco/1.0 (https://seadisco.com)";
-const INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
-const DELAY_MS    = 350;                 // ~3 req/sec to CAA
+const INTERVAL_MS   = 6 * 60 * 60 * 1000; // 6 hours
+const DELAY_MS      = 350;                 // ~3 req/sec to CAA
+const BACKFILL_DAYS = 14;
+const NORMAL_DAYS   = 1;
+const SPARSE_THRESHOLD = 20;              // below this → treat as fresh DB, do backfill
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
-async function fetchListenBrainz(): Promise<any[]> {
-  const url = `${LB_API}?days=1&sort=release_date&past=true&future=false`;
+async function countFreshReleases(): Promise<number> {
+  const connStr = process.env.APP_DB_URL;
+  if (!connStr) return 999; // no DB, skip backfill
+  const pool = new Pool({ connectionString: connStr, ssl: { rejectUnauthorized: false } });
+  try {
+    const r = await pool.query("SELECT COUNT(*)::int AS n FROM fresh_releases");
+    return r.rows[0]?.n ?? 0;
+  } catch { return 0; }
+  finally { await pool.end(); }
+}
+
+async function fetchListenBrainz(days: number): Promise<any[]> {
+  const url = `${LB_API}?days=${days}&sort=release_date&past=true&future=false`;
   const r = await fetch(url, { headers: { "User-Agent": UA } });
   if (!r.ok) throw new Error(`ListenBrainz HTTP ${r.status}`);
   const data = await r.json() as any;
@@ -37,8 +54,12 @@ async function checkCoverArt(caaReleaseMbid: string): Promise<string | null> {
 export async function runFreshSync(): Promise<void> {
   console.log("[fresh-sync] starting", new Date().toISOString());
   try {
-    const releases = await fetchListenBrainz();
-    console.log(`[fresh-sync] fetched ${releases.length} releases from ListenBrainz`);
+    const count = await countFreshReleases();
+    const days  = count < SPARSE_THRESHOLD ? BACKFILL_DAYS : NORMAL_DAYS;
+    console.log(`[fresh-sync] DB has ${count} records — fetching ${days} day(s) from ListenBrainz`);
+
+    const releases = await fetchListenBrainz(days);
+    console.log(`[fresh-sync] fetched ${releases.length} releases`);
 
     let saved = 0, skipped = 0;
 

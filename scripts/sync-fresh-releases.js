@@ -36,8 +36,15 @@ async function ensureTable() {
   `);
 }
 
-async function fetchListenBrainz() {
-  const url = `${LB_API}?days=1&sort=release_date&past=true&future=false`;
+async function countExisting() {
+  try {
+    const r = await pool.query("SELECT COUNT(*)::int AS n FROM fresh_releases");
+    return r.rows[0]?.n ?? 0;
+  } catch { return 0; }
+}
+
+async function fetchListenBrainz(days = 1) {
+  const url = `${LB_API}?days=${days}&sort=release_date&past=true&future=false`;
   const r = await fetch(url, { headers: { "User-Agent": UA } });
   if (!r.ok) throw new Error(`ListenBrainz HTTP ${r.status}`);
   const data = await r.json();
@@ -94,7 +101,11 @@ async function main() {
   console.log("=== sync-fresh-releases starting ===", new Date().toISOString());
   await ensureTable();
 
-  const releases = await fetchListenBrainz();
+  const existing = await countExisting();
+  const days = existing < 20 ? 14 : 1;
+  console.log(`DB has ${existing} records — fetching ${days} day(s) from ListenBrainz`);
+
+  const releases = await fetchListenBrainz(days);
   console.log(`Fetched ${releases.length} releases from ListenBrainz`);
 
   let saved = 0, skipped = 0;
