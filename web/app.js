@@ -443,6 +443,7 @@ async function doSearch(page = 1, skipPushState = false) {
         style   ? `Style: ${style}`     : "",
       ].filter(Boolean).join(", ");
       const qualityTitles = items.slice(0, 6).map(it => it.title ?? it.name ?? "").filter(Boolean);
+      console.log("[rq] query:", qualityQuery, "titles:", qualityTitles.length);
       if (qualityQuery && qualityTitles.length) {
         const statusEl = document.getElementById("status");
         if (statusEl) statusEl.textContent = `${countMsg} · …`;
