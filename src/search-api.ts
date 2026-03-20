@@ -456,7 +456,7 @@ app.get("/api/recent-searches", async (_req, res) => {
       const j = Math.floor(Math.random() * (i + 1));
       [searches[i], searches[j]] = [searches[j], searches[i]];
     }
-    res.json({ searches: searches.slice(0, 20) });
+    res.json({ searches: searches.slice(0, 48) });
   } catch { res.json({ searches: [] }); }
 });
 
@@ -863,7 +863,7 @@ app.get("/api/fresh-releases", async (req, res) => {
   try {
     const tag = req.query.tag ? String(req.query.tag) : "";
     const [releases, topTags] = await Promise.all([
-      tag ? getFreshReleasesByTag(tag, 36) : getFreshReleases(36),
+      tag ? getFreshReleasesByTag(tag, 48) : getFreshReleases(48),
       getFreshTopTags(24),
     ]);
     res.json({ releases, topTags });
