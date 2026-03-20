@@ -127,7 +127,6 @@ function clearForm() {
   document.querySelector('input[name="result-type"][value=""]').checked = true;
   
   document.getElementById("search-desc").textContent = "";
-  document.getElementById("search-pipe").style.display = "none";
   document.getElementById("type-desc").textContent = "";
   document.getElementById("type-pipe").style.display = "none";
   document.getElementById("sort-desc").textContent = "";
@@ -186,7 +185,6 @@ async function doSearch(page = 1, skipPushState = false) {
     const descText = parts.length ? "Search :: " + parts.join(", ") : "";
     
     document.getElementById("search-desc").textContent = descText;
-    document.getElementById("search-pipe").style.display = descText ? "inline" : "none";
     const typeLabels = { "master":"Masters", "release":"Releases", "artist":"Artists", "label":"Labels" };
     const typeLabel = typeLabels[resultType] ?? "";
     document.getElementById("type-desc").textContent = typeLabel ? `Results: ${typeLabel}` : "";
@@ -425,9 +423,30 @@ async function doSearch(page = 1, skipPushState = false) {
 
     if (!items.length) { setStatus("No results found."); return; }
 
-    setStatus(`${items.length} results — page ${currentPage} of ${totalPages}`);
+    const countMsg = `${items.length} results — page ${currentPage} of ${totalPages}`;
+    setStatus(countMsg);
     renderResults(items);
     renderPagination();
+
+    // Async Claude quality phrase (fire-and-forget, page 1 only)
+    if (page === 1) {
+      const qualityQuery = [q, artist ? `Artist: ${artist}` : "", release ? `Release: ${release}` : ""].filter(Boolean).join(", ");
+      const qualityTitles = items.slice(0, 6).map(it => it.title ?? it.name ?? "").filter(Boolean);
+      if (qualityQuery && qualityTitles.length) {
+        fetch("/api/result-quality", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query: qualityQuery, titles: qualityTitles }),
+        }).then(r => r.json()).then(d => {
+          if (d.phrase) {
+            const el = document.getElementById("status");
+            if (el && el.textContent === countMsg) {
+              el.textContent = `${countMsg} · ${d.phrase}`;
+            }
+          }
+        }).catch(() => {});
+      }
+    }
 
     // GA4: track search as virtual page view + search event
     if (typeof gtag === "function") {
@@ -1234,6 +1253,17 @@ function sharePopup(btn) {
   });
 }
 
+function copySearchUrl(el) {
+  navigator.clipboard.writeText(window.location.href).then(() => {
+    const orig = el.textContent;
+    el.textContent = "link copied!";
+    el.style.color = "var(--accent)";
+    setTimeout(() => { el.textContent = orig; el.style.color = ""; }, 1800);
+  }).catch(() => {
+    prompt("Copy this link:", window.location.href);
+  });
+}
+
 function setStatus(msg, isError = false) {
   const el = document.getElementById("status");
   el.textContent = msg;
@@ -1429,7 +1459,6 @@ window.addEventListener("popstate", () => {
     document.getElementById("status").textContent = "";
     document.getElementById("pagination").style.display = "none";
     document.getElementById("search-desc").textContent = "";
-    document.getElementById("search-pipe").style.display = "none";
     document.getElementById("type-desc").textContent = "";
     document.getElementById("type-pipe").style.display = "none";
     document.getElementById("sort-desc").textContent = "";
