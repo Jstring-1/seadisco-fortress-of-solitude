@@ -358,16 +358,19 @@ export async function pruneFreshReleases(): Promise<number> {
   return r.rowCount ?? 0;
 }
 
+const FRESH_TAGS = ['folk', 'traditional', 'acoustic', 'indie'];
+
 export async function getFreshReleases(limit = 48): Promise<any[]> {
-  // Random sample from last 24 hours
+  // Random sample from last 24 hours, filtered to preferred genres
   const r = await getPool().query(
     `SELECT release_mbid, release_name, artist_credit_name, release_date,
             primary_type, secondary_type, tags, caa_release_mbid, cover_url
      FROM fresh_releases
      WHERE fetched_at > NOW() - INTERVAL '24 hours'
+       AND tags && $2
      ORDER BY RANDOM()
      LIMIT $1`,
-    [limit]
+    [limit, FRESH_TAGS]
   );
   return r.rows;
 }
