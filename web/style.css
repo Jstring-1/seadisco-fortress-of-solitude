@@ -91,9 +91,6 @@ html { overflow-x: hidden; }
   }
   .filters label { min-width: 80px; }
 
-  /* Recent feed */
-  #recent-feed { margin-top: 1.25rem; padding: 0 0.9rem 1.25rem; }
-  #recent-feed .feed-pill { font-size: 0.7rem; padding: 0.2rem 0.5rem; }
 
   /* Results grid — tighter */
   #results {
@@ -233,36 +230,45 @@ body {
   text-transform: uppercase;
 }
 
-#recent-feed {
-  margin-top: 1.5rem;
-  margin-bottom: 0;
-  padding-bottom: 1.5rem;
+/* ── Recent Searches popup ──────────────────────────────────────────────── */
+#recent-searches-popup {
+  display: none;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  min-width: 260px;
+  max-width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.35);
+  padding: 0.75rem 0.85rem 0.8rem;
+  z-index: 200;
 }
-#recent-feed .feed-label {
-  font-size: 0.7rem;
-  color: #3a5a6a;
+#recent-searches-popup .rsp-label {
+  font-size: 0.65rem;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
-  margin-bottom: 0.45rem;
+  letter-spacing: 0.1em;
+  color: #3a5a6a;
+  margin-bottom: 0.5rem;
 }
-#recent-feed .feed-pills {
+#recent-searches-popup .feed-pills {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
-  justify-content: center;
 }
-#recent-feed .feed-pill {
-  background: var(--surface);
+#recent-searches-popup .feed-pill {
+  background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 20px;
-  padding: 0.25rem 0.65rem;
-  font-size: 0.75rem;
+  padding: 0.22rem 0.6rem;
+  font-size: 0.72rem;
   color: #777;
   cursor: pointer;
   white-space: nowrap;
   transition: border-color 0.15s, color 0.15s;
 }
-#recent-feed .feed-pill:hover {
+#recent-searches-popup .feed-pill:hover {
   border-color: #3a5a6a;
   color: #bbb;
 }
