@@ -22,12 +22,18 @@ const UNAUTH_LIMIT     = 5;
 const LIMIT_WINDOW_MS  = 24 * 60 * 60 * 1000; // 24 hours
 const ipCounts = new Map<string, { count: number; resetAt: number }>();
 
+// IPs that bypass the rate limit and auth requirement entirely
+const IP_WHITELIST = new Set<string>([
+  "172.59.131.156",
+]);
+
 function clientIp(req: express.Request): string {
   const fwd = req.headers["x-forwarded-for"] as string | undefined;
   return (fwd ? fwd.split(",")[0] : req.ip ?? "unknown").replace(/^::ffff:/, "").trim();
 }
 
 function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
+  if (IP_WHITELIST.has(ip)) return { allowed: true, remaining: UNAUTH_LIMIT };
   const now = Date.now();
   const entry = ipCounts.get(ip);
   if (!entry || now > entry.resetAt) {
@@ -417,17 +423,19 @@ app.get("/search", async (req, res) => {
   const artist = stripArtistSuffix(req.query.artist as string | undefined);
   const q = rawQ || artist || "";
 
+  const ip = clientIp(req);
+  const whitelisted = IP_WHITELIST.has(ip);
+
   const userId = getClerkUserId(req);
   const userToken = userId ? await getUserToken(userId) : null;
   const usingSharedToken = !userToken;
 
   // Rate-limit unauthenticated users — allow 5 free searches/day via shared token
-  if (usingSharedToken) {
+  if (usingSharedToken && !whitelisted) {
     if (!sharedToken) {
       res.status(401).json({ error: "no_token", message: "Sign in and add your Discogs API token to search." });
       return;
     }
-    const ip = clientIp(req);
     const { allowed, remaining } = checkRateLimit(ip);
     if (!allowed) {
       res.status(429).json({
@@ -439,8 +447,8 @@ app.get("/search", async (req, res) => {
     res.setHeader("X-RateLimit-Remaining", remaining);
   }
 
-  // allowFallback=true for unauthenticated users — they passed the rate limit check above
-  const dc = await getDiscogsForRequest(req, usingSharedToken);
+  // allowFallback=true for unauthenticated/whitelisted users — they passed the rate limit check above
+  const dc = await getDiscogsForRequest(req, usingSharedToken || whitelisted);
   if (!dc) {
     res.status(401).json({ error: "no_token", message: "Sign in and add your Discogs API token to search." });
     return;
