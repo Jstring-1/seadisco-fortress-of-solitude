@@ -376,10 +376,10 @@ async function doSearch(page = 1, skipPushState = false) {
         } catch { /* keep original results */ }
       }
 
-      if (bioData?.profile || bioData?.wikiExtract) {
+      if (bioData?.profile) {
         const entityType = artist ? 'artist' : label ? 'label' : genre ? 'genre' : 'artist';
         window._currentBio = {
-          name: bioData.name, text: bioData.profile ?? null, wiki: bioData.wikiExtract ?? null,
+          name: bioData.name, text: bioData.profile ?? null,
           members:        bioData.members        ?? [],
           groups:         bioData.groups         ?? [],
           aliases:        bioData.aliases        ?? [],
@@ -390,15 +390,13 @@ async function doSearch(page = 1, skipPushState = false) {
           discogsId: bioData.discogsId ?? null,
         };
 
-        // Use Discogs profile if available, otherwise fall back to Wikipedia extract
         const rawBioText  = bioData.profile ?? null;
-        const wikiText    = bioData.wikiExtract ?? null;
-        const displayText = rawBioText ? stripDiscogsMarkup(rawBioText) : (wikiText ?? "");
+        const displayText = rawBioText ? stripDiscogsMarkup(rawBioText) : "";
         const TRUNCATE = 300;
         const needsMore = displayText.length > TRUNCATE;
         const truncatedRaw = rawBioText
           ? (needsMore ? truncateRaw(rawBioText, TRUNCATE) + '\u2026' : rawBioText)
-          : (needsMore ? displayText.slice(0, TRUNCATE) + '\u2026' : displayText);
+          : "";
 
         const readMore = needsMore
           ? ` <a href="#" onclick="openBioFull(event)" style="font-size:0.8rem;color:var(--accent);white-space:nowrap;text-decoration:none">read more</a>`
@@ -813,7 +811,7 @@ function openBioFull(event) {
   u.searchParams.set("bi", "1");
   history.replaceState({}, "", u.toString());
   const {
-    name, text, wiki, discogsId = null,
+    name, text, discogsId = null,
     members = [], groups = [], aliases = [],
     namevariations = [], urls = [],
     parentLabel = null, sublabels = [],
@@ -822,11 +820,6 @@ function openBioFull(event) {
   let html = renderBioMarkup(text ?? "");
   const relLinks = renderArtistRelations(members, groups, aliases, namevariations, urls, parentLabel, sublabels);
   if (relLinks) html += relLinks;
-  if (wiki) {
-    html += `<hr style="border:none;border-top:1px solid var(--border);margin:1.25rem 0 1rem">
-             <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.6rem">Wikipedia</div>
-             <div style="font-size:0.87rem;line-height:1.65">${escHtml(wiki)}</div>`;
-  }
   if (discogsId) {
     html += `<div style="margin-top:1.1rem"><a href="https://www.discogs.com/artist/${discogsId}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#666;text-decoration:none">View profile on Discogs ↗</a></div>`;
   }

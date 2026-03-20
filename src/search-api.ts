@@ -530,52 +530,6 @@ app.get("/artist/:id", async (req, res) => {
 
 const MB_UA = "DiscogsMCPSearch/1.0 ( search@sideman.pro )";
 
-// Helper: fetch a Wikipedia extract by article title
-async function fetchWikiSummary(title: string): Promise<{ extract: string; displayTitle: string } | null> {
-  try {
-    const r = await fetch(
-      `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`,
-      { headers: { "User-Agent": MB_UA } }
-    );
-    if (!r.ok) return null;
-    const d = await r.json() as any;
-    if (d.type === "standard" && d.extract) return { extract: d.extract, displayTitle: d.title ?? title };
-  } catch { /* fall through */ }
-  return null;
-}
-
-// Helper: search Wikipedia and return best-matching article summary
-async function searchWiki(query: string, name: string): Promise<{ extract: string; displayTitle: string } | null> {
-  try {
-    const r = await fetch(
-      `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(query)}&format=json&utf8=1&srlimit=5`,
-      { headers: { "User-Agent": MB_UA } }
-    );
-    const d = await r.json() as any;
-    const hits: any[] = d?.query?.search ?? [];
-    if (!hits.length) return null;
-
-    const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
-    const target = norm(name);
-    const targetWords = target.split(/\s+/).filter(w => w.length > 2);
-    // Prefer exact title match; otherwise require at least one meaningful word in common
-    const exact = hits.find(h => norm(h.title) === target);
-    const partial = hits.find(h => {
-      const t = norm(h.title);
-      return targetWords.some(w => t.includes(w));
-    });
-    const best = exact ?? partial;
-    if (!best) return null; // no article title resembles the artist name
-    const result = await fetchWikiSummary(best.title);
-    if (!result) return null;
-    // Final sanity check: the article must mention the artist name somewhere in the extract
-    const extractNorm = norm(result.extract.slice(0, 400));
-    const anyWordMatches = targetWords.some(w => extractNorm.includes(w));
-    if (!anyWordMatches) return null;
-    return result;
-  } catch { return null; }
-}
-
 // GET /artist-bio?name=Miles+Davis[&id=123456] — Discogs bio
 // If `id` is supplied the artist is fetched directly (no ambiguous name search).
 app.get("/artist-bio", async (req, res) => {
@@ -597,18 +551,13 @@ app.get("/artist-bio", async (req, res) => {
   // ── Fast path: direct lookup by Discogs ID ──────────────────────────────
   if (idParam) {
     try {
-      const nameForWiki = nameRaw.replace(/\s*\(\d+\)$/, "").trim();
-      const [artist, wikiResult] = await Promise.all([
-        dc.getArtist(idParam) as Promise<any>,
-        fetchWikiSummary(nameForWiki).then(r => r ?? searchWiki(`${nameForWiki} musician`, nameForWiki)),
-      ]);
+      const artist = await dc.getArtist(idParam) as any;
       let profile: string | null = artist?.profile ?? null;
       if (profile) profile = await resolveDiscogsIds(profile, dc);
       res.json({
         profile,
         name: artist?.name ?? nameRaw,
         alternatives: [],
-        wikiExtract: wikiResult?.extract ?? null,
         members:        mapNames(artist?.members ?? []),
         groups:         mapNames(artist?.groups  ?? []),
         aliases:        mapNames(artist?.aliases ?? []),
@@ -628,13 +577,7 @@ app.get("/artist-bio", async (req, res) => {
   const nameForMatch  = nameRaw.trim();
 
   try {
-    // Fetch Discogs candidates and Wikipedia in parallel
-    const pAll = await Promise.all([
-      dc.search(nameForSearch, { type: "artist", perPage: 20 }),
-      fetchWikiSummary(nameForSearch).then(r => r ?? searchWiki(`${nameForSearch} musician`, nameForSearch)),
-    ]);
-    const discogsResults = pAll[0] as any;
-    const wikiResult     = pAll[1] as any;
+    const discogsResults = await dc.search(nameForSearch, { type: "artist", perPage: 20 }) as any;
 
     const candidates: any[] = discogsResults?.results ?? [];
 
@@ -686,7 +629,6 @@ app.get("/artist-bio", async (req, res) => {
       name: artist?.name ?? nameForMatch,
       discogsId: best.id ?? null,
       alternatives,
-      wikiExtract: wikiResult?.extract ?? null,
       members:        mapNames(artist?.members ?? []),
       groups:         mapNames(artist?.groups  ?? []),
       aliases:        mapNames(artist?.aliases ?? []),
