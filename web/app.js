@@ -1611,22 +1611,26 @@ async function loadRecentFeed() {
   try {
     const data = await fetch("/api/recent-searches").then(r => r.json());
     const searches = data.searches ?? [];
-    if (!searches.length) return;
-    _recentSearches = searches;
     const el = document.getElementById("recent-feed");
-    if (el) {
-      el.style.display = "block";
-      el.innerHTML = `<div class="feed-pills">${
-        searches.map((s, i) => {
-          const { full, short } = feedLabel(s.params);
-          return `<span class="feed-pill" data-idx="${i}" title="${escHtml(full)}">${escHtml(short)}</span>`;
-        }).join("")
-      }</div>`;
-      el.querySelectorAll(".feed-pill").forEach((pill, i) => {
-        pill.addEventListener("click", () => feedApply(searches[i].params));
-      });
-    }
-  } catch { /* no feed available */ }
+    if (!el) return;
+    if (!searches.length) { el.style.display = "none"; return; }
+    _recentSearches = searches;
+    const pillsHtml = `<div class="feed-pills">${
+      searches.map((s, i) => {
+        const { full, short } = feedLabel(s.params);
+        return `<span class="feed-pill" data-idx="${i}" title="${escHtml(full)}">${escHtml(short)}</span>`;
+      }).join("")
+    }</div>`;
+    el.style.opacity = "0";
+    el.innerHTML = pillsHtml;
+    el.querySelectorAll(".feed-pill").forEach((pill, i) => {
+      pill.addEventListener("click", () => feedApply(searches[i].params));
+    });
+    requestAnimationFrame(() => { el.style.opacity = "1"; });
+  } catch {
+    const el = document.getElementById("recent-feed");
+    if (el) el.style.display = "none";
+  }
 }
 
 function renderFreshGrid(releases) {
