@@ -1497,6 +1497,52 @@ async function loadRecentFeed() {
   } catch { /* no feed available */ }
 }
 
+async function loadFreshReleases() {
+  const section = document.getElementById("fresh-releases-section");
+  const grid    = document.getElementById("fresh-releases-grid");
+  if (!section || !grid) return;
+  try {
+    const data = await fetch("/api/fresh-releases").then(r => r.json());
+    const releases = data.releases ?? [];
+    if (!releases.length) return;
+
+    grid.innerHTML = releases.map(rel => {
+      const img = rel.cover_url
+        ? `<img src="${escHtml(rel.cover_url)}" alt="${escHtml(rel.release_name ?? '')}" loading="lazy" onerror="this.style.display='none'">`
+        : `<div class="fresh-card-no-img">♪</div>`;
+
+      const types = [rel.primary_type, rel.secondary_type].filter(Boolean).join(" · ");
+      const tags  = (rel.tags ?? []).slice(0, 3).map(t =>
+        `<span class="fresh-tag">${escHtml(t)}</span>`
+      ).join("");
+
+      const date = rel.release_date
+        ? new Date(rel.release_date + "T00:00:00").toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+        : "";
+
+      const mbUrl = `https://musicbrainz.org/release/${encodeURIComponent(rel.release_mbid)}`;
+      const discogsUrl = `/?q=${encodeURIComponent(rel.release_name ?? "")}&ar=${encodeURIComponent(rel.artist_credit_name ?? "")}`;
+
+      return `<div class="fresh-card">
+        <div class="fresh-card-img">${img}</div>
+        <div class="fresh-card-body">
+          <div class="fresh-card-title">${escHtml(rel.release_name ?? "Unknown")}</div>
+          <div class="fresh-card-artist">${escHtml(rel.artist_credit_name ?? "")}</div>
+          ${date ? `<div class="fresh-card-date">${date}</div>` : ""}
+          ${types ? `<div class="fresh-card-type">${escHtml(types)}</div>` : ""}
+          ${tags ? `<div class="fresh-card-tags">${tags}</div>` : ""}
+          <div class="fresh-card-links">
+            <a href="${mbUrl}" target="_blank" rel="noopener">MusicBrainz ↗</a>
+            <a href="${discogsUrl}">Search Discogs →</a>
+          </div>
+        </div>
+      </div>`;
+    }).join("");
+
+    section.style.display = "block";
+  } catch { /* fresh releases unavailable */ }
+}
+
 // Auth-ready promise — declared here so the page-load IIFE below can await it
 // before initAuth (which resolves it) is defined further down the file.
 let _authReady;
@@ -1511,6 +1557,7 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
     doSearch(parseInt(p.get("pg") ?? "1"), true);
   }
   loadRecentFeed();
+  loadFreshReleases();
 })();
 
 // Submit on Enter (all text inputs)

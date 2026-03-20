@@ -2,7 +2,7 @@ import express from "express";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, getSearchHistory, getRecentSearches, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, upsertCollectionItems, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, updateCollectionSyncedAt, updateWantlistSyncedAt } from "./db.js";
+import { initDb, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, getSearchHistory, getRecentSearches, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, upsertCollectionItems, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases } from "./db.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -848,6 +848,17 @@ app.get("/master-versions/:id", async (req, res) => {
   } catch (err) {
     console.error(err);
     res.json({ versions: [] });
+  }
+});
+
+// GET /api/fresh-releases — random 48 from ListenBrainz fresh releases (last 24h)
+app.get("/api/fresh-releases", async (_req, res) => {
+  try {
+    const rows = await getFreshReleases(48);
+    res.json({ releases: rows });
+  } catch (err) {
+    console.error("fresh-releases error:", err);
+    res.json({ releases: [] });
   }
 });
 

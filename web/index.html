@@ -180,10 +180,15 @@
     <button id="next-btn" onclick="doSearch(currentPage + 1)">Next →</button>
   </div>
   <div id="recent-feed" style="display:none"></div>
+
+  <div id="fresh-releases-section" style="display:none;margin-top:3rem">
+    <div style="text-align:center;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.12em;color:#3a5a6a;margin-bottom:1rem">Latest Drops</div>
+    <div id="fresh-releases-grid" class="fresh-grid"></div>
+  </div>
 </main>
 <footer style="text-align:center;padding:2rem 1rem 1.5rem;font-size:0.72rem;color:var(--muted);line-height:1.4">
   <div style="color:#555;font-style:italic">DISCLAIMER: AI be funky sometimes</div>
-  Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Discogs</a>, <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Claude</a>, and <a href="https://www.wikipedia.org" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Wikipedia</a> &nbsp;|&nbsp; <a href="#" onclick="document.getElementById('info-overlay').style.display='flex';return false;" style="color:#3a5a6a;text-decoration:none">Info</a>
+  Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Discogs</a>, <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Claude</a>, <a href="https://www.wikipedia.org" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Wikipedia</a>, and <a href="https://listenbrainz.org" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">ListenBrainz</a> &nbsp;|&nbsp; <a href="#" onclick="document.getElementById('info-overlay').style.display='flex';return false;" style="color:#3a5a6a;text-decoration:none">Info</a>
   <div>© 2026 SeaDisco &nbsp;·&nbsp; Music data courtesy of Discogs API &nbsp;·&nbsp; Not affiliated with Discogs &nbsp;·&nbsp; Jimmy Witherfork Strikes Again</div>
 </footer>
 
@@ -290,6 +295,9 @@
 
     <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">My Collection &amp; Wantlist</h3>
     <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem">Signed-in users with a Discogs token can browse their Discogs collection and wantlist directly from the main page using the tabs above results. Records are synced from Discogs (up to 1,000 at a time) and cached locally for fast browsing. Green ✓ Collection and red ♡ Wantlist badges appear on search results. Click 'Sync now' to refresh.</p>
+
+    <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">Latest Drops</h3>
+    <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem">Below the recent search pills you'll find <strong style="color:#ccc">Latest Drops</strong> — a live feed of new music releases sourced from <a href="https://listenbrainz.org" target="_blank" rel="noopener" style="color:#5a9aaa">ListenBrainz</a> and <a href="https://musicbrainz.org" target="_blank" rel="noopener" style="color:#5a9aaa">MusicBrainz</a>, refreshed every 6 hours. Click <strong style="color:#ccc">Search Discogs →</strong> on any card to find that release on Discogs, or <strong style="color:#ccc">MusicBrainz ↗</strong> for full release metadata.</p>
 
     <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">Your Account</h3>
     <p style="font-size:0.84rem;color:#aaa;margin:0">Create a free account and connect your own Discogs API token for unlimited searches and a personal search history. Get your token at <strong style="color:#ccc">discogs.com → Settings → Developers → Generate new token</strong>.</p>
