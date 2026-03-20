@@ -1485,7 +1485,7 @@ async function loadRecentFeed() {
     const data = await fetch("/api/recent-searches").then(r => r.json());
     const searches = data.searches ?? [];
     if (!searches.length) return;
-    el.innerHTML = `<div class="feed-pills">${
+    el.innerHTML = `<div style="text-align:center;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.12em;color:#3a5a6a;margin-bottom:0.5rem">Recent Searches</div><div class="feed-pills">${
         searches.map((s, i) =>
           `<span class="feed-pill" data-idx="${i}">${feedLabel(s.params)}</span>`
         ).join("")
