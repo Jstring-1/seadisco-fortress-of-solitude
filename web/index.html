@@ -26,7 +26,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="/style.css?v=20260320b" />
+  <link rel="stylesheet" href="/style.css?v=20260320c" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -44,17 +44,12 @@
 </div>
 
 <nav id="main-nav">
-  <button class="main-nav-tab active" data-view="search" onclick="switchView('search')">Search</button>
-  <button class="main-nav-tab" data-view="drops" onclick="switchView('drops')">Drops</button>
+  <div id="main-nav-tabs">
+    <button class="main-nav-tab active" data-view="search" onclick="switchView('search')">Search</button>
+    <button class="main-nav-tab" data-view="drops" onclick="switchView('drops')">Drops</button>
+  </div>
 </nav>
 <div id="search-view">
-<div id="collection-tabs" style="display:none;max-width:900px;margin:0 auto;padding:0 1.5rem 1rem">
-  <div class="result-tabs">
-    <button class="result-tab active" data-tab="search">Search Results</button>
-    <button class="result-tab" data-tab="collection">My Collection</button>
-    <button class="result-tab" data-tab="wantlist">My Wantlist</button>
-  </div>
-</div>
 
 <main>
   <div id="header-bar">
@@ -253,7 +248,7 @@
   <div id="lightbox-counter"></div>
 </div>
 
-<script src="/app.js?v=20260320b"></script>
+<script src="/app.js?v=20260320c"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
 
 <!-- Info popup -->

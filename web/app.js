@@ -590,9 +590,15 @@ function renderCardFromBasicInfo(basicInfo) {
   return renderCard(syntheticItem);
 }
 
-function showCollectionTabs(show) {
-  const tabsEl = document.getElementById("collection-tabs");
-  if (tabsEl) tabsEl.style.display = show ? "block" : "none";
+function addNavTab(view, label) {
+  const container = document.getElementById("main-nav-tabs");
+  if (!container || container.querySelector(`[data-view="${view}"]`)) return;
+  const btn = document.createElement("button");
+  btn.className = "main-nav-tab";
+  btn.dataset.view = view;
+  btn.textContent = label;
+  btn.onclick = () => switchView(view);
+  container.appendChild(btn);
 }
 
 function switchView(view) {
@@ -607,14 +613,13 @@ function switchView(view) {
   } else {
     if (searchView) searchView.style.display = "";
     if (dropsView)  dropsView.style.display  = "none";
+    if (view === "collection") loadCollectionTab(1);
+    else if (view === "wantlist") loadWantlistTab(1);
   }
 }
 
 function setActiveTab(tab) {
   _activeTab = tab;
-  document.querySelectorAll(".result-tab").forEach(btn => {
-    btn.classList.toggle("active", btn.dataset.tab === tab);
-  });
 }
 
 async function loadCollectionTab(page = 1) {
@@ -1565,7 +1570,8 @@ function feedLabel(p) {
   if (p.style)         parts.push(p.style);
   if (p.format) parts.push(p.format);
   if (p.year)          parts.push(p.year);
-  return parts.join(" · ") || "Search";
+  const label = parts.join(" · ") || "Search";
+  return label.length > 24 ? label.slice(0, 23) + "…" : label;
 }
 
 function feedApply(p) {
@@ -1763,24 +1769,9 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
         if (tokenCheck.ok) {
           const tokenData = await tokenCheck.json();
           if (tokenData.hasToken) {
-            showCollectionTabs(true);
+            addNavTab("collection", "Collection");
+            addNavTab("wantlist", "Wantlist");
             await loadDiscogsIds();
-            // Wire up tab click handlers
-            document.querySelectorAll(".result-tab").forEach(btn => {
-              btn.addEventListener("click", () => {
-                const tab = btn.dataset.tab;
-                if (tab === "search") {
-                  setActiveTab("search");
-                  document.getElementById("pagination").style.display = "none";
-                  document.getElementById("results").innerHTML = "";
-                  setStatus("");
-                } else if (tab === "collection") {
-                  loadCollectionTab(1);
-                } else if (tab === "wantlist") {
-                  loadWantlistTab(1);
-                }
-              });
-            });
           }
         }
       } catch { /* collection tabs optional */ }
