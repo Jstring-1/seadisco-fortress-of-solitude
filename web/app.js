@@ -597,7 +597,20 @@ function addNavTab(view) {
   if (btn) btn.classList.remove("nav-disabled");
 }
 
+function toggleMobileNav() {
+  document.getElementById("main-nav-tabs")?.classList.toggle("mobile-open");
+}
+
+// Close hamburger menu when clicking outside
+document.addEventListener("click", e => {
+  if (!e.target.closest("#main-nav-tabs") && !e.target.closest("#nav-hamburger")) {
+    document.getElementById("main-nav-tabs")?.classList.remove("mobile-open");
+  }
+});
+
 function switchView(view, skipPushState = false) {
+  // Close mobile nav if open
+  document.getElementById("main-nav-tabs")?.classList.remove("mobile-open");
   // Block disabled tabs
   const tabBtn = document.querySelector(`#main-nav-tabs [data-view="${view}"]`);
   if (tabBtn?.classList.contains("nav-disabled")) return;

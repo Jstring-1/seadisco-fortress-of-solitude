@@ -45,11 +45,46 @@ html { overflow-x: hidden; }
   }
   #site-header img { height: 96px; }
 
-  /* Navbar — shrink tabs to fit, allow horizontal scroll if still too wide */
-  #main-nav { padding: 0 0.25rem 2rem; }
-  #main-nav-tabs { overflow-x: auto; overflow-y: visible; max-width: 100%; }
-  .main-nav-tab { padding: 0.4rem 0.6rem; font-size: 0.7rem; letter-spacing: 0.03em; }
-  .nav-auth-btn  { padding: 0.4rem 0.6rem; font-size: 0.7rem; letter-spacing: 0.03em; }
+  /* Navbar — hamburger replaces tab row */
+  #main-nav { padding: 0 1rem 1.5rem; justify-content: center; }
+  #nav-hamburger { display: flex; }          /* show hamburger */
+  #nav-tabs-wrap {                           /* becomes dropdown container */
+    position: absolute;
+    top: 2.4rem;
+    z-index: 200;
+    display: block;
+  }
+  #main-nav-tabs {                           /* hidden until toggled */
+    display: none;
+    flex-direction: column;
+    border-radius: var(--radius);
+    min-width: 190px;
+    overflow: hidden;
+  }
+  #main-nav-tabs.mobile-open { display: flex; }
+  /* Vertical tab style inside dropdown */
+  .main-nav-tab {
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0 !important;
+    padding: 0.65rem 1.2rem;
+    font-size: 0.82rem;
+    letter-spacing: 0.03em;
+    text-align: left;
+    width: 100%;
+  }
+  #main-nav-tabs > .main-nav-tab:first-child { border-radius: 0 !important; }
+  #main-nav-tabs > button:last-of-type { border-right: none; border-bottom: 1px solid var(--border); }
+  #nav-auth-wrap { border-left: none; }
+  .nav-auth-btn {
+    border-radius: 0 !important;
+    padding: 0.65rem 1.2rem;
+    font-size: 0.82rem;
+    width: 100%;
+    justify-content: flex-start;
+    border-bottom: none;
+  }
+  #nav-auth-popup { display: none !important; }
 
   #header-bar {
     flex-direction: column;
@@ -76,6 +111,7 @@ html { overflow-x: hidden; }
     flex-wrap: wrap;
     gap: 0.4rem;
     row-gap: 0.5rem;
+    padding: 0 0.5rem;
   }
   .type-sort-row > span { display: none; }
   .type-radios   { order: 1; }
@@ -163,8 +199,6 @@ html { overflow-x: hidden; }
     padding-top: 7px;
     padding-bottom: 20px;
   }
-  .main-nav-tab { padding: 0.35rem 0.45rem; font-size: 0.66rem; }
-  .nav-auth-btn  { padding: 0.35rem 0.45rem; font-size: 0.66rem; }
 
   .type-sort-row { font-size: 0.7rem; }
 
@@ -246,12 +280,16 @@ body {
   padding: 0 1.5rem 2.5rem;
   position: relative;
 }
+/* Wrapper gives popup a positioning context without affecting overflow */
+#nav-tabs-wrap {
+  position: relative;
+  display: inline-flex;
+}
 #main-nav-tabs {
   display: flex;
   border: 1px solid var(--border);
   border-radius: 7px;
-  overflow: visible;
-  position: relative;
+  overflow: hidden; /* ← safe now; popup lives outside this element */
 }
 #main-nav-tabs > .main-nav-tab:first-child { border-radius: 6px 0 0 6px; }
 #nav-auth-wrap {
@@ -292,7 +330,8 @@ body {
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
   z-index: 300;
 }
-#nav-auth-wrap:hover #nav-auth-popup { display: block; }
+/* :has() lets us trigger popup from a sibling context */
+#nav-tabs-wrap:has(#nav-auth-wrap:hover) #nav-auth-popup { display: block; }
 .main-nav-tab {
   background: none;
   border: none;
@@ -310,6 +349,28 @@ body {
 .main-nav-tab.active      { background: var(--surface); color: var(--accent); font-weight: 600; }
 .main-nav-tab:hover:not(.active):not(.nav-disabled) { color: var(--fg); background: var(--surface); }
 .main-nav-tab.nav-disabled { color: #333; cursor: default; }
+
+/* ── Hamburger button (mobile only) ────────────────────────────────────── */
+#nav-hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: space-between;
+  width: 36px;
+  height: 28px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 7px;
+  cursor: pointer;
+}
+#nav-hamburger span {
+  display: block;
+  height: 2px;
+  background: var(--muted);
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+#nav-hamburger:hover span { background: var(--accent); }
 
 /* ── Recent Searches pills (inline under results) ───────────────────────── */
 #recent-feed {
