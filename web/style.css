@@ -234,8 +234,8 @@ body {
 }
 
 #recent-feed {
-  margin-top: 60px;
-  margin-bottom: 1.25rem;
+  margin-top: 2.5rem;
+  margin-bottom: 2.5rem;
 }
 #recent-feed .feed-label {
   font-size: 0.7rem;
@@ -932,7 +932,8 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 #status {
   color: var(--muted);
   font-size: 0.9rem;
-  margin-bottom: 1.25rem;
+  margin-top: 2.5rem;
+  margin-bottom: 1rem;
   min-height: 1.2em;
 }
 
@@ -1052,7 +1053,8 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   justify-content: center;
   align-items: center;
   gap: 1rem;
-  margin-top: 2rem;
+  margin-top: 2.5rem;
+  margin-bottom: 2.5rem;
 }
 
 #pagination button {
