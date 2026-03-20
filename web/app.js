@@ -136,6 +136,7 @@ function clearForm() {
 }
 
 async function doSearch(page = 1, skipPushState = false) {
+  console.log("[doSearch] called from:", new Error().stack.split("\n")[2]?.trim());
   const q         = document.getElementById("query").value.trim();
   const advOpen   = document.getElementById("advanced-panel")?.dataset.open === "true";
   const artistRaw = advOpen ? document.getElementById("f-artist").value.trim() : "";
