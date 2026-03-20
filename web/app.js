@@ -103,7 +103,9 @@ function restoreFromParams(p) {
   document.getElementById("f-year").value    = p.get("yr") ?? "";
   document.getElementById("f-label").value   = p.get("lb") ?? "";
   document.getElementById("f-genre").value   = p.get("gn") ?? "";
-  document.getElementById("f-sort").value    = p.get("sr") ?? "";
+  const sortEl = document.getElementById("f-sort");
+  sortEl.value = p.get("sr") ?? "";
+  if (!sortEl.value) sortEl.selectedIndex = 0;
   document.getElementById("f-format").value  = p.get("fm") || "";
   populateStyles();
   document.getElementById("f-style").value   = p.get("st") ?? "";
@@ -1554,7 +1556,9 @@ function feedApply(p) {
   document.getElementById("f-style").value   = p.style         ?? "";
   const radio = document.querySelector(`input[name="result-type"][value="${p.type ?? ""}"]`);
   if (radio) radio.checked = true;
-  document.getElementById("f-sort").value    = p.sort          ?? "";
+  const feedSortEl = document.getElementById("f-sort");
+  feedSortEl.value = p.sort ?? "";
+  if (!feedSortEl.value) feedSortEl.selectedIndex = 0;
   // Open advanced panel if any advanced fields are populated so doSearch picks them up
   const needsAdv = p.artist || p.release_title || p.year || p.label || p.genre || p.style || p.format;
   if (needsAdv) toggleAdvanced(true);
