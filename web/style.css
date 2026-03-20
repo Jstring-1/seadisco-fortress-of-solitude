@@ -54,9 +54,9 @@ html { overflow-x: hidden; }
   }
   #auth-bar { text-align: center; }
 
-  #collection-tabs { padding: 0 1rem 1.25rem; }
+  #collection-tabs { padding: 0 0.4rem 1.25rem; }
 
-  main { padding: 0.4rem 0.9rem 1rem; }
+  main { padding: 0.4rem 0.4rem 1rem; }
 
   /* Search row — allow button to flex so it never clips in narrow viewports */
   main { overflow-x: hidden; }
@@ -74,7 +74,7 @@ html { overflow-x: hidden; }
     flex-wrap: wrap;
     gap: 0.4rem;
     row-gap: 0.5rem;
-    padding: 0 0.5rem;
+    padding: 0 0.2rem;
   }
   .type-sort-row > span { display: none; }
   .type-radios   { order: 1; }
