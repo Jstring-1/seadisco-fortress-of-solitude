@@ -387,15 +387,46 @@ export async function getFreshReleasesByTag(tag: string, limit = 48): Promise<an
   return r.rows;
 }
 
-export async function getFreshTopTags(limit = 24): Promise<Array<{ tag: string; cnt: number }>> {
+export async function getFreshTopTags(limit = 36): Promise<Array<{ tag: string; cnt: number }>> {
+  // Fetch extra candidates then deduplicate tags whose top-20 release sets are identical.
+  const candidateLimit = limit * 3;
   const r = await getPool().query(
-    `SELECT unnest(tags) AS tag, COUNT(*)::int AS cnt
-     FROM fresh_releases
-     WHERE fetched_at > NOW() - INTERVAL '14 days'
-     GROUP BY tag
+    `WITH top_tags AS (
+       SELECT unnest(tags) AS tag, COUNT(*)::int AS cnt
+       FROM fresh_releases
+       WHERE fetched_at > NOW() - INTERVAL '14 days'
+       GROUP BY tag
+       ORDER BY cnt DESC
+       LIMIT $1
+     ),
+     ranked AS (
+       SELECT tt.tag, tt.cnt, fr.release_mbid,
+         ROW_NUMBER() OVER (
+           PARTITION BY tt.tag
+           ORDER BY fr.release_date DESC NULLS LAST, fr.fetched_at DESC
+         ) AS rn
+       FROM top_tags tt
+       JOIN fresh_releases fr
+         ON tt.tag = ANY(fr.tags)
+        AND fr.fetched_at > NOW() - INTERVAL '14 days'
+     ),
+     fingerprints AS (
+       SELECT tag, cnt,
+         STRING_AGG(release_mbid::text, ',' ORDER BY rn) AS fp
+       FROM ranked
+       WHERE rn <= 20
+       GROUP BY tag, cnt
+     ),
+     deduped AS (
+       SELECT DISTINCT ON (fp) tag, cnt
+       FROM fingerprints
+       ORDER BY fp, cnt DESC
+     )
+     SELECT tag, cnt
+     FROM deduped
      ORDER BY cnt DESC
-     LIMIT $1`,
-    [limit]
+     LIMIT $2`,
+    [candidateLimit, limit]
   );
   return r.rows;
 }

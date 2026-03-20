@@ -613,8 +613,17 @@ function switchView(view) {
   } else {
     if (searchView) searchView.style.display = "";
     if (dropsView)  dropsView.style.display  = "none";
-    if (view === "collection") loadCollectionTab(1);
-    else if (view === "wantlist") loadWantlistTab(1);
+    if (view === "collection") {
+      loadCollectionTab(1);
+    } else if (view === "wantlist") {
+      loadWantlistTab(1);
+    } else {
+      // Search — clear any collection/wantlist content
+      document.getElementById("results").innerHTML = "";
+      document.getElementById("pagination").style.display = "none";
+      setStatus("");
+      document.getElementById("blurb").style.display = "none";
+    }
   }
 }
 
@@ -1570,8 +1579,9 @@ function feedLabel(p) {
   if (p.style)         parts.push(p.style);
   if (p.format) parts.push(p.format);
   if (p.year)          parts.push(p.year);
-  const label = parts.join(" · ") || "Search";
-  return label.length > 24 ? label.slice(0, 23) + "…" : label;
+  const full = parts.join(" · ") || "Search";
+  const short = full.length > 24 ? full.slice(0, 23) + "…" : full;
+  return { full, short };
 }
 
 function feedApply(p) {
@@ -1607,7 +1617,10 @@ async function loadRecentFeed() {
     if (el) {
       el.style.display = "block";
       el.innerHTML = `<div class="feed-pills">${
-        searches.map((s, i) => `<span class="feed-pill" data-idx="${i}">${feedLabel(s.params)}</span>`).join("")
+        searches.map((s, i) => {
+          const { full, short } = feedLabel(s.params);
+          return `<span class="feed-pill" data-idx="${i}" title="${escHtml(full)}">${escHtml(short)}</span>`;
+        }).join("")
       }</div>`;
       el.querySelectorAll(".feed-pill").forEach((pill, i) => {
         pill.addEventListener("click", () => feedApply(searches[i].params));
