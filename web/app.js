@@ -444,16 +444,20 @@ async function doSearch(page = 1, skipPushState = false) {
       ].filter(Boolean).join(", ");
       const qualityTitles = items.slice(0, 6).map(it => it.title ?? it.name ?? "").filter(Boolean);
       if (qualityQuery && qualityTitles.length) {
+        const statusEl = document.getElementById("status");
+        if (statusEl) statusEl.textContent = `${countMsg} · …`;
         fetch("/api/result-quality", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query: qualityQuery, titles: qualityTitles }),
         }).then(r => r.json()).then(d => {
-          if (d.phrase) {
-            const el = document.getElementById("status");
-            if (el) el.textContent = `${countMsg} · ${d.phrase}`;
-          }
-        }).catch(err => console.error("[result-quality]", err));
+          const el = document.getElementById("status");
+          if (el) el.textContent = d.phrase ? `${countMsg} · ${d.phrase}` : countMsg;
+        }).catch(err => {
+          console.error("[result-quality]", err);
+          const el = document.getElementById("status");
+          if (el) el.textContent = countMsg;
+        });
       } else {
         console.warn("[result-quality] skipped — qualityQuery:", qualityQuery, "titles:", qualityTitles.length);
       }
