@@ -136,7 +136,6 @@ function clearForm() {
 }
 
 async function doSearch(page = 1, skipPushState = false) {
-  console.log("[doSearch] called from:", new Error().stack.split("\n")[2]?.trim());
   const q         = document.getElementById("query").value.trim();
   const advOpen   = document.getElementById("advanced-panel")?.dataset.open === "true";
   const artistRaw = advOpen ? document.getElementById("f-artist").value.trim() : "";
@@ -444,7 +443,6 @@ async function doSearch(page = 1, skipPushState = false) {
         style   ? `Style: ${style}`     : "",
       ].filter(Boolean).join(", ");
       const qualityTitles = items.slice(0, 6).map(it => it.title ?? it.name ?? "").filter(Boolean);
-      console.log("[rq] query:", qualityQuery, "titles:", qualityTitles.length);
       if (qualityQuery && qualityTitles.length) {
         const statusEl = document.getElementById("status");
         if (statusEl) statusEl.textContent = `${countMsg} · …`;
@@ -452,21 +450,13 @@ async function doSearch(page = 1, skipPushState = false) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query: qualityQuery, titles: qualityTitles }),
-        }).then(r => { console.log("[rq] http:", r.status); return r.json(); })
-          .then(d => {
-          console.log("[rq] response:", JSON.stringify(d));
+        }).then(r => r.json()).then(d => {
           const el = document.getElementById("status");
-          if (el) {
-            el.textContent = d.phrase ? `${countMsg} · ${d.phrase}` : countMsg;
-            console.log("[rq] DOM text:", el.textContent, "| display:", el.style.display, "| offsetParent:", !!el.offsetParent);
-          }
-        }).catch(err => {
-          console.error("[rq] error:", err);
+          if (el) el.textContent = d.phrase ? `${countMsg} · ${d.phrase}` : countMsg;
+        }).catch(() => {
           const el = document.getElementById("status");
           if (el) el.textContent = countMsg;
         });
-      } else {
-        console.warn("[result-quality] skipped — qualityQuery:", qualityQuery, "titles:", qualityTitles.length);
       }
     }
 
@@ -1290,7 +1280,7 @@ function setStatus(msg, isError = false) {
   const el = document.getElementById("status");
   el.textContent = msg;
   el.className = isError ? "error" : "";
-  el.style.display = msg ? "" : "none";
+  el.style.display = msg ? "block" : "none";
 }
 
 // Store overflow items for rel-popup; keyed by auto-incrementing id
