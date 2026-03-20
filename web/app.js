@@ -1811,14 +1811,14 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
     if (!window._clerk) { _authReady(); return; }
     await window._clerk.load();
 
-    const navWrap = document.getElementById("nav-auth-wrap");
-    if (navWrap) {
+    const navBtn = document.getElementById("nav-auth-btn");
+    if (navBtn) {
       if (window._clerk.user) {
-        navWrap.innerHTML = `<a href="/account" class="nav-auth-btn">Account</a>`;
+        navBtn.textContent = "Account";
+        navBtn.classList.remove("nav-signup-btn");
       } else {
-        navWrap.innerHTML = `
-          <a href="/account" class="nav-auth-btn nav-signup-btn">Sign Up</a>
-          <div id="nav-auth-popup">Sign up and add your Discogs API token for unlimited searches</div>`;
+        navBtn.textContent = "Sign Up";
+        navBtn.classList.add("nav-signup-btn");
       }
     }
 
