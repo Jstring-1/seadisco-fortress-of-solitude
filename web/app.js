@@ -1516,8 +1516,10 @@ async function loadFreshReleases() {
         `<span class="fresh-tag">${escHtml(t)}</span>`
       ).join("");
 
-      const date = rel.release_date
-        ? new Date(rel.release_date + "T00:00:00").toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+      // Slice to YYYY-MM-DD string (handles both Date objects and strings from PG)
+      const dateStr = rel.release_date ? String(rel.release_date).slice(0, 10) : "";
+      const date = dateStr
+        ? new Date(dateStr + "T12:00:00").toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
         : "";
 
       const mbUrl = `https://musicbrainz.org/release/${encodeURIComponent(rel.release_mbid)}`;
