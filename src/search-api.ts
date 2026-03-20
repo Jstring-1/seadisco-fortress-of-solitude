@@ -858,7 +858,7 @@ app.get("/api/fresh-releases", async (req, res) => {
     const tag = req.query.tag ? String(req.query.tag) : "";
     const [releases, topTags] = await Promise.all([
       tag ? getFreshReleasesByTag(tag, 48) : getFreshReleases(48),
-      getFreshTopTags(12),
+      getFreshTopTags(24),
     ]);
     res.json({ releases, topTags });
   } catch (err) {

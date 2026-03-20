@@ -387,7 +387,7 @@ export async function getFreshReleasesByTag(tag: string, limit = 48): Promise<an
   return r.rows;
 }
 
-export async function getFreshTopTags(limit = 12): Promise<Array<{ tag: string; cnt: number }>> {
+export async function getFreshTopTags(limit = 24): Promise<Array<{ tag: string; cnt: number }>> {
   const r = await getPool().query(
     `SELECT unnest(tags) AS tag, COUNT(*)::int AS cnt
      FROM fresh_releases
