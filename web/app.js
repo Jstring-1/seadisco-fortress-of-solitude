@@ -1497,49 +1497,78 @@ async function loadRecentFeed() {
   } catch { /* no feed available */ }
 }
 
+function renderFreshGrid(releases) {
+  const grid = document.getElementById("fresh-releases-grid");
+  if (!grid) return;
+  if (!releases.length) {
+    grid.innerHTML = `<div style="color:var(--muted);font-size:0.8rem;grid-column:1/-1;text-align:center;padding:2rem 0">No releases found for this tag.</div>`;
+    return;
+  }
+  grid.innerHTML = releases.map(rel => {
+    const img = rel.cover_url
+      ? `<img src="${escHtml(rel.cover_url)}" alt="${escHtml(rel.release_name ?? '')}" loading="lazy" onerror="this.style.display='none'">`
+      : `<div class="fresh-card-no-img">♪</div>`;
+
+    const types = [rel.primary_type, rel.secondary_type].filter(Boolean).join(" · ");
+
+    // Slice to YYYY-MM-DD string (handles both Date objects and strings from PG)
+    const dateStr = rel.release_date ? String(rel.release_date).slice(0, 10) : "";
+    const date = dateStr
+      ? new Date(dateStr + "T12:00:00").toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+      : "";
+
+    const mbUrl      = `https://musicbrainz.org/release/${encodeURIComponent(rel.release_mbid)}`;
+    const discogsUrl = `/?q=${encodeURIComponent(rel.release_name ?? "")}&ar=${encodeURIComponent(rel.artist_credit_name ?? "")}`;
+
+    return `<div class="fresh-card">
+      <div class="fresh-card-img">${img}</div>
+      <div class="fresh-card-body">
+        <div class="fresh-card-title">${escHtml(rel.release_name ?? "Unknown")}</div>
+        <div class="fresh-card-artist">${escHtml(rel.artist_credit_name ?? "")}</div>
+        ${date ? `<div class="fresh-card-date">${date}</div>` : ""}
+        ${types ? `<div class="fresh-card-type">${escHtml(types)}</div>` : ""}
+        <div class="fresh-card-links">
+          <a href="${mbUrl}" target="_blank" rel="noopener">Info at MusicBrainz ↗</a>
+          <a href="${discogsUrl}">Search Discogs →</a>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+let _freshActiveTag = "";
+
+async function filterFreshByTag(tag) {
+  const pills = document.querySelectorAll(".fresh-tag-pill");
+  pills.forEach(p => p.classList.toggle("active", p.dataset.tag === tag));
+  _freshActiveTag = tag;
+  const url = tag ? `/api/fresh-releases?tag=${encodeURIComponent(tag)}` : "/api/fresh-releases";
+  try {
+    const data = await fetch(url).then(r => r.json());
+    renderFreshGrid(data.releases ?? []);
+  } catch { /* ignore */ }
+}
+
 async function loadFreshReleases() {
   const section = document.getElementById("fresh-releases-section");
-  const grid    = document.getElementById("fresh-releases-grid");
-  if (!section || !grid) return;
+  if (!section) return;
   try {
     const data = await fetch("/api/fresh-releases").then(r => r.json());
     const releases = data.releases ?? [];
-    if (!releases.length) return;
+    const topTags  = data.topTags  ?? [];
+    if (!releases.length && !topTags.length) return;
 
-    grid.innerHTML = releases.map(rel => {
-      const img = rel.cover_url
-        ? `<img src="${escHtml(rel.cover_url)}" alt="${escHtml(rel.release_name ?? '')}" loading="lazy" onerror="this.style.display='none'">`
-        : `<div class="fresh-card-no-img">♪</div>`;
+    // Render tag cloud
+    const tagCloud = document.getElementById("fresh-tag-cloud");
+    if (tagCloud && topTags.length) {
+      tagCloud.innerHTML =
+        `<span class="fresh-tag-pill active" data-tag="" onclick="filterFreshByTag('')">All</span>` +
+        topTags.map(t =>
+          `<span class="fresh-tag-pill" data-tag="${escHtml(t.tag)}" onclick="filterFreshByTag('${escHtml(t.tag)}')">${escHtml(t.tag)}</span>`
+        ).join("");
+    }
 
-      const types = [rel.primary_type, rel.secondary_type].filter(Boolean).join(" · ");
-      const tags  = (rel.tags ?? []).slice(0, 3).map(t =>
-        `<span class="fresh-tag">${escHtml(t)}</span>`
-      ).join("");
-
-      // Slice to YYYY-MM-DD string (handles both Date objects and strings from PG)
-      const dateStr = rel.release_date ? String(rel.release_date).slice(0, 10) : "";
-      const date = dateStr
-        ? new Date(dateStr + "T12:00:00").toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
-        : "";
-
-      const mbUrl = `https://musicbrainz.org/release/${encodeURIComponent(rel.release_mbid)}`;
-      const discogsUrl = `/?q=${encodeURIComponent(rel.release_name ?? "")}&ar=${encodeURIComponent(rel.artist_credit_name ?? "")}`;
-
-      return `<div class="fresh-card">
-        <div class="fresh-card-img">${img}</div>
-        <div class="fresh-card-body">
-          <div class="fresh-card-title">${escHtml(rel.release_name ?? "Unknown")}</div>
-          <div class="fresh-card-artist">${escHtml(rel.artist_credit_name ?? "")}</div>
-          ${date ? `<div class="fresh-card-date">${date}</div>` : ""}
-          ${types ? `<div class="fresh-card-type">${escHtml(types)}</div>` : ""}
-          <div class="fresh-card-links">
-            <a href="${mbUrl}" target="_blank" rel="noopener">Info at MusicBrainz ↗</a>
-            <a href="${discogsUrl}">Search Discogs →</a>
-          </div>
-        </div>
-      </div>`;
-    }).join("");
-
+    renderFreshGrid(releases);
     section.style.display = "block";
   } catch { /* fresh releases unavailable */ }
 }
