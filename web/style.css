@@ -230,34 +230,39 @@ body {
   text-transform: uppercase;
 }
 
-/* ── Recent Searches popup ──────────────────────────────────────────────── */
-#recent-searches-popup {
-  display: none;
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  min-width: 260px;
-  max-width: 420px;
-  background: var(--surface);
+/* ── Main nav (Search / Drops) ─────────────────────────────────────────── */
+#main-nav {
+  display: flex;
+  justify-content: center;
+  padding: 0 1.5rem 0.75rem;
+}
+.main-nav-tab {
+  background: none;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 6px 24px rgba(0,0,0,0.35);
-  padding: 0.75rem 0.85rem 0.8rem;
-  z-index: 200;
-}
-#recent-searches-popup .rsp-label {
-  font-size: 0.65rem;
+  color: var(--muted);
+  padding: 0.4rem 2.2rem;
+  cursor: pointer;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: #3a5a6a;
-  margin-bottom: 0.5rem;
+  transition: all 0.15s;
 }
-#recent-searches-popup .feed-pills {
+.main-nav-tab:first-child { border-radius: 6px 0 0 6px; }
+.main-nav-tab:last-child  { border-radius: 0 6px 6px 0; border-left: none; }
+.main-nav-tab.active      { background: var(--surface); color: var(--accent); font-weight: 600; }
+.main-nav-tab:hover:not(.active) { color: var(--fg); background: var(--surface); }
+
+/* ── Recent Searches pills (inline under results) ───────────────────────── */
+#recent-feed {
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+.feed-pills {
   display: flex;
   flex-wrap: wrap;
   gap: 0.35rem;
 }
-#recent-searches-popup .feed-pill {
+.feed-pill {
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 20px;
@@ -268,7 +273,7 @@ body {
   white-space: nowrap;
   transition: border-color 0.15s, color 0.15s;
 }
-#recent-searches-popup .feed-pill:hover {
+.feed-pill:hover {
   border-color: #3a5a6a;
   color: #bbb;
 }

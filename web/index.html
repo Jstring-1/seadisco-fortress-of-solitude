@@ -26,7 +26,7 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="/style.css?v=20260319e" />
+  <link rel="stylesheet" href="/style.css?v=20260320a" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -43,7 +43,12 @@
   <a href="https://seadisco.com"><img src="/seadisco-logo.png" alt="SeaDisco" /></a>
 </div>
 
-<div id="collection-tabs" style="visibility:hidden;max-width:900px;margin:0 auto;padding:0 1.5rem 1rem">
+<nav id="main-nav">
+  <button class="main-nav-tab active" data-view="search" onclick="switchView('search')">Search</button>
+  <button class="main-nav-tab" data-view="drops" onclick="switchView('drops')">Drops</button>
+</nav>
+<div id="search-view">
+<div id="collection-tabs" style="display:none;max-width:900px;margin:0 auto;padding:0 1.5rem 1rem">
   <div class="result-tabs">
     <button class="result-tab active" data-tab="search">Search Results</button>
     <button class="result-tab" data-tab="collection">My Collection</button>
@@ -165,8 +170,6 @@
     <span id="type-desc"></span>
     <span id="sort-pipe" style="color:#333;display:none">|</span>
     <span id="sort-desc"></span>
-    <a id="recent-searches-link" href="#" onclick="toggleRecentPopup(event)" style="display:none;margin-left:auto;color:#3a5a6a;text-decoration:none;white-space:nowrap;font-size:0.72rem">Recent Searches</a>
-    <div id="recent-searches-popup"></div>
   </div>
 
   <div id="artist-alts"></div>
@@ -180,12 +183,17 @@
     <span id="page-info"></span>
     <button id="next-btn" onclick="window.scrollTo({top:0,behavior:'smooth'});doSearch(currentPage+1)">Next →</button>
   </div>
-  <div id="fresh-releases-section" style="display:none;margin-top:2.5rem">
+  <div id="recent-feed" style="display:none;margin-top:1.5rem"></div>
+</main>
+</div><!-- /search-view -->
+
+<div id="drops-view" style="display:none;max-width:900px;margin:0 auto;padding:0.4rem 1.5rem 1.5rem">
+  <div id="fresh-releases-section">
     <div style="text-align:center;font-size:0.7rem;text-transform:uppercase;letter-spacing:0.12em;color:#3a5a6a;margin-bottom:0.75rem">Latest Drops from MusicBrainz</div>
     <div id="fresh-tag-cloud" class="fresh-tag-cloud"></div>
     <div id="fresh-releases-grid" class="fresh-grid"></div>
   </div>
-</main>
+</div>
 <footer style="text-align:center;padding:2rem 1rem 1.5rem;font-size:0.72rem;color:var(--muted);line-height:1.4">
   <div style="color:#555;font-style:italic">DISCLAIMER: AI be funky sometimes</div>
   Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Discogs</a>, <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Claude</a>, and <a href="https://listenbrainz.org" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">ListenBrainz</a> &nbsp;|&nbsp; <a href="#" onclick="document.getElementById('info-overlay').style.display='flex';return false;" style="color:#3a5a6a;text-decoration:none">Info</a>
@@ -245,7 +253,7 @@
   <div id="lightbox-counter"></div>
 </div>
 
-<script src="/app.js?v=20260319e"></script>
+<script src="/app.js?v=20260320a"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
 
 <!-- Info popup -->

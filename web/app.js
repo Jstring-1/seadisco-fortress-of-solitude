@@ -592,7 +592,22 @@ function renderCardFromBasicInfo(basicInfo) {
 
 function showCollectionTabs(show) {
   const tabsEl = document.getElementById("collection-tabs");
-  if (tabsEl) tabsEl.style.visibility = show ? "visible" : "hidden";
+  if (tabsEl) tabsEl.style.display = show ? "block" : "none";
+}
+
+function switchView(view) {
+  document.querySelectorAll(".main-nav-tab").forEach(btn =>
+    btn.classList.toggle("active", btn.dataset.view === view)
+  );
+  const searchView = document.getElementById("search-view");
+  const dropsView  = document.getElementById("drops-view");
+  if (view === "drops") {
+    if (searchView) searchView.style.display = "none";
+    if (dropsView)  dropsView.style.display  = "block";
+  } else {
+    if (searchView) searchView.style.display = "";
+    if (dropsView)  dropsView.style.display  = "none";
+  }
 }
 
 function setActiveTab(tab) {
@@ -1582,50 +1597,18 @@ async function loadRecentFeed() {
     const searches = data.searches ?? [];
     if (!searches.length) return;
     _recentSearches = searches;
-
-    const link = document.getElementById("recent-searches-link");
-    if (link) link.style.display = "";
-
-    const popup = document.getElementById("recent-searches-popup");
-    if (popup) {
-      popup.innerHTML = `<div class="rsp-label">Recent Searches</div><div class="feed-pills">${
+    const el = document.getElementById("recent-feed");
+    if (el) {
+      el.style.display = "block";
+      el.innerHTML = `<div class="feed-pills">${
         searches.map((s, i) => `<span class="feed-pill" data-idx="${i}">${feedLabel(s.params)}</span>`).join("")
       }</div>`;
-      popup.querySelectorAll(".feed-pill").forEach((pill, i) => {
-        pill.addEventListener("click", () => {
-          closeRecentPopup();
-          feedApply(searches[i].params);
-        });
+      el.querySelectorAll(".feed-pill").forEach((pill, i) => {
+        pill.addEventListener("click", () => feedApply(searches[i].params));
       });
     }
   } catch { /* no feed available */ }
 }
-
-function toggleRecentPopup(e) {
-  e.preventDefault();
-  e.stopPropagation();
-  const popup = document.getElementById("recent-searches-popup");
-  if (!popup) return;
-  const open = popup.style.display !== "none" && popup.style.display !== "";
-  if (open) {
-    popup.style.display = "none";
-  } else {
-    popup.style.display = "block";
-  }
-}
-
-function closeRecentPopup() {
-  const popup = document.getElementById("recent-searches-popup");
-  if (popup) popup.style.display = "none";
-}
-
-document.addEventListener("click", (e) => {
-  const popup = document.getElementById("recent-searches-popup");
-  const link  = document.getElementById("recent-searches-link");
-  if (popup && !popup.contains(e.target) && e.target !== link) {
-    popup.style.display = "none";
-  }
-});
 
 function renderFreshGrid(releases) {
   const grid = document.getElementById("fresh-releases-grid");
@@ -1680,15 +1663,11 @@ async function filterFreshByTag(tag) {
 }
 
 async function loadFreshReleases() {
-  const section = document.getElementById("fresh-releases-section");
-  if (!section) return;
   try {
     const data = await fetch("/api/fresh-releases").then(r => r.json());
     const releases = data.releases ?? [];
     const topTags  = data.topTags  ?? [];
     if (!releases.length && !topTags.length) return;
-
-    // Render tag cloud
     const tagCloud = document.getElementById("fresh-tag-cloud");
     if (tagCloud && topTags.length) {
       tagCloud.innerHTML =
@@ -1697,9 +1676,7 @@ async function loadFreshReleases() {
           `<span class="fresh-tag-pill" data-tag="${escHtml(t.tag)}" onclick="filterFreshByTag('${escHtml(t.tag)}')">${escHtml(t.tag)}</span>`
         ).join("");
     }
-
     renderFreshGrid(releases);
-    section.style.display = "block";
   } catch { /* fresh releases unavailable */ }
 }
 
