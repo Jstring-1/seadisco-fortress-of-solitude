@@ -1615,7 +1615,7 @@ async function loadRecentFeed() {
     if (!el) return;
     if (!searches.length) { el.style.display = "none"; return; }
     _recentSearches = searches;
-    const pillsHtml = `<div class="feed-pills">${
+    const pillsHtml = `<div class="feed-label">Recent Searches</div><div class="feed-pills">${
       searches.map((s, i) => {
         const { full, short } = feedLabel(s.params);
         return `<span class="feed-pill" data-idx="${i}" title="${escHtml(full)}">${escHtml(short)}</span>`;
