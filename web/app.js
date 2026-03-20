@@ -451,11 +451,11 @@ async function doSearch(page = 1, skipPushState = false) {
         }).then(r => r.json()).then(d => {
           if (d.phrase) {
             const el = document.getElementById("status");
-            if (el && el.textContent === countMsg) {
-              el.textContent = `${countMsg} · ${d.phrase}`;
-            }
+            if (el) el.textContent = `${countMsg} · ${d.phrase}`;
           }
-        }).catch(() => {});
+        }).catch(err => console.error("[result-quality]", err));
+      } else {
+        console.warn("[result-quality] skipped — qualityQuery:", qualityQuery, "titles:", qualityTitles.length);
       }
     }
 
