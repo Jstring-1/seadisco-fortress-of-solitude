@@ -451,11 +451,13 @@ async function doSearch(page = 1, skipPushState = false) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query: qualityQuery, titles: qualityTitles }),
-        }).then(r => r.json()).then(d => {
+        }).then(r => { console.log("[rq] http:", r.status); return r.json(); })
+          .then(d => {
+          console.log("[rq] response:", JSON.stringify(d));
           const el = document.getElementById("status");
           if (el) el.textContent = d.phrase ? `${countMsg} · ${d.phrase}` : countMsg;
         }).catch(err => {
-          console.error("[result-quality]", err);
+          console.error("[rq] error:", err);
           const el = document.getElementById("status");
           if (el) el.textContent = countMsg;
         });
