@@ -455,7 +455,10 @@ async function doSearch(page = 1, skipPushState = false) {
           .then(d => {
           console.log("[rq] response:", JSON.stringify(d));
           const el = document.getElementById("status");
-          if (el) el.textContent = d.phrase ? `${countMsg} · ${d.phrase}` : countMsg;
+          if (el) {
+            el.textContent = d.phrase ? `${countMsg} · ${d.phrase}` : countMsg;
+            console.log("[rq] DOM text:", el.textContent, "| display:", el.style.display, "| offsetParent:", !!el.offsetParent);
+          }
         }).catch(err => {
           console.error("[rq] error:", err);
           const el = document.getElementById("status");
