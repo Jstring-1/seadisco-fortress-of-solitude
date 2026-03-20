@@ -68,6 +68,22 @@ export async function initDb() {
       UNIQUE(clerk_user_id, discogs_release_id)
     )
   `);
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS fresh_releases (
+      id                  SERIAL PRIMARY KEY,
+      release_mbid        TEXT UNIQUE NOT NULL,
+      release_name        TEXT,
+      artist_credit_name  TEXT,
+      release_date        DATE,
+      primary_type        TEXT,
+      secondary_type      TEXT,
+      tags                TEXT[],
+      caa_id              BIGINT,
+      caa_release_mbid    TEXT,
+      cover_url           TEXT,
+      fetched_at          TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
 }
 
 export async function saveSearch(clerkUserId: string, params: Record<string, string>): Promise<void> {
@@ -300,4 +316,58 @@ export async function updateWantlistSyncedAt(clerkUserId: string): Promise<void>
     "UPDATE user_tokens SET wantlist_synced_at = NOW() WHERE clerk_user_id = $1",
     [clerkUserId]
   );
+}
+
+export async function upsertFreshRelease(r: {
+  release_mbid: string;
+  release_name: string;
+  artist_credit_name: string;
+  release_date: string | null;
+  primary_type: string | null;
+  secondary_type: string | null;
+  tags: string[];
+  caa_id: number | null;
+  caa_release_mbid: string | null;
+  cover_url: string | null;
+}): Promise<void> {
+  await getPool().query(
+    `INSERT INTO fresh_releases
+       (release_mbid, release_name, artist_credit_name, release_date, primary_type, secondary_type, tags, caa_id, caa_release_mbid, cover_url, fetched_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
+     ON CONFLICT (release_mbid)
+     DO UPDATE SET
+       release_name       = $2,
+       artist_credit_name = $3,
+       release_date       = $4,
+       primary_type       = $5,
+       secondary_type     = $6,
+       tags               = $7,
+       caa_id             = $8,
+       caa_release_mbid   = $9,
+       cover_url          = $10,
+       fetched_at         = NOW()`,
+    [r.release_mbid, r.release_name, r.artist_credit_name, r.release_date,
+     r.primary_type, r.secondary_type, r.tags, r.caa_id, r.caa_release_mbid, r.cover_url]
+  );
+}
+
+export async function pruneFreshReleases(): Promise<number> {
+  const r = await getPool().query(
+    `DELETE FROM fresh_releases WHERE fetched_at < NOW() - INTERVAL '14 days'`
+  );
+  return r.rowCount ?? 0;
+}
+
+export async function getFreshReleases(limit = 48): Promise<any[]> {
+  // Random sample from last 24 hours
+  const r = await getPool().query(
+    `SELECT release_mbid, release_name, artist_credit_name, release_date,
+            primary_type, secondary_type, tags, caa_release_mbid, cover_url
+     FROM fresh_releases
+     WHERE fetched_at > NOW() - INTERVAL '24 hours'
+     ORDER BY RANDOM()
+     LIMIT $1`,
+    [limit]
+  );
+  return r.rows;
 }
