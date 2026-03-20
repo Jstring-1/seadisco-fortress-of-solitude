@@ -262,6 +262,7 @@ body {
 /* ── Recent Searches pills (inline under results) ───────────────────────── */
 #recent-feed {
   padding-top: 1rem;
+  transition: opacity 0.4s ease;
 }
 .feed-pills {
   display: flex;
@@ -284,6 +285,28 @@ body {
   border-color: #3a5a6a;
   color: #bbb;
 }
+
+/* Placeholder pills shown while recent searches load */
+@keyframes feed-shimmer {
+  0%   { opacity: 0.25; }
+  50%  { opacity: 0.55; }
+  100% { opacity: 0.25; }
+}
+.feed-pill-ph {
+  width: 4.5rem;
+  height: 1.5rem;
+  background: var(--surface);
+  border-color: transparent;
+  cursor: default;
+  animation: feed-shimmer 1.6s ease-in-out infinite;
+}
+.feed-pill-ph:nth-child(2) { width: 5.5rem; animation-delay: 0.15s; }
+.feed-pill-ph:nth-child(3) { width: 3.8rem; animation-delay: 0.3s; }
+.feed-pill-ph:nth-child(4) { width: 6rem;   animation-delay: 0.45s; }
+.feed-pill-ph:nth-child(5) { width: 4rem;   animation-delay: 0.6s; }
+.feed-pill-ph:nth-child(6) { width: 5rem;   animation-delay: 0.75s; }
+.feed-pill-ph:nth-child(7) { width: 4.5rem; animation-delay: 0.9s; }
+.feed-pill-ph:nth-child(8) { width: 3.5rem; animation-delay: 1.05s; }
 
 /* ── Latest Drops / Fresh Releases ─────────────────────────────────────── */
 .fresh-tag-cloud {
