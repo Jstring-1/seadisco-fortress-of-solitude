@@ -390,7 +390,7 @@ async function doSearch(page = 1, skipPushState = false) {
 
         const rawBioText  = bioData.profile ?? null;
         const displayText = rawBioText ? stripDiscogsMarkup(rawBioText) : "";
-        const TRUNCATE = 300;
+        const TRUNCATE = 600;
         const needsMore = displayText.length > TRUNCATE;
         const truncatedRaw = rawBioText
           ? (needsMore ? truncateRaw(rawBioText, TRUNCATE) + '\u2026' : rawBioText)
@@ -413,7 +413,7 @@ async function doSearch(page = 1, skipPushState = false) {
         const relLinks = renderArtistRelations(
           bioData.members        ?? [], bioData.groups    ?? [], bioData.aliases  ?? [],
           bioData.namevariations ?? [], bioData.urls      ?? [],
-          bioData.parentLabel    ?? null, bioData.sublabels ?? []
+          bioData.parentLabel    ?? null, bioData.sublabels ?? [], true
         );
         const bioHtml  = rawBioText ? renderBioMarkup(truncatedRaw) : escHtml(truncatedRaw);
         blurbEl.innerHTML = heading + bioHtml + readMore + relLinks + discogsLink;
@@ -1271,29 +1271,82 @@ function setStatus(msg, isError = false) {
   el.style.display = msg ? "" : "none";
 }
 
-function renderArtistRelations(members = [], groups = [], aliases = [], namevariations = [], urls = [], parentLabel = null, sublabels = []) {
+// Store overflow items for rel-popup; keyed by auto-incrementing id
+window._relPopups = {};
+let _relPopupIdx = 0;
+function _storeRelPopup(items, isLinks) {
+  const key = "rp" + (++_relPopupIdx);
+  window._relPopups[key] = { items, isLinks };
+  return key;
+}
+
+function showRelPopup(event, key) {
+  event.preventDefault();
+  event.stopPropagation();
+  const store = window._relPopups[key];
+  if (!store) return;
+  let popup = document.getElementById("rel-overflow-popup");
+  if (!popup) {
+    popup = document.createElement("div");
+    popup.id = "rel-overflow-popup";
+    popup.style.cssText = "position:absolute;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.6rem 0.85rem;max-width:260px;font-size:0.78rem;line-height:1.7;box-shadow:0 4px 20px rgba(0,0,0,0.6);display:none";
+    popup.onclick = e => e.stopPropagation();
+    document.body.appendChild(popup);
+    document.addEventListener("click", () => { popup.style.display = "none"; });
+  }
+  if (store.isLinks) {
+    popup.innerHTML = store.items.map(u =>
+      `<div><a href="${escHtml(u)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${escHtml(u.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</a></div>`
+    ).join("");
+  } else {
+    popup.innerHTML = store.items.map(a => typeof a === "string"
+      ? `<div>${escHtml(a)}</div>`
+      : `<div><a href="#" class="bio-artist-link" onclick="searchBioArtist(event,this);document.getElementById('rel-overflow-popup').style.display='none'" data-artist="${escHtml(a.name)}"${a.id ? ` data-artist-id="${a.id}"` : ""}>${escHtml(a.name)}</a></div>`
+    ).join("");
+  }
+  const rect = event.target.getBoundingClientRect();
+  popup.style.display = "block";
+  popup.style.top  = (rect.bottom + window.scrollY + 4) + "px";
+  popup.style.left = Math.min(rect.left + window.scrollX, window.innerWidth - 270) + "px";
+}
+
+function renderArtistRelations(members = [], groups = [], aliases = [], namevariations = [], urls = [], parentLabel = null, sublabels = [], compact = false) {
+  const LIMIT = 3;
+
+  const moreBtn = (overflow, isLinks) => {
+    if (!overflow.length) return "";
+    const key = _storeRelPopup(overflow, isLinks);
+    return ` <a href="#" style="font-size:0.72rem;color:var(--muted);white-space:nowrap;text-decoration:none" onclick="showRelPopup(event,'${key}')">+${overflow.length} more</a>`;
+  };
+
   const row = (label, items) => {
     if (!items.length) return "";
-    const links = items.map(a =>
+    const visible  = compact ? items.slice(0, LIMIT) : items;
+    const overflow = compact ? items.slice(LIMIT) : [];
+    const links = visible.map(a =>
       `<a href="#" class="bio-artist-link" onclick="searchBioArtist(event,this)" data-artist="${escHtml(a.name)}"${a.id ? ` data-artist-id="${a.id}"` : ""}>${escHtml(a.name)}</a>`
     ).join('<span style="color:#555;margin:0 0.2em">·</span>');
     return `<div style="font-size:0.78rem;margin-top:0.55rem;line-height:1.6">
-              <span style="color:#777;margin-right:0.4em">${label}:</span>${links}
+              <span style="color:#777;margin-right:0.4em">${label}:</span>${links}${moreBtn(overflow, false)}
             </div>`;
   };
   const textRow = (label, items) => {
     if (!items.length) return "";
+    const visible  = compact ? items.slice(0, LIMIT) : items;
+    const overflow = compact ? items.slice(LIMIT) : [];
     return `<div style="font-size:0.78rem;margin-top:0.55rem;line-height:1.6">
-              <span style="color:#777;margin-right:0.4em">${label}:</span>${escHtml(items.join(" · "))}
+              <span style="color:#777;margin-right:0.4em">${label}:</span>${escHtml(visible.join(" · "))}${moreBtn(overflow, false)}
             </div>`;
   };
   const urlRow = (label, items) => {
     if (!items.length) return "";
-    const links = items.map(u =>
+    const visible  = compact ? items.slice(0, LIMIT) : items;
+    const overflow = compact ? items.slice(LIMIT) : [];
+    const links = visible.map(u =>
       `<div><a href="${escHtml(u)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${escHtml(u.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</a></div>`
     ).join("");
     return `<div style="font-size:0.78rem;margin-top:0.55rem;line-height:1.8">
-              <span style="color:#777;margin-right:0.4em">${label}:</span>${links}
+              <span style="color:#777;margin-right:0.4em">${label}:</span>${links}${moreBtn(overflow, true)}
             </div>`;
   };
   const html = row("Members", members)
