@@ -1532,7 +1532,7 @@ async function loadFreshReleases() {
           ${types ? `<div class="fresh-card-type">${escHtml(types)}</div>` : ""}
           ${tags ? `<div class="fresh-card-tags">${tags}</div>` : ""}
           <div class="fresh-card-links">
-            <a href="${mbUrl}" target="_blank" rel="noopener">MusicBrainz ↗</a>
+            <a href="${mbUrl}" target="_blank" rel="noopener">Info at MusicBrainz ↗</a>
             <a href="${discogsUrl}">Search Discogs →</a>
           </div>
         </div>
