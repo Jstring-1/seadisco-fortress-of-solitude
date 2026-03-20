@@ -464,7 +464,8 @@ async function doSearch(page = 1, skipPushState = false) {
     if (typeof gtag === "function") {
       gtag("event", "page_view", {
         page_location: window.location.href,
-        page_title: document.title
+        page_path:     window.location.pathname + window.location.search,
+        page_title:    document.title
       });
       gtag("event", "search", {
         search_term: [q, artist, label, genre].filter(Boolean).join(" | ") || "(filters only)"
@@ -613,6 +614,14 @@ function switchView(view, skipPushState = false) {
     } else {
       history.pushState({}, "", location.pathname);
     }
+  }
+  if (typeof gtag === "function") {
+    const titles = { drops: "Drops", info: "Info", collection: "Collection", wantlist: "Wantlist", search: "Search" };
+    gtag("event", "page_view", {
+      page_location: window.location.href,
+      page_path:     window.location.pathname + window.location.search,
+      page_title:    "SeaDisco – " + (titles[view] ?? view)
+    });
   }
   // Hide all views first
   if (searchView) searchView.style.display = "none";
