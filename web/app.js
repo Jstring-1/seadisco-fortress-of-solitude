@@ -1792,9 +1792,7 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
     const navWrap = document.getElementById("nav-auth-wrap");
     if (navWrap) {
       if (window._clerk.user) {
-        const email = window._clerk.user.primaryEmailAddress?.emailAddress ?? "";
-        const truncated = email ? email.slice(0, 2) + "***" + email.slice(-2) : "account";
-        navWrap.innerHTML = `<a href="/account" class="nav-auth-btn">ACCOUNT: ${truncated}</a>`;
+        navWrap.innerHTML = `<a href="/account" class="nav-auth-btn">Account</a>`;
       } else {
         navWrap.innerHTML = `
           <a href="/account" class="nav-auth-btn nav-signup-btn">Sign Up</a>
