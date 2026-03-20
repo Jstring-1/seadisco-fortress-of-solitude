@@ -1736,7 +1736,7 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
       if (window._clerk.user) {
         const email = window._clerk.user.primaryEmailAddress?.emailAddress ?? "";
         const [local, domain] = email.split("@");
-        const truncated = email ? local.slice(0, 3) + "***@" + domain : "account";
+        const truncated = email ? local.slice(0, 2) + "***" + local.slice(-2) + "@" + domain : "account";
         authBar.innerHTML = `<a href="/account">${truncated}</a>`;
       } else {
         authBar.innerHTML = `<a href="/account">Add your Discogs API Token for More Searches</a>`;
