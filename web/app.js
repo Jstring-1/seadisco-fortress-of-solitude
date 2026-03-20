@@ -104,14 +104,14 @@ function restoreFromParams(p) {
   document.getElementById("f-label").value   = p.get("lb") ?? "";
   document.getElementById("f-genre").value   = p.get("gn") ?? "";
   document.getElementById("f-sort").value    = p.get("sr") ?? "";
-  document.getElementById("f-format").value  = p.get("fm") || "Vinyl";
+  document.getElementById("f-format").value  = p.get("fm") || "";
   populateStyles();
   document.getElementById("f-style").value   = p.get("st") ?? "";
   const rtype = p.get("rt") ?? "";
   const radio = document.querySelector(`input[name="result-type"][value="${rtype}"]`);
   if (radio) radio.checked = true;
   // Auto-open advanced panel if any advanced fields are in use
-  const hasAdvanced = p.get("ar") || p.get("re") || p.get("yr") || p.get("lb") || p.get("gn") || p.get("st") || (p.get("fm") && p.get("fm") !== "Vinyl");
+  const hasAdvanced = p.get("ar") || p.get("re") || p.get("yr") || p.get("lb") || p.get("gn") || p.get("st") || p.get("fm");
   if (hasAdvanced) toggleAdvanced(true);
 }
 
@@ -121,7 +121,7 @@ function clearForm() {
     if (el) el.value = "";
   });
   document.getElementById("f-sort").value = "";
-  document.getElementById("f-format").value = "Vinyl";
+  document.getElementById("f-format").value = "";
   document.getElementById("f-style").innerHTML = '<option value="">Any</option>';
   document.getElementById("f-style").disabled = true;
   document.querySelector('input[name="result-type"][value=""]').checked = true;
@@ -135,14 +135,15 @@ function clearForm() {
 
 async function doSearch(page = 1, skipPushState = false) {
   const q         = document.getElementById("query").value.trim();
-  const artistRaw = document.getElementById("f-artist").value.trim();
+  const advOpen   = document.getElementById("advanced-panel")?.dataset.open === "true";
+  const artistRaw = advOpen ? document.getElementById("f-artist").value.trim() : "";
   const artist    = artistRaw.replace(/\s*\(\d+\)$/, ""); // stripped for search params
-  const release   = document.getElementById("f-release").value.trim();
-  const year      = document.getElementById("f-year").value.trim();
-  const label     = document.getElementById("f-label").value.trim();
-  const genre     = document.getElementById("f-genre").value.trim();
-  const style     = document.getElementById("f-style")?.value.trim() ?? "";
-  const format    = document.getElementById("f-format").value;
+  const release   = advOpen ? document.getElementById("f-release").value.trim() : "";
+  const year      = advOpen ? document.getElementById("f-year").value.trim() : "";
+  const label     = advOpen ? document.getElementById("f-label").value.trim() : "";
+  const genre     = advOpen ? document.getElementById("f-genre").value.trim() : "";
+  const style     = advOpen ? (document.getElementById("f-style")?.value.trim() ?? "") : "";
+  const format    = advOpen ? document.getElementById("f-format").value : "";
   const sort      = document.getElementById("f-sort").value;
   const resultType = document.querySelector('input[name="result-type"]:checked')?.value ?? "";
 
@@ -1339,9 +1340,10 @@ function renderArtistRelations(members = [], groups = [], aliases = [], namevari
             </div>`;
   };
   const urlRow = (label, items) => {
-    if (!items.length) return "";
-    const visible  = compact ? items.slice(0, LIMIT) : items;
-    const overflow = compact ? items.slice(LIMIT) : [];
+    const filtered = items.filter(u => !/facebook\.com|myspace\.com/i.test(u));
+    if (!filtered.length) return "";
+    const visible  = compact ? filtered.slice(0, LIMIT) : filtered;
+    const overflow = compact ? filtered.slice(LIMIT) : [];
     const links = visible.map(u =>
       `<div><a href="${escHtml(u)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${escHtml(u.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</a></div>`
     ).join("");
@@ -1390,6 +1392,8 @@ function searchBioArtist(event, el) {
   document.getElementById("f-label").value   = "";
   document.getElementById("f-genre").value   = "";
   currentArtistId = el.dataset.artistId || null;
+  // Ensure advanced panel is open so doSearch reads the artist field
+  toggleAdvanced(true);
   doSearch(1);
 }
 
@@ -1533,7 +1537,7 @@ function feedLabel(p) {
   if (p.label)         parts.push(`${tc(p.label)} label`);
   if (p.genre)         parts.push(p.genre);
   if (p.style)         parts.push(p.style);
-  if (p.format && p.format !== "Vinyl") parts.push(p.format);
+  if (p.format) parts.push(p.format);
   if (p.year)          parts.push(p.year);
   return parts.join(" · ") || "Search";
 }
@@ -1544,13 +1548,16 @@ function feedApply(p) {
   document.getElementById("f-release").value = p.release_title ?? "";
   document.getElementById("f-year").value    = p.year          ?? "";
   document.getElementById("f-label").value   = p.label         ?? "";
-  document.getElementById("f-format").value  = p.format        || "Vinyl";
+  document.getElementById("f-format").value  = p.format        || "";
   document.getElementById("f-genre").value   = p.genre         ?? "";
   populateStyles();
   document.getElementById("f-style").value   = p.style         ?? "";
   const radio = document.querySelector(`input[name="result-type"][value="${p.type ?? ""}"]`);
   if (radio) radio.checked = true;
   document.getElementById("f-sort").value    = p.sort          ?? "";
+  // Open advanced panel if any advanced fields are populated so doSearch picks them up
+  const needsAdv = p.artist || p.release_title || p.year || p.label || p.genre || p.style || p.format;
+  if (needsAdv) toggleAdvanced(true);
   doSearch(1);
 }
 
