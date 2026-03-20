@@ -45,47 +45,6 @@ html { overflow-x: hidden; }
   }
   #site-header img { height: 96px; }
 
-  /* Navbar — hamburger replaces tab row */
-  #main-nav { padding: 0 1rem 1.5rem; justify-content: center; }
-  #nav-hamburger { display: flex; }          /* show hamburger */
-  #nav-tabs-wrap {                           /* becomes dropdown container */
-    position: absolute;
-    top: 2.4rem;
-    z-index: 200;
-    display: block;
-  }
-  #main-nav-tabs {                           /* hidden until toggled */
-    display: none;
-    flex-direction: column;
-    border-radius: var(--radius);
-    min-width: 190px;
-    overflow: hidden;
-  }
-  #main-nav-tabs.mobile-open { display: flex; }
-  /* Vertical tab style inside dropdown */
-  .main-nav-tab {
-    border-right: none;
-    border-bottom: 1px solid var(--border);
-    border-radius: 0 !important;
-    padding: 0.65rem 1.2rem;
-    font-size: 0.82rem;
-    letter-spacing: 0.03em;
-    text-align: left;
-    width: 100%;
-  }
-  #main-nav-tabs > .main-nav-tab:first-child { border-radius: 0 !important; }
-  #main-nav-tabs > button:last-of-type { border-right: none; border-bottom: 1px solid var(--border); }
-  #nav-auth-wrap { border-left: none; }
-  .nav-auth-btn {
-    border-radius: 0 !important;
-    padding: 0.65rem 1.2rem;
-    font-size: 0.82rem;
-    width: 100%;
-    justify-content: flex-start;
-    border-bottom: none;
-  }
-  #nav-auth-popup { display: none !important; }
-
   #header-bar {
     flex-direction: column;
     align-items: center;
@@ -287,11 +246,9 @@ body {
 }
 #main-nav-tabs {
   display: flex;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  overflow: hidden; /* ← safe now; popup lives outside this element */
+  /* No outer border or border-radius — borders live on each button instead,
+     which avoids the rounded-corner / internal-border rendering artifact */
 }
-#main-nav-tabs > .main-nav-tab:first-child { border-radius: 6px 0 0 6px; }
 #nav-auth-wrap {
   position: relative;
   display: flex;
@@ -299,7 +256,10 @@ body {
 }
 .nav-auth-btn {
   background: none;
-  border: none;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  border-left: none;
   border-radius: 0 6px 6px 0;
   color: var(--muted);
   font-size: 0.78rem;
@@ -334,8 +294,10 @@ body {
 #nav-tabs-wrap:has(#nav-auth-wrap:hover) #nav-auth-popup { display: block; }
 .main-nav-tab {
   background: none;
-  border: none;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   border-right: 1px solid var(--border);
+  border-left: none;
   color: var(--muted);
   padding: 0.4rem 1.3rem;
   cursor: pointer;
@@ -345,10 +307,40 @@ body {
   transition: all 0.15s;
   white-space: nowrap;
 }
-#main-nav-tabs > button:last-of-type { border-right: none; }
+/* First tab gets left border + rounded left corners */
+#main-nav-tabs > .main-nav-tab:first-child {
+  border-left: 1px solid var(--border);
+  border-radius: 6px 0 0 6px;
+}
+/* Info (last button) keeps its border-right — it's the separator before Account */
 .main-nav-tab.active      { background: var(--surface); color: var(--accent); font-weight: 600; }
 .main-nav-tab:hover:not(.active):not(.nav-disabled) { color: var(--fg); background: var(--surface); }
 .main-nav-tab.nav-disabled { color: #333; cursor: default; }
+
+/* ── Mobile nav override — MUST come after desktop nav styles ───────────── */
+@media (max-width: 640px) {
+  #main-nav { padding: 0 1rem 1.5rem; justify-content: center; }
+  #nav-hamburger { display: flex; }
+  #nav-tabs-wrap { position: absolute; top: 2.4rem; z-index: 200; display: block; }
+  #main-nav-tabs { display: none; flex-direction: column; min-width: 190px;
+                   border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  #main-nav-tabs.mobile-open { display: flex; }
+  .main-nav-tab {
+    border-top: none; border-left: none; border-right: none;
+    border-bottom: 1px solid var(--border);
+    border-radius: 0 !important;
+    padding: 0.65rem 1.2rem; font-size: 0.82rem;
+    letter-spacing: 0.03em; text-align: left; width: 100%;
+  }
+  #main-nav-tabs > .main-nav-tab:first-child { border-left: none; border-radius: 0 !important; }
+  #nav-auth-wrap { border-left: none; }
+  .nav-auth-btn {
+    border: none; border-radius: 0 !important;
+    padding: 0.65rem 1.2rem; font-size: 0.82rem;
+    width: 100%; justify-content: flex-start;
+  }
+  #nav-auth-popup { display: none !important; }
+}
 
 /* ── Hamburger button (mobile only) ────────────────────────────────────── */
 #nav-hamburger {
