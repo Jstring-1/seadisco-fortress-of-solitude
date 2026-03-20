@@ -1238,6 +1238,7 @@ function setStatus(msg, isError = false) {
   const el = document.getElementById("status");
   el.textContent = msg;
   el.className = isError ? "error" : "";
+  el.style.display = msg ? "" : "none";
 }
 
 function renderArtistRelations(members = [], groups = [], aliases = [], namevariations = [], urls = [], parentLabel = null, sublabels = []) {

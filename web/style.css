@@ -934,7 +934,7 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   font-size: 0.9rem;
   margin-top: 2.5rem;
   margin-bottom: 1rem;
-  min-height: 1.2em;
+  display: none;
 }
 
 #status.error { color: #e05555; }
