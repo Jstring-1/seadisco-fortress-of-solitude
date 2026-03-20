@@ -392,6 +392,42 @@ Return ONLY a valid JSON array, no markdown, no explanation.`;
   }
 });
 
+// POST /api/result-quality — Claude gives a short phrase on result relevance
+app.post("/api/result-quality", express.json(), async (req, res) => {
+  if (!anthropicKey) { res.json({ phrase: null }); return; }
+  const { query, titles } = req.body ?? {};
+  if (!query || !Array.isArray(titles) || !titles.length) { res.json({ phrase: null }); return; }
+
+  const titleList = (titles as string[]).slice(0, 6).map((t, i) => `${i + 1}. ${t}`).join("\n");
+  const prompt = `A user searched Discogs for: "${query}"
+
+Top results returned:
+${titleList}
+
+In 4–7 words, give a single honest phrase describing how well these results match the query. Be direct, like a librarian — e.g. "Strong match", "Partial match, try narrowing", "Loose results, refine your search", "Exact artist found", "Mixed bag, add more filters". No punctuation at the end. Return ONLY the phrase, nothing else.`;
+
+  try {
+    const r = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": anthropicKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 24,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    const data = await r.json() as any;
+    const phrase = (data.content?.[0]?.text ?? "").trim().replace(/[.!?]+$/, "") || null;
+    res.json({ phrase });
+  } catch {
+    res.json({ phrase: null });
+  }
+});
+
 // GET /api/recent-searches — anonymous global feed
 app.get("/api/recent-searches", async (_req, res) => {
   if (!process.env.APP_DB_URL) { res.json({ searches: [] }); return; }
