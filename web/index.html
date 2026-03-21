@@ -86,6 +86,7 @@
 
 <main>
   <span id="auth-status" style="display:none"></span>
+  <div id="main-search-form">
   <div class="search-row">
     <input type="text" id="query" placeholder="Search artists, releases, labels…" autocomplete="off" />
     <button id="search-btn" onclick="doSearch(1)" style="flex-shrink:0">Search</button>
@@ -188,13 +189,22 @@
     </div>
   </div>
 
-  <div style="position:relative;display:flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:#555;margin-bottom:1.25rem;min-height:1em">
+  <div id="search-desc-row" style="position:relative;display:flex;align-items:center;gap:0.4rem;font-size:0.78rem;color:#555;margin-bottom:1.25rem;min-height:1em">
     <span id="powered-by"></span>
     <span id="search-desc" onclick="copySearchUrl(this)" title="Click to copy search link" style="cursor:pointer"></span>
     <span id="type-pipe" style="color:#333;display:none">|</span>
     <span id="type-desc"></span>
     <span id="sort-pipe" style="color:#333;display:none">|</span>
     <span id="sort-desc"></span>
+  </div>
+  </div><!-- /main-search-form -->
+
+  <!-- Collection / Wantlist local search bar — hidden until those views are active -->
+  <div id="cw-search-row" class="search-row" style="display:none">
+    <input type="text" id="cw-query" placeholder="Search your collection…" autocomplete="off"
+      onkeydown="if(event.key==='Enter'){doCwSearch(1)}" />
+    <button onclick="doCwSearch(1)" style="flex-shrink:0">Search</button>
+    <button type="button" onclick="clearCwSearch()" title="Clear" style="background:none;border:none;padding:0.3rem 0.5rem;font-size:1.5rem;color:#555;cursor:pointer;line-height:1;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
   </div>
 
   <div id="status"></div>
@@ -324,7 +334,7 @@
   <div id="lightbox-counter"></div>
 </div>
 
-<script src="/app.js?v=20260321a"></script>
+<script src="/app.js?v=20260321b"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
 
 </body>
