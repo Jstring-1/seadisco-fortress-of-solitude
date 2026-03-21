@@ -661,6 +661,7 @@ function switchView(view, skipPushState = false) {
     if (cwRow) cwRow.style.display = "";
     if (cwInput) { cwInput.placeholder = "Search your collection…"; cwInput.value = ""; }
     _cwTab = "collection"; _cwQuery = "";
+    document.getElementById("artist-alts").innerHTML = "";
     const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "none";
     loadCollectionTab(1);
   } else if (view === "wantlist") {
@@ -669,6 +670,7 @@ function switchView(view, skipPushState = false) {
     if (cwRow) cwRow.style.display = "";
     if (cwInput) { cwInput.placeholder = "Search your wantlist…"; cwInput.value = ""; }
     _cwTab = "wantlist"; _cwQuery = "";
+    document.getElementById("artist-alts").innerHTML = "";
     const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "none";
     loadWantlistTab(1);
   } else {
