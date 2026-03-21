@@ -256,25 +256,33 @@ app.post("/api/user/sync", express.json(), async (req, res) => {
   }
 });
 
-// GET /api/user/collection — paginated cached collection (with optional search)
+// GET /api/user/collection — paginated cached collection (with optional filters)
 app.get("/api/user/collection", async (req, res) => {
   const userId = getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   const page    = parseInt(req.query.page    as string) || 1;
   const perPage = parseInt(req.query.per_page as string) || 25;
-  const search  = (req.query.q as string ?? "").trim() || undefined;
-  const { items, total } = await getCollectionPage(userId, page, perPage, search);
+  const filters: Record<string, string> = {};
+  for (const key of ["q", "artist", "label", "year", "genre", "style", "format"]) {
+    const v = (req.query[key] as string ?? "").trim();
+    if (v) (filters as any)[key] = v;
+  }
+  const { items, total } = await getCollectionPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
   res.json({ items, total, page, pages: Math.ceil(total / perPage) });
 });
 
-// GET /api/user/wantlist — paginated cached wantlist (with optional search)
+// GET /api/user/wantlist — paginated cached wantlist (with optional filters)
 app.get("/api/user/wantlist", async (req, res) => {
   const userId = getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   const page    = parseInt(req.query.page    as string) || 1;
   const perPage = parseInt(req.query.per_page as string) || 25;
-  const search  = (req.query.q as string ?? "").trim() || undefined;
-  const { items, total } = await getWantlistPage(userId, page, perPage, search);
+  const filters: Record<string, string> = {};
+  for (const key of ["q", "artist", "label", "year", "genre", "style", "format"]) {
+    const v = (req.query[key] as string ?? "").trim();
+    if (v) (filters as any)[key] = v;
+  }
+  const { items, total } = await getWantlistPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
   res.json({ items, total, page, pages: Math.ceil(total / perPage) });
 });
 
