@@ -199,12 +199,31 @@
   </div>
   </div><!-- /main-search-form -->
 
-  <!-- Collection / Wantlist local search bar — hidden until those views are active -->
-  <div id="cw-search-row" class="search-row" style="display:none">
-    <input type="text" id="cw-query" placeholder="Search your collection…" autocomplete="off"
-      onkeydown="if(event.key==='Enter'){doCwSearch(1)}" />
-    <button onclick="doCwSearch(1)" style="flex-shrink:0">Search</button>
-    <button type="button" onclick="clearCwSearch()" title="Clear" style="background:none;border:none;padding:0.3rem 0.5rem;font-size:1.5rem;color:#555;cursor:pointer;line-height:1;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
+  <!-- Collection / Wantlist local search — hidden until those views are active -->
+  <div id="cw-search-wrap" style="display:none">
+    <div class="search-row">
+      <input type="text" id="cw-query" placeholder="Search your collection…" autocomplete="off"
+        onkeydown="if(event.key==='Enter'){doCwSearch(1)}" />
+      <button onclick="doCwSearch(1)" style="flex-shrink:0">Search</button>
+    </div>
+    <div style="display:flex;align-items:center;gap:0.4rem;margin-top:0.3rem">
+      <button type="button" id="cw-advanced-toggle" onclick="toggleCwAdvanced()" style="background:none;border:none;padding:0;font-size:0.78rem;color:#666;cursor:pointer;display:flex;align-items:center;gap:0.3rem;white-space:nowrap" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#666'">
+        <span id="cw-advanced-arrow">▶</span> Filters
+      </button>
+      <button type="button" onclick="clearCwSearch()" title="Clear all filters" style="background:none;border:none;padding:0.3rem 0.5rem;font-size:1.5rem;color:#555;cursor:pointer;line-height:1;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
+    </div>
+    <div id="cw-advanced-panel" style="display:none;margin-top:0.5rem">
+      <div class="filters">
+        <label>Artist <input type="text" id="cw-artist" placeholder="e.g. Miles Davis" onkeydown="if(event.key==='Enter'){doCwSearch(1)}" /></label>
+        <label>Label <input type="text" id="cw-label" placeholder="e.g. Columbia" onkeydown="if(event.key==='Enter'){doCwSearch(1)}" /></label>
+        <label>Year <input type="text" id="cw-year" placeholder="e.g. 1959" onkeydown="if(event.key==='Enter'){doCwSearch(1)}" /></label>
+      </div>
+      <div class="filters filters-pair" style="margin-top:0.4rem">
+        <label>Genre <input type="text" id="cw-genre" placeholder="e.g. Jazz" onkeydown="if(event.key==='Enter'){doCwSearch(1)}" /></label>
+        <label>Style <input type="text" id="cw-style" placeholder="e.g. Hard Bop" onkeydown="if(event.key==='Enter'){doCwSearch(1)}" /></label>
+        <label>Format <input type="text" id="cw-format" placeholder="e.g. Vinyl" onkeydown="if(event.key==='Enter'){doCwSearch(1)}" /></label>
+      </div>
+    </div>
   </div>
 
   <div id="status"></div>
@@ -334,7 +353,7 @@
   <div id="lightbox-counter"></div>
 </div>
 
-<script src="/app.js?v=20260321b"></script>
+<script src="/app.js?v=20260321c"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
 
 </body>

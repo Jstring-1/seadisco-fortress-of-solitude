@@ -287,30 +287,49 @@ export async function upsertWantlistItems(
   }
 }
 
+export interface CwSearchFilters {
+  q?: string;
+  artist?: string;
+  label?: string;
+  year?: string;
+  genre?: string;
+  style?: string;
+  format?: string;
+}
+
+function buildCwWhere(filters: CwSearchFilters, startIdx: number): { clause: string; params: any[] } {
+  const clauses: string[] = [];
+  const params: any[] = [];
+  let idx = startIdx;
+  if (filters.q)      { clauses.push(`data::text ILIKE $${idx}`); params.push(`%${filters.q}%`); idx++; }
+  if (filters.artist) { clauses.push(`data->'artists' @> $${idx}::jsonb`); params.push(JSON.stringify([{ name: filters.artist }])); idx++; }
+  if (filters.label)  { clauses.push(`data->'labels' @> $${idx}::jsonb`); params.push(JSON.stringify([{ name: filters.label }])); idx++; }
+  if (filters.year)   { clauses.push(`(data->>'year')::text = $${idx}`); params.push(filters.year); idx++; }
+  if (filters.genre)  { clauses.push(`data->'genres' ? $${idx}`); params.push(filters.genre); idx++; }
+  if (filters.style)  { clauses.push(`data->'styles' ? $${idx}`); params.push(filters.style); idx++; }
+  if (filters.format) { clauses.push(`data->'formats' @> $${idx}::jsonb`); params.push(JSON.stringify([{ name: filters.format }])); idx++; }
+  return { clause: clauses.length ? " AND " + clauses.join(" AND ") : "", params };
+}
+
 export async function getCollectionPage(
   clerkUserId: string,
   page: number,
   perPage: number,
-  search?: string
+  filters?: CwSearchFilters
 ): Promise<{ items: any[]; total: number }> {
   const offset = (page - 1) * perPage;
-  const searchClause = search ? ` AND data::text ILIKE $4` : "";
-  const dataParams: any[] = search
-    ? [clerkUserId, perPage, offset, `%${search}%`]
-    : [clerkUserId, perPage, offset];
-  const countParams: any[] = search
-    ? [clerkUserId, `%${search}%`]
-    : [clerkUserId];
+  const { clause: dataClause, params: dataFilterParams } = buildCwWhere(filters ?? {}, 4);
+  const { clause: countClause, params: countFilterParams } = buildCwWhere(filters ?? {}, 2);
   const [dataR, countR] = await Promise.all([
     getPool().query(
-      `SELECT data FROM user_collection WHERE clerk_user_id = $1${searchClause}
+      `SELECT data FROM user_collection WHERE clerk_user_id = $1${dataClause}
        ORDER BY added_at DESC NULLS LAST, id DESC
        LIMIT $2 OFFSET $3`,
-      dataParams
+      [clerkUserId, perPage, offset, ...dataFilterParams]
     ),
     getPool().query(
-      `SELECT COUNT(*)::int AS total FROM user_collection WHERE clerk_user_id = $1${search ? " AND data::text ILIKE $2" : ""}`,
-      countParams
+      `SELECT COUNT(*)::int AS total FROM user_collection WHERE clerk_user_id = $1${countClause}`,
+      [clerkUserId, ...countFilterParams]
     ),
   ]);
   return { items: dataR.rows.map(r => r.data), total: countR.rows[0]?.total ?? 0 };
@@ -320,26 +339,21 @@ export async function getWantlistPage(
   clerkUserId: string,
   page: number,
   perPage: number,
-  search?: string
+  filters?: CwSearchFilters
 ): Promise<{ items: any[]; total: number }> {
   const offset = (page - 1) * perPage;
-  const searchClause = search ? ` AND data::text ILIKE $4` : "";
-  const dataParams: any[] = search
-    ? [clerkUserId, perPage, offset, `%${search}%`]
-    : [clerkUserId, perPage, offset];
-  const countParams: any[] = search
-    ? [clerkUserId, `%${search}%`]
-    : [clerkUserId];
+  const { clause: dataClause, params: dataFilterParams } = buildCwWhere(filters ?? {}, 4);
+  const { clause: countClause, params: countFilterParams } = buildCwWhere(filters ?? {}, 2);
   const [dataR, countR] = await Promise.all([
     getPool().query(
-      `SELECT data FROM user_wantlist WHERE clerk_user_id = $1${searchClause}
+      `SELECT data FROM user_wantlist WHERE clerk_user_id = $1${dataClause}
        ORDER BY added_at DESC NULLS LAST, id DESC
        LIMIT $2 OFFSET $3`,
-      dataParams
+      [clerkUserId, perPage, offset, ...dataFilterParams]
     ),
     getPool().query(
-      `SELECT COUNT(*)::int AS total FROM user_wantlist WHERE clerk_user_id = $1${search ? " AND data::text ILIKE $2" : ""}`,
-      countParams
+      `SELECT COUNT(*)::int AS total FROM user_wantlist WHERE clerk_user_id = $1${countClause}`,
+      [clerkUserId, ...countFilterParams]
     ),
   ]);
   return { items: dataR.rows.map(r => r.data), total: countR.rows[0]?.total ?? 0 };

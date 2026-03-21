@@ -644,22 +644,23 @@ function switchView(view, skipPushState = false) {
 
   // Toggle main search form vs collection/wantlist search bar
   const mainForm = document.getElementById("main-search-form");
-  const cwRow    = document.getElementById("cw-search-row");
+  const cwWrap   = document.getElementById("cw-search-wrap");
   const cwInput  = document.getElementById("cw-query");
 
   if (view === "drops") {
     if (dropsView) dropsView.style.display = "block";
     if (mainForm) mainForm.style.display = "";
-    if (cwRow) cwRow.style.display = "none";
+    if (cwWrap) cwWrap.style.display = "none";
   } else if (view === "info") {
     if (infoView) infoView.style.display = "block";
     if (mainForm) mainForm.style.display = "";
-    if (cwRow) cwRow.style.display = "none";
+    if (cwWrap) cwWrap.style.display = "none";
   } else if (view === "collection") {
     if (searchView) searchView.style.display = "";
     if (mainForm) mainForm.style.display = "none";
-    if (cwRow) cwRow.style.display = "";
+    if (cwWrap) cwWrap.style.display = "";
     if (cwInput) { cwInput.placeholder = "Search your collection…"; cwInput.value = ""; }
+    clearCwFilters();
     _cwTab = "collection"; _cwQuery = "";
     document.getElementById("artist-alts").innerHTML = "";
     const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "none";
@@ -667,8 +668,9 @@ function switchView(view, skipPushState = false) {
   } else if (view === "wantlist") {
     if (searchView) searchView.style.display = "";
     if (mainForm) mainForm.style.display = "none";
-    if (cwRow) cwRow.style.display = "";
+    if (cwWrap) cwWrap.style.display = "";
     if (cwInput) { cwInput.placeholder = "Search your wantlist…"; cwInput.value = ""; }
+    clearCwFilters();
     _cwTab = "wantlist"; _cwQuery = "";
     document.getElementById("artist-alts").innerHTML = "";
     const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "none";
@@ -676,7 +678,7 @@ function switchView(view, skipPushState = false) {
   } else {
     if (searchView) searchView.style.display = "";
     if (mainForm) mainForm.style.display = "";
-    if (cwRow) cwRow.style.display = "none";
+    if (cwWrap) cwWrap.style.display = "none";
     document.getElementById("results").innerHTML = "";
     document.getElementById("pagination").style.display = "none";
     setStatus("");
@@ -688,31 +690,72 @@ function switchView(view, skipPushState = false) {
 // ── Collection / Wantlist local search ──
 let _cwTab = "collection"; // which tab is active for CW search
 let _cwQuery = "";         // current CW search query
+let _cwAdvOpen = false;
+
+function toggleCwAdvanced(forceOpen) {
+  const panel = document.getElementById("cw-advanced-panel");
+  const arrow = document.getElementById("cw-advanced-arrow");
+  if (!panel) return;
+  _cwAdvOpen = forceOpen === true ? true : forceOpen === false ? false : !_cwAdvOpen;
+  panel.style.display = _cwAdvOpen ? "" : "none";
+  if (arrow) arrow.textContent = _cwAdvOpen ? "▼" : "▶";
+}
+
+function getCwFilters() {
+  const f = {};
+  const q      = (document.getElementById("cw-query")?.value  ?? "").trim();
+  const artist = (document.getElementById("cw-artist")?.value ?? "").trim();
+  const label  = (document.getElementById("cw-label")?.value  ?? "").trim();
+  const year   = (document.getElementById("cw-year")?.value   ?? "").trim();
+  const genre  = (document.getElementById("cw-genre")?.value  ?? "").trim();
+  const style  = (document.getElementById("cw-style")?.value  ?? "").trim();
+  const format = (document.getElementById("cw-format")?.value ?? "").trim();
+  if (q)      f.q      = q;
+  if (artist) f.artist = artist;
+  if (label)  f.label  = label;
+  if (year)   f.year   = year;
+  if (genre)  f.genre  = genre;
+  if (style)  f.style  = style;
+  if (format) f.format = format;
+  return f;
+}
 
 function doCwSearch(page = 1) {
-  const q = document.getElementById("cw-query")?.value.trim() ?? "";
-  _cwQuery = q;
+  const filters = getCwFilters();
+  _cwQuery = filters.q || "";
   if (_cwTab === "collection") {
-    loadCollectionTab(page, q);
+    loadCollectionTab(page, filters);
   } else {
-    loadWantlistTab(page, q);
+    loadWantlistTab(page, filters);
   }
 }
 
 function clearCwSearch() {
-  const input = document.getElementById("cw-query");
-  if (input) input.value = "";
+  document.getElementById("cw-query").value  = "";
+  document.getElementById("cw-artist").value = "";
+  document.getElementById("cw-label").value  = "";
+  document.getElementById("cw-year").value   = "";
+  document.getElementById("cw-genre").value  = "";
+  document.getElementById("cw-style").value  = "";
+  document.getElementById("cw-format").value = "";
   _cwQuery = "";
   doCwSearch(1);
+}
+
+function clearCwFilters() {
+  ["cw-query","cw-artist","cw-label","cw-year","cw-genre","cw-style","cw-format"].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = "";
+  });
+  toggleCwAdvanced(false);
 }
 
 function setActiveTab(tab) {
   _activeTab = tab;
 }
 
-async function loadCollectionTab(page = 1, search) {
+async function loadCollectionTab(page = 1, filters) {
   _colPage = page;
-  const q = search ?? _cwQuery;
+  const f = filters || getCwFilters();
   setActiveTab("collection");
   document.getElementById("blurb").style.display = "none";
   document.getElementById("results").innerHTML = "";
@@ -720,15 +763,23 @@ async function loadCollectionTab(page = 1, search) {
   setStatus("Loading collection…");
   try {
     let url = `/api/user/collection?page=${page}&per_page=24`;
-    if (q) url += `&q=${encodeURIComponent(q)}`;
+    if (f.q)      url += `&q=${encodeURIComponent(f.q)}`;
+    if (f.artist) url += `&artist=${encodeURIComponent(f.artist)}`;
+    if (f.label)  url += `&label=${encodeURIComponent(f.label)}`;
+    if (f.year)   url += `&year=${encodeURIComponent(f.year)}`;
+    if (f.genre)  url += `&genre=${encodeURIComponent(f.genre)}`;
+    if (f.style)  url += `&style=${encodeURIComponent(f.style)}`;
+    if (f.format) url += `&format=${encodeURIComponent(f.format)}`;
     const r = await apiFetch(url);
     const data = await r.json();
     const items = data.items ?? [];
+    const hasFilter = Object.keys(f).length > 0;
+    const filterDesc = Object.values(f).join(" + ");
     if (!items.length) {
-      setStatus(q ? `No collection items matching "${q}".` : "No collection items synced yet. Click 'Sync now' to fetch from Discogs.");
+      setStatus(hasFilter ? `No collection items matching "${filterDesc}".` : "No collection items synced yet. Click 'Sync now' to fetch from Discogs.");
       return;
     }
-    const prefix = q ? `${data.total} results for "${q}"` : `${data.total} items in collection`;
+    const prefix = hasFilter ? `${data.total} results for "${filterDesc}"` : `${data.total} items in collection`;
     setStatus(`${prefix} — page ${page} of ${data.pages}`);
     document.getElementById("results").innerHTML = items.map(renderCardFromBasicInfo).join("");
     totalPages = data.pages;
@@ -739,9 +790,9 @@ async function loadCollectionTab(page = 1, search) {
   }
 }
 
-async function loadWantlistTab(page = 1, search) {
+async function loadWantlistTab(page = 1, filters) {
   _wlPage = page;
-  const q = search ?? _cwQuery;
+  const f = filters || getCwFilters();
   setActiveTab("wantlist");
   document.getElementById("blurb").style.display = "none";
   document.getElementById("results").innerHTML = "";
@@ -749,15 +800,23 @@ async function loadWantlistTab(page = 1, search) {
   setStatus("Loading wantlist…");
   try {
     let url = `/api/user/wantlist?page=${page}&per_page=24`;
-    if (q) url += `&q=${encodeURIComponent(q)}`;
+    if (f.q)      url += `&q=${encodeURIComponent(f.q)}`;
+    if (f.artist) url += `&artist=${encodeURIComponent(f.artist)}`;
+    if (f.label)  url += `&label=${encodeURIComponent(f.label)}`;
+    if (f.year)   url += `&year=${encodeURIComponent(f.year)}`;
+    if (f.genre)  url += `&genre=${encodeURIComponent(f.genre)}`;
+    if (f.style)  url += `&style=${encodeURIComponent(f.style)}`;
+    if (f.format) url += `&format=${encodeURIComponent(f.format)}`;
     const r = await apiFetch(url);
     const data = await r.json();
     const items = data.items ?? [];
+    const hasFilter = Object.keys(f).length > 0;
+    const filterDesc = Object.values(f).join(" + ");
     if (!items.length) {
-      setStatus(q ? `No wantlist items matching "${q}".` : "No wantlist items synced yet. Click 'Sync now' to fetch from Discogs.");
+      setStatus(hasFilter ? `No wantlist items matching "${filterDesc}".` : "No wantlist items synced yet. Click 'Sync now' to fetch from Discogs.");
       return;
     }
-    const prefix = q ? `${data.total} results for "${q}"` : `${data.total} items in wantlist`;
+    const prefix = hasFilter ? `${data.total} results for "${filterDesc}"` : `${data.total} items in wantlist`;
     setStatus(`${prefix} — page ${page} of ${data.pages}`);
     document.getElementById("results").innerHTML = items.map(renderCardFromBasicInfo).join("");
     totalPages = data.pages;
