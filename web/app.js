@@ -156,10 +156,9 @@ async function doSearch(page = 1, skipPushState = false) {
     return;
   }
 
-  // Switch back to search tab if on collection/wantlist tab
-  if (_activeTab !== "search") {
-    setActiveTab("search");
-  }
+  // Always ensure search view is active and navbar reflects it
+  switchView("search", true);
+  setActiveTab("search");
 
   if (!skipPushState) pushSearchState(q, artistRaw, release, year, label, genre, sort, resultType, page);
 
@@ -924,6 +923,8 @@ function openBioFull(event) {
 
 async function doAiSearch(q) {
   if (!q) { setStatus("Enter a question or description to search with AI.", false); return; }
+  switchView("search", true);
+  setActiveTab("search");
   const blurbEl = document.getElementById("blurb");
   document.getElementById("results").innerHTML = "";
   document.getElementById("pagination").style.display = "none";
