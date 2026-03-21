@@ -228,11 +228,11 @@ async function doSearch(page = 1, skipPushState = false) {
       if (artistRaw) {
         const bioUrl = `${API}/artist-bio?name=${encodeURIComponent(artistRaw)}`
                      + (currentArtistId ? `&id=${currentArtistId}` : "");
-        bioFetch = fetch(bioUrl);
+        bioFetch = apiFetch(bioUrl).catch(() => null);
       } else if (label) {
-        bioFetch = apiFetch(`${API}/label-bio?name=${encodeURIComponent(label)}`);
+        bioFetch = apiFetch(`${API}/label-bio?name=${encodeURIComponent(label)}`).catch(() => null);
       } else if (genre) {
-        bioFetch = apiFetch(`${API}/genre-info?genre=${encodeURIComponent(genre)}`);
+        bioFetch = apiFetch(`${API}/genre-info?genre=${encodeURIComponent(genre)}`).catch(() => null);
       }
     }
 
