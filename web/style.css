@@ -300,6 +300,7 @@ body {
   transition: color 0.15s, background 0.15s;
 }
 .nav-auth-btn:hover { color: var(--text); background: rgba(255,255,255,0.03); }
+.nav-auth-btn.active { color: var(--accent); font-weight: 600; background: rgba(0,200,212,0.05); }
 /* ─ Auth popup ──────────────────────────────────────────────────────────── */
 #nav-auth-popup {
   display: none;
@@ -1108,7 +1109,7 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 #status {
   color: var(--muted);
   font-size: 0.9rem;
-  margin-top: 2.5rem;
+  margin-top: 1rem;
   margin-bottom: 1rem;
   display: none;
 }
@@ -1437,4 +1438,29 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 /* ── Mobile: force Format/Year on line 1, Genre/Style on line 2 ── */
 @media (max-width: 640px) {
   .filters-pair label { flex: 1 1 45%; min-width: 0; }
+  #drops-view  { padding-left: 0.4rem !important; padding-right: 0.4rem !important; }
+  #info-view   { padding-left: 0.4rem !important; padding-right: 0.4rem !important; }
+  footer       { padding-left: 0.4rem; padding-right: 0.4rem; }
+}
+
+/* ── Screen-reader-only utility (hidden visually, readable by crawlers/AT) ── */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Consistent footer ── */
+footer {
+  text-align: center;
+  padding: 2rem 1rem 1.5rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  line-height: 1.4;
 }
