@@ -1540,6 +1540,7 @@ function searchArtistFromModal(event, el) {
   document.getElementById("f-year").value    = "";
   document.getElementById("f-label").value   = "";
   document.getElementById("f-genre").value   = "";
+  toggleAdvanced(true);
   doSearch(1);
 }
 
@@ -1548,6 +1549,7 @@ function selectAltArtist(event, el) {
   document.getElementById("f-artist").value = el.dataset.altName;
   document.getElementById("query").value = "";
   currentArtistId = el.dataset.altId || null;
+  toggleAdvanced(true);
   doSearch(1);
 }
 
