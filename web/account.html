@@ -302,6 +302,18 @@ async function showAuthSection() {
   loadAdminInbox();
 }
 
+let _syncPollTimer = null;
+
+function fmtTime(ts) {
+  if (!ts) return "never";
+  const diff = Math.round((Date.now() - new Date(ts)) / 60000);
+  if (diff < 1) return "just now";
+  if (diff < 60) return `${diff}m ago`;
+  const h = Math.round(diff / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+}
+
 async function loadSyncStatus() {
   const syncSection = document.getElementById("sync-section");
   const statusEl = document.getElementById("account-sync-status");
@@ -312,17 +324,32 @@ async function loadSyncStatus() {
     const d = await fetch("/api/user/sync-status", {
       headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
-    const fmt = ts => {
-      if (!ts) return "never";
-      const diff = Math.round((Date.now() - new Date(ts)) / 60000);
-      if (diff < 1) return "just now";
-      if (diff < 60) return `${diff}m ago`;
-      const h = Math.round(diff / 60);
-      if (h < 24) return `${h}h ago`;
-      return `${Math.round(h / 24)}d ago`;
-    };
-    statusEl.textContent = `Collection: synced ${fmt(d.collectionSyncedAt)} · Wantlist: synced ${fmt(d.wantlistSyncedAt)}`;
-    if (d.discogsUsername) statusEl.textContent += ` · @${d.discogsUsername}`;
+
+    // If sync is currently running, show progress and start polling
+    if (d.syncStatus === "syncing") {
+      const pct = d.syncTotal ? Math.round((d.syncProgress / d.syncTotal) * 100) : 0;
+      statusEl.textContent = `Syncing… ${d.syncProgress.toLocaleString()} / ${d.syncTotal.toLocaleString()} items (${pct}%)`;
+      btn.disabled = true;
+      btn.textContent = "Syncing…";
+      btn.style.opacity = "0.4";
+      btn.style.cursor = "default";
+      startSyncPolling();
+      return;
+    }
+
+    // Sync finished or idle — stop polling if running
+    stopSyncPolling();
+
+    let statusText = `Collection: synced ${fmtTime(d.collectionSyncedAt)} · Wantlist: synced ${fmtTime(d.wantlistSyncedAt)}`;
+    if (d.discogsUsername) statusText += ` · @${d.discogsUsername}`;
+    if (d.syncStatus === "complete" && d.syncProgress > 0) {
+      statusText += ` · Last sync: ${d.syncProgress.toLocaleString()} items`;
+    }
+    if (d.syncStatus === "error" && d.syncError) {
+      statusText += ` · Sync error: ${d.syncError}`;
+    }
+    statusEl.textContent = statusText;
+
     // Dim the sync button if both were synced within the last hour
     const oneHourAgo = Date.now() - 60 * 60 * 1000;
     const collRecent = d.collectionSyncedAt && new Date(d.collectionSyncedAt).getTime() > oneHourAgo;
@@ -338,9 +365,19 @@ async function loadSyncStatus() {
       btn.style.cursor = "pointer";
       btn.title = "";
     }
+    btn.textContent = "Sync Now";
   } catch {
     statusEl.textContent = "Could not load sync status.";
   }
+}
+
+function startSyncPolling() {
+  if (_syncPollTimer) return;
+  _syncPollTimer = setInterval(loadSyncStatus, 4000);
+}
+
+function stopSyncPolling() {
+  if (_syncPollTimer) { clearInterval(_syncPollTimer); _syncPollTimer = null; }
 }
 
 async function accountSync() {
@@ -348,7 +385,8 @@ async function accountSync() {
   const statusEl = document.getElementById("account-sync-status");
   btn.disabled = true;
   btn.textContent = "Syncing…";
-  statusEl.textContent = "Syncing your collection and wantlist…";
+  btn.style.opacity = "0.4";
+  statusEl.textContent = "Starting sync…";
   try {
     const sessionToken = await clerk.session?.getToken();
     const r = await fetch("/api/user/sync", {
@@ -358,18 +396,19 @@ async function accountSync() {
     }).then(r => r.json());
     if (r.skipped) {
       statusEl.textContent = "Synced recently — try again in an hour.";
-    } else {
-      statusEl.textContent = `Synced ${r.collectionCount ?? 0} collection + ${r.wantlistCount ?? 0} wantlist records.`;
+      btn.textContent = "Sync Now";
+      btn.title = "Synced recently — available again in an hour";
+      return;
     }
+    // Sync started in background — poll for progress
+    statusEl.textContent = "Syncing in background…";
+    startSyncPolling();
   } catch {
     statusEl.textContent = "Sync failed. Please try again.";
+    btn.textContent = "Sync Now";
+    btn.disabled = false;
+    btn.style.opacity = "1";
   }
-  btn.textContent = "Sync Now";
-  // Re-check cooldown to dim if needed
-  btn.disabled = true;
-  btn.style.opacity = "0.4";
-  btn.style.cursor = "default";
-  btn.title = "Synced recently — available again in an hour";
 }
 
 async function saveToken() {
