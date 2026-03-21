@@ -1462,6 +1462,7 @@ function renderBioMarkup(text) {
 function searchBioArtist(event, el) {
   event.preventDefault();
   closeBioFull();
+  switchView("search", true);
   document.getElementById("f-artist").value  = el.dataset.artist;
   document.getElementById("query").value     = "";
   document.getElementById("f-release").value = "";
@@ -1564,6 +1565,7 @@ function closeAltsPopup() {
 // ── Entity card click → new search ───────────────────────────────────────
 function searchByEntity(event, el) {
   event.preventDefault();
+  switchView("search", true);
   const type = el.dataset.entityType;
   const name = el.dataset.entityName;
   document.getElementById("query").value = "";
@@ -1577,6 +1579,8 @@ function searchByEntity(event, el) {
     currentArtistId = el.dataset.entityId || null;
   }
   if (type === "label")  document.getElementById("f-label").value  = name;
+  // Must open advanced panel so doSearch reads artist/label fields
+  toggleAdvanced(true);
   doSearch(1);
 }
 
