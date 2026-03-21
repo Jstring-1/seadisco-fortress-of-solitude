@@ -549,7 +549,7 @@ async function loadAdminSearches() {
       const label = searchLabel(params);
       const date  = new Date(searched_at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
       return `<div id="gs-${i}" style="display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0;border-bottom:1px solid #1a1a1a;gap:0.5rem">
-        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.8rem;color:var(--muted)">${label}</span>
+        <a href="${paramsToUrl(params)}" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.8rem;color:var(--accent);text-decoration:none">${label}</a>
         <span style="color:#444;font-size:0.72rem;flex-shrink:0">${date}</span>
         <button onclick="deleteGlobalSearch(${i})" style="background:none;border:none;color:#555;cursor:pointer;font-size:0.85rem;padding:0 0.1rem;flex-shrink:0;line-height:1" title="Delete from global pool">✕</button>
       </div>`;
