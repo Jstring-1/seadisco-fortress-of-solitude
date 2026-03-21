@@ -519,6 +519,7 @@ function renderCard(item) {
   }
 
   const label   = (item.label   ?? []).slice(0, 2).join(", ");
+  const catno   = (type === "release" || type === "master") ? (item.catno ?? "") : "";
   const formats = (item.format  ?? []).slice(0, 3).join(" · ");
   const genre   = (item.genre   ?? []).slice(0, 1).join("");
   const country = item.country ?? "";
@@ -557,7 +558,7 @@ function renderCard(item) {
       <div class="card-body">
         ${artist ? `<div class="card-artist">${escHtml(artist)}</div>` : ""}
         <div class="card-title">${escHtml(title)}</div>
-        ${label   ? `<div class="card-sub">${escHtml(label)}</div>`   : ""}
+        ${label   ? `<div class="card-sub">${escHtml(label)}${catno ? ` <span class="card-catno">${escHtml(catno)}</span>` : ""}</div>` : (catno ? `<div class="card-sub"><span class="card-catno">${escHtml(catno)}</span></div>` : "")}
         ${formats ? `<div class="card-format">${escHtml(formats)}</div>` : ""}
         ${genre   ? `<div class="card-format">${escHtml(genre)}</div>`   : ""}
         <div class="card-meta">${metaParts.map(escHtml).join(" · ")}</div>

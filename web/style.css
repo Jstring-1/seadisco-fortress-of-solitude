@@ -1195,6 +1195,12 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   overflow: hidden;
 }
 
+.card-catno {
+  font-size: 0.68rem;
+  color: #4a6a78;
+  margin-left: 0.3rem;
+}
+
 .card-format {
   font-size: 0.72rem;
   color: var(--muted);
