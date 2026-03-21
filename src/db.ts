@@ -290,19 +290,27 @@ export async function upsertWantlistItems(
 export async function getCollectionPage(
   clerkUserId: string,
   page: number,
-  perPage: number
+  perPage: number,
+  search?: string
 ): Promise<{ items: any[]; total: number }> {
   const offset = (page - 1) * perPage;
+  const searchClause = search ? ` AND data::text ILIKE $4` : "";
+  const dataParams: any[] = search
+    ? [clerkUserId, perPage, offset, `%${search}%`]
+    : [clerkUserId, perPage, offset];
+  const countParams: any[] = search
+    ? [clerkUserId, `%${search}%`]
+    : [clerkUserId];
   const [dataR, countR] = await Promise.all([
     getPool().query(
-      `SELECT data FROM user_collection WHERE clerk_user_id = $1
+      `SELECT data FROM user_collection WHERE clerk_user_id = $1${searchClause}
        ORDER BY added_at DESC NULLS LAST, id DESC
        LIMIT $2 OFFSET $3`,
-      [clerkUserId, perPage, offset]
+      dataParams
     ),
     getPool().query(
-      "SELECT COUNT(*)::int AS total FROM user_collection WHERE clerk_user_id = $1",
-      [clerkUserId]
+      `SELECT COUNT(*)::int AS total FROM user_collection WHERE clerk_user_id = $1${search ? " AND data::text ILIKE $2" : ""}`,
+      countParams
     ),
   ]);
   return { items: dataR.rows.map(r => r.data), total: countR.rows[0]?.total ?? 0 };
@@ -311,19 +319,27 @@ export async function getCollectionPage(
 export async function getWantlistPage(
   clerkUserId: string,
   page: number,
-  perPage: number
+  perPage: number,
+  search?: string
 ): Promise<{ items: any[]; total: number }> {
   const offset = (page - 1) * perPage;
+  const searchClause = search ? ` AND data::text ILIKE $4` : "";
+  const dataParams: any[] = search
+    ? [clerkUserId, perPage, offset, `%${search}%`]
+    : [clerkUserId, perPage, offset];
+  const countParams: any[] = search
+    ? [clerkUserId, `%${search}%`]
+    : [clerkUserId];
   const [dataR, countR] = await Promise.all([
     getPool().query(
-      `SELECT data FROM user_wantlist WHERE clerk_user_id = $1
+      `SELECT data FROM user_wantlist WHERE clerk_user_id = $1${searchClause}
        ORDER BY added_at DESC NULLS LAST, id DESC
        LIMIT $2 OFFSET $3`,
-      [clerkUserId, perPage, offset]
+      dataParams
     ),
     getPool().query(
-      "SELECT COUNT(*)::int AS total FROM user_wantlist WHERE clerk_user_id = $1",
-      [clerkUserId]
+      `SELECT COUNT(*)::int AS total FROM user_wantlist WHERE clerk_user_id = $1${search ? " AND data::text ILIKE $2" : ""}`,
+      countParams
     ),
   ]);
   return { items: dataR.rows.map(r => r.data), total: countR.rows[0]?.total ?? 0 };

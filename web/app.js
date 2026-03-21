@@ -642,45 +642,92 @@ function switchView(view, skipPushState = false) {
   if (dropsView)  dropsView.style.display  = "none";
   if (infoView)   infoView.style.display   = "none";
 
+  // Toggle main search form vs collection/wantlist search bar
+  const mainForm = document.getElementById("main-search-form");
+  const cwRow    = document.getElementById("cw-search-row");
+  const cwInput  = document.getElementById("cw-query");
+
   if (view === "drops") {
     if (dropsView) dropsView.style.display = "block";
+    if (mainForm) mainForm.style.display = "";
+    if (cwRow) cwRow.style.display = "none";
   } else if (view === "info") {
     if (infoView) infoView.style.display = "block";
+    if (mainForm) mainForm.style.display = "";
+    if (cwRow) cwRow.style.display = "none";
   } else if (view === "collection") {
     if (searchView) searchView.style.display = "";
+    if (mainForm) mainForm.style.display = "none";
+    if (cwRow) cwRow.style.display = "";
+    if (cwInput) { cwInput.placeholder = "Search your collection…"; cwInput.value = ""; }
+    _cwTab = "collection"; _cwQuery = "";
+    const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "none";
     loadCollectionTab(1);
   } else if (view === "wantlist") {
     if (searchView) searchView.style.display = "";
+    if (mainForm) mainForm.style.display = "none";
+    if (cwRow) cwRow.style.display = "";
+    if (cwInput) { cwInput.placeholder = "Search your wantlist…"; cwInput.value = ""; }
+    _cwTab = "wantlist"; _cwQuery = "";
+    const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "none";
     loadWantlistTab(1);
   } else {
     if (searchView) searchView.style.display = "";
+    if (mainForm) mainForm.style.display = "";
+    if (cwRow) cwRow.style.display = "none";
     document.getElementById("results").innerHTML = "";
     document.getElementById("pagination").style.display = "none";
     setStatus("");
     document.getElementById("blurb").style.display = "none";
+    const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "";
   }
+}
+
+// ── Collection / Wantlist local search ──
+let _cwTab = "collection"; // which tab is active for CW search
+let _cwQuery = "";         // current CW search query
+
+function doCwSearch(page = 1) {
+  const q = document.getElementById("cw-query")?.value.trim() ?? "";
+  _cwQuery = q;
+  if (_cwTab === "collection") {
+    loadCollectionTab(page, q);
+  } else {
+    loadWantlistTab(page, q);
+  }
+}
+
+function clearCwSearch() {
+  const input = document.getElementById("cw-query");
+  if (input) input.value = "";
+  _cwQuery = "";
+  doCwSearch(1);
 }
 
 function setActiveTab(tab) {
   _activeTab = tab;
 }
 
-async function loadCollectionTab(page = 1) {
+async function loadCollectionTab(page = 1, search) {
   _colPage = page;
+  const q = search ?? _cwQuery;
   setActiveTab("collection");
   document.getElementById("blurb").style.display = "none";
   document.getElementById("results").innerHTML = "";
   document.getElementById("pagination").style.display = "none";
   setStatus("Loading collection…");
   try {
-    const r = await apiFetch(`/api/user/collection?page=${page}&per_page=24`);
+    let url = `/api/user/collection?page=${page}&per_page=24`;
+    if (q) url += `&q=${encodeURIComponent(q)}`;
+    const r = await apiFetch(url);
     const data = await r.json();
     const items = data.items ?? [];
     if (!items.length) {
-      setStatus("No collection items synced yet. Click 'Sync now' to fetch from Discogs.");
+      setStatus(q ? `No collection items matching "${q}".` : "No collection items synced yet. Click 'Sync now' to fetch from Discogs.");
       return;
     }
-    setStatus(`${data.total} items in collection — page ${page} of ${data.pages}`);
+    const prefix = q ? `${data.total} results for "${q}"` : `${data.total} items in collection`;
+    setStatus(`${prefix} — page ${page} of ${data.pages}`);
     document.getElementById("results").innerHTML = items.map(renderCardFromBasicInfo).join("");
     totalPages = data.pages;
     currentPage = page;
@@ -690,22 +737,26 @@ async function loadCollectionTab(page = 1) {
   }
 }
 
-async function loadWantlistTab(page = 1) {
+async function loadWantlistTab(page = 1, search) {
   _wlPage = page;
+  const q = search ?? _cwQuery;
   setActiveTab("wantlist");
   document.getElementById("blurb").style.display = "none";
   document.getElementById("results").innerHTML = "";
   document.getElementById("pagination").style.display = "none";
   setStatus("Loading wantlist…");
   try {
-    const r = await apiFetch(`/api/user/wantlist?page=${page}&per_page=24`);
+    let url = `/api/user/wantlist?page=${page}&per_page=24`;
+    if (q) url += `&q=${encodeURIComponent(q)}`;
+    const r = await apiFetch(url);
     const data = await r.json();
     const items = data.items ?? [];
     if (!items.length) {
-      setStatus("No wantlist items synced yet. Click 'Sync now' to fetch from Discogs.");
+      setStatus(q ? `No wantlist items matching "${q}".` : "No wantlist items synced yet. Click 'Sync now' to fetch from Discogs.");
       return;
     }
-    setStatus(`${data.total} items in wantlist — page ${page} of ${data.pages}`);
+    const prefix = q ? `${data.total} results for "${q}"` : `${data.total} items in wantlist`;
+    setStatus(`${prefix} — page ${page} of ${data.pages}`);
     document.getElementById("results").innerHTML = items.map(renderCardFromBasicInfo).join("");
     totalPages = data.pages;
     currentPage = page;
@@ -717,18 +768,16 @@ async function loadWantlistTab(page = 1) {
 
 function renderCollectionPagination(tab) {
   if (totalPages <= 1) return;
-  const prevFn = tab === "collection" ? `loadCollectionTab(${currentPage - 1})` : `loadWantlistTab(${currentPage - 1})`;
-  const nextFn = tab === "collection" ? `loadCollectionTab(${currentPage + 1})` : `loadWantlistTab(${currentPage + 1})`;
   const pag = document.getElementById("pagination");
   pag.style.display = "flex";
   document.getElementById("page-info").textContent = `${currentPage} / ${totalPages}`;
   document.getElementById("prev-btn").disabled = currentPage <= 1;
   document.getElementById("next-btn").disabled = currentPage >= totalPages;
   document.getElementById("prev-btn").onclick = currentPage > 1
-    ? () => { tab === "collection" ? loadCollectionTab(currentPage - 1) : loadWantlistTab(currentPage - 1); }
+    ? () => { window.scrollTo({top:0,behavior:'smooth'}); tab === "collection" ? loadCollectionTab(currentPage - 1) : loadWantlistTab(currentPage - 1); }
     : null;
   document.getElementById("next-btn").onclick = currentPage < totalPages
-    ? () => { tab === "collection" ? loadCollectionTab(currentPage + 1) : loadWantlistTab(currentPage + 1); }
+    ? () => { window.scrollTo({top:0,behavior:'smooth'}); tab === "collection" ? loadCollectionTab(currentPage + 1) : loadWantlistTab(currentPage + 1); }
     : null;
 }
 
