@@ -392,7 +392,7 @@ app.post("/api/ai-search", express.json(), async (req, res) => {
   const prompt = `You are a music expert specializing in vinyl records, rare and world music.
 The user is searching for: "${q}"
 
-Return a JSON array of 6-8 music recommendations (artists or albums/releases) that best match this query.
+Return a JSON array of 12 music recommendations (artists or albums/releases) that best match this query.
 For each item include:
 - name: artist name, or "Album Title by Artist"
 - type: "artist" or "release"
@@ -411,7 +411,7 @@ Return ONLY a valid JSON array, no markdown, no explanation.`;
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 1024,
+        max_tokens: 1500,
         messages: [{ role: "user", content: prompt }],
       }),
     });
