@@ -136,6 +136,16 @@
         <div id="feedback-list" style="font-size:0.85rem;color:var(--muted)">Loading…</div>
       </div>
 
+      <!-- Admin interest signals — only rendered for admin user -->
+      <div id="admin-interests" style="display:none">
+        <hr class="section-divider" />
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem">
+          <h2 style="margin:0">Interest Signals</h2>
+          <button id="backfill-btn" onclick="backfillInterests()" style="background:none;border:1px solid #444;color:#aaa;cursor:pointer;font-size:0.75rem;padding:0.2rem 0.5rem;border-radius:4px">Backfill</button>
+        </div>
+        <div id="interest-stats" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
+      </div>
+
       <!-- Admin global search pool — only rendered for admin user -->
       <div id="admin-searches" style="display:none">
         <hr class="section-divider" />
@@ -513,6 +523,7 @@ async function loadAdminInbox() {
     const { items } = await r.json();
     document.getElementById("admin-inbox").style.display = "block";
     loadAdminSearches(); // also load global search pool for admin
+    loadInterestStats(); // also load interest signal stats for admin
     const el = document.getElementById("feedback-list");
     if (!items.length) { el.textContent = "No feedback yet."; return; }
     el.innerHTML = items.map(({ id, user_email, message, created_at }) => {
@@ -577,6 +588,46 @@ async function deleteGlobalSearch(i) {
       if (!remaining) document.getElementById("global-search-list").textContent = "No global searches.";
     }
   } catch { /* ignore */ }
+}
+
+async function loadInterestStats() {
+  const section = document.getElementById("admin-interests");
+  const el = document.getElementById("interest-stats");
+  section.style.display = "block";
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const stats = await fetch("/api/admin/interests", {
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
+    }).then(r => r.json());
+    if (stats.error) { el.textContent = "Could not load."; return; }
+    const topList = (items, max = 10) => items.slice(0, max).map(i => `${i.name} (${i.cnt})`).join(", ");
+    el.innerHTML = `
+      <div style="margin-bottom:0.4rem"><strong style="color:var(--fg)">${stats.totalReleases}</strong> releases tracked</div>
+      <div style="margin-bottom:0.3rem"><strong style="color:#aaa">Top artists:</strong> ${topList(stats.topArtists, 15)}</div>
+      <div style="margin-bottom:0.3rem"><strong style="color:#aaa">Top labels:</strong> ${topList(stats.topLabels, 15)}</div>
+      <div style="margin-bottom:0.3rem"><strong style="color:#aaa">Top genres:</strong> ${topList(stats.topGenres)}</div>
+      <div><strong style="color:#aaa">Top styles:</strong> ${topList(stats.topStyles, 15)}</div>
+    `;
+  } catch { el.textContent = "Could not load interest stats."; }
+}
+
+async function backfillInterests() {
+  const btn = document.getElementById("backfill-btn");
+  btn.disabled = true; btn.textContent = "Running…";
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const r = await fetch("/api/admin/backfill-interests", {
+      method: "POST",
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
+    }).then(r => r.json());
+    if (r.ok) {
+      btn.textContent = `Done (${r.collection}c + ${r.wantlist}w)`;
+      loadInterestStats();
+    } else {
+      btn.textContent = "Failed";
+    }
+  } catch { btn.textContent = "Failed"; }
+  setTimeout(() => { btn.disabled = false; btn.textContent = "Backfill"; }, 3000);
 }
 
 async function deleteFeedbackItem(id) {

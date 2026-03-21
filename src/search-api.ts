@@ -2,7 +2,7 @@ import express from "express";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, getRecentSearches, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, upsertCollectionItems, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, getFreshReleasesByTag, getFreshTopTags } from "./db.js";
+import { initDb, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, getRecentSearches, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, upsertCollectionItems, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, getFreshReleasesByTag, getFreshTopTags, recordInterestSignals, getInterestStats, backfillInterestSignals } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -218,6 +218,7 @@ app.post("/api/user/sync", express.json(), async (req, res) => {
           addedAt: item.date_added ? new Date(item.date_added) : undefined,
         })).filter(i => i.id);
         await upsertCollectionItems(userId, items);
+        await recordInterestSignals(items, "collection");
         collectionCount += items.length;
         if (releases.length < 100) break;
       }
@@ -241,6 +242,7 @@ app.post("/api/user/sync", express.json(), async (req, res) => {
           addedAt: item.date_added ? new Date(item.date_added) : undefined,
         })).filter(i => i.id);
         await upsertWantlistItems(userId, items);
+        await recordInterestSignals(items, "wantlist");
         wantlistCount += items.length;
         if (wants.length < 100) break;
       }
@@ -378,6 +380,29 @@ app.delete("/api/admin/search", express.json(), async (req, res) => {
   if (!params) { res.status(400).json({ error: "Missing params" }); return; }
   await deleteSearchGlobal(params);
   res.json({ ok: true });
+});
+
+// POST /api/admin/backfill-interests — one-time backfill from existing collection/wantlist data
+app.post("/api/admin/backfill-interests", async (req, res) => {
+  const userId = getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  try {
+    const counts = await backfillInterestSignals();
+    res.json({ ok: true, ...counts });
+  } catch (err) {
+    console.error("Backfill error:", err);
+    res.status(500).json({ error: "Backfill failed" });
+  }
+});
+
+// GET /api/admin/interests — interest signal stats, admin only
+app.get("/api/admin/interests", async (req, res) => {
+  const userId = getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  const stats = await getInterestStats();
+  res.json(stats);
 });
 
 // POST /api/ai-search — Claude music recommendations
