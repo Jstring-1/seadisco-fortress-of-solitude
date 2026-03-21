@@ -429,6 +429,34 @@ export async function getWantlistPage(
   return { items: dataR.rows.map(r => r.data), total: countR.rows[0]?.total ?? 0 };
 }
 
+export async function getCollectionFacets(clerkUserId: string): Promise<{ genres: string[]; styles: string[] }> {
+  const [genresR, stylesR] = await Promise.all([
+    getPool().query(
+      `SELECT DISTINCT g AS name FROM user_collection, jsonb_array_elements_text(data->'genres') AS g WHERE clerk_user_id = $1 ORDER BY g`,
+      [clerkUserId]
+    ),
+    getPool().query(
+      `SELECT DISTINCT s AS name FROM user_collection, jsonb_array_elements_text(data->'styles') AS s WHERE clerk_user_id = $1 ORDER BY s`,
+      [clerkUserId]
+    ),
+  ]);
+  return { genres: genresR.rows.map(r => r.name), styles: stylesR.rows.map(r => r.name) };
+}
+
+export async function getWantlistFacets(clerkUserId: string): Promise<{ genres: string[]; styles: string[] }> {
+  const [genresR, stylesR] = await Promise.all([
+    getPool().query(
+      `SELECT DISTINCT g AS name FROM user_wantlist, jsonb_array_elements_text(data->'genres') AS g WHERE clerk_user_id = $1 ORDER BY g`,
+      [clerkUserId]
+    ),
+    getPool().query(
+      `SELECT DISTINCT s AS name FROM user_wantlist, jsonb_array_elements_text(data->'styles') AS s WHERE clerk_user_id = $1 ORDER BY s`,
+      [clerkUserId]
+    ),
+  ]);
+  return { genres: genresR.rows.map(r => r.name), styles: stylesR.rows.map(r => r.name) };
+}
+
 export async function getCollectionIds(clerkUserId: string): Promise<number[]> {
   const r = await getPool().query(
     "SELECT discogs_release_id FROM user_collection WHERE clerk_user_id = $1",

@@ -664,6 +664,7 @@ function switchView(view, skipPushState = false) {
     _cwTab = "collection"; _cwQuery = "";
     document.getElementById("artist-alts").innerHTML = "";
     const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "none";
+    loadCwFacets("collection");
     loadCollectionTab(1);
   } else if (view === "wantlist") {
     if (searchView) searchView.style.display = "";
@@ -674,6 +675,7 @@ function switchView(view, skipPushState = false) {
     _cwTab = "wantlist"; _cwQuery = "";
     document.getElementById("artist-alts").innerHTML = "";
     const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "none";
+    loadCwFacets("wantlist");
     loadWantlistTab(1);
   } else {
     if (searchView) searchView.style.display = "";
@@ -743,6 +745,23 @@ function clearCwSearch() {
   document.getElementById("cw-format").value  = "";
   _cwQuery = "";
   doCwSearch(1);
+}
+
+async function loadCwFacets(type) {
+  try {
+    const r = await apiFetch(`/api/user/facets?type=${type}`);
+    const data = await r.json();
+    const genreEl = document.getElementById("cw-genre");
+    const styleEl = document.getElementById("cw-style");
+    if (genreEl) {
+      genreEl.innerHTML = '<option value="">Any</option>' +
+        (data.genres ?? []).map(g => `<option value="${g}">${g}</option>`).join("");
+    }
+    if (styleEl) {
+      styleEl.innerHTML = '<option value="">Any</option>' +
+        (data.styles ?? []).map(s => `<option value="${s}">${s}</option>`).join("");
+    }
+  } catch {}
 }
 
 function clearCwFilters() {
