@@ -393,7 +393,7 @@ async function doSearch(page = 1, skipPushState = false) {
 
         const rawBioText  = bioData.profile ?? null;
         const displayText = rawBioText ? stripDiscogsMarkup(rawBioText) : "";
-        const TRUNCATE = 600;
+        const TRUNCATE = 552;
         const needsMore = displayText.length > TRUNCATE;
         const truncatedRaw = rawBioText
           ? (needsMore ? truncateRaw(rawBioText, TRUNCATE) + '\u2026' : rawBioText)
@@ -415,7 +415,7 @@ async function doSearch(page = 1, skipPushState = false) {
 
         const relLinks = renderArtistRelations(
           bioData.members        ?? [], bioData.groups    ?? [], bioData.aliases  ?? [],
-          bioData.namevariations ?? [], bioData.urls      ?? [],
+          bioData.namevariations ?? [], entityType === "label" ? [] : (bioData.urls ?? []),
           bioData.parentLabel    ?? null, bioData.sublabels ?? [], true
         );
         const bioHtml  = rawBioText ? renderBioMarkup(truncatedRaw) : escHtml(truncatedRaw);
