@@ -188,8 +188,13 @@ async function doSearch(page = 1, skipPushState = false) {
     const sortLabels = { "year:asc":"Year ↑", "year:desc":"Year ↓", "title:asc":"Title A→Z", "title:desc":"Title Z→A", "label:asc":"Label A→Z" };
     const sortLabel = sortLabels[sort] ?? "";
     const extras = [typeLabel, sortLabel].filter(Boolean).join(" · ");
-    const descText = parts.length ? "Searched :: " + parts.join(", ") + (extras ? "  ·  " + extras : "") : "";
-    document.getElementById("search-desc").textContent = descText;
+    const searchTerms = parts.join(", ") + (extras ? "  ·  " + extras : "");
+    const descEl = document.getElementById("search-desc");
+    if (parts.length) {
+      descEl.innerHTML = `Searched :: <span onclick="copySearchUrl(this)" title="Click to copy search link" style="cursor:pointer;border-bottom:1px dotted transparent;transition:border-color 0.2s" onmouseover="this.style.borderBottomColor='var(--accent)'" onmouseout="this.style.borderBottomColor='transparent'">${escHtml(searchTerms)}</span>`;
+    } else {
+      descEl.textContent = "";
+    }
     document.getElementById("search-returned").textContent = "";
     document.getElementById("search-ai-summary").textContent = "";
     if (descText) document.getElementById("search-info-block").style.display = "";
