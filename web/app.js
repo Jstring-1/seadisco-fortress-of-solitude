@@ -129,10 +129,9 @@ function clearForm() {
   document.querySelector('input[name="result-type"][value=""]').checked = true;
   
   document.getElementById("search-desc").textContent = "";
-  document.getElementById("type-desc").textContent = "";
-  document.getElementById("type-pipe").style.display = "none";
-  document.getElementById("sort-desc").textContent = "";
-  document.getElementById("sort-pipe").style.display = "none";
+  document.getElementById("search-returned").textContent = "";
+  document.getElementById("search-ai-summary").textContent = "";
+  document.getElementById("search-info-block").style.display = "none";
 }
 
 async function doSearch(page = 1, skipPushState = false) {
@@ -184,17 +183,16 @@ async function doSearch(page = 1, skipPushState = false) {
     if (genre)   parts.push(`Genre: ${genre}`);
     if (style)   parts.push(`Style: ${style}`);
     if (format)  parts.push(`Format: ${format}`);
-    const descText = parts.length ? "Search :: " + parts.join(", ") : "";
-    
-    document.getElementById("search-desc").textContent = descText;
     const typeLabels = { "master":"Masters", "release":"Releases", "artist":"Artists", "label":"Labels" };
     const typeLabel = typeLabels[resultType] ?? "";
-    document.getElementById("type-desc").textContent = typeLabel ? `Results: ${typeLabel}` : "";
-    document.getElementById("type-pipe").style.display = (descText && typeLabel) ? "inline" : "none";
     const sortLabels = { "year:asc":"Year ↑", "year:desc":"Year ↓", "title:asc":"Title A→Z", "title:desc":"Title Z→A", "label:asc":"Label A→Z" };
     const sortLabel = sortLabels[sort] ?? "";
-    document.getElementById("sort-desc").textContent = sortLabel ? `Sort: ${sortLabel}` : "";
-    document.getElementById("sort-pipe").style.display = (descText && sortLabel) ? "inline" : "none";
+    const extras = [typeLabel, sortLabel].filter(Boolean).join(" · ");
+    const descText = parts.length ? "Searched :: " + parts.join(", ") + (extras ? "  ·  " + extras : "") : "";
+    document.getElementById("search-desc").textContent = descText;
+    document.getElementById("search-returned").textContent = "";
+    document.getElementById("search-ai-summary").textContent = "";
+    if (descText) document.getElementById("search-info-block").style.display = "";
   }
 
   const isYearSort  = sort.startsWith("year:");
@@ -236,7 +234,7 @@ async function doSearch(page = 1, skipPushState = false) {
       }
     }
 
-    let items, totalPages_new;
+    let items, totalPages_new, totalItems_new = 0;
     if (dualFetch) {
       const [masterRes, releaseRes, bioRes2] = await Promise.all([
         apiFetch(`${API}/search?${baseParams("master",  18)}`),
@@ -254,6 +252,7 @@ async function doSearch(page = 1, skipPushState = false) {
       });
       items = merged;
       totalPages_new = Math.max(md.pagination?.pages ?? 1, rd.pagination?.pages ?? 1);
+      totalItems_new = (md.pagination?.items ?? 0) + (rd.pagination?.items ?? 0);
     } else if (artistRaw && resultType === "label") {
       // Special case: artist + Labels radio → show labels that artist recorded on
       const rp = new URLSearchParams({ q: q || artist, artist, type: "master", per_page: 50, page: 1 });
@@ -274,6 +273,7 @@ async function doSearch(page = 1, skipPushState = false) {
       );
       items = labelCards.filter(Boolean);
       totalPages_new = 1;
+      totalItems_new = items.length;
     } else {
       const [res, bioRes] = await Promise.all([
         apiFetch(`${API}/search?${baseParams(null, 24)}`),
@@ -297,6 +297,7 @@ async function doSearch(page = 1, skipPushState = false) {
       const data = await res.json();
       items = data.results ?? [];
       totalPages_new = data.pagination?.pages ?? 1;
+      totalItems_new = data.pagination?.items ?? items.length;
 
       // If no results but a format filter is active, retry without format so the artist's
       // releases still appear (e.g. artist has no vinyl but does have CDs/masters)
@@ -309,6 +310,7 @@ async function doSearch(page = 1, skipPushState = false) {
           if ((fd.results ?? []).length > 0) {
             items = fd.results;
             totalPages_new = fd.pagination?.pages ?? 1;
+            totalItems_new = fd.pagination?.items ?? items.length;
             setStatus(`No ${format} releases found — showing all formats.`);
           }
         }
@@ -329,21 +331,14 @@ async function doSearch(page = 1, skipPushState = false) {
           bioData = await apiFetch(`${API}/artist-bio?name=${encodeURIComponent(derivedArtist)}`).then(r => r.json()).catch(() => null);
         }
       }
-      const altsEl = document.getElementById("artist-alts");
+      // Store alternatives for the bio full popup (not shown on the bio card)
       const alts = (bioData?.alternatives ?? []).filter(a => a.name);
+      document.getElementById("artist-alts").innerHTML = "";
       if (alts.length > 0) {
-        const altLink = a => `<a href="#" data-alt-name="${escHtml(a.name)}"${a.id ? ` data-alt-id="${a.id}"` : ""} onclick="selectAltArtist(event,this)" style="color:#666;text-decoration:none;border-bottom:1px dotted #444">${escHtml(a.name)}</a>`;
-        const shown  = alts.slice(0, 3);
-        const hidden = alts.slice(3);
         const popupEl = document.getElementById("alts-popup");
         popupEl.innerHTML = `<h4>Other artists</h4>` +
           alts.map(a => `<a href="#" data-alt-name="${escHtml(a.name)}"${a.id ? ` data-alt-id="${a.id}"` : ""} onclick="selectAltArtist(event,this);closeAltsPopup()">${escHtml(a.name)}</a>`).join("");
-        const moreBtn = hidden.length > 0
-          ? ` <a href="#" onclick="openAltsPopup(event)" style="color:#666;font-size:0.75rem;text-decoration:none;white-space:nowrap">▾ ${hidden.length} more</a>`
-          : "";
-        altsEl.innerHTML = `<div style="font-size:0.78rem;color:#555;margin-bottom:0.6rem">Also: ${shown.map(altLink).join(' &middot; ')}${moreBtn}</div>`;
       } else {
-        altsEl.innerHTML = "";
         document.getElementById("alts-popup").innerHTML = "<h4>Other artists</h4>";
       }
 
@@ -371,6 +366,7 @@ async function doSearch(page = 1, skipPushState = false) {
             if ((cd.results ?? []).length > 0) {
               items = cd.results;
               totalPages = cd.pagination?.pages ?? totalPages;
+              totalItems_new = cd.pagination?.items ?? totalItems_new;
             }
           }
         } catch { /* keep original results */ }
@@ -388,6 +384,7 @@ async function doSearch(page = 1, skipPushState = false) {
           parentLabel:    bioData.parentLabel    ?? null,
           sublabels:      bioData.sublabels      ?? [],
           discogsId: bioData.discogsId ?? null,
+          alternatives:   alts,
         };
 
         const rawBioText  = bioData.profile ?? null;
@@ -405,28 +402,23 @@ async function doSearch(page = 1, skipPushState = false) {
           ? `<strong style="display:block;margin-bottom:0.4rem;color:var(--accent)">${escHtml(bioData.name)}</strong>`
           : "";
 
-        let discogsHref = "";
-        if (entityType === 'artist') discogsHref = `https://www.discogs.com/search/?q=${encodeURIComponent(bioData.name)}&type=artist`;
-        else if (entityType === 'label') discogsHref = `https://www.discogs.com/search/?q=${encodeURIComponent(bioData.name)}&type=label`;
-        const discogsLink = discogsHref
-          ? `<div style="margin-top:0.3rem"><a href="${discogsHref}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#666;text-decoration:none">View on Discogs ↗</a></div>`
-          : "";
-
         const relLinks = renderArtistRelations(
           bioData.members        ?? [], bioData.groups    ?? [], bioData.aliases  ?? [],
           bioData.namevariations ?? [], [],
           bioData.parentLabel    ?? null, bioData.sublabels ?? [], true
         );
         const bioHtml  = rawBioText ? renderBioMarkup(truncatedRaw) : escHtml(truncatedRaw);
-        blurbEl.innerHTML = heading + bioHtml + readMore + relLinks + discogsLink;
+        blurbEl.innerHTML = heading + bioHtml + readMore + relLinks;
         blurbEl.style.display = "block";
       }
     }
 
     if (!items.length) { setStatus("No results found."); return; }
 
-    const countMsg = `${items.length} results — page ${currentPage} of ${totalPages}`;
-    setStatus(countMsg);
+    setStatus("");
+    const returnedMsg = `Returned :: ${totalItems_new.toLocaleString()} results — page ${currentPage} of ${totalPages}`;
+    document.getElementById("search-returned").textContent = returnedMsg;
+    document.getElementById("search-info-block").style.display = "";
     renderResults(items);
     renderPagination();
 
@@ -443,18 +435,16 @@ async function doSearch(page = 1, skipPushState = false) {
       ].filter(Boolean).join(", ");
       const qualityTitles = items.slice(0, 6).map(it => it.title ?? it.name ?? "").filter(Boolean);
       if (qualityQuery && qualityTitles.length) {
-        const statusEl = document.getElementById("status");
-        if (statusEl) statusEl.textContent = `${countMsg} · …`;
+        const aiEl = document.getElementById("search-ai-summary");
+        if (aiEl) aiEl.textContent = "…";
         fetch("/api/result-quality", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query: qualityQuery, titles: qualityTitles }),
         }).then(r => r.json()).then(d => {
-          const el = document.getElementById("status");
-          if (el) el.textContent = d.phrase ? `${countMsg} · ${d.phrase}` : countMsg;
+          if (aiEl) aiEl.textContent = d.phrase || "";
         }).catch(() => {
-          const el = document.getElementById("status");
-          if (el) el.textContent = countMsg;
+          if (aiEl) aiEl.textContent = "";
         });
       }
     }
@@ -1059,10 +1049,18 @@ function openBioFull(event) {
     members = [], groups = [], aliases = [],
     namevariations = [], urls = [],
     parentLabel = null, sublabels = [],
+    alternatives = [],
   } = window._currentBio ?? {};
   document.getElementById("bio-full-name").textContent = name ?? "";
   let html = renderBioMarkup(text ?? "");
-  const relLinks = renderArtistRelations(members, groups, aliases, namevariations, [], parentLabel, sublabels);
+  // Show alternatives ("Also:") in popup
+  if (alternatives.length > 0) {
+    const altLinks = alternatives.map(a =>
+      `<a href="#" class="bio-artist-link" onclick="selectAltArtist(event,this);closeBioFull()" data-alt-name="${escHtml(a.name)}"${a.id ? ` data-alt-id="${a.id}"` : ""} style="color:var(--accent);text-decoration:none">${escHtml(a.name)}</a>`
+    ).join('<span style="color:#555;margin:0 0.3em">·</span>');
+    html += `<div style="font-size:0.78rem;margin-top:0.7rem;line-height:1.6"><span style="color:#777;margin-right:0.4em">Also:</span>${altLinks}</div>`;
+  }
+  const relLinks = renderArtistRelations(members, groups, aliases, namevariations, urls, parentLabel, sublabels);
   if (relLinks) html += relLinks;
   if (discogsId) {
     html += `<div style="margin-top:1.1rem"><a href="https://www.discogs.com/artist/${discogsId}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#666;text-decoration:none">View profile on Discogs ↗</a></div>`;
@@ -1557,14 +1555,6 @@ function renderArtistRelations(members = [], groups = [], aliases = [], namevari
               <span style="color:#777;margin-right:0.4em">${label}:</span>${links}${moreBtn(overflow, false)}
             </div>`;
   };
-  const textRow = (label, items) => {
-    if (!items.length) return "";
-    const visible  = compact ? items.slice(0, LIMIT) : items;
-    const overflow = compact ? items.slice(LIMIT) : [];
-    return `<div style="font-size:0.78rem;margin-top:0.55rem;line-height:1.6">
-              <span style="color:#777;margin-right:0.4em">${label}:</span>${escHtml(visible.join(" · "))}${moreBtn(overflow, false)}
-            </div>`;
-  };
   const urlRow = (label, items) => {
     const filtered = items.filter(u => !/facebook\.com|myspace\.com/i.test(u));
     if (!filtered.length) return "";
@@ -1577,10 +1567,20 @@ function renderArtistRelations(members = [], groups = [], aliases = [], namevari
               <span style="color:#777;margin-right:0.4em">${label}:</span>${links}${moreBtn(overflow, true)}
             </div>`;
   };
+  // "Also known as" uses clickable links (search as artist), skipped in compact (bio card) mode
+  const akaRow = (label, items) => {
+    if (!items.length || compact) return "";
+    const links = items.map(n =>
+      `<a href="#" class="bio-artist-link" onclick="searchBioArtist(event,this)" data-artist="${escHtml(n)}" style="color:var(--accent);text-decoration:none">${escHtml(n)}</a>`
+    ).join('<span style="color:#555;margin:0 0.2em">·</span>');
+    return `<div style="font-size:0.78rem;margin-top:0.55rem;line-height:1.6">
+              <span style="color:#777;margin-right:0.4em">${label}:</span>${links}
+            </div>`;
+  };
   const html = row("Members", members)
     + row("Also in", groups)
     + row("Aliases", aliases)
-    + textRow("Also known as", namevariations)
+    + akaRow("Also known as", namevariations)
     + (parentLabel ? row("Part of", [parentLabel]) : "")
     + row("Sub-labels", sublabels)
     + urlRow("Links", urls);
@@ -1755,10 +1755,9 @@ window.addEventListener("popstate", () => {
       document.getElementById("status").textContent = "";
       document.getElementById("pagination").style.display = "none";
       document.getElementById("search-desc").textContent = "";
-      document.getElementById("type-desc").textContent = "";
-      document.getElementById("type-pipe").style.display = "none";
-      document.getElementById("sort-desc").textContent = "";
-      document.getElementById("sort-pipe").style.display = "none";
+      document.getElementById("search-returned").textContent = "";
+      document.getElementById("search-ai-summary").textContent = "";
+      document.getElementById("search-info-block").style.display = "none";
     }
   }
 });

@@ -24,12 +24,14 @@ export class DiscogsClient {
         }
         return response.json();
     }
-    async search(query, options = {}) {
+    async search(query = "", options = {}) {
         const params = { q: query };
         if (options.type)
             params.type = options.type;
         if (options.artist)
             params.artist = options.artist;
+        if (options.releaseTitle)
+            params.release_title = options.releaseTitle;
         if (options.label)
             params.label = options.label;
         if (options.year)
@@ -38,6 +40,10 @@ export class DiscogsClient {
             params.genre = options.genre;
         if (options.style)
             params.style = options.style;
+        if (options.sort)
+            params.sort = options.sort;
+        if (options.sortOrder)
+            params.sort_order = options.sortOrder;
         params.page = String(options.page ?? 1);
         params.per_page = String(options.perPage ?? 10);
         return this.get("/database/search", params);
