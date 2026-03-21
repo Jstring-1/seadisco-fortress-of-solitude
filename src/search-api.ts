@@ -451,7 +451,7 @@ app.get("/api/recent-searches", async (_req, res) => {
       seen.add(sig);
       return true;
     });
-    // Shuffle and return 20 random entries
+    // DB already randomises; shuffle again for extra variety, return 48
     for (let i = searches.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [searches[i], searches[j]] = [searches[j], searches[i]];

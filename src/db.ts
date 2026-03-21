@@ -101,7 +101,7 @@ export async function saveSearch(clerkUserId: string, params: Record<string, str
     `INSERT INTO search_history (clerk_user_id, params) VALUES ($1, $2)`,
     [clerkUserId, JSON.stringify(params)]
   );
-  // Keep only the most recent 200 searches per user
+  // Keep only the most recent 500 searches per user
   await getPool().query(
     `DELETE FROM search_history
      WHERE clerk_user_id = $1
@@ -109,7 +109,7 @@ export async function saveSearch(clerkUserId: string, params: Record<string, str
          SELECT id FROM search_history
          WHERE clerk_user_id = $1
          ORDER BY searched_at DESC
-         LIMIT 200
+         LIMIT 500
        )`,
     [clerkUserId]
   );
@@ -153,12 +153,13 @@ export async function deleteUserToken(clerkUserId: string): Promise<void> {
   );
 }
 
-export async function getRecentSearches(limit = 20): Promise<Array<{ params: Record<string, string>; searched_at: string }>> {
+export async function getRecentSearches(limit = 500): Promise<Array<{ params: Record<string, string>; searched_at: string }>> {
   const r = await getPool().query(
     `SELECT params, MAX(searched_at) AS searched_at
      FROM search_history
+     WHERE searched_at > NOW() - INTERVAL '28 days'
      GROUP BY params
-     ORDER BY MAX(searched_at) DESC
+     ORDER BY RANDOM()
      LIMIT $1`,
     [limit]
   );
