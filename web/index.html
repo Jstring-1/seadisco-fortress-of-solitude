@@ -17,7 +17,7 @@
   <meta property="og:image" content="https://seadisco.com/seadisco-logo.png" />
 
   <!-- Twitter Card -->
-  <meta name="twitter:card" content="summary" />
+  <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="SeaDisco — Music Rabbit Hole Pathway" />
   <meta name="twitter:description" content="Advanced Discogs music search. Dive deep into artists, releases, and labels." />
   <meta name="twitter:image" content="https://seadisco.com/seadisco-logo.png" />
@@ -26,7 +26,9 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="/style.css?v=20260320ak" />
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#0c1015">
+  <link rel="stylesheet" href="/style.css?v=20260321a" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -36,11 +38,30 @@
     gtag('js', new Date());
     gtag('config', 'G-GYEHWV1B03', { send_page_view: false });
   </script>
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "SeaDisco",
+    "url": "https://seadisco.com",
+    "description": "Advanced Discogs music search engine. Search artists, releases, labels across jazz, blues, world music, and more.",
+    "applicationCategory": "MusicApplication",
+    "operatingSystem": "Any",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://seadisco.com/?q={search_term_string}",
+      "query-input": "required name=search_term_string"
+    }
+  }
+  </script>
 </head>
 <body>
 
 <div id="site-header">
-  <a href="https://seadisco.com"><img src="/seadisco-logo.png" alt="SeaDisco" /></a>
+  <h1 class="sr-only">SeaDisco — Advanced Discogs Music Search Engine</h1>
+  <a href="https://seadisco.com"><img src="/seadisco-logo.png" alt="SeaDisco — Search artists, releases, and labels on Discogs" /></a>
 </div>
 
 <nav id="main-nav">
@@ -244,7 +265,7 @@
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem">SeaDisco runs on the site owner's Discogs API token, which is shared across all anonymous users and <strong style="color:#ccc">capped at 1 search per second</strong> by Discogs. Anonymous users also get <strong style="color:#ccc">5 free searches per day</strong> before hitting the limit. Create a free account and add your own Discogs token to get unlimited personal searches with no shared bottleneck. Get your token at <strong style="color:#ccc">discogs.com → Settings → Developers → Generate new token</strong>, then paste it in your <a href="/account" style="color:#5a9aaa">Account</a> page.</p>
 </div>
 
-<footer style="text-align:center;padding:2rem 1rem 1.5rem;font-size:0.72rem;color:var(--muted);line-height:1.4">
+<footer>
   <div style="color:#555;font-style:italic">DISCLAIMER: AI be funky sometimes</div>
   Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Discogs</a>, <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Claude</a>, and <a href="https://listenbrainz.org" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">ListenBrainz</a>
   <div>© 2026 SeaDisco &nbsp;·&nbsp; Music data courtesy of Discogs API &nbsp;·&nbsp; Not affiliated with Discogs &nbsp;·&nbsp; Jimmy Witherfork Strikes Again</div>
@@ -303,7 +324,7 @@
   <div id="lightbox-counter"></div>
 </div>
 
-<script src="/app.js?v=20260320al"></script>
+<script src="/app.js?v=20260321a"></script>
 <script src="https://www.youtube.com/iframe_api"></script>
 
 </body>

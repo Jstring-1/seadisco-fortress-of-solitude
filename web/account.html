@@ -10,7 +10,9 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
   <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
   <link rel="icon" href="/favicon.ico">
-  <link rel="stylesheet" href="/style.css?v=20260320u" />
+  <link rel="manifest" href="/site.webmanifest">
+  <meta name="theme-color" content="#0c1015">
+  <link rel="stylesheet" href="/style.css?v=20260321a" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -18,7 +20,7 @@
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag('js', new Date());
-    gtag('config', 'G-GYEHWV1B03');
+    gtag('config', 'G-GYEHWV1B03', { send_page_view: true });
   </script>
   <style>
     .account-box {
@@ -64,7 +66,7 @@
       <a class="main-nav-tab" href="/?view=wantlist">Wantlist</a>
       <a class="main-nav-tab" href="/?view=info">Info</a>
       <div id="nav-auth-wrap">
-        <a href="/account" class="nav-auth-btn active" style="color:var(--accent);font-weight:600">Account</a>
+        <a href="/account" class="nav-auth-btn active">Account</a>
       </div>
     </div>
   </div>
@@ -161,7 +163,7 @@
     </div>
   </div>
 </main>
-<footer style="text-align:center;padding:1.5rem 1rem;font-size:0.72rem;color:var(--muted);margin-top:2rem;line-height:1.4">
+<footer style="margin-top:2rem">
   <div style="color:#555;font-style:italic">DISCLAIMER: AI be funky sometimes</div>
   Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Discogs</a>, <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Claude</a>, and <a href="https://listenbrainz.org" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">ListenBrainz</a>
   <div>© 2026 SeaDisco &nbsp;·&nbsp; Music data courtesy of Discogs API &nbsp;·&nbsp; Not affiliated with Discogs &nbsp;·&nbsp; Jimmy Witherfork Strikes Again</div>
