@@ -737,7 +737,7 @@ app.get("/artist-bio", async (req, res) => {
 
 // Helper: resolve Discogs ID tags in a profile string
 async function resolveDiscogsIds(profile: string, dc: DiscogsClient = discogs!): Promise<string> {
-  const idPattern = /\[([rma])=?(\d+)\]/g;
+  const idPattern = /\[([rmal])=?(\d+)\]/g;
   const matches: { tag: string; type: string; id: string }[] = [];
   const seen = new Set<string>();
   let m;
@@ -756,6 +756,9 @@ async function resolveDiscogsIds(profile: string, dc: DiscogsClient = discogs!):
       } else if (type === "m") {
         const r = await dc.getMasterRelease(id) as any;
         displayName = r?.title ?? "";
+      } else if (type === "l") {
+        const r = await dc.getLabel(id) as any;
+        displayName = r?.name ?? "";
       } else {
         const r = await dc.getArtist(id) as any;
         // Wrap in [a=Name] so the frontend can render it as a clickable link

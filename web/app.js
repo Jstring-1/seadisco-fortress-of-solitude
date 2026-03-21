@@ -1438,6 +1438,8 @@ function renderArtistRelations(members = [], groups = [], aliases = [], namevari
 
 function renderBioMarkup(text) {
   if (!text) return '';
+  // First flatten [l=Name] tags to plain text (label names, no link needed)
+  text = text.replace(/\[l=([^\]]+)\]/g, '$1');
   const parts = [];
   let lastIndex = 0;
   const re = /\[a=([^\]]+)\]/g;
