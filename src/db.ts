@@ -298,19 +298,71 @@ export interface CwSearchFilters {
   format?: string;
 }
 
-function buildCwWhere(filters: CwSearchFilters, startIdx: number): { clause: string; params: any[] } {
-  const clauses: string[] = [];
+// Parse a filter value with operators:  + (AND),  | (OR),  - prefix (NOT)
+// e.g. "miles davis + john coltrane" → both must match
+// e.g. "-verve" → must NOT match verve
+// e.g. "miles davis | john coltrane" → either matches
+// e.g. "blue note + -verve | columbia" → (blue note AND NOT verve) OR columbia
+function parseFilterExpr(value: string, column: string, startIdx: number): { clause: string; params: any[]; nextIdx: number } {
+  const orBranches = value.split(/\s*\|\s*/);
+  const orClauses: string[] = [];
   const params: any[] = [];
   let idx = startIdx;
-  if (filters.q)       { clauses.push(`data::text ILIKE $${idx}`);              params.push(`%${filters.q}%`);       idx++; }
-  if (filters.artist)  { clauses.push(`(data->'artists')::text ILIKE $${idx}`); params.push(`%${filters.artist}%`);  idx++; }
-  if (filters.release) { clauses.push(`data->>'title' ILIKE $${idx}`);          params.push(`%${filters.release}%`); idx++; }
-  if (filters.label)   { clauses.push(`(data->'labels')::text ILIKE $${idx}`);  params.push(`%${filters.label}%`);   idx++; }
-  if (filters.year)    { clauses.push(`(data->>'year')::text ILIKE $${idx}`);   params.push(`%${filters.year}%`);    idx++; }
-  if (filters.genre)   { clauses.push(`(data->'genres')::text ILIKE $${idx}`);  params.push(`%${filters.genre}%`);   idx++; }
-  if (filters.style)   { clauses.push(`(data->'styles')::text ILIKE $${idx}`);  params.push(`%${filters.style}%`);   idx++; }
-  if (filters.format)  { clauses.push(`(data->'formats')::text ILIKE $${idx}`); params.push(`%${filters.format}%`);  idx++; }
-  return { clause: clauses.length ? " AND " + clauses.join(" AND ") : "", params };
+
+  for (const branch of orBranches) {
+    const terms = branch.split(/\s*\+\s*/);
+    const andClauses: string[] = [];
+    for (let term of terms) {
+      term = term.trim();
+      if (!term) continue;
+      if (term.startsWith("-") && term.length > 1) {
+        // NOT: exclude this term
+        andClauses.push(`${column} NOT ILIKE $${idx}`);
+        params.push(`%${term.slice(1).trim()}%`);
+      } else {
+        andClauses.push(`${column} ILIKE $${idx}`);
+        params.push(`%${term}%`);
+      }
+      idx++;
+    }
+    if (andClauses.length) {
+      orClauses.push(andClauses.length === 1 ? andClauses[0] : `(${andClauses.join(" AND ")})`);
+    }
+  }
+
+  const clause = orClauses.length === 0 ? ""
+    : orClauses.length === 1 ? orClauses[0]
+    : `(${orClauses.join(" OR ")})`;
+  return { clause, params, nextIdx: idx };
+}
+
+function buildCwWhere(filters: CwSearchFilters, startIdx: number): { clause: string; params: any[] } {
+  const clauses: string[] = [];
+  const allParams: any[] = [];
+  let idx = startIdx;
+
+  const fields: Array<[string | undefined, string]> = [
+    [filters.q,       "data::text"],
+    [filters.artist,  "(data->'artists')::text"],
+    [filters.release, "data->>'title'"],
+    [filters.label,   "(data->'labels')::text"],
+    [filters.year,    "(data->>'year')::text"],
+    [filters.genre,   "(data->'genres')::text"],
+    [filters.style,   "(data->'styles')::text"],
+    [filters.format,  "(data->'formats')::text"],
+  ];
+
+  for (const [value, column] of fields) {
+    if (!value) continue;
+    const { clause, params, nextIdx } = parseFilterExpr(value, column, idx);
+    if (clause) {
+      clauses.push(clause);
+      allParams.push(...params);
+      idx = nextIdx;
+    }
+  }
+
+  return { clause: clauses.length ? " AND " + clauses.join(" AND ") : "", params: allParams };
 }
 
 export async function getCollectionPage(
