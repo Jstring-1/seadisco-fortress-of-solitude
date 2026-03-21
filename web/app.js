@@ -197,7 +197,7 @@ async function doSearch(page = 1, skipPushState = false) {
     }
     document.getElementById("search-returned").textContent = "";
     document.getElementById("search-ai-summary").textContent = "";
-    if (descText) document.getElementById("search-info-block").style.display = "";
+    if (parts.length) document.getElementById("search-info-block").style.display = "";
   }
 
   const isYearSort  = sort.startsWith("year:");
