@@ -305,6 +305,7 @@ async function showAuthSection() {
 async function loadSyncStatus() {
   const syncSection = document.getElementById("sync-section");
   const statusEl = document.getElementById("account-sync-status");
+  const btn = document.getElementById("account-sync-btn");
   syncSection.style.display = "block";
   try {
     const sessionToken = await clerk.session?.getToken();
@@ -322,6 +323,21 @@ async function loadSyncStatus() {
     };
     statusEl.textContent = `Collection: synced ${fmt(d.collectionSyncedAt)} · Wantlist: synced ${fmt(d.wantlistSyncedAt)}`;
     if (d.discogsUsername) statusEl.textContent += ` · @${d.discogsUsername}`;
+    // Dim the sync button if both were synced within the last hour
+    const oneHourAgo = Date.now() - 60 * 60 * 1000;
+    const collRecent = d.collectionSyncedAt && new Date(d.collectionSyncedAt).getTime() > oneHourAgo;
+    const wantRecent = d.wantlistSyncedAt && new Date(d.wantlistSyncedAt).getTime() > oneHourAgo;
+    if (collRecent && wantRecent) {
+      btn.disabled = true;
+      btn.style.opacity = "0.4";
+      btn.style.cursor = "default";
+      btn.title = "Synced recently — available again in an hour";
+    } else {
+      btn.disabled = false;
+      btn.style.opacity = "1";
+      btn.style.cursor = "pointer";
+      btn.title = "";
+    }
   } catch {
     statusEl.textContent = "Could not load sync status.";
   }
@@ -348,8 +364,12 @@ async function accountSync() {
   } catch {
     statusEl.textContent = "Sync failed. Please try again.";
   }
-  btn.disabled = false;
   btn.textContent = "Sync Now";
+  // Re-check cooldown to dim if needed
+  btn.disabled = true;
+  btn.style.opacity = "0.4";
+  btn.style.cursor = "default";
+  btn.title = "Synced recently — available again in an hour";
 }
 
 async function saveToken() {
