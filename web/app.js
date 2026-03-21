@@ -415,7 +415,7 @@ async function doSearch(page = 1, skipPushState = false) {
 
         const relLinks = renderArtistRelations(
           bioData.members        ?? [], bioData.groups    ?? [], bioData.aliases  ?? [],
-          bioData.namevariations ?? [], entityType === "label" ? [] : (bioData.urls ?? []),
+          bioData.namevariations ?? [], [],
           bioData.parentLabel    ?? null, bioData.sublabels ?? [], true
         );
         const bioHtml  = rawBioText ? renderBioMarkup(truncatedRaw) : escHtml(truncatedRaw);
@@ -912,7 +912,7 @@ function openBioFull(event) {
   } = window._currentBio ?? {};
   document.getElementById("bio-full-name").textContent = name ?? "";
   let html = renderBioMarkup(text ?? "");
-  const relLinks = renderArtistRelations(members, groups, aliases, namevariations, urls, parentLabel, sublabels);
+  const relLinks = renderArtistRelations(members, groups, aliases, namevariations, [], parentLabel, sublabels);
   if (relLinks) html += relLinks;
   if (discogsId) {
     html += `<div style="margin-top:1.1rem"><a href="https://www.discogs.com/artist/${discogsId}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#666;text-decoration:none">View profile on Discogs ↗</a></div>`;
