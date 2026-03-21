@@ -134,6 +134,16 @@
         <div id="feedback-list" style="font-size:0.85rem;color:var(--muted)">Loading…</div>
       </div>
 
+      <!-- Admin global search pool — only rendered for admin user -->
+      <div id="admin-searches" style="display:none">
+        <hr class="section-divider" />
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem">
+          <h2 style="margin:0">Global Search Pool</h2>
+          <span id="admin-search-count" style="font-size:0.78rem;color:#555"></span>
+        </div>
+        <div id="global-search-list" style="font-size:0.85rem;color:var(--muted);max-height:480px;overflow-y:auto">Loading…</div>
+      </div>
+
       <hr class="section-divider" />
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div style="display:flex;gap:1rem;align-items:center">
@@ -500,6 +510,7 @@ async function loadAdminInbox() {
     if (!r.ok) return; // not admin — stay hidden
     const { items } = await r.json();
     document.getElementById("admin-inbox").style.display = "block";
+    loadAdminSearches(); // also load global search pool for admin
     const el = document.getElementById("feedback-list");
     if (!items.length) { el.textContent = "No feedback yet."; return; }
     el.innerHTML = items.map(({ id, user_email, message, created_at }) => {
@@ -516,6 +527,54 @@ async function loadAdminInbox() {
       </div>`;
     }).join("");
   } catch { /* not admin or error — ignore */ }
+}
+
+let _globalSearchParams = [];
+
+async function loadAdminSearches() {
+  const section = document.getElementById("admin-searches");
+  const el = document.getElementById("global-search-list");
+  const countEl = document.getElementById("admin-search-count");
+  section.style.display = "block";
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const data = await fetch("/api/admin/searches", {
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
+    }).then(r => r.json());
+    const searches = data.searches ?? [];
+    _globalSearchParams = searches.map(s => s.params);
+    countEl.textContent = `${searches.length} entries`;
+    if (!searches.length) { el.textContent = "No global searches."; return; }
+    el.innerHTML = searches.map(({ params, searched_at }, i) => {
+      const label = searchLabel(params);
+      const date  = new Date(searched_at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      return `<div id="gs-${i}" style="display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0;border-bottom:1px solid #1a1a1a;gap:0.5rem">
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.8rem;color:var(--muted)">${label}</span>
+        <span style="color:#444;font-size:0.72rem;flex-shrink:0">${date}</span>
+        <button onclick="deleteGlobalSearch(${i})" style="background:none;border:none;color:#555;cursor:pointer;font-size:0.85rem;padding:0 0.1rem;flex-shrink:0;line-height:1" title="Delete from global pool">✕</button>
+      </div>`;
+    }).join("");
+  } catch { el.textContent = "Could not load global searches."; }
+}
+
+async function deleteGlobalSearch(i) {
+  const params = _globalSearchParams[i];
+  if (!params) return;
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const r = await fetch("/api/admin/search", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
+      body: JSON.stringify({ params }),
+    });
+    if (r.ok) {
+      document.getElementById(`gs-${i}`)?.remove();
+      _globalSearchParams[i] = null;
+      const remaining = document.querySelectorAll("#global-search-list [id^='gs-']").length;
+      document.getElementById("admin-search-count").textContent = `${remaining} entries`;
+      if (!remaining) document.getElementById("global-search-list").textContent = "No global searches.";
+    }
+  } catch { /* ignore */ }
 }
 
 async function deleteFeedbackItem(id) {

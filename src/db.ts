@@ -126,6 +126,13 @@ export async function clearSearchHistory(clerkUserId: string): Promise<void> {
   await getPool().query("DELETE FROM search_history WHERE clerk_user_id = $1", [clerkUserId]);
 }
 
+export async function deleteSearchGlobal(params: Record<string, string>): Promise<void> {
+  await getPool().query(
+    "DELETE FROM search_history WHERE params = $1",
+    [JSON.stringify(params)]
+  );
+}
+
 export async function getSearchHistory(clerkUserId: string, limit = 50): Promise<Array<{ params: Record<string, string>; searched_at: string }>> {
   const r = await getPool().query(
     `SELECT params, MAX(searched_at) AS searched_at
