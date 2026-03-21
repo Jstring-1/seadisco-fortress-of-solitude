@@ -202,7 +202,7 @@ app.post("/api/user/sync", express.json(), async (req, res) => {
 
   try {
     if (syncCollection && !collectionRecent) {
-      for (let page = 1; page <= 10; page++) {
+      for (let page = 1; page <= 30; page++) {
         if (page > 1) await delay(1000);
         const r = await fetch(
           `https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=100&page=${page}`,
@@ -226,7 +226,7 @@ app.post("/api/user/sync", express.json(), async (req, res) => {
     }
 
     if (syncWantlist && !wantlistRecent) {
-      for (let page = 1; page <= 10; page++) {
+      for (let page = 1; page <= 30; page++) {
         if (page > 1) await delay(1000);
         const r = await fetch(
           `https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=100&page=${page}`,
@@ -263,7 +263,7 @@ app.get("/api/user/collection", async (req, res) => {
   const page    = parseInt(req.query.page    as string) || 1;
   const perPage = parseInt(req.query.per_page as string) || 25;
   const filters: Record<string, string> = {};
-  for (const key of ["q", "artist", "label", "year", "genre", "style", "format"]) {
+  for (const key of ["q", "artist", "release", "label", "year", "genre", "style", "format"]) {
     const v = (req.query[key] as string ?? "").trim();
     if (v) (filters as any)[key] = v;
   }
@@ -278,7 +278,7 @@ app.get("/api/user/wantlist", async (req, res) => {
   const page    = parseInt(req.query.page    as string) || 1;
   const perPage = parseInt(req.query.per_page as string) || 25;
   const filters: Record<string, string> = {};
-  for (const key of ["q", "artist", "label", "year", "genre", "style", "format"]) {
+  for (const key of ["q", "artist", "release", "label", "year", "genre", "style", "format"]) {
     const v = (req.query[key] as string ?? "").trim();
     if (v) (filters as any)[key] = v;
   }

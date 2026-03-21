@@ -290,6 +290,7 @@ export async function upsertWantlistItems(
 export interface CwSearchFilters {
   q?: string;
   artist?: string;
+  release?: string;
   label?: string;
   year?: string;
   genre?: string;
@@ -301,13 +302,14 @@ function buildCwWhere(filters: CwSearchFilters, startIdx: number): { clause: str
   const clauses: string[] = [];
   const params: any[] = [];
   let idx = startIdx;
-  if (filters.q)      { clauses.push(`data::text ILIKE $${idx}`); params.push(`%${filters.q}%`); idx++; }
-  if (filters.artist) { clauses.push(`data->'artists' @> $${idx}::jsonb`); params.push(JSON.stringify([{ name: filters.artist }])); idx++; }
-  if (filters.label)  { clauses.push(`data->'labels' @> $${idx}::jsonb`); params.push(JSON.stringify([{ name: filters.label }])); idx++; }
-  if (filters.year)   { clauses.push(`(data->>'year')::text = $${idx}`); params.push(filters.year); idx++; }
-  if (filters.genre)  { clauses.push(`data->'genres' ? $${idx}`); params.push(filters.genre); idx++; }
-  if (filters.style)  { clauses.push(`data->'styles' ? $${idx}`); params.push(filters.style); idx++; }
-  if (filters.format) { clauses.push(`data->'formats' @> $${idx}::jsonb`); params.push(JSON.stringify([{ name: filters.format }])); idx++; }
+  if (filters.q)       { clauses.push(`data::text ILIKE $${idx}`); params.push(`%${filters.q}%`); idx++; }
+  if (filters.artist)  { clauses.push(`EXISTS (SELECT 1 FROM jsonb_array_elements(data->'artists') a WHERE a->>'name' ILIKE $${idx})`); params.push(`%${filters.artist}%`); idx++; }
+  if (filters.release) { clauses.push(`data->>'title' ILIKE $${idx}`); params.push(`%${filters.release}%`); idx++; }
+  if (filters.label)   { clauses.push(`EXISTS (SELECT 1 FROM jsonb_array_elements(data->'labels') l WHERE l->>'name' ILIKE $${idx})`); params.push(`%${filters.label}%`); idx++; }
+  if (filters.year)    { clauses.push(`(data->>'year')::text = $${idx}`); params.push(filters.year); idx++; }
+  if (filters.genre)   { clauses.push(`EXISTS (SELECT 1 FROM jsonb_array_elements_text(data->'genres') g WHERE g ILIKE $${idx})`); params.push(`%${filters.genre}%`); idx++; }
+  if (filters.style)   { clauses.push(`EXISTS (SELECT 1 FROM jsonb_array_elements_text(data->'styles') s WHERE s ILIKE $${idx})`); params.push(`%${filters.style}%`); idx++; }
+  if (filters.format)  { clauses.push(`EXISTS (SELECT 1 FROM jsonb_array_elements(data->'formats') f WHERE f->>'name' ILIKE $${idx})`); params.push(`%${filters.format}%`); idx++; }
   return { clause: clauses.length ? " AND " + clauses.join(" AND ") : "", params };
 }
 

@@ -703,20 +703,22 @@ function toggleCwAdvanced(forceOpen) {
 
 function getCwFilters() {
   const f = {};
-  const q      = (document.getElementById("cw-query")?.value  ?? "").trim();
-  const artist = (document.getElementById("cw-artist")?.value ?? "").trim();
-  const label  = (document.getElementById("cw-label")?.value  ?? "").trim();
-  const year   = (document.getElementById("cw-year")?.value   ?? "").trim();
-  const genre  = (document.getElementById("cw-genre")?.value  ?? "").trim();
-  const style  = (document.getElementById("cw-style")?.value  ?? "").trim();
-  const format = (document.getElementById("cw-format")?.value ?? "").trim();
-  if (q)      f.q      = q;
-  if (artist) f.artist = artist;
-  if (label)  f.label  = label;
-  if (year)   f.year   = year;
-  if (genre)  f.genre  = genre;
-  if (style)  f.style  = style;
-  if (format) f.format = format;
+  const q       = (document.getElementById("cw-query")?.value   ?? "").trim();
+  const artist  = (document.getElementById("cw-artist")?.value  ?? "").trim();
+  const release = (document.getElementById("cw-release")?.value ?? "").trim();
+  const label   = (document.getElementById("cw-label")?.value   ?? "").trim();
+  const year    = (document.getElementById("cw-year")?.value    ?? "").trim();
+  const genre   = (document.getElementById("cw-genre")?.value   ?? "").trim();
+  const style   = (document.getElementById("cw-style")?.value   ?? "").trim();
+  const format  = (document.getElementById("cw-format")?.value  ?? "").trim();
+  if (q)       f.q       = q;
+  if (artist)  f.artist  = artist;
+  if (release) f.release = release;
+  if (label)   f.label   = label;
+  if (year)    f.year    = year;
+  if (genre)   f.genre   = genre;
+  if (style)   f.style   = style;
+  if (format)  f.format  = format;
   return f;
 }
 
@@ -731,19 +733,20 @@ function doCwSearch(page = 1) {
 }
 
 function clearCwSearch() {
-  document.getElementById("cw-query").value  = "";
-  document.getElementById("cw-artist").value = "";
-  document.getElementById("cw-label").value  = "";
-  document.getElementById("cw-year").value   = "";
-  document.getElementById("cw-genre").value  = "";
-  document.getElementById("cw-style").value  = "";
-  document.getElementById("cw-format").value = "";
+  document.getElementById("cw-query").value   = "";
+  document.getElementById("cw-artist").value  = "";
+  document.getElementById("cw-release").value = "";
+  document.getElementById("cw-label").value   = "";
+  document.getElementById("cw-year").value    = "";
+  document.getElementById("cw-genre").value   = "";
+  document.getElementById("cw-style").value   = "";
+  document.getElementById("cw-format").value  = "";
   _cwQuery = "";
   doCwSearch(1);
 }
 
 function clearCwFilters() {
-  ["cw-query","cw-artist","cw-label","cw-year","cw-genre","cw-style","cw-format"].forEach(id => {
+  ["cw-query","cw-artist","cw-release","cw-label","cw-year","cw-genre","cw-style","cw-format"].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = "";
   });
   toggleCwAdvanced(false);
@@ -763,13 +766,14 @@ async function loadCollectionTab(page = 1, filters) {
   setStatus("Loading collection…");
   try {
     let url = `/api/user/collection?page=${page}&per_page=24`;
-    if (f.q)      url += `&q=${encodeURIComponent(f.q)}`;
-    if (f.artist) url += `&artist=${encodeURIComponent(f.artist)}`;
-    if (f.label)  url += `&label=${encodeURIComponent(f.label)}`;
-    if (f.year)   url += `&year=${encodeURIComponent(f.year)}`;
-    if (f.genre)  url += `&genre=${encodeURIComponent(f.genre)}`;
-    if (f.style)  url += `&style=${encodeURIComponent(f.style)}`;
-    if (f.format) url += `&format=${encodeURIComponent(f.format)}`;
+    if (f.q)       url += `&q=${encodeURIComponent(f.q)}`;
+    if (f.artist)  url += `&artist=${encodeURIComponent(f.artist)}`;
+    if (f.release) url += `&release=${encodeURIComponent(f.release)}`;
+    if (f.label)   url += `&label=${encodeURIComponent(f.label)}`;
+    if (f.year)    url += `&year=${encodeURIComponent(f.year)}`;
+    if (f.genre)   url += `&genre=${encodeURIComponent(f.genre)}`;
+    if (f.style)   url += `&style=${encodeURIComponent(f.style)}`;
+    if (f.format)  url += `&format=${encodeURIComponent(f.format)}`;
     const r = await apiFetch(url);
     const data = await r.json();
     const items = data.items ?? [];
@@ -800,13 +804,14 @@ async function loadWantlistTab(page = 1, filters) {
   setStatus("Loading wantlist…");
   try {
     let url = `/api/user/wantlist?page=${page}&per_page=24`;
-    if (f.q)      url += `&q=${encodeURIComponent(f.q)}`;
-    if (f.artist) url += `&artist=${encodeURIComponent(f.artist)}`;
-    if (f.label)  url += `&label=${encodeURIComponent(f.label)}`;
-    if (f.year)   url += `&year=${encodeURIComponent(f.year)}`;
-    if (f.genre)  url += `&genre=${encodeURIComponent(f.genre)}`;
-    if (f.style)  url += `&style=${encodeURIComponent(f.style)}`;
-    if (f.format) url += `&format=${encodeURIComponent(f.format)}`;
+    if (f.q)       url += `&q=${encodeURIComponent(f.q)}`;
+    if (f.artist)  url += `&artist=${encodeURIComponent(f.artist)}`;
+    if (f.release) url += `&release=${encodeURIComponent(f.release)}`;
+    if (f.label)   url += `&label=${encodeURIComponent(f.label)}`;
+    if (f.year)    url += `&year=${encodeURIComponent(f.year)}`;
+    if (f.genre)   url += `&genre=${encodeURIComponent(f.genre)}`;
+    if (f.style)   url += `&style=${encodeURIComponent(f.style)}`;
+    if (f.format)  url += `&format=${encodeURIComponent(f.format)}`;
     const r = await apiFetch(url);
     const data = await r.json();
     const items = data.items ?? [];
