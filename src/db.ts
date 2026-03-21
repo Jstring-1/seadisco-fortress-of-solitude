@@ -68,6 +68,28 @@ export async function initDb() {
       UNIQUE(clerk_user_id, discogs_release_id)
     )
   `);
+  // Anonymous interest signals — survives account deletion
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS interest_signals (
+      id                 SERIAL PRIMARY KEY,
+      discogs_release_id INTEGER NOT NULL,
+      source             TEXT NOT NULL,
+      artists            TEXT[],
+      labels             TEXT[],
+      genres             TEXT[],
+      styles             TEXT[],
+      year               INTEGER,
+      recorded_at        TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(discogs_release_id, source)
+    )
+  `);
+  await getPool().query(`
+    CREATE INDEX IF NOT EXISTS interest_signals_artists_idx ON interest_signals USING GIN (artists)
+  `);
+  await getPool().query(`
+    CREATE INDEX IF NOT EXISTS interest_signals_genres_idx ON interest_signals USING GIN (genres)
+  `);
+
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS fresh_releases (
       id                  SERIAL PRIMARY KEY,
@@ -418,4 +440,99 @@ export async function getFreshTopTags(limit = 24): Promise<Array<{ tag: string; 
     [limit]
   );
   return r.rows;
+}
+
+// ── Interest signals (anonymous, survives account deletion) ──
+
+export async function recordInterestSignals(
+  items: Array<{ id: number; data: any }>,
+  source: "collection" | "wantlist"
+): Promise<void> {
+  for (const item of items) {
+    const d = item.data;
+    if (!d) continue;
+    const artists: string[] = (d.artists ?? []).map((a: any) => a.name).filter(Boolean);
+    const labels:  string[] = (d.labels  ?? []).map((l: any) => l.name).filter(Boolean);
+    const genres:  string[] = d.genres ?? [];
+    const styles:  string[] = d.styles ?? [];
+    const year:    number | null = d.year || null;
+    await getPool().query(
+      `INSERT INTO interest_signals (discogs_release_id, source, artists, labels, genres, styles, year)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (discogs_release_id, source)
+       DO UPDATE SET artists = $3, labels = $4, genres = $5, styles = $6, year = $7, recorded_at = NOW()`,
+      [item.id, source, artists, labels, genres, styles, year]
+    );
+  }
+}
+
+export async function getInterestStats(): Promise<{
+  totalReleases: number;
+  topArtists: Array<{ name: string; cnt: number }>;
+  topLabels:  Array<{ name: string; cnt: number }>;
+  topGenres:  Array<{ name: string; cnt: number }>;
+  topStyles:  Array<{ name: string; cnt: number }>;
+}> {
+  const [totalR, artistsR, labelsR, genresR, stylesR] = await Promise.all([
+    getPool().query("SELECT COUNT(*)::int AS cnt FROM interest_signals"),
+    getPool().query(
+      `SELECT unnest(artists) AS name, COUNT(*)::int AS cnt
+       FROM interest_signals GROUP BY name ORDER BY cnt DESC LIMIT 50`
+    ),
+    getPool().query(
+      `SELECT unnest(labels) AS name, COUNT(*)::int AS cnt
+       FROM interest_signals GROUP BY name ORDER BY cnt DESC LIMIT 50`
+    ),
+    getPool().query(
+      `SELECT unnest(genres) AS name, COUNT(*)::int AS cnt
+       FROM interest_signals GROUP BY name ORDER BY cnt DESC LIMIT 30`
+    ),
+    getPool().query(
+      `SELECT unnest(styles) AS name, COUNT(*)::int AS cnt
+       FROM interest_signals GROUP BY name ORDER BY cnt DESC LIMIT 50`
+    ),
+  ]);
+  return {
+    totalReleases: totalR.rows[0]?.cnt ?? 0,
+    topArtists: artistsR.rows,
+    topLabels:  labelsR.rows,
+    topGenres:  genresR.rows,
+    topStyles:  stylesR.rows,
+  };
+}
+
+export async function backfillInterestSignals(): Promise<{ collection: number; wantlist: number }> {
+  let collCount = 0;
+  let wantCount = 0;
+  const coll = await getPool().query("SELECT discogs_release_id, data FROM user_collection");
+  for (const row of coll.rows) {
+    const artists: string[] = (row.data?.artists ?? []).map((a: any) => a.name).filter(Boolean);
+    const labels:  string[] = (row.data?.labels  ?? []).map((l: any) => l.name).filter(Boolean);
+    const genres:  string[] = row.data?.genres ?? [];
+    const styles:  string[] = row.data?.styles ?? [];
+    const year:    number | null = row.data?.year || null;
+    await getPool().query(
+      `INSERT INTO interest_signals (discogs_release_id, source, artists, labels, genres, styles, year)
+       VALUES ($1, 'collection', $2, $3, $4, $5, $6)
+       ON CONFLICT (discogs_release_id, source) DO NOTHING`,
+      [row.discogs_release_id, artists, labels, genres, styles, year]
+    );
+    collCount++;
+  }
+  const want = await getPool().query("SELECT discogs_release_id, data FROM user_wantlist");
+  for (const row of want.rows) {
+    const artists: string[] = (row.data?.artists ?? []).map((a: any) => a.name).filter(Boolean);
+    const labels:  string[] = (row.data?.labels  ?? []).map((l: any) => l.name).filter(Boolean);
+    const genres:  string[] = row.data?.genres ?? [];
+    const styles:  string[] = row.data?.styles ?? [];
+    const year:    number | null = row.data?.year || null;
+    await getPool().query(
+      `INSERT INTO interest_signals (discogs_release_id, source, artists, labels, genres, styles, year)
+       VALUES ($1, 'wantlist', $2, $3, $4, $5, $6)
+       ON CONFLICT (discogs_release_id, source) DO NOTHING`,
+      [row.discogs_release_id, artists, labels, genres, styles, year]
+    );
+    wantCount++;
+  }
+  return { collection: collCount, wantlist: wantCount };
 }
