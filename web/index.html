@@ -211,9 +211,9 @@
         <span id="cw-advanced-arrow">▶</span> Filters
       </button>
       <button type="button" onclick="clearCwSearch()" title="Clear all filters" style="background:none;border:none;padding:0.3rem 0.5rem;font-size:1.5rem;color:#555;cursor:pointer;line-height:1;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
+      <span style="font-size:0.72rem;color:#444;margin-left:0.3rem"><span style="color:#666">+</span> AND &nbsp;<span style="color:#666">|</span> OR &nbsp;<span style="color:#666">-</span> exclude &nbsp;·&nbsp; <span style="color:#555">e.g.</span> <span style="color:#666">blue note + -verve</span></span>
     </div>
     <div id="cw-advanced-panel" style="display:none;margin-top:0.5rem">
-      <div style="font-size:0.72rem;color:#555;margin-bottom:0.4rem">Use <span style="color:#888">+</span> for AND, <span style="color:#888">|</span> for OR, <span style="color:#888">-</span> to exclude &nbsp;·&nbsp; e.g. <span style="color:#777">blue note + -verve</span> or <span style="color:#777">miles davis | john coltrane</span></div>
       <div class="filters">
         <label>Artist <input type="text" id="cw-artist" placeholder="e.g. Miles Davis" onkeydown="if(event.key==='Enter'){doCwSearch(1)}" /></label>
         <label>Release <input type="text" id="cw-release" placeholder="e.g. Kind of Blue" onkeydown="if(event.key==='Enter'){doCwSearch(1)}" /></label>
