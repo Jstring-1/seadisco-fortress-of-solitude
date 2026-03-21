@@ -333,7 +333,8 @@ app.get("/api/user/facets", async (req, res) => {
   const userId = getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   const type = (req.query.type as string) ?? "collection";
-  const facets = type === "wantlist" ? await getWantlistFacets(userId) : await getCollectionFacets(userId);
+  const genre = (req.query.genre as string) || undefined;
+  const facets = type === "wantlist" ? await getWantlistFacets(userId, genre) : await getCollectionFacets(userId, genre);
   res.json(facets);
 });
 

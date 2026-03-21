@@ -742,21 +742,35 @@ function clearCwSearch() {
   doCwSearch(1);
 }
 
-async function loadCwFacets(type) {
+async function loadCwFacets(type, genre) {
   try {
-    const r = await apiFetch(`/api/user/facets?type=${type}`);
+    let url = `/api/user/facets?type=${type}`;
+    if (genre) url += `&genre=${encodeURIComponent(genre)}`;
+    const r = await apiFetch(url);
     const data = await r.json();
     const genreEl = document.getElementById("cw-genre");
     const styleEl = document.getElementById("cw-style");
-    if (genreEl) {
+    // Only refresh genres on initial load (no genre filter), not when filtering styles
+    if (!genre && genreEl) {
       genreEl.innerHTML = '<option value="">Any</option>' +
         (data.genres ?? []).map(g => `<option value="${g}">${g}</option>`).join("");
     }
     if (styleEl) {
+      const prev = styleEl.value;
       styleEl.innerHTML = '<option value="">Any</option>' +
         (data.styles ?? []).map(s => `<option value="${s}">${s}</option>`).join("");
+      // Restore previous selection if still available
+      if (prev && [...styleEl.options].some(o => o.value === prev)) styleEl.value = prev;
     }
   } catch {}
+}
+
+function onCwGenreChange() {
+  const genre = document.getElementById("cw-genre")?.value || "";
+  // Reset style when genre changes
+  document.getElementById("cw-style").value = "";
+  loadCwFacets(_cwTab, genre || undefined);
+  doCwSearch(1);
 }
 
 function clearCwFilters() {
