@@ -558,9 +558,10 @@ function renderCard(item) {
       <div class="card-body">
         ${artist ? `<div class="card-artist">${escHtml(artist)}</div>` : ""}
         <div class="card-title">${escHtml(title)}</div>
-        ${label   ? `<div class="card-sub">${escHtml(label)}${catno ? ` <span class="card-catno">${escHtml(catno)}</span>` : ""}</div>` : (catno ? `<div class="card-sub"><span class="card-catno">${escHtml(catno)}</span></div>` : "")}
+        ${label   ? `<div class="card-sub">${escHtml(label)}</div>` : ""}
         ${formats ? `<div class="card-format">${escHtml(formats)}</div>` : ""}
         ${genre   ? `<div class="card-format">${escHtml(genre)}</div>`   : ""}
+        ${catno   ? `<div class="card-catno-line">${escHtml(catno)}</div>` : ""}
         <div class="card-meta">${metaParts.map(escHtml).join(" · ")}</div>
       </div>
     </a>`;
