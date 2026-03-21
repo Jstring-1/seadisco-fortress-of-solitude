@@ -2,7 +2,7 @@ import express from "express";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, getRecentSearches, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, upsertCollectionItems, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, getFreshReleasesByTag, getFreshTopTags, recordInterestSignals, getInterestStats, backfillInterestSignals } from "./db.js";
+import { initDb, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, getRecentSearches, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, getFreshReleasesByTag, getFreshTopTags, recordInterestSignals, getInterestStats, backfillInterestSignals } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -154,7 +154,97 @@ app.delete("/api/user/account", async (req, res) => {
   res.json({ ok: true });
 });
 
-// POST /api/user/sync — sync collection and/or wantlist from Discogs
+// Background sync worker — runs detached from the HTTP request
+async function runBackgroundSync(userId: string, token: string, username: string, syncCollection: boolean, syncWantlist: boolean) {
+  const headers = { "Authorization": `Discogs token=${token}`, "User-Agent": "SeaDisco/1.0" };
+  const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+  let totalSynced = 0;
+
+  try {
+    // First, get total counts from Discogs to estimate total
+    let estimatedTotal = 0;
+    if (syncCollection) {
+      try {
+        const r = await fetch(`https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=1&page=1`, { headers });
+        if (r.ok) {
+          const d = await r.json() as any;
+          estimatedTotal += d.pagination?.items ?? 0;
+        }
+        await delay(500);
+      } catch {}
+    }
+    if (syncWantlist) {
+      try {
+        const r = await fetch(`https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=1&page=1`, { headers });
+        if (r.ok) {
+          const d = await r.json() as any;
+          estimatedTotal += d.pagination?.items ?? 0;
+        }
+        await delay(500);
+      } catch {}
+    }
+
+    await updateSyncProgress(userId, "syncing", 0, estimatedTotal);
+
+    if (syncCollection) {
+      for (let page = 1; ; page++) {
+        if (page > 1) await delay(2000); // 2s pacing — leaves headroom for user searches
+        const r = await fetch(
+          `https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=100&page=${page}`,
+          { headers }
+        );
+        if (!r.ok) break;
+        const data = await r.json() as any;
+        const releases: any[] = data.releases ?? [];
+        if (!releases.length) break;
+        const items = releases.map((item: any) => ({
+          id:      item.basic_information?.id as number,
+          data:    item.basic_information as object,
+          addedAt: item.date_added ? new Date(item.date_added) : undefined,
+        })).filter(i => i.id);
+        await upsertCollectionItems(userId, items);
+        await recordInterestSignals(items, "collection");
+        totalSynced += items.length;
+        await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
+        if (releases.length < 100) break;
+      }
+      await updateCollectionSyncedAt(userId);
+    }
+
+    if (syncWantlist) {
+      for (let page = 1; ; page++) {
+        if (page > 1) await delay(2000);
+        const r = await fetch(
+          `https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=100&page=${page}`,
+          { headers }
+        );
+        if (!r.ok) break;
+        const data = await r.json() as any;
+        const wants: any[] = data.wants ?? [];
+        if (!wants.length) break;
+        const items = wants.map((item: any) => ({
+          id:      item.id as number,
+          data:    item.basic_information as object,
+          addedAt: item.date_added ? new Date(item.date_added) : undefined,
+        })).filter(i => i.id);
+        await upsertWantlistItems(userId, items);
+        await recordInterestSignals(items, "wantlist");
+        totalSynced += items.length;
+        await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
+        if (wants.length < 100) break;
+      }
+      await updateWantlistSyncedAt(userId);
+    }
+
+    await updateSyncProgress(userId, "complete", totalSynced, estimatedTotal);
+    console.log(`Background sync complete for ${username}: ${totalSynced} items`);
+  } catch (err) {
+    console.error("Background sync error:", err);
+    await updateSyncProgress(userId, "error", totalSynced, 0, String(err));
+  }
+}
+
+// POST /api/user/sync — kick off background sync of collection and/or wantlist
 app.post("/api/user/sync", express.json(), async (req, res) => {
   const userId = getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
@@ -173,12 +263,17 @@ app.post("/api/user/sync", express.json(), async (req, res) => {
     return;
   }
 
+  // If already syncing, don't start another
+  if (syncStatus.syncStatus === "syncing") {
+    res.json({ ok: true, syncing: true, progress: syncStatus.syncProgress, total: syncStatus.syncTotal });
+    return;
+  }
+
   const token = await getUserToken(userId);
   if (!token) { res.status(400).json({ error: "No Discogs token found" }); return; }
 
   let username = await getDiscogsUsername(userId);
   if (!username) {
-    // Auto-fetch username from Discogs identity endpoint (token saved before this feature)
     try {
       const identRes = await fetch("https://api.discogs.com/oauth/identity", {
         headers: { "Authorization": `Discogs token=${token}`, "User-Agent": "SeaDisco/1.0" }
@@ -194,66 +289,13 @@ app.post("/api/user/sync", express.json(), async (req, res) => {
   }
   if (!username) { res.status(400).json({ error: "Could not determine Discogs username" }); return; }
 
-  const headers = { "Authorization": `Discogs token=${token}`, "User-Agent": "SeaDisco/1.0" };
-  const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+  // Respond immediately, sync runs in background
+  res.json({ ok: true, started: true });
 
-  let collectionCount = 0;
-  let wantlistCount   = 0;
-
-  try {
-    if (syncCollection && !collectionRecent) {
-      for (let page = 1; page <= 30; page++) {
-        if (page > 1) await delay(1000);
-        const r = await fetch(
-          `https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=100&page=${page}`,
-          { headers }
-        );
-        if (!r.ok) break;
-        const data = await r.json() as any;
-        const releases: any[] = data.releases ?? [];
-        if (!releases.length) break;
-        const items = releases.map((item: any) => ({
-          id:      item.basic_information?.id as number,
-          data:    item.basic_information as object,
-          addedAt: item.date_added ? new Date(item.date_added) : undefined,
-        })).filter(i => i.id);
-        await upsertCollectionItems(userId, items);
-        await recordInterestSignals(items, "collection");
-        collectionCount += items.length;
-        if (releases.length < 100) break;
-      }
-      await updateCollectionSyncedAt(userId);
-    }
-
-    if (syncWantlist && !wantlistRecent) {
-      for (let page = 1; page <= 30; page++) {
-        if (page > 1) await delay(1000);
-        const r = await fetch(
-          `https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=100&page=${page}`,
-          { headers }
-        );
-        if (!r.ok) break;
-        const data = await r.json() as any;
-        const wants: any[] = data.wants ?? [];
-        if (!wants.length) break;
-        const items = wants.map((item: any) => ({
-          id:      item.id as number,
-          data:    item.basic_information as object,
-          addedAt: item.date_added ? new Date(item.date_added) : undefined,
-        })).filter(i => i.id);
-        await upsertWantlistItems(userId, items);
-        await recordInterestSignals(items, "wantlist");
-        wantlistCount += items.length;
-        if (wants.length < 100) break;
-      }
-      await updateWantlistSyncedAt(userId);
-    }
-
-    res.json({ ok: true, collectionCount, wantlistCount });
-  } catch (err) {
-    console.error("Sync error:", err);
-    res.status(500).json({ error: "Sync failed" });
-  }
+  // Fire and forget — runs in background
+  runBackgroundSync(userId, token, username, syncCollection && !collectionRecent, syncWantlist && !wantlistRecent).catch(err => {
+    console.error("Background sync uncaught error:", err);
+  });
 });
 
 // GET /api/user/collection — paginated cached collection (with optional filters)
@@ -308,7 +350,11 @@ app.get("/api/user/sync-status", async (req, res) => {
   res.json({
     collectionSyncedAt: syncStatus.collectionSyncedAt,
     wantlistSyncedAt:   syncStatus.wantlistSyncedAt,
-    discogsUsername:    username,
+    discogsUsername:     username,
+    syncStatus:          syncStatus.syncStatus,
+    syncProgress:        syncStatus.syncProgress,
+    syncTotal:           syncStatus.syncTotal,
+    syncError:           syncStatus.syncError,
   });
 });
 

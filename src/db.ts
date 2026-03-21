@@ -46,6 +46,11 @@ export async function initDb() {
   await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS discogs_username TEXT`);
   await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS collection_synced_at TIMESTAMP`);
   await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS wantlist_synced_at TIMESTAMP`);
+  // Background sync progress tracking
+  await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS sync_status TEXT DEFAULT 'idle'`);
+  await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS sync_progress INTEGER DEFAULT 0`);
+  await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS sync_total INTEGER DEFAULT 0`);
+  await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS sync_error TEXT`);
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS user_collection (
       id                 SERIAL PRIMARY KEY,
@@ -246,14 +251,25 @@ export async function setDiscogsUsername(clerkUserId: string, username: string):
   );
 }
 
-export async function getSyncStatus(clerkUserId: string): Promise<{ collectionSyncedAt: Date | null; wantlistSyncedAt: Date | null }> {
+export async function updateSyncProgress(clerkUserId: string, status: string, progress: number, total: number, error?: string): Promise<void> {
+  await getPool().query(
+    `UPDATE user_tokens SET sync_status = $2, sync_progress = $3, sync_total = $4, sync_error = $5 WHERE clerk_user_id = $1`,
+    [clerkUserId, status, progress, total, error ?? null]
+  );
+}
+
+export async function getSyncStatus(clerkUserId: string): Promise<{ collectionSyncedAt: Date | null; wantlistSyncedAt: Date | null; syncStatus: string; syncProgress: number; syncTotal: number; syncError: string | null }> {
   const r = await getPool().query(
-    "SELECT collection_synced_at, wantlist_synced_at FROM user_tokens WHERE clerk_user_id = $1",
+    "SELECT collection_synced_at, wantlist_synced_at, sync_status, sync_progress, sync_total, sync_error FROM user_tokens WHERE clerk_user_id = $1",
     [clerkUserId]
   );
   return {
     collectionSyncedAt: r.rows[0]?.collection_synced_at ?? null,
     wantlistSyncedAt:   r.rows[0]?.wantlist_synced_at   ?? null,
+    syncStatus:         r.rows[0]?.sync_status           ?? "idle",
+    syncProgress:       r.rows[0]?.sync_progress         ?? 0,
+    syncTotal:          r.rows[0]?.sync_total             ?? 0,
+    syncError:          r.rows[0]?.sync_error             ?? null,
   };
 }
 

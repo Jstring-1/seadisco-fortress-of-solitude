@@ -857,9 +857,11 @@ async function showSyncStatus(type) {
   el.innerHTML = `<a href="#" onclick="triggerSync('${type}');return false;" style="color:var(--accent);text-decoration:none">Sync now</a>`;
 }
 
+let _mainSyncPoll = null;
+
 async function triggerSync(type = "both") {
   const el = document.getElementById("sync-status");
-  if (el) el.textContent = "Syncing…";
+  if (el) el.textContent = "Syncing in background…";
   try {
     const r = await apiFetch("/api/user/sync", {
       method: "POST",
@@ -871,10 +873,24 @@ async function triggerSync(type = "both") {
       if (el) el.innerHTML = `Recently synced &nbsp;·&nbsp; <a href="#" onclick="triggerSync('${type}');return false;" style="color:var(--accent);text-decoration:none">Sync now</a>`;
       return;
     }
-    // Reload badge IDs after sync
-    await loadDiscogsIds();
-    if (_activeTab === "collection") loadCollectionTab(1);
-    else if (_activeTab === "wantlist") loadWantlistTab(1);
+    // Poll for progress
+    if (_mainSyncPoll) clearInterval(_mainSyncPoll);
+    _mainSyncPoll = setInterval(async () => {
+      try {
+        const sr = await apiFetch("/api/user/sync-status");
+        const sd = await sr.json();
+        if (sd.syncStatus === "syncing") {
+          const pct = sd.syncTotal ? Math.round((sd.syncProgress / sd.syncTotal) * 100) : 0;
+          if (el) el.textContent = `Syncing… ${sd.syncProgress.toLocaleString()} / ${sd.syncTotal.toLocaleString()} (${pct}%)`;
+        } else {
+          clearInterval(_mainSyncPoll); _mainSyncPoll = null;
+          if (el) el.innerHTML = `Sync complete &nbsp;·&nbsp; <a href="#" onclick="triggerSync('${type}');return false;" style="color:var(--accent);text-decoration:none">Sync now</a>`;
+          await loadDiscogsIds();
+          if (_activeTab === "collection") loadCollectionTab(1);
+          else if (_activeTab === "wantlist") loadWantlistTab(1);
+        }
+      } catch { clearInterval(_mainSyncPoll); _mainSyncPoll = null; }
+    }, 4000);
   } catch (e) {
     if (el) el.textContent = "Sync failed: " + e.message;
   }
