@@ -429,30 +429,32 @@ export async function getWantlistPage(
   return { items: dataR.rows.map(r => r.data), total: countR.rows[0]?.total ?? 0 };
 }
 
-export async function getCollectionFacets(clerkUserId: string): Promise<{ genres: string[]; styles: string[] }> {
+export async function getCollectionFacets(clerkUserId: string, genre?: string): Promise<{ genres: string[]; styles: string[] }> {
+  const stylesQuery = genre
+    ? `SELECT DISTINCT s AS name FROM user_collection, jsonb_array_elements_text(data->'styles') AS s WHERE clerk_user_id = $1 AND (data->'genres')::text ILIKE $2 ORDER BY s`
+    : `SELECT DISTINCT s AS name FROM user_collection, jsonb_array_elements_text(data->'styles') AS s WHERE clerk_user_id = $1 ORDER BY s`;
+  const stylesParams = genre ? [clerkUserId, `%${genre}%`] : [clerkUserId];
   const [genresR, stylesR] = await Promise.all([
     getPool().query(
       `SELECT DISTINCT g AS name FROM user_collection, jsonb_array_elements_text(data->'genres') AS g WHERE clerk_user_id = $1 ORDER BY g`,
       [clerkUserId]
     ),
-    getPool().query(
-      `SELECT DISTINCT s AS name FROM user_collection, jsonb_array_elements_text(data->'styles') AS s WHERE clerk_user_id = $1 ORDER BY s`,
-      [clerkUserId]
-    ),
+    getPool().query(stylesQuery, stylesParams),
   ]);
   return { genres: genresR.rows.map(r => r.name), styles: stylesR.rows.map(r => r.name) };
 }
 
-export async function getWantlistFacets(clerkUserId: string): Promise<{ genres: string[]; styles: string[] }> {
+export async function getWantlistFacets(clerkUserId: string, genre?: string): Promise<{ genres: string[]; styles: string[] }> {
+  const stylesQuery = genre
+    ? `SELECT DISTINCT s AS name FROM user_wantlist, jsonb_array_elements_text(data->'styles') AS s WHERE clerk_user_id = $1 AND (data->'genres')::text ILIKE $2 ORDER BY s`
+    : `SELECT DISTINCT s AS name FROM user_wantlist, jsonb_array_elements_text(data->'styles') AS s WHERE clerk_user_id = $1 ORDER BY s`;
+  const stylesParams = genre ? [clerkUserId, `%${genre}%`] : [clerkUserId];
   const [genresR, stylesR] = await Promise.all([
     getPool().query(
       `SELECT DISTINCT g AS name FROM user_wantlist, jsonb_array_elements_text(data->'genres') AS g WHERE clerk_user_id = $1 ORDER BY g`,
       [clerkUserId]
     ),
-    getPool().query(
-      `SELECT DISTINCT s AS name FROM user_wantlist, jsonb_array_elements_text(data->'styles') AS s WHERE clerk_user_id = $1 ORDER BY s`,
-      [clerkUserId]
-    ),
+    getPool().query(stylesQuery, stylesParams),
   ]);
   return { genres: genresR.rows.map(r => r.name), styles: stylesR.rows.map(r => r.name) };
 }
