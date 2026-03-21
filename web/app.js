@@ -1713,7 +1713,7 @@ function renderFreshGrid(releases) {
         ${date ? `<div class="fresh-card-date">${date}</div>` : ""}
         ${types ? `<div class="fresh-card-type">${escHtml(types)}</div>` : ""}
         <div class="fresh-card-links">
-          <a href="${googleUrl}" target="_blank" rel="noopener">Search →</a>
+          <a href="${googleUrl}" target="_blank" rel="noopener">Google →</a>
         </div>
       </div>
     </div>`;
