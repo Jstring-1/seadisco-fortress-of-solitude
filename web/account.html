@@ -143,7 +143,10 @@
         <button onclick="deleteAccount()" class="danger-btn" style="font-size:0.82rem;padding:0.3rem 0.7rem">Delete account</button>
       </div>
       <hr class="section-divider" />
-      <h2 style="margin-bottom:0.5rem">Recent Searches</h2>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem">
+        <h2 style="margin:0">Saved Searches</h2>
+        <button onclick="clearAllSearches()" style="background:none;border:none;color:#666;cursor:pointer;font-size:0.78rem;padding:0" title="Delete all saved searches">Clear all</button>
+      </div>
       <div id="history-list" style="font-size:0.85rem;color:var(--muted)">Loading…</div>
     </div>
   </div>
@@ -360,6 +363,8 @@ async function removeToken() {
   await showAuthSection();
 }
 
+let _historyParams = []; // cache for delete operations
+
 async function loadHistory() {
   const el = document.getElementById("history-list");
   if (!el) return;
@@ -369,17 +374,54 @@ async function loadHistory() {
       headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
     const history = data.history ?? [];
+    _historyParams = history.map(h => h.params);
     if (!history.length) { el.textContent = "No searches yet."; return; }
-    el.innerHTML = history.map(({ params, searched_at }) => {
+    el.innerHTML = history.map(({ params, searched_at }, i) => {
       const label = searchLabel(params);
       const url   = paramsToUrl(params);
       const date  = new Date(searched_at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-      return `<div style="display:flex;justify-content:space-between;align-items:baseline;padding:0.3rem 0;border-bottom:1px solid #222">
-        <a href="${url}" style="color:var(--accent);text-decoration:none;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${label}</a>
-        <span style="color:#555;font-size:0.75rem;margin-left:0.75rem;flex-shrink:0">${date}</span>
+      return `<div id="sh-${i}" style="display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0;border-bottom:1px solid #222;gap:0.5rem">
+        <a href="${url}" style="color:var(--accent);text-decoration:none;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.83rem">${label}</a>
+        <span style="color:#555;font-size:0.72rem;flex-shrink:0">${date}</span>
+        <button onclick="deleteHistoryItem(${i})" style="background:none;border:none;color:#555;cursor:pointer;font-size:0.85rem;padding:0 0.1rem;flex-shrink:0;line-height:1" title="Delete">✕</button>
       </div>`;
     }).join("");
   } catch { el.textContent = "Could not load history."; }
+}
+
+async function deleteHistoryItem(i) {
+  const params = _historyParams[i];
+  if (!params) return;
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const r = await fetch("/api/user/search", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
+      body: JSON.stringify({ params }),
+    });
+    if (r.ok) {
+      document.getElementById(`sh-${i}`)?.remove();
+      _historyParams[i] = null;
+      if (!document.querySelector("#history-list [id^='sh-']")) {
+        document.getElementById("history-list").textContent = "No searches yet.";
+      }
+    }
+  } catch { /* ignore */ }
+}
+
+async function clearAllSearches() {
+  if (!confirm("Delete all saved searches? This cannot be undone.")) return;
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const r = await fetch("/api/user/searches", {
+      method: "DELETE",
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
+    });
+    if (r.ok) {
+      _historyParams = [];
+      document.getElementById("history-list").textContent = "No searches yet.";
+    }
+  } catch { /* ignore */ }
 }
 
 function searchLabel(p) {

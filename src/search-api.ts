@@ -2,7 +2,7 @@ import express from "express";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, getSearchHistory, getRecentSearches, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, upsertCollectionItems, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, getFreshReleasesByTag, getFreshTopTags } from "./db.js";
+import { initDb, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, getSearchHistory, deleteSearch, clearSearchHistory, getRecentSearches, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, upsertCollectionItems, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, getFreshReleasesByTag, getFreshTopTags } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -310,6 +310,24 @@ app.get("/api/user/history", async (req, res) => {
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   const history = await getSearchHistory(userId);
   res.json({ history });
+});
+
+// DELETE /api/user/search — delete one saved search by params
+app.delete("/api/user/search", express.json(), async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { params } = req.body ?? {};
+  if (!params) { res.status(400).json({ error: "Missing params" }); return; }
+  await deleteSearch(userId, params);
+  res.json({ ok: true });
+});
+
+// DELETE /api/user/searches — clear all saved searches for the user
+app.delete("/api/user/searches", async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  await clearSearchHistory(userId);
+  res.json({ ok: true });
 });
 
 // POST /api/feedback — save feedback from signed-in user
