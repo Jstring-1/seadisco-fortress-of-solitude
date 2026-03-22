@@ -513,12 +513,16 @@ app.post("/api/admin/sync-all", async (req, res) => {
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   const users = await getAllUsersForSync();
   res.json({ ok: true, queued: users.length });
-  // Fire syncs concurrently — each user has their own Discogs token so no shared rate limit
-  for (const user of users) {
-    runBackgroundSync(user.clerkUserId, user.token, user.username, true, true).catch(err => {
-      console.error(`Auto sync-all error for ${user.username}:`, err);
-    });
-  }
+  // Run syncs sequentially so server load and Discogs API stay manageable
+  (async () => {
+    for (const user of users) {
+      try {
+        await runBackgroundSync(user.clerkUserId, user.token, user.username, true, true);
+      } catch (err) {
+        console.error(`Sync-all error for ${user.username}:`, err);
+      }
+    }
+  })();
 });
 
 // GET /api/admin/interests — interest signal stats, admin only
