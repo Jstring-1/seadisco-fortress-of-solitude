@@ -245,6 +245,11 @@ export async function dumpSearchHistory(): Promise<any[]> {
   return r.rows;
 }
 
+export async function truncateSearchHistory(): Promise<number> {
+  const r = await getPool().query(`DELETE FROM search_history`);
+  return r.rowCount ?? 0;
+}
+
 export async function saveFeedback(clerkUserId: string, userEmail: string, message: string): Promise<void> {
   await getPool().query(
     `INSERT INTO feedback (clerk_user_id, user_email, message) VALUES ($1, $2, $3)`,

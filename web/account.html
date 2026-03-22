@@ -146,6 +146,7 @@
       <div id="admin-dump" style="display:none">
         <hr class="section-divider" />
         <button onclick="dumpSearchHistory()" style="padding:0.4rem 1rem;border:1px solid var(--border);background:var(--surface);color:var(--fg);border-radius:4px;cursor:pointer">Dump Search History</button>
+        <button onclick="if(confirm('Delete ALL search history?')) nukeSearchHistory()" style="padding:0.4rem 1rem;border:1px solid #633;background:#311;color:#f66;border-radius:4px;cursor:pointer;margin-left:0.5rem">Delete All Search History</button>
       </div>
 
       <!-- Admin global search pool — only rendered for admin user -->
@@ -673,6 +674,17 @@ async function loadInterestStats() {
   } catch { el.textContent = "Could not load interest stats."; }
 }
 
+
+async function nukeSearchHistory() {
+  const sessionToken = await clerk.session?.getToken();
+  const r = await fetch("/api/admin/search-all", {
+    method: "DELETE",
+    headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
+  });
+  const d = await r.json();
+  alert(`Deleted ${d.deleted} entries`);
+  location.reload();
+}
 
 async function dumpSearchHistory() {
   const sessionToken = await clerk.session?.getToken();
