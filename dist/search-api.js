@@ -732,31 +732,11 @@ app.get("/search", async (req, res) => {
     const artist = stripArtistSuffix(req.query.artist);
     const rawLabel = req.query.label ?? "";
     const rawRelease = req.query.release_title ?? "";
-    // When no general query, promote the first field value to q for broad results
-    // and DON'T also send it as a dedicated param (avoids double-filter killing results)
-    let q = rawQ;
-    let searchArtist = artist || undefined;
-    let searchLabel = rawLabel || undefined;
-    let searchRelease = rawRelease || undefined;
-    if (!q && artist) {
-        q = artist;
-        searchArtist = undefined;
-    }
-    else if (!q && rawLabel) {
-        q = rawLabel;
-        searchLabel = undefined;
-    }
-    else if (!q && rawRelease) {
-        q = rawRelease;
-        searchRelease = undefined;
-    }
-    // Also strip dedicated param if it duplicates q (avoids overly-strict double filter)
-    if (q && searchArtist && q.toLowerCase() === searchArtist.toLowerCase())
-        searchArtist = undefined;
-    if (q && searchLabel && q.toLowerCase() === searchLabel.toLowerCase())
-        searchLabel = undefined;
-    if (q && searchRelease && q.toLowerCase() === searchRelease.toLowerCase())
-        searchRelease = undefined;
+    // Each field is sent as its own dedicated Discogs param — no promotion to q
+    const q = rawQ;
+    const searchArtist = artist || undefined;
+    const searchLabel = rawLabel || undefined;
+    const searchRelease = rawRelease || undefined;
     const ip = clientIp(req);
     const whitelisted = IP_WHITELIST.has(ip);
     const userId = getClerkUserId(req);
