@@ -1,4 +1,5 @@
 import express from "express";
+import compression from "compression";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
@@ -89,8 +90,20 @@ if (process.env.APP_DB_URL) {
 const app = express();
 app.set("trust proxy", true); // respect X-Forwarded-For from Railway's proxy
 
-// Serve static files from web/ (logo, etc.)
-app.use(express.static(path.join(__dirname, "../web"), { extensions: ["html"] }));
+// Gzip/brotli compression for all responses
+app.use(compression());
+
+// Cache headers for static assets (versioned files get long cache, HTML short)
+app.use(express.static(path.join(__dirname, "../web"), {
+  extensions: ["html"],
+  setHeaders(res, filePath) {
+    if (/\.(js|css|webp|png|ico|woff2?)$/i.test(filePath)) {
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    } else if (/\.html$/i.test(filePath)) {
+      res.setHeader("Cache-Control", "public, max-age=3600, must-revalidate");
+    }
+  },
+}));
 
 // Allow any webpage to call this API
 app.use((_req, res, next) => {
