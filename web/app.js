@@ -1393,7 +1393,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
              : `<div class="album-cover-placeholder">♪</div>`}
       <div class="album-meta">
         ${typeLabel ? `<div class="album-type-badge">${escHtml(typeLabel)}</div>` : ""}
-        <h2>${escHtml(title)}${window._collectionIds?.has(Number(releaseId)) ? ` <span class="collection-badge" title="In your collection">✓</span>` : ""}${window._wantlistIds?.has(Number(releaseId)) ? ` <span class="wantlist-badge" title="In your wantlist">♡</span>` : ""}</h2>
+        <h2><a href="#" class="album-title-search" onclick="event.preventDefault();closeModal();document.getElementById('query').value='${escHtml(title.replace(/'/g, "\\'"))}';toggleAdvanced(false);document.querySelector('input[name=\\'result-type\\'][value=\\'\\']').checked=true;doSearch(1)" title="Search for other versions" style="color:inherit;text-decoration:none">${escHtml(title)}</a>${window._collectionIds?.has(Number(releaseId)) ? ` <span class="collection-badge" title="In your collection">✓</span>` : ""}${window._wantlistIds?.has(Number(releaseId)) ? ` <span class="wantlist-badge" title="In your wantlist">♡</span>` : ""}</h2>
         ${artists.length ? `<div class="album-artist">${artists.map(n => `<a href="#" class="modal-artist-link" data-artist="${escHtml(n)}" onclick="searchArtistFromModal(event,this)">${escHtml(n)}</a>`).join(", ")}</div>` : ""}
         ${detailRows ? `<div class="album-detail-grid">${detailRows}</div>` : ""}
         ${(() => {
@@ -1748,12 +1748,21 @@ window.addEventListener("popstate", () => {
 function toTitleCase(s) {
   return s.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1));
 }
-function feedLabel(p) {
+// Normalize old full-name param keys to single letters (handles old DB entries)
+function normP(p) {
+  const m = { artist:"a", release_title:"r", label:"l", year:"y", genre:"g", style:"s", format:"f", type:"t", sort:"o" };
+  const o = {};
+  for (const [k, v] of Object.entries(p)) { if (v) o[m[k] ?? k] = v; }
+  return o;
+}
+
+function feedLabel(raw) {
+  const p = normP(raw);
   const tc = s => toTitleCase(s);
   const parts = [];
   if (p.q && (!p.a || p.q.toLowerCase() !== p.a.toLowerCase())) parts.push(tc(p.q));
   if (p.a) parts.push(tc(p.a));
-  if (p.r) parts.push(`"${tc(p.r)}"`);
+  if (p.r) parts.push(tc(p.r));
   if (p.l) parts.push(`${tc(p.l)} label`);
   if (p.g) parts.push(p.g);
   if (p.s) parts.push(p.s);
@@ -1764,8 +1773,9 @@ function feedLabel(p) {
   return { full, short };
 }
 
-function feedApply(p) {
-  if (!p) return;
+function feedApply(raw) {
+  if (!raw) return;
+  const p = normP(raw);
   try {
     switchView("search", true);
     document.getElementById("query").value     = p.q ?? "";

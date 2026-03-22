@@ -1000,6 +1000,12 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   line-height: 1.3;
 }
 
+.album-title-search:hover {
+  text-decoration: underline dotted !important;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--muted) !important;
+}
+
 #album-info .album-meta .album-artist, #version-info .album-meta .album-artist {
   color: var(--accent);
   font-size: 0.75rem;
