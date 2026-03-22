@@ -1426,7 +1426,19 @@ function renderMasterVersions(filter) {
   const list = document.getElementById("master-versions-list");
   if (!list) return;
   const MEDIA = new Set(["Vinyl","CD","Cassette","DVD","Blu-ray","File","Box Set","Lathe Cut","Flexi-disc","Shellac","8-Track Cartridge","Reel-To-Reel","MiniDisc","SACD","Betamax","VHS"]);
-  const getMedium = v => { const parts = (v.format ?? "").split(",").map(s => s.trim()); return parts.find(p => MEDIA.has(p)) || parts[0] || ""; };
+  const getMedium = v => {
+    const parts = (v.format ?? "").split(",").map(s => s.trim());
+    return parts.find(p => MEDIA.has(p)) || (v.majorFormats ?? []).find(f => MEDIA.has(f)) || parts[0] || "";
+  };
+  const getDisplayFormat = v => {
+    const fmt = (v.format ?? "").trim();
+    const medium = (v.majorFormats ?? []).find(f => MEDIA.has(f));
+    if (!fmt) return medium || "—";
+    // If the format string already contains the medium type, show as-is
+    if (!medium || fmt.split(",").map(s => s.trim()).includes(medium)) return fmt;
+    // Otherwise prepend the medium so it's always visible
+    return `${medium}, ${fmt}`;
+  };
   const filtered = filter ? _masterVersions.filter(v => getMedium(v) === filter) : _masterVersions;
 
   // Update pill active states
@@ -1446,7 +1458,7 @@ function renderMasterVersions(filter) {
     return `
       <span style="color:#888">${escHtml(!v.year || v.year === "0" ? "?" : String(v.year))}</span>
       <span style="color:#aaa">${escHtml(v.country || "?")}</span>
-      <span style="color:#888">${escHtml(v.format ?? "—")}</span>
+      <span style="color:#888">${escHtml(getDisplayFormat(v))}</span>
       <span style="color:#aaa">${escHtml(v.catno ?? "—")}</span>
       <span><a href="#" onclick="openVersionPopup(event,${v.id})" style="color:var(--accent);text-decoration:none">${escHtml(v.label ?? v.title ?? "—")}</a>${badge}</span>`;
   }).join("");
@@ -1464,11 +1476,11 @@ async function loadMasterVersions(event, masterId) {
     // Build unique medium types for filter pills
     // Discogs format strings look like "CD, Compilation" or "Vinyl, LP, Album"
     // We want the medium type (Vinyl/CD/Cassette/etc.) not qualifiers
-    const MEDIA = new Set(["Vinyl","CD","Cassette","DVD","Blu-ray","File","Box Set","Lathe Cut","Flexi-disc","Shellac","8-Track Cartridge","Reel-To-Reel","MiniDisc","SACD","Betamax","VHS"]);
+    const MEDIA2 = new Set(["Vinyl","CD","Cassette","DVD","Blu-ray","File","Box Set","Lathe Cut","Flexi-disc","Shellac","8-Track Cartridge","Reel-To-Reel","MiniDisc","SACD","Betamax","VHS"]);
+    const getMedium2 = v => { const parts = (v.format ?? "").split(",").map(s => s.trim()); return parts.find(p => MEDIA2.has(p)) || (v.majorFormats ?? []).find(f => MEDIA2.has(f)) || parts[0] || ""; };
     const formatSet = new Set();
     _masterVersions.forEach(v => {
-      const parts = (v.format ?? "").split(",").map(s => s.trim());
-      const medium = parts.find(p => MEDIA.has(p)) || parts[0] || "";
+      const medium = getMedium2(v);
       if (medium) formatSet.add(medium);
     });
     const formats = [...formatSet].sort();

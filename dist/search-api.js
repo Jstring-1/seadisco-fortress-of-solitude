@@ -1180,6 +1180,7 @@ app.get("/master-versions/:id", async (req, res) => {
             country: v.country,
             year: v.released,
             format: v.format,
+            majorFormats: v.major_formats ?? [],
             url: v.resource_url ? `https://www.discogs.com/release/${v.id}` : null,
         }));
         res.json({ versions });

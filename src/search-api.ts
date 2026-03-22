@@ -1082,14 +1082,15 @@ app.get("/master-versions/:id", async (req, res) => {
     );
     const data = await r.json() as any;
     const versions = (data.versions ?? []).map((v: any) => ({
-      id:      v.id,
-      title:   v.title,
-      label:   v.label,
-      catno:   v.catno,
-      country: v.country,
-      year:    v.released,
-      format:  v.format,
-      url:     v.resource_url ? `https://www.discogs.com/release/${v.id}` : null,
+      id:           v.id,
+      title:        v.title,
+      label:        v.label,
+      catno:        v.catno,
+      country:      v.country,
+      year:         v.released,
+      format:       v.format,
+      majorFormats: v.major_formats ?? [],
+      url:          v.resource_url ? `https://www.discogs.com/release/${v.id}` : null,
     }));
     res.json({ versions });
   } catch (err) {
