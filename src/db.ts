@@ -33,6 +33,10 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS search_history_user_idx
     ON search_history (clerk_user_id, searched_at DESC)
   `);
+  // Add has_bio column if it doesn't exist
+  await getPool().query(`
+    ALTER TABLE search_history ADD COLUMN IF NOT EXISTS has_bio BOOLEAN DEFAULT FALSE
+  `);
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS feedback (
       id            SERIAL PRIMARY KEY,
@@ -142,6 +146,20 @@ export async function saveSearch(clerkUserId: string, params: Record<string, str
   );
 }
 
+export async function markSearchBio(clerkUserId: string): Promise<void> {
+  // Mark the most recent search by this user as having a bio
+  await getPool().query(
+    `UPDATE search_history SET has_bio = TRUE
+     WHERE id = (
+       SELECT id FROM search_history
+       WHERE clerk_user_id = $1
+       ORDER BY searched_at DESC
+       LIMIT 1
+     )`,
+    [clerkUserId]
+  );
+}
+
 export async function deleteSearch(clerkUserId: string, params: Record<string, string>): Promise<void> {
   await getPool().query(
     "DELETE FROM search_history WHERE clerk_user_id = $1 AND params = $2",
@@ -203,6 +221,7 @@ export async function getRecentSearches(limit = 500): Promise<Array<{ params: Re
     `SELECT params, MAX(searched_at) AS searched_at
      FROM search_history
      WHERE searched_at > NOW() - INTERVAL '28 days'
+       AND has_bio = TRUE
      GROUP BY params
      ORDER BY RANDOM()
      LIMIT $1`,

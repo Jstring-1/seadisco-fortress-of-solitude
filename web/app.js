@@ -354,6 +354,9 @@ async function doSearch(page = 1, skipPushState = false) {
         const bioHtml  = rawBioText ? renderBioMarkup(truncatedRaw) : escHtml(truncatedRaw);
         blurbEl.innerHTML = heading + bioHtml + readMore + relLinks;
         blurbEl.style.display = "block";
+
+        // Mark this search as having a bio (for recent search cloud filtering)
+        apiFetch("/api/user/mb", { method: "POST" }).catch(() => {});
       }
     }
 
