@@ -208,10 +208,12 @@ async function doSearch(page = 1, skipPushState = false) {
     const qVal = q || effectiveArtist || release || label || "";
     const p = new URLSearchParams({ q: qVal, page, per_page: perPage });
     if (resultType) p.set("type", resultType);
-    if (effectiveArtist) p.set("artist", effectiveArtist);
+    // Only send dedicated artist/label params when they differ from q
+    // (sending both q=name + artist=name is overly strict and kills results)
+    if (effectiveArtist && effectiveArtist !== q) p.set("artist", effectiveArtist);
     if (release) p.set("release_title", release);
     if (year)    p.set("year",          year);
-    if (label)   p.set("label",         label);
+    if (label && label !== q)   p.set("label",         label);
     if (genre)   p.set("genre",         genre);
     if (style)   p.set("style",         style);
     if (format)  p.set("format",        format);
@@ -1692,6 +1694,8 @@ function searchByEntity(event, el) {
   document.getElementById("f-year").value    = "";
   document.getElementById("f-label").value   = "";
   document.getElementById("f-genre").value   = "";
+  // Put name in general search for broad results; also set dedicated field for bio fetch
+  document.getElementById("query").value = name;
   if (type === "artist") {
     document.getElementById("f-artist").value = name;
     currentArtistId = el.dataset.entityId || null;
