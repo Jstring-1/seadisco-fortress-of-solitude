@@ -72,11 +72,12 @@
   </button>
   <div id="nav-tabs-wrap">
     <div id="main-nav-tabs">
-      <button class="main-nav-tab active" data-view="search" onclick="switchView('search')">Search</button>
-      <button class="main-nav-tab" data-view="drops" onclick="switchView('drops')">Drops</button>
-      <button class="main-nav-tab nav-disabled" data-view="collection" onclick="switchView('collection')" title="Sign in to access your collection">Collection</button>
-      <button class="main-nav-tab nav-disabled" data-view="wantlist" onclick="switchView('wantlist')" title="Sign in to access your wantlist">Wantlist</button>
-      <button class="main-nav-tab" data-view="info" onclick="switchView('info')">Info</button>
+      <button class="main-nav-tab active" data-view="search" onclick="switchView('search')" title="Search the Discogs database of 15+ million releases">Search</button>
+      <button class="main-nav-tab nav-disabled" data-view="wanted" onclick="switchView('wanted')" title="Items wanted by SeaDisco members — sign in to view">Wanted</button>
+      <button class="main-nav-tab" data-view="drops" onclick="switchView('drops')" title="New releases sourced from ListenBrainz, refreshed every 6 hours">Drops</button>
+      <button class="main-nav-tab nav-disabled" data-view="collection" onclick="switchView('collection')" title="Browse and search your synced Discogs collection — sign in to access">Collection</button>
+      <button class="main-nav-tab nav-disabled" data-view="wantlist" onclick="switchView('wantlist')" title="Browse and search your synced Discogs wantlist — sign in to access">Wantlist</button>
+      <button class="main-nav-tab" data-view="info" onclick="switchView('info')" title="How SeaDisco works">Info</button>
       <div id="nav-auth-wrap">
         <a href="/account" class="nav-auth-btn" id="nav-auth-btn">Account</a>
       </div>
@@ -235,6 +236,14 @@
         </label>
         <label>Format <input type="text" id="cw-format" placeholder="e.g. Vinyl" onkeydown="if(event.key==='Enter'){doCwSearch(1)}" /></label>
       </div>
+    </div>
+  </div>
+
+  <div id="wanted-search-wrap" style="display:none">
+    <div class="search-row">
+      <input type="text" id="wanted-q" placeholder="Search wanted items…" autocomplete="off"
+        oninput="filterWantedItems()" onkeydown="if(event.key==='Escape'){document.getElementById('wanted-q').value='';filterWantedItems()}" />
+      <button type="button" onclick="document.getElementById('wanted-q').value='';filterWantedItems()" title="Clear" style="background:none;border:none;padding:0.3rem 0.5rem;font-size:1.5rem;color:#555;cursor:pointer;line-height:1;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
     </div>
   </div>
 
