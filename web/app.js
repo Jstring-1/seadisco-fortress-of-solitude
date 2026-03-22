@@ -205,15 +205,20 @@ async function doSearch(page = 1, skipPushState = false) {
   const buildParams = (perPage) => {
     const effectiveArtist = artist || (page > 1 ? detectedArtist : null) || "";
     // Discogs requires q — use first available field as fallback
-    const qVal = q || effectiveArtist || release || label || "";
+    // Track which field was used as fallback so we don't double it as a dedicated param
+    let qVal = q;
+    let qSource = "q";
+    if (!qVal && effectiveArtist) { qVal = effectiveArtist; qSource = "artist"; }
+    else if (!qVal && release)    { qVal = release;         qSource = "release"; }
+    else if (!qVal && label)      { qVal = label;           qSource = "label"; }
+    else if (!qVal)               { qVal = ""; }
     const p = new URLSearchParams({ q: qVal, page, per_page: perPage });
     if (resultType) p.set("type", resultType);
-    // Only send dedicated artist/label params when they differ from q
-    // (sending both q=name + artist=name is overly strict and kills results)
-    if (effectiveArtist && effectiveArtist !== q) p.set("artist", effectiveArtist);
-    if (release) p.set("release_title", release);
+    // Don't send a dedicated param if it was already used as q (avoids overly strict double filtering)
+    if (effectiveArtist && qSource !== "artist") p.set("artist", effectiveArtist);
+    if (release && qSource !== "release") p.set("release_title", release);
     if (year)    p.set("year",          year);
-    if (label && label !== q)   p.set("label",         label);
+    if (label && qSource !== "label")   p.set("label",         label);
     if (genre)   p.set("genre",         genre);
     if (style)   p.set("style",         style);
     if (format)  p.set("format",        format);
@@ -1694,8 +1699,6 @@ function searchByEntity(event, el) {
   document.getElementById("f-year").value    = "";
   document.getElementById("f-label").value   = "";
   document.getElementById("f-genre").value   = "";
-  // Put name in general search for broad results; also set dedicated field for bio fetch
-  document.getElementById("query").value = name;
   if (type === "artist") {
     document.getElementById("f-artist").value = name;
     currentArtistId = el.dataset.entityId || null;
