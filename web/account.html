@@ -143,11 +143,6 @@
         <div id="interest-stats" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
       </div>
 
-      <div id="admin-dump" style="display:none">
-        <hr class="section-divider" />
-        <button onclick="dumpSearchHistory()" style="padding:0.4rem 1rem;border:1px solid var(--border);background:var(--surface);color:var(--fg);border-radius:4px;cursor:pointer">Dump Search History</button>
-        <button onclick="if(confirm('Delete ALL search history?')) nukeSearchHistory()" style="padding:0.4rem 1rem;border:1px solid #633;background:#311;color:#f66;border-radius:4px;cursor:pointer;margin-left:0.5rem">Delete All Search History</button>
-      </div>
 
       <!-- Admin global search pool — only rendered for admin user -->
       <div id="admin-searches" style="display:none">
@@ -586,7 +581,6 @@ async function loadAdminInbox() {
     document.getElementById("admin-inbox").style.display = "block";
     loadAdminSearches(); // also load global search pool for admin
     loadInterestStats(); // also load interest signal stats for admin
-    document.getElementById("admin-dump").style.display = "block";
     const el = document.getElementById("feedback-list");
     if (!items.length) { el.textContent = "No feedback yet."; return; }
     el.innerHTML = items.map(({ id, user_email, message, created_at }) => {
@@ -674,31 +668,6 @@ async function loadInterestStats() {
   } catch { el.textContent = "Could not load interest stats."; }
 }
 
-
-async function nukeSearchHistory() {
-  const sessionToken = await clerk.session?.getToken();
-  const r = await fetch("/api/admin/search-all", {
-    method: "DELETE",
-    headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
-  });
-  const d = await r.json();
-  alert(`Deleted ${d.deleted} entries`);
-  location.reload();
-}
-
-async function dumpSearchHistory() {
-  const sessionToken = await clerk.session?.getToken();
-  const r = await fetch("/api/admin/search-dump", {
-    headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
-  });
-  const blob = await r.blob();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "search-history.json";
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 async function deleteFeedbackItem(id) {
   const sessionToken = await clerk.session?.getToken();
