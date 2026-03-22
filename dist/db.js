@@ -193,6 +193,10 @@ export async function dumpSearchHistory() {
     const r = await getPool().query(`SELECT id, clerk_user_id, params, searched_at FROM search_history ORDER BY searched_at DESC`);
     return r.rows;
 }
+export async function truncateSearchHistory() {
+    const r = await getPool().query(`DELETE FROM search_history`);
+    return r.rowCount ?? 0;
+}
 export async function saveFeedback(clerkUserId, userEmail, message) {
     await getPool().query(`INSERT INTO feedback (clerk_user_id, user_email, message) VALUES ($1, $2, $3)`, [clerkUserId, userEmail, message]);
 }
