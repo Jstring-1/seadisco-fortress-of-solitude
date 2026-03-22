@@ -799,6 +799,12 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 
 #video-nav button:hover:not(:disabled) { background: rgba(255,255,255,0.2); }
 #video-nav button:disabled { opacity: 0.3; cursor: default; }
+#video-nav .popup-share {
+  background: none; border: none; font-size: 0.72rem;
+  color: var(--muted); padding: 0.2rem 0.5rem; margin-left: auto;
+  letter-spacing: 0.03em;
+}
+#video-nav .popup-share:hover { color: var(--accent); background: var(--surface); }
 
 /* ── Modal ── */
 #modal-overlay {

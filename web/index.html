@@ -30,7 +30,7 @@
   <meta name="theme-color" content="#0c1015">
   <link rel="preconnect" href="https://api.discogs.com" />
   <link rel="preconnect" href="https://i.discogs.com" />
-  <link rel="stylesheet" href="/style.css?v=20260321b" />
+  <link rel="stylesheet" href="/style.css?v=20260322a" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -341,14 +341,14 @@
   <div id="video-wrap">
     <div id="video-box">
       <button id="video-close" onclick="closeVideo()">×</button>
-      <button class="popup-share" onclick="sharePopup(this)">share</button>
       <div id="video-player"></div>
     </div>
     <div id="video-footer">
       <div id="video-title"></div>
-      <div id="video-nav">
+      <div id="video-nav" style="position:relative">
         <button id="video-prev" onclick="videoPrev()" disabled>&#8592; prev</button>
         <button id="video-next" onclick="playNextVideo()" disabled>next &#8594;</button>
+        <button class="popup-share" onclick="sharePopup(this)">share</button>
       </div>
     </div>
   </div>
@@ -362,7 +362,7 @@
   <div id="lightbox-counter"></div>
 </div>
 
-<script src="/app.js?v=20260321n"></script>
+<script src="/app.js?v=20260322a"></script>
 
 </body>
 </html>
