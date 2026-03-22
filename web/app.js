@@ -1425,7 +1425,9 @@ let _masterVersions = [];
 function renderMasterVersions(filter) {
   const list = document.getElementById("master-versions-list");
   if (!list) return;
-  const filtered = filter ? _masterVersions.filter(v => (v.format ?? "").toLowerCase().includes(filter.toLowerCase())) : _masterVersions;
+  const MEDIA = new Set(["Vinyl","CD","Cassette","DVD","Blu-ray","File","Box Set","Lathe Cut","Flexi-disc","Shellac","8-Track Cartridge","Reel-To-Reel","MiniDisc","SACD","Betamax","VHS"]);
+  const getMedium = v => { const parts = (v.format ?? "").split(",").map(s => s.trim()); return parts.find(p => MEDIA.has(p)) || parts[0] || ""; };
+  const filtered = filter ? _masterVersions.filter(v => getMedium(v) === filter) : _masterVersions;
 
   // Update pill active states
   list.querySelectorAll(".mv-filter-pill").forEach(p => {
@@ -1459,11 +1461,15 @@ async function loadMasterVersions(event, masterId) {
     _masterVersions = data.versions ?? [];
     if (!_masterVersions.length) { list.textContent = "No pressings found."; return; }
 
-    // Build unique format types for filter pills
+    // Build unique medium types for filter pills
+    // Discogs format strings look like "CD, Compilation" or "Vinyl, LP, Album"
+    // We want the medium type (Vinyl/CD/Cassette/etc.) not qualifiers
+    const MEDIA = new Set(["Vinyl","CD","Cassette","DVD","Blu-ray","File","Box Set","Lathe Cut","Flexi-disc","Shellac","8-Track Cartridge","Reel-To-Reel","MiniDisc","SACD","Betamax","VHS"]);
     const formatSet = new Set();
     _masterVersions.forEach(v => {
-      const raw = (v.format ?? "").split(",")[0].trim();
-      if (raw) formatSet.add(raw);
+      const parts = (v.format ?? "").split(",").map(s => s.trim());
+      const medium = parts.find(p => MEDIA.has(p)) || parts[0] || "";
+      if (medium) formatSet.add(medium);
     });
     const formats = [...formatSet].sort();
     const pillStyle = `cursor:pointer;border:none;border-radius:20px;padding:0.15rem 0.6rem;font-size:0.72rem;font-weight:600;transition:background 0.15s`;
