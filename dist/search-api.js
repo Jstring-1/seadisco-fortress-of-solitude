@@ -98,7 +98,7 @@ app.use(express.static(path.join(__dirname, "../web"), {
             res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
         }
         else if (/\.html$/i.test(filePath)) {
-            res.setHeader("Cache-Control", "public, max-age=3600, must-revalidate");
+            res.setHeader("Cache-Control", "no-cache, must-revalidate");
         }
     },
 }));
