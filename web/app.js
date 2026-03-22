@@ -204,17 +204,29 @@ async function doSearch(page = 1, skipPushState = false) {
 
   const buildParams = (perPage) => {
     const effectiveArtist = artist || (page > 1 ? detectedArtist : null) || "";
-    // Discogs requires q — use first available field as fallback
-    const qVal = q || effectiveArtist || release || label || "";
+    // Discogs artist/label/genre/style/year/format params are release-specific filters.
+    // When "All" is selected, fold everything into q so all entity types can appear.
+    // When a specific type is selected, use dedicated params for precise filtering.
+    const useDetailedParams = !!resultType; // Masters, Releases, Artists, or Labels radio
+    let qVal = q;
+    if (!useDetailedParams) {
+      // "All" radio — combine fields into q for broad search
+      const qParts = [q, effectiveArtist, release, label].filter(Boolean);
+      qVal = qParts.join(" ");
+    } else if (!qVal) {
+      qVal = effectiveArtist || release || label || "";
+    }
     const p = new URLSearchParams({ q: qVal, page, per_page: perPage });
     if (resultType) p.set("type", resultType);
-    if (effectiveArtist) p.set("artist", effectiveArtist);
-    if (release) p.set("release_title", release);
-    if (year)    p.set("year",          year);
-    if (label)   p.set("label",         label);
-    if (genre)   p.set("genre",         genre);
-    if (style)   p.set("style",         style);
-    if (format)  p.set("format",        format);
+    if (useDetailedParams) {
+      if (effectiveArtist) p.set("artist", effectiveArtist);
+      if (release) p.set("release_title", release);
+      if (year)    p.set("year",          year);
+      if (label)   p.set("label",         label);
+      if (genre)   p.set("genre",         genre);
+      if (style)   p.set("style",         style);
+      if (format)  p.set("format",        format);
+    }
     if (sort) {
       const [sortField, sortOrder] = sort.split(":");
       p.set("sort",       sortField);
