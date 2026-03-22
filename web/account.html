@@ -132,7 +132,11 @@
       <!-- Admin inbox — only rendered for admin user -->
       <div id="admin-inbox" style="display:none">
         <hr class="section-divider" />
-        <h2 style="margin-bottom:0.5rem">Feedback Inbox</h2>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
+          <h2 style="margin:0">Feedback Inbox</h2>
+          <button onclick="adminSyncAll()" id="admin-sync-all-btn" style="font-size:0.78rem;padding:0.25rem 0.8rem;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-weight:600">Sync All Users</button>
+        </div>
+        <div id="admin-sync-all-status" style="font-size:0.78rem;color:var(--muted);margin-bottom:0.5rem"></div>
         <div id="feedback-list" style="font-size:0.85rem;color:var(--muted)">Loading…</div>
       </div>
 
@@ -348,6 +352,15 @@ async function loadSyncStatus() {
     }
     statusEl.textContent = statusText;
 
+    // Auto-sync if either collection or wantlist is more than 6 hours stale
+    const sixHoursAgo = Date.now() - 6 * 60 * 60 * 1000;
+    const collStale = !d.collectionSyncedAt || new Date(d.collectionSyncedAt).getTime() < sixHoursAgo;
+    const wantStale = !d.wantlistSyncedAt   || new Date(d.wantlistSyncedAt).getTime()   < sixHoursAgo;
+    if ((collStale || wantStale) && d.syncStatus !== "syncing") {
+      accountSync(true); // silent auto-sync
+      return;
+    }
+
     // Dim the sync button if both were synced within the last hour
     const oneHourAgo = Date.now() - 60 * 60 * 1000;
     const collRecent = d.collectionSyncedAt && new Date(d.collectionSyncedAt).getTime() > oneHourAgo;
@@ -378,13 +391,15 @@ function stopSyncPolling() {
   if (_syncPollTimer) { clearInterval(_syncPollTimer); _syncPollTimer = null; }
 }
 
-async function accountSync() {
+async function accountSync(silent = false) {
   const btn = document.getElementById("account-sync-btn");
   const statusEl = document.getElementById("account-sync-status");
-  btn.disabled = true;
-  btn.textContent = "Syncing…";
-  btn.style.opacity = "0.4";
-  statusEl.textContent = "Starting sync…";
+  if (!silent) {
+    btn.disabled = true;
+    btn.textContent = "Syncing…";
+    btn.style.opacity = "0.4";
+    statusEl.textContent = "Starting sync…";
+  }
   try {
     const sessionToken = await clerk.session?.getToken();
     const r = await fetch("/api/user/sync", {
@@ -393,19 +408,23 @@ async function accountSync() {
       body: JSON.stringify({ type: "both" })
     }).then(r => r.json());
     if (r.skipped) {
-      statusEl.textContent = "Synced recently — try again in an hour.";
-      btn.textContent = "Sync Now";
-      btn.title = "Synced recently — available again in an hour";
+      if (!silent) {
+        statusEl.textContent = "Synced recently — try again in an hour.";
+        btn.textContent = "Sync Now";
+        btn.title = "Synced recently — available again in an hour";
+      }
       return;
     }
     // Sync started in background — poll for progress
-    statusEl.textContent = "Syncing in background…";
+    if (!silent) statusEl.textContent = "Syncing in background…";
     startSyncPolling();
   } catch {
-    statusEl.textContent = "Sync failed. Please try again.";
-    btn.textContent = "Sync Now";
-    btn.disabled = false;
-    btn.style.opacity = "1";
+    if (!silent) {
+      statusEl.textContent = "Sync failed. Please try again.";
+      btn.textContent = "Sync Now";
+      btn.disabled = false;
+      btn.style.opacity = "1";
+    }
   }
 }
 
@@ -695,6 +714,27 @@ async function loadInterestStats() {
   } catch { el.textContent = "Could not load interest stats."; }
 }
 
+
+async function adminSyncAll() {
+  const btn = document.getElementById("admin-sync-all-btn");
+  const statusEl = document.getElementById("admin-sync-all-status");
+  btn.disabled = true;
+  btn.textContent = "Starting…";
+  statusEl.textContent = "";
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const r = await fetch("/api/admin/sync-all", {
+      method: "POST",
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
+    }).then(r => r.json());
+    statusEl.textContent = `Sync kicked off for ${r.queued} user${r.queued !== 1 ? "s" : ""} — running in background.`;
+  } catch {
+    statusEl.textContent = "Sync-all failed.";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Sync All Users";
+  }
+}
 
 async function deleteFeedbackItem(id) {
   const sessionToken = await clerk.session?.getToken();

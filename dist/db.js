@@ -159,6 +159,18 @@ export async function getSearchHistory(clerkUserId, limit = 50) {
      LIMIT $2`, [clerkUserId, limit]);
     return r.rows;
 }
+export async function getAllUsersForSync() {
+    const r = await getPool().query(`SELECT clerk_user_id, discogs_token, discogs_username, collection_synced_at, wantlist_synced_at
+     FROM user_tokens
+     WHERE discogs_token IS NOT NULL AND discogs_username IS NOT NULL`);
+    return r.rows.map(row => ({
+        clerkUserId: row.clerk_user_id,
+        token: row.discogs_token,
+        username: row.discogs_username,
+        collectionSyncedAt: row.collection_synced_at ?? null,
+        wantlistSyncedAt: row.wantlist_synced_at ?? null,
+    }));
+}
 export async function getUserToken(clerkUserId) {
     const r = await getPool().query("SELECT discogs_token FROM user_tokens WHERE clerk_user_id = $1", [clerkUserId]);
     return r.rows[0]?.discogs_token ?? null;
