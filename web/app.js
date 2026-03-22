@@ -150,11 +150,7 @@ async function doSearch(page = 1, skipPushState = false) {
 
   if (resultType === "ai") { doAiSearch(q); return; }
 
-  // Search rules:
-  // 1. Radio button selected → honor it always
-  // 2. No radio + format/year/genre/style engaged → Discogs naturally returns releases/masters
-  //    (those filters don't apply to artist/label entities)
-  // 3. No radio + no constraining filters → all types
+  // Radio buttons are the ONLY thing that determines result type
 
   if (!q && !artist && !release && !year && !label && !genre) {
     setStatus("Enter a search term or fill in at least one filter.", false);
@@ -206,24 +202,12 @@ async function doSearch(page = 1, skipPushState = false) {
     if (parts.length) document.getElementById("search-info-block").style.display = "";
   }
 
-  const skipSort    = resultType === "artist" || resultType === "label";
-
-  const baseParams = (typeOverride, perPage) => {
-    // For pages 2+, use the auto-detected artist (saved from page 1) for consistent Discogs pagination
+  const buildParams = (perPage) => {
     const effectiveArtist = artist || (page > 1 ? detectedArtist : null) || "";
-    // Discogs requires q — but don't echo artist/label into q when they're already separate params
-    // (doubling up e.g. q=Blue Note + label=Blue Note narrows results unexpectedly)
-    let qVal = q;
-    if (!qVal) {
-      if (effectiveArtist) qVal = effectiveArtist;
-      else if (release) qVal = release;
-      else if (label) qVal = label;
-      else qVal = "";
-    }
+    // Discogs requires q — use first available field as fallback
+    const qVal = q || effectiveArtist || release || label || "";
     const p = new URLSearchParams({ q: qVal, page, per_page: perPage });
-    const t = typeOverride ?? resultType;
-    if (t) p.set("type", t);
-    // Pass all filters — Discogs ignores release-specific ones for artist/label entity searches
+    if (resultType) p.set("type", resultType);
     if (effectiveArtist) p.set("artist", effectiveArtist);
     if (release) p.set("release_title", release);
     if (year)    p.set("year",          year);
@@ -231,7 +215,7 @@ async function doSearch(page = 1, skipPushState = false) {
     if (genre)   p.set("genre",         genre);
     if (style)   p.set("style",         style);
     if (format)  p.set("format",        format);
-    if (sort && !skipSort) {
+    if (sort) {
       const [sortField, sortOrder] = sort.split(":");
       p.set("sort",       sortField);
       p.set("sort_order", sortOrder);
@@ -254,72 +238,29 @@ async function doSearch(page = 1, skipPushState = false) {
     }
 
     let items, totalPages_new, totalItems_new = 0;
-    {
-      const [res, bioRes] = await Promise.all([
-        apiFetch(`${API}/search?${baseParams(null, 24)}`),
-        bioFetch ?? Promise.resolve(null),
-      ]);
-      bioFetch = bioRes ? { json: () => bioRes.json() } : null;
-      if (res.status === 401 || res.status === 429) {
-        const errData = await res.json().catch(() => ({}));
-        if (errData.error === "no_token") {
-          document.getElementById("status").innerHTML =
-            `<a href="/account" style="color:var(--accent)">Sign in and add your Discogs token</a> to start searching.`;
-          return;
-        }
-        if (errData.error === "rate_limited") {
-          document.getElementById("status").innerHTML =
-            `You've used your 5 free searches for today. <a href="/account" style="color:var(--accent)">Add your Discogs token</a> for unlimited searches.`;
-          return;
-        }
+    const [res, bioRes] = await Promise.all([
+      apiFetch(`${API}/search?${buildParams(24)}`),
+      bioFetch ?? Promise.resolve(null),
+    ]);
+    bioFetch = bioRes ? { json: () => bioRes.json() } : null;
+    if (res.status === 401 || res.status === 429) {
+      const errData = await res.json().catch(() => ({}));
+      if (errData.error === "no_token") {
+        document.getElementById("status").innerHTML =
+          `<a href="/account" style="color:var(--accent)">Sign in and add your Discogs token</a> to start searching.`;
+        return;
       }
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      items = data.results ?? [];
-      totalPages_new = data.pagination?.pages ?? 1;
-      totalItems_new = data.pagination?.items ?? items.length;
-
-      // If no results but a format filter is active, retry without format so the artist's
-      // releases still appear (e.g. artist has no vinyl but does have CDs/masters)
-      if (items.length === 0 && format && (artist || q)) {
-        const fallbackP = baseParams(null, 48);
-        fallbackP.delete("format");
-        fallbackP.delete("type"); // also drop type restriction so releases/masters both appear
-        const fallbackRes = await apiFetch(`${API}/search?${fallbackP}`);
-        if (fallbackRes.ok) {
-          const fd = await fallbackRes.json();
-          if ((fd.results ?? []).length > 0) {
-            items = fd.results;
-            totalPages_new = fd.pagination?.pages ?? 1;
-            totalItems_new = fd.pagination?.items ?? items.length;
-            setStatus(`No ${format} releases found — showing all formats.`);
-          }
-        }
-      }
-
-      // If artist/label search returned 0 results, retry as general text search
-      // (Discogs artist/label params are strict; q= does broader matching)
-      if (items.length === 0 && (artist || label) && !q) {
-        const fallbackQ = artist || label;
-        const fallbackP = new URLSearchParams({ q: fallbackQ, page, per_page: 24 });
-        // Don't carry over type restriction — let fallback search across all types
-        if (release) fallbackP.set("release_title", release);
-        if (year)    fallbackP.set("year", year);
-        if (genre)   fallbackP.set("genre", genre);
-        if (style)   fallbackP.set("style", style);
-        if (format)  fallbackP.set("format", format);
-        if (sort && !skipSort) { const [sf, so] = sort.split(":"); fallbackP.set("sort", sf); fallbackP.set("sort_order", so); }
-        const fallbackRes = await apiFetch(`${API}/search?${fallbackP}`);
-        if (fallbackRes.ok) {
-          const fd = await fallbackRes.json();
-          if ((fd.results ?? []).length > 0) {
-            items = fd.results;
-            totalPages_new = fd.pagination?.pages ?? 1;
-            totalItems_new = fd.pagination?.items ?? items.length;
-          }
-        }
+      if (errData.error === "rate_limited") {
+        document.getElementById("status").innerHTML =
+          `You've used your 5 free searches for today. <a href="/account" style="color:var(--accent)">Add your Discogs token</a> for unlimited searches.`;
+        return;
       }
     }
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    items = data.results ?? [];
+    totalPages_new = data.pagination?.pages ?? 1;
+    totalItems_new = data.pagination?.items ?? items.length;
     totalPages = totalPages_new;
 
     const blurbEl = document.getElementById("blurb");
@@ -356,14 +297,14 @@ async function doSearch(page = 1, skipPushState = false) {
       // If bio was auto-detected on page 1, re-fetch constrained to that artist and save for pagination
       if (bioData?.name && !artistRaw && !release && !label && !genre && page === 1) {
         const constrainedArtist = bioData.name.replace(/\s*\(\d+\)$/, "").trim();
-        detectedArtist = constrainedArtist; // saved so pages 2+ use it directly in baseParams
+        detectedArtist = constrainedArtist; // saved so pages 2+ use it directly in buildParams
         try {
           const cp = new URLSearchParams({ q: q || constrainedArtist, page, per_page: 48, artist: constrainedArtist });
           if (resultType) cp.set("type", resultType);
           if (release)    cp.set("release_title", release);
           if (year)       cp.set("year", year);
           if (format)     cp.set("format", format);
-          if (sort && !skipSort) { const [sf, so] = sort.split(":"); cp.set("sort", sf); cp.set("sort_order", so); }
+          if (sort) { const [sf, so] = sort.split(":"); cp.set("sort", sf); cp.set("sort_order", so); }
           const cr = await apiFetch(`${API}/search?${cp}`);
           if (cr.ok) {
             const cd = await cr.json();
