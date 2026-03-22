@@ -24,7 +24,7 @@
   </script>
   <style>
     .account-box {
-      max-width: 480px;
+      max-width: 860px;
       margin: 2rem auto;
       background: var(--surface);
       border-radius: var(--radius);
@@ -610,8 +610,6 @@ async function loadAdminInbox() {
   } catch { /* not admin or error — ignore */ }
 }
 
-let _globalSearchParams = [];
-
 async function loadAdminSearches() {
   const section = document.getElementById("admin-searches");
   const el = document.getElementById("global-search-list");
@@ -623,34 +621,29 @@ async function loadAdminSearches() {
       headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
     const searches = data.searches ?? [];
-    _globalSearchParams = searches.map(s => s.params);
     countEl.textContent = `${searches.length} entries`;
     if (!searches.length) { el.textContent = "No global searches."; return; }
-    el.innerHTML = searches.map(({ params, searched_at }, i) => {
+    el.innerHTML = searches.map(({ id, params, searched_at }) => {
       const label = searchLabel(params);
-      const date  = new Date(searched_at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-      return `<div id="gs-${i}" style="display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0;border-bottom:1px solid #1a1a1a;gap:0.5rem">
-        <a href="${paramsToUrl(params)}" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.8rem;color:var(--accent);text-decoration:none">${label}</a>
+      const date  = new Date(searched_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      return `<div id="gs-${id}" style="display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0;border-bottom:1px solid #1a1a1a;gap:0.5rem">
+        <a href="${paramsToUrl(params)}" target="_blank" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.8rem;color:var(--accent);text-decoration:none">${label}</a>
         <span style="color:#444;font-size:0.72rem;flex-shrink:0">${date}</span>
-        <button onclick="deleteGlobalSearch(${i})" style="background:none;border:none;color:#555;cursor:pointer;font-size:0.85rem;padding:0 0.1rem;flex-shrink:0;line-height:1" title="Delete from global pool">✕</button>
+        <button onclick="deleteGlobalSearch(${id})" style="background:none;border:none;color:#555;cursor:pointer;font-size:0.85rem;padding:0 0.1rem;flex-shrink:0;line-height:1" title="Delete entry">✕</button>
       </div>`;
     }).join("");
   } catch { el.textContent = "Could not load global searches."; }
 }
 
-async function deleteGlobalSearch(i) {
-  const params = _globalSearchParams[i];
-  if (!params) return;
+async function deleteGlobalSearch(id) {
   try {
     const sessionToken = await clerk.session?.getToken();
-    const r = await fetch("/api/admin/search", {
+    const r = await fetch(`/api/admin/search/${id}`, {
       method: "DELETE",
-      headers: { "Content-Type": "application/json", ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
-      body: JSON.stringify({ params }),
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
     });
     if (r.ok) {
-      document.getElementById(`gs-${i}`)?.remove();
-      _globalSearchParams[i] = null;
+      document.getElementById(`gs-${id}`)?.remove();
       const remaining = document.querySelectorAll("#global-search-list [id^='gs-']").length;
       document.getElementById("admin-search-count").textContent = `${remaining} entries`;
       if (!remaining) document.getElementById("global-search-list").textContent = "No global searches.";
@@ -668,13 +661,36 @@ async function loadInterestStats() {
       headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
     if (stats.error) { el.textContent = "Could not load."; return; }
-    const topList = (items, max = 10) => items.slice(0, max).map(i => `${i.name} (${i.cnt})`).join(", ");
+    const appBase = window.location.origin;
+    const artistLink = (name, cnt) => {
+      const url = `${appBase}/?a=${encodeURIComponent(name)}`;
+      return `<a href="${url}" target="_blank" style="color:var(--accent);text-decoration:none" title="Search ${name}">${name}</a> <span style="color:#555">(${cnt})</span>`;
+    };
+    const labelLink = (name, cnt) => {
+      const url = `${appBase}/?l=${encodeURIComponent(name)}`;
+      return `<a href="${url}" target="_blank" style="color:var(--accent);text-decoration:none" title="Search ${name} label">${name}</a> <span style="color:#555">(${cnt})</span>`;
+    };
+    const plainList = (items, max = 30) => items.slice(0, max).map(i => `${i.name} <span style="color:#555">(${i.cnt})</span>`).join(" · ");
+    const tagCloud = (items, linkFn, max = 50) => items.slice(0, max).map(i => linkFn(i.name, i.cnt)).join(" · ");
+
     el.innerHTML = `
-      <div style="margin-bottom:0.4rem"><strong style="color:var(--fg)">${stats.totalReleases}</strong> releases tracked</div>
-      <div style="margin-bottom:0.3rem"><strong style="color:#aaa">Top artists:</strong> ${topList(stats.topArtists, 15)}</div>
-      <div style="margin-bottom:0.3rem"><strong style="color:#aaa">Top labels:</strong> ${topList(stats.topLabels, 15)}</div>
-      <div style="margin-bottom:0.3rem"><strong style="color:#aaa">Top genres:</strong> ${topList(stats.topGenres)}</div>
-      <div><strong style="color:#aaa">Top styles:</strong> ${topList(stats.topStyles, 15)}</div>
+      <div style="margin-bottom:0.8rem"><strong style="color:var(--fg);font-size:1rem">${stats.totalReleases.toLocaleString()}</strong> <span style="color:#777">releases tracked across all users</span></div>
+      <div style="margin-bottom:0.8rem">
+        <div style="color:#aaa;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.35rem">Top Artists</div>
+        <div style="line-height:2;font-size:0.83rem">${tagCloud(stats.topArtists, artistLink, 50)}</div>
+      </div>
+      <div style="margin-bottom:0.8rem">
+        <div style="color:#aaa;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.35rem">Top Labels</div>
+        <div style="line-height:2;font-size:0.83rem">${tagCloud(stats.topLabels, labelLink, 50)}</div>
+      </div>
+      <div style="margin-bottom:0.8rem">
+        <div style="color:#aaa;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.35rem">Top Genres</div>
+        <div style="line-height:2;font-size:0.83rem">${plainList(stats.topGenres, 30)}</div>
+      </div>
+      <div>
+        <div style="color:#aaa;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.35rem">Top Styles</div>
+        <div style="line-height:2;font-size:0.83rem">${plainList(stats.topStyles, 50)}</div>
+      </div>
     `;
   } catch { el.textContent = "Could not load interest stats."; }
 }
