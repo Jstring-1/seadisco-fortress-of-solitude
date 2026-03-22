@@ -504,29 +504,29 @@ async function clearAllSearches() {
 
 function searchLabel(p) {
   const parts = [];
-  if (p.q && (!p.artist || p.q.toLowerCase() !== p.artist.toLowerCase())) parts.push(p.q);
-  if (p.artist)        parts.push(p.artist);
-  if (p.release_title) parts.push(`"${p.release_title}"`);
-  if (p.label)         parts.push(`${p.label} label`);
-  if (p.genre)         parts.push(p.genre);
-  if (p.style)         parts.push(p.style);
-  if (p.format && p.format !== "Vinyl") parts.push(p.format);
-  if (p.year)          parts.push(p.year);
+  if (p.q && (!p.a || p.q.toLowerCase() !== p.a.toLowerCase())) parts.push(p.q);
+  if (p.a) parts.push(p.a);
+  if (p.r) parts.push(`"${p.r}"`);
+  if (p.l) parts.push(`${p.l} label`);
+  if (p.g) parts.push(p.g);
+  if (p.s) parts.push(p.s);
+  if (p.f && p.f !== "Vinyl") parts.push(p.f);
+  if (p.y) parts.push(p.y);
   return parts.join(" · ") || "Search";
 }
 
 function paramsToUrl(p) {
   const u = new URLSearchParams();
-  if (p.q)             u.set("q",  p.q);
-  if (p.artist)        u.set("ar", p.artist);
-  if (p.release_title) u.set("re", p.release_title);
-  if (p.year)          u.set("yr", p.year);
-  if (p.label)         u.set("lb", p.label);
-  if (p.genre)         u.set("gn", p.genre);
-  if (p.style)         u.set("st", p.style);
-  if (p.format)        u.set("fm", p.format);
-  if (p.type)          u.set("rt", p.type);
-  if (p.sort)          u.set("sr", p.sort);
+  if (p.q) u.set("q",  p.q);
+  if (p.a) u.set("ar", p.a);
+  if (p.r) u.set("re", p.r);
+  if (p.y) u.set("yr", p.y);
+  if (p.l) u.set("lb", p.l);
+  if (p.g) u.set("gn", p.g);
+  if (p.s) u.set("st", p.s);
+  if (p.f) u.set("fm", p.f);
+  if (p.t) u.set("rt", p.t);
+  if (p.o) u.set("sr", p.o);
   return "/?" + u.toString();
 }
 

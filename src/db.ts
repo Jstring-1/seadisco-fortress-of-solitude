@@ -143,9 +143,9 @@ export async function saveSearch(clerkUserId: string, params: Record<string, str
 }
 
 export async function markSearchBio(clerkUserId: string): Promise<void> {
-  // Add bi=y to the params of the most recent search
+  // Add b=y to the params of the most recent search
   await getPool().query(
-    `UPDATE search_history SET params = params || '{"bi":"y"}'::jsonb
+    `UPDATE search_history SET params = params || '{"b":"y"}'::jsonb
      WHERE id = (
        SELECT id FROM search_history
        WHERE clerk_user_id = $1
@@ -213,17 +213,29 @@ export async function deleteUserToken(clerkUserId: string): Promise<void> {
 }
 
 export async function getRecentSearches(limit = 500): Promise<Array<{ params: Record<string, string>; searched_at: string }>> {
-  const r = await getPool().query(
+  // Prefer searches with a bio; fall back to all if too few
+  const bio = await getPool().query(
     `SELECT params, MAX(searched_at) AS searched_at
      FROM search_history
      WHERE searched_at > NOW() - INTERVAL '28 days'
-       AND params->>'bi' = 'y'
+       AND params->>'b' = 'y'
      GROUP BY params
      ORDER BY RANDOM()
      LIMIT $1`,
     [limit]
   );
-  return r.rows;
+  if (bio.rows.length >= 20) return bio.rows;
+  // Not enough bio searches yet — fill from all searches
+  const all = await getPool().query(
+    `SELECT params, MAX(searched_at) AS searched_at
+     FROM search_history
+     WHERE searched_at > NOW() - INTERVAL '28 days'
+     GROUP BY params
+     ORDER BY RANDOM()
+     LIMIT $1`,
+    [limit]
+  );
+  return all.rows;
 }
 
 export async function saveFeedback(clerkUserId: string, userEmail: string, message: string): Promise<void> {
