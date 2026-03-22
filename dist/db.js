@@ -417,11 +417,13 @@ export async function getWantedItems() {
     const seen = new Set();
     const result = [];
     const maxLen = Math.max(...userLists.map(l => l.length));
-    for (let i = 0; i < maxLen; i++) {
+    outer: for (let i = 0; i < maxLen; i++) {
         for (const list of userLists) {
             if (i < list.length && !seen.has(list[i].id)) {
                 seen.add(list[i].id);
                 result.push(list[i].data);
+                if (result.length >= 500)
+                    break outer;
             }
         }
     }

@@ -872,7 +872,7 @@ function renderWantedItems(items) {
     return;
   }
   const q = (document.getElementById("wanted-q")?.value ?? "").trim();
-  setStatus(q ? `${items.length} wanted items matching "${q}"` : `${items.length} items wanted by the community`);
+  setStatus(q ? `${items.length} wanted items matching "${q}"` : `${items.length} of up to 500 random community wantlist items`);
   document.getElementById("results").innerHTML = items.map(item => renderCardFromBasicInfo(item)).join("");
 }
 
