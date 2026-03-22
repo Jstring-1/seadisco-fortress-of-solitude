@@ -553,20 +553,42 @@ export async function getCollectionIds(clerkUserId: string): Promise<number[]> {
 }
 
 export async function getWantedItems(): Promise<object[]> {
-  const r = await getPool().query(`
-    SELECT data FROM (
-      SELECT DISTINCT ON (discogs_release_id) data
-      FROM user_wantlist
-      ORDER BY discogs_release_id
-    ) deduped
-  `);
-  const rows: object[] = r.rows.map((row: { data: object }) => row.data);
-  // Fisher-Yates shuffle
-  for (let i = rows.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [rows[i], rows[j]] = [rows[j], rows[i]];
+  const r = await getPool().query(
+    `SELECT clerk_user_id, discogs_release_id, data FROM user_wantlist`
+  );
+
+  // Group by user
+  const byUser = new Map<string, Array<{ id: number; data: object }>>();
+  for (const row of r.rows) {
+    if (!byUser.has(row.clerk_user_id)) byUser.set(row.clerk_user_id, []);
+    byUser.get(row.clerk_user_id)!.push({ id: row.discogs_release_id, data: row.data });
   }
-  return rows;
+
+  // Fisher-Yates shuffle helper
+  const shuffle = <T>(arr: T[]): T[] => {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+    return arr;
+  };
+
+  // Shuffle each user's list independently
+  const userLists = Array.from(byUser.values()).map(items => shuffle(items));
+
+  // Round-robin interleave, deduping by release_id
+  const seen = new Set<number>();
+  const result: object[] = [];
+  const maxLen = Math.max(...userLists.map(l => l.length));
+  for (let i = 0; i < maxLen; i++) {
+    for (const list of userLists) {
+      if (i < list.length && !seen.has(list[i].id)) {
+        seen.add(list[i].id);
+        result.push(list[i].data);
+      }
+    }
+  }
+  return result;
 }
 
 export async function getWantlistIds(clerkUserId: string): Promise<number[]> {
