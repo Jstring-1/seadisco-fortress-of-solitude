@@ -638,7 +638,22 @@ app.get("/api/recent-searches", async (_req, res) => {
 app.get("/search", async (req, res) => {
   const rawQ   = (req.query.q as string) ?? "";
   const artist = stripArtistSuffix(req.query.artist as string | undefined);
-  const q = rawQ;
+  const rawLabel = (req.query.label as string) ?? "";
+  const rawRelease = (req.query.release_title as string) ?? "";
+
+  // When no general query, promote the first field value to q for broad results
+  // and DON'T also send it as a dedicated param (avoids double-filter killing results)
+  let q = rawQ;
+  let searchArtist: string | undefined = artist || undefined;
+  let searchLabel: string | undefined = rawLabel || undefined;
+  let searchRelease: string | undefined = rawRelease || undefined;
+  if (!q && artist)          { q = artist;     searchArtist  = undefined; }
+  else if (!q && rawLabel)   { q = rawLabel;   searchLabel   = undefined; }
+  else if (!q && rawRelease) { q = rawRelease; searchRelease = undefined; }
+  // Also strip dedicated param if it duplicates q (avoids overly-strict double filter)
+  if (q && searchArtist  && q.toLowerCase() === searchArtist.toLowerCase())  searchArtist  = undefined;
+  if (q && searchLabel   && q.toLowerCase() === searchLabel.toLowerCase())   searchLabel   = undefined;
+  if (q && searchRelease && q.toLowerCase() === searchRelease.toLowerCase()) searchRelease = undefined;
 
   const ip = clientIp(req);
   const whitelisted = IP_WHITELIST.has(ip);
@@ -674,9 +689,9 @@ app.get("/search", async (req, res) => {
   try {
     const results = await dc.search(q, {
       type: req.query.type as "release" | "master" | "artist" | "label" | undefined,
-      artist,
-      releaseTitle: req.query.release_title as string | undefined,
-      label: req.query.label as string | undefined,
+      artist: searchArtist,
+      releaseTitle: searchRelease,
+      label: searchLabel,
       year: req.query.year as string | undefined,
       genre: req.query.genre as string | undefined,
       style: req.query.style as string | undefined,
@@ -709,7 +724,9 @@ app.get("/search", async (req, res) => {
         p.o = `${String(req.query.sort)}${sortOrder}`;
       }
       const hasResults = (results as any)?.results?.length > 0;
-      if (Object.keys(p).length && hasResults) saveSearch(userId, p).catch(() => {});
+      // Only save when there are meaningful search terms (not just type/sort/format)
+      const hasMeaningful = p.q || p.a || p.r || p.l || p.g || p.s || p.y;
+      if (hasMeaningful && hasResults) saveSearch(userId, p).catch(() => {});
     }
   } catch (err) {
     console.error(err);

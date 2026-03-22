@@ -357,6 +357,9 @@ async function doSearch(page = 1, skipPushState = false) {
 
         // Mark this search as having a bio (for recent search cloud filtering)
         apiFetch("/api/user/mb", { method: "POST" }).catch(() => {});
+        // Add bio marker to URL
+        const bu = new URL(window.location.href);
+        if (!bu.searchParams.has("b")) { bu.searchParams.set("b", "y"); history.replaceState({}, "", bu.toString()); }
       }
     }
 
@@ -1797,9 +1800,15 @@ async function loadRecentFeed() {
     const el = document.getElementById("recent-feed");
     if (!el) return;
     if (!searches.length) { el.style.display = "none"; return; }
-    _recentSearches = searches;
+    // Filter out searches with no meaningful label (would show as generic "Search")
+    const filtered = searches.filter(s => {
+      const { full } = feedLabel(s.params);
+      return full !== "Search";
+    });
+    if (!filtered.length) { el.style.display = "none"; return; }
+    _recentSearches = filtered;
     const pillsHtml = `<div class="feed-label">Recent Searches</div><div class="feed-pills">${
-      searches.map((s, i) => {
+      filtered.map((s, i) => {
         const { full, short } = feedLabel(s.params);
         return `<span class="feed-pill" data-idx="${i}" title="${escHtml(full)}">${escHtml(short)}</span>`;
       }).join("")
@@ -1807,7 +1816,7 @@ async function loadRecentFeed() {
     el.style.opacity = "0";
     el.innerHTML = pillsHtml;
     el.querySelectorAll(".feed-pill").forEach((pill, i) => {
-      pill.addEventListener("click", () => feedApply(searches[i].params));
+      pill.addEventListener("click", () => feedApply(filtered[i].params));
     });
     requestAnimationFrame(() => { el.style.opacity = "1"; });
   } catch {
