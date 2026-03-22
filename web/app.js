@@ -446,8 +446,13 @@ async function doSearch(page = 1, skipPushState = false) {
 
 // ── Render cards ──────────────────────────────────────────────────────────
 function renderResults(items) {
+  window._lastResults = items;
+  const hideOwned = document.getElementById("hide-owned")?.checked;
+  const filtered = hideOwned && window._collectionIds?.size
+    ? items.filter(item => !window._collectionIds.has(Number(item.id)))
+    : items;
   const grid = document.getElementById("results");
-  grid.innerHTML = items.map(item => renderCard(item)).join("");
+  grid.innerHTML = filtered.map(item => renderCard(item)).join("");
 }
 
 function renderCard(item) {
@@ -881,6 +886,13 @@ async function loadDiscogsIds() {
     const data = await r.json();
     window._collectionIds = new Set(data.collectionIds ?? []);
     window._wantlistIds   = new Set(data.wantlistIds   ?? []);
+    // Enable "Hide owned" checkbox once collection is loaded
+    if (window._collectionIds.size > 0) {
+      const cb = document.getElementById("hide-owned");
+      const lbl = document.getElementById("hide-owned-label");
+      if (cb) { cb.disabled = false; cb.style.opacity = "1"; cb.style.cursor = "pointer"; cb.addEventListener("change", () => { if (window._lastResults) renderResults(window._lastResults); }); }
+      if (lbl) { lbl.style.color = "#aaa"; lbl.style.cursor = "pointer"; lbl.title = "Hide releases already in your collection"; }
+    }
   } catch { /* ignore */ }
 }
 
