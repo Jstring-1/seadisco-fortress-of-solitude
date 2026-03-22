@@ -1420,30 +1420,63 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   if (isMaster) loadMasterVersions(null, searchResult.id);
 }
 
+let _masterVersions = [];
+
+function renderMasterVersions(filter) {
+  const list = document.getElementById("master-versions-list");
+  if (!list) return;
+  const filtered = filter ? _masterVersions.filter(v => (v.format ?? "").toLowerCase().includes(filter.toLowerCase())) : _masterVersions;
+
+  // Update pill active states
+  list.querySelectorAll(".mv-filter-pill").forEach(p => {
+    p.style.background = p.dataset.filter === (filter ?? "") ? "var(--accent)" : "#2a2a2a";
+    p.style.color      = p.dataset.filter === (filter ?? "") ? "#000" : "var(--fg)";
+  });
+
+  const grid = list.querySelector(".mv-grid");
+  if (!grid) return;
+  if (!filtered.length) { grid.innerHTML = `<span style="color:var(--muted);grid-column:1/-1">No pressings match this filter.</span>`; return; }
+  grid.innerHTML = filtered.map(v => {
+    const inCol  = window._collectionIds?.has(v.id);
+    const inWant = window._wantlistIds?.has(v.id);
+    const badge  = inCol  ? `<span class="collection-badge">✓</span>` :
+                   inWant ? `<span class="wantlist-badge">♡</span>` : "";
+    return `
+      <span style="color:#888">${escHtml(!v.year || v.year === "0" ? "?" : String(v.year))}</span>
+      <span style="color:#aaa">${escHtml(v.country || "?")}</span>
+      <span style="color:#888">${escHtml(v.format ?? "—")}</span>
+      <span style="color:#aaa">${escHtml(v.catno ?? "—")}</span>
+      <span><a href="#" onclick="openVersionPopup(event,${v.id})" style="color:var(--accent);text-decoration:none">${escHtml(v.label ?? v.title ?? "—")}</a>${badge}</span>`;
+  }).join("");
+}
+
 async function loadMasterVersions(event, masterId) {
   if (event) event.preventDefault();
   const list = document.getElementById("master-versions-list");
   if (!list) return;
   try {
     const data = await apiFetch(`${API}/master-versions/${masterId}`).then(r => r.json());
-    const versions = data.versions ?? [];
-    if (!versions.length) { list.textContent = "No pressings found."; return; }
+    _masterVersions = data.versions ?? [];
+    if (!_masterVersions.length) { list.textContent = "No pressings found."; return; }
+
+    // Build unique format types for filter pills
+    const formatSet = new Set();
+    _masterVersions.forEach(v => {
+      const raw = (v.format ?? "").split(",")[0].trim();
+      if (raw) formatSet.add(raw);
+    });
+    const formats = [...formatSet].sort();
+    const pillStyle = `cursor:pointer;border:none;border-radius:20px;padding:0.15rem 0.6rem;font-size:0.72rem;font-weight:600;transition:background 0.15s`;
+    const pills = [
+      `<button class="mv-filter-pill" data-filter="" onclick="renderMasterVersions('')" style="${pillStyle};background:var(--accent);color:#000">All</button>`,
+      ...formats.map(f => `<button class="mv-filter-pill" data-filter="${escHtml(f)}" onclick="renderMasterVersions('${f.replace(/'/g,"\\'")}')\" style="${pillStyle};background:#2a2a2a;color:var(--fg)">${escHtml(f)}</button>`)
+    ].join("");
+
     list.innerHTML = `
-      <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem">Pressings / Versions</div>
-      <div style="display:grid;grid-template-columns:auto auto auto auto 1fr;gap:0.2rem 0.7rem;font-size:0.75rem">
-        ${versions.map(v => {
-        const inCol  = window._collectionIds?.has(v.id);
-        const inWant = window._wantlistIds?.has(v.id);
-        const badge  = inCol  ? `<span class="collection-badge">✓</span>` :
-                       inWant ? `<span class="wantlist-badge">♡</span>` : "";
-        return `
-          <span style="color:#888">${escHtml(!v.year || v.year === "0" ? "?" : String(v.year))}</span>
-          <span style="color:#aaa">${escHtml(v.country || "?")}</span>
-          <span style="color:#888">${escHtml(v.format ?? "—")}</span>
-          <span style="color:#aaa">${escHtml(v.catno ?? "—")}</span>
-          <span><a href="#" onclick="openVersionPopup(event,${v.id})" style="color:var(--accent);text-decoration:none">${escHtml(v.label ?? v.title ?? "—")}</a>${badge}</span>`;
-      }).join("")}
-      </div>`;
+      <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.4rem">Pressings / Versions</div>
+      ${formats.length > 1 ? `<div style="display:flex;flex-wrap:wrap;gap:0.35rem;margin-bottom:0.6rem">${pills}</div>` : ""}
+      <div class="mv-grid" style="display:grid;grid-template-columns:auto auto auto auto 1fr;gap:0.2rem 0.7rem;font-size:0.75rem"></div>`;
+    renderMasterVersions("");
   } catch(e) {
     list.textContent = "Failed to load pressings.";
   }
