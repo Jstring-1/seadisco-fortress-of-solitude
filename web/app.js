@@ -228,13 +228,17 @@ async function doSearch(page = 1, skipPushState = false) {
     const p = new URLSearchParams({ q: qVal, page, per_page: perPage });
     const t = typeOverride ?? resultType;
     if (t) p.set("type", t);
-    if (effectiveArtist) p.set("artist", effectiveArtist);
-    if (release) p.set("release_title", release);
-    if (year)    p.set("year",          year);
-    if (label)   p.set("label",         label);
-    if (genre)   p.set("genre",         genre);
-    if (style)   p.set("style",         style);
-    if (format)  p.set("format",        format);
+    // Only send release-specific filters when searching for releases/masters (not artist/label entities)
+    const entitySearch = (t === "artist" || t === "label");
+    if (!entitySearch) {
+      if (effectiveArtist) p.set("artist", effectiveArtist);
+      if (release) p.set("release_title", release);
+      if (year)    p.set("year",          year);
+      if (label)   p.set("label",         label);
+      if (genre)   p.set("genre",         genre);
+      if (style)   p.set("style",         style);
+      if (format)  p.set("format",        format);
+    }
     if (sort && !skipSort) {
       const [sortField, sortOrder] = sort.split(":");
       p.set("sort",       sortField);
