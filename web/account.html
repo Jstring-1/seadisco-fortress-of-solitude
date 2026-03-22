@@ -135,6 +135,13 @@
         <div id="admin-sync-all-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.35rem"></div>
       </div>
 
+      <!-- Admin user sync status — only rendered for admin user -->
+      <div id="admin-sync-status-section" style="display:none">
+        <hr class="section-divider" />
+        <h2 style="margin-bottom:0.5rem">User Sync Status</h2>
+        <div id="admin-sync-status-list" style="font-size:0.83rem;color:var(--muted)">Loading…</div>
+      </div>
+
       <!-- Admin inbox — only rendered for admin user -->
       <div id="admin-inbox" style="display:none">
         <hr class="section-divider" />
@@ -612,8 +619,9 @@ async function loadAdminInbox() {
     const { items } = await r.json();
     document.getElementById("admin-inbox").style.display = "block";
     document.getElementById("admin-sync-all-btn").style.display = "inline-block"; // reveal for admin only
-    loadAdminSearches(); // also load global search pool for admin
-    loadInterestStats(); // also load interest signal stats for admin
+    loadAdminSearches();   // also load global search pool for admin
+    loadInterestStats();   // also load interest signal stats for admin
+    loadAdminSyncStatus(); // also load per-user sync status for admin
     const el = document.getElementById("feedback-list");
     if (!items.length) { el.textContent = "No feedback yet."; return; }
     el.innerHTML = items.map(({ id, user_email, message, created_at }) => {
@@ -717,6 +725,54 @@ async function loadInterestStats() {
   } catch { el.textContent = "Could not load interest stats."; }
 }
 
+
+let _adminSyncPoll = null;
+
+async function loadAdminSyncStatus() {
+  const section = document.getElementById("admin-sync-status-section");
+  const el = document.getElementById("admin-sync-status-list");
+  section.style.display = "block";
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const { users } = await fetch("/api/admin/sync-status", {
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
+    }).then(r => r.json());
+    if (!users?.length) { el.textContent = "No users with Discogs tokens."; return; }
+
+    const fmtTime = ts => {
+      if (!ts) return "never";
+      const diff = Math.round((Date.now() - new Date(ts)) / 60000);
+      if (diff < 1) return "just now";
+      if (diff < 60) return `${diff}m ago`;
+      const h = Math.round(diff / 60);
+      if (h < 24) return `${h}h ago`;
+      return `${Math.round(h / 24)}d ago`;
+    };
+
+    el.innerHTML = users.map(u => {
+      const isSyncing = u.syncStatus === "syncing";
+      const isError   = u.syncStatus === "error";
+      const pct = u.syncTotal ? Math.round((u.syncProgress / u.syncTotal) * 100) : 0;
+      const statusColor = isError ? "#c0392b" : isSyncing ? "var(--accent)" : "#555";
+      const statusText  = isSyncing ? `Syncing… ${u.syncProgress.toLocaleString()} / ${u.syncTotal.toLocaleString()} (${pct}%)`
+                        : isError   ? `Error: ${u.syncError}`
+                        : u.syncStatus === "complete" ? "Complete" : "Idle";
+      return `<div style="padding:0.45rem 0;border-bottom:1px solid #1a1a1a;display:grid;grid-template-columns:140px 1fr 1fr auto;gap:0.5rem 1rem;align-items:baseline;font-size:0.8rem">
+        <span style="color:var(--fg);font-weight:600">@${u.username}</span>
+        <span style="color:${statusColor}">${statusText}</span>
+        <span style="color:#555">Coll: ${fmtTime(u.collectionSyncedAt)} · Want: ${fmtTime(u.wantlistSyncedAt)}</span>
+      </div>`;
+    }).join("");
+
+    // Auto-refresh every 5s while any sync is running
+    const anyRunning = users.some(u => u.syncStatus === "syncing");
+    if (anyRunning && !_adminSyncPoll) {
+      _adminSyncPoll = setInterval(loadAdminSyncStatus, 5000);
+    } else if (!anyRunning && _adminSyncPoll) {
+      clearInterval(_adminSyncPoll); _adminSyncPoll = null;
+    }
+  } catch { el.textContent = "Could not load sync status."; }
+}
 
 async function adminSyncAll() {
   const btn = document.getElementById("admin-sync-all-btn");

@@ -3,7 +3,7 @@ import compression from "compression";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, getFreshReleasesByTag, getFreshTopTags, recordInterestSignals, getInterestStats, backfillInterestSignals } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, getFreshReleasesByTag, getFreshTopTags, recordInterestSignals, getInterestStats, backfillInterestSignals } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sharedToken = process.env.DISCOGS_TOKEN ?? "";
@@ -180,27 +180,51 @@ async function runBackgroundSync(userId, token, username, syncCollection, syncWa
     const headers = { "Authorization": `Discogs token=${token}`, "User-Agent": "SeaDisco/1.0" };
     const delay = (ms) => new Promise(r => setTimeout(r, ms));
     let totalSynced = 0;
+    // Fetch with retry — up to 3 attempts with 10s backoff on non-OK or network error
+    async function fetchWithRetry(url, retries = 3) {
+        for (let attempt = 1; attempt <= retries; attempt++) {
+            try {
+                const r = await fetch(url, { headers });
+                if (r.ok)
+                    return r;
+                if (r.status === 429 || r.status >= 500) {
+                    const waitMs = attempt * 10000;
+                    console.warn(`Sync ${username}: HTTP ${r.status} on attempt ${attempt}, retrying in ${waitMs / 1000}s`);
+                    if (attempt < retries)
+                        await delay(waitMs);
+                    else
+                        throw new Error(`HTTP ${r.status} after ${retries} attempts`);
+                }
+                else {
+                    throw new Error(`HTTP ${r.status}`); // 4xx non-retryable
+                }
+            }
+            catch (err) {
+                if (attempt === retries)
+                    throw err;
+                console.warn(`Sync ${username}: fetch error attempt ${attempt}:`, err);
+                await delay(attempt * 10000);
+            }
+        }
+        throw new Error("fetchWithRetry exhausted");
+    }
     try {
         // First, get total counts from Discogs to estimate total
         let estimatedTotal = 0;
         if (syncCollection) {
             try {
-                const r = await fetch(`https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=1&page=1`, { headers });
-                if (r.ok) {
-                    const d = await r.json();
-                    estimatedTotal += d.pagination?.items ?? 0;
-                }
+                const r = await fetchWithRetry(`https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=1&page=1`);
+                const d = await r.json();
+                estimatedTotal += d.pagination?.items ?? 0;
                 await delay(500);
             }
             catch { }
         }
         if (syncWantlist) {
             try {
-                const r = await fetch(`https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=1&page=1`, { headers });
-                if (r.ok) {
-                    const d = await r.json();
-                    estimatedTotal += d.pagination?.items ?? 0;
-                }
+                const r = await fetchWithRetry(`https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=1&page=1`);
+                const d = await r.json();
+                estimatedTotal += d.pagination?.items ?? 0;
                 await delay(500);
             }
             catch { }
@@ -210,9 +234,7 @@ async function runBackgroundSync(userId, token, username, syncCollection, syncWa
             for (let page = 1;; page++) {
                 if (page > 1)
                     await delay(2000); // 2s pacing — leaves headroom for user searches
-                const r = await fetch(`https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=100&page=${page}`, { headers });
-                if (!r.ok)
-                    break;
+                const r = await fetchWithRetry(`https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=100&page=${page}`);
                 const data = await r.json();
                 const releases = data.releases ?? [];
                 if (!releases.length)
@@ -235,9 +257,7 @@ async function runBackgroundSync(userId, token, username, syncCollection, syncWa
             for (let page = 1;; page++) {
                 if (page > 1)
                     await delay(2000);
-                const r = await fetch(`https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=100&page=${page}`, { headers });
-                if (!r.ok)
-                    break;
+                const r = await fetchWithRetry(`https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=100&page=${page}`);
                 const data = await r.json();
                 const wants = data.wants ?? [];
                 if (!wants.length)
@@ -260,7 +280,7 @@ async function runBackgroundSync(userId, token, username, syncCollection, syncWa
         console.log(`Background sync complete for ${username}: ${totalSynced} items`);
     }
     catch (err) {
-        console.error("Background sync error:", err);
+        console.error(`Background sync error for ${username}:`, err);
         await updateSyncProgress(userId, "error", totalSynced, 0, String(err));
     }
 }
@@ -562,6 +582,17 @@ app.post("/api/admin/backfill-interests", async (req, res) => {
         console.error("Backfill error:", err);
         res.status(500).json({ error: "Backfill failed" });
     }
+});
+// GET /api/admin/sync-status — per-user sync status, admin only
+app.get("/api/admin/sync-status", async (req, res) => {
+    const userId = getClerkUserId(req);
+    const adminId = process.env.ADMIN_CLERK_ID ?? "";
+    if (!userId || !adminId || userId !== adminId) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+    }
+    const users = await getAllUsersSyncStatus();
+    res.json({ users });
 });
 // POST /api/admin/sync-all — trigger background sync for all users with tokens, admin only
 app.post("/api/admin/sync-all", async (req, res) => {

@@ -191,6 +191,33 @@ export async function getSearchHistory(clerkUserId: string, limit = 50): Promise
   return r.rows;
 }
 
+export async function getAllUsersSyncStatus(): Promise<Array<{
+  username: string;
+  collectionSyncedAt: Date | null;
+  wantlistSyncedAt: Date | null;
+  syncStatus: string;
+  syncProgress: number;
+  syncTotal: number;
+  syncError: string | null;
+}>> {
+  const r = await getPool().query(
+    `SELECT discogs_username, collection_synced_at, wantlist_synced_at,
+            sync_status, sync_progress, sync_total, sync_error
+     FROM user_tokens
+     WHERE discogs_username IS NOT NULL
+     ORDER BY discogs_username`
+  );
+  return r.rows.map(row => ({
+    username:           row.discogs_username,
+    collectionSyncedAt: row.collection_synced_at ?? null,
+    wantlistSyncedAt:   row.wantlist_synced_at   ?? null,
+    syncStatus:         row.sync_status          ?? "idle",
+    syncProgress:       row.sync_progress        ?? 0,
+    syncTotal:          row.sync_total           ?? 0,
+    syncError:          row.sync_error           ?? null,
+  }));
+}
+
 export async function getAllUsersForSync(): Promise<Array<{ clerkUserId: string; token: string; username: string; collectionSyncedAt: Date | null; wantlistSyncedAt: Date | null }>> {
   const r = await getPool().query(
     `SELECT clerk_user_id, discogs_token, discogs_username, collection_synced_at, wantlist_synced_at
