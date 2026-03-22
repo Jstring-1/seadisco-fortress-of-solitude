@@ -143,6 +143,11 @@
         <div id="interest-stats" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
       </div>
 
+      <div id="admin-dump" style="display:none">
+        <hr class="section-divider" />
+        <button onclick="dumpSearchHistory()" style="padding:0.4rem 1rem;border:1px solid var(--border);background:var(--surface);color:var(--fg);border-radius:4px;cursor:pointer">Dump Search History</button>
+      </div>
+
       <!-- Admin global search pool — only rendered for admin user -->
       <div id="admin-searches" style="display:none">
         <hr class="section-divider" />
@@ -580,6 +585,7 @@ async function loadAdminInbox() {
     document.getElementById("admin-inbox").style.display = "block";
     loadAdminSearches(); // also load global search pool for admin
     loadInterestStats(); // also load interest signal stats for admin
+    document.getElementById("admin-dump").style.display = "block";
     const el = document.getElementById("feedback-list");
     if (!items.length) { el.textContent = "No feedback yet."; return; }
     el.innerHTML = items.map(({ id, user_email, message, created_at }) => {
@@ -667,6 +673,20 @@ async function loadInterestStats() {
   } catch { el.textContent = "Could not load interest stats."; }
 }
 
+
+async function dumpSearchHistory() {
+  const sessionToken = await clerk.session?.getToken();
+  const r = await fetch("/api/admin/search-dump", {
+    headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
+  });
+  const blob = await r.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "search-history.json";
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 async function deleteFeedbackItem(id) {
   const sessionToken = await clerk.session?.getToken();

@@ -189,6 +189,10 @@ export async function getRecentSearches(limit = 500) {
      LIMIT $1`, [limit]);
     return all.rows;
 }
+export async function dumpSearchHistory() {
+    const r = await getPool().query(`SELECT id, clerk_user_id, params, searched_at FROM search_history ORDER BY searched_at DESC`);
+    return r.rows;
+}
 export async function saveFeedback(clerkUserId, userEmail, message) {
     await getPool().query(`INSERT INTO feedback (clerk_user_id, user_email, message) VALUES ($1, $2, $3)`, [clerkUserId, userEmail, message]);
 }
