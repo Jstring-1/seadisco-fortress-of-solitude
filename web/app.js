@@ -326,7 +326,7 @@ async function doSearch(page = 1, skipPushState = false) {
       if (items.length === 0 && (artist || label) && !q) {
         const fallbackQ = artist || label;
         const fallbackP = new URLSearchParams({ q: fallbackQ, page, per_page: 24 });
-        if (resultType) fallbackP.set("type", resultType);
+        // Don't carry over type restriction — let fallback search across all types
         if (release) fallbackP.set("release_title", release);
         if (year)    fallbackP.set("year", year);
         if (genre)   fallbackP.set("genre", genre);
