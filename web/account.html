@@ -118,8 +118,10 @@
 
       <div class="token-form">
         <input type="text" id="token-input" placeholder="Paste your Discogs token here" autocomplete="off" spellcheck="false" />
-        <button id="save-btn" onclick="saveToken()">Save token</button>
-        <button id="remove-btn" class="danger-btn" onclick="removeToken()" style="display:none">Remove saved token</button>
+        <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+          <button id="save-btn" onclick="saveToken()">Save token</button>
+          <button id="remove-btn" class="danger-btn" onclick="removeToken()" style="display:none">Remove saved token</button>
+        </div>
       </div>
 
       <div id="sync-section" style="display:none">
