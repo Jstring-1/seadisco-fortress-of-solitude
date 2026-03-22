@@ -394,6 +394,22 @@ export async function getCollectionIds(clerkUserId) {
     const r = await getPool().query("SELECT discogs_release_id FROM user_collection WHERE clerk_user_id = $1", [clerkUserId]);
     return r.rows.map(row => row.discogs_release_id);
 }
+export async function getWantedItems() {
+    const r = await getPool().query(`
+    SELECT data FROM (
+      SELECT DISTINCT ON (discogs_release_id) data
+      FROM user_wantlist
+      ORDER BY discogs_release_id
+    ) deduped
+  `);
+    const rows = r.rows.map((row) => row.data);
+    // Fisher-Yates shuffle
+    for (let i = rows.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [rows[i], rows[j]] = [rows[j], rows[i]];
+    }
+    return rows;
+}
 export async function getWantlistIds(clerkUserId) {
     const r = await getPool().query("SELECT discogs_release_id FROM user_wantlist WHERE clerk_user_id = $1", [clerkUserId]);
     return r.rows.map(row => row.discogs_release_id);

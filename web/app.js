@@ -573,14 +573,14 @@ function switchView(view, skipPushState = false) {
   const dropsView  = document.getElementById("drops-view");
   const infoView   = document.getElementById("info-view");
   if (!skipPushState) {
-    if (view === "drops" || view === "collection" || view === "wantlist" || view === "info") {
+    if (view === "drops" || view === "collection" || view === "wantlist" || view === "info" || view === "wanted") {
       history.pushState({ view }, "", "?view=" + view);
     } else {
       history.pushState({}, "", location.pathname);
     }
   }
   if (typeof gtag === "function") {
-    const titles = { drops: "Drops", info: "Info", collection: "Collection", wantlist: "Wantlist", search: "Search" };
+    const titles = { drops: "Drops", info: "Info", collection: "Collection", wantlist: "Wantlist", wanted: "Wanted", search: "Search" };
     gtag("event", "page_view", {
       page_location: window.location.href,
       page_path:     window.location.pathname + window.location.search,
@@ -593,22 +593,34 @@ function switchView(view, skipPushState = false) {
   if (infoView)   infoView.style.display   = "none";
 
   // Toggle main search form vs collection/wantlist search bar
-  const mainForm = document.getElementById("main-search-form");
-  const cwWrap   = document.getElementById("cw-search-wrap");
-  const cwInput  = document.getElementById("cw-query");
+  const mainForm    = document.getElementById("main-search-form");
+  const cwWrap      = document.getElementById("cw-search-wrap");
+  const cwInput     = document.getElementById("cw-query");
+  const wantedWrap  = document.getElementById("wanted-search-wrap");
 
   if (view === "drops") {
     if (dropsView) dropsView.style.display = "block";
     if (mainForm) mainForm.style.display = "";
     if (cwWrap) cwWrap.style.display = "none";
+    if (wantedWrap) wantedWrap.style.display = "none";
   } else if (view === "info") {
     if (infoView) infoView.style.display = "block";
     if (mainForm) mainForm.style.display = "";
     if (cwWrap) cwWrap.style.display = "none";
+    if (wantedWrap) wantedWrap.style.display = "none";
+  } else if (view === "wanted") {
+    if (searchView) searchView.style.display = "";
+    if (mainForm) mainForm.style.display = "none";
+    if (cwWrap) cwWrap.style.display = "none";
+    if (wantedWrap) wantedWrap.style.display = "";
+    document.getElementById("artist-alts").innerHTML = "";
+    const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "none";
+    loadWantedTab();
   } else if (view === "collection") {
     if (searchView) searchView.style.display = "";
     if (mainForm) mainForm.style.display = "none";
     if (cwWrap) cwWrap.style.display = "";
+    if (wantedWrap) wantedWrap.style.display = "none";
     if (cwInput) { cwInput.placeholder = "Search your collection…"; cwInput.value = ""; }
     clearCwFilters();
     _cwTab = "collection"; _cwQuery = "";
@@ -620,6 +632,7 @@ function switchView(view, skipPushState = false) {
     if (searchView) searchView.style.display = "";
     if (mainForm) mainForm.style.display = "none";
     if (cwWrap) cwWrap.style.display = "";
+    if (wantedWrap) wantedWrap.style.display = "none";
     if (cwInput) { cwInput.placeholder = "Search your wantlist…"; cwInput.value = ""; }
     clearCwFilters();
     _cwTab = "wantlist"; _cwQuery = "";
@@ -631,6 +644,7 @@ function switchView(view, skipPushState = false) {
     if (searchView) searchView.style.display = "";
     if (mainForm) mainForm.style.display = "";
     if (cwWrap) cwWrap.style.display = "none";
+    if (wantedWrap) wantedWrap.style.display = "none";
     document.getElementById("results").innerHTML = "";
     document.getElementById("pagination").style.display = "none";
     setStatus("");
@@ -813,6 +827,53 @@ async function loadWantlistTab(page = 1, filters) {
   } catch (e) {
     setStatus("Failed to load wantlist: " + e.message, true);
   }
+}
+
+// ── Community Wanted ──
+let _wantedItems = null; // cached after first load
+
+async function loadWantedTab() {
+  setActiveTab("wanted");
+  document.getElementById("blurb").style.display = "none";
+  document.getElementById("results").innerHTML = "";
+  document.getElementById("pagination").style.display = "none";
+  if (_wantedItems) { renderWantedItems(_wantedItems); return; }
+  setStatus("Loading wanted items…");
+  try {
+    const r = await apiFetch("/api/wanted");
+    const data = await r.json();
+    _wantedItems = data.items ?? [];
+    renderWantedItems(_wantedItems);
+  } catch (e) {
+    setStatus("Failed to load wanted items: " + e.message, true);
+  }
+}
+
+function filterWantedItems() {
+  if (!_wantedItems) return;
+  const q = (document.getElementById("wanted-q")?.value ?? "").trim().toLowerCase();
+  if (!q) { renderWantedItems(_wantedItems); return; }
+  const filtered = _wantedItems.filter(item => {
+    const artist = (item.artists ?? []).map(a => a.name).join(" ").toLowerCase();
+    const title  = (item.title  ?? "").toLowerCase();
+    const label  = (item.labels ?? []).map(l => l.name).join(" ").toLowerCase();
+    const genre  = (item.genres ?? []).join(" ").toLowerCase();
+    const style  = (item.styles ?? []).join(" ").toLowerCase();
+    const year   = String(item.year ?? "");
+    return `${artist} ${title} ${label} ${genre} ${style} ${year}`.includes(q);
+  });
+  renderWantedItems(filtered);
+}
+
+function renderWantedItems(items) {
+  if (!items.length) {
+    setStatus("No wanted items found.");
+    document.getElementById("results").innerHTML = "";
+    return;
+  }
+  const q = (document.getElementById("wanted-q")?.value ?? "").trim();
+  setStatus(q ? `${items.length} wanted items matching "${q}"` : `${items.length} items wanted by the community`);
+  document.getElementById("results").innerHTML = items.map(item => renderCardFromBasicInfo(item)).join("");
 }
 
 function renderCollectionPagination(tab) {
@@ -1791,7 +1852,7 @@ function searchByEntity(event, el) {
 window.addEventListener("popstate", () => {
   const p = new URLSearchParams(location.search);
   const view = p.get("view");
-  if (view === "drops" || view === "collection" || view === "wantlist" || view === "info") {
+  if (view === "drops" || view === "collection" || view === "wantlist" || view === "info" || view === "wanted") {
     switchView(view, true);
   } else {
     switchView("search", true);
@@ -1983,7 +2044,7 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
   const view = p.get("view");
   if (view === "drops" || view === "info") {
     switchView(view, true);
-  } else if (view === "collection" || view === "wantlist") {
+  } else if (view === "collection" || view === "wantlist" || view === "wanted") {
     await authReadyPromise;
     switchView(view, true);
   } else if (p.toString()) {
@@ -2058,8 +2119,9 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
       }
     }
 
-    // If user is signed in, check if they have a token and set up collection tabs
+    // If user is signed in, unlock Wanted tab (community feature, no token needed)
     if (window._clerk.user) {
+      addNavTab("wanted");
       try {
         const tokenCheck = await apiFetch("/api/user/token");
         if (tokenCheck.ok) {

@@ -552,6 +552,23 @@ export async function getCollectionIds(clerkUserId: string): Promise<number[]> {
   return r.rows.map(row => row.discogs_release_id);
 }
 
+export async function getWantedItems(): Promise<object[]> {
+  const r = await getPool().query(`
+    SELECT data FROM (
+      SELECT DISTINCT ON (discogs_release_id) data
+      FROM user_wantlist
+      ORDER BY discogs_release_id
+    ) deduped
+  `);
+  const rows: object[] = r.rows.map((row: { data: object }) => row.data);
+  // Fisher-Yates shuffle
+  for (let i = rows.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [rows[i], rows[j]] = [rows[j], rows[i]];
+  }
+  return rows;
+}
+
 export async function getWantlistIds(clerkUserId: string): Promise<number[]> {
   const r = await getPool().query(
     "SELECT discogs_release_id FROM user_wantlist WHERE clerk_user_id = $1",
