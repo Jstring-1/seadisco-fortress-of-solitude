@@ -1000,10 +1000,15 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   line-height: 1.3;
 }
 
+.album-title-search {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.85em;
+}
 .album-title-search:hover {
-  text-decoration: underline dotted !important;
+  text-decoration: underline dotted;
   text-underline-offset: 3px;
-  text-decoration-color: var(--muted) !important;
+  text-decoration-color: var(--muted);
 }
 
 #album-info .album-meta .album-artist, #version-info .album-meta .album-artist {
