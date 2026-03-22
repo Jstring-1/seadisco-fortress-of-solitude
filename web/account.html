@@ -753,10 +753,11 @@ async function loadAdminSyncStatus() {
       const isSyncing = u.syncStatus === "syncing";
       const isError   = u.syncStatus === "error";
       const pct = u.syncTotal ? Math.round((u.syncProgress / u.syncTotal) * 100) : 0;
-      const statusColor = isError ? "#c0392b" : isSyncing ? "var(--accent)" : "#555";
+      const statusColor = isError ? "#c0392b" : isSyncing ? "var(--accent)" : u.syncStatus === "complete" ? "#4caf50" : "#555";
+      const countStr = u.syncProgress > 0 ? ` — ${u.syncProgress.toLocaleString()}${u.syncTotal ? ` / ${u.syncTotal.toLocaleString()}` : ""} items` : "";
       const statusText  = isSyncing ? `Syncing… ${u.syncProgress.toLocaleString()} / ${u.syncTotal.toLocaleString()} (${pct}%)`
                         : isError   ? `Error: ${u.syncError}`
-                        : u.syncStatus === "complete" ? "Complete" : "Idle";
+                        : u.syncStatus === "complete" ? `Complete${countStr}` : `Idle${countStr}`;
       return `<div style="padding:0.45rem 0;border-bottom:1px solid #1a1a1a;display:grid;grid-template-columns:140px 1fr 1fr auto;gap:0.5rem 1rem;align-items:baseline;font-size:0.8rem">
         <span style="color:var(--fg);font-weight:600">@${u.username}</span>
         <span style="color:${statusColor}">${statusText}</span>
