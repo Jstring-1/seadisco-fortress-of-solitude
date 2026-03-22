@@ -126,17 +126,17 @@
       <hr class="section-divider" />
         <h2 style="margin-bottom:0.4rem">Collection &amp; Wantlist</h2>
         <div id="account-sync-status" style="font-size:0.82rem;color:var(--muted);margin-bottom:0.5rem">Loading sync status…</div>
-        <button id="account-sync-btn" onclick="accountSync()" style="font-size:0.82rem;padding:0.3rem 0.9rem;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-weight:600">Sync Now</button>
+        <div style="display:flex;align-items:center;gap:0.7rem;flex-wrap:wrap">
+          <button id="account-sync-btn" onclick="accountSync()" style="font-size:0.82rem;padding:0.3rem 0.9rem;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-weight:600">Sync Now</button>
+          <button onclick="adminSyncAll()" id="admin-sync-all-btn" style="display:none;font-size:0.78rem;padding:0.3rem 0.9rem;background:#2a2a2a;color:var(--fg);border:1px solid #444;border-radius:5px;cursor:pointer;font-weight:600">Sync All Users</button>
+        </div>
+        <div id="admin-sync-all-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.35rem"></div>
       </div>
 
       <!-- Admin inbox — only rendered for admin user -->
       <div id="admin-inbox" style="display:none">
         <hr class="section-divider" />
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.5rem">
-          <h2 style="margin:0">Feedback Inbox</h2>
-          <button onclick="adminSyncAll()" id="admin-sync-all-btn" style="font-size:0.78rem;padding:0.25rem 0.8rem;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-weight:600">Sync All Users</button>
-        </div>
-        <div id="admin-sync-all-status" style="font-size:0.78rem;color:var(--muted);margin-bottom:0.5rem"></div>
+        <h2 style="margin-bottom:0.5rem">Feedback Inbox</h2>
         <div id="feedback-list" style="font-size:0.85rem;color:var(--muted)">Loading…</div>
       </div>
 
@@ -609,6 +609,7 @@ async function loadAdminInbox() {
     if (!r.ok) return; // not admin — stay hidden
     const { items } = await r.json();
     document.getElementById("admin-inbox").style.display = "block";
+    document.getElementById("admin-sync-all-btn").style.display = "inline-block"; // reveal for admin only
     loadAdminSearches(); // also load global search pool for admin
     loadInterestStats(); // also load interest signal stats for admin
     const el = document.getElementById("feedback-list");
