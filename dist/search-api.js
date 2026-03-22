@@ -713,7 +713,33 @@ app.get("/api/recent-searches", async (_req, res) => {
 app.get("/search", async (req, res) => {
     const rawQ = req.query.q ?? "";
     const artist = stripArtistSuffix(req.query.artist);
-    const q = rawQ;
+    const rawLabel = req.query.label ?? "";
+    const rawRelease = req.query.release_title ?? "";
+    // When no general query, promote the first field value to q for broad results
+    // and DON'T also send it as a dedicated param (avoids double-filter killing results)
+    let q = rawQ;
+    let searchArtist = artist || undefined;
+    let searchLabel = rawLabel || undefined;
+    let searchRelease = rawRelease || undefined;
+    if (!q && artist) {
+        q = artist;
+        searchArtist = undefined;
+    }
+    else if (!q && rawLabel) {
+        q = rawLabel;
+        searchLabel = undefined;
+    }
+    else if (!q && rawRelease) {
+        q = rawRelease;
+        searchRelease = undefined;
+    }
+    // Also strip dedicated param if it duplicates q (avoids overly-strict double filter)
+    if (q && searchArtist && q.toLowerCase() === searchArtist.toLowerCase())
+        searchArtist = undefined;
+    if (q && searchLabel && q.toLowerCase() === searchLabel.toLowerCase())
+        searchLabel = undefined;
+    if (q && searchRelease && q.toLowerCase() === searchRelease.toLowerCase())
+        searchRelease = undefined;
     const ip = clientIp(req);
     const whitelisted = IP_WHITELIST.has(ip);
     const userId = getClerkUserId(req);
@@ -744,9 +770,9 @@ app.get("/search", async (req, res) => {
     try {
         const results = await dc.search(q, {
             type: req.query.type,
-            artist,
-            releaseTitle: req.query.release_title,
-            label: req.query.label,
+            artist: searchArtist,
+            releaseTitle: searchRelease,
+            label: searchLabel,
             year: req.query.year,
             genre: req.query.genre,
             style: req.query.style,
@@ -787,7 +813,9 @@ app.get("/search", async (req, res) => {
                 p.o = `${String(req.query.sort)}${sortOrder}`;
             }
             const hasResults = results?.results?.length > 0;
-            if (Object.keys(p).length && hasResults)
+            // Only save when there are meaningful search terms (not just type/sort/format)
+            const hasMeaningful = p.q || p.a || p.r || p.l || p.g || p.s || p.y;
+            if (hasMeaningful && hasResults)
                 saveSearch(userId, p).catch(() => { });
         }
     }
