@@ -150,8 +150,9 @@ async function doSearch(page = 1, skipPushState = false) {
 
   if (resultType === "ai") { doAiSearch(q); return; }
 
-  // Advanced-only search (no general q): default to masters sorted oldest→newest
-  if (!q && (artist || release || year || label || genre || style || format)) {
+  // Advanced-only artist/label search (no general q): default to masters sorted oldest→newest
+  // Genre/year/style-driven searches stay open so users get releases, compilations, etc.
+  if (!q && (artist || label) && !genre && !style && !resultType) {
     resultType = "master";
     sort = "year:asc";
     document.querySelector('input[name="result-type"][value="master"]').checked = true;
@@ -215,7 +216,16 @@ async function doSearch(page = 1, skipPushState = false) {
   const baseParams = (typeOverride, perPage) => {
     // For pages 2+, use the auto-detected artist (saved from page 1) for consistent Discogs pagination
     const effectiveArtist = artist || (page > 1 ? detectedArtist : null) || "";
-    const p = new URLSearchParams({ q: q || effectiveArtist || label || release, page, per_page: perPage });
+    // Discogs requires q — but don't echo artist/label into q when they're already separate params
+    // (doubling up e.g. q=Blue Note + label=Blue Note narrows results unexpectedly)
+    let qVal = q;
+    if (!qVal) {
+      if (effectiveArtist) qVal = effectiveArtist;
+      else if (release) qVal = release;
+      else if (label) qVal = label;
+      else qVal = "";
+    }
+    const p = new URLSearchParams({ q: qVal, page, per_page: perPage });
     const t = typeOverride ?? resultType;
     if (t) p.set("type", t);
     if (effectiveArtist) p.set("artist", effectiveArtist);
@@ -317,6 +327,7 @@ async function doSearch(page = 1, skipPushState = false) {
       if (items.length === 0 && format && (artist || q)) {
         const fallbackP = baseParams(null, 48);
         fallbackP.delete("format");
+        fallbackP.delete("type"); // also drop type restriction so releases/masters both appear
         const fallbackRes = await apiFetch(`${API}/search?${fallbackP}`);
         if (fallbackRes.ok) {
           const fd = await fallbackRes.json();
