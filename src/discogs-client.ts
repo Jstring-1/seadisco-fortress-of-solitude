@@ -44,7 +44,8 @@ export class DiscogsClient {
     page?: number;
     perPage?: number;
   } = {}) {
-    const params: Record<string, string> = { q: query };
+    const params: Record<string, string> = {};
+    if (query) params.q = query;
     if (options.type) params.type = options.type;
     if (options.artist) params.artist = options.artist;
     if (options.releaseTitle) params.release_title = options.releaseTitle;
