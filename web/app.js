@@ -1112,7 +1112,16 @@ document.getElementById("bio-full-overlay").addEventListener("click", e => {
 
 // ── Video popup ────────────────────────────────────────────────────────────
 let ytPlayer = null;
+let _ytLoading = false;
 window.onYouTubeIframeAPIReady = function() { window._ytAPIReady = true; };
+
+function ensureYTAPI() {
+  if (window._ytAPIReady || _ytLoading) return;
+  _ytLoading = true;
+  const s = document.createElement("script");
+  s.src = "https://www.youtube.com/iframe_api";
+  document.head.appendChild(s);
+}
 
 function setVideoUrl(id) {
   const u = new URL(window.location.href);
@@ -1162,6 +1171,7 @@ function updateVideoNavButtons() {
 
 function openVideo(event, url) {
   if (event) { event.preventDefault(); event.stopPropagation(); }
+  ensureYTAPI();
   const id = extractYouTubeId(url);
   if (!id) { window.open(url, "_blank", "noopener"); return; }
   const trackLinks = [...document.querySelectorAll(".track-link[data-video]")];
@@ -1891,8 +1901,10 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
     await authReadyPromise;
     doSearch(parseInt(p.get("pg") ?? "1"), true);
   }
-  loadRecentFeed();
-  loadFreshReleases();
+  // Defer non-critical feeds until browser is idle
+  const deferLoad = (fn) => typeof requestIdleCallback === "function" ? requestIdleCallback(fn) : setTimeout(fn, 200);
+  deferLoad(() => loadRecentFeed());
+  deferLoad(() => loadFreshReleases());
 })();
 
 // Submit on Enter (all text inputs)

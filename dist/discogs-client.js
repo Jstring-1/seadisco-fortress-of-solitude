@@ -25,7 +25,9 @@ export class DiscogsClient {
         return response.json();
     }
     async search(query = "", options = {}) {
-        const params = { q: query };
+        const params = {};
+        if (query)
+            params.q = query;
         if (options.type)
             params.type = options.type;
         if (options.artist)
