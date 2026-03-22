@@ -275,35 +275,26 @@
 <div id="info-view" style="display:none;max-width:760px;margin:0 auto;padding:1rem 1.5rem 2.5rem">
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">How SeaDisco Works</h2>
 
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">Basic Search</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem">Type anything into the main search box — artist name, album title, label, genre, or a mix. SeaDisco searches the entire Discogs database of over 15 million releases.</p>
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Searching</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Type anything into the main search box — artist, album, label, genre, or a mix — to search the entire Discogs database. Click <strong style="color:#ccc">Advanced</strong> to open targeted fields: Artist, Release Title, Label, Year, Genre &amp; Style, and Format. Each field is sent to Discogs as its own filter, so you can combine them freely.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Use the radio buttons to narrow results by type: <strong style="color:#ccc">All · Masters · Releases · Artists · Labels</strong>. Masters group every pressing of a recording together; Releases are individual pressings by country, label, year, and format. Sort by relevance, year, title, or label — your sort is saved with each search.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">Clicking a result card opens full details: tracklist with YouTube preview links and ⌕ icons to find other versions, pressing info, credits, market price, and photos. Track titles in Master popups include a format filter so you can narrow pressings to Vinyl, CD, Cassette, etc. instantly. The <strong style="color:#ccc">Hide owned</strong> checkbox (active when your collection is synced) removes items already in your collection from any search result page.</p>
 
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">Advanced Search</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem">Click <strong style="color:#ccc">Advanced</strong> to unlock targeted fields: Artist, Release Title, Label, Year, Genre &amp; Style, and Format. Advanced fields are only applied when the panel is open.</p>
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">✦ AI Search</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">Select <strong style="color:#ccc">AI</strong> from the result type buttons to describe what you're looking for in plain language — <em>"obscure 70s Nigerian funk"</em>, <em>"music like early Miles Davis"</em>, <em>"best post-war Chicago blues guitarists"</em>. Claude returns 12 curated picks with descriptions and direct links to Discogs searches. AI searches are not saved to your history. Requires a free account.</p>
 
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">✦ AI Search</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem">Select <strong style="color:#ccc">AI</strong> to ask Claude for music recommendations in plain language — "obscure 70s Nigerian funk", "music like early Miles Davis", "best post-war Chicago blues guitarists". Returns 12 curated picks linking to Discogs searches. Requires a free account.</p>
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Collection &amp; Wantlist</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Signed-in users with a Discogs token can sync their full collection and wantlist — no size limit, whether you have 500 or 15,000 records. Sync runs silently in the background with live progress and picks up automatically when you sign in if your data is more than 6 hours old.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">Once synced, the <strong style="color:#ccc">Collection</strong> and <strong style="color:#ccc">Wantlist</strong> tabs become fully searchable with dedicated filters for artist, release, label, year, genre, style, and format. Genre and style filters are dropdowns built from your actual data. Filters support <strong style="color:#ccc">+</strong> (AND), <strong style="color:#ccc">|</strong> (OR), and <strong style="color:#ccc">-</strong> (exclude) operators. Green <strong style="color:#4caf50">✓</strong> and red <strong style="color:#c0392b">♡</strong> badges appear on matching cards across all search results.</p>
 
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">Sort</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem">Sort by relevance, year, title, or label. The selected sort is saved with your search and restored when you click a recent search pill.</p>
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Latest Drops</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">The <strong style="color:#ccc">Drops</strong> tab surfaces new releases sourced from <a href="https://listenbrainz.org" target="_blank" rel="noopener" style="color:#5a9aaa">ListenBrainz</a> and <a href="https://musicbrainz.org" target="_blank" rel="noopener" style="color:#5a9aaa">MusicBrainz</a>, refreshed every 6 hours and kept for 4 weeks. Filter by genre and style tags using the tag cloud. The <strong style="color:#ccc">Google →</strong> link on each card searches the web for that artist and release — useful for finding it beyond Discogs.</p>
 
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">Result Types</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem">Filter by <strong style="color:#ccc">All · Masters · Releases · Artists · Labels</strong>. Masters group all pressings of a recording; Releases are specific pressings by country, year, and format.</p>
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Recent Searches &amp; Discovery</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">The pill cloud below search results shows recent searches from all SeaDisco users that surfaced an artist or label bio — a signal that the search led somewhere interesting. Click any pill to instantly re-run that search. Hover to see the full text.</p>
 
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">Result Cards</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem">Click any card to see full release details — tracklist, credits, pressing info, market price, and photos. Click the cover art to browse all images. Artist and label names link to their Discogs pages within SeaDisco.</p>
-
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">Recent Searches</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem">The pill cloud below search results shows recent searches from all SeaDisco users. Click any pill to instantly re-run that search, including its sort. Hover a pill to see the full untruncated search text.</p>
-
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">Latest Drops</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem">The <strong style="color:#ccc">Drops</strong> tab shows new releases sourced from <a href="https://listenbrainz.org" target="_blank" rel="noopener" style="color:#5a9aaa">ListenBrainz</a> and <a href="https://musicbrainz.org" target="_blank" rel="noopener" style="color:#5a9aaa">MusicBrainz</a>, refreshed every 6 hours and kept for 4 weeks. Filter by genre/style tags using the tag cloud at the top. The <strong style="color:#ccc">Google →</strong> link on each card opens a Google search for that artist and release so you can find it anywhere on the web — not just Discogs.</p>
-
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">My Collection &amp; Wantlist</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem">Signed-in users with a Discogs token can sync their full Discogs collection and wantlist to SeaDisco. Sync runs in the background with live progress — no size limit, whether you have 500 or 15,000 records. Once synced, your collection and wantlist are fully searchable with a dedicated search bar and advanced filters for artist, release, label, year, genre, style, and format. Genre and style filters are dropdowns populated from your actual data. Filters support operators: <strong style="color:#ccc">+</strong> (AND), <strong style="color:#ccc">|</strong> (OR), and <strong style="color:#ccc">-</strong> (exclude). Green ✓ and red ♡ badges also appear on matching search results across the site. Sync is available once per hour from your <a href="/account" style="color:#5a9aaa">Account</a> page.</p>
-
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.2rem 0 0.4rem">Search Rate &amp; Your Token</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.5rem">SeaDisco runs on the site owner's Discogs API token, which is shared across all anonymous users and <strong style="color:#ccc">capped at 1 search per second</strong> by Discogs. Anonymous users also get <strong style="color:#ccc">5 free searches per day</strong> before hitting the limit. Create a free account and add your own Discogs token to get unlimited personal searches with no shared bottleneck. Get your token at <strong style="color:#ccc">discogs.com → Settings → Developers → Generate new token</strong>, then paste it in your <a href="/account" style="color:#5a9aaa">Account</a> page.</p>
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Your Token &amp; Search Limits</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">Anonymous users share the site's Discogs token, capped at <strong style="color:#ccc">25 searches per day</strong>. Sign up for a free account and add your own Discogs token for unlimited personal searches with no shared bottleneck. Get your token at <strong style="color:#ccc">discogs.com → Settings → Developers → Generate new token</strong>, then paste it on your <a href="/account" style="color:#5a9aaa">Account</a> page.</p>
 </div>
 
 <footer>
