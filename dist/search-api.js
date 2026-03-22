@@ -615,14 +615,17 @@ app.post("/api/ai-search", express.json(), async (req, res) => {
     const prompt = `You are a music expert specializing in vinyl records, rare and world music.
 The user is searching for: "${q}"
 
-Return a JSON array of 12 music recommendations (artists or albums/releases) that best match this query.
-For each item include:
+Return a JSON object with two fields:
+- blurb: a single sentence (max 30 words) that contextualizes these recommendations — what connects them, what era or sound they represent. Conversational, no filler phrases.
+- items: an array of 12 music recommendations (artists or albums/releases) that best match this query.
+
+Each item in the items array must include:
 - name: artist name, or "Album Title by Artist"
 - type: "artist" or "release"
 - description: one compelling sentence explaining why this fits
 - discogsParams: object with relevant Discogs search fields only (choose from: q, artist, label, genre, style, year). year must be a single 4-digit year, never a range.
 
-Return ONLY a valid JSON array, no markdown, no explanation.`;
+Return ONLY a valid JSON object, no markdown, no explanation.`;
     try {
         const r = await fetch("https://api.anthropic.com/v1/messages", {
             method: "POST",
@@ -633,7 +636,7 @@ Return ONLY a valid JSON array, no markdown, no explanation.`;
             },
             body: JSON.stringify({
                 model: "claude-haiku-4-5-20251001",
-                max_tokens: 1500,
+                max_tokens: 1700,
                 messages: [{ role: "user", content: prompt }],
             }),
         });
@@ -643,11 +646,14 @@ Return ONLY a valid JSON array, no markdown, no explanation.`;
             res.status(502).json({ error: `AI error: ${data.error?.message ?? r.status}` });
             return;
         }
-        let text = (data.content?.[0]?.text ?? "[]").trim();
+        let text = (data.content?.[0]?.text ?? "{}").trim();
         // Strip markdown code fences if present
         text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-        const recommendations = JSON.parse(text);
-        res.json({ recommendations });
+        const parsed = JSON.parse(text);
+        // Support both new { blurb, items } format and legacy bare array
+        const recommendations = Array.isArray(parsed) ? parsed : (parsed.items ?? []);
+        const blurb = Array.isArray(parsed) ? "" : (parsed.blurb ?? "");
+        res.json({ recommendations, blurb });
     }
     catch (err) {
         console.error("AI search error:", err);
