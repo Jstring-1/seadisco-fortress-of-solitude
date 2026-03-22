@@ -3,7 +3,7 @@ import compression from "compression";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, getRecentSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, getFreshReleasesByTag, getFreshTopTags, recordInterestSignals, getInterestStats, backfillInterestSignals } from "./db.js";
+import { initDb, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, getFreshReleasesByTag, getFreshTopTags, recordInterestSignals, getInterestStats, backfillInterestSignals } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -440,15 +440,13 @@ app.delete("/api/admin/feedback/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
-// GET /api/admin/searches — global search pool, admin only
+// GET /api/admin/searches — full search history, admin only
 app.get("/api/admin/searches", async (req, res) => {
   const userId = getClerkUserId(req);
   const adminId = process.env.ADMIN_CLERK_ID ?? "";
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
-  const raw = await getRecentSearches(500);
-  // Normalize and sort most recent first for the admin view
+  const raw = await dumpSearchHistory();
   const searches = raw.map(s => ({ ...s, params: normalizeParams(s.params) }));
-  searches.sort((a, b) => new Date(b.searched_at).getTime() - new Date(a.searched_at).getTime());
   res.json({ searches });
 });
 
@@ -480,6 +478,17 @@ app.delete("/api/admin/search", express.json(), async (req, res) => {
   const { params } = req.body ?? {};
   if (!params) { res.status(400).json({ error: "Missing params" }); return; }
   await deleteSearchGlobal(params);
+  res.json({ ok: true });
+});
+
+// DELETE /api/admin/search/:id — delete a single search row by ID, admin only
+app.delete("/api/admin/search/:id", async (req, res) => {
+  const userId = getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  const id = parseInt(req.params.id);
+  if (!id) { res.status(400).json({ error: "Invalid id" }); return; }
+  await deleteSearchById(id);
   res.json({ ok: true });
 });
 

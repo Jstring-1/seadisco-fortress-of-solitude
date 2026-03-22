@@ -174,6 +174,10 @@ export async function deleteSearchGlobal(params: Record<string, string>): Promis
   );
 }
 
+export async function deleteSearchById(id: number): Promise<void> {
+  await getPool().query("DELETE FROM search_history WHERE id = $1", [id]);
+}
+
 export async function getSearchHistory(clerkUserId: string, limit = 50): Promise<Array<{ params: Record<string, string>; searched_at: string }>> {
   const r = await getPool().query(
     `SELECT params, MAX(searched_at) AS searched_at
