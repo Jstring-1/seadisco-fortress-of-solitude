@@ -150,14 +150,11 @@ async function doSearch(page = 1, skipPushState = false) {
 
   if (resultType === "ai") { doAiSearch(q); return; }
 
-  // Advanced-only artist/label search (no general q): default to masters sorted oldest→newest
-  // Genre/year/style-driven searches stay open so users get releases, compilations, etc.
-  if (!q && (artist || label) && !genre && !style && !resultType) {
-    resultType = "master";
-    sort = "year:asc";
-    document.querySelector('input[name="result-type"][value="master"]').checked = true;
-    document.getElementById("f-sort").value = "year:asc";
-  }
+  // Search rules:
+  // 1. Radio button selected → honor it always
+  // 2. No radio + format/year/genre/style engaged → Discogs naturally returns releases/masters
+  //    (those filters don't apply to artist/label entities)
+  // 3. No radio + no constraining filters → all types
 
   if (!q && !artist && !release && !year && !label && !genre) {
     setStatus("Enter a search term or fill in at least one filter.", false);
@@ -209,9 +206,7 @@ async function doSearch(page = 1, skipPushState = false) {
     if (parts.length) document.getElementById("search-info-block").style.display = "";
   }
 
-  const isYearSort  = sort.startsWith("year:");
   const skipSort    = resultType === "artist" || resultType === "label";
-  const dualFetch   = isYearSort && !skipSort && resultType === "";
 
   const baseParams = (typeOverride, perPage) => {
     // For pages 2+, use the auto-detected artist (saved from page 1) for consistent Discogs pagination
@@ -228,17 +223,14 @@ async function doSearch(page = 1, skipPushState = false) {
     const p = new URLSearchParams({ q: qVal, page, per_page: perPage });
     const t = typeOverride ?? resultType;
     if (t) p.set("type", t);
-    // Only send release-specific filters when searching for releases/masters (not artist/label entities)
-    const entitySearch = (t === "artist" || t === "label");
-    if (!entitySearch) {
-      if (effectiveArtist) p.set("artist", effectiveArtist);
-      if (release) p.set("release_title", release);
-      if (year)    p.set("year",          year);
-      if (label)   p.set("label",         label);
-      if (genre)   p.set("genre",         genre);
-      if (style)   p.set("style",         style);
-      if (format)  p.set("format",        format);
-    }
+    // Pass all filters — Discogs ignores release-specific ones for artist/label entity searches
+    if (effectiveArtist) p.set("artist", effectiveArtist);
+    if (release) p.set("release_title", release);
+    if (year)    p.set("year",          year);
+    if (label)   p.set("label",         label);
+    if (genre)   p.set("genre",         genre);
+    if (style)   p.set("style",         style);
+    if (format)  p.set("format",        format);
     if (sort && !skipSort) {
       const [sortField, sortOrder] = sort.split(":");
       p.set("sort",       sortField);
@@ -262,46 +254,7 @@ async function doSearch(page = 1, skipPushState = false) {
     }
 
     let items, totalPages_new, totalItems_new = 0;
-    if (dualFetch) {
-      const [masterRes, releaseRes, bioRes2] = await Promise.all([
-        apiFetch(`${API}/search?${baseParams("master",  18)}`),
-        apiFetch(`${API}/search?${baseParams("release",  6)}`),
-        bioFetch ?? Promise.resolve(null),
-      ]);
-      bioFetch = bioRes2 ? { json: () => bioRes2.json() } : null;
-      const [md, rd] = await Promise.all([masterRes.json(), releaseRes.json()]);
-      const merged = [...(md.results ?? []), ...(rd.results ?? [])];
-      const asc = sort === "year:asc";
-      merged.sort((a, b) => {
-        const ya = parseInt(a.year ?? "0") || 0;
-        const yb = parseInt(b.year ?? "0") || 0;
-        return asc ? ya - yb : yb - ya;
-      });
-      items = merged;
-      totalPages_new = Math.max(md.pagination?.pages ?? 1, rd.pagination?.pages ?? 1);
-      totalItems_new = (md.pagination?.items ?? 0) + (rd.pagination?.items ?? 0);
-    } else if (artistRaw && resultType === "label") {
-      // Special case: artist + Labels radio → show labels that artist recorded on
-      const rp = new URLSearchParams({ q: q || artist, artist, type: "master", per_page: 50, page: 1 });
-      const [relRes, bioRes] = await Promise.all([
-        apiFetch(`${API}/search?${rp}`),
-        bioFetch ?? Promise.resolve(null),
-      ]);
-      bioFetch = bioRes ? { json: () => bioRes.json() } : null;
-      const relData = await relRes.json();
-      const labelNames = [...new Set(
-        (relData.results ?? []).flatMap(r => r.label ?? []).filter(Boolean)
-      )].slice(0, 12);
-      const labelCards = await Promise.all(
-        labelNames.map(name =>
-          apiFetch(`${API}/search?q=${encodeURIComponent(name)}&type=label&per_page=1`)
-            .then(r => r.json()).then(d => d.results?.[0]).catch(() => null)
-        )
-      );
-      items = labelCards.filter(Boolean);
-      totalPages_new = 1;
-      totalItems_new = items.length;
-    } else {
+    {
       const [res, bioRes] = await Promise.all([
         apiFetch(`${API}/search?${baseParams(null, 24)}`),
         bioFetch ?? Promise.resolve(null),
