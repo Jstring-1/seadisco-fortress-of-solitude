@@ -1053,13 +1053,14 @@ async function doAiSearch(q) {
     const r = await apiFetch("/api/ai-search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ q }) });
     if (r.status === 401) { setStatus("Sign in and add your Discogs token to use AI search.", false); return; }
     if (!r.ok) { setStatus("AI search failed. Try again.", false); return; }
-    const { recommendations } = await r.json();
+    const { recommendations, blurb } = await r.json();
     if (!recommendations?.length) { setStatus("No recommendations returned.", false); return; }
     setStatus("");
 
     blurbEl.innerHTML = `
       <div style="margin-bottom:1rem">
-        <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:#666;margin-bottom:0.5rem">✦ AI Recommendations for "${q}"</div>
+        <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:#666;margin-bottom:0.4rem">✦ AI Recommendations for "${escHtml(q)}"</div>
+        ${blurb ? `<div style="font-size:0.85rem;color:var(--muted);font-style:italic;margin-bottom:0.75rem">${escHtml(blurb)}</div>` : ""}
         ${recommendations.map(rec => {
           const params = new URLSearchParams();
           const p = rec.discogsParams ?? {};
