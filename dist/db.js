@@ -31,10 +31,6 @@ export async function initDb() {
     CREATE INDEX IF NOT EXISTS search_history_user_idx
     ON search_history (clerk_user_id, searched_at DESC)
   `);
-    // Add has_bio column if it doesn't exist
-    await getPool().query(`
-    ALTER TABLE search_history ADD COLUMN IF NOT EXISTS has_bio BOOLEAN DEFAULT FALSE
-  `);
     await getPool().query(`
     CREATE TABLE IF NOT EXISTS feedback (
       id            SERIAL PRIMARY KEY,
@@ -133,8 +129,8 @@ export async function saveSearch(clerkUserId, params) {
        )`, [clerkUserId]);
 }
 export async function markSearchBio(clerkUserId) {
-    // Mark the most recent search by this user as having a bio
-    await getPool().query(`UPDATE search_history SET has_bio = TRUE
+    // Add bi=y to the params of the most recent search
+    await getPool().query(`UPDATE search_history SET params = params || '{"bi":"y"}'::jsonb
      WHERE id = (
        SELECT id FROM search_history
        WHERE clerk_user_id = $1
@@ -177,7 +173,7 @@ export async function getRecentSearches(limit = 500) {
     const r = await getPool().query(`SELECT params, MAX(searched_at) AS searched_at
      FROM search_history
      WHERE searched_at > NOW() - INTERVAL '28 days'
-       AND has_bio = TRUE
+       AND params->>'bi' = 'y'
      GROUP BY params
      ORDER BY RANDOM()
      LIMIT $1`, [limit]);
