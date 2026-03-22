@@ -145,8 +145,8 @@ async function doSearch(page = 1, skipPushState = false) {
   const genre     = advOpen ? document.getElementById("f-genre").value.trim() : "";
   const style     = advOpen ? (document.getElementById("f-style")?.value.trim() ?? "") : "";
   const format    = advOpen ? document.getElementById("f-format").value : "";
-  let sort      = document.getElementById("f-sort").value;
-  let resultType = document.querySelector('input[name="result-type"]:checked')?.value ?? "";
+  const sort      = document.getElementById("f-sort").value;
+  const resultType = document.querySelector('input[name="result-type"]:checked')?.value ?? "";
 
   if (resultType === "ai") { doAiSearch(q); return; }
 
@@ -318,7 +318,6 @@ async function doSearch(page = 1, skipPushState = false) {
       }
 
       if (bioData?.profile) {
-        const entityType = artist ? 'artist' : label ? 'label' : genre ? 'genre' : 'artist';
         window._currentBio = {
           name: bioData.name, text: bioData.profile ?? null,
           members:        bioData.members        ?? [],
