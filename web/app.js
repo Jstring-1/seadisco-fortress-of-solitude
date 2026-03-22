@@ -321,14 +321,14 @@ async function doSearch(page = 1, skipPushState = false) {
         }
       }
 
-      // If artist search returned 0 results, retry as general text search
-      // (Discogs artist param is strict; q= does broader matching)
-      if (items.length === 0 && artist && !q) {
-        const fallbackP = new URLSearchParams({ q: artist, page, per_page: 24 });
+      // If artist/label search returned 0 results, retry as general text search
+      // (Discogs artist/label params are strict; q= does broader matching)
+      if (items.length === 0 && (artist || label) && !q) {
+        const fallbackQ = artist || label;
+        const fallbackP = new URLSearchParams({ q: fallbackQ, page, per_page: 24 });
         if (resultType) fallbackP.set("type", resultType);
         if (release) fallbackP.set("release_title", release);
         if (year)    fallbackP.set("year", year);
-        if (label)   fallbackP.set("label", label);
         if (genre)   fallbackP.set("genre", genre);
         if (style)   fallbackP.set("style", style);
         if (format)  fallbackP.set("format", format);
