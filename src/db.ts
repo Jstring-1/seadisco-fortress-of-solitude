@@ -191,6 +191,21 @@ export async function getSearchHistory(clerkUserId: string, limit = 50): Promise
   return r.rows;
 }
 
+export async function getAllUsersForSync(): Promise<Array<{ clerkUserId: string; token: string; username: string; collectionSyncedAt: Date | null; wantlistSyncedAt: Date | null }>> {
+  const r = await getPool().query(
+    `SELECT clerk_user_id, discogs_token, discogs_username, collection_synced_at, wantlist_synced_at
+     FROM user_tokens
+     WHERE discogs_token IS NOT NULL AND discogs_username IS NOT NULL`
+  );
+  return r.rows.map(row => ({
+    clerkUserId:       row.clerk_user_id,
+    token:             row.discogs_token,
+    username:          row.discogs_username,
+    collectionSyncedAt: row.collection_synced_at ?? null,
+    wantlistSyncedAt:   row.wantlist_synced_at   ?? null,
+  }));
+}
+
 export async function getUserToken(clerkUserId: string): Promise<string | null> {
   const r = await getPool().query(
     "SELECT discogs_token FROM user_tokens WHERE clerk_user_id = $1",
