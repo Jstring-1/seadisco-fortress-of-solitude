@@ -595,7 +595,7 @@ app.get("/api/recent-searches", async (_req, res) => {
 app.get("/search", async (req, res) => {
   const rawQ   = (req.query.q as string) ?? "";
   const artist = stripArtistSuffix(req.query.artist as string | undefined);
-  const q = rawQ || artist || "";
+  const q = rawQ;
 
   const ip = clientIp(req);
   const whitelisted = IP_WHITELIST.has(ip);
