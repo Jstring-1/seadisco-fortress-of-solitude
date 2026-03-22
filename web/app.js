@@ -145,10 +145,18 @@ async function doSearch(page = 1, skipPushState = false) {
   const genre     = advOpen ? document.getElementById("f-genre").value.trim() : "";
   const style     = advOpen ? (document.getElementById("f-style")?.value.trim() ?? "") : "";
   const format    = advOpen ? document.getElementById("f-format").value : "";
-  const sort      = document.getElementById("f-sort").value;
-  const resultType = document.querySelector('input[name="result-type"]:checked')?.value ?? "";
+  let sort      = document.getElementById("f-sort").value;
+  let resultType = document.querySelector('input[name="result-type"]:checked')?.value ?? "";
 
   if (resultType === "ai") { doAiSearch(q); return; }
+
+  // Advanced-only search (no general q): default to masters sorted oldest→newest
+  if (!q && (artist || release || year || label || genre || style || format)) {
+    resultType = "master";
+    sort = "year:asc";
+    document.querySelector('input[name="result-type"][value="master"]').checked = true;
+    document.getElementById("f-sort").value = "year:asc";
+  }
 
   if (!q && !artist && !release && !year && !label && !genre) {
     setStatus("Enter a search term or fill in at least one filter.", false);
