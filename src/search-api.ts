@@ -389,7 +389,8 @@ function stripArtistSuffix(name: string | undefined): string | undefined {
 app.get("/api/user/history", async (req, res) => {
   const userId = getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-  const history = await getSearchHistory(userId);
+  const raw = await getSearchHistory(userId);
+  const history = raw.map((s: any) => ({ ...s, params: normalizeParams(s.params) }));
   res.json({ history });
 });
 
@@ -444,8 +445,9 @@ app.get("/api/admin/searches", async (req, res) => {
   const userId = getClerkUserId(req);
   const adminId = process.env.ADMIN_CLERK_ID ?? "";
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
-  const searches = await getRecentSearches(500);
-  // Sort most recent first for the admin view
+  const raw = await getRecentSearches(500);
+  // Normalize and sort most recent first for the admin view
+  const searches = raw.map(s => ({ ...s, params: normalizeParams(s.params) }));
   searches.sort((a, b) => new Date(b.searched_at).getTime() - new Date(a.searched_at).getTime());
   res.json({ searches });
 });
@@ -610,14 +612,29 @@ app.post("/api/user/mb", async (req, res) => {
 });
 
 // GET /api/recent-searches — anonymous global feed
+// Normalize old full-name param keys to single-letter keys
+function normalizeParams(p: Record<string, string>): Record<string, string> {
+  const keyMap: Record<string, string> = {
+    artist: "a", release_title: "r", label: "l", year: "y",
+    genre: "g", style: "s", format: "f", type: "t", sort: "o",
+  };
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(p)) {
+    if (v) out[keyMap[k] ?? k] = v;
+  }
+  return out;
+}
+
 app.get("/api/recent-searches", async (_req, res) => {
   if (!process.env.APP_DB_URL) { res.json({ searches: [] }); return; }
   try {
     const raw = await getRecentSearches(500);
+    // Normalize all params to single-letter keys (handles old entries with full names)
+    const normalized = raw.map(s => ({ ...s, params: normalizeParams(s.params) }));
     // Deduplicate by normalised content: lowercase q/artist/label/release/genre/style/year
     // Searches differing only in format, type, or sort are treated as the same
     const seen = new Set<string>();
-    const searches = raw.filter(({ params }) => {
+    const searches = normalized.filter(({ params }) => {
       const sig = [params.q, params.a, params.r, params.l, params.g, params.s, params.y]
         .map(v => (v ?? "").toLowerCase().trim())
         .join("|");
