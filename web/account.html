@@ -12,7 +12,7 @@
   <link rel="icon" href="/favicon.ico">
   <link rel="manifest" href="/site.webmanifest">
   <meta name="theme-color" content="#0c1015">
-  <link rel="stylesheet" href="/style.css?v=20260321a" />
+  <link rel="stylesheet" href="/style.css?v=20260321b" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -503,11 +503,20 @@ async function clearAllSearches() {
   } catch { /* ignore */ }
 }
 
-function searchLabel(p) {
+// Normalize old full-name param keys to single letters
+function normP(raw) {
+  const m = { artist:"a", release_title:"r", label:"l", year:"y", genre:"g", style:"s", format:"f", type:"t", sort:"o" };
+  const o = {};
+  for (const [k, v] of Object.entries(raw)) { if (v) o[m[k] ?? k] = v; }
+  return o;
+}
+
+function searchLabel(raw) {
+  const p = normP(raw);
   const parts = [];
   if (p.q && (!p.a || p.q.toLowerCase() !== p.a.toLowerCase())) parts.push(p.q);
   if (p.a) parts.push(p.a);
-  if (p.r) parts.push(`"${p.r}"`);
+  if (p.r) parts.push(p.r);
   if (p.l) parts.push(`${p.l} label`);
   if (p.g) parts.push(p.g);
   if (p.s) parts.push(p.s);
@@ -516,7 +525,8 @@ function searchLabel(p) {
   return parts.join(" · ") || "Search";
 }
 
-function paramsToUrl(p) {
+function paramsToUrl(raw) {
+  const p = normP(raw);
   const u = new URLSearchParams();
   if (p.q) u.set("q",  p.q);
   if (p.a) u.set("ar", p.a);
@@ -528,6 +538,7 @@ function paramsToUrl(p) {
   if (p.f) u.set("fm", p.f);
   if (p.t) u.set("rt", p.t);
   if (p.o) u.set("sr", p.o);
+  if (p.b) u.set("b",  p.b);
   return "/?" + u.toString();
 }
 
