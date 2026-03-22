@@ -418,7 +418,12 @@ async function doSearch(page = 1, skipPushState = false) {
       }
     }
 
-    if (!items.length) { setStatus("No results found."); return; }
+    if (!items.length) {
+      setStatus("");
+      document.getElementById("search-ai-summary").innerHTML = "<i>Couldn't find any results at Discogs.</i>";
+      document.getElementById("search-info-block").style.display = "";
+      return;
+    }
 
     setStatus("");
     const returnedMsg = `Returned :: ${totalItems_new.toLocaleString()} results — page ${currentPage} of ${totalPages}`;
