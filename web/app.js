@@ -320,6 +320,29 @@ async function doSearch(page = 1, skipPushState = false) {
           }
         }
       }
+
+      // If artist search returned 0 results, retry as general text search
+      // (Discogs artist param is strict; q= does broader matching)
+      if (items.length === 0 && artist && !q) {
+        const fallbackP = new URLSearchParams({ q: artist, page, per_page: 24 });
+        if (resultType) fallbackP.set("type", resultType);
+        if (release) fallbackP.set("release_title", release);
+        if (year)    fallbackP.set("year", year);
+        if (label)   fallbackP.set("label", label);
+        if (genre)   fallbackP.set("genre", genre);
+        if (style)   fallbackP.set("style", style);
+        if (format)  fallbackP.set("format", format);
+        if (sort && !skipSort) { const [sf, so] = sort.split(":"); fallbackP.set("sort", sf); fallbackP.set("sort_order", so); }
+        const fallbackRes = await apiFetch(`${API}/search?${fallbackP}`);
+        if (fallbackRes.ok) {
+          const fd = await fallbackRes.json();
+          if ((fd.results ?? []).length > 0) {
+            items = fd.results;
+            totalPages_new = fd.pagination?.pages ?? 1;
+            totalItems_new = fd.pagination?.items ?? items.length;
+          }
+        }
+      }
     }
     totalPages = totalPages_new;
 
