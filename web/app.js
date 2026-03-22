@@ -886,12 +886,16 @@ async function loadDiscogsIds() {
     const data = await r.json();
     window._collectionIds = new Set(data.collectionIds ?? []);
     window._wantlistIds   = new Set(data.wantlistIds   ?? []);
-    // Enable "Hide owned" checkbox once collection is loaded
-    if (window._collectionIds.size > 0) {
-      const cb = document.getElementById("hide-owned");
-      const lbl = document.getElementById("hide-owned-label");
-      if (cb) { cb.disabled = false; cb.style.opacity = "1"; cb.style.cursor = "pointer"; cb.addEventListener("change", () => { if (window._lastResults) renderResults(window._lastResults); }); }
-      if (lbl) { lbl.style.color = "#aaa"; lbl.style.cursor = "pointer"; lbl.title = "Hide releases already in your collection"; }
+    // Enable "Hide owned" checkbox for any logged-in user with a token
+    const cb = document.getElementById("hide-owned");
+    const lbl = document.getElementById("hide-owned-label");
+    if (cb && cb.disabled) {
+      cb.disabled = false; cb.style.opacity = "1"; cb.style.cursor = "pointer";
+      cb.addEventListener("change", () => { if (window._lastResults) renderResults(window._lastResults); });
+    }
+    if (lbl) {
+      lbl.style.color = "#aaa"; lbl.style.cursor = "pointer";
+      lbl.title = window._collectionIds.size > 0 ? "Hide releases already in your collection" : "Sync your collection on the Account page to use this filter";
     }
   } catch { /* ignore */ }
 }
