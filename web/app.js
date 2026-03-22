@@ -1074,6 +1074,7 @@ async function doAiSearch(q) {
           if (p.genre)  params.set("gn", p.genre);
           if (p.style)  params.set("st", p.style);
           const yr = p.year ? String(p.year).split(/[-–]/)[0].trim() : "";
+          // Note: AI recs use their own discogsParams format (artist/label/genre/style/year)
           if (/^\d{4}$/.test(yr)) params.set("yr", yr);
           const href = "/?" + params.toString();
           return `<div style="padding:0.75rem 0;border-bottom:1px solid #222">
@@ -1747,14 +1748,14 @@ function toTitleCase(s) {
 function feedLabel(p) {
   const tc = s => toTitleCase(s);
   const parts = [];
-  if (p.q && (!p.artist || p.q.toLowerCase() !== p.artist.toLowerCase())) parts.push(tc(p.q));
-  if (p.artist)        parts.push(tc(p.artist));
-  if (p.release_title) parts.push(`"${tc(p.release_title)}"`);
-  if (p.label)         parts.push(`${tc(p.label)} label`);
-  if (p.genre)         parts.push(p.genre);
-  if (p.style)         parts.push(p.style);
-  if (p.format) parts.push(p.format);
-  if (p.year)          parts.push(p.year);
+  if (p.q && (!p.a || p.q.toLowerCase() !== p.a.toLowerCase())) parts.push(tc(p.q));
+  if (p.a) parts.push(tc(p.a));
+  if (p.r) parts.push(`"${tc(p.r)}"`);
+  if (p.l) parts.push(`${tc(p.l)} label`);
+  if (p.g) parts.push(p.g);
+  if (p.s) parts.push(p.s);
+  if (p.f) parts.push(p.f);
+  if (p.y) parts.push(p.y);
   const full = parts.join(" · ") || "Search";
   const short = full.length > 24 ? full.slice(0, 23) + "…" : full;
   return { full, short };
@@ -1764,23 +1765,22 @@ function feedApply(p) {
   if (!p) return;
   try {
     switchView("search", true);
-    document.getElementById("query").value     = p.q             ?? "";
-    document.getElementById("f-artist").value  = p.artist        ?? "";
-    document.getElementById("f-release").value = p.release_title ?? "";
-    document.getElementById("f-year").value    = p.year          ?? "";
-    document.getElementById("f-label").value   = p.label         ?? "";
-    document.getElementById("f-format").value  = p.format        || "";
-    document.getElementById("f-genre").value   = p.genre         ?? "";
+    document.getElementById("query").value     = p.q ?? "";
+    document.getElementById("f-artist").value  = p.a ?? "";
+    document.getElementById("f-release").value = p.r ?? "";
+    document.getElementById("f-year").value    = p.y ?? "";
+    document.getElementById("f-label").value   = p.l ?? "";
+    document.getElementById("f-format").value  = p.f || "";
+    document.getElementById("f-genre").value   = p.g ?? "";
     populateStyles();
-    document.getElementById("f-style").value   = p.style         ?? "";
-    const typeVal = p.type ?? "";
+    document.getElementById("f-style").value   = p.s ?? "";
+    const typeVal = p.t ?? "";
     const radio = document.querySelector(`input[name="result-type"][value="${typeVal}"]`);
     if (radio) radio.checked = true;
     const feedSortEl = document.getElementById("f-sort");
-    feedSortEl.value = p.sort ?? "";
+    feedSortEl.value = p.o ?? "";
     if (!feedSortEl.value) feedSortEl.selectedIndex = 0;
-    // Open advanced panel if any advanced fields are populated so doSearch picks them up
-    const needsAdv = p.artist || p.release_title || p.year || p.label || p.genre || p.style || p.format;
+    const needsAdv = p.a || p.r || p.y || p.l || p.g || p.s || p.f;
     if (needsAdv) toggleAdvanced(true);
     doSearch(1);
   } catch (e) {

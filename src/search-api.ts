@@ -598,7 +598,7 @@ app.get("/api/recent-searches", async (_req, res) => {
     // Searches differing only in format, type, or sort are treated as the same
     const seen = new Set<string>();
     const searches = raw.filter(({ params }) => {
-      const sig = [params.q, params.artist, params.release_title, params.label, params.genre, params.style, params.year]
+      const sig = [params.q, params.a, params.r, params.l, params.g, params.s, params.y]
         .map(v => (v ?? "").toLowerCase().trim())
         .join("|");
       if (!sig.replace(/\|/g, "").trim() || seen.has(sig)) return false;
@@ -673,20 +673,20 @@ app.get("/search", async (req, res) => {
     if (userId && isFirstPage) {
       const artistParam = req.query.artist ? String(req.query.artist) : "";
       const p: Record<string, string> = {};
-      // Skip q if it duplicates artist (case-insensitive); skip default Vinyl format
+      // Single-letter keys: q a r l y g s f t o
       if (rawQ && rawQ.toLowerCase() !== artistParam.toLowerCase()) p.q = rawQ;
-      if (artistParam)             p.artist        = artistParam;
-      if (req.query.release_title) p.release_title = String(req.query.release_title);
-      if (req.query.label)         p.label         = String(req.query.label);
-      if (req.query.year)          p.year          = String(req.query.year);
-      if (req.query.genre)         p.genre         = String(req.query.genre);
-      if (req.query.style)         p.style         = String(req.query.style);
+      if (artistParam)             p.a = artistParam;
+      if (req.query.release_title) p.r = String(req.query.release_title);
+      if (req.query.label)         p.l = String(req.query.label);
+      if (req.query.year)          p.y = String(req.query.year);
+      if (req.query.genre)         p.g = String(req.query.genre);
+      if (req.query.style)         p.s = String(req.query.style);
       const fmt = req.query.format ? String(req.query.format) : "";
-      if (fmt && fmt !== "Vinyl")  p.format        = fmt;
-      if (req.query.type)          p.type          = String(req.query.type);
+      if (fmt && fmt !== "Vinyl")  p.f = fmt;
+      if (req.query.type)          p.t = String(req.query.type);
       if (req.query.sort) {
         const sortOrder = req.query.sort_order ? `:${String(req.query.sort_order)}` : "";
-        p.sort = `${String(req.query.sort)}${sortOrder}`;
+        p.o = `${String(req.query.sort)}${sortOrder}`;
       }
       const hasResults = (results as any)?.results?.length > 0;
       if (Object.keys(p).length && hasResults) saveSearch(userId, p).catch(() => {});
