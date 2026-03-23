@@ -573,6 +573,59 @@ body {
 .fresh-card-links a:hover {
   color: var(--accent);
 }
+.fresh-card-links a.fresh-discogs-link {
+  color: var(--accent);
+  opacity: 0.75;
+}
+.fresh-card-links a.fresh-discogs-link:hover {
+  opacity: 1;
+}
+
+/* Genre/style filter row */
+.fresh-filter-row {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+  align-items: center;
+}
+.fresh-filter-select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.72rem;
+  color: #aaa;
+  cursor: pointer;
+  max-width: 180px;
+}
+.fresh-filter-select:focus { outline: none; border-color: var(--accent); }
+.fresh-filter-select option { background: #0f1a20; }
+.fresh-filter-input {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.72rem;
+  color: #ccc;
+  width: 130px;
+}
+.fresh-filter-input::placeholder { color: #555; }
+.fresh-filter-input:focus { outline: none; border-color: var(--accent); }
+
+/* "Also:" alternatives in Discogs drop card popup */
+.fresh-also-section {
+  padding: 0.55rem 1rem 0.4rem;
+  font-size: 0.78rem;
+  border-top: 1px solid var(--border);
+  margin-top: 0.25rem;
+  color: #777;
+  line-height: 1.7;
+}
+.fresh-also-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+.fresh-also-link:hover { text-decoration: underline; }
 
 /* Fresh grid responsive */
 @media (max-width: 860px) {
