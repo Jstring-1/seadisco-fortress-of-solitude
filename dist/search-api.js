@@ -119,6 +119,7 @@ app.use((_req, res, next) => {
 // ── Auth / account endpoints ──────────────────────────────────────────────
 // GET /api/config — public config for the frontend
 app.get("/api/config", (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=600"); // 10 min
     res.json({ clerkPublishableKey: authPk, authEnabled: requireAuth });
 });
 // GET /api/user/token — returns whether the user has a token saved
@@ -387,6 +388,7 @@ app.get("/api/wanted", async (req, res) => {
         return;
     }
     try {
+        res.setHeader("Cache-Control", "private, max-age=300"); // 5 min, auth-gated
         const items = await getWantedItems();
         res.json({ items });
     }
@@ -786,6 +788,7 @@ function normalizeParams(p) {
     return out;
 }
 app.get("/api/recent-searches", async (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=120"); // 2 min
     if (!process.env.APP_DB_URL) {
         res.json({ searches: [] });
         return;
@@ -964,6 +967,7 @@ const MB_UA = "DiscogsMCPSearch/1.0 ( search@sideman.pro )";
 // GET /artist-bio?name=Miles+Davis[&id=123456] — Discogs bio
 // If `id` is supplied the artist is fetched directly (no ambiguous name search).
 app.get("/artist-bio", async (req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=3600"); // 1 hour
     const nameRaw = req.query.name;
     const idParam = req.query.id ? parseInt(req.query.id, 10) : null;
     if (!nameRaw || !nameRaw.trim()) {
@@ -1106,6 +1110,7 @@ async function resolveDiscogsIds(profile, dc = discogs) {
 }
 // GET /label-bio?name=Blue+Note — Discogs label profile
 app.get("/label-bio", async (req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=3600"); // 1 hour
     const name = req.query.name;
     if (!name || !name.trim()) {
         res.status(400).json({ error: "Missing required query parameter: name" });
@@ -1145,6 +1150,7 @@ app.get("/label-bio", async (req, res) => {
 });
 // GET /genre-info?genre=Jazz — returns a factual AI-generated genre description
 app.get("/genre-info", async (req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=86400"); // 24 hours
     const genre = req.query.genre;
     if (!genre || !genre.trim()) {
         res.status(400).json({ error: "Missing required query parameter: genre" });
@@ -1182,6 +1188,7 @@ app.get("/genre-info", async (req, res) => {
 });
 // GET /marketplace-stats/:id?type=release|master
 app.get("/marketplace-stats/:id", async (req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=300"); // 5 min
     const { id } = req.params;
     const type = req.query.type ?? "release";
     const dc = await getDiscogsForRequest(req, true);
@@ -1242,6 +1249,7 @@ app.get("/master-versions/:id", async (req, res) => {
 // GET /api/fresh-releases — 150 random releases from last 3 months, client-side filtered
 app.get("/api/fresh-releases", async (req, res) => {
     try {
+        res.setHeader("Cache-Control", "public, max-age=300"); // 5 min
         const releases = await getFreshReleases(150);
         res.json({ releases });
     }
@@ -1253,6 +1261,7 @@ app.get("/api/fresh-releases", async (req, res) => {
 // GET /api/fresh-releases/search?q=... — search full 3-month DB by artist/release/tag
 app.get("/api/fresh-releases/search", async (req, res) => {
     try {
+        res.setHeader("Cache-Control", "public, max-age=120"); // 2 min
         const q = String(req.query.q ?? "").trim();
         if (!q) {
             res.json({ releases: [] });
@@ -1268,6 +1277,7 @@ app.get("/api/fresh-releases/search", async (req, res) => {
 });
 // ── Concert info (Ticketmaster + Bandsintown) ─────────────────────────────
 app.get("/api/concerts/:artist", async (req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=900"); // 15 min
     const artist = decodeURIComponent(req.params.artist).trim();
     if (!artist) {
         res.json({ events: [] });
