@@ -2005,6 +2005,35 @@ function renderFreshGrid(releases) {
 let _freshActiveTag = "";
 let _freshAll = []; // all 150 loaded once, filtered client-side
 
+function scrollTagCloud(dir) {
+  const el = document.getElementById("fresh-tag-cloud");
+  if (el) el.scrollBy({ left: dir * 220, behavior: "smooth" });
+}
+
+// Drag-to-scroll for tag cloud
+(function () {
+  let isDown = false, startX, scrollLeft;
+  document.addEventListener("mousedown", e => {
+    const el = document.getElementById("fresh-tag-cloud");
+    if (!el || !el.contains(e.target)) return;
+    isDown = true; startX = e.pageX - el.offsetLeft; scrollLeft = el.scrollLeft;
+    el.style.cursor = "grabbing";
+  });
+  document.addEventListener("mouseleave", () => { isDown = false; });
+  document.addEventListener("mouseup", () => {
+    isDown = false;
+    const el = document.getElementById("fresh-tag-cloud");
+    if (el) el.style.cursor = "";
+  });
+  document.addEventListener("mousemove", e => {
+    if (!isDown) return;
+    const el = document.getElementById("fresh-tag-cloud");
+    if (!el) return;
+    e.preventDefault();
+    el.scrollLeft = scrollLeft - (e.pageX - el.offsetLeft - startX);
+  });
+})();
+
 function filterFreshByTag(tag) {
   const pills = document.querySelectorAll(".fresh-tag-pill");
   pills.forEach(p => p.classList.toggle("active", p.dataset.tag === tag));
