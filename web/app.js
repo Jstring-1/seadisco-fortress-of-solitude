@@ -545,7 +545,7 @@ function renderCardFromBasicInfo(basicInfo) {
 function addNavTab(view) {
   // Tabs are always in the DOM; this just enables a greyed-out one
   const btn = document.querySelector(`#main-nav-tabs [data-view="${view}"]`);
-  if (btn) btn.classList.remove("nav-disabled");
+  if (btn) { btn.classList.remove("nav-disabled"); btn.removeAttribute("title"); }
 }
 
 function toggleMobileNav() {
@@ -872,7 +872,7 @@ function renderWantedItems(items) {
     return;
   }
   const q = (document.getElementById("wanted-q")?.value ?? "").trim();
-  setStatus(q ? `${items.length} wanted items matching "${q}"` : `${items.length} of up to 500 random community wantlist items`);
+  setStatus(q ? `${items.length} wanted items matching "${q}"` : `${items.length} random community wantlist items`);
   document.getElementById("results").innerHTML = items.map(item => renderCardFromBasicInfo(item)).join("");
 }
 
