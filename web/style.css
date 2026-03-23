@@ -449,16 +449,17 @@ body {
 .tag-scroll-left  { left: 0; }
 .tag-scroll-right { right: 0; }
 .fresh-tag-cloud {
-  display: flex;
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-rows: repeat(3, auto);
+  grid-auto-flow: column;
   gap: 0.35rem;
-  overflow-x: auto;
-  scroll-behavior: smooth;
-  padding: 0.25rem 0.5rem;
-  scrollbar-width: none;        /* Firefox */
-  -ms-overflow-style: none;    /* IE/Edge */
+  overflow-x: scroll;
+  padding: 0.2rem 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  cursor: default;
 }
-.fresh-tag-cloud::-webkit-scrollbar { display: none; } /* Chrome/Safari */
+.fresh-tag-cloud::-webkit-scrollbar { display: none; }
 .fresh-tag-pill {
   background: var(--surface);
   border: 1px solid var(--border);
