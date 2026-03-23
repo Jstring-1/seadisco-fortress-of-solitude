@@ -2033,7 +2033,8 @@ async function loadFreshReleases() {
     const topTags = [...tagCounts.entries()]
       .sort((a, b) => b[1] - a[1])
       .slice(0, 50)
-      .map(([tag]) => tag);
+      .map(([tag]) => tag)
+      .sort(() => Math.random() - 0.5); // randomize display order
 
     const tagCloud = document.getElementById("fresh-tag-cloud");
     if (tagCloud && topTags.length) {
