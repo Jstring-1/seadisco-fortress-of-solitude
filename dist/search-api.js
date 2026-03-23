@@ -13,7 +13,7 @@ const authPk = process.env.AUTH_PK ?? "";
 // Set REQUIRE_AUTH=true to require users to sign in and provide their own Discogs token
 const requireAuth = process.env.REQUIRE_AUTH === "true";
 // Concert API keys
-const ticketmasterKey = process.env.TICKETMASTER_KEY ?? "";
+const ticketmasterKey = process.env.TICKETMASTER_API_KEY ?? "";
 const bandsintownAppId = "seadisco"; // Bandsintown just needs an app identifier
 // Shared Discogs client (used as fallback when user has no personal token)
 const discogs = sharedToken ? new DiscogsClient(sharedToken) : null;
@@ -1309,7 +1309,7 @@ app.get("/api/concerts/:artist", async (req, res) => {
         }
     }
     else {
-        console.log("Ticketmaster skipped — no TICKETMASTER_KEY env var");
+        console.log("Ticketmaster skipped — no TICKETMASTER_API_KEY env var");
     }
     // Bandsintown API
     try {
