@@ -274,7 +274,6 @@ body {
 #main-nav-tabs > .main-nav-tab:first-child { border-radius: 6px 0 0 6px; }
 #main-nav-tabs > button:last-of-type { box-shadow: none; } /* Info: no right separator, auth-wrap provides it */
 .main-nav-tab.active      { color: var(--accent); font-weight: 600; background: rgba(0,200,212,0.05); }
-.main-nav-tab:hover:not(.active):not(.nav-disabled) { color: var(--text); background: rgba(255,255,255,0.03); }
 .main-nav-tab.nav-disabled { color: #2a3a40; cursor: default; }
 /* ─ Auth wrap + button ──────────────────────────────────────────────────── */
 #nav-auth-wrap {
