@@ -573,6 +573,15 @@ body {
 .fresh-card-links a:hover {
   color: var(--accent);
 }
+/* Title/artist links on drop cards — inherit color, no underline by default */
+a.fresh-card-search-link {
+  color: inherit;
+  text-decoration: none;
+}
+a.fresh-card-search-link:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 .fresh-card-links a.fresh-discogs-link {
   color: var(--accent);
   opacity: 0.75;
