@@ -414,7 +414,7 @@ body {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  margin-bottom: 0.85rem;
+  margin-bottom: 1rem;
 }
 .fresh-all-btn {
   background: var(--surface);
@@ -444,7 +444,7 @@ body {
   flex-wrap: wrap;
   justify-content: center;
   gap: 0.35rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.85rem;
 }
 .fresh-tag-pill {
   background: var(--surface);
@@ -603,8 +603,8 @@ a.fresh-card-search-link:hover {
   cursor: pointer;
   box-sizing: border-box;
 }
-.fresh-filter-select { max-width: 160px; }
-.fresh-filter-input  { width: 110px; color: #ccc; cursor: text; }
+.fresh-filter-select { width: 130px; }
+.fresh-filter-input  { width: 130px; color: #ccc; cursor: text; }
 .fresh-filter-select:focus,
 .fresh-filter-input:focus  { outline: none; border-color: var(--accent); }
 .fresh-filter-select option { background: #0f1a20; }
