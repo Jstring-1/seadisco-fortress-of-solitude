@@ -2172,6 +2172,13 @@ function searchFromDropCard(event, field, value) {
   doSearch(1);
 }
 
+// Navigate to Drops view and search by tag
+function dropTagSearch(tag) {
+  switchView("drops");
+  const input = document.getElementById("fresh-tag-input");
+  if (input) { input.value = tag; debounceFreshSearch(tag); }
+}
+
 // ── Drop card → popup (Discogs search with ListenBrainz fallback) ────────
 async function openDropCardPopup(el) {
   const artist  = el.dataset.artist  || "";
@@ -2200,32 +2207,35 @@ async function openDropCardPopup(el) {
     loadingEl.style.display = "none";
 
     if (!results.length) {
-      // No Discogs match — show ListenBrainz info
+      // No Discogs match — show ListenBrainz info with floated cover layout
       const fmtDate = date
         ? new Date(date + "T12:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
         : "";
+      const year = date ? date.slice(0, 4) : "";
       const googleQ   = [artist, title, "new release"].filter(Boolean).join(" ");
       const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(googleQ)}`;
-      const mbUrl     = rgMbid ? `https://musicbrainz.org/release-group/${rgMbid}` : "";
 
-      let html = `<div style="text-align:center;padding:1.5rem 1rem">`;
-      if (cover) html += `<img src="${escHtml(cover)}" alt="" style="max-width:220px;border-radius:6px;margin-bottom:1rem">`;
-      html += `<div style="font-size:1.05rem;font-weight:600;color:#e2e2e2;margin-bottom:0.25rem">${escHtml(title)}</div>`;
-      html += `<div style="font-size:0.88rem;color:var(--accent);margin-bottom:0.6rem">${escHtml(artist)}</div>`;
-      if (fmtDate || types) {
-        html += `<div style="font-size:0.78rem;color:#888;margin-bottom:0.5rem">${[types, fmtDate].filter(Boolean).join(" · ")}</div>`;
-      }
+      // Escape for onclick attributes
+      const escArt = escHtml(artist).replace(/'/g, "\\'");
+      const escTit = escHtml(title).replace(/'/g, "\\'");
+
+      let html = `<div class="drop-nomatch">`;
+      if (cover) html += `<img class="drop-nomatch-cover" src="${escHtml(cover)}" alt="">`;
+      html += `<div class="drop-nomatch-details">`;
+      html += `<div class="drop-nomatch-artist"><a href="#" onclick="event.preventDefault();closeModal();searchFromDropCard(event,'artist','${escArt}')">${escHtml(artist)}</a></div>`;
+      html += `<div class="drop-nomatch-title"><a href="#" onclick="event.preventDefault();closeModal();searchFromDropCard(event,'release','${escTit}')">${escHtml(title)}</a></div>`;
+      if (types) html += `<div class="drop-nomatch-line">${escHtml(types)}</div>`;
+      if (fmtDate) html += `<div class="drop-nomatch-line">Released: ${fmtDate}</div>`;
+      // Truncated tag list — each tag links to a Drops search
       if (tags.length) {
-        html += `<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:0.3rem;margin-bottom:0.8rem">`;
-        html += tags.map(t => `<span style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:0.15rem 0.5rem;font-size:0.68rem;color:#999">${escHtml(t)}</span>`).join("");
+        const shown = tags.slice(0, 8);
+        html += `<div class="drop-nomatch-tags">`;
+        html += shown.map(t => `<a href="#" class="drop-nomatch-tag" onclick="event.preventDefault();closeModal();dropTagSearch('${escHtml(t).replace(/'/g, "\\'")}')">${escHtml(t)}</a>`).join("");
+        if (tags.length > 8) html += `<span class="drop-nomatch-tag" style="color:#555">+${tags.length - 8}</span>`;
         html += `</div>`;
       }
-      html += `<div style="font-size:0.82rem;color:#777;margin-bottom:1rem;font-style:italic">No Discogs entry yet</div>`;
-      html += `<div style="display:flex;justify-content:center;gap:0.75rem;flex-wrap:wrap">`;
-      html += `<a href="#" onclick="event.preventDefault();closeModal();searchFromDropCard(event,'artist','${escHtml(artist)}')" style="font-size:0.75rem;color:var(--accent);text-decoration:none">Search artist on SeaDisco</a>`;
-      html += `<a href="#" onclick="event.preventDefault();closeModal();searchFromDropCard(event,'release','${escHtml(title)}')" style="font-size:0.75rem;color:var(--accent);text-decoration:none">Search title on SeaDisco</a>`;
-      if (mbUrl) html += `<a href="${mbUrl}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#5a9aaa;text-decoration:none">MusicBrainz →</a>`;
-      html += `<a href="${googleUrl}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#5a9aaa;text-decoration:none">Google →</a>`;
+      html += `<div class="drop-nomatch-msg">No Discogs entry yet</div>`;
+      html += `<a href="${googleUrl}" target="_blank" rel="noopener" class="drop-nomatch-google">Google →</a>`;
       html += `</div></div>`;
       infoEl.innerHTML = html;
       return;
