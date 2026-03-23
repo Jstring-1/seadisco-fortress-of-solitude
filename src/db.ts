@@ -647,6 +647,20 @@ export async function upsertFreshRelease(r: {
   );
 }
 
+export async function getFreshStats(): Promise<{ count: number; oldest: string | null; newest: string | null }> {
+  const r = await getPool().query(
+    `SELECT COUNT(*)::int AS count,
+            MIN(release_date) AS oldest,
+            MAX(release_date) AS newest
+     FROM fresh_releases`
+  );
+  return {
+    count:  r.rows[0]?.count  ?? 0,
+    oldest: r.rows[0]?.oldest ?? null,
+    newest: r.rows[0]?.newest ?? null,
+  };
+}
+
 export async function pruneFreshReleases(): Promise<number> {
   const r = await getPool().query(
     `DELETE FROM fresh_releases WHERE fetched_at < NOW() - INTERVAL '3 months'`

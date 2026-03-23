@@ -138,6 +138,7 @@
       <div id="admin-sync-status-section" style="display:none">
         <hr class="section-divider" />
         <h2 style="margin-bottom:0.5rem">User Sync Status</h2>
+        <div id="admin-fresh-stats" style="font-size:0.8rem;color:#555;margin-bottom:0.75rem"></div>
         <div id="admin-sync-status-list" style="font-size:0.83rem;color:var(--muted)">Loading…</div>
       </div>
 
@@ -733,9 +734,14 @@ async function loadAdminSyncStatus() {
   section.style.display = "block";
   try {
     const sessionToken = await clerk.session?.getToken();
-    const { users } = await fetch("/api/admin/sync-status", {
+    const { users, freshStats } = await fetch("/api/admin/sync-status", {
       headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
+    const freshEl = document.getElementById("admin-fresh-stats");
+    if (freshEl && freshStats) {
+      const fmt = d => d ? new Date(d).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "—";
+      freshEl.textContent = `Drops DB: ${(freshStats.count ?? 0).toLocaleString()} releases · ${fmt(freshStats.oldest)} – ${fmt(freshStats.newest)}`;
+    }
     if (!users?.length) { el.textContent = "No users with Discogs tokens."; return; }
 
     const fmtTime = ts => {

@@ -457,6 +457,17 @@ export async function upsertFreshRelease(r) {
        fetched_at         = NOW()`, [r.release_mbid, r.release_name, r.artist_credit_name, r.release_date,
         r.primary_type, r.secondary_type, r.tags, r.caa_id, r.caa_release_mbid, r.cover_url]);
 }
+export async function getFreshStats() {
+    const r = await getPool().query(`SELECT COUNT(*)::int AS count,
+            MIN(release_date) AS oldest,
+            MAX(release_date) AS newest
+     FROM fresh_releases`);
+    return {
+        count: r.rows[0]?.count ?? 0,
+        oldest: r.rows[0]?.oldest ?? null,
+        newest: r.rows[0]?.newest ?? null,
+    };
+}
 export async function pruneFreshReleases() {
     const r = await getPool().query(`DELETE FROM fresh_releases WHERE fetched_at < NOW() - INTERVAL '3 months'`);
     return r.rowCount ?? 0;
