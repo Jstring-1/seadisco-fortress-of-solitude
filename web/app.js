@@ -2003,33 +2003,41 @@ function renderFreshGrid(releases) {
 }
 
 let _freshActiveTag = "";
+let _freshAll = []; // all 150 loaded once, filtered client-side
 
-async function filterFreshByTag(tag) {
+function filterFreshByTag(tag) {
   const pills = document.querySelectorAll(".fresh-tag-pill");
   pills.forEach(p => p.classList.toggle("active", p.dataset.tag === tag));
   _freshActiveTag = tag;
-  const url = tag ? `/api/fresh-releases?tag=${encodeURIComponent(tag)}` : "/api/fresh-releases";
-  try {
-    const data = await fetch(url).then(r => r.json());
-    renderFreshGrid(data.releases ?? []);
-  } catch { /* ignore */ }
+  const filtered = tag ? _freshAll.filter(r => (r.tags ?? []).includes(tag)) : _freshAll;
+  renderFreshGrid(filtered);
 }
 
 async function loadFreshReleases() {
   try {
     const data = await fetch("/api/fresh-releases").then(r => r.json());
-    const releases = data.releases ?? [];
-    const topTags  = data.topTags  ?? [];
-    if (!releases.length && !topTags.length) return;
+    _freshAll = data.releases ?? [];
+    if (!_freshAll.length) return;
+
+    // Build tag cloud from all loaded items — no extra API call needed
+    const tagCounts = new Map();
+    for (const r of _freshAll) {
+      for (const t of (r.tags ?? [])) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
+    }
+    const topTags = [...tagCounts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 30)
+      .map(([tag]) => tag);
+
     const tagCloud = document.getElementById("fresh-tag-cloud");
     if (tagCloud && topTags.length) {
       tagCloud.innerHTML =
         `<span class="fresh-tag-pill active" data-tag="" onclick="filterFreshByTag('')">All</span>` +
         topTags.map(t =>
-          `<span class="fresh-tag-pill" data-tag="${escHtml(t.tag)}" onclick="filterFreshByTag('${escHtml(t.tag)}')">${escHtml(t.tag)}</span>`
+          `<span class="fresh-tag-pill" data-tag="${escHtml(t)}" onclick="filterFreshByTag('${escHtml(t)}')">${escHtml(t)}</span>`
         ).join("");
     }
-    renderFreshGrid(releases);
+    renderFreshGrid(_freshAll);
   } catch { /* fresh releases unavailable */ }
 }
 
