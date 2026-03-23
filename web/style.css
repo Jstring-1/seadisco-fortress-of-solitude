@@ -409,47 +409,6 @@ body {
 .feed-pill-ph:nth-child(8) { width: 3.5rem; animation-delay: 1.05s; }
 
 /* ── Latest Drops / Fresh Releases ─────────────────────────────────────── */
-.fresh-tag-cloud-wrap {
-  position: relative;
-  display: flex;
-  align-items: stretch;
-  margin-bottom: 0.5rem;
-}
-.fresh-tag-cloud-wrap::before,
-.fresh-tag-cloud-wrap::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 60px;
-  z-index: 1;
-  pointer-events: none;
-}
-.fresh-tag-cloud-wrap::before {
-  left: 32px;
-  background: linear-gradient(to right, var(--bg) 30%, transparent);
-}
-.fresh-tag-cloud-wrap::after {
-  right: 32px;
-  background: linear-gradient(to left, var(--bg) 30%, transparent);
-}
-.tag-scroll-btn {
-  flex-shrink: 0;
-  width: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(12, 16, 21, 0.78);
-  border: none;
-  border-radius: 6px;
-  color: var(--muted);
-  font-size: 1.4rem;
-  line-height: 1;
-  cursor: pointer;
-  font-weight: 300;
-  z-index: 2;
-}
-.tag-scroll-btn:hover:not(.main-nav-tab) { background: rgba(12, 16, 21, 0.92); color: var(--text); }
 /* ─ Tag footer: persistent All button + active label ─ */
 .fresh-tag-footer {
   display: flex;
@@ -481,18 +440,12 @@ body {
   font-style: italic;
 }
 .fresh-tag-cloud {
-  display: grid;
-  grid-template-rows: repeat(3, auto);
-  grid-auto-flow: column;
-  justify-items: start;    /* pills natural text width, no column stretching */
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 0.35rem;
-  overflow-x: scroll;
-  padding: 0.2rem 0;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-  cursor: default;
+  margin-bottom: 0.5rem;
 }
-.fresh-tag-cloud::-webkit-scrollbar { display: none; }
 .fresh-tag-pill {
   background: var(--surface);
   border: 1px solid var(--border);
