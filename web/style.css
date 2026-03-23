@@ -944,6 +944,68 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   padding: 1rem;
 }
 
+/* ── Concert overlay ── */
+#concert-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  z-index: 250;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+#concert-overlay.open { display: flex; }
+#concert-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  max-width: 560px;
+  width: 100%;
+  max-height: 82vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+}
+#concert-close {
+  position: sticky;
+  top: 0.5rem;
+  float: right;
+  margin: 0.5rem 0.6rem 0 0;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.1rem 0.4rem;
+  border-radius: 4px;
+  z-index: 1;
+}
+#concert-close:hover { color: var(--text); background: #1e2d38; }
+#concert-info { padding: 1rem; }
+.concert-artist-name { font-size: 1.1rem; font-weight: 600; color: #e2e2e2; margin-bottom: 0.75rem; }
+.concert-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
+.concert-item {
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  gap: 0.5rem;
+  align-items: start;
+}
+.concert-item:hover { border-color: #3a4a55; }
+.concert-date { font-size: 0.72rem; color: var(--accent); font-weight: 600; line-height: 1.4; }
+.concert-date .concert-time { font-weight: normal; color: #777; display: block; }
+.concert-details { min-width: 0; }
+.concert-event-name { font-size: 0.82rem; color: #ccc; font-weight: 500; }
+.concert-venue { font-size: 0.72rem; color: #999; margin-top: 0.15rem; }
+.concert-venue a { color: #5a9aaa; text-decoration: none; }
+.concert-venue a:hover { text-decoration: underline; }
+.concert-source { font-size: 0.6rem; color: #555; text-transform: uppercase; letter-spacing: 0.04em; }
+.concert-empty { padding: 2rem; text-align: center; color: #777; font-style: italic; }
+
 /* ── Version overlay (layered over master popup) ── */
 #version-overlay {
   display: none;

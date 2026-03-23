@@ -1003,6 +1003,86 @@ function closeModal() {
   history.replaceState({}, "", u.toString());
 }
 
+// ── Concert popup ─────────────────────────────────────────────────────────
+async function openConcertPopup(event, artistName) {
+  if (event) event.preventDefault();
+  const overlay   = document.getElementById("concert-overlay");
+  const infoEl    = document.getElementById("concert-info");
+  const loadingEl = document.getElementById("concert-loading");
+  infoEl.innerHTML = "";
+  loadingEl.textContent = "Loading concerts…";
+  loadingEl.style.display = "block";
+  overlay.classList.add("open");
+
+  // Shareable URL
+  const u = new URL(window.location.href);
+  u.searchParams.set("ct", artistName);
+  history.pushState({}, "", u.toString());
+
+  try {
+    const data = await fetch(`/api/concerts/${encodeURIComponent(artistName)}`).then(r => r.json());
+    loadingEl.style.display = "none";
+    const events = data.events ?? [];
+
+    if (!events.length) {
+      infoEl.innerHTML = `<div class="concert-empty">No concert info found for ${escHtml(artistName)}</div>`;
+      return;
+    }
+
+    const fmtDate = (d) => {
+      if (!d) return "";
+      try { return new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }); }
+      catch { return d; }
+    };
+    const fmtTime = (t) => {
+      if (!t) return "";
+      try {
+        const [h, m] = t.split(":");
+        const hr = parseInt(h);
+        return `${hr > 12 ? hr - 12 : hr}:${m} ${hr >= 12 ? "PM" : "AM"}`;
+      } catch { return t; }
+    };
+
+    let html = `<div class="concert-artist-name">${escHtml(artistName)} — Upcoming Shows</div>`;
+    html += `<div class="concert-list">`;
+    for (const ev of events) {
+      const googleQ = encodeURIComponent(`${artistName} ${ev.venue} ${ev.city} concert`);
+      const googleUrl = `https://www.google.com/search?q=${googleQ}`;
+      const location = [ev.city, ev.region, ev.country].filter(Boolean).join(", ");
+      html += `<div class="concert-item">
+        <div class="concert-date">
+          ${escHtml(fmtDate(ev.date))}
+          ${ev.time ? `<span class="concert-time">${escHtml(fmtTime(ev.time))}</span>` : ""}
+        </div>
+        <div class="concert-details">
+          <div class="concert-event-name">${escHtml(ev.name)}</div>
+          <div class="concert-venue">
+            <a href="${googleUrl}" target="_blank" rel="noopener">${escHtml(ev.venue)}</a>
+            ${location ? ` — ${escHtml(location)}` : ""}
+          </div>
+          <span class="concert-source">${escHtml(ev.source)}</span>
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
+    infoEl.innerHTML = html;
+  } catch (err) {
+    loadingEl.style.display = "none";
+    infoEl.innerHTML = `<div class="concert-empty">Failed to load concert info.</div>`;
+  }
+}
+
+function closeConcertPopup() {
+  document.getElementById("concert-overlay").classList.remove("open");
+  const u = new URL(window.location.href);
+  u.searchParams.delete("ct");
+  history.replaceState({}, "", u.toString());
+}
+
+document.getElementById("concert-overlay").addEventListener("click", e => {
+  if (e.target === document.getElementById("concert-overlay")) closeConcertPopup();
+});
+
 // ── Image lightbox / carousel ─────────────────────────────────────────────
 let _lbImages = [], _lbIdx = 0;
 
@@ -1333,6 +1413,7 @@ document.getElementById("video-overlay").addEventListener("click", e => {
 
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") {
+    closeConcertPopup();
     closeVideo();
     closeModal();
     closeBioFull();
@@ -1488,6 +1569,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
           ? `<a href="https://www.discogs.com/sell/list?release_id=${escHtml(String(stats.releaseId))}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#888;text-decoration:none;margin-top:0.2rem;display:block">${escHtml(String(stats.numForSale))} available from $${parseFloat(stats.lowestPrice).toFixed(2)}</a>`
           : (stats?.numForSale === 0 ? `<div style="font-size:0.75rem;color:#555;margin-top:0.2rem">Not currently available on Discogs marketplace</div>` : "")
         }
+        ${artists.length ? `<a href="#" onclick="openConcertPopup(event,'${escHtml(artists[0]).replace(/'/g, "\\'")}')" style="font-size:0.75rem;color:#5a9aaa;text-decoration:none;margin-top:0.2rem;display:block">Concerts ♪</a>` : ""}
       </div>
     </div>
     ${trackHTML}
@@ -2237,6 +2319,7 @@ async function openDropCardPopup(el) {
       }
       html += `</div>`;
       html += `<div class="drop-nomatch-msg">No Discogs entry yet</div>`;
+      html += `<a href="#" onclick="openConcertPopup(event,'${escArt}')" class="drop-nomatch-google" style="margin-top:0.3rem">Concerts ♪</a>`;
       html += `<a href="${googleUrl}" target="_blank" rel="noopener" class="drop-nomatch-google">Google →</a>`;
       html += `</div></div>`;
       infoEl.innerHTML = html;
@@ -2319,6 +2402,10 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
     await authReadyPromise;
     doSearch(parseInt(p.get("pg") ?? "1"), true);
   }
+  // Restore concert popup from shared URL
+  const ctArtist = p.get("ct");
+  if (ctArtist) openConcertPopup(null, ctArtist);
+
   // Defer non-critical feeds until browser is idle
   const deferLoad = (fn) => typeof requestIdleCallback === "function" ? requestIdleCallback(fn) : setTimeout(fn, 200);
   deferLoad(() => loadRecentFeed());
