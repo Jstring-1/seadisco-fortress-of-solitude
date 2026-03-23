@@ -604,7 +604,7 @@ a.fresh-card-search-link:hover {
   box-sizing: border-box;
 }
 .fresh-filter-select { width: 130px; }
-.fresh-filter-input  { width: 130px; color: #ccc; cursor: text; }
+.fresh-filter-input  { width: 80px; color: #ccc; cursor: text; }
 .fresh-filter-select:focus,
 .fresh-filter-input:focus  { outline: none; border-color: var(--accent); }
 .fresh-filter-select option { background: #0f1a20; }
