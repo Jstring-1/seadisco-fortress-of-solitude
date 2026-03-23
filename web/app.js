@@ -580,7 +580,7 @@ function switchView(view, skipPushState = false) {
     }
   }
   if (typeof gtag === "function") {
-    const titles = { drops: "Drops", info: "Info", collection: "Collection", wantlist: "Wantlist", wanted: "Wanted", search: "Search" };
+    const titles = { drops: "Drops", info: "Info", collection: "Collection", wantlist: "Wantlist", wanted: "Wants", search: "Search" };
     gtag("event", "page_view", {
       page_location: window.location.href,
       page_path:     window.location.pathname + window.location.search,
