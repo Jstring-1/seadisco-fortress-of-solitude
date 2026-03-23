@@ -590,25 +590,36 @@ a.fresh-card-search-link:hover {
   opacity: 1;
 }
 
-/* Genre/style selects + tag text input — unified height, inline in footer row */
+/* Genre/style selects + tag text input — forced identical size */
 .fresh-filter-select,
 .fresh-filter-input {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 0.1rem 0.4rem;
+  height: 22px;
+  padding: 0 0.4rem;
+  font-family: inherit;
   font-size: 0.68rem;
-  line-height: 1.4;
+  line-height: 22px;
   color: #aaa;
-  cursor: pointer;
   box-sizing: border-box;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
 }
-.fresh-filter-select { width: 130px; }
+.fresh-filter-select {
+  width: 130px;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23666'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  padding-right: 18px;
+}
 .fresh-filter-input  { width: 80px; color: #ccc; cursor: text; }
 .fresh-filter-select:focus,
 .fresh-filter-input:focus  { outline: none; border-color: var(--accent); }
 .fresh-filter-select option { background: #0f1a20; }
-.fresh-filter-input::placeholder { color: #555; }
+.fresh-filter-input::placeholder { color: #555; font-family: inherit; font-size: 0.68rem; }
 
 /* "Also:" alternatives in Discogs drop card popup */
 .fresh-also-section {
