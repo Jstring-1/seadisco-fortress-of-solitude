@@ -105,9 +105,14 @@ export async function initDb() {
       caa_id              BIGINT,
       caa_release_mbid    TEXT,
       cover_url           TEXT,
+      release_group_mbid  TEXT,
+      artist_mbids        TEXT[],
       fetched_at          TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+    // Migration: add columns if missing on existing tables
+    await getPool().query(`ALTER TABLE fresh_releases ADD COLUMN IF NOT EXISTS release_group_mbid TEXT`);
+    await getPool().query(`ALTER TABLE fresh_releases ADD COLUMN IF NOT EXISTS artist_mbids TEXT[]`);
 }
 export async function saveSearch(clerkUserId, params) {
     // Skip if identical params were saved in the last 5 minutes (prevents double-saves)
@@ -441,8 +446,8 @@ export async function updateWantlistSyncedAt(clerkUserId) {
 }
 export async function upsertFreshRelease(r) {
     await getPool().query(`INSERT INTO fresh_releases
-       (release_mbid, release_name, artist_credit_name, release_date, primary_type, secondary_type, tags, caa_id, caa_release_mbid, cover_url, fetched_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
+       (release_mbid, release_name, artist_credit_name, release_date, primary_type, secondary_type, tags, caa_id, caa_release_mbid, cover_url, release_group_mbid, artist_mbids, fetched_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,NOW())
      ON CONFLICT (release_mbid)
      DO UPDATE SET
        release_name       = $2,
@@ -454,8 +459,11 @@ export async function upsertFreshRelease(r) {
        caa_id             = $8,
        caa_release_mbid   = $9,
        cover_url          = $10,
+       release_group_mbid = $11,
+       artist_mbids       = $12,
        fetched_at         = NOW()`, [r.release_mbid, r.release_name, r.artist_credit_name, r.release_date,
-        r.primary_type, r.secondary_type, r.tags, r.caa_id, r.caa_release_mbid, r.cover_url]);
+        r.primary_type, r.secondary_type, r.tags, r.caa_id, r.caa_release_mbid, r.cover_url,
+        r.release_group_mbid, r.artist_mbids]);
 }
 export async function getFreshStats() {
     const r = await getPool().query(`SELECT COUNT(*)::int AS count,
@@ -477,7 +485,8 @@ export async function pruneFreshReleases() {
 export async function getFreshReleases(limit = 150) {
     // Random sample from last 3 months — all loaded at once for client-side filtering
     const r = await getPool().query(`SELECT release_mbid, release_name, artist_credit_name, release_date,
-            primary_type, secondary_type, tags, caa_release_mbid, cover_url
+            primary_type, secondary_type, tags, caa_release_mbid, cover_url,
+            release_group_mbid, artist_mbids
      FROM fresh_releases
      WHERE fetched_at > NOW() - INTERVAL '3 months'
      ORDER BY RANDOM()
@@ -487,7 +496,8 @@ export async function getFreshReleases(limit = 150) {
 export async function searchFreshReleases(query, limit = 200) {
     const pattern = `%${query}%`;
     const r = await getPool().query(`SELECT release_mbid, release_name, artist_credit_name, release_date,
-            primary_type, secondary_type, tags, caa_release_mbid, cover_url
+            primary_type, secondary_type, tags, caa_release_mbid, cover_url,
+            release_group_mbid, artist_mbids
      FROM fresh_releases
      WHERE fetched_at > NOW() - INTERVAL '3 months'
        AND (

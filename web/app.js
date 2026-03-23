@@ -1984,23 +1984,16 @@ function renderFreshGrid(releases) {
       ? new Date(dateStr + "T12:00:00").toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
       : "";
 
-    const googleQ   = [rel.artist_credit_name, rel.release_name, "new release"].filter(Boolean).join(" ");
-    const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(googleQ)}`;
+    // Encode ListenBrainz metadata as data attributes for the popup
+    const mbData = `data-artist="${escHtml(rel.artist_credit_name ?? '')}" data-title="${escHtml(rel.release_name ?? '')}" data-cover="${escHtml(rel.cover_url ?? '')}" data-date="${escHtml(dateStr)}" data-type="${escHtml(types)}" data-tags="${escHtml((rel.tags ?? []).join(','))}" data-rgmbid="${escHtml(rel.release_group_mbid ?? '')}" data-artmbids="${escHtml((rel.artist_mbids ?? []).join(','))}"`;
 
-    return `<div class="fresh-card">
+    return `<div class="fresh-card fresh-card-clickable" ${mbData} onclick="openDropCardPopup(this)">
       <div class="fresh-card-img">${img}</div>
       <div class="fresh-card-body">
-        <div class="fresh-card-title"><a href="#" class="fresh-card-search-link" data-field="release" data-value="${escHtml(rel.release_name ?? '')}" onclick="searchFromDropCard(event,this.dataset.field,this.dataset.value)">${escHtml(rel.release_name ?? "Unknown")}</a></div>
-        <div class="fresh-card-artist"><a href="#" class="fresh-card-search-link" data-field="artist" data-value="${escHtml(rel.artist_credit_name ?? '')}" onclick="searchFromDropCard(event,this.dataset.field,this.dataset.value)">${escHtml(rel.artist_credit_name ?? "")}</a></div>
+        <div class="fresh-card-title">${escHtml(rel.release_name ?? "Unknown")}</div>
+        <div class="fresh-card-artist">${escHtml(rel.artist_credit_name ?? "")}</div>
         ${date ? `<div class="fresh-card-date">${date}</div>` : ""}
         ${types ? `<div class="fresh-card-type">${escHtml(types)}</div>` : ""}
-        <div class="fresh-card-links">
-          <a href="${googleUrl}" target="_blank" rel="noopener">Google →</a>
-          <a href="#" class="fresh-discogs-link"
-             data-artist="${escHtml(rel.artist_credit_name ?? '')}"
-             data-title="${escHtml(rel.release_name ?? '')}"
-             onclick="openFreshCardDiscogs(event,this.dataset.artist,this.dataset.title)">Discogs ↗</a>
-        </div>
       </div>
     </div>`;
   }).join("");
@@ -2179,9 +2172,17 @@ function searchFromDropCard(event, field, value) {
   doSearch(1);
 }
 
-// ── Drop card → Discogs popup ─────────────────────────────────────────────
-async function openFreshCardDiscogs(event, artist, title) {
-  event.preventDefault();
+// ── Drop card → popup (Discogs search with ListenBrainz fallback) ────────
+async function openDropCardPopup(el) {
+  const artist  = el.dataset.artist  || "";
+  const title   = el.dataset.title   || "";
+  const cover   = el.dataset.cover   || "";
+  const date    = el.dataset.date    || "";
+  const types   = el.dataset.type    || "";
+  const tags    = el.dataset.tags    ? el.dataset.tags.split(",").filter(Boolean) : [];
+  const rgMbid  = el.dataset.rgmbid  || "";
+  const artMbids = el.dataset.artmbids ? el.dataset.artmbids.split(",").filter(Boolean) : [];
+
   const overlay   = document.getElementById("modal-overlay");
   const infoEl    = document.getElementById("album-info");
   const loadingEl = document.getElementById("modal-loading");
@@ -2199,16 +2200,39 @@ async function openFreshCardDiscogs(event, artist, title) {
     loadingEl.style.display = "none";
 
     if (!results.length) {
-      infoEl.innerHTML = `
-        <div style="padding:2.5rem 1rem;text-align:center;color:#888">
-          <div style="font-size:1rem;margin-bottom:0.4rem;color:#aaa">No Discogs entry yet</div>
-          <div style="font-size:0.8rem"><em>${escHtml(artist)} – ${escHtml(title)}</em> doesn't have a page on Discogs yet.</div>
-        </div>`;
+      // No Discogs match — show ListenBrainz info
+      const fmtDate = date
+        ? new Date(date + "T12:00:00").toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
+        : "";
+      const googleQ   = [artist, title, "new release"].filter(Boolean).join(" ");
+      const googleUrl = `https://www.google.com/search?q=${encodeURIComponent(googleQ)}`;
+      const mbUrl     = rgMbid ? `https://musicbrainz.org/release-group/${rgMbid}` : "";
+
+      let html = `<div style="text-align:center;padding:1.5rem 1rem">`;
+      if (cover) html += `<img src="${escHtml(cover)}" alt="" style="max-width:220px;border-radius:6px;margin-bottom:1rem">`;
+      html += `<div style="font-size:1.05rem;font-weight:600;color:#e2e2e2;margin-bottom:0.25rem">${escHtml(title)}</div>`;
+      html += `<div style="font-size:0.88rem;color:var(--accent);margin-bottom:0.6rem">${escHtml(artist)}</div>`;
+      if (fmtDate || types) {
+        html += `<div style="font-size:0.78rem;color:#888;margin-bottom:0.5rem">${[types, fmtDate].filter(Boolean).join(" · ")}</div>`;
+      }
+      if (tags.length) {
+        html += `<div style="display:flex;flex-wrap:wrap;justify-content:center;gap:0.3rem;margin-bottom:0.8rem">`;
+        html += tags.map(t => `<span style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:0.15rem 0.5rem;font-size:0.68rem;color:#999">${escHtml(t)}</span>`).join("");
+        html += `</div>`;
+      }
+      html += `<div style="font-size:0.82rem;color:#777;margin-bottom:1rem;font-style:italic">No Discogs entry yet</div>`;
+      html += `<div style="display:flex;justify-content:center;gap:0.75rem;flex-wrap:wrap">`;
+      html += `<a href="#" onclick="event.preventDefault();closeModal();searchFromDropCard(event,'artist','${escHtml(artist)}')" style="font-size:0.75rem;color:var(--accent);text-decoration:none">Search artist on SeaDisco</a>`;
+      html += `<a href="#" onclick="event.preventDefault();closeModal();searchFromDropCard(event,'release','${escHtml(title)}')" style="font-size:0.75rem;color:var(--accent);text-decoration:none">Search title on SeaDisco</a>`;
+      if (mbUrl) html += `<a href="${mbUrl}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#5a9aaa;text-decoration:none">MusicBrainz →</a>`;
+      html += `<a href="${googleUrl}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#5a9aaa;text-decoration:none">Google →</a>`;
+      html += `</div></div>`;
+      infoEl.innerHTML = html;
       return;
     }
 
     const primary = results[0];
-    const alts    = results.slice(1, 4); // up to 3 alternatives
+    const alts    = results.slice(1, 4);
 
     const pType = primary.type === "master" ? "master" : "release";
     itemCache.set(String(primary.id), primary);

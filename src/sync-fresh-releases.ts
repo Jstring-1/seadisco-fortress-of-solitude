@@ -83,6 +83,8 @@ export async function runFreshSync(): Promise<void> {
         caa_id:             rel.caa_id                         ?? null,
         caa_release_mbid:   caaRelMbid,
         cover_url:          coverUrl,
+        release_group_mbid: rel.release_group_mbid             ?? null,
+        artist_mbids:       rel.artist_mbids                   ?? [],
       });
       saved++;
       await sleep(DELAY_MS);
