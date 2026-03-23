@@ -2067,7 +2067,7 @@ async function loadFreshReleases() {
     }
     const topTags = [...tagCounts.entries()]
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 50)
+      .slice(0, 150)
       .map(([tag]) => tag);
 
     const tagCloud = document.getElementById("fresh-tag-cloud");
