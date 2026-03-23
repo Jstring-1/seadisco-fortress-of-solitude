@@ -30,7 +30,7 @@
   <meta name="theme-color" content="#0c1015">
   <link rel="preconnect" href="https://api.discogs.com" />
   <link rel="preconnect" href="https://i.discogs.com" />
-  <link rel="stylesheet" href="/style.css?v=20260322b" />
+  <link rel="stylesheet" href="/style.css?v=20260322c" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -281,6 +281,15 @@
       <button class="fresh-all-btn active" id="fresh-all-btn" onclick="filterFreshByTag('')">All</button>
       <span id="fresh-active-label">All releases</span>
     </div>
+    <div class="fresh-filter-row">
+      <select id="fresh-genre-select" class="fresh-filter-select" onchange="onFreshGenreChange()">
+        <option value="">Genre</option>
+      </select>
+      <select id="fresh-style-select" class="fresh-filter-select" onchange="filterFreshByGenreStyle()" style="display:none">
+        <option value="">Style</option>
+      </select>
+      <input id="fresh-tag-input" class="fresh-filter-input" type="text" placeholder="Filter by tag…" oninput="filterFreshByTagInput(this.value)" autocomplete="off" spellcheck="false">
+    </div>
     <div id="fresh-releases-grid" class="fresh-grid"></div>
   </div>
 </div>
@@ -369,7 +378,7 @@
   <div id="lightbox-counter"></div>
 </div>
 
-<script src="/app.js?v=20260322b"></script>
+<script src="/app.js?v=20260322c"></script>
 
 </body>
 </html>

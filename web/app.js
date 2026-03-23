@@ -1996,6 +1996,10 @@ function renderFreshGrid(releases) {
         ${types ? `<div class="fresh-card-type">${escHtml(types)}</div>` : ""}
         <div class="fresh-card-links">
           <a href="${googleUrl}" target="_blank" rel="noopener">Google →</a>
+          <a href="#" class="fresh-discogs-link"
+             data-artist="${escHtml(rel.artist_credit_name ?? '')}"
+             data-title="${escHtml(rel.release_name ?? '')}"
+             onclick="openFreshCardDiscogs(event,this.dataset.artist,this.dataset.title)">Discogs ↗</a>
         </div>
       </div>
     </div>`;
@@ -2010,6 +2014,13 @@ function filterFreshByTag(tag) {
   const pills = document.querySelectorAll(".fresh-tag-pill");
   pills.forEach(p => p.classList.toggle("active", p.dataset.tag === tag));
   _freshActiveTag = tag;
+  // Reset genre/style/text filters
+  const gs = document.getElementById("fresh-genre-select");
+  const ss = document.getElementById("fresh-style-select");
+  const ti = document.getElementById("fresh-tag-input");
+  if (gs) gs.value = "";
+  if (ss) { ss.value = ""; ss.style.display = "none"; }
+  if (ti) ti.value = "";
   const filtered = tag ? _freshAll.filter(r => (r.tags ?? []).includes(tag)) : _freshAll;
   renderFreshGrid(filtered);
   // Update persistent footer
@@ -2019,7 +2030,171 @@ function filterFreshByTag(tag) {
   if (label)  label.textContent = tag ? tag : "All releases";
 }
 
+// Normalise a string for loose genre/style tag matching
+function _normTag(s) {
+  return s.toLowerCase()
+    .replace(/[&\/,]/g, " ")
+    .replace(/\b(and|'n')\b/g, " ")
+    .replace(/[-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function _applyGenreStyleFilter(label) {
+  // Deactivate tag pills and All button
+  document.querySelectorAll(".fresh-tag-pill").forEach(p => p.classList.remove("active"));
+  _freshActiveTag = "";
+  const allBtn = document.getElementById("fresh-all-btn");
+  const activeLabel = document.getElementById("fresh-active-label");
+  if (allBtn) allBtn.classList.remove("active");
+  if (activeLabel) activeLabel.textContent = label || "All releases";
+  // Clear text input
+  const ti = document.getElementById("fresh-tag-input");
+  if (ti) ti.value = "";
+}
+
+function onFreshGenreChange() {
+  const genre = document.getElementById("fresh-genre-select")?.value ?? "";
+  const ss    = document.getElementById("fresh-style-select");
+  if (ss) {
+    if (genre && GENRE_STYLES[genre]) {
+      ss.innerHTML = '<option value="">Style</option>' +
+        GENRE_STYLES[genre].map(s => `<option value="${escHtml(s)}">${escHtml(s)}</option>`).join("");
+      ss.style.display = "";
+    } else {
+      ss.innerHTML = '<option value="">Style</option>';
+      ss.style.display = "none";
+    }
+    ss.value = "";
+  }
+  filterFreshByGenreStyle();
+}
+
+function filterFreshByGenreStyle() {
+  const genre = document.getElementById("fresh-genre-select")?.value ?? "";
+  const style = document.getElementById("fresh-style-select")?.value ?? "";
+  const filter = style || genre;
+  if (!filter) {
+    filterFreshByTag(""); // reset to all
+    return;
+  }
+  _applyGenreStyleFilter(filter);
+  const normFilter = _normTag(filter);
+  const filtered = _freshAll.filter(r =>
+    (r.tags ?? []).some(t => {
+      const nt = _normTag(t);
+      return nt === normFilter || nt.includes(normFilter) || normFilter.includes(nt);
+    })
+  );
+  renderFreshGrid(filtered);
+}
+
+function filterFreshByTagInput(val) {
+  const trimmed = val.trim();
+  if (!trimmed) {
+    // Reset dropdowns too
+    const gs = document.getElementById("fresh-genre-select");
+    const ss = document.getElementById("fresh-style-select");
+    if (gs) gs.value = "";
+    if (ss) { ss.value = ""; ss.style.display = "none"; }
+    filterFreshByTag(""); // reset to all
+    return;
+  }
+  // Deactivate pills/dropdowns
+  document.querySelectorAll(".fresh-tag-pill").forEach(p => p.classList.remove("active"));
+  _freshActiveTag = "";
+  const gs = document.getElementById("fresh-genre-select");
+  const ss = document.getElementById("fresh-style-select");
+  if (gs) gs.value = "";
+  if (ss) { ss.value = ""; ss.style.display = "none"; }
+  const allBtn = document.getElementById("fresh-all-btn");
+  const activeLabel = document.getElementById("fresh-active-label");
+  if (allBtn) allBtn.classList.remove("active");
+  if (activeLabel) activeLabel.textContent = trimmed;
+  const normInput = _normTag(trimmed);
+  const filtered = _freshAll.filter(r =>
+    (r.tags ?? []).some(t => _normTag(t).includes(normInput)) ||
+    _normTag(r.release_name ?? "").includes(normInput) ||
+    _normTag(r.artist_credit_name ?? "").includes(normInput)
+  );
+  renderFreshGrid(filtered);
+}
+
+// ── Drop card → Discogs popup ─────────────────────────────────────────────
+async function openFreshCardDiscogs(event, artist, title) {
+  event.preventDefault();
+  const overlay   = document.getElementById("modal-overlay");
+  const infoEl    = document.getElementById("album-info");
+  const loadingEl = document.getElementById("modal-loading");
+  infoEl.innerHTML = "";
+  loadingEl.textContent = "Searching Discogs…";
+  loadingEl.style.display = "block";
+  overlay.classList.add("open");
+
+  try {
+    const q    = encodeURIComponent(title);
+    const art  = encodeURIComponent(artist);
+    const data = await apiFetch(`${API}/search?q=${q}&artist=${art}&type=release&per_page=5`).then(r => r.json());
+    const results = data.results ?? [];
+
+    loadingEl.style.display = "none";
+
+    if (!results.length) {
+      infoEl.innerHTML = `
+        <div style="padding:2.5rem 1rem;text-align:center;color:#888">
+          <div style="font-size:1rem;margin-bottom:0.4rem;color:#aaa">No Discogs entry yet</div>
+          <div style="font-size:0.8rem"><em>${escHtml(artist)} – ${escHtml(title)}</em> doesn't have a page on Discogs yet.</div>
+        </div>`;
+      return;
+    }
+
+    const primary = results[0];
+    const alts    = results.slice(1, 4); // up to 3 alternatives
+
+    const pType = primary.type === "master" ? "master" : "release";
+    itemCache.set(String(primary.id), primary);
+
+    const [d, stats] = await Promise.all([
+      apiFetch(`${API}/${pType}/${primary.id}`).then(r => r.json()),
+      apiFetch(`${API}/marketplace-stats/${primary.id}?type=${pType}`).then(r => r.json()).catch(() => null),
+    ]);
+
+    loadingEl.style.display = "none";
+    const pUrl = primary.uri ? `https://www.discogs.com${primary.uri}` : "";
+    renderAlbumInfo(d, primary, pUrl, stats);
+
+    // Append "Also:" section for alternatives
+    if (alts.length) {
+      const alsoDiv = document.createElement("div");
+      alsoDiv.className = "fresh-also-section";
+      alsoDiv.innerHTML = `<span style="color:#666;margin-right:0.3em">Also:</span>` +
+        alts.map(a => {
+          const aType = a.type === "master" ? "master" : "release";
+          const aUrl  = a.uri ? `https://www.discogs.com${a.uri}` : "";
+          return `<a href="#" class="fresh-also-link" onclick="openModal(event,${a.id},'${aType}','${aUrl.replace(/'/g, "\\'")}')">${escHtml(a.title ?? "")}</a>`;
+        }).join('<span style="color:#444;margin:0 0.3em">·</span>');
+      infoEl.appendChild(alsoDiv);
+    }
+
+  } catch (err) {
+    loadingEl.style.display = "none";
+    infoEl.innerHTML = `<div style="padding:2rem;text-align:center;color:#888">Failed to search Discogs.</div>`;
+  }
+}
+
+function initFreshGenreDropdown() {
+  const gs = document.getElementById("fresh-genre-select");
+  if (!gs || gs.options.length > 1) return;
+  for (const genre of Object.keys(GENRE_STYLES)) {
+    const opt = document.createElement("option");
+    opt.value = genre;
+    opt.textContent = genre;
+    gs.appendChild(opt);
+  }
+}
+
 async function loadFreshReleases() {
+  initFreshGenreDropdown();
   try {
     const data = await fetch("/api/fresh-releases").then(r => r.json());
     _freshAll = data.releases ?? [];
