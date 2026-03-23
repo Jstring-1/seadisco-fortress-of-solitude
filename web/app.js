@@ -2005,34 +2005,46 @@ function renderFreshGrid(releases) {
 let _freshActiveTag = "";
 let _freshAll = []; // all 150 loaded once, filtered client-side
 
-function scrollTagCloud(dir) {
-  const el = document.getElementById("fresh-tag-cloud");
-  if (el) el.scrollBy({ left: dir * 220, behavior: "smooth" });
-}
+let _tagBoost = 0;
 
-// Drag-to-scroll for tag cloud
-(function () {
-  let isDown = false, startX, scrollLeft;
-  document.addEventListener("mousedown", e => {
-    const el = document.getElementById("fresh-tag-cloud");
-    if (!el || !el.contains(e.target)) return;
-    isDown = true; startX = e.pageX - el.offsetLeft; scrollLeft = el.scrollLeft;
-    el.style.cursor = "grabbing";
+function initTagCarousel() {
+  const el = document.getElementById("fresh-tag-cloud");
+  if (!el || el.children.length === 0) return;
+
+  // Duplicate pills for seamless infinite loop
+  el.innerHTML += el.innerHTML;
+
+  requestAnimationFrame(() => {
+    const halfWidth = el.scrollWidth / 2;
+    if (halfWidth <= 0) return;
+
+    const BASE  = 0.55;  // px/frame auto speed
+    const BOOST = 2.5;   // extra px/frame while button held
+
+    function tick() {
+      el.scrollLeft += BASE + _tagBoost;
+      if (el.scrollLeft >= halfWidth) el.scrollLeft -= halfWidth;
+      if (el.scrollLeft < 0)         el.scrollLeft += halfWidth;
+      requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+
+    // Hold buttons to boost speed in either direction
+    const lBtn = document.querySelector(".tag-scroll-left");
+    const rBtn = document.querySelector(".tag-scroll-right");
+    if (lBtn) {
+      lBtn.addEventListener("mousedown",  () => _tagBoost = -BOOST);
+      lBtn.addEventListener("touchstart", () => _tagBoost = -BOOST, { passive: true });
+    }
+    if (rBtn) {
+      rBtn.addEventListener("mousedown",  () => _tagBoost = BOOST);
+      rBtn.addEventListener("touchstart", () => _tagBoost = BOOST, { passive: true });
+    }
+    ["mouseup", "touchend"].forEach(ev =>
+      document.addEventListener(ev, () => _tagBoost = 0)
+    );
   });
-  document.addEventListener("mouseleave", () => { isDown = false; });
-  document.addEventListener("mouseup", () => {
-    isDown = false;
-    const el = document.getElementById("fresh-tag-cloud");
-    if (el) el.style.cursor = "";
-  });
-  document.addEventListener("mousemove", e => {
-    if (!isDown) return;
-    const el = document.getElementById("fresh-tag-cloud");
-    if (!el) return;
-    e.preventDefault();
-    el.scrollLeft = scrollLeft - (e.pageX - el.offsetLeft - startX);
-  });
-})();
+}
 
 function filterFreshByTag(tag) {
   const pills = document.querySelectorAll(".fresh-tag-pill");
@@ -2067,6 +2079,7 @@ async function loadFreshReleases() {
         ).join("");
     }
     renderFreshGrid(_freshAll);
+    initTagCarousel();
   } catch { /* fresh releases unavailable */ }
 }
 
