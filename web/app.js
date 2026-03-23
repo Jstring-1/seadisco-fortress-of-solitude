@@ -2005,46 +2005,6 @@ function renderFreshGrid(releases) {
 let _freshActiveTag = "";
 let _freshAll = []; // all 150 loaded once, filtered client-side
 
-let _tagBoost = 0;
-
-function initTagCarousel() {
-  const el = document.getElementById("fresh-tag-cloud");
-  if (!el || el.children.length === 0) return;
-
-  // Duplicate pills for seamless infinite loop
-  el.innerHTML += el.innerHTML;
-
-  requestAnimationFrame(() => {
-    const halfWidth = el.scrollWidth / 2;
-    if (halfWidth <= 0) return;
-
-    const BASE  = 0.55;  // px/frame auto speed
-    const BOOST = 2.5;   // extra px/frame while button held
-
-    function tick() {
-      el.scrollLeft += BASE + _tagBoost;
-      if (el.scrollLeft >= halfWidth) el.scrollLeft -= halfWidth;
-      if (el.scrollLeft < 0)         el.scrollLeft += halfWidth;
-      requestAnimationFrame(tick);
-    }
-    requestAnimationFrame(tick);
-
-    // Hold buttons to boost speed in either direction
-    const lBtn = document.querySelector(".tag-scroll-left");
-    const rBtn = document.querySelector(".tag-scroll-right");
-    if (lBtn) {
-      lBtn.addEventListener("mousedown",  () => _tagBoost = -BOOST);
-      lBtn.addEventListener("touchstart", () => _tagBoost = -BOOST, { passive: true });
-    }
-    if (rBtn) {
-      rBtn.addEventListener("mousedown",  () => _tagBoost = BOOST);
-      rBtn.addEventListener("touchstart", () => _tagBoost = BOOST, { passive: true });
-    }
-    ["mouseup", "touchend"].forEach(ev =>
-      document.addEventListener(ev, () => _tagBoost = 0)
-    );
-  });
-}
 
 function filterFreshByTag(tag) {
   const pills = document.querySelectorAll(".fresh-tag-pill");
@@ -2072,7 +2032,7 @@ async function loadFreshReleases() {
     }
     const topTags = [...tagCounts.entries()]
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 150)
+      .slice(0, 50)
       .map(([tag]) => tag);
 
     const tagCloud = document.getElementById("fresh-tag-cloud");
@@ -2082,7 +2042,6 @@ async function loadFreshReleases() {
       ).join("");
     }
     renderFreshGrid(_freshAll);
-    initTagCarousel();
   } catch { /* fresh releases unavailable */ }
 }
 
