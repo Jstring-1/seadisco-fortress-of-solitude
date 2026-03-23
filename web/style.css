@@ -409,13 +409,39 @@ body {
 .feed-pill-ph:nth-child(8) { width: 3.5rem; animation-delay: 1.05s; }
 
 /* ── Latest Drops / Fresh Releases ─────────────────────────────────────── */
-.fresh-tag-cloud {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.35rem;
+.fresh-tag-cloud-wrap {
+  position: relative;
   margin-bottom: 1rem;
 }
+.fresh-tag-cloud-wrap::before,
+.fresh-tag-cloud-wrap::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 40px;
+  z-index: 1;
+  pointer-events: none;
+}
+.fresh-tag-cloud-wrap::before {
+  left: 0;
+  background: linear-gradient(to right, var(--bg), transparent);
+}
+.fresh-tag-cloud-wrap::after {
+  right: 0;
+  background: linear-gradient(to left, var(--bg), transparent);
+}
+.fresh-tag-cloud {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.35rem;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  padding: 0.25rem 0.5rem;
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;    /* IE/Edge */
+}
+.fresh-tag-cloud::-webkit-scrollbar { display: none; } /* Chrome/Safari */
 .fresh-tag-pill {
   background: var(--surface);
   border: 1px solid var(--border);
