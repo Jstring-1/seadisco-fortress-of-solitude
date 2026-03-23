@@ -296,9 +296,7 @@ body {
   white-space: nowrap;
   display: flex;
   align-items: center;
-  transition: color 0.15s, background 0.15s;
 }
-.nav-auth-btn:hover { color: var(--text); background: rgba(255,255,255,0.03); }
 .nav-auth-btn.active { color: var(--accent); font-weight: 600; background: rgba(0,200,212,0.05); }
 /* ─ Auth popup ──────────────────────────────────────────────────────────── */
 #nav-auth-popup {
