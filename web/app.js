@@ -2052,6 +2052,11 @@ function filterFreshByTag(tag) {
   _freshActiveTag = tag;
   const filtered = tag ? _freshAll.filter(r => (r.tags ?? []).includes(tag)) : _freshAll;
   renderFreshGrid(filtered);
+  // Update persistent footer
+  const allBtn = document.getElementById("fresh-all-btn");
+  const label  = document.getElementById("fresh-active-label");
+  if (allBtn) allBtn.classList.toggle("active", !tag);
+  if (label)  label.textContent = tag ? tag : "All releases";
 }
 
 async function loadFreshReleases() {
@@ -2072,11 +2077,9 @@ async function loadFreshReleases() {
 
     const tagCloud = document.getElementById("fresh-tag-cloud");
     if (tagCloud && topTags.length) {
-      tagCloud.innerHTML =
-        `<span class="fresh-tag-pill active" data-tag="" onclick="filterFreshByTag('')">All</span>` +
-        topTags.map(t =>
-          `<span class="fresh-tag-pill" data-tag="${escHtml(t)}" onclick="filterFreshByTag('${escHtml(t)}')">${escHtml(t)}</span>`
-        ).join("");
+      tagCloud.innerHTML = topTags.map(t =>
+        `<span class="fresh-tag-pill" data-tag="${escHtml(t)}" onclick="filterFreshByTag('${escHtml(t)}')">${escHtml(t)}</span>`
+      ).join("");
     }
     renderFreshGrid(_freshAll);
     initTagCarousel();
