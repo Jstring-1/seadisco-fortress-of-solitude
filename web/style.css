@@ -424,13 +424,30 @@ body {
   pointer-events: none;
 }
 .fresh-tag-cloud-wrap::before {
-  left: 0;
+  left: 28px;
   background: linear-gradient(to right, var(--bg), transparent);
 }
 .fresh-tag-cloud-wrap::after {
-  right: 0;
+  right: 28px;
   background: linear-gradient(to left, var(--bg), transparent);
 }
+.tag-scroll-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.4rem;
+  line-height: 1;
+  padding: 0 0.2rem;
+  cursor: pointer;
+  font-weight: 300;
+}
+.tag-scroll-btn:hover:not(.main-nav-tab) { background: none; color: var(--text); }
+.tag-scroll-left  { left: 0; }
+.tag-scroll-right { right: 0; }
 .fresh-tag-cloud {
   display: flex;
   flex-wrap: nowrap;
