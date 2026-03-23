@@ -1187,49 +1187,61 @@ app.get("/api/concerts/:artist", async (req, res) => {
     try {
       const tmUrl = `https://app.ticketmaster.com/discovery/v2/events.json?keyword=${encodeURIComponent(artist)}&classificationName=music&size=20&sort=date,asc&apikey=${ticketmasterKey}`;
       const tmRes = await fetch(tmUrl);
+      const tmBody = await tmRes.text();
       if (tmRes.ok) {
-        const tmData = await tmRes.json();
-        for (const ev of (tmData._embedded?.events ?? [])) {
-          const venue = ev._embedded?.venues?.[0];
-          events.push({
-            name:    ev.name ?? "",
-            date:    ev.dates?.start?.localDate ?? "",
-            time:    ev.dates?.start?.localTime ?? "",
-            venue:   venue?.name ?? "",
-            city:    venue?.city?.name ?? "",
-            region:  venue?.state?.name ?? "",
-            country: venue?.country?.countryCode ?? "",
-            url:     ev.url ?? "",
-            source:  "ticketmaster",
-          });
-        }
+        try {
+          const tmData = JSON.parse(tmBody);
+          for (const ev of (tmData._embedded?.events ?? [])) {
+            const venue = ev._embedded?.venues?.[0];
+            events.push({
+              name:    ev.name ?? "",
+              date:    ev.dates?.start?.localDate ?? "",
+              time:    ev.dates?.start?.localTime ?? "",
+              venue:   venue?.name ?? "",
+              city:    venue?.city?.name ?? "",
+              region:  venue?.state?.name ?? "",
+              country: venue?.country?.countryCode ?? "",
+              url:     ev.url ?? "",
+              source:  "ticketmaster",
+            });
+          }
+        } catch { /* parse error */ }
+      } else {
+        console.error(`Ticketmaster ${tmRes.status}:`, tmBody.slice(0, 300));
       }
-    } catch (err) { console.error("Ticketmaster error:", err); }
+    } catch (err) { console.error("Ticketmaster fetch error:", err); }
+  } else {
+    console.log("Ticketmaster skipped — no TICKETMASTER_KEY env var");
   }
 
   // Bandsintown API
   try {
     const bitUrl = `https://rest.bandsintown.com/artists/${encodeURIComponent(artist)}/events?app_id=${bandsintownAppId}&date=upcoming`;
     const bitRes = await fetch(bitUrl);
+    const bitBody = await bitRes.text();
     if (bitRes.ok) {
-      const bitData = await bitRes.json();
-      if (Array.isArray(bitData)) {
-        for (const ev of bitData) {
-          events.push({
-            name:    ev.title ?? `${artist} live`,
-            date:    (ev.datetime ?? "").slice(0, 10),
-            time:    (ev.datetime ?? "").slice(11, 16),
-            venue:   ev.venue?.name ?? "",
-            city:    ev.venue?.city ?? "",
-            region:  ev.venue?.region ?? "",
-            country: ev.venue?.country ?? "",
-            url:     ev.url ?? "",
-            source:  "bandsintown",
-          });
+      try {
+        const bitData = JSON.parse(bitBody);
+        if (Array.isArray(bitData)) {
+          for (const ev of bitData) {
+            events.push({
+              name:    ev.title ?? `${artist} live`,
+              date:    (ev.datetime ?? "").slice(0, 10),
+              time:    (ev.datetime ?? "").slice(11, 16),
+              venue:   ev.venue?.name ?? "",
+              city:    ev.venue?.city ?? "",
+              region:  ev.venue?.region ?? "",
+              country: ev.venue?.country ?? "",
+              url:     ev.url ?? "",
+              source:  "bandsintown",
+            });
+          }
         }
-      }
+      } catch { /* parse error */ }
+    } else {
+      console.error(`Bandsintown ${bitRes.status}:`, bitBody.slice(0, 300));
     }
-  } catch (err) { console.error("Bandsintown error:", err); }
+  } catch (err) { console.error("Bandsintown fetch error:", err); }
 
   // Dedupe by date+venue (prefer ticketmaster if duplicate)
   const seen = new Set<string>();
@@ -1243,6 +1255,7 @@ app.get("/api/concerts/:artist", async (req, res) => {
   // Sort by date ascending
   deduped.sort((a, b) => a.date.localeCompare(b.date));
 
+  console.log(`Concerts for "${artist}": ${events.length} raw, ${deduped.length} deduped`);
   res.json({ artist, events: deduped });
 });
 
