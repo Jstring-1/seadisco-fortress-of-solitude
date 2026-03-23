@@ -12,6 +12,9 @@ const anthropicKey = process.env.ANTHROPIC_API_KEY ?? "";
 const authPk = process.env.AUTH_PK ?? "";
 // Set REQUIRE_AUTH=true to require users to sign in and provide their own Discogs token
 const requireAuth = process.env.REQUIRE_AUTH === "true";
+// Concert API keys
+const ticketmasterKey = process.env.TICKETMASTER_KEY ?? "";
+const bandsintownAppId = "seadisco"; // Bandsintown just needs an app identifier
 // Shared Discogs client (used as fallback when user has no personal token)
 const discogs = sharedToken ? new DiscogsClient(sharedToken) : null;
 // ── IP rate limiter for unauthenticated (shared-token) searches ───────────
@@ -1262,6 +1265,81 @@ app.get("/api/fresh-releases/search", async (req, res) => {
         console.error("fresh-releases search error:", err);
         res.json({ releases: [] });
     }
+});
+// ── Concert info (Ticketmaster + Bandsintown) ─────────────────────────────
+app.get("/api/concerts/:artist", async (req, res) => {
+    const artist = decodeURIComponent(req.params.artist).trim();
+    if (!artist) {
+        res.json({ events: [] });
+        return;
+    }
+    const events = [];
+    // Ticketmaster Discovery API
+    if (ticketmasterKey) {
+        try {
+            const tmUrl = `https://app.ticketmaster.com/discovery/v2/events.json?keyword=${encodeURIComponent(artist)}&classificationName=music&size=20&sort=date,asc&apikey=${ticketmasterKey}`;
+            const tmRes = await fetch(tmUrl);
+            if (tmRes.ok) {
+                const tmData = await tmRes.json();
+                for (const ev of (tmData._embedded?.events ?? [])) {
+                    const venue = ev._embedded?.venues?.[0];
+                    events.push({
+                        name: ev.name ?? "",
+                        date: ev.dates?.start?.localDate ?? "",
+                        time: ev.dates?.start?.localTime ?? "",
+                        venue: venue?.name ?? "",
+                        city: venue?.city?.name ?? "",
+                        region: venue?.state?.name ?? "",
+                        country: venue?.country?.countryCode ?? "",
+                        url: ev.url ?? "",
+                        source: "ticketmaster",
+                    });
+                }
+            }
+        }
+        catch (err) {
+            console.error("Ticketmaster error:", err);
+        }
+    }
+    // Bandsintown API
+    try {
+        const bitUrl = `https://rest.bandsintown.com/artists/${encodeURIComponent(artist)}/events?app_id=${bandsintownAppId}&date=upcoming`;
+        const bitRes = await fetch(bitUrl);
+        if (bitRes.ok) {
+            const bitData = await bitRes.json();
+            if (Array.isArray(bitData)) {
+                for (const ev of bitData) {
+                    events.push({
+                        name: ev.title ?? `${artist} live`,
+                        date: (ev.datetime ?? "").slice(0, 10),
+                        time: (ev.datetime ?? "").slice(11, 16),
+                        venue: ev.venue?.name ?? "",
+                        city: ev.venue?.city ?? "",
+                        region: ev.venue?.region ?? "",
+                        country: ev.venue?.country ?? "",
+                        url: ev.url ?? "",
+                        source: "bandsintown",
+                    });
+                }
+            }
+        }
+    }
+    catch (err) {
+        console.error("Bandsintown error:", err);
+    }
+    // Dedupe by date+venue (prefer ticketmaster if duplicate)
+    const seen = new Set();
+    const deduped = [];
+    for (const ev of events) {
+        const key = `${ev.date}|${ev.venue}`.toLowerCase();
+        if (seen.has(key))
+            continue;
+        seen.add(key);
+        deduped.push(ev);
+    }
+    // Sort by date ascending
+    deduped.sort((a, b) => a.date.localeCompare(b.date));
+    res.json({ artist, events: deduped });
 });
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 app.listen(PORT, "0.0.0.0", () => {
