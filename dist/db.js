@@ -460,12 +460,14 @@ export async function upsertFreshRelease(r) {
 export async function getFreshStats() {
     const r = await getPool().query(`SELECT COUNT(*)::int AS count,
             MIN(release_date) AS oldest,
-            MAX(release_date) AS newest
+            MAX(release_date) AS newest,
+            (SELECT COUNT(DISTINCT t)::int FROM fresh_releases, unnest(tags) AS t) AS tag_count
      FROM fresh_releases`);
     return {
         count: r.rows[0]?.count ?? 0,
         oldest: r.rows[0]?.oldest ?? null,
         newest: r.rows[0]?.newest ?? null,
+        tagCount: r.rows[0]?.tag_count ?? 0,
     };
 }
 export async function pruneFreshReleases() {

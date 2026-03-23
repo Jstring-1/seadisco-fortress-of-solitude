@@ -740,7 +740,7 @@ async function loadAdminSyncStatus() {
     const freshEl = document.getElementById("admin-fresh-stats");
     if (freshEl && freshStats) {
       const fmt = d => d ? new Date(d).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "—";
-      freshEl.textContent = `Drops DB: ${(freshStats.count ?? 0).toLocaleString()} releases · ${fmt(freshStats.oldest)} – ${fmt(freshStats.newest)}`;
+      freshEl.textContent = `Drops DB: ${(freshStats.count ?? 0).toLocaleString()} releases · ${(freshStats.tagCount ?? 0).toLocaleString()} tags · ${fmt(freshStats.oldest)} – ${fmt(freshStats.newest)}`;
     }
     if (!users?.length) { el.textContent = "No users with Discogs tokens."; return; }
 
