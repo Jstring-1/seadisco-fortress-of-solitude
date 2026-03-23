@@ -2143,7 +2143,7 @@ function rebuildFreshTagCloud(releases) {
   if (tagCloud) {
     tagCloud.innerHTML = topTags.length
       ? topTags.map(t =>
-          `<span class="fresh-tag-pill" data-tag="${escHtml(t)}" onclick="filterFreshByTag('${escHtml(t)}')">${escHtml(t)}</span>`
+          `<span class="fresh-tag-pill" data-tag="${escHtml(t)}" onclick="filterFreshByTag('${escHtml(t)}')" title="${escHtml(t)}">${escHtml(t.length > 30 ? t.slice(0, 28) + "…" : t)}</span>`
         ).join("")
       : "";
   }
@@ -2230,7 +2230,7 @@ async function openDropCardPopup(el) {
       html += `<div class="drop-nomatch-tags">`;
       if (tags.length) {
         const shown = tags.slice(0, 8);
-        html += shown.map(t => `<a href="#" class="drop-nomatch-tag" onclick="event.preventDefault();closeModal();dropTagSearch('${escHtml(t).replace(/'/g, "\\'")}')">${escHtml(t)}</a>`).join("");
+        html += shown.map(t => `<a href="#" class="drop-nomatch-tag" onclick="event.preventDefault();closeModal();dropTagSearch('${escHtml(t).replace(/'/g, "\\'")}')" title="${escHtml(t)}">${escHtml(t.length > 30 ? t.slice(0, 28) + "…" : t)}</a>`).join("");
         if (tags.length > 8) html += `<span class="drop-nomatch-tag" style="color:#555">+${tags.length - 8}</span>`;
       } else {
         html += `<span style="font-size:0.65rem;color:#555">--</span>`;
