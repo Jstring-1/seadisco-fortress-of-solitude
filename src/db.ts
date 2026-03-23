@@ -483,7 +483,7 @@ export async function getCollectionPage(
   const [dataR, countR] = await Promise.all([
     getPool().query(
       `SELECT data FROM user_collection WHERE clerk_user_id = $1${dataClause}
-       ORDER BY added_at DESC NULLS LAST, id DESC
+       ORDER BY LOWER(data->'artists'->0->>'name') ASC, LOWER(data->>'title') ASC
        LIMIT $2 OFFSET $3`,
       [clerkUserId, perPage, offset, ...dataFilterParams]
     ),
@@ -507,7 +507,7 @@ export async function getWantlistPage(
   const [dataR, countR] = await Promise.all([
     getPool().query(
       `SELECT data FROM user_wantlist WHERE clerk_user_id = $1${dataClause}
-       ORDER BY added_at DESC NULLS LAST, id DESC
+       ORDER BY LOWER(data->'artists'->0->>'name') ASC, LOWER(data->>'title') ASC
        LIMIT $2 OFFSET $3`,
       [clerkUserId, perPage, offset, ...dataFilterParams]
     ),

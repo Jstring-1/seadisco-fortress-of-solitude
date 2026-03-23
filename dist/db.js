@@ -355,7 +355,7 @@ export async function getCollectionPage(clerkUserId, page, perPage, filters) {
     const { clause: countClause, params: countFilterParams } = buildCwWhere(filters ?? {}, 2);
     const [dataR, countR] = await Promise.all([
         getPool().query(`SELECT data FROM user_collection WHERE clerk_user_id = $1${dataClause}
-       ORDER BY added_at DESC NULLS LAST, id DESC
+       ORDER BY LOWER(data->'artists'->0->>'name') ASC, LOWER(data->>'title') ASC
        LIMIT $2 OFFSET $3`, [clerkUserId, perPage, offset, ...dataFilterParams]),
         getPool().query(`SELECT COUNT(*)::int AS total FROM user_collection WHERE clerk_user_id = $1${countClause}`, [clerkUserId, ...countFilterParams]),
     ]);
@@ -367,7 +367,7 @@ export async function getWantlistPage(clerkUserId, page, perPage, filters) {
     const { clause: countClause, params: countFilterParams } = buildCwWhere(filters ?? {}, 2);
     const [dataR, countR] = await Promise.all([
         getPool().query(`SELECT data FROM user_wantlist WHERE clerk_user_id = $1${dataClause}
-       ORDER BY added_at DESC NULLS LAST, id DESC
+       ORDER BY LOWER(data->'artists'->0->>'name') ASC, LOWER(data->>'title') ASC
        LIMIT $2 OFFSET $3`, [clerkUserId, perPage, offset, ...dataFilterParams]),
         getPool().query(`SELECT COUNT(*)::int AS total FROM user_wantlist WHERE clerk_user_id = $1${countClause}`, [clerkUserId, ...countFilterParams]),
     ]);
