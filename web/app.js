@@ -1990,8 +1990,8 @@ function renderFreshGrid(releases) {
     return `<div class="fresh-card">
       <div class="fresh-card-img">${img}</div>
       <div class="fresh-card-body">
-        <div class="fresh-card-title">${escHtml(rel.release_name ?? "Unknown")}</div>
-        <div class="fresh-card-artist">${escHtml(rel.artist_credit_name ?? "")}</div>
+        <div class="fresh-card-title"><a href="#" class="fresh-card-search-link" data-field="release" data-value="${escHtml(rel.release_name ?? '')}" onclick="searchFromDropCard(event,this.dataset.field,this.dataset.value)">${escHtml(rel.release_name ?? "Unknown")}</a></div>
+        <div class="fresh-card-artist"><a href="#" class="fresh-card-search-link" data-field="artist" data-value="${escHtml(rel.artist_credit_name ?? '')}" onclick="searchFromDropCard(event,this.dataset.field,this.dataset.value)">${escHtml(rel.artist_credit_name ?? "")}</a></div>
         ${date ? `<div class="fresh-card-date">${date}</div>` : ""}
         ${types ? `<div class="fresh-card-type">${escHtml(types)}</div>` : ""}
         <div class="fresh-card-links">
@@ -2118,6 +2118,29 @@ function filterFreshByTagInput(val) {
     _normTag(r.artist_credit_name ?? "").includes(normInput)
   );
   renderFreshGrid(filtered);
+}
+
+// ── Drop card → SeaDisco search ──────────────────────────────────────────
+function searchFromDropCard(event, field, value) {
+  event.preventDefault();
+  // Clear all fields
+  document.getElementById("query").value     = "";
+  document.getElementById("f-artist").value  = "";
+  document.getElementById("f-release").value = "";
+  document.getElementById("f-year").value    = "";
+  document.getElementById("f-label").value   = "";
+  document.getElementById("f-genre").value   = "";
+  populateStyles();
+  document.querySelector('input[name="result-type"][value=""]').checked = true;
+  if (field === "artist") {
+    document.getElementById("f-artist").value = value;
+    toggleAdvanced(true);
+  } else {
+    document.getElementById("f-release").value = value;
+    toggleAdvanced(true);
+  }
+  switchView("search");
+  doSearch(1);
 }
 
 // ── Drop card → Discogs popup ─────────────────────────────────────────────
