@@ -644,7 +644,7 @@ button {
   transition: background 0.15s;
 }
 
-button:hover { background: var(--accent2); }
+button:hover:not(.main-nav-tab) { background: var(--accent2); }
 button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 
 #search-btn { width: 120px; flex-shrink: 0; }
