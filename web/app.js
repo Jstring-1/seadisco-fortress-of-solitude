@@ -2007,27 +2007,33 @@ function renderFreshGrid(releases) {
 }
 
 let _freshActiveTag = "";
-let _freshAll = []; // all 150 loaded once, filtered client-side
+let _freshAll = [];        // currently displayed set (random 150 or search results)
+let _freshBrowse = [];     // the original random 150 for restoring browse mode
+let _freshSearchTimer = null;
 
 
 function filterFreshByTag(tag) {
   const pills = document.querySelectorAll(".fresh-tag-pill");
   pills.forEach(p => p.classList.toggle("active", p.dataset.tag === tag));
   _freshActiveTag = tag;
-  // Reset genre/style/text filters
+  // Reset genre/style filters (but keep search input — user may be filtering search results)
   const gs = document.getElementById("fresh-genre-select");
   const ss = document.getElementById("fresh-style-select");
-  const ti = document.getElementById("fresh-tag-input");
   if (gs) gs.value = "";
   if (ss) { ss.value = ""; ss.style.display = "none"; }
-  if (ti) ti.value = "";
   const filtered = tag ? _freshAll.filter(r => (r.tags ?? []).includes(tag)) : _freshAll;
   renderFreshGrid(filtered);
   // Update persistent footer
   const allBtn = document.getElementById("fresh-all-btn");
   const label  = document.getElementById("fresh-active-label");
+  const searchInput = document.getElementById("fresh-tag-input");
+  const inSearch = searchInput && searchInput.value.trim();
   if (allBtn) allBtn.classList.toggle("active", !tag);
-  if (label)  label.textContent = tag ? tag : "All releases";
+  if (label) {
+    if (tag) label.textContent = tag;
+    else if (inSearch) label.textContent = `"${searchInput.value.trim()}" — ${_freshAll.length} result${_freshAll.length !== 1 ? "s" : ""}`;
+    else label.textContent = "All releases";
+  }
 }
 
 // Normalise a string for loose genre/style tag matching
@@ -2089,17 +2095,25 @@ function filterFreshByGenreStyle() {
   renderFreshGrid(filtered);
 }
 
-function filterFreshByTagInput(val) {
+function debounceFreshSearch(val) {
+  clearTimeout(_freshSearchTimer);
   const trimmed = val.trim();
   if (!trimmed) {
-    // Reset dropdowns too
+    // Restore browse mode immediately
+    _freshAll = _freshBrowse;
+    _freshActiveTag = "";
     const gs = document.getElementById("fresh-genre-select");
     const ss = document.getElementById("fresh-style-select");
     if (gs) gs.value = "";
     if (ss) { ss.value = ""; ss.style.display = "none"; }
-    filterFreshByTag(""); // reset to all
+    rebuildFreshTagCloud(_freshAll);
+    filterFreshByTag("");
     return;
   }
+  _freshSearchTimer = setTimeout(() => runFreshSearch(trimmed), 400);
+}
+
+async function runFreshSearch(query) {
   // Deactivate pills/dropdowns
   document.querySelectorAll(".fresh-tag-pill").forEach(p => p.classList.remove("active"));
   _freshActiveTag = "";
@@ -2110,14 +2124,36 @@ function filterFreshByTagInput(val) {
   const allBtn = document.getElementById("fresh-all-btn");
   const activeLabel = document.getElementById("fresh-active-label");
   if (allBtn) allBtn.classList.remove("active");
-  if (activeLabel) activeLabel.textContent = trimmed;
-  const normInput = _normTag(trimmed);
-  const filtered = _freshAll.filter(r =>
-    (r.tags ?? []).some(t => _normTag(t).includes(normInput)) ||
-    _normTag(r.release_name ?? "").includes(normInput) ||
-    _normTag(r.artist_credit_name ?? "").includes(normInput)
-  );
-  renderFreshGrid(filtered);
+  if (activeLabel) activeLabel.textContent = `"${query}"`;
+  try {
+    const data = await fetch(`/api/fresh-releases/search?q=${encodeURIComponent(query)}`).then(r => r.json());
+    _freshAll = data.releases ?? [];
+    rebuildFreshTagCloud(_freshAll);
+    renderFreshGrid(_freshAll);
+    if (activeLabel) activeLabel.textContent = `"${query}" — ${_freshAll.length} result${_freshAll.length !== 1 ? "s" : ""}`;
+  } catch {
+    renderFreshGrid([]);
+  }
+}
+
+function rebuildFreshTagCloud(releases) {
+  const tagCounts = new Map();
+  for (const r of releases) {
+    for (const t of (r.tags ?? [])) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
+  }
+  const topTags = [...tagCounts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 50)
+    .map(([tag]) => tag)
+    .sort(() => Math.random() - 0.5);
+  const tagCloud = document.getElementById("fresh-tag-cloud");
+  if (tagCloud) {
+    tagCloud.innerHTML = topTags.length
+      ? topTags.map(t =>
+          `<span class="fresh-tag-pill" data-tag="${escHtml(t)}" onclick="filterFreshByTag('${escHtml(t)}')">${escHtml(t)}</span>`
+        ).join("")
+      : "";
+  }
 }
 
 // ── Drop card → SeaDisco search ──────────────────────────────────────────
@@ -2221,25 +2257,9 @@ async function loadFreshReleases() {
   try {
     const data = await fetch("/api/fresh-releases").then(r => r.json());
     _freshAll = data.releases ?? [];
+    _freshBrowse = _freshAll; // save for restoring after search
     if (!_freshAll.length) return;
-
-    // Build tag cloud from all loaded items — no extra API call needed
-    const tagCounts = new Map();
-    for (const r of _freshAll) {
-      for (const t of (r.tags ?? [])) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1);
-    }
-    const topTags = [...tagCounts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 50)
-      .map(([tag]) => tag)
-      .sort(() => Math.random() - 0.5); // randomize display order
-
-    const tagCloud = document.getElementById("fresh-tag-cloud");
-    if (tagCloud && topTags.length) {
-      tagCloud.innerHTML = topTags.map(t =>
-        `<span class="fresh-tag-pill" data-tag="${escHtml(t)}" onclick="filterFreshByTag('${escHtml(t)}')">${escHtml(t)}</span>`
-      ).join("");
-    }
+    rebuildFreshTagCloud(_freshAll);
     renderFreshGrid(_freshAll);
   } catch { /* fresh releases unavailable */ }
 }

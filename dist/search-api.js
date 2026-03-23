@@ -3,7 +3,7 @@ import compression from "compression";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sharedToken = process.env.DISCOGS_TOKEN ?? "";
@@ -1244,6 +1244,22 @@ app.get("/api/fresh-releases", async (req, res) => {
     }
     catch (err) {
         console.error("fresh-releases error:", err);
+        res.json({ releases: [] });
+    }
+});
+// GET /api/fresh-releases/search?q=... — search full 3-month DB by artist/release/tag
+app.get("/api/fresh-releases/search", async (req, res) => {
+    try {
+        const q = String(req.query.q ?? "").trim();
+        if (!q) {
+            res.json({ releases: [] });
+            return;
+        }
+        const releases = await searchFreshReleases(q, 200);
+        res.json({ releases });
+    }
+    catch (err) {
+        console.error("fresh-releases search error:", err);
         res.json({ releases: [] });
     }
 });

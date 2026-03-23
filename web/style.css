@@ -615,7 +615,7 @@ a.fresh-card-search-link:hover {
   background-position: right 6px center;
   padding-right: 18px;
 }
-.fresh-filter-input  { width: 80px; color: #ccc; cursor: text; }
+.fresh-filter-input  { flex: 1; min-width: 80px; max-width: 260px; color: #ccc; cursor: text; }
 .fresh-filter-select:focus,
 .fresh-filter-input:focus  { outline: none; border-color: var(--accent); }
 .fresh-filter-select option { background: #0f1a20; }

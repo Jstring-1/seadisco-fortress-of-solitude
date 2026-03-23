@@ -484,6 +484,21 @@ export async function getFreshReleases(limit = 150) {
      LIMIT $1`, [limit]);
     return r.rows;
 }
+export async function searchFreshReleases(query, limit = 200) {
+    const pattern = `%${query}%`;
+    const r = await getPool().query(`SELECT release_mbid, release_name, artist_credit_name, release_date,
+            primary_type, secondary_type, tags, caa_release_mbid, cover_url
+     FROM fresh_releases
+     WHERE fetched_at > NOW() - INTERVAL '3 months'
+       AND (
+         artist_credit_name ILIKE $1
+         OR release_name ILIKE $1
+         OR EXISTS (SELECT 1 FROM unnest(tags) AS t WHERE t ILIKE $1)
+       )
+     ORDER BY release_date DESC NULLS LAST
+     LIMIT $2`, [pattern, limit]);
+    return r.rows;
+}
 export async function getFreshTopTags(limit = 24) {
     // Random selection from all tags that appear on at least 1 release in the last 14 days.
     const r = await getPool().query(`SELECT unnest(tags) AS tag, COUNT(*)::int AS cnt
