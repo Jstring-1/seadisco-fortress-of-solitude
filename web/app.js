@@ -2227,13 +2227,15 @@ async function openDropCardPopup(el) {
       if (types) html += `<div class="drop-nomatch-line">${escHtml(types)}</div>`;
       if (fmtDate) html += `<div class="drop-nomatch-line">Released: ${fmtDate}</div>`;
       // Truncated tag list — each tag links to a Drops search
+      html += `<div class="drop-nomatch-tags">`;
       if (tags.length) {
         const shown = tags.slice(0, 8);
-        html += `<div class="drop-nomatch-tags">`;
         html += shown.map(t => `<a href="#" class="drop-nomatch-tag" onclick="event.preventDefault();closeModal();dropTagSearch('${escHtml(t).replace(/'/g, "\\'")}')">${escHtml(t)}</a>`).join("");
         if (tags.length > 8) html += `<span class="drop-nomatch-tag" style="color:#555">+${tags.length - 8}</span>`;
-        html += `</div>`;
+      } else {
+        html += `<span style="font-size:0.65rem;color:#555">--</span>`;
       }
+      html += `</div>`;
       html += `<div class="drop-nomatch-msg">No Discogs entry yet</div>`;
       html += `<a href="${googleUrl}" target="_blank" rel="noopener" class="drop-nomatch-google">Google →</a>`;
       html += `</div></div>`;
