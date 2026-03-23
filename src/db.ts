@@ -649,36 +649,21 @@ export async function upsertFreshRelease(r: {
 
 export async function pruneFreshReleases(): Promise<number> {
   const r = await getPool().query(
-    `DELETE FROM fresh_releases WHERE fetched_at < NOW() - INTERVAL '28 days'`
+    `DELETE FROM fresh_releases WHERE fetched_at < NOW() - INTERVAL '3 months'`
   );
   return r.rowCount ?? 0;
 }
 
-export async function getFreshReleases(limit = 48): Promise<any[]> {
-  // Random sample from last 14 days, all genres
+export async function getFreshReleases(limit = 150): Promise<any[]> {
+  // Random sample from last 3 months — all loaded at once for client-side filtering
   const r = await getPool().query(
     `SELECT release_mbid, release_name, artist_credit_name, release_date,
             primary_type, secondary_type, tags, caa_release_mbid, cover_url
      FROM fresh_releases
-     WHERE fetched_at > NOW() - INTERVAL '28 days'
+     WHERE fetched_at > NOW() - INTERVAL '3 months'
      ORDER BY RANDOM()
      LIMIT $1`,
     [limit]
-  );
-  return r.rows;
-}
-
-export async function getFreshReleasesByTag(tag: string, limit = 48): Promise<any[]> {
-  // Most recent releases with a specific tag, all genres
-  const r = await getPool().query(
-    `SELECT release_mbid, release_name, artist_credit_name, release_date,
-            primary_type, secondary_type, tags, caa_release_mbid, cover_url
-     FROM fresh_releases
-     WHERE fetched_at > NOW() - INTERVAL '28 days'
-       AND $2 = ANY(tags)
-     ORDER BY release_date DESC NULLS LAST, fetched_at DESC
-     LIMIT $1`,
-    [limit, tag]
   );
   return r.rows;
 }

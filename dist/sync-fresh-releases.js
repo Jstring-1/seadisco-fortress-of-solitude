@@ -11,9 +11,9 @@ const CAA_URL = (mbid) => `https://coverartarchive.org/release/${mbid}/front-250
 const UA = "SeaDisco/1.0 (https://seadisco.com)";
 const INTERVAL_MS = 6 * 60 * 60 * 1000; // 6 hours
 const DELAY_MS = 350; // ~3 req/sec to CAA
-const BACKFILL_DAYS = 28;
+const BACKFILL_DAYS = 90; // 3 months on first run
 const NORMAL_DAYS = 1;
-const SPARSE_THRESHOLD = 400; // below this → treat as sparse, do backfill
+const SPARSE_THRESHOLD = 1500; // below this → treat as sparse, do backfill
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 async function countFreshReleases() {
     const connStr = process.env.APP_DB_URL;
