@@ -482,6 +482,7 @@ body {
   flex-direction: column;
   transition: border-color 0.15s, transform 0.15s;
 }
+.fresh-card-clickable { cursor: pointer; }
 .fresh-card:hover {
   border-color: var(--accent-dim);
   transform: translateY(-2px);
@@ -555,6 +556,7 @@ body {
   color: #5a8090;
   white-space: nowrap;
 }
+/* kept for backward compat — cards no longer render links inline */
 .fresh-card-links {
   margin-top: auto;
   padding-top: 0.4rem;
