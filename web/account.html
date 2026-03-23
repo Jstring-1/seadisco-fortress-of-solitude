@@ -44,9 +44,6 @@
     #signed-out-section { display: none; }
     .user-email { color: #aaa; font-size: 0.85rem; margin-bottom: 1.2rem; }
     .section-divider { border: none; border-top: 1px solid #333; margin: 1.5rem 0; }
-    /* Nav tabs on account page are <a> tags — match button styling exactly */
-    #main-nav-tabs a.main-nav-tab { display: flex; align-items: center; text-decoration: none; color: var(--muted); background: none; border: none; }
-    #main-nav-tabs a.main-nav-tab:hover { color: var(--muted); background: none; }
   </style>
 </head>
 <body>
@@ -68,7 +65,7 @@
       <a class="main-nav-tab" href="/?view=wantlist">Wantlist</a>
       <a class="main-nav-tab" href="/?view=info">Info</a>
       <div id="nav-auth-wrap">
-        <a href="/account" class="nav-auth-btn active">Account</a>
+        <a href="/account" class="main-nav-tab nav-auth-btn active">Account</a>
       </div>
     </div>
   </div>
