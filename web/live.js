@@ -1,6 +1,38 @@
 // ── Live tab: concert/event search ───────────────────────────────────────
+let _livePage = 0;
+let _liveTotal = 0;
 
-async function doLiveSearch() {
+function _renderLiveEvents(events, artist) {
+  let html = "";
+  for (const ev of events) {
+    const fmtDate = _liveFmtDate(ev.date);
+    const fmtTime = _liveFmtTime(ev.time);
+    const location = [ev.city, ev.region, ev.country].filter(Boolean).join(", ");
+    const artistLine = !artist && ev.artist
+      ? `<div class="live-event-artist"><a href="#" onclick="event.preventDefault();liveSearchArtist('${escHtml(ev.artist).replace(/'/g, "\\'")}')">${escHtml(ev.artist)}</a></div>`
+      : "";
+    const venueLink = ev.venueId
+      ? `<a href="#" onclick="event.preventDefault();liveSearchVenue('${escHtml(ev.venueId).replace(/'/g, "\\'")}','${escHtml(ev.venue).replace(/'/g, "\\'")}')">${escHtml(ev.venue)}</a>`
+      : `<a href="https://www.google.com/search?q=${encodeURIComponent(`${ev.venue} ${ev.city} concerts`)}" target="_blank" rel="noopener">${escHtml(ev.venue)}</a>`;
+    html += `<div class="live-event">
+      <div class="live-event-date">
+        ${escHtml(fmtDate)}
+        ${fmtTime ? `<span class="live-event-time">${escHtml(fmtTime)}</span>` : ""}
+      </div>
+      <div class="live-event-info">
+        ${artistLine}
+        <div class="live-event-name">${escHtml(ev.name)}</div>
+        <div class="live-event-venue">
+          ${venueLink}
+          ${location ? ` — ${escHtml(location)}` : ""}
+        </div>
+      </div>
+    </div>`;
+  }
+  return html;
+}
+
+async function doLiveSearch(append = false) {
   const artist = (document.getElementById("live-artist")?.value ?? "").trim();
   const city   = (document.getElementById("live-city")?.value ?? "").trim();
   const genre  = (document.getElementById("live-genre")?.value ?? "").trim();
@@ -12,35 +44,50 @@ async function doLiveSearch() {
 
   const statusEl  = document.getElementById("live-status");
   const resultsEl = document.getElementById("live-results");
-  statusEl.textContent = "Searching…";
-  resultsEl.innerHTML = "";
+
+  if (!append) {
+    _livePage = 0;
+    _liveTotal = 0;
+    statusEl.textContent = "Searching…";
+    resultsEl.innerHTML = "";
+  } else {
+    // Remove the "load more" link before fetching
+    const moreEl = document.getElementById("live-load-more");
+    if (moreEl) moreEl.textContent = "Loading…";
+  }
 
   try {
     const params = new URLSearchParams();
     if (artist) params.set("artist", artist);
     if (city)   params.set("city", city);
     if (genre)  params.set("genre", genre);
+    if (_livePage > 0) params.set("page", String(_livePage));
 
     const data = await fetch(`/api/concerts/search?${params}`).then(r => r.json());
     const events = data.events ?? [];
     const artistImage = data.artistImage ?? null;
+    const hasMore = data.hasMore ?? false;
 
-    if (!events.length) {
+    if (!events.length && !append) {
       statusEl.textContent = "";
       resultsEl.innerHTML = `<div class="live-empty">No events found. Try broadening your search.</div>`;
       return;
     }
 
-    // Save live search to DB only when results were found
-    const liveParams = {};
-    if (artist) liveParams.artist = artist;
-    if (city)   liveParams.city = city;
-    if (genre)  liveParams.genre = genre;
-    apiFetch("/api/user/live-search", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ params: liveParams }),
-    }).catch(() => {});
+    _liveTotal += events.length;
+
+    // Save live search to DB only on first page and when results found
+    if (!append && events.length) {
+      const liveParams = {};
+      if (artist) liveParams.artist = artist;
+      if (city)   liveParams.city = city;
+      if (genre)  liveParams.genre = genre;
+      apiFetch("/api/user/live-search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ params: liveParams }),
+      }).catch(() => {});
+    }
 
     const parts = [];
     if (artist) parts.push(artist);
@@ -49,56 +96,41 @@ async function doLiveSearch() {
     const backLink = _livePrevSearch
       ? ` · <a href="#" onclick="event.preventDefault();liveGoBack()" style="color:var(--accent);text-decoration:none">← Back</a>`
       : "";
-    statusEl.innerHTML = `${events.length} event${events.length !== 1 ? "s" : ""} — ${escHtml(parts.join(" · "))}${backLink}`;
+    statusEl.innerHTML = `${_liveTotal} event${_liveTotal !== 1 ? "s" : ""} — ${escHtml(parts.join(" · "))}${backLink}`;
 
-    let html = "";
-
-    // Artist header with image (only when artist was searched)
-    if (artist && artistImage) {
-      html += `<div class="live-artist-header">
-        <img class="live-artist-img" src="${escHtml(artistImage)}" alt="" onerror="this.style.display='none'">
-        <div class="live-artist-name"><a href="#" onclick="event.preventDefault();liveSearchArtist('${escHtml(artist).replace(/'/g, "\\'")}')">${escHtml(artist)}</a></div>
-      </div>`;
-    } else if (artist) {
-      html += `<div class="live-artist-header">
-        <div class="live-artist-name"><a href="#" onclick="event.preventDefault();liveSearchArtist('${escHtml(artist).replace(/'/g, "\\'")}')">${escHtml(artist)}</a></div>
-      </div>`;
+    if (append) {
+      // Remove old "load more" link
+      const moreEl = document.getElementById("live-load-more");
+      if (moreEl) moreEl.remove();
+      // Append new events
+      resultsEl.insertAdjacentHTML("beforeend", _renderLiveEvents(events, artist));
+    } else {
+      let html = "";
+      if (artist && artistImage) {
+        html += `<div class="live-artist-header">
+          <img class="live-artist-img" src="${escHtml(artistImage)}" alt="" onerror="this.style.display='none'">
+          <div class="live-artist-name"><a href="#" onclick="event.preventDefault();liveSearchArtist('${escHtml(artist).replace(/'/g, "\\'")}')">${escHtml(artist)}</a></div>
+        </div>`;
+      } else if (artist) {
+        html += `<div class="live-artist-header">
+          <div class="live-artist-name"><a href="#" onclick="event.preventDefault();liveSearchArtist('${escHtml(artist).replace(/'/g, "\\'")}')">${escHtml(artist)}</a></div>
+        </div>`;
+      }
+      html += _renderLiveEvents(events, artist);
+      resultsEl.innerHTML = html;
     }
 
-    for (const ev of events) {
-      const fmtDate = _liveFmtDate(ev.date);
-      const fmtTime = _liveFmtTime(ev.time);
-      const location = [ev.city, ev.region, ev.country].filter(Boolean).join(", ");
-      // Show artist name on each row when no artist was searched (city/genre mode)
-      const artistLine = !artist && ev.artist
-        ? `<div class="live-event-artist"><a href="#" onclick="event.preventDefault();liveSearchArtist('${escHtml(ev.artist).replace(/'/g, "\\'")}')">${escHtml(ev.artist)}</a></div>`
-        : "";
-
-      // Venue link: search venue events if we have a venueId, otherwise Google
-      const venueLink = ev.venueId
-        ? `<a href="#" onclick="event.preventDefault();liveSearchVenue('${escHtml(ev.venueId).replace(/'/g, "\\'")}','${escHtml(ev.venue).replace(/'/g, "\\'")}')">${escHtml(ev.venue)}</a>`
-        : `<a href="https://www.google.com/search?q=${encodeURIComponent(`${ev.venue} ${ev.city} concerts`)}" target="_blank" rel="noopener">${escHtml(ev.venue)}</a>`;
-
-      html += `<div class="live-event">
-        <div class="live-event-date">
-          ${escHtml(fmtDate)}
-          ${fmtTime ? `<span class="live-event-time">${escHtml(fmtTime)}</span>` : ""}
-        </div>
-        <div class="live-event-info">
-          ${artistLine}
-          <div class="live-event-name">${escHtml(ev.name)}</div>
-          <div class="live-event-venue">
-            ${venueLink}
-            ${location ? ` — ${escHtml(location)}` : ""}
-          </div>
-        </div>
-      </div>`;
+    // Add "Load more" link if there are more pages
+    if (hasMore) {
+      resultsEl.insertAdjacentHTML("beforeend",
+        `<div id="live-load-more" style="text-align:center;padding:1rem 0">
+          <a href="#" onclick="event.preventDefault();_livePage++;doLiveSearch(true)" style="color:var(--accent);text-decoration:none;font-size:0.85rem">Load more events →</a>
+        </div>`);
     }
 
-    resultsEl.innerHTML = html;
   } catch (err) {
     statusEl.textContent = "";
-    resultsEl.innerHTML = `<div class="live-empty">Failed to load events.</div>`;
+    if (!append) resultsEl.innerHTML = `<div class="live-empty">Failed to load events.</div>`;
   }
 }
 

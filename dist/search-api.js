@@ -1334,18 +1334,21 @@ app.get("/api/concerts/search", async (req, res) => {
     const artist = (req.query.artist ?? "").trim();
     const city = (req.query.city ?? "").trim();
     const genre = (req.query.genre ?? "").trim();
+    const page = parseInt(req.query.page ?? "0", 10) || 0;
     if (!artist && !city && !genre) {
         res.json({ events: [], artistImage: null });
         return;
     }
     const events = [];
     let artistImage = null;
+    let tmTotalPages = 0;
     // ── Ticketmaster ──
     if (ticketmasterKey) {
         try {
             const params = new URLSearchParams({
                 classificationName: genre || "music",
                 size: "200",
+                page: String(page),
                 sort: "date,asc",
                 apikey: ticketmasterKey,
             });
@@ -1369,6 +1372,7 @@ app.get("/api/concerts/search", async (req, res) => {
             if (tmRes.ok) {
                 try {
                     const tmData = JSON.parse(tmBody);
+                    tmTotalPages = tmData.page?.totalPages ?? 0;
                     for (const ev of (tmData._embedded?.events ?? [])) {
                         const attractions = ev._embedded?.attractions ?? [];
                         let eventArtist = attractions[0]?.name ?? "";
@@ -1471,7 +1475,8 @@ app.get("/api/concerts/search", async (req, res) => {
         deduped.push(ev);
     }
     deduped.sort((a, b) => a.date.localeCompare(b.date));
-    res.json({ events: deduped, artistImage });
+    const hasMore = page + 1 < tmTotalPages;
+    res.json({ events: deduped, artistImage, page, hasMore });
 });
 // GET /api/concerts/venue/:venueId — all upcoming events at a Ticketmaster venue
 app.get("/api/concerts/venue/:venueId", async (req, res) => {
