@@ -546,6 +546,24 @@ export async function getCollectionPage(
   return { items: dataR.rows.map(r => r.data), total: countR.rows[0]?.total ?? 0 };
 }
 
+export async function getAllCollectionItems(clerkUserId: string): Promise<any[]> {
+  const r = await getPool().query(
+    `SELECT data, folder_id FROM user_collection WHERE clerk_user_id = $1
+     ORDER BY LOWER(data->'artists'->0->>'name') ASC, LOWER(data->>'title') ASC`,
+    [clerkUserId]
+  );
+  return r.rows;
+}
+
+export async function getAllWantlistItems(clerkUserId: string): Promise<any[]> {
+  const r = await getPool().query(
+    `SELECT data FROM user_wantlist WHERE clerk_user_id = $1
+     ORDER BY LOWER(data->'artists'->0->>'name') ASC, LOWER(data->>'title') ASC`,
+    [clerkUserId]
+  );
+  return r.rows;
+}
+
 export async function getWantlistPage(
   clerkUserId: string,
   page: number,
