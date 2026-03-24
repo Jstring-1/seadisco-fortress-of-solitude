@@ -586,7 +586,7 @@ async function loadRecentFeed() {
     const pillsHtml = `<div class="feed-label">Recent Searches</div><div class="feed-pills">${
       filtered.map((s, i) => {
         const { full, short } = feedLabel(s.params);
-        return `<span class="feed-pill" data-idx="${i}" title="${escHtml(full)}">${escHtml(short)}</span>`;
+        return `<span class="pill feed-pill" data-idx="${i}" title="${escHtml(full)}">${escHtml(short)}</span>`;
       }).join("")
     }</div>`;
     el.style.opacity = "0";

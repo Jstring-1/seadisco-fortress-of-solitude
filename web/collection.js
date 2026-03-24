@@ -157,9 +157,9 @@ async function loadCollectionFolders() {
     const folders = data.folders ?? [];
     if (!folders.length) { el.style.display = "none"; return; }
     el.style.display = "";
-    let html = `<span class="cw-folder-pill active" data-folder="0" onclick="filterByFolder(0)">All</span>`;
+    let html = `<span class="pill cw-folder-pill active" data-folder="0" onclick="filterByFolder(0)">All</span>`;
     html += folders.map(f =>
-      `<span class="cw-folder-pill" data-folder="${f.folderId}" onclick="filterByFolder(${f.folderId})" title="${escHtml(f.name)} (${f.count})">${escHtml(f.name)}</span>`
+      `<span class="pill cw-folder-pill" data-folder="${f.folderId}" onclick="filterByFolder(${f.folderId})" title="${escHtml(f.name)} (${f.count})">${escHtml(f.name)}</span>`
     ).join("");
     el.innerHTML = html;
   } catch { el.style.display = "none"; }

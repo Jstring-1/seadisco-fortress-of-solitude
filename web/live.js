@@ -281,7 +281,7 @@ async function loadLiveRecentFeed() {
       if (p.genre)  parts.push(p.genre);
       const full = parts.join(" · ");
       const short = full.length > 28 ? full.slice(0, 27) + "…" : full;
-      return `<span class="feed-pill" data-live-idx="${i}" title="${escHtml(full)}">${escHtml(short)}</span>`;
+      return `<span class="pill feed-pill" data-live-idx="${i}" title="${escHtml(full)}">${escHtml(short)}</span>`;
     }).join("");
     el.innerHTML = `<div class="feed-label">Recent Live Searches</div><div class="feed-pills">${pills}</div>`;
     el.querySelectorAll(".feed-pill").forEach((pill, i) => {

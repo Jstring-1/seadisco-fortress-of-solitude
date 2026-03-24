@@ -20,7 +20,7 @@ function renderFreshGrid(releases) {
 
     const mbData = `data-artist="${escHtml(rel.artist_credit_name ?? '')}" data-title="${escHtml(rel.release_name ?? '')}" data-cover="${escHtml(rel.cover_url ?? '')}" data-date="${escHtml(dateStr)}" data-type="${escHtml(types)}" data-tags="${escHtml((rel.tags ?? []).join(','))}" data-rgmbid="${escHtml(rel.release_group_mbid ?? '')}" data-artmbids="${escHtml((rel.artist_mbids ?? []).join(','))}"`;
 
-    return `<div class="fresh-card fresh-card-clickable" ${mbData} onclick="openDropCardPopup(this)">
+    return `<div class="card fresh-card" ${mbData} onclick="openDropCardPopup(this)">
       <div class="fresh-card-img">${img}</div>
       <div class="fresh-card-body">
         <div class="fresh-card-title">${escHtml(rel.release_name ?? "Unknown")}</div>
@@ -168,7 +168,7 @@ function rebuildFreshTagCloud(releases) {
   if (tagCloud) {
     tagCloud.innerHTML = topTags.length
       ? topTags.map(t =>
-          `<span class="fresh-tag-pill" data-tag="${escHtml(t)}" onclick="filterFreshByTag('${escHtml(t)}')" title="${escHtml(t)}">${escHtml(t.length > 30 ? t.slice(0, 28) + "…" : t)}</span>`
+          `<span class="pill fresh-tag-pill" data-tag="${escHtml(t)}" onclick="filterFreshByTag('${escHtml(t)}')" title="${escHtml(t)}">${escHtml(t.length > 30 ? t.slice(0, 28) + "…" : t)}</span>`
         ).join("")
       : "";
   }
