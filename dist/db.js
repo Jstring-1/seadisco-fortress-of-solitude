@@ -399,6 +399,21 @@ function buildCwWhere(filters, startIdx) {
         allParams.push(filters.folderId);
         idx++;
     }
+    // Rating filter
+    if (filters.ratingUnrated) {
+        clauses.push(`(rating IS NULL OR rating = 0)`);
+    }
+    else if (filters.ratingMin && filters.ratingMin >= 1 && filters.ratingMin <= 5) {
+        clauses.push(`rating >= $${idx}`);
+        allParams.push(filters.ratingMin);
+        idx++;
+    }
+    // Notes text search
+    if (filters.notes) {
+        clauses.push(`notes::text ILIKE $${idx}`);
+        allParams.push(`%${filters.notes}%`);
+        idx++;
+    }
     return { clause: clauses.length ? " AND " + clauses.join(" AND ") : "", params: allParams };
 }
 export async function getCollectionPage(clerkUserId, page, perPage, filters) {

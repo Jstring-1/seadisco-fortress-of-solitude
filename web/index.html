@@ -248,6 +248,20 @@
         </label>
         <label>Format <input type="text" id="cw-format" placeholder="e.g. Vinyl" onkeydown="if(event.key==='Enter'){doCwSearch(1)}" /></label>
       </div>
+      <div class="filters" style="margin-top:0.4rem">
+        <label>Rating
+          <select id="cw-rating" onchange="doCwSearch(1)" style="color-scheme:dark">
+            <option value="">Any</option>
+            <option value="5">★★★★★</option>
+            <option value="4">★★★★+</option>
+            <option value="3">★★★+</option>
+            <option value="2">★★+</option>
+            <option value="1">★+</option>
+            <option value="unrated">Unrated</option>
+          </select>
+        </label>
+        <label>Notes <input type="text" id="cw-notes" placeholder="e.g. Mint, Shelf 3" onkeydown="if(event.key==='Enter'){doCwSearch(1)}" /></label>
+      </div>
     </div>
   </div>
 

@@ -278,11 +278,13 @@ async function exportWantlist() {
 }
 
 function clearCwFilters() {
-  ["cw-query","cw-artist","cw-release","cw-label","cw-year","cw-genre","cw-style","cw-format"].forEach(id => {
+  ["cw-query","cw-artist","cw-release","cw-label","cw-year","cw-genre","cw-style","cw-format","cw-notes"].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = "";
   });
   const sortEl = document.getElementById("cw-sort");
   if (sortEl) sortEl.value = "";
+  const ratingEl = document.getElementById("cw-rating");
+  if (ratingEl) ratingEl.value = "";
   toggleCwAdvanced(false);
   // Reset folder filter
   _cwFolderId = 0;
@@ -314,12 +316,16 @@ async function loadCollectionTab(page = 1, filters) {
     if (f.style)   url += `&style=${encodeURIComponent(f.style)}`;
     if (f.format)  url += `&format=${encodeURIComponent(f.format)}`;
     if (_cwFolderId > 0) url += `&folderId=${_cwFolderId}`;
+    const cwRating = document.getElementById("cw-rating")?.value || "";
+    if (cwRating) url += `&rating=${encodeURIComponent(cwRating)}`;
+    const cwNotes = (document.getElementById("cw-notes")?.value ?? "").trim();
+    if (cwNotes) url += `&notes=${encodeURIComponent(cwNotes)}`;
     const cwSort = document.getElementById("cw-sort")?.value || "";
     if (cwSort) url += `&sort=${encodeURIComponent(cwSort)}`;
     const r = await apiFetch(url);
     const data = await r.json();
     const items = data.items ?? [];
-    const hasFilter = Object.keys(f).length > 0;
+    const hasFilter = Object.keys(f).length > 0 || cwRating || cwNotes;
     const filterDesc = Object.values(f).join(" + ");
     if (!items.length) {
       setStatus(hasFilter ? `No collection items matching "${filterDesc}".` : "No collection items synced yet. Click 'Sync now' to fetch from Discogs.");
@@ -354,12 +360,16 @@ async function loadWantlistTab(page = 1, filters) {
     if (f.genre)   url += `&genre=${encodeURIComponent(f.genre)}`;
     if (f.style)   url += `&style=${encodeURIComponent(f.style)}`;
     if (f.format)  url += `&format=${encodeURIComponent(f.format)}`;
+    const cwRating = document.getElementById("cw-rating")?.value || "";
+    if (cwRating) url += `&rating=${encodeURIComponent(cwRating)}`;
+    const cwNotes = (document.getElementById("cw-notes")?.value ?? "").trim();
+    if (cwNotes) url += `&notes=${encodeURIComponent(cwNotes)}`;
     const cwSort = document.getElementById("cw-sort")?.value || "";
     if (cwSort) url += `&sort=${encodeURIComponent(cwSort)}`;
     const r = await apiFetch(url);
     const data = await r.json();
     const items = data.items ?? [];
-    const hasFilter = Object.keys(f).length > 0;
+    const hasFilter = Object.keys(f).length > 0 || cwRating || cwNotes;
     const filterDesc = Object.values(f).join(" + ");
     if (!items.length) {
       setStatus(hasFilter ? `No wantlist items matching "${filterDesc}".` : "No wantlist items synced yet. Click 'Sync now' to fetch from Discogs.");
