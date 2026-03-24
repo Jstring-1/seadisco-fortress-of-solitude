@@ -554,7 +554,7 @@ export async function getCollectionPage(
   const orderBy = cwOrderBy(filters?.sort);
   const [dataR, countR] = await Promise.all([
     getPool().query(
-      `SELECT data FROM user_collection WHERE clerk_user_id = $1${dataClause}
+      `SELECT data, rating, notes FROM user_collection WHERE clerk_user_id = $1${dataClause}
        ${orderBy}
        LIMIT $2 OFFSET $3`,
       [clerkUserId, perPage, offset, ...dataFilterParams]
@@ -564,7 +564,7 @@ export async function getCollectionPage(
       [clerkUserId, ...countFilterParams]
     ),
   ]);
-  return { items: dataR.rows.map(r => r.data), total: countR.rows[0]?.total ?? 0 };
+  return { items: dataR.rows.map(r => ({ ...r.data, _rating: r.rating ?? 0, _notes: r.notes ?? [] })), total: countR.rows[0]?.total ?? 0 };
 }
 
 export async function getAllCollectionItems(clerkUserId: string): Promise<any[]> {
@@ -597,7 +597,7 @@ export async function getWantlistPage(
   const orderBy = cwOrderBy(filters?.sort);
   const [dataR, countR] = await Promise.all([
     getPool().query(
-      `SELECT data FROM user_wantlist WHERE clerk_user_id = $1${dataClause}
+      `SELECT data, rating, notes FROM user_wantlist WHERE clerk_user_id = $1${dataClause}
        ${orderBy}
        LIMIT $2 OFFSET $3`,
       [clerkUserId, perPage, offset, ...dataFilterParams]
@@ -607,7 +607,7 @@ export async function getWantlistPage(
       [clerkUserId, ...countFilterParams]
     ),
   ]);
-  return { items: dataR.rows.map(r => r.data), total: countR.rows[0]?.total ?? 0 };
+  return { items: dataR.rows.map(r => ({ ...r.data, _rating: r.rating ?? 0, _notes: r.notes ?? [] })), total: countR.rows[0]?.total ?? 0 };
 }
 
 export async function getCollectionFacets(clerkUserId: string, genre?: string): Promise<{ genres: string[]; styles: string[] }> {

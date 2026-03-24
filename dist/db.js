@@ -407,12 +407,12 @@ export async function getCollectionPage(clerkUserId, page, perPage, filters) {
     const { clause: countClause, params: countFilterParams } = buildCwWhere(filters ?? {}, 2);
     const orderBy = cwOrderBy(filters?.sort);
     const [dataR, countR] = await Promise.all([
-        getPool().query(`SELECT data FROM user_collection WHERE clerk_user_id = $1${dataClause}
+        getPool().query(`SELECT data, rating, notes FROM user_collection WHERE clerk_user_id = $1${dataClause}
        ${orderBy}
        LIMIT $2 OFFSET $3`, [clerkUserId, perPage, offset, ...dataFilterParams]),
         getPool().query(`SELECT COUNT(*)::int AS total FROM user_collection WHERE clerk_user_id = $1${countClause}`, [clerkUserId, ...countFilterParams]),
     ]);
-    return { items: dataR.rows.map(r => r.data), total: countR.rows[0]?.total ?? 0 };
+    return { items: dataR.rows.map(r => ({ ...r.data, _rating: r.rating ?? 0, _notes: r.notes ?? [] })), total: countR.rows[0]?.total ?? 0 };
 }
 export async function getAllCollectionItems(clerkUserId) {
     const r = await getPool().query(`SELECT data, folder_id FROM user_collection WHERE clerk_user_id = $1
@@ -430,12 +430,12 @@ export async function getWantlistPage(clerkUserId, page, perPage, filters) {
     const { clause: countClause, params: countFilterParams } = buildCwWhere(filters ?? {}, 2);
     const orderBy = cwOrderBy(filters?.sort);
     const [dataR, countR] = await Promise.all([
-        getPool().query(`SELECT data FROM user_wantlist WHERE clerk_user_id = $1${dataClause}
+        getPool().query(`SELECT data, rating, notes FROM user_wantlist WHERE clerk_user_id = $1${dataClause}
        ${orderBy}
        LIMIT $2 OFFSET $3`, [clerkUserId, perPage, offset, ...dataFilterParams]),
         getPool().query(`SELECT COUNT(*)::int AS total FROM user_wantlist WHERE clerk_user_id = $1${countClause}`, [clerkUserId, ...countFilterParams]),
     ]);
-    return { items: dataR.rows.map(r => r.data), total: countR.rows[0]?.total ?? 0 };
+    return { items: dataR.rows.map(r => ({ ...r.data, _rating: r.rating ?? 0, _notes: r.notes ?? [] })), total: countR.rows[0]?.total ?? 0 };
 }
 export async function getCollectionFacets(clerkUserId, genre) {
     const stylesQuery = genre

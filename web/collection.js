@@ -19,6 +19,8 @@ function renderCardFromBasicInfo(basicInfo) {
     year:         String(basicInfo.year ?? ""),
     country:      "",
     uri:          basicInfo.id ? `/release/${basicInfo.id}` : "",
+    _rating:      basicInfo._rating ?? 0,
+    _notes:       basicInfo._notes ?? [],
   };
   return renderCard(syntheticItem);
 }
