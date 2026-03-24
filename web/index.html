@@ -30,7 +30,7 @@
   <meta name="theme-color" content="#0c1015">
   <link rel="preconnect" href="https://api.discogs.com" />
   <link rel="preconnect" href="https://i.discogs.com" />
-  <link rel="stylesheet" href="/style.css?v=20260324b" />
+  <link rel="stylesheet" href="/style.css?v=20260324c" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -89,7 +89,7 @@
 
 <main>
   <span id="auth-status" style="display:none"></span>
-  <div id="main-search-form">
+  <div id="main-search-form" class="content-narrow">
   <div class="search-row">
     <input type="text" id="query" placeholder="Search artists, releases, labels…" autocomplete="off" />
     <button id="search-btn" onclick="doSearch(1)" style="flex-shrink:0">Search</button>
@@ -195,7 +195,7 @@
     </div>
   </div>
 
-  <div id="search-info-block" style="margin-bottom:0.4rem;min-height:1em;display:none">
+  <div id="search-info-block" class="content-narrow" style="margin-bottom:0.4rem;min-height:1em;display:none">
     <div id="search-desc" style="font-size:0.82rem;color:var(--accent);line-height:2.2"></div>
     <div id="search-ai-summary" style="font-size:0.82rem;color:var(--accent);line-height:2.2;font-style:italic"></div>
     <div id="search-returned" style="font-size:0.82rem;color:var(--accent);line-height:2.2"></div>
@@ -203,7 +203,7 @@
   </div><!-- /main-search-form -->
 
   <!-- Collection / Wantlist local search — hidden until those views are active -->
-  <div id="cw-search-wrap" style="display:none">
+  <div id="cw-search-wrap" class="content-narrow" style="display:none">
     <div id="cw-folder-cloud" class="cw-folder-cloud" style="display:none"></div>
     <div class="search-row">
       <input type="text" id="cw-query" placeholder="Search your collection…" autocomplete="off"
@@ -264,7 +264,7 @@
     </div>
   </div>
 
-  <div id="wanted-search-wrap" style="display:none">
+  <div id="wanted-search-wrap" class="content-narrow" style="display:none">
     <div class="search-row">
       <input type="text" id="wanted-q" placeholder="Search wanted items…" autocomplete="off"
         oninput="filterWantedItems()" onkeydown="if(event.key==='Escape'){document.getElementById('wanted-q').value='';filterWantedItems()}" />
@@ -272,12 +272,12 @@
     </div>
   </div>
 
-  <div id="status"></div>
+  <div id="status" class="content-narrow"></div>
   <div id="artist-alts"></div>
   <div id="alts-popup-backdrop" onclick="closeAltsPopup()"></div>
   <div id="alts-popup"><h4>Other artists</h4></div>
-  <div id="blurb"></div>
-  <div id="results"></div>
+  <div id="blurb" class="content-narrow"></div>
+  <div id="results" class="card-grid"></div>
   <div id="pagination" style="display:none">
     <button id="prev-btn" onclick="window.scrollTo({top:0,behavior:'smooth'});doSearch(currentPage-1)">← Prev</button>
     <span id="page-info"></span>
@@ -286,14 +286,14 @@
   <div id="recent-feed" style="margin-top:1.5rem">
     <div class="feed-label">Recent Searches</div>
     <div class="feed-pills feed-pills-placeholder">
-      <span class="feed-pill feed-pill-ph"></span>
-      <span class="feed-pill feed-pill-ph"></span>
-      <span class="feed-pill feed-pill-ph"></span>
-      <span class="feed-pill feed-pill-ph"></span>
-      <span class="feed-pill feed-pill-ph"></span>
-      <span class="feed-pill feed-pill-ph"></span>
-      <span class="feed-pill feed-pill-ph"></span>
-      <span class="feed-pill feed-pill-ph"></span>
+      <span class="pill feed-pill feed-pill-ph"></span>
+      <span class="pill feed-pill feed-pill-ph"></span>
+      <span class="pill feed-pill feed-pill-ph"></span>
+      <span class="pill feed-pill feed-pill-ph"></span>
+      <span class="pill feed-pill feed-pill-ph"></span>
+      <span class="pill feed-pill feed-pill-ph"></span>
+      <span class="pill feed-pill feed-pill-ph"></span>
+      <span class="pill feed-pill feed-pill-ph"></span>
     </div>
   </div>
 </main>
@@ -303,7 +303,7 @@
   <div id="fresh-releases-section">
     <div id="fresh-tag-cloud" class="fresh-tag-cloud"></div>
     <div class="fresh-tag-footer">
-      <button class="fresh-all-btn active" id="fresh-all-btn" onclick="filterFreshByTag('')">All</button>
+      <button class="pill fresh-all-btn active" id="fresh-all-btn" onclick="filterFreshByTag('')">All</button>
       <select id="fresh-genre-select" class="fresh-filter-select" onchange="onFreshGenreChange()">
         <option value="">Genre</option>
       </select>
@@ -312,10 +312,10 @@
       </select>
       <input id="fresh-tag-input" class="fresh-filter-input" type="text" placeholder="Search drops…" oninput="debounceFreshSearch(this.value)" autocomplete="off" spellcheck="false">
     </div>
-    <div id="fresh-releases-grid" class="fresh-grid"></div>
+    <div id="fresh-releases-grid" class="card-grid fresh-grid"></div>
   </div>
 </div>
-<div id="live-view" style="display:none;max-width:900px;margin:0 auto;padding:0.4rem 1.5rem 1.5rem">
+<div id="live-view" class="content-narrow" style="display:none;padding:0.4rem 1.5rem 1.5rem">
   <div class="live-search-row">
     <input type="text" id="live-artist" class="live-input" placeholder="Artist" autocomplete="off" onkeydown="if(event.key==='Enter')doLiveSearch()">
     <input type="text" id="live-city" class="live-input" placeholder="City or Zip" autocomplete="off" onkeydown="if(event.key==='Enter')doLiveSearch()">
@@ -344,7 +344,7 @@
   <div id="live-results"></div>
 </div>
 
-<div id="info-view" style="display:none;max-width:760px;margin:0 auto;padding:1rem 1.5rem 2.5rem">
+<div id="info-view" class="content-narrow" style="display:none;padding:1rem 1.5rem 2.5rem">
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">How SeaDisco Works</h2>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Searching</h3>
