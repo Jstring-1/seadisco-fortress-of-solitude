@@ -1250,11 +1250,13 @@ app.get("/api/concerts/search", async (req, res) => {
           params.set("postalCode", city);
           params.set("radius", "50");
           params.set("unit", "miles");
+          params.set("countryCode", "US");
         } else {
           params.set("city", city);
         }
       }
       const tmUrl = `https://app.ticketmaster.com/discovery/v2/events.json?${params}`;
+      console.log("Live TM URL:", tmUrl.replace(ticketmasterKey, "***"));
       const tmRes = await fetch(tmUrl);
       const tmBody = await tmRes.text();
       if (tmRes.ok) {
