@@ -158,22 +158,24 @@
 
 
       <!-- Admin global search pool — only rendered for admin user -->
-      <div id="admin-searches" style="display:none">
+      <div id="admin-search-pools" style="display:none">
         <hr class="section-divider" />
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem">
-          <h2 style="margin:0">Global Search Pool</h2>
-          <span id="admin-search-count" style="font-size:0.78rem;color:#555"></span>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+          <div id="admin-searches">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem">
+              <h2 style="margin:0;font-size:1rem">Global Search Pool</h2>
+              <span id="admin-search-count" style="font-size:0.72rem;color:#555"></span>
+            </div>
+            <div id="global-search-list" style="font-size:0.8rem;color:var(--muted);max-height:520px;overflow-y:auto">Loading…</div>
+          </div>
+          <div id="admin-live-searches">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem">
+              <h2 style="margin:0;font-size:1rem">Live Search Pool</h2>
+              <span id="admin-live-search-count" style="font-size:0.72rem;color:#555"></span>
+            </div>
+            <div id="global-live-search-list" style="font-size:0.8rem;color:var(--muted);max-height:520px;overflow-y:auto">Loading…</div>
+          </div>
         </div>
-        <div id="global-search-list" style="font-size:0.85rem;color:var(--muted);max-height:480px;overflow-y:auto">Loading…</div>
-      </div>
-
-      <div id="admin-live-searches" style="display:none">
-        <hr class="section-divider" />
-        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem">
-          <h2 style="margin:0">Live Search Pool</h2>
-          <span id="admin-live-search-count" style="font-size:0.78rem;color:#555"></span>
-        </div>
-        <div id="global-live-search-list" style="font-size:0.85rem;color:var(--muted);max-height:480px;overflow-y:auto">Loading…</div>
       </div>
 
       <hr class="section-divider" />
@@ -658,14 +660,14 @@ async function loadAdminInbox() {
 }
 
 async function loadAdminSearches() {
+  const poolsWrap   = document.getElementById("admin-search-pools");
   const section     = document.getElementById("admin-searches");
   const el          = document.getElementById("global-search-list");
   const countEl     = document.getElementById("admin-search-count");
   const liveSection = document.getElementById("admin-live-searches");
   const liveEl      = document.getElementById("global-live-search-list");
   const liveCountEl = document.getElementById("admin-live-search-count");
-  section.style.display = "block";
-  liveSection.style.display = "block";
+  poolsWrap.style.display = "block";
   try {
     const sessionToken = await clerk.session?.getToken();
     const data = await fetch("/api/admin/searches", {
