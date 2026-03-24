@@ -269,6 +269,22 @@ export async function getRecentSearches(limit = 300): Promise<Array<{ params: Re
     `SELECT params, searched_at FROM (
        SELECT DISTINCT ON (params) params, searched_at
        FROM search_history
+       WHERE NOT (params ? '_type')
+       ORDER BY params, searched_at DESC
+     ) sub
+     ORDER BY searched_at DESC
+     LIMIT $1`,
+    [limit]
+  );
+  return r.rows;
+}
+
+export async function getRecentLiveSearches(limit = 200): Promise<Array<{ params: Record<string, string>; searched_at: string }>> {
+  const r = await getPool().query(
+    `SELECT params, searched_at FROM (
+       SELECT DISTINCT ON (params) params, searched_at
+       FROM search_history
+       WHERE params->>'_type' = 'live'
        ORDER BY params, searched_at DESC
      ) sub
      ORDER BY searched_at DESC

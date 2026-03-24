@@ -3,7 +3,7 @@ import compression from "compression";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sharedToken = process.env.DISCOGS_TOKEN ?? "";
@@ -829,6 +829,37 @@ app.get("/api/recent-searches", async (_req, res) => {
             return true;
         });
         // Shuffle the latest 300 and return 48 random pills
+        for (let i = searches.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [searches[i], searches[j]] = [searches[j], searches[i]];
+        }
+        res.json({ searches: searches.slice(0, 48) });
+    }
+    catch {
+        res.json({ searches: [] });
+    }
+});
+// GET /api/recent-live-searches — recent concert searches for Live tab pill cloud
+app.get("/api/recent-live-searches", async (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=120");
+    if (!process.env.APP_DB_URL) {
+        res.json({ searches: [] });
+        return;
+    }
+    try {
+        const raw = await getRecentLiveSearches(200);
+        // Dedupe by content signature
+        const seen = new Set();
+        const searches = raw.filter(({ params }) => {
+            const sig = [params.artist, params.city, params.genre]
+                .map(v => (v ?? "").toLowerCase().trim())
+                .join("|");
+            if (!sig.replace(/\|/g, "").trim() || seen.has(sig))
+                return false;
+            seen.add(sig);
+            return true;
+        });
+        // Shuffle and return 48
         for (let i = searches.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [searches[i], searches[j]] = [searches[j], searches[i]];

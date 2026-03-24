@@ -85,6 +85,7 @@ function switchView(view, skipPushState = false) {
     if (liveView) liveView.style.display = "block";
     if (mainForm) mainForm.style.display = "none";
     if (cwWrap) cwWrap.style.display = "none";
+    if (typeof loadLiveRecentFeed === "function") loadLiveRecentFeed();
     if (wantedWrap) wantedWrap.style.display = "none";
   } else if (view === "info") {
     if (infoView) infoView.style.display = "block";
