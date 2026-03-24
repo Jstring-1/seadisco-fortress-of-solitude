@@ -1,14 +1,5 @@
 // ── Live tab: concert/event search ───────────────────────────────────────
 
-// Restore saved city on load
-(function () {
-  const saved = localStorage.getItem("seadisco_live_city");
-  if (saved) {
-    const el = document.getElementById("live-city");
-    if (el) el.value = saved;
-  }
-})();
-
 async function doLiveSearch() {
   const artist = (document.getElementById("live-artist")?.value ?? "").trim();
   const city   = (document.getElementById("live-city")?.value ?? "").trim();
@@ -19,10 +10,16 @@ async function doLiveSearch() {
     return;
   }
 
-  // Save city for next visit
-  if (city) {
-    localStorage.setItem("seadisco_live_city", city);
-  }
+  // Save live search to DB (fire-and-forget)
+  const liveParams = {};
+  if (artist) liveParams.artist = artist;
+  if (city)   liveParams.city = city;
+  if (genre)  liveParams.genre = genre;
+  apiFetch("/api/user/live-search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ params: liveParams }),
+  }).catch(() => {});
 
   const statusEl  = document.getElementById("live-status");
   const resultsEl = document.getElementById("live-results");
