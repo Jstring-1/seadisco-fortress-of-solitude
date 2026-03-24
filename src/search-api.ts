@@ -1255,7 +1255,7 @@ app.get("/api/concerts/search", async (req, res) => {
       if (city) {
         if (/^\d{5}$/.test(city)) {
           params.set("postalCode", city);
-          params.set("radius", "50");
+          params.set("radius", "75");
           params.set("unit", "miles");
           params.set("countryCode", "US");
         } else {
