@@ -59,8 +59,6 @@ html { overflow-x: hidden; }
     width: auto;
     min-width: 70px;
     flex: 0 0 auto;
-    font-size: 0.85rem;
-    padding: 0.65rem 0.6rem;
   }
 
   /* Type/sort row — radios on top, Advanced+Sort+Clear on bottom */
@@ -183,6 +181,7 @@ html { overflow-x: hidden; }
   --text:      #e2e2e2;
   --muted:     #7a9aaa;
   --radius:    8px;
+  --input-h:   28px;
 }
 
 body {
@@ -567,19 +566,10 @@ a.fresh-card-search-link:hover {
   opacity: 1;
 }
 
-/* Genre/style selects + tag text input — forced identical size */
+/* Genre/style selects + tag text input on drops page */
 .fresh-filter-select,
 .fresh-filter-input {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  height: 22px;
-  padding: 0 0.4rem;
-  font-family: inherit;
-  font-size: 0.68rem;
-  line-height: 22px;
   color: #aaa;
-  box-sizing: border-box;
   -webkit-appearance: none;
   -moz-appearance: none;
   appearance: none;
@@ -596,7 +586,7 @@ a.fresh-card-search-link:hover {
 .fresh-filter-select:focus,
 .fresh-filter-input:focus  { outline: none; border-color: var(--accent); }
 .fresh-filter-select option { background: #0f1a20; }
-.fresh-filter-input::placeholder { color: #555; font-family: inherit; font-size: 0.68rem; }
+.fresh-filter-input::placeholder { color: #555; }
 
 /* ── Live tab ─────────────────────────────────────────────────────────── */
 /* #live-view and #info-view now use .content-narrow class */
@@ -607,16 +597,7 @@ a.fresh-card-search-link:hover {
   flex-wrap: wrap;
 }
 .live-input, .live-select {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  height: 22px;
-  padding: 0 0.4rem;
-  font-family: inherit;
-  font-size: 0.68rem;
-  line-height: 22px;
-  color: #ccc;
-  box-sizing: border-box;
+  /* inherits height/font from global input/select rules */
 }
 .live-input { flex: 1; min-width: 80px; max-width: 240px; }
 .live-input::placeholder { color: #555; }
@@ -634,14 +615,7 @@ a.fresh-card-search-link:hover {
 }
 .live-select option { background: #0f1a20; }
 .live-search-btn {
-  background: var(--accent);
-  color: #000;
-  border: none;
-  border-radius: 6px;
-  padding: 0 0.8rem;
-  height: 22px;
-  font-size: 0.68rem;
-  font-weight: 600;
+  /* inherits height/font from global button rules */
   cursor: pointer;
   white-space: nowrap;
 }
@@ -838,8 +812,12 @@ input[type="text"] {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text);
-  font-size: 1rem;
-  padding: 0.65rem 1rem;
+  font-family: inherit;
+  font-size: 0.78rem;
+  height: var(--input-h);
+  padding: 0 0.6rem;
+  line-height: var(--input-h);
+  box-sizing: border-box;
   outline: none;
   transition: border-color 0.15s;
 }
@@ -853,8 +831,12 @@ select {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text);
-  font-size: 0.9rem;
-  padding: 0.55rem 0.75rem;
+  font-family: inherit;
+  font-size: 0.78rem;
+  height: var(--input-h);
+  padding: 0 0.5rem;
+  line-height: var(--input-h);
+  box-sizing: border-box;
   outline: none;
   cursor: pointer;
   color-scheme: dark;
@@ -866,9 +848,12 @@ button {
   border-radius: var(--radius);
   color: #000;
   cursor: pointer;
-  font-size: 0.95rem;
+  font-family: inherit;
+  font-size: 0.78rem;
   font-weight: 600;
-  padding: 0.65rem 1.4rem;
+  height: var(--input-h);
+  padding: 0 1rem;
+  box-sizing: border-box;
   transition: background 0.15s;
 }
 
@@ -901,8 +886,6 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 .filters select {
   flex: 1;
   min-width: 120px;
-  font-size: 0.85rem;
-  padding: 0.55rem 0.75rem;
   color-scheme: dark;
 }
 
