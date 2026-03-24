@@ -12,7 +12,7 @@
   <link rel="icon" href="/favicon.ico">
   <link rel="manifest" href="/site.webmanifest">
   <meta name="theme-color" content="#0c1015">
-  <link rel="stylesheet" href="/style.css?v=20260322b" />
+  <link rel="stylesheet" href="/style.css?v=20260324a" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -48,29 +48,28 @@
 </head>
 <body>
 
-<div id="site-header">
-  <a href="/"><img src="/seadisco-logo.png" alt="SeaDisco" /></a>
-</div>
-
-<nav id="main-nav">
-  <button id="nav-hamburger" onclick="toggleMobileNav()" aria-label="Open navigation">
-    <span></span><span></span><span></span>
-  </button>
-  <div id="nav-tabs-wrap">
-    <div id="main-nav-tabs">
-      <a class="main-nav-tab" href="/">Search</a>
-      <a class="main-nav-tab" href="/?view=drops">Drops</a>
-      <a class="main-nav-tab" href="/?view=live">Live</a>
-      <a class="main-nav-tab" href="/?view=info">Info</a>
-      <a class="main-nav-tab" href="/?view=collection">Collection</a>
-      <a class="main-nav-tab" href="/?view=wantlist">Wantlist</a>
-      <a class="main-nav-tab" href="/?view=wanted">Wants</a>
-      <div id="nav-auth-wrap">
-        <a href="/account" class="main-nav-tab nav-auth-btn active">Account</a>
+<header id="site-header">
+  <a href="/" class="header-logo"><picture><source srcset="/seadisco-logo.webp" type="image/webp" /><img src="/seadisco-logo.png" alt="SeaDisco" /></picture></a>
+  <nav id="main-nav">
+    <button id="nav-hamburger" onclick="toggleMobileNav()" aria-label="Open navigation">
+      <span></span><span></span><span></span>
+    </button>
+    <div id="nav-tabs-wrap">
+      <div id="main-nav-tabs">
+        <a class="main-nav-tab" href="/">Search</a>
+        <a class="main-nav-tab" href="/?view=drops">Drops</a>
+        <a class="main-nav-tab" href="/?view=live">Live</a>
+        <a class="main-nav-tab" href="/?view=info">Info</a>
+        <a class="main-nav-tab" href="/?view=collection">Collection</a>
+        <a class="main-nav-tab" href="/?view=wantlist">Wantlist</a>
+        <a class="main-nav-tab" href="/?view=wanted">Wants</a>
+        <div id="nav-auth-wrap">
+          <a href="/account" class="main-nav-tab nav-auth-btn active">Account</a>
+        </div>
       </div>
     </div>
-  </div>
-</nav>
+  </nav>
+</header>
 
 <main>
   <div class="account-box">

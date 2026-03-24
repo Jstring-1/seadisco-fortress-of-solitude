@@ -314,12 +314,12 @@ body {
     position: fixed;
     top: 1rem;
     right: 1rem;
-    z-index: 400;
+    z-index: 500;
     background: var(--surface);
     border-color: var(--accent);
   }
   /* Dropdown: fixed just below the hamburger, right-aligned */
-  #nav-tabs-wrap { position: fixed; top: 3.5rem; right: 1rem; z-index: 400; min-width: 200px; }
+  #nav-tabs-wrap { position: fixed; top: 3.5rem; right: 1rem; z-index: 500; min-width: 200px; }
   #main-nav-tabs {
     display: none !important;
     flex-direction: column;
@@ -649,6 +649,7 @@ a.fresh-card-search-link:hover {
 .fresh-filter-input::placeholder { color: #555; font-family: inherit; font-size: 0.68rem; }
 
 /* ── Live tab ─────────────────────────────────────────────────────────── */
+#live-view, #info-view { max-width: 900px; margin: 0 auto; }
 .live-search-row {
   display: flex;
   gap: 0.5rem;
@@ -866,15 +867,20 @@ a.drop-nomatch-tag:hover { border-color: var(--accent); color: var(--accent); }
 }
 
 main {
-  max-width: 1200px;
+  width: 90%;
+  max-width: 1400px;
   margin: 0 auto;
-  padding: 0.4rem 1.5rem 1.5rem;
+  padding: 0.4rem 0 1.5rem;
 }
+@media (max-width: 1024px) { main { width: 94%; } }
+@media (max-width: 640px)  { main { width: 97%; } }
+@media (max-width: 400px)  { main { width: 99%; } }
 
 
 /* ── Search form ── */
-#main-search-form {
+#main-search-form, #cw-search-wrap, #wanted-search-wrap {
   max-width: 900px;
+  margin: 0 auto;
 }
 .search-row {
   display: flex;
