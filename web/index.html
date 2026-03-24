@@ -204,7 +204,6 @@
 
   <!-- Collection / Wantlist local search — hidden until those views are active -->
   <div id="cw-search-wrap" class="content-narrow" style="display:none">
-    <div id="cw-folder-cloud" class="cw-folder-cloud" style="display:none"></div>
     <div class="search-row">
       <input type="text" id="cw-query" placeholder="Search your collection…" autocomplete="off"
         onkeydown="if(event.key==='Enter'){doCwSearch(1)}" />
@@ -262,6 +261,7 @@
         </label>
       </div>
     </div>
+    <div id="cw-folder-cloud" class="cw-folder-cloud" style="display:none"></div>
   </div>
 
   <div id="wanted-search-wrap" class="content-narrow" style="display:none">
@@ -301,7 +301,6 @@
 
 <div id="drops-view" style="display:none">
   <div id="fresh-releases-section">
-    <div id="fresh-tag-cloud" class="fresh-tag-cloud"></div>
     <div class="fresh-tag-footer">
       <button class="pill fresh-all-btn active" id="fresh-all-btn" onclick="filterFreshByTag('')">All</button>
       <select id="fresh-genre-select" class="fresh-filter-select" onchange="onFreshGenreChange()">
@@ -312,6 +311,7 @@
       </select>
       <input id="fresh-tag-input" class="fresh-filter-input" type="text" placeholder="Search drops…" oninput="debounceFreshSearch(this.value)" autocomplete="off" spellcheck="false">
     </div>
+    <div id="fresh-tag-cloud" class="fresh-tag-cloud"></div>
     <div id="fresh-releases-grid" class="card-grid fresh-grid"></div>
   </div>
 </div>
