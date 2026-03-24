@@ -251,6 +251,30 @@ function onCwGenreChange() {
   doCwSearch(1);
 }
 
+async function exportCollection() {
+  try {
+    const r = await apiFetch("/api/user/collection/export");
+    if (!r.ok) throw new Error("Export failed");
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "seadisco-collection.csv"; a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) { alert("Export failed: " + e.message); }
+}
+
+async function exportWantlist() {
+  try {
+    const r = await apiFetch("/api/user/wantlist/export");
+    if (!r.ok) throw new Error("Export failed");
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "seadisco-wantlist.csv"; a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) { alert("Export failed: " + e.message); }
+}
+
 function clearCwFilters() {
   ["cw-query","cw-artist","cw-release","cw-label","cw-year","cw-genre","cw-style","cw-format"].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = "";

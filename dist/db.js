@@ -395,6 +395,16 @@ export async function getCollectionPage(clerkUserId, page, perPage, filters) {
     ]);
     return { items: dataR.rows.map(r => r.data), total: countR.rows[0]?.total ?? 0 };
 }
+export async function getAllCollectionItems(clerkUserId) {
+    const r = await getPool().query(`SELECT data, folder_id FROM user_collection WHERE clerk_user_id = $1
+     ORDER BY LOWER(data->'artists'->0->>'name') ASC, LOWER(data->>'title') ASC`, [clerkUserId]);
+    return r.rows;
+}
+export async function getAllWantlistItems(clerkUserId) {
+    const r = await getPool().query(`SELECT data FROM user_wantlist WHERE clerk_user_id = $1
+     ORDER BY LOWER(data->'artists'->0->>'name') ASC, LOWER(data->>'title') ASC`, [clerkUserId]);
+    return r.rows;
+}
 export async function getWantlistPage(clerkUserId, page, perPage, filters) {
     const offset = (page - 1) * perPage;
     const { clause: dataClause, params: dataFilterParams } = buildCwWhere(filters ?? {}, 4);

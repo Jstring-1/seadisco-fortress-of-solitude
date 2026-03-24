@@ -3,7 +3,7 @@ import compression from "compression";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sharedToken = process.env.DISCOGS_TOKEN ?? "";
@@ -412,6 +412,78 @@ app.get("/api/wanted", async (req, res) => {
         res.status(500).json({ error: String(e) });
     }
 });
+// GET /api/user/collection/export — download collection as CSV
+app.get("/api/user/collection/export", async (req, res) => {
+    const userId = getClerkUserId(req);
+    if (!userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const [rows, folders] = await Promise.all([
+            getAllCollectionItems(userId),
+            getCollectionFolderList(userId),
+        ]);
+        const folderMap = new Map(folders.map(f => [f.folderId, f.name]));
+        const csv = buildCsv(rows, folderMap);
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", "attachment; filename=seadisco-collection.csv");
+        res.send(csv);
+    }
+    catch (e) {
+        res.status(500).json({ error: "Export failed" });
+    }
+});
+// GET /api/user/wantlist/export — download wantlist as CSV
+app.get("/api/user/wantlist/export", async (req, res) => {
+    const userId = getClerkUserId(req);
+    if (!userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const rows = await getAllWantlistItems(userId);
+        const csv = buildCsv(rows, null);
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", "attachment; filename=seadisco-wantlist.csv");
+        res.send(csv);
+    }
+    catch (e) {
+        res.status(500).json({ error: "Export failed" });
+    }
+});
+function buildCsv(rows, folderMap) {
+    const headers = ["Artist", "Title", "Label", "Cat#", "Year", "Format", "Genre", "Style", "Country"];
+    if (folderMap)
+        headers.push("Folder");
+    const escCsv = (s) => {
+        if (!s)
+            return "";
+        if (s.includes('"') || s.includes(",") || s.includes("\n"))
+            return '"' + s.replace(/"/g, '""') + '"';
+        return s;
+    };
+    const lines = [headers.join(",")];
+    for (const row of rows) {
+        const d = row.data;
+        const artist = (d.artists ?? []).map((a) => a.name).join(", ");
+        const title = d.title ?? "";
+        const label = (d.labels ?? []).map((l) => l.name).join(", ");
+        const catno = (d.labels ?? [])[0]?.catno ?? "";
+        const year = String(d.year ?? "");
+        const format = (d.formats ?? []).map((f) => [f.name, ...(f.descriptions ?? [])].filter(Boolean).join(" ")).join("; ");
+        const genre = (d.genres ?? []).join(", ");
+        const style = (d.styles ?? []).join(", ");
+        const country = d.country ?? "";
+        const cols = [artist, title, label, catno, year, format, genre, style, country];
+        if (folderMap) {
+            const fid = row.folder_id ?? 0;
+            cols.push(folderMap.get(fid) ?? (fid === 0 ? "Uncategorized" : String(fid)));
+        }
+        lines.push(cols.map(escCsv).join(","));
+    }
+    return lines.join("\n");
+}
 // GET /api/user/facets — distinct genres and styles from collection or wantlist
 app.get("/api/user/facets", async (req, res) => {
     const userId = getClerkUserId(req);
