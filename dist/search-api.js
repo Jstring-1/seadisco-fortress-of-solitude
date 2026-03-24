@@ -527,7 +527,10 @@ app.get("/api/admin/searches", async (req, res) => {
         return;
     }
     const raw = await dumpSearchHistory();
-    const searches = raw.map(s => ({ ...s, params: normalizeParams(s.params) }));
+    const searches = raw.map(s => ({
+        ...s,
+        params: s.params?._type === "live" ? s.params : normalizeParams(s.params),
+    }));
     res.json({ searches });
 });
 // GET /api/admin/search-dump — full search history export, admin only

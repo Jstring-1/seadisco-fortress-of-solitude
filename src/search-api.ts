@@ -479,7 +479,10 @@ app.get("/api/admin/searches", async (req, res) => {
   const adminId = process.env.ADMIN_CLERK_ID ?? "";
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   const raw = await dumpSearchHistory();
-  const searches = raw.map(s => ({ ...s, params: normalizeParams(s.params) }));
+  const searches = raw.map(s => ({
+    ...s,
+    params: s.params?._type === "live" ? s.params : normalizeParams(s.params),
+  }));
   res.json({ searches });
 });
 
