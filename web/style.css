@@ -1517,6 +1517,7 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 }
 
 .card-body {
+  position: relative;
   padding: 0.75rem 0.85rem 0.9rem;
   flex: 1;
   display: flex;
@@ -1568,6 +1569,22 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   overflow: hidden;
 }
 
+.card-rating {
+  font-size: 0.65rem;
+  color: #c8a83e;
+  letter-spacing: 0.05em;
+  margin-top: 0.15rem;
+}
+.card-notes-btn {
+  position: absolute;
+  bottom: 0.4rem;
+  right: 0.4rem;
+  font-size: 0.7rem;
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+.card-notes-btn:hover { opacity: 1; }
 .card-meta {
   margin-top: auto;
   padding-top: 0.5rem;

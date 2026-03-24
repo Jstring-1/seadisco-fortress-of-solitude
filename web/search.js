@@ -434,6 +434,23 @@ function renderCard(item) {
 
   const thumbWrap = `<div class="card-thumb-wrap">${thumb}${badges ? `<div class="card-thumb-badges">${badges}</div>` : ""}</div>`;
 
+  // Rating stars (only for collection/wantlist cards)
+  const rating = item._rating ?? 0;
+  const ratingHtml = rating > 0
+    ? `<div class="card-rating">${"★".repeat(rating)}${"☆".repeat(5 - rating)}</div>`
+    : "";
+
+  // Notes indicator (only for collection/wantlist cards with notes)
+  const notes = item._notes ?? [];
+  const hasNotes = notes.length > 0 && notes.some(n => n.value);
+  let notesHtml = "";
+  if (hasNotes) {
+    // Store notes for popup lookup
+    if (!window._cardNotes) window._cardNotes = {};
+    window._cardNotes[releaseId] = notes;
+    notesHtml = `<div class="card-notes-btn" onclick="event.preventDefault();event.stopPropagation();showCardNotes(event,${releaseId})" title="View notes">📝</div>`;
+  }
+
   return `
     <a ${cardAttrs}>
       ${thumbWrap}
@@ -444,9 +461,34 @@ function renderCard(item) {
         ${formats ? `<div class="card-format">${escHtml(formats)}</div>` : ""}
         ${genre   ? `<div class="card-format">${escHtml(genre)}</div>`   : ""}
         ${catno   ? `<div class="card-catno-line">${escHtml(catno)}</div>` : ""}
+        ${ratingHtml}
         <div class="card-meta">${metaParts.map(escHtml).join(" · ")}</div>
+        ${notesHtml}
       </div>
     </a>`;
+}
+
+// ── Card notes popup ─────────────────────────────────────────────────────
+function showCardNotes(event, releaseId) {
+  const notes = window._cardNotes?.[releaseId];
+  if (!notes) return;
+  let popup = document.getElementById("card-notes-popup");
+  if (!popup) {
+    popup = document.createElement("div");
+    popup.id = "card-notes-popup";
+    popup.style.cssText = "position:absolute;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.6rem 0.85rem;max-width:280px;font-size:0.78rem;line-height:1.6;box-shadow:0 4px 20px rgba(0,0,0,0.6);display:none";
+    popup.onclick = e => e.stopPropagation();
+    document.body.appendChild(popup);
+    document.addEventListener("click", () => { popup.style.display = "none"; });
+  }
+  const rows = notes.filter(n => n.value).map(n =>
+    `<div style="margin-bottom:0.3rem"><span style="color:#777">${escHtml(n.field_name ?? n.field_id ?? "Note")}:</span> <span style="color:#ccc">${escHtml(n.value)}</span></div>`
+  ).join("");
+  popup.innerHTML = rows || `<div style="color:#555">No notes</div>`;
+  const rect = event.target.getBoundingClientRect();
+  popup.style.display = "block";
+  popup.style.top  = (rect.bottom + window.scrollY + 4) + "px";
+  popup.style.left = Math.min(rect.left + window.scrollX, window.innerWidth - 290) + "px";
 }
 
 // ── Pagination ────────────────────────────────────────────────────────────
