@@ -618,7 +618,7 @@ a.fresh-card-search-link:hover {
   color: #ccc;
   box-sizing: border-box;
 }
-.live-input { flex: 1; min-width: 120px; }
+.live-input { flex: 1; min-width: 80px; max-width: 240px; }
 .live-input::placeholder { color: #555; }
 .live-input:focus, .live-select:focus { outline: none; border-color: var(--accent); }
 .live-select {
