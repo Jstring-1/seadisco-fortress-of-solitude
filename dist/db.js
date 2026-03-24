@@ -327,8 +327,9 @@ function cwOrderBy(sort) {
         case "year": return `ORDER BY (data->>'year') DESC NULLS LAST, LOWER(data->'artists'->0->>'name') ASC`;
         case "year_asc": return `ORDER BY (data->>'year') ASC NULLS LAST, LOWER(data->'artists'->0->>'name') ASC`;
         case "added": return `ORDER BY added_at DESC NULLS LAST, id DESC`;
+        case "added_asc": return `ORDER BY added_at ASC NULLS LAST, id ASC`;
         case "rating": return `ORDER BY rating DESC NULLS LAST, LOWER(data->'artists'->0->>'name') ASC`;
-        default: return `ORDER BY LOWER(data->'artists'->0->>'name') ASC, LOWER(data->>'title') ASC`; // "artist" or default
+        default: return `ORDER BY LOWER(data->'artists'->0->>'name') ASC, LOWER(data->>'title') ASC`;
     }
 }
 // Parse a filter value with operators:  + (AND),  | (OR),  - prefix (NOT)
