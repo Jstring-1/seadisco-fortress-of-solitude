@@ -197,7 +197,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.6rem 5%;
+  padding: 0.6rem 1.5rem;
+  max-width: 1100px;
+  margin: 0 auto;
 }
 
 .header-logo { display: flex; align-items: center; flex-shrink: 0; }
@@ -345,7 +347,7 @@ body {
 
 /* ── Recent Searches pills (inline under results) ───────────────────────── */
 #recent-feed {
-  padding-top: 1rem;
+  padding-top: 2rem;
   transition: opacity 0.4s ease;
 }
 .feed-label {
@@ -405,6 +407,7 @@ body {
 .fresh-tag-footer {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
   padding: 0.75rem 0;
   margin-bottom: 0.75rem;
@@ -876,9 +879,10 @@ main {
 
 
 /* ── Search form ── */
-#main-search-form, #cw-search-wrap, #wanted-search-wrap {
+#main-search-form, #cw-search-wrap, #wanted-search-wrap, #search-info-block, #status {
   max-width: 900px;
-  margin: 0 auto;
+  margin-left: auto;
+  margin-right: auto;
 }
 .search-row {
   display: flex;
@@ -979,6 +983,8 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   border-radius: var(--radius);
   padding: 0.9rem 1.1rem;
   max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
   font-size: 0.9rem;
   line-height: 1.6;
   color: var(--text);
@@ -1477,6 +1483,7 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 1rem;
+  min-height: 4rem;
 }
 
 .card {
