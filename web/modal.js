@@ -70,7 +70,8 @@ async function openConcertPopup(event, artistName) {
       } catch { return t; }
     };
 
-    let html = `<div class="concert-artist-name">${escHtml(artistName)} — Upcoming Shows</div>`;
+    const escArt = escHtml(artistName).replace(/'/g, "\\'");
+    let html = `<div class="concert-artist-name">${escHtml(artistName)} — Upcoming Shows <a href="#" onclick="event.preventDefault();closeConcertPopup();closeModal();document.getElementById('live-artist').value='${escArt}';switchView('live');doLiveSearch()" style="font-size:0.75rem;color:var(--accent);text-decoration:none;margin-left:0.5rem">Search on Live →</a></div>`;
     html += `<div class="concert-list">`;
     for (const ev of events) {
       const googleQ = encodeURIComponent(`${artistName} ${ev.venue} ${ev.city} concert`);
