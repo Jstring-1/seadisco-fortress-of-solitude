@@ -110,6 +110,7 @@ function liveSearchArtist(name) {
     genre:  document.getElementById("live-genre").value,
   };
   document.getElementById("live-artist").value = name;
+  document.getElementById("live-genre").value = "";
   doLiveSearch();
 }
 
