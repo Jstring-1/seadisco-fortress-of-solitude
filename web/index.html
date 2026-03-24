@@ -61,31 +61,30 @@
 </head>
 <body>
 
-<div id="site-header">
+<header id="site-header">
+  <a href="https://seadisco.com" class="header-logo"><picture><source srcset="/seadisco-logo.webp" type="image/webp" /><img src="/seadisco-logo.png" alt="SeaDisco" /></picture></a>
   <h1 class="sr-only">SeaDisco — Advanced Discogs Music Search Engine</h1>
-  <a href="https://seadisco.com"><picture><source srcset="/seadisco-logo.webp" type="image/webp" /><img src="/seadisco-logo.png" alt="SeaDisco — Search artists, releases, and labels on Discogs" /></picture></a>
-</div>
-
-<nav id="main-nav">
-  <button id="nav-hamburger" onclick="toggleMobileNav()" aria-label="Open navigation">
-    <span></span><span></span><span></span>
-  </button>
-  <div id="nav-tabs-wrap">
-    <div id="main-nav-tabs">
-      <button class="main-nav-tab active" data-view="search" onclick="switchView('search')">Search</button>
-      <button class="main-nav-tab" data-view="drops" onclick="switchView('drops')">Drops</button>
-      <button class="main-nav-tab" data-view="live" onclick="switchView('live')">Live</button>
-      <button class="main-nav-tab" data-view="info" onclick="switchView('info')">Info</button>
-      <button class="main-nav-tab nav-disabled" data-view="collection" onclick="switchView('collection')" title="Login to Access">Collection</button>
-      <button class="main-nav-tab nav-disabled" data-view="wantlist" onclick="switchView('wantlist')" title="Login to Access">Wantlist</button>
-      <button class="main-nav-tab nav-disabled" data-view="wanted" onclick="switchView('wanted')" title="Login to Access">Wants</button>
-      <div id="nav-auth-wrap">
-        <a href="/account" class="main-nav-tab nav-auth-btn" id="nav-auth-btn">Account</a>
+  <nav id="main-nav">
+    <button id="nav-hamburger" onclick="toggleMobileNav()" aria-label="Open navigation">
+      <span></span><span></span><span></span>
+    </button>
+    <div id="nav-tabs-wrap">
+      <div id="main-nav-tabs">
+        <button class="main-nav-tab active" data-view="search" onclick="switchView('search')">Search</button>
+        <button class="main-nav-tab" data-view="drops" onclick="switchView('drops')">Drops</button>
+        <button class="main-nav-tab" data-view="live" onclick="switchView('live')">Live</button>
+        <button class="main-nav-tab" data-view="info" onclick="switchView('info')">Info</button>
+        <button class="main-nav-tab nav-disabled" data-view="collection" onclick="switchView('collection')" title="Login to Access">Collection</button>
+        <button class="main-nav-tab nav-disabled" data-view="wantlist" onclick="switchView('wantlist')" title="Login to Access">Wantlist</button>
+        <button class="main-nav-tab nav-disabled" data-view="wanted" onclick="switchView('wanted')" title="Login to Access">Wants</button>
+        <div id="nav-auth-wrap">
+          <a href="/account" class="main-nav-tab nav-auth-btn" id="nav-auth-btn">Account</a>
+        </div>
       </div>
+      <div id="nav-auth-popup">Sign up and add your Discogs API token for unlimited searches</div>
     </div>
-    <div id="nav-auth-popup">Sign up and add your Discogs API token for unlimited searches</div>
-  </div>
-</nav>
+  </nav>
+</header>
 <div id="search-view">
 
 <main>
