@@ -168,6 +168,15 @@
         <div id="global-search-list" style="font-size:0.85rem;color:var(--muted);max-height:480px;overflow-y:auto">Loading…</div>
       </div>
 
+      <div id="admin-live-searches" style="display:none">
+        <hr class="section-divider" />
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem">
+          <h2 style="margin:0">Live Search Pool</h2>
+          <span id="admin-live-search-count" style="font-size:0.78rem;color:#555"></span>
+        </div>
+        <div id="global-live-search-list" style="font-size:0.85rem;color:var(--muted);max-height:480px;overflow-y:auto">Loading…</div>
+      </div>
+
       <hr class="section-divider" />
       <div style="display:flex;justify-content:space-between;align-items:center">
         <div style="display:flex;gap:1rem;align-items:center">
@@ -650,28 +659,44 @@ async function loadAdminInbox() {
 }
 
 async function loadAdminSearches() {
-  const section = document.getElementById("admin-searches");
-  const el = document.getElementById("global-search-list");
-  const countEl = document.getElementById("admin-search-count");
+  const section     = document.getElementById("admin-searches");
+  const el          = document.getElementById("global-search-list");
+  const countEl     = document.getElementById("admin-search-count");
+  const liveSection = document.getElementById("admin-live-searches");
+  const liveEl      = document.getElementById("global-live-search-list");
+  const liveCountEl = document.getElementById("admin-live-search-count");
   section.style.display = "block";
+  liveSection.style.display = "block";
   try {
     const sessionToken = await clerk.session?.getToken();
     const data = await fetch("/api/admin/searches", {
       headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
-    const searches = data.searches ?? [];
-    countEl.textContent = `${searches.length} entries`;
-    if (!searches.length) { el.textContent = "No global searches."; return; }
-    el.innerHTML = searches.map(({ id, params, searched_at }) => {
+    const all = data.searches ?? [];
+
+    // Split into discogs and live
+    const discogs = all.filter(s => s.params?._type !== "live");
+    const live    = all.filter(s => s.params?._type === "live");
+
+    const renderRow = ({ id, params, searched_at }) => {
       const label = searchLabel(params);
       const date  = new Date(searched_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
       return `<div id="gs-${id}" style="display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0;border-bottom:1px solid #1a1a1a;gap:0.5rem">
-        <a href="${paramsToUrl(params)}" target="_blank" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.8rem;color:var(--accent);text-decoration:none">${label}</a>
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.8rem;color:var(--accent)">${label}</span>
         <span style="color:#444;font-size:0.72rem;flex-shrink:0">${date}</span>
         <button onclick="deleteGlobalSearch(${id})" style="background:none;border:none;color:#555;cursor:pointer;font-size:0.85rem;padding:0 0.1rem;flex-shrink:0;line-height:1" title="Delete entry">✕</button>
       </div>`;
-    }).join("");
-  } catch { el.textContent = "Could not load global searches."; }
+    };
+
+    countEl.textContent = `${discogs.length} entries`;
+    el.innerHTML = discogs.length ? discogs.map(renderRow).join("") : "No searches.";
+
+    liveCountEl.textContent = `${live.length} entries`;
+    liveEl.innerHTML = live.length ? live.map(renderRow).join("") : "No live searches.";
+  } catch {
+    el.textContent = "Could not load global searches.";
+    liveEl.textContent = "Could not load live searches.";
+  }
 }
 
 async function deleteGlobalSearch(id) {
@@ -683,9 +708,13 @@ async function deleteGlobalSearch(id) {
     });
     if (r.ok) {
       document.getElementById(`gs-${id}`)?.remove();
-      const remaining = document.querySelectorAll("#global-search-list [id^='gs-']").length;
-      document.getElementById("admin-search-count").textContent = `${remaining} entries`;
-      if (!remaining) document.getElementById("global-search-list").textContent = "No global searches.";
+      // Update whichever section the item was in
+      const discogsRemaining = document.querySelectorAll("#global-search-list [id^='gs-']").length;
+      const liveRemaining    = document.querySelectorAll("#global-live-search-list [id^='gs-']").length;
+      document.getElementById("admin-search-count").textContent = `${discogsRemaining} entries`;
+      document.getElementById("admin-live-search-count").textContent = `${liveRemaining} entries`;
+      if (!discogsRemaining) document.getElementById("global-search-list").textContent = "No searches.";
+      if (!liveRemaining) document.getElementById("global-live-search-list").textContent = "No live searches.";
     }
   } catch { /* ignore */ }
 }
