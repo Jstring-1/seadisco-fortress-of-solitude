@@ -263,30 +263,19 @@ export async function deleteUserToken(clerkUserId: string): Promise<void> {
   );
 }
 
-export async function getRecentSearches(limit = 500): Promise<Array<{ params: Record<string, string>; searched_at: string }>> {
-  // Prefer searches with a bio; fall back to all if too few
-  const bio = await getPool().query(
-    `SELECT params, MAX(searched_at) AS searched_at
-     FROM search_history
-     WHERE searched_at > NOW() - INTERVAL '28 days'
-       AND params->>'b' = 'y'
-     GROUP BY params
-     ORDER BY RANDOM()
+export async function getRecentSearches(limit = 300): Promise<Array<{ params: Record<string, string>; searched_at: string }>> {
+  // Grab the latest `limit` unique searches, then randomise in the API layer
+  const r = await getPool().query(
+    `SELECT params, searched_at FROM (
+       SELECT DISTINCT ON (params) params, searched_at
+       FROM search_history
+       ORDER BY params, searched_at DESC
+     ) sub
+     ORDER BY searched_at DESC
      LIMIT $1`,
     [limit]
   );
-  if (bio.rows.length >= 20) return bio.rows;
-  // Not enough bio searches yet — fill from all searches
-  const all = await getPool().query(
-    `SELECT params, MAX(searched_at) AS searched_at
-     FROM search_history
-     WHERE searched_at > NOW() - INTERVAL '28 days'
-     GROUP BY params
-     ORDER BY RANDOM()
-     LIMIT $1`,
-    [limit]
-  );
-  return all.rows;
+  return r.rows;
 }
 
 export async function dumpSearchHistory(): Promise<any[]> {
