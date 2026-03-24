@@ -1269,6 +1269,158 @@ app.get("/api/concerts/:artist", async (req, res) => {
   res.json({ artist, events: deduped });
 });
 
+// ── Live tab: flexible concert search (artist, city/zip, genre) ───────────
+app.get("/api/concerts/search", async (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=900"); // 15 min
+  const artist = (req.query.artist as string ?? "").trim();
+  const city   = (req.query.city   as string ?? "").trim();
+  const genre  = (req.query.genre  as string ?? "").trim();
+  if (!artist && !city && !genre) { res.json({ events: [], artistImage: null }); return; }
+
+  interface LiveEvent {
+    artist: string;      // performing artist name
+    name: string;        // event/tour name
+    date: string;
+    time: string;
+    venue: string;
+    city: string;
+    region: string;
+    country: string;
+    url: string;
+    source: string;
+  }
+
+  const events: LiveEvent[] = [];
+  let artistImage: string | null = null;
+
+  // ── Ticketmaster ──
+  if (ticketmasterKey) {
+    try {
+      const params = new URLSearchParams({
+        classificationName: genre || "music",
+        size: "50",
+        sort: "date,asc",
+        apikey: ticketmasterKey,
+      });
+      if (artist) params.set("keyword", artist);
+      if (city) {
+        // If it looks like a US zip code, use postalCode + radius
+        if (/^\d{5}$/.test(city)) {
+          params.set("postalCode", city);
+          params.set("radius", "50");
+          params.set("unit", "miles");
+        } else {
+          params.set("city", city);
+        }
+      }
+      const tmUrl = `https://app.ticketmaster.com/discovery/v2/events.json?${params}`;
+      const tmRes = await fetch(tmUrl);
+      const tmBody = await tmRes.text();
+      if (tmRes.ok) {
+        try {
+          const tmData = JSON.parse(tmBody);
+          for (const ev of (tmData._embedded?.events ?? [])) {
+            // Extract actual artist from attractions
+            const attractions = ev._embedded?.attractions ?? [];
+            let eventArtist = attractions[0]?.name ?? "";
+            // If artist was searched, verify the artist actually appears
+            if (artist) {
+              const artistLower = artist.toLowerCase();
+              const matched = attractions.find((a: any) =>
+                (a.name ?? "").toLowerCase().includes(artistLower) ||
+                artistLower.includes((a.name ?? "").toLowerCase())
+              );
+              if (!matched && !(ev.name ?? "").toLowerCase().includes(artistLower)) continue;
+              if (matched) eventArtist = matched.name;
+            }
+            const venue = ev._embedded?.venues?.[0];
+            events.push({
+              artist:  eventArtist || ev.name?.split(/\s[-–—:]\s/)?.[0] || "",
+              name:    ev.name ?? "",
+              date:    ev.dates?.start?.localDate ?? "",
+              time:    ev.dates?.start?.localTime ?? "",
+              venue:   venue?.name ?? "",
+              city:    venue?.city?.name ?? "",
+              region:  venue?.state?.name ?? "",
+              country: venue?.country?.countryCode ?? "",
+              url:     ev.url ?? "",
+              source:  "ticketmaster",
+            });
+          }
+        } catch { /* parse error */ }
+      }
+    } catch (err) { console.error("Live TM error:", err); }
+  }
+
+  // ── Bandsintown (only when artist is specified) ──
+  if (artist) {
+    try {
+      // Fetch artist info (for image) + events in parallel
+      const [artRes, evtRes] = await Promise.all([
+        fetch(`https://rest.bandsintown.com/artists/${encodeURIComponent(artist)}?app_id=${bandsintownAppId}`),
+        fetch(`https://rest.bandsintown.com/artists/${encodeURIComponent(artist)}/events?app_id=${bandsintownAppId}&date=upcoming`),
+      ]);
+      // Artist image — only use if name matches closely
+      if (artRes.ok) {
+        try {
+          const artData = await artRes.json() as any;
+          const bitName = (artData.name ?? "").toLowerCase().trim();
+          const searchName = artist.toLowerCase().trim();
+          if (bitName === searchName || bitName.includes(searchName) || searchName.includes(bitName)) {
+            const img = artData.image_url || artData.thumb_url || null;
+            if (img && !img.includes("default") && !img.includes("placeholder")) {
+              artistImage = img;
+            }
+          }
+        } catch { /* ignore */ }
+      }
+      // Events
+      if (evtRes.ok) {
+        try {
+          const bitBody = await evtRes.text();
+          const bitData = JSON.parse(bitBody);
+          if (Array.isArray(bitData)) {
+            for (const ev of bitData) {
+              const evCity = ev.venue?.city ?? "";
+              const evRegion = ev.venue?.region ?? "";
+              // If city filter is active, skip events not in that city
+              if (city && !/^\d{5}$/.test(city)) {
+                const cityLower = city.toLowerCase();
+                if (!evCity.toLowerCase().includes(cityLower) && !evRegion.toLowerCase().includes(cityLower)) continue;
+              }
+              events.push({
+                artist:  artist,
+                name:    ev.title ?? `${artist} live`,
+                date:    (ev.datetime ?? "").slice(0, 10),
+                time:    (ev.datetime ?? "").slice(11, 16),
+                venue:   ev.venue?.name ?? "",
+                city:    evCity,
+                region:  evRegion,
+                country: ev.venue?.country ?? "",
+                url:     ev.url ?? "",
+                source:  "bandsintown",
+              });
+            }
+          }
+        } catch { /* parse error */ }
+      }
+    } catch (err) { console.error("Live BIT error:", err); }
+  }
+
+  // Dedupe by date+venue
+  const seen = new Set<string>();
+  const deduped: LiveEvent[] = [];
+  for (const ev of events) {
+    const key = `${ev.date}|${ev.venue}`.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(ev);
+  }
+  deduped.sort((a, b) => a.date.localeCompare(b.date));
+
+  res.json({ events: deduped, artistImage });
+});
+
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Discogs search API listening on port ${PORT}`);
