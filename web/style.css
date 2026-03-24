@@ -193,6 +193,16 @@ body {
   overflow-x: hidden;
 }
 
+/* ── Scrollbars ── */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2a3a44 transparent;
+}
+*::-webkit-scrollbar { width: 6px; height: 6px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: #2a3a44; border-radius: 3px; }
+*::-webkit-scrollbar-thumb:hover { background: #3a5a6a; }
+
 #site-header {
   display: flex;
   align-items: center;
