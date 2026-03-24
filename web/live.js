@@ -10,17 +10,6 @@ async function doLiveSearch() {
     return;
   }
 
-  // Save live search to DB (fire-and-forget)
-  const liveParams = {};
-  if (artist) liveParams.artist = artist;
-  if (city)   liveParams.city = city;
-  if (genre)  liveParams.genre = genre;
-  apiFetch("/api/user/live-search", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ params: liveParams }),
-  }).catch(() => {});
-
   const statusEl  = document.getElementById("live-status");
   const resultsEl = document.getElementById("live-results");
   statusEl.textContent = "Searching…";
@@ -41,6 +30,17 @@ async function doLiveSearch() {
       resultsEl.innerHTML = `<div class="live-empty">No events found. Try broadening your search.</div>`;
       return;
     }
+
+    // Save live search to DB only when results were found
+    const liveParams = {};
+    if (artist) liveParams.artist = artist;
+    if (city)   liveParams.city = city;
+    if (genre)  liveParams.genre = genre;
+    apiFetch("/api/user/live-search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ params: liveParams }),
+    }).catch(() => {});
 
     const parts = [];
     if (artist) parts.push(artist);
