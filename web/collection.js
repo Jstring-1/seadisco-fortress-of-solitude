@@ -111,6 +111,7 @@ function switchView(view, skipPushState = false) {
     document.getElementById("artist-alts").innerHTML = "";
     const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "none";
     loadCwFacets("collection");
+    loadCollectionFolders();
     loadCollectionTab(1);
   } else if (view === "wantlist") {
     if (searchView) searchView.style.display = "";
@@ -122,6 +123,7 @@ function switchView(view, skipPushState = false) {
     _cwTab = "wantlist"; _cwQuery = "";
     document.getElementById("artist-alts").innerHTML = "";
     const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "none";
+    const fc = document.getElementById("cw-folder-cloud"); if (fc) fc.style.display = "none";
     loadCwFacets("wantlist");
     loadWantlistTab(1);
   } else {
@@ -141,6 +143,32 @@ function switchView(view, skipPushState = false) {
 let _cwTab = "collection";
 let _cwQuery = "";
 let _cwAdvOpen = false;
+let _cwFolderId = 0; // active folder filter (0 = all)
+
+async function loadCollectionFolders() {
+  const el = document.getElementById("cw-folder-cloud");
+  if (!el) return;
+  el.innerHTML = "";
+  _cwFolderId = 0;
+  try {
+    const data = await apiFetch("/api/user/folders").then(r => r.json());
+    const folders = data.folders ?? [];
+    if (!folders.length) { el.style.display = "none"; return; }
+    el.style.display = "";
+    let html = `<span class="cw-folder-pill active" data-folder="0" onclick="filterByFolder(0)">All</span>`;
+    html += folders.map(f =>
+      `<span class="cw-folder-pill" data-folder="${f.folderId}" onclick="filterByFolder(${f.folderId})" title="${escHtml(f.name)} (${f.count})">${escHtml(f.name)}</span>`
+    ).join("");
+    el.innerHTML = html;
+  } catch { el.style.display = "none"; }
+}
+
+function filterByFolder(folderId) {
+  _cwFolderId = folderId;
+  const pills = document.querySelectorAll(".cw-folder-pill");
+  pills.forEach(p => p.classList.toggle("active", parseInt(p.dataset.folder) === folderId));
+  loadCollectionTab(1);
+}
 
 function toggleCwAdvanced(forceOpen) {
   const panel = document.getElementById("cw-advanced-panel");
@@ -228,6 +256,11 @@ function clearCwFilters() {
     const el = document.getElementById(id); if (el) el.value = "";
   });
   toggleCwAdvanced(false);
+  // Reset folder filter
+  _cwFolderId = 0;
+  document.querySelectorAll(".cw-folder-pill").forEach(p =>
+    p.classList.toggle("active", parseInt(p.dataset.folder) === 0)
+  );
 }
 
 function setActiveTab(tab) {
@@ -252,6 +285,7 @@ async function loadCollectionTab(page = 1, filters) {
     if (f.genre)   url += `&genre=${encodeURIComponent(f.genre)}`;
     if (f.style)   url += `&style=${encodeURIComponent(f.style)}`;
     if (f.format)  url += `&format=${encodeURIComponent(f.format)}`;
+    if (_cwFolderId > 0) url += `&folderId=${_cwFolderId}`;
     const r = await apiFetch(url);
     const data = await r.json();
     const items = data.items ?? [];

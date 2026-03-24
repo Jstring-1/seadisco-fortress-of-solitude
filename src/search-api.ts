@@ -3,7 +3,7 @@ import compression from "compression";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -233,9 +233,10 @@ async function runBackgroundSync(userId: string, token: string, username: string
         const releases: any[] = data.releases ?? [];
         if (!releases.length) break;
         const items = releases.map((item: any) => ({
-          id:      item.basic_information?.id as number,
-          data:    item.basic_information as object,
-          addedAt: item.date_added ? new Date(item.date_added) : undefined,
+          id:       item.basic_information?.id as number,
+          data:     item.basic_information as object,
+          addedAt:  item.date_added ? new Date(item.date_added) : undefined,
+          folderId: item.folder_id ?? 0,
         })).filter(i => i.id);
         await upsertCollectionItems(userId, items);
         await recordInterestSignals(items, "collection");
@@ -244,6 +245,17 @@ async function runBackgroundSync(userId: string, token: string, username: string
         if (releases.length < 100) break;
       }
       await updateCollectionSyncedAt(userId);
+
+      // Sync folder list
+      try {
+        await delay(1000);
+        const fr = await fetchWithRetry(`https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders`);
+        const fd = await fr.json() as any;
+        const folders = (fd.folders ?? [])
+          .filter((f: any) => f.id !== 0) // skip the virtual "All" folder
+          .map((f: any) => ({ id: f.id as number, name: f.name as string, count: f.count as number }));
+        if (folders.length) await upsertCollectionFolders(userId, folders);
+      } catch { /* folder sync optional */ }
     }
 
     if (syncWantlist) {
@@ -337,11 +349,13 @@ app.get("/api/user/collection", async (req, res) => {
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   const page    = parseInt(req.query.page    as string) || 1;
   const perPage = parseInt(req.query.per_page as string) || 25;
-  const filters: Record<string, string> = {};
+  const filters: Record<string, any> = {};
   for (const key of ["q", "artist", "release", "label", "year", "genre", "style", "format"]) {
     const v = (req.query[key] as string ?? "").trim();
-    if (v) (filters as any)[key] = v;
+    if (v) filters[key] = v;
   }
+  const folderId = parseInt(req.query.folderId as string ?? "", 10);
+  if (folderId > 0) filters.folderId = folderId;
   const { items, total } = await getCollectionPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
   res.json({ items, total, page, pages: Math.ceil(total / perPage) });
 });
@@ -382,6 +396,14 @@ app.get("/api/user/facets", async (req, res) => {
   const genre = (req.query.genre as string) || undefined;
   const facets = type === "wantlist" ? await getWantlistFacets(userId, genre) : await getCollectionFacets(userId, genre);
   res.json(facets);
+});
+
+// GET /api/user/folders — collection folder list
+app.get("/api/user/folders", async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const folders = await getCollectionFolderList(userId);
+  res.json({ folders });
 });
 
 // GET /api/user/discogs-ids — collection and wantlist IDs for badge rendering

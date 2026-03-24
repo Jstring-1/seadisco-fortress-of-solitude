@@ -46,6 +46,18 @@ export async function initDb() {
   await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS discogs_username TEXT`);
   await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS collection_synced_at TIMESTAMP`);
   await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS wantlist_synced_at TIMESTAMP`);
+  // Folder support for collection items
+  await getPool().query(`ALTER TABLE user_collection ADD COLUMN IF NOT EXISTS folder_id INTEGER DEFAULT 0`);
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_collection_folders (
+      id            SERIAL PRIMARY KEY,
+      clerk_user_id TEXT NOT NULL,
+      folder_id     INTEGER NOT NULL,
+      folder_name   TEXT NOT NULL,
+      item_count    INTEGER DEFAULT 0,
+      UNIQUE(clerk_user_id, folder_id)
+    )
+  `);
   // Background sync progress tracking
   await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS sync_status TEXT DEFAULT 'idle'`);
   await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS sync_progress INTEGER DEFAULT 0`);
@@ -370,17 +382,43 @@ export async function getSyncStatus(clerkUserId: string): Promise<{ collectionSy
 
 export async function upsertCollectionItems(
   clerkUserId: string,
-  items: Array<{ id: number; data: object; addedAt?: Date }>
+  items: Array<{ id: number; data: object; addedAt?: Date; folderId?: number }>
 ): Promise<void> {
   for (const item of items) {
     await getPool().query(
-      `INSERT INTO user_collection (clerk_user_id, discogs_release_id, data, added_at, synced_at)
-       VALUES ($1, $2, $3, $4, NOW())
+      `INSERT INTO user_collection (clerk_user_id, discogs_release_id, data, added_at, synced_at, folder_id)
+       VALUES ($1, $2, $3, $4, NOW(), $5)
        ON CONFLICT (clerk_user_id, discogs_release_id)
-       DO UPDATE SET data = $3, added_at = $4, synced_at = NOW()`,
-      [clerkUserId, item.id, JSON.stringify(item.data), item.addedAt ?? null]
+       DO UPDATE SET data = $3, added_at = $4, synced_at = NOW(), folder_id = $5`,
+      [clerkUserId, item.id, JSON.stringify(item.data), item.addedAt ?? null, item.folderId ?? 0]
     );
   }
+}
+
+export async function upsertCollectionFolders(
+  clerkUserId: string,
+  folders: Array<{ id: number; name: string; count: number }>
+): Promise<void> {
+  // Clear old folders and re-insert
+  await getPool().query(`DELETE FROM user_collection_folders WHERE clerk_user_id = $1`, [clerkUserId]);
+  for (const f of folders) {
+    await getPool().query(
+      `INSERT INTO user_collection_folders (clerk_user_id, folder_id, folder_name, item_count)
+       VALUES ($1, $2, $3, $4)`,
+      [clerkUserId, f.id, f.name, f.count]
+    );
+  }
+}
+
+export async function getCollectionFolderList(
+  clerkUserId: string
+): Promise<Array<{ folderId: number; name: string; count: number }>> {
+  const r = await getPool().query(
+    `SELECT folder_id, folder_name, item_count FROM user_collection_folders
+     WHERE clerk_user_id = $1 ORDER BY folder_name ASC`,
+    [clerkUserId]
+  );
+  return r.rows.map(row => ({ folderId: row.folder_id, name: row.folder_name, count: row.item_count }));
 }
 
 export async function upsertWantlistItems(
@@ -407,6 +445,7 @@ export interface CwSearchFilters {
   genre?: string;
   style?: string;
   format?: string;
+  folderId?: number;
 }
 
 // Parse a filter value with operators:  + (AND),  | (OR),  - prefix (NOT)
@@ -471,6 +510,13 @@ function buildCwWhere(filters: CwSearchFilters, startIdx: number): { clause: str
       allParams.push(...params);
       idx = nextIdx;
     }
+  }
+
+  // Folder filter (exact match on integer column)
+  if (filters.folderId !== undefined && filters.folderId > 0) {
+    clauses.push(`folder_id = $${idx}`);
+    allParams.push(filters.folderId);
+    idx++;
   }
 
   return { clause: clauses.length ? " AND " + clauses.join(" AND ") : "", params: allParams };
