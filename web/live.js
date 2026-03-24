@@ -128,3 +128,40 @@ function _liveFmtTime(t) {
     return `${hr > 12 ? hr - 12 : hr}:${m} ${hr >= 12 ? "PM" : "AM"}`;
   } catch { return t; }
 }
+
+// ── Recent live search pill cloud ────────────────────────────────────────
+let _liveRecentLoaded = false;
+
+async function loadLiveRecentFeed() {
+  if (_liveRecentLoaded) return;
+  _liveRecentLoaded = true;
+  const el = document.getElementById("live-recent-feed");
+  if (!el) return;
+  try {
+    const data = await fetch("/api/recent-live-searches").then(r => r.json());
+    const searches = data.searches ?? [];
+    if (!searches.length) { el.style.display = "none"; return; }
+    const pills = searches.map((s, i) => {
+      const p = s.params;
+      const parts = [];
+      if (p.artist) parts.push(p.artist);
+      if (p.city)   parts.push(p.city);
+      if (p.genre)  parts.push(p.genre);
+      const full = parts.join(" · ");
+      const short = full.length > 28 ? full.slice(0, 27) + "…" : full;
+      return `<span class="feed-pill" data-live-idx="${i}" title="${escHtml(full)}">${escHtml(short)}</span>`;
+    }).join("");
+    el.innerHTML = `<div class="feed-label">Recent Live Searches</div><div class="feed-pills">${pills}</div>`;
+    el.querySelectorAll(".feed-pill").forEach((pill, i) => {
+      pill.addEventListener("click", () => {
+        const p = searches[i].params;
+        document.getElementById("live-artist").value = p.artist || "";
+        document.getElementById("live-city").value   = p.city || "";
+        document.getElementById("live-genre").value  = p.genre || "";
+        doLiveSearch();
+      });
+    });
+  } catch {
+    if (el) el.style.display = "none";
+  }
+}
