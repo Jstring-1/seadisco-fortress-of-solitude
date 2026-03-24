@@ -600,11 +600,11 @@ a.fresh-card-search-link:hover {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 6px;
-  height: 32px;
-  padding: 0 0.6rem;
+  height: 26px;
+  padding: 0 0.5rem;
   font-family: inherit;
-  font-size: 0.8rem;
-  line-height: 32px;
+  font-size: 0.75rem;
+  line-height: 26px;
   color: #ccc;
   box-sizing: border-box;
 }
