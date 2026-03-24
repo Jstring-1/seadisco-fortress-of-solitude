@@ -1345,7 +1345,7 @@ app.get("/api/concerts/search", async (req, res) => {
         try {
             const params = new URLSearchParams({
                 classificationName: genre || "music",
-                size: "50",
+                size: "200",
                 sort: "date,asc",
                 apikey: ticketmasterKey,
             });
@@ -1482,7 +1482,7 @@ app.get("/api/concerts/venue/:venueId", async (req, res) => {
         return;
     }
     try {
-        const tmUrl = `https://app.ticketmaster.com/discovery/v2/events.json?venueId=${encodeURIComponent(venueId)}&classificationName=music&size=50&sort=date,asc&apikey=${ticketmasterKey}`;
+        const tmUrl = `https://app.ticketmaster.com/discovery/v2/events.json?venueId=${encodeURIComponent(venueId)}&classificationName=music&size=200&sort=date,asc&apikey=${ticketmasterKey}`;
         const tmRes = await fetch(tmUrl);
         if (!tmRes.ok) {
             res.json({ events: [], venueName: "" });
