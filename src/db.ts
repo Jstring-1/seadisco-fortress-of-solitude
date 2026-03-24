@@ -453,7 +453,10 @@ export interface CwSearchFilters {
   style?: string;
   format?: string;
   folderId?: number;
-  sort?: string; // "artist", "title", "year", "added", "rating"
+  ratingMin?: number;  // 1-5 for "N stars+", 0 for unrated only
+  ratingUnrated?: boolean; // true = show only unrated
+  notes?: string;      // text search across notes JSONB
+  sort?: string;
 }
 
 function cwOrderBy(sort?: string): string {
@@ -536,6 +539,22 @@ function buildCwWhere(filters: CwSearchFilters, startIdx: number): { clause: str
   if (filters.folderId !== undefined && filters.folderId > 0) {
     clauses.push(`folder_id = $${idx}`);
     allParams.push(filters.folderId);
+    idx++;
+  }
+
+  // Rating filter
+  if (filters.ratingUnrated) {
+    clauses.push(`(rating IS NULL OR rating = 0)`);
+  } else if (filters.ratingMin && filters.ratingMin >= 1 && filters.ratingMin <= 5) {
+    clauses.push(`rating >= $${idx}`);
+    allParams.push(filters.ratingMin);
+    idx++;
+  }
+
+  // Notes text search
+  if (filters.notes) {
+    clauses.push(`notes::text ILIKE $${idx}`);
+    allParams.push(`%${filters.notes}%`);
     idx++;
   }
 

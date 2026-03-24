@@ -361,6 +361,11 @@ app.get("/api/user/collection", async (req, res) => {
   }
   const folderId = parseInt(req.query.folderId as string ?? "", 10);
   if (folderId > 0) filters.folderId = folderId;
+  const ratingParam = (req.query.rating as string ?? "").trim();
+  if (ratingParam === "unrated") filters.ratingUnrated = true;
+  else if (ratingParam) { const rm = parseInt(ratingParam, 10); if (rm >= 1 && rm <= 5) filters.ratingMin = rm; }
+  const notesParam = (req.query.notes as string ?? "").trim();
+  if (notesParam) filters.notes = notesParam;
   const sort = (req.query.sort as string ?? "").trim();
   if (sort) filters.sort = sort;
   const { items, total } = await getCollectionPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
@@ -378,6 +383,11 @@ app.get("/api/user/wantlist", async (req, res) => {
     const v = (req.query[key] as string ?? "").trim();
     if (v) filters[key] = v;
   }
+  const ratingParam = (req.query.rating as string ?? "").trim();
+  if (ratingParam === "unrated") filters.ratingUnrated = true;
+  else if (ratingParam) { const rm = parseInt(ratingParam, 10); if (rm >= 1 && rm <= 5) filters.ratingMin = rm; }
+  const notesParam = (req.query.notes as string ?? "").trim();
+  if (notesParam) filters.notes = notesParam;
   const sort = (req.query.sort as string ?? "").trim();
   if (sort) filters.sort = sort;
   const { items, total } = await getWantlistPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
