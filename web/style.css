@@ -595,6 +595,7 @@ a.fresh-card-search-link:hover {
   gap: 0.5rem;
   margin-bottom: 0.75rem;
   flex-wrap: wrap;
+  justify-content: center;
 }
 .live-input, .live-select {
   /* inherits height/font from global input/select rules */
@@ -784,9 +785,15 @@ a.drop-nomatch-tag:hover { border-color: var(--accent); color: var(--accent); }
 
 /* Fresh grid responsive — now handled by .card-grid media queries */
 
-main, #drops-view, #live-view, #info-view {
+main, #drops-view {
   width: 90%;
   max-width: 1400px;
+  margin: 0 auto;
+  padding: 0.4rem 0 1.5rem;
+}
+#live-view, #info-view {
+  width: 90%;
+  max-width: 900px;
   margin: 0 auto;
   padding: 0.4rem 0 1.5rem;
 }
