@@ -541,6 +541,14 @@ function normP(raw) {
 }
 
 function searchLabel(raw) {
+  // Live searches have _type=live with artist/city/genre keys
+  if (raw._type === "live") {
+    const parts = [];
+    if (raw.artist) parts.push(raw.artist);
+    if (raw.city)   parts.push(raw.city);
+    if (raw.genre)  parts.push(raw.genre);
+    return "🎤 " + (parts.join(" · ") || "Live search");
+  }
   const p = normP(raw);
   const parts = [];
   if (p.q && (!p.a || p.q.toLowerCase() !== p.a.toLowerCase())) parts.push(p.q);
