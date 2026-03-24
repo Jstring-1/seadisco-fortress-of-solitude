@@ -1327,7 +1327,7 @@ app.get("/api/fresh-releases/search", async (req, res) => {
 });
 // ── Live tab: flexible concert search (artist, city/zip, genre) ───────────
 app.get("/api/concerts/search", async (req, res) => {
-    res.setHeader("Cache-Control", "public, max-age=900"); // 15 min
+    res.setHeader("Cache-Control", "no-cache"); // disable until stable
     const artist = (req.query.artist ?? "").trim();
     const city = (req.query.city ?? "").trim();
     const genre = (req.query.genre ?? "").trim();
