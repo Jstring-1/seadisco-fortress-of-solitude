@@ -86,7 +86,6 @@ async function doLiveSearch() {
             <a href="${googleUrl}" target="_blank" rel="noopener">${escHtml(ev.venue)}</a>
             ${location ? ` — ${escHtml(location)}` : ""}
           </div>
-          <div class="live-event-source">${escHtml(ev.source)}</div>
         </div>
       </div>`;
     }
