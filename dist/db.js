@@ -56,6 +56,13 @@ export async function initDb() {
       UNIQUE(clerk_user_id, folder_id)
     )
   `);
+    // Extra collection fields — rating, notes, instance_id
+    await getPool().query(`ALTER TABLE user_collection ADD COLUMN IF NOT EXISTS rating INTEGER DEFAULT 0`);
+    await getPool().query(`ALTER TABLE user_collection ADD COLUMN IF NOT EXISTS instance_id INTEGER`);
+    await getPool().query(`ALTER TABLE user_collection ADD COLUMN IF NOT EXISTS notes JSONB`);
+    // Extra wantlist fields — rating, notes
+    await getPool().query(`ALTER TABLE user_wantlist ADD COLUMN IF NOT EXISTS rating INTEGER DEFAULT 0`);
+    await getPool().query(`ALTER TABLE user_wantlist ADD COLUMN IF NOT EXISTS notes JSONB`);
     // Background sync progress tracking
     await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS sync_status TEXT DEFAULT 'idle'`);
     await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS sync_progress INTEGER DEFAULT 0`);
@@ -287,10 +294,10 @@ export async function getSyncStatus(clerkUserId) {
 }
 export async function upsertCollectionItems(clerkUserId, items) {
     for (const item of items) {
-        await getPool().query(`INSERT INTO user_collection (clerk_user_id, discogs_release_id, data, added_at, synced_at, folder_id)
-       VALUES ($1, $2, $3, $4, NOW(), $5)
+        await getPool().query(`INSERT INTO user_collection (clerk_user_id, discogs_release_id, data, added_at, synced_at, folder_id, rating, instance_id, notes)
+       VALUES ($1, $2, $3, $4, NOW(), $5, $6, $7, $8)
        ON CONFLICT (clerk_user_id, discogs_release_id)
-       DO UPDATE SET data = $3, added_at = $4, synced_at = NOW(), folder_id = $5`, [clerkUserId, item.id, JSON.stringify(item.data), item.addedAt ?? null, item.folderId ?? 0]);
+       DO UPDATE SET data = $3, added_at = $4, synced_at = NOW(), folder_id = $5, rating = $6, instance_id = $7, notes = $8`, [clerkUserId, item.id, JSON.stringify(item.data), item.addedAt ?? null, item.folderId ?? 0, item.rating ?? 0, item.instanceId ?? null, item.notes ? JSON.stringify(item.notes) : null]);
     }
 }
 export async function upsertCollectionFolders(clerkUserId, folders) {
@@ -308,10 +315,19 @@ export async function getCollectionFolderList(clerkUserId) {
 }
 export async function upsertWantlistItems(clerkUserId, items) {
     for (const item of items) {
-        await getPool().query(`INSERT INTO user_wantlist (clerk_user_id, discogs_release_id, data, added_at, synced_at)
-       VALUES ($1, $2, $3, $4, NOW())
+        await getPool().query(`INSERT INTO user_wantlist (clerk_user_id, discogs_release_id, data, added_at, synced_at, rating, notes)
+       VALUES ($1, $2, $3, $4, NOW(), $5, $6)
        ON CONFLICT (clerk_user_id, discogs_release_id)
-       DO UPDATE SET data = $3, added_at = $4, synced_at = NOW()`, [clerkUserId, item.id, JSON.stringify(item.data), item.addedAt ?? null]);
+       DO UPDATE SET data = $3, added_at = $4, synced_at = NOW(), rating = $5, notes = $6`, [clerkUserId, item.id, JSON.stringify(item.data), item.addedAt ?? null, item.rating ?? 0, item.notes ? JSON.stringify(item.notes) : null]);
+    }
+}
+function cwOrderBy(sort) {
+    switch (sort) {
+        case "title": return `ORDER BY LOWER(data->>'title') ASC, LOWER(data->'artists'->0->>'name') ASC`;
+        case "year": return `ORDER BY (data->>'year') DESC NULLS LAST, LOWER(data->'artists'->0->>'name') ASC`;
+        case "added": return `ORDER BY added_at DESC NULLS LAST, id DESC`;
+        case "rating": return `ORDER BY rating DESC NULLS LAST, LOWER(data->'artists'->0->>'name') ASC`;
+        default: return `ORDER BY LOWER(data->'artists'->0->>'name') ASC, LOWER(data->>'title') ASC`; // "artist" or default
     }
 }
 // Parse a filter value with operators:  + (AND),  | (OR),  - prefix (NOT)
@@ -387,9 +403,10 @@ export async function getCollectionPage(clerkUserId, page, perPage, filters) {
     const offset = (page - 1) * perPage;
     const { clause: dataClause, params: dataFilterParams } = buildCwWhere(filters ?? {}, 4);
     const { clause: countClause, params: countFilterParams } = buildCwWhere(filters ?? {}, 2);
+    const orderBy = cwOrderBy(filters?.sort);
     const [dataR, countR] = await Promise.all([
         getPool().query(`SELECT data FROM user_collection WHERE clerk_user_id = $1${dataClause}
-       ORDER BY LOWER(data->'artists'->0->>'name') ASC, LOWER(data->>'title') ASC
+       ${orderBy}
        LIMIT $2 OFFSET $3`, [clerkUserId, perPage, offset, ...dataFilterParams]),
         getPool().query(`SELECT COUNT(*)::int AS total FROM user_collection WHERE clerk_user_id = $1${countClause}`, [clerkUserId, ...countFilterParams]),
     ]);
@@ -409,9 +426,10 @@ export async function getWantlistPage(clerkUserId, page, perPage, filters) {
     const offset = (page - 1) * perPage;
     const { clause: dataClause, params: dataFilterParams } = buildCwWhere(filters ?? {}, 4);
     const { clause: countClause, params: countFilterParams } = buildCwWhere(filters ?? {}, 2);
+    const orderBy = cwOrderBy(filters?.sort);
     const [dataR, countR] = await Promise.all([
         getPool().query(`SELECT data FROM user_wantlist WHERE clerk_user_id = $1${dataClause}
-       ORDER BY LOWER(data->'artists'->0->>'name') ASC, LOWER(data->>'title') ASC
+       ${orderBy}
        LIMIT $2 OFFSET $3`, [clerkUserId, perPage, offset, ...dataFilterParams]),
         getPool().query(`SELECT COUNT(*)::int AS total FROM user_wantlist WHERE clerk_user_id = $1${countClause}`, [clerkUserId, ...countFilterParams]),
     ]);

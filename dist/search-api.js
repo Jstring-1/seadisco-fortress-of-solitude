@@ -248,6 +248,9 @@ async function runBackgroundSync(userId, token, username, syncCollection, syncWa
                     data: item.basic_information,
                     addedAt: item.date_added ? new Date(item.date_added) : undefined,
                     folderId: item.folder_id ?? 0,
+                    rating: item.rating ?? 0,
+                    instanceId: item.instance_id ?? undefined,
+                    notes: item.notes ?? undefined,
                 })).filter(i => i.id);
                 await upsertCollectionItems(userId, items);
                 await recordInterestSignals(items, "collection");
@@ -283,6 +286,8 @@ async function runBackgroundSync(userId, token, username, syncCollection, syncWa
                     id: item.id,
                     data: item.basic_information,
                     addedAt: item.date_added ? new Date(item.date_added) : undefined,
+                    rating: item.rating ?? 0,
+                    notes: item.notes ?? undefined,
                 })).filter(i => i.id);
                 await upsertWantlistItems(userId, items);
                 await recordInterestSignals(items, "wantlist");
@@ -375,6 +380,9 @@ app.get("/api/user/collection", async (req, res) => {
     const folderId = parseInt(req.query.folderId ?? "", 10);
     if (folderId > 0)
         filters.folderId = folderId;
+    const sort = (req.query.sort ?? "").trim();
+    if (sort)
+        filters.sort = sort;
     const { items, total } = await getCollectionPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
     res.json({ items, total, page, pages: Math.ceil(total / perPage) });
 });
@@ -393,6 +401,9 @@ app.get("/api/user/wantlist", async (req, res) => {
         if (v)
             filters[key] = v;
     }
+    const sort = (req.query.sort ?? "").trim();
+    if (sort)
+        filters.sort = sort;
     const { items, total } = await getWantlistPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
     res.json({ items, total, page, pages: Math.ceil(total / perPage) });
 });
