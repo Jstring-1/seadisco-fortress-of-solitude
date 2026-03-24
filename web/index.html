@@ -216,7 +216,14 @@
         <span id="cw-advanced-arrow">▶</span> Filters
       </button>
       <button type="button" onclick="clearCwSearch()" title="Clear all filters" style="background:none;border:none;padding:0.3rem 0.5rem;font-size:1.5rem;color:#555;cursor:pointer;line-height:1;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
-      <button type="button" id="cw-export-btn" onclick="_cwTab==='collection'?exportCollection():exportWantlist()" title="Download as CSV" style="background:none;border:none;padding:0;font-size:0.78rem;color:#555;cursor:pointer;margin-left:auto;white-space:nowrap" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">⬇ CSV</button>
+      <select id="cw-sort" onchange="doCwSearch(1)" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;height:22px;padding:0 0.4rem;font-family:inherit;font-size:0.68rem;line-height:22px;color:#aaa;box-sizing:border-box;cursor:pointer;margin-left:auto;color-scheme:dark">
+        <option value="">Sort: Artist</option>
+        <option value="title">Sort: Title</option>
+        <option value="year">Sort: Year</option>
+        <option value="added">Sort: Date Added</option>
+        <option value="rating">Sort: Rating</option>
+      </select>
+      <button type="button" id="cw-export-btn" onclick="_cwTab==='collection'?exportCollection():exportWantlist()" title="Download as CSV" style="background:none;border:none;padding:0;font-size:0.78rem;color:#555;cursor:pointer;white-space:nowrap" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">⬇ CSV</button>
     </div>
     <div id="cw-advanced-panel" style="display:none;margin-top:0.5rem">
       <div style="font-size:0.72rem;color:#444;margin-bottom:0.4rem;line-height:1.6">Filters support operators: use <span style="color:#888">+</span> to require multiple terms, <span style="color:#888">|</span> for either/or, and <span style="color:#888">-</span> before a term to exclude it &nbsp;·&nbsp; e.g. Artist: <span style="color:#777">miles davis | coltrane</span> &nbsp; Label: <span style="color:#777">columbia + -legacy</span></div>

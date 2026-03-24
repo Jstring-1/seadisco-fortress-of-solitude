@@ -279,6 +279,8 @@ function clearCwFilters() {
   ["cw-query","cw-artist","cw-release","cw-label","cw-year","cw-genre","cw-style","cw-format"].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = "";
   });
+  const sortEl = document.getElementById("cw-sort");
+  if (sortEl) sortEl.value = "";
   toggleCwAdvanced(false);
   // Reset folder filter
   _cwFolderId = 0;
@@ -310,6 +312,8 @@ async function loadCollectionTab(page = 1, filters) {
     if (f.style)   url += `&style=${encodeURIComponent(f.style)}`;
     if (f.format)  url += `&format=${encodeURIComponent(f.format)}`;
     if (_cwFolderId > 0) url += `&folderId=${_cwFolderId}`;
+    const cwSort = document.getElementById("cw-sort")?.value || "";
+    if (cwSort) url += `&sort=${encodeURIComponent(cwSort)}`;
     const r = await apiFetch(url);
     const data = await r.json();
     const items = data.items ?? [];
@@ -348,6 +352,8 @@ async function loadWantlistTab(page = 1, filters) {
     if (f.genre)   url += `&genre=${encodeURIComponent(f.genre)}`;
     if (f.style)   url += `&style=${encodeURIComponent(f.style)}`;
     if (f.format)  url += `&format=${encodeURIComponent(f.format)}`;
+    const cwSort = document.getElementById("cw-sort")?.value || "";
+    if (cwSort) url += `&sort=${encodeURIComponent(cwSort)}`;
     const r = await apiFetch(url);
     const data = await r.json();
     const items = data.items ?? [];

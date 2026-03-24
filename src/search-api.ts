@@ -233,10 +233,13 @@ async function runBackgroundSync(userId: string, token: string, username: string
         const releases: any[] = data.releases ?? [];
         if (!releases.length) break;
         const items = releases.map((item: any) => ({
-          id:       item.basic_information?.id as number,
-          data:     item.basic_information as object,
-          addedAt:  item.date_added ? new Date(item.date_added) : undefined,
-          folderId: item.folder_id ?? 0,
+          id:         item.basic_information?.id as number,
+          data:       item.basic_information as object,
+          addedAt:    item.date_added ? new Date(item.date_added) : undefined,
+          folderId:   item.folder_id ?? 0,
+          rating:     item.rating ?? 0,
+          instanceId: item.instance_id ?? undefined,
+          notes:      item.notes ?? undefined,
         })).filter(i => i.id);
         await upsertCollectionItems(userId, items);
         await recordInterestSignals(items, "collection");
@@ -271,6 +274,8 @@ async function runBackgroundSync(userId: string, token: string, username: string
           id:      item.id as number,
           data:    item.basic_information as object,
           addedAt: item.date_added ? new Date(item.date_added) : undefined,
+          rating:  item.rating ?? 0,
+          notes:   item.notes ?? undefined,
         })).filter(i => i.id);
         await upsertWantlistItems(userId, items);
         await recordInterestSignals(items, "wantlist");
@@ -356,6 +361,8 @@ app.get("/api/user/collection", async (req, res) => {
   }
   const folderId = parseInt(req.query.folderId as string ?? "", 10);
   if (folderId > 0) filters.folderId = folderId;
+  const sort = (req.query.sort as string ?? "").trim();
+  if (sort) filters.sort = sort;
   const { items, total } = await getCollectionPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
   res.json({ items, total, page, pages: Math.ceil(total / perPage) });
 });
@@ -366,11 +373,13 @@ app.get("/api/user/wantlist", async (req, res) => {
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   const page    = parseInt(req.query.page    as string) || 1;
   const perPage = parseInt(req.query.per_page as string) || 25;
-  const filters: Record<string, string> = {};
+  const filters: Record<string, any> = {};
   for (const key of ["q", "artist", "release", "label", "year", "genre", "style", "format"]) {
     const v = (req.query[key] as string ?? "").trim();
-    if (v) (filters as any)[key] = v;
+    if (v) filters[key] = v;
   }
+  const sort = (req.query.sort as string ?? "").trim();
+  if (sort) filters.sort = sort;
   const { items, total } = await getWantlistPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
   res.json({ items, total, page, pages: Math.ceil(total / perPage) });
 });
