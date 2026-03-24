@@ -3,7 +3,7 @@ import compression from "compression";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sharedToken = process.env.DISCOGS_TOKEN ?? "";
@@ -247,6 +247,7 @@ async function runBackgroundSync(userId, token, username, syncCollection, syncWa
                     id: item.basic_information?.id,
                     data: item.basic_information,
                     addedAt: item.date_added ? new Date(item.date_added) : undefined,
+                    folderId: item.folder_id ?? 0,
                 })).filter(i => i.id);
                 await upsertCollectionItems(userId, items);
                 await recordInterestSignals(items, "collection");
@@ -256,6 +257,18 @@ async function runBackgroundSync(userId, token, username, syncCollection, syncWa
                     break;
             }
             await updateCollectionSyncedAt(userId);
+            // Sync folder list
+            try {
+                await delay(1000);
+                const fr = await fetchWithRetry(`https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders`);
+                const fd = await fr.json();
+                const folders = (fd.folders ?? [])
+                    .filter((f) => f.id !== 0) // skip the virtual "All" folder
+                    .map((f) => ({ id: f.id, name: f.name, count: f.count }));
+                if (folders.length)
+                    await upsertCollectionFolders(userId, folders);
+            }
+            catch { /* folder sync optional */ }
         }
         if (syncWantlist) {
             for (let page = 1;; page++) {
@@ -359,6 +372,9 @@ app.get("/api/user/collection", async (req, res) => {
         if (v)
             filters[key] = v;
     }
+    const folderId = parseInt(req.query.folderId ?? "", 10);
+    if (folderId > 0)
+        filters.folderId = folderId;
     const { items, total } = await getCollectionPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
     res.json({ items, total, page, pages: Math.ceil(total / perPage) });
 });
@@ -407,6 +423,16 @@ app.get("/api/user/facets", async (req, res) => {
     const genre = req.query.genre || undefined;
     const facets = type === "wantlist" ? await getWantlistFacets(userId, genre) : await getCollectionFacets(userId, genre);
     res.json(facets);
+});
+// GET /api/user/folders — collection folder list
+app.get("/api/user/folders", async (req, res) => {
+    const userId = getClerkUserId(req);
+    if (!userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const folders = await getCollectionFolderList(userId);
+    res.json({ folders });
 });
 // GET /api/user/discogs-ids — collection and wantlist IDs for badge rendering
 app.get("/api/user/discogs-ids", async (req, res) => {
