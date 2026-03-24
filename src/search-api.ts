@@ -678,6 +678,20 @@ In 4–7 words, give a single honest phrase describing how well these results ma
 });
 
 // POST /api/user/mb — mark most recent search as having a bio
+// Save live (concert) searches
+app.post("/api/user/live-search", express.json(), async (req, res) => {
+  const userId = getClerkUserId(req);
+  // Allow anonymous saves too — use "anon" as placeholder
+  const uid = userId || "anon";
+  const params = req.body?.params;
+  if (!params || typeof params !== "object") { res.json({ ok: true }); return; }
+  try {
+    // Tag as live search so we can distinguish from Discogs searches
+    await saveSearch(uid, { ...params, _type: "live" });
+    res.json({ ok: true });
+  } catch { res.json({ ok: true }); }
+});
+
 app.post("/api/user/mb", async (req, res) => {
   const userId = getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "not signed in" }); return; }
