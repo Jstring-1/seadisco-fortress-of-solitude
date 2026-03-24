@@ -160,6 +160,11 @@ async function loadLiveRecentFeed() {
     const data = await fetch("/api/recent-live-searches").then(r => r.json());
     const searches = data.searches ?? [];
     if (!searches.length) { el.style.display = "none"; return; }
+    // Shuffle client-side for variety on cached responses
+    for (let i = searches.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [searches[i], searches[j]] = [searches[j], searches[i]];
+    }
     const pills = searches.map((s, i) => {
       const p = s.params;
       const parts = [];
