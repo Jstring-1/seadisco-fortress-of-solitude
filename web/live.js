@@ -151,7 +151,7 @@ async function liveSearchVenue(venueId, venueName) {
 
     statusEl.textContent = `${events.length} upcoming at ${name}${loc ? " — " + loc : ""}`;
 
-    let html = `<div class="live-back-row"><a href="#" onclick="event.preventDefault();liveGoBack()">← Back to results</a></div>`;
+    let html = `<div style="margin-bottom:0.6rem"><a href="#" onclick="event.preventDefault();liveGoBack()" style="color:var(--accent);text-decoration:none;font-size:0.8rem">← Back</a></div>`;
     for (const ev of events) {
       const fmtDate = _liveFmtDate(ev.date);
       const fmtTime = _liveFmtTime(ev.time);
