@@ -158,7 +158,7 @@ export async function deleteSearchById(id) {
 export async function getSearchHistory(clerkUserId, limit = 50) {
     const r = await getPool().query(`SELECT params, MAX(searched_at) AS searched_at
      FROM search_history
-     WHERE clerk_user_id = $1
+     WHERE clerk_user_id = $1 AND NOT (params ? '_type')
      GROUP BY params
      ORDER BY MAX(searched_at) DESC
      LIMIT $2`, [clerkUserId, limit]);

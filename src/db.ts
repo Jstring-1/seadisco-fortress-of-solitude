@@ -187,7 +187,7 @@ export async function getSearchHistory(clerkUserId: string, limit = 50): Promise
   const r = await getPool().query(
     `SELECT params, MAX(searched_at) AS searched_at
      FROM search_history
-     WHERE clerk_user_id = $1
+     WHERE clerk_user_id = $1 AND NOT (params ? '_type')
      GROUP BY params
      ORDER BY MAX(searched_at) DESC
      LIMIT $2`,
