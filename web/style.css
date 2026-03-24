@@ -197,9 +197,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.6rem 1.5rem;
-  max-width: 1200px;
-  margin: 0 auto;
+  padding: 0.6rem 5%;
 }
 
 .header-logo { display: flex; align-items: center; flex-shrink: 0; }
