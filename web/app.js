@@ -15,7 +15,7 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
 (async function () {
   const p = new URLSearchParams(location.search);
   const view = p.get("view");
-  if (view === "drops" || view === "info") {
+  if (view === "drops" || view === "live" || view === "info") {
     switchView(view, true);
   } else if (view === "collection" || view === "wantlist" || view === "wanted") {
     await authReadyPromise;
@@ -37,7 +37,7 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
 window.addEventListener("popstate", () => {
   const p = new URLSearchParams(location.search);
   const view = p.get("view");
-  if (view === "drops" || view === "collection" || view === "wantlist" || view === "info" || view === "wanted") {
+  if (view === "drops" || view === "live" || view === "collection" || view === "wantlist" || view === "info" || view === "wanted") {
     switchView(view, true);
   } else {
     switchView("search", true);

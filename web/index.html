@@ -74,6 +74,7 @@
     <div id="main-nav-tabs">
       <button class="main-nav-tab active" data-view="search" onclick="switchView('search')">Search</button>
       <button class="main-nav-tab" data-view="drops" onclick="switchView('drops')">Drops</button>
+      <button class="main-nav-tab" data-view="live" onclick="switchView('live')">Live</button>
       <button class="main-nav-tab" data-view="info" onclick="switchView('info')">Info</button>
       <button class="main-nav-tab nav-disabled" data-view="collection" onclick="switchView('collection')" title="Login to Access">Collection</button>
       <button class="main-nav-tab nav-disabled" data-view="wantlist" onclick="switchView('wantlist')" title="Login to Access">Wantlist</button>
@@ -290,6 +291,33 @@
     <div id="fresh-releases-grid" class="fresh-grid"></div>
   </div>
 </div>
+<div id="live-view" style="display:none;max-width:900px;margin:0 auto;padding:0.4rem 1.5rem 1.5rem">
+  <div class="live-search-row">
+    <input type="text" id="live-artist" class="live-input" placeholder="Artist" autocomplete="off" onkeydown="if(event.key==='Enter')doLiveSearch()">
+    <input type="text" id="live-city" class="live-input" placeholder="City or Zip" autocomplete="off" onkeydown="if(event.key==='Enter')doLiveSearch()">
+    <select id="live-genre" class="live-select" onchange="doLiveSearch()">
+      <option value="">Any genre</option>
+      <option value="rock">Rock</option>
+      <option value="pop">Pop</option>
+      <option value="hip-hop/rap">Hip-Hop</option>
+      <option value="R&B">R&B</option>
+      <option value="electronic">Electronic</option>
+      <option value="country">Country</option>
+      <option value="jazz">Jazz</option>
+      <option value="classical">Classical</option>
+      <option value="metal">Metal</option>
+      <option value="folk">Folk</option>
+      <option value="reggae">Reggae</option>
+      <option value="latin">Latin</option>
+      <option value="blues">Blues</option>
+      <option value="punk">Punk</option>
+    </select>
+    <button class="live-search-btn" onclick="doLiveSearch()">Search</button>
+  </div>
+  <div id="live-status" style="font-size:0.78rem;color:#555;margin-bottom:0.5rem"></div>
+  <div id="live-results"></div>
+</div>
+
 <div id="info-view" style="display:none;max-width:760px;margin:0 auto;padding:1rem 1.5rem 2.5rem">
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">How SeaDisco Works</h2>
 
@@ -300,6 +328,9 @@
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Latest Drops</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">150 random picks from a rolling 3-month database of 20,000+ releases via <a href="https://listenbrainz.org" target="_blank" rel="noopener" style="color:#5a9aaa">ListenBrainz</a>/<a href="https://musicbrainz.org" target="_blank" rel="noopener" style="color:#5a9aaa">MusicBrainz</a>, refreshed every 6 hours. Filter by the tag cloud or genre dropdown, or search the full database by artist, title, or tag.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0">Click any card to search Discogs — if matched, the full popup opens with alternatives. No match shows ListenBrainz info with clickable tags and a Google link.</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Live</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">Search upcoming concerts and events by artist, city/zip code, or genre. Results pull from both <a href="https://www.ticketmaster.com" target="_blank" rel="noopener" style="color:#5a9aaa">Ticketmaster</a> and <a href="https://www.bandsintown.com" target="_blank" rel="noopener" style="color:#5a9aaa">Bandsintown</a>, merged and deduped. Artist searches include a Bandsintown photo when available. Each listing links to Google for tickets. Your last searched city is saved for convenience.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Collection, Wantlist &amp; Wants</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Add your Discogs token to sync your full collection and wantlist — any size. Sync runs in the background and refreshes automatically every 6 hours. Both tabs have dedicated filters (artist, release, label, year, genre, style, format) with <strong style="color:#ccc">+</strong> (AND), <strong style="color:#ccc">|</strong> (OR), and <strong style="color:#ccc">-</strong> (exclude) operators. Green <strong style="color:#4caf50">✓</strong> and red <strong style="color:#c0392b">♡</strong> badges mark owned and wanted items across all results.</p>
@@ -377,12 +408,13 @@
   <div id="lightbox-counter"></div>
 </div>
 
-<script src="/utils.js?v=20260323f"></script>
-<script src="/search.js?v=20260323f"></script>
-<script src="/collection.js?v=20260323f"></script>
-<script src="/modal.js?v=20260323f"></script>
-<script src="/drops.js?v=20260323f"></script>
-<script src="/app.js?v=20260323f"></script>
+<script src="/utils.js?v=20260323g"></script>
+<script src="/search.js?v=20260323g"></script>
+<script src="/collection.js?v=20260323g"></script>
+<script src="/modal.js?v=20260323g"></script>
+<script src="/drops.js?v=20260323g"></script>
+<script src="/live.js?v=20260323g"></script>
+<script src="/app.js?v=20260323g"></script>
 
 </body>
 </html>
