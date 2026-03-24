@@ -794,7 +794,7 @@ app.get("/api/recent-searches", async (_req, res) => {
         return;
     }
     try {
-        const raw = await getRecentSearches(500);
+        const raw = await getRecentSearches(300);
         // Normalize all params to single-letter keys (handles old entries with full names)
         const normalized = raw.map(s => ({ ...s, params: normalizeParams(s.params) }));
         // Deduplicate by normalised content: lowercase q/artist/label/release/genre/style/year
@@ -809,7 +809,7 @@ app.get("/api/recent-searches", async (_req, res) => {
             seen.add(sig);
             return true;
         });
-        // DB already randomises; shuffle again for extra variety, return 48
+        // Shuffle the latest 300 and return 48 random pills
         for (let i = searches.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
             [searches[i], searches[j]] = [searches[j], searches[i]];
