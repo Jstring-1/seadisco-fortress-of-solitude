@@ -69,13 +69,15 @@ async function doLiveSearch() {
       const fmtDate = _liveFmtDate(ev.date);
       const fmtTime = _liveFmtTime(ev.time);
       const location = [ev.city, ev.region, ev.country].filter(Boolean).join(", ");
-      const googleQ = encodeURIComponent(`${ev.artist || artist} ${ev.venue} ${ev.city} concert tickets`);
-      const googleUrl = `https://www.google.com/search?q=${googleQ}`;
-
       // Show artist name on each row when no artist was searched (city/genre mode)
       const artistLine = !artist && ev.artist
         ? `<div class="live-event-artist"><a href="#" onclick="event.preventDefault();liveSearchArtist('${escHtml(ev.artist).replace(/'/g, "\\'")}')">${escHtml(ev.artist)}</a></div>`
         : "";
+
+      // Venue link: search venue events if we have a venueId, otherwise Google
+      const venueLink = ev.venueId
+        ? `<a href="#" onclick="event.preventDefault();liveSearchVenue('${escHtml(ev.venueId).replace(/'/g, "\\'")}','${escHtml(ev.venue).replace(/'/g, "\\'")}')">${escHtml(ev.venue)}</a>`
+        : `<a href="https://www.google.com/search?q=${encodeURIComponent(`${ev.venue} ${ev.city} concerts`)}" target="_blank" rel="noopener">${escHtml(ev.venue)}</a>`;
 
       html += `<div class="live-event">
         <div class="live-event-date">
@@ -86,7 +88,7 @@ async function doLiveSearch() {
           ${artistLine}
           <div class="live-event-name">${escHtml(ev.name)}</div>
           <div class="live-event-venue">
-            <a href="${googleUrl}" target="_blank" rel="noopener">${escHtml(ev.venue)}</a>
+            ${venueLink}
             ${location ? ` — ${escHtml(location)}` : ""}
           </div>
         </div>
@@ -121,6 +123,57 @@ function liveGoBack() {
   document.getElementById("live-genre").value  = _livePrevSearch.genre;
   _livePrevSearch = null;
   doLiveSearch();
+}
+
+async function liveSearchVenue(venueId, venueName) {
+  // Save current fields so user can go back
+  _livePrevSearch = {
+    artist: document.getElementById("live-artist").value,
+    city:   document.getElementById("live-city").value,
+    genre:  document.getElementById("live-genre").value,
+  };
+  const statusEl  = document.getElementById("live-status");
+  const resultsEl = document.getElementById("live-results");
+  statusEl.textContent = `Loading events at ${venueName}…`;
+  resultsEl.innerHTML = "";
+
+  try {
+    const data = await fetch(`/api/concerts/venue/${encodeURIComponent(venueId)}`).then(r => r.json());
+    const events = data.events ?? [];
+    const name   = data.venueName || venueName;
+    const loc    = data.location || "";
+
+    if (!events.length) {
+      statusEl.textContent = "";
+      resultsEl.innerHTML = `<div class="live-empty">No upcoming events at ${escHtml(name)}</div>`;
+      return;
+    }
+
+    statusEl.textContent = `${events.length} upcoming at ${name}${loc ? " — " + loc : ""}`;
+
+    let html = `<div class="live-back-row"><a href="#" onclick="event.preventDefault();liveGoBack()">← Back to results</a></div>`;
+    for (const ev of events) {
+      const fmtDate = _liveFmtDate(ev.date);
+      const fmtTime = _liveFmtTime(ev.time);
+      const artistLine = ev.artist
+        ? `<div class="live-event-artist"><a href="#" onclick="event.preventDefault();liveSearchArtist('${escHtml(ev.artist).replace(/'/g, "\\'")}')">${escHtml(ev.artist)}</a></div>`
+        : "";
+      html += `<div class="live-event">
+        <div class="live-event-date">
+          ${escHtml(fmtDate)}
+          ${fmtTime ? `<span class="live-event-time">${escHtml(fmtTime)}</span>` : ""}
+        </div>
+        <div class="live-event-info">
+          ${artistLine}
+          <div class="live-event-name">${escHtml(ev.name)}</div>
+        </div>
+      </div>`;
+    }
+    resultsEl.innerHTML = html;
+  } catch {
+    statusEl.textContent = "";
+    resultsEl.innerHTML = `<div class="live-empty">Failed to load venue events.</div>`;
+  }
 }
 
 function clearLiveSearch() {

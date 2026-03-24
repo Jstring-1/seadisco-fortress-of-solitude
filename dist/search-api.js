@@ -1388,6 +1388,7 @@ app.get("/api/concerts/search", async (req, res) => {
                             date: ev.dates?.start?.localDate ?? "",
                             time: ev.dates?.start?.localTime ?? "",
                             venue: venue?.name ?? "",
+                            venueId: venue?.id ?? "",
                             city: venue?.city?.name ?? "",
                             region: venue?.state?.name ?? "",
                             country: venue?.country?.countryCode ?? "",
@@ -1443,6 +1444,7 @@ app.get("/api/concerts/search", async (req, res) => {
                                 date: (ev.datetime ?? "").slice(0, 10),
                                 time: (ev.datetime ?? "").slice(11, 16),
                                 venue: ev.venue?.name ?? "",
+                                venueId: "",
                                 city: evCity,
                                 region: evRegion,
                                 country: ev.venue?.country ?? "",
@@ -1470,6 +1472,50 @@ app.get("/api/concerts/search", async (req, res) => {
     }
     deduped.sort((a, b) => a.date.localeCompare(b.date));
     res.json({ events: deduped, artistImage });
+});
+// GET /api/concerts/venue/:venueId — all upcoming events at a Ticketmaster venue
+app.get("/api/concerts/venue/:venueId", async (req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=900");
+    const venueId = req.params.venueId;
+    if (!venueId || !ticketmasterKey) {
+        res.json({ events: [], venueName: "" });
+        return;
+    }
+    try {
+        const tmUrl = `https://app.ticketmaster.com/discovery/v2/events.json?venueId=${encodeURIComponent(venueId)}&classificationName=music&size=50&sort=date,asc&apikey=${ticketmasterKey}`;
+        const tmRes = await fetch(tmUrl);
+        if (!tmRes.ok) {
+            res.json({ events: [], venueName: "" });
+            return;
+        }
+        const tmData = await tmRes.json();
+        const events = [];
+        let venueName = "";
+        for (const ev of (tmData._embedded?.events ?? [])) {
+            const venue = ev._embedded?.venues?.[0];
+            if (!venueName && venue?.name)
+                venueName = venue.name;
+            const attractions = ev._embedded?.attractions ?? [];
+            const artistName = attractions[0]?.name ?? ev.name?.split(/\s[-–—:]\s/)?.[0] ?? "";
+            events.push({
+                artist: artistName,
+                name: ev.name ?? "",
+                date: ev.dates?.start?.localDate ?? "",
+                time: ev.dates?.start?.localTime ?? "",
+                venue: venue?.name ?? "",
+                venueId: venue?.id ?? venueId,
+                city: venue?.city?.name ?? "",
+                region: venue?.state?.name ?? "",
+                country: venue?.country?.countryCode ?? "",
+            });
+        }
+        const location = events[0] ? [events[0].city, events[0].region, events[0].country].filter(Boolean).join(", ") : "";
+        res.json({ events, venueName, location });
+    }
+    catch (err) {
+        console.error("Venue events error:", err);
+        res.json({ events: [], venueName: "" });
+    }
 });
 // ── Concert info (Ticketmaster + Bandsintown) ─────────────────────────────
 app.get("/api/concerts/:artist", async (req, res) => {
