@@ -17,6 +17,16 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
   const view = p.get("view");
   if (view === "drops" || view === "live" || view === "info") {
     switchView(view, true);
+    // Restore live search from shared URL
+    if (view === "live" && (p.get("la") || p.get("lc") || p.get("lg"))) {
+      const la = document.getElementById("live-artist");
+      const lc = document.getElementById("live-city");
+      const lg = document.getElementById("live-genre");
+      if (la) la.value = p.get("la") || "";
+      if (lc) lc.value = p.get("lc") || "";
+      if (lg) lg.value = p.get("lg") || "";
+      doLiveSearch();
+    }
   } else if (view === "collection" || view === "wantlist" || view === "wanted") {
     await authReadyPromise;
     switchView(view, true);

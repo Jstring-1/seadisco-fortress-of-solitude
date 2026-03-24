@@ -76,6 +76,16 @@ async function doLiveSearch(append = false) {
 
     _liveTotal += events.length;
 
+    // Update URL for sharing
+    if (!append) {
+      const u = new URLSearchParams();
+      u.set("view", "live");
+      if (artist) u.set("la", artist);
+      if (city)   u.set("lc", city);
+      if (genre)  u.set("lg", genre);
+      history.replaceState({}, "", "?" + u.toString());
+    }
+
     // Save live search to DB only on first page and when results found
     if (!append && events.length) {
       const liveParams = {};
