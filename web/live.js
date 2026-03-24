@@ -46,7 +46,10 @@ async function doLiveSearch() {
     if (artist) parts.push(artist);
     if (city)   parts.push(city);
     if (genre)  parts.push(genre);
-    statusEl.textContent = `${events.length} event${events.length !== 1 ? "s" : ""} — ${parts.join(" · ")}`;
+    const backLink = _livePrevSearch
+      ? ` · <a href="#" onclick="event.preventDefault();liveGoBack()" style="color:var(--accent);text-decoration:none">← Back</a>`
+      : "";
+    statusEl.innerHTML = `${events.length} event${events.length !== 1 ? "s" : ""} — ${escHtml(parts.join(" · "))}${backLink}`;
 
     let html = "";
 
@@ -97,8 +100,25 @@ async function doLiveSearch() {
   }
 }
 
+let _livePrevSearch = null;
+
 function liveSearchArtist(name) {
+  // Save current fields so user can go back
+  _livePrevSearch = {
+    artist: document.getElementById("live-artist").value,
+    city:   document.getElementById("live-city").value,
+    genre:  document.getElementById("live-genre").value,
+  };
   document.getElementById("live-artist").value = name;
+  doLiveSearch();
+}
+
+function liveGoBack() {
+  if (!_livePrevSearch) return;
+  document.getElementById("live-artist").value = _livePrevSearch.artist;
+  document.getElementById("live-city").value   = _livePrevSearch.city;
+  document.getElementById("live-genre").value  = _livePrevSearch.genre;
+  _livePrevSearch = null;
   doLiveSearch();
 }
 
