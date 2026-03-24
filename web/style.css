@@ -251,6 +251,7 @@ body {
   border-radius: 0;          /* MUST override global button{border-radius:8px} */
   box-shadow: inset -1px 0 0 var(--border);  /* right separator */
   color: var(--muted);
+  height: auto;
   padding: 0.45rem 1.2rem;
   cursor: pointer;
   font-size: 0.78rem;
@@ -261,6 +262,7 @@ body {
   text-decoration: none;     /* for <a> tags (Account) */
   display: inline-flex;      /* for <a> tags (Account) */
   align-items: center;       /* for <a> tags (Account) */
+  align-self: stretch;       /* fill container height */
 }
 .main-nav-tab:hover         { color: var(--muted); background: none; } /* suppress browser <a> hover */
 #main-nav-tabs > .main-nav-tab:first-child { border-radius: 6px 0 0 6px; }
