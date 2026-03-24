@@ -93,10 +93,15 @@ async function doLiveSearch(append = false) {
     if (artist) parts.push(artist);
     if (city)   parts.push(city);
     if (genre)  parts.push(genre);
+    const headingEl = document.getElementById("live-heading");
     const backLink = _livePrevSearch
-      ? ` · <a href="#" onclick="event.preventDefault();liveGoBack()" style="color:var(--accent);text-decoration:none">← Back</a>`
+      ? ` <a href="#" onclick="event.preventDefault();liveGoBack()" style="color:var(--accent);text-decoration:none;font-size:0.8rem;margin-left:0.4rem">← Back</a>`
       : "";
-    statusEl.innerHTML = `${_liveTotal} event${_liveTotal !== 1 ? "s" : ""} — ${escHtml(parts.join(" · "))}${backLink}`;
+    if (headingEl) {
+      headingEl.innerHTML = escHtml(parts.join(" · ")) + backLink;
+      headingEl.style.display = "";
+    }
+    statusEl.textContent = `${_liveTotal} event${_liveTotal !== 1 ? "s" : ""}`;
 
     if (append) {
       // Remove old "load more" link
@@ -181,9 +186,14 @@ async function liveSearchVenue(venueId, venueName) {
       return;
     }
 
-    statusEl.textContent = `${events.length} upcoming at ${name}${loc ? " — " + loc : ""}`;
+    const headingEl = document.getElementById("live-heading");
+    if (headingEl) {
+      headingEl.innerHTML = `${escHtml(name)}${loc ? ` <span style="font-size:0.8rem;color:#555">— ${escHtml(loc)}</span>` : ""} <a href="#" onclick="event.preventDefault();liveGoBack()" style="color:var(--accent);text-decoration:none;font-size:0.8rem;margin-left:0.4rem">← Back</a>`;
+      headingEl.style.display = "";
+    }
+    statusEl.textContent = `${events.length} upcoming event${events.length !== 1 ? "s" : ""}`;
 
-    let html = `<div style="margin-bottom:0.6rem"><a href="#" onclick="event.preventDefault();liveGoBack()" style="color:var(--accent);text-decoration:none;font-size:0.8rem">← Back</a></div>`;
+    let html = "";
     for (const ev of events) {
       const fmtDate = _liveFmtDate(ev.date);
       const fmtTime = _liveFmtTime(ev.time);
@@ -214,6 +224,8 @@ function clearLiveSearch() {
   document.getElementById("live-genre").value = "";
   document.getElementById("live-status").textContent = "";
   document.getElementById("live-results").innerHTML = "";
+  const h = document.getElementById("live-heading");
+  if (h) { h.textContent = ""; h.style.display = "none"; }
 }
 
 function _liveFmtDate(d) {
