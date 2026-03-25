@@ -1725,8 +1725,8 @@ async function fetchEbayGearListings(): Promise<number> {
         const items = summaries.map((s: any) => ({
           itemId:          s.itemId,
           title:           s.title ?? "",
-          price:           parseFloat(s.price?.value ?? "0"),
-          currency:        s.price?.currency ?? "USD",
+          price:           parseFloat(s.currentBidPrice?.value ?? s.price?.value ?? "0"),
+          currency:        s.currentBidPrice?.currency ?? s.price?.currency ?? "USD",
           condition:       s.condition ?? s.conditionId ?? "",
           imageUrl:        s.image?.imageUrl ?? "",
           itemUrl:         s.itemWebUrl ?? "",
