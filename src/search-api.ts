@@ -698,7 +698,7 @@ app.post("/api/admin/sync-all", async (req, res) => {
 });
 
 // POST /api/admin/sync-user — trigger background sync for a single user, admin only
-app.post("/api/admin/sync-user", async (req, res) => {
+app.post("/api/admin/sync-user", express.json(), async (req, res) => {
   const userId = getClerkUserId(req);
   const adminId = process.env.ADMIN_CLERK_ID ?? "";
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
