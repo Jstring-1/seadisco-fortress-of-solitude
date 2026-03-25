@@ -1,9 +1,12 @@
 // ── Gear tab — eBay vintage electronics scroller ─────────────────────────
 let _gearItems = [];
 let _gearTotal = 0;
-let _gearMinPrice = 100;
+let _gearMinPrice = 0;
+let _gearSort = "bids";
+let _gearQuery = "";
 let _gearOffset = 0;
 let _gearLoading = false;
+let _gearDebounce = null;
 const GEAR_PAGE_SIZE = 200;
 
 function renderGearCard(item, idx) {
@@ -17,18 +20,29 @@ function renderGearCard(item, idx) {
   const condition = item.condition || "";
   const loc = [item.location_city, item.location_state].filter(Boolean).join(", ");
 
-  const buyType = (item.buying_options ?? []).includes("AUCTION")
-    ? `Auction${item.bid_count > 0 ? ` · ${item.bid_count} bid${item.bid_count !== 1 ? "s" : ""}` : ""}`
-    : "Buy Now";
+  const bids = item.bid_count ?? 0;
+  const bidStr = bids > 0 ? `${bids} bid${bids !== 1 ? "s" : ""}` : "";
 
   const specifics = item.item_specifics ?? {};
   const brand = specifics.Brand || specifics.brand || "";
   const model = specifics.Model || specifics.model || "";
   const brandModel = [brand, model].filter(Boolean).join(" ");
 
-  const endDate = item.item_end_date
-    ? new Date(item.item_end_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })
-    : "";
+  // Time remaining
+  let timeLeft = "";
+  if (item.item_end_date) {
+    const ms = new Date(item.item_end_date).getTime() - Date.now();
+    if (ms > 0) {
+      const hrs = Math.floor(ms / 3600000);
+      const mins = Math.floor((ms % 3600000) / 60000);
+      if (hrs >= 24) { const d = Math.floor(hrs / 24); timeLeft = `${d}d ${hrs % 24}h left`; }
+      else if (hrs > 0) timeLeft = `${hrs}h ${mins}m left`;
+      else timeLeft = `${mins}m left`;
+    }
+  }
+
+  // Show condition only if it's notable (not just "Used")
+  const conditionShow = condition && condition !== "Used" ? condition : "";
 
   return `<div class="card gear-card" onclick="openGearPopup(${idx})" style="cursor:pointer" title="${escHtml(item.title)}">
     <div class="card-thumb-wrap">${img}</div>
@@ -36,10 +50,10 @@ function renderGearCard(item, idx) {
       <div class="card-title">${escHtml(item.title.length > 65 ? item.title.slice(0, 63) + "…" : item.title)}</div>
       ${brandModel ? `<div class="card-sub" style="color:#aaa">${escHtml(brandModel)}</div>` : ""}
       <div class="gear-price">${priceStr}</div>
-      <div class="card-sub">${escHtml(buyType)}</div>
-      ${condition ? `<div class="card-meta">${escHtml(condition)}</div>` : ""}
+      ${bidStr ? `<div class="card-sub gear-bids">${escHtml(bidStr)}</div>` : ""}
+      ${conditionShow ? `<div class="card-meta">${escHtml(conditionShow)}</div>` : ""}
       ${loc ? `<div class="card-meta">${escHtml(loc)}</div>` : ""}
-      ${endDate ? `<div class="card-meta">Ends ${endDate}</div>` : ""}
+      ${timeLeft ? `<div class="card-meta gear-time-left">${timeLeft}</div>` : ""}
     </div>
   </div>`;
 }
@@ -126,6 +140,23 @@ function setGearPriceFilter(minPrice) {
   loadGearListings();
 }
 
+function setGearSort(sort) {
+  _gearSort = sort;
+  _gearOffset = 0;
+  _gearItems = [];
+  loadGearListings();
+}
+
+function onGearSearch(val) {
+  clearTimeout(_gearDebounce);
+  _gearDebounce = setTimeout(() => {
+    _gearQuery = val;
+    _gearOffset = 0;
+    _gearItems = [];
+    loadGearListings();
+  }, 350);
+}
+
 async function loadGearListings(append = false) {
   if (_gearLoading) return;
   _gearLoading = true;
@@ -142,7 +173,8 @@ async function loadGearListings(append = false) {
   }
 
   try {
-    const url = `/api/gear?min_price=${_gearMinPrice}&limit=${GEAR_PAGE_SIZE}&offset=${_gearOffset}`;
+    const qEnc = _gearQuery ? `&q=${encodeURIComponent(_gearQuery)}` : "";
+    const url = `/api/gear?min_price=${_gearMinPrice}&sort=${_gearSort}${qEnc}&limit=${GEAR_PAGE_SIZE}&offset=${_gearOffset}`;
     const r = await fetch(url);
     const data = await r.json();
     const newItems = data.items ?? [];

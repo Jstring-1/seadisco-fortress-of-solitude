@@ -346,16 +346,29 @@
 </div>
 
 <div id="gear-view" style="display:none">
-  <div class="gear-header content-narrow">
-    <div class="gear-price-pills">
-      <span class="pill gear-price-pill active" data-min="100" onclick="setGearPriceFilter(100)">$100+</span>
-      <span class="pill gear-price-pill" data-min="200" onclick="setGearPriceFilter(200)">$200+</span>
-      <span class="pill gear-price-pill" data-min="500" onclick="setGearPriceFilter(500)">$500+</span>
-      <span class="pill gear-price-pill" data-min="1000" onclick="setGearPriceFilter(1000)">$1,000+</span>
+  <div class="gear-header content-area">
+    <div class="gear-controls">
+      <div class="gear-price-pills">
+        <span class="pill gear-price-pill active" data-min="0" onclick="setGearPriceFilter(0)">All</span>
+        <span class="pill gear-price-pill" data-min="100" onclick="setGearPriceFilter(100)">$100+</span>
+        <span class="pill gear-price-pill" data-min="200" onclick="setGearPriceFilter(200)">$200+</span>
+        <span class="pill gear-price-pill" data-min="500" onclick="setGearPriceFilter(500)">$500+</span>
+        <span class="pill gear-price-pill" data-min="1000" onclick="setGearPriceFilter(1000)">$1,000+</span>
+      </div>
+      <div class="gear-right-controls">
+        <input type="text" class="site-form-field gear-search-field" placeholder="Filter listings…" oninput="onGearSearch(this.value)">
+        <select class="site-form-field gear-sort" onchange="setGearSort(this.value)">
+          <option value="bids">Most Bids</option>
+          <option value="price_desc">Price: High → Low</option>
+          <option value="price_asc">Price: Low → High</option>
+          <option value="ending">Ending Soonest</option>
+          <option value="newest">Newly Listed</option>
+        </select>
+      </div>
     </div>
     <div id="gear-status" style="font-size:0.78rem;color:#555;margin-top:0.3rem"></div>
   </div>
-  <div id="gear-results" class="card-grid"></div>
+  <div id="gear-results" class="card-grid content-area"></div>
   <div style="text-align:center;margin:1.5rem 0">
     <button id="gear-load-more" onclick="loadMoreGear()" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--accent);padding:0.5rem 1.5rem;cursor:pointer;font-size:0.82rem" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">Load more</button>
   </div>
@@ -460,7 +473,7 @@
 <script src="/modal.js?v=20260324d"></script>
 <script src="/drops.js?v=20260324d"></script>
 <script src="/live.js?v=20260324d"></script>
-<script src="/gear.js?v=20260324e"></script>
+<script src="/gear.js?v=20260325a"></script>
 <script src="/app.js?v=20260324e"></script>
 
 </body>

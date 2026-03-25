@@ -575,11 +575,30 @@ a.fresh-card-search-link:hover {
 .gear-header {
   margin-bottom: 0.75rem;
 }
+.gear-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
 .gear-price-pills {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
   align-items: center;
+}
+.gear-right-controls {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.gear-search-field {
+  width: 160px;
+}
+.gear-sort {
+  width: auto;
+  min-width: 140px;
 }
 .gear-card {
   text-decoration: none;
@@ -594,6 +613,13 @@ a.fresh-card-search-link:hover {
   font-weight: 700;
   color: #daa520;
   margin: 0.15rem 0;
+}
+.gear-bids {
+  color: #e8a020;
+  font-weight: 600;
+}
+.gear-time-left {
+  color: #cc6644;
 }
 
 /* Gear popup */
