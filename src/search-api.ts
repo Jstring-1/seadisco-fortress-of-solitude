@@ -1,5 +1,6 @@
 import express from "express";
 import compression from "compression";
+import crypto from "crypto";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
@@ -1807,6 +1808,29 @@ app.post("/api/admin/gear/fetch", express.json(), async (req, res) => {
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   res.json({ ok: true, started: true });
   fetchEbayGearListings().then(() => fetchGearDetails());
+});
+
+// ── eBay Marketplace Account Deletion Notification (compliance) ──────────
+const EBAY_VERIFICATION_TOKEN = "seadisco2026accountdeletiontoken";
+
+app.get("/api/ebay/deletion", (req, res) => {
+  // eBay sends a GET with challenge_code to verify the endpoint
+  const challengeCode = req.query.challenge_code as string;
+  if (!challengeCode) return res.status(400).json({ error: "missing challenge_code" });
+
+  const hash = crypto.createHash("sha256");
+  hash.update(challengeCode);
+  hash.update(EBAY_VERIFICATION_TOKEN);
+  hash.update("https://discogs-mcp-server-production-c794.up.railway.app/api/ebay/deletion");
+  const responseHash = hash.digest("hex");
+
+  res.json({ challengeResponse: responseHash });
+});
+
+app.post("/api/ebay/deletion", (_req, res) => {
+  // eBay sends POST for actual deletion notifications — just acknowledge
+  console.log("eBay account deletion notification received");
+  res.status(200).json({ ok: true });
 });
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
