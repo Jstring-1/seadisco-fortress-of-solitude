@@ -21,7 +21,7 @@ function renderGearCard(item, idx) {
   const loc = [item.location_city, item.location_state].filter(Boolean).join(", ");
 
   const bids = item.bid_count ?? 0;
-  const bidStr = bids > 0 ? `${bids} bid${bids !== 1 ? "s" : ""}` : "";
+  const bidStr = `${bids} bid${bids !== 1 ? "s" : ""}`;
 
   const specifics = item.item_specifics ?? {};
   const brand = specifics.Brand || specifics.brand || "";
@@ -50,7 +50,7 @@ function renderGearCard(item, idx) {
       <div class="card-title">${escHtml(item.title.length > 65 ? item.title.slice(0, 63) + "…" : item.title)}</div>
       ${brandModel ? `<div class="card-sub" style="color:#aaa">${escHtml(brandModel)}</div>` : ""}
       <div class="gear-price">${priceStr}</div>
-      ${bidStr ? `<div class="card-sub gear-bids">${escHtml(bidStr)}</div>` : ""}
+      <div class="card-sub gear-bids">${escHtml(bidStr)}</div>
       ${conditionShow ? `<div class="card-meta">${escHtml(conditionShow)}</div>` : ""}
       ${loc ? `<div class="card-meta">${escHtml(loc)}</div>` : ""}
       ${timeLeft ? `<div class="card-meta gear-time-left">${timeLeft}</div>` : ""}
