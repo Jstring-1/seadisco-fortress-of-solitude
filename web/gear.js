@@ -6,7 +6,7 @@ let _gearOffset = 0;
 let _gearLoading = false;
 const GEAR_PAGE_SIZE = 200;
 
-function renderGearCard(item) {
+function renderGearCard(item, idx) {
   const img = item.image_url
     ? `<img src="${escHtml(item.image_url)}" alt="${escHtml(item.title)}" loading="lazy" onerror="this.style.display='none'">`
     : `<div class="thumb-placeholder">⚙</div>`;
@@ -30,7 +30,7 @@ function renderGearCard(item) {
     ? new Date(item.item_end_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })
     : "";
 
-  return `<a class="card gear-card" href="${escHtml(item.item_url)}" target="_blank" rel="noopener" title="${escHtml(item.title)}">
+  return `<div class="card gear-card" onclick="openGearPopup(${idx})" style="cursor:pointer" title="${escHtml(item.title)}">
     <div class="card-thumb-wrap">${img}</div>
     <div class="card-body">
       <div class="card-title">${escHtml(item.title.length > 65 ? item.title.slice(0, 63) + "…" : item.title)}</div>
@@ -41,7 +41,69 @@ function renderGearCard(item) {
       ${loc ? `<div class="card-meta">${escHtml(loc)}</div>` : ""}
       ${endDate ? `<div class="card-meta">Ends ${endDate}</div>` : ""}
     </div>
-  </a>`;
+  </div>`;
+}
+
+function openGearPopup(idx) {
+  const item = _gearItems[idx];
+  if (!item) return;
+
+  const price = parseFloat(item.price);
+  const priceStr = price.toLocaleString("en-US", { style: "currency", currency: item.currency || "USD" });
+  const condition = item.condition || "";
+  const loc = [item.location_city, item.location_state, item.location_country].filter(Boolean).join(", ");
+  const specifics = item.item_specifics ?? {};
+  const allImages = item.all_images && item.all_images.length ? item.all_images : (item.image_url ? [item.image_url] : []);
+
+  const buyType = (item.buying_options ?? []).includes("AUCTION")
+    ? `Auction${item.bid_count > 0 ? ` · ${item.bid_count} bid${item.bid_count !== 1 ? "s" : ""}` : ""}`
+    : "Buy Now";
+
+  const endDate = item.item_end_date
+    ? new Date(item.item_end_date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+    : "";
+
+  const seller = item.seller_name || "";
+  const feedback = item.seller_feedback ? `(${item.seller_feedback}%)` : "";
+
+  // Build specifics list
+  const specKeys = Object.keys(specifics).filter(k => specifics[k]);
+  const specsHtml = specKeys.length
+    ? `<div class="gear-popup-specs">${specKeys.map(k => `<div class="gear-spec-row"><span class="gear-spec-label">${escHtml(k)}</span> <span>${escHtml(String(specifics[k]))}</span></div>`).join("")}</div>`
+    : "";
+
+  // Build image gallery
+  const galleryHtml = allImages.length > 1
+    ? `<div class="gear-popup-gallery">${allImages.map(u => `<img src="${escHtml(u)}" loading="lazy" onclick="this.parentElement.previousElementSibling.src='${escHtml(u)}'" onerror="this.style.display='none'">`).join("")}</div>`
+    : "";
+
+  // Detail HTML (from getItem)
+  const detailHtml = item.detail_html
+    ? `<div class="gear-popup-description">${item.detail_html}</div>`
+    : "";
+
+  const overlay = document.createElement("div");
+  overlay.className = "gear-popup-overlay";
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  overlay.innerHTML = `<div class="gear-popup">
+    <button class="gear-popup-close" onclick="this.closest('.gear-popup-overlay').remove()">✕</button>
+    ${allImages.length ? `<img class="gear-popup-main-img" src="${escHtml(allImages[0])}" onerror="this.style.display='none'">` : ""}
+    ${galleryHtml}
+    <div class="gear-popup-body">
+      <h3 class="gear-popup-title">${escHtml(item.title)}</h3>
+      <div class="gear-popup-price">${priceStr} <span style="font-size:0.78rem;font-weight:400;color:#aaa;margin-left:0.5rem">${escHtml(buyType)}</span></div>
+      ${endDate ? `<div class="gear-popup-meta">Ends ${endDate}</div>` : ""}
+      ${condition ? `<div class="gear-popup-meta">Condition: ${escHtml(condition)}</div>` : ""}
+      ${loc ? `<div class="gear-popup-meta">Location: ${escHtml(loc)}</div>` : ""}
+      ${seller ? `<div class="gear-popup-meta">Seller: ${escHtml(seller)} ${feedback}</div>` : ""}
+      ${specsHtml}
+      ${detailHtml}
+      <a class="gear-popup-ebay-link" href="${escHtml(item.item_url)}" target="_blank" rel="noopener">View on eBay →</a>
+    </div>
+  </div>`;
+
+  document.body.appendChild(overlay);
 }
 
 function renderGearGrid() {
@@ -51,7 +113,7 @@ function renderGearGrid() {
     grid.innerHTML = `<div style="color:var(--muted);font-size:0.8rem;grid-column:1/-1;text-align:center;padding:2rem 0">No gear listings available yet. Check back soon!</div>`;
     return;
   }
-  grid.innerHTML = _gearItems.map(renderGearCard).join("");
+  grid.innerHTML = _gearItems.map((item, idx) => renderGearCard(item, idx)).join("");
 }
 
 function setGearPriceFilter(minPrice) {
