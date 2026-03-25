@@ -1042,12 +1042,28 @@ export async function getGearNeedingDetail(limit: number = 20): Promise<Array<{ 
   return r.rows.map(row => ({ itemId: row.item_id, price: row.price }));
 }
 
-export async function getGearListings(minPrice: number = 100, limit: number = 200, offset: number = 0): Promise<{ items: any[]; total: number }> {
+export async function getGearListings(minPrice: number = 0, limit: number = 200, offset: number = 0, sort: string = "bids", q: string = ""): Promise<{ items: any[]; total: number }> {
+  const params: any[] = [minPrice];
+  let where = `WHERE price >= $1 AND NOT expired
+    AND (condition IS NULL OR condition NOT ILIKE '%for parts%')
+    AND (item_end_date IS NULL OR item_end_date > NOW())`;
+  if (q.trim()) {
+    params.push(`%${q.trim()}%`);
+    where += ` AND title ILIKE $${params.length}`;
+  }
   const countR = await getPool().query(
-    `SELECT COUNT(*)::int AS cnt FROM gear_listings WHERE price >= $1 AND NOT expired`,
-    [minPrice]
+    `SELECT COUNT(*)::int AS cnt FROM gear_listings ${where}`,
+    params
   );
   const total = countR.rows[0]?.cnt ?? 0;
+  const orderMap: Record<string, string> = {
+    bids: "bid_count DESC, price DESC",
+    price_desc: "price DESC",
+    price_asc: "price ASC",
+    ending: "item_end_date ASC NULLS LAST",
+    newest: "fetched_at DESC",
+  };
+  const orderBy = orderMap[sort] ?? orderMap.bids;
   const r = await getPool().query(
     `SELECT item_id, title, price, currency, condition, image_url, item_url,
        location_city, location_state, location_country,
@@ -1056,10 +1072,10 @@ export async function getGearListings(minPrice: number = 100, limit: number = 20
        detail_html, all_images, item_specifics, thumbnail_url,
        fetched_at, detailed_at
      FROM gear_listings
-     WHERE price >= $1 AND NOT expired
-     ORDER BY bid_count DESC, price DESC
-     LIMIT $2 OFFSET $3`,
-    [minPrice, limit, offset]
+     ${where}
+     ORDER BY ${orderBy}
+     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    [...params, limit, offset]
   );
   return { items: r.rows, total };
 }

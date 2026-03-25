@@ -246,7 +246,7 @@ async function runBackgroundSync(userId: string, token: string, username: string
         if (_syncAbort) { console.log(`Sync ${username}: aborted`); await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted"); return; }
         if (page > 1) await delay(1200); // 1.2s pacing — Discogs allows 60/min
         const r = await fetchWithRetry(
-          `https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=100&page=${page}`
+          `https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=500&page=${page}&sort=added&sort_order=desc`
         );
         const data = await r.json() as any;
         const releases: any[] = data.releases ?? [];
@@ -264,7 +264,7 @@ async function runBackgroundSync(userId: string, token: string, username: string
         await recordInterestSignals(items, "collection");
         totalSynced += items.length;
         await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
-        if (releases.length < 100) break;
+        if (releases.length < 500) break;
       }
       await updateCollectionSyncedAt(userId);
 
@@ -285,7 +285,7 @@ async function runBackgroundSync(userId: string, token: string, username: string
         if (_syncAbort) { console.log(`Sync ${username}: aborted`); await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted"); return; }
         if (page > 1) await delay(1200);
         const r = await fetchWithRetry(
-          `https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=100&page=${page}`
+          `https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=500&page=${page}`
         );
         const data = await r.json() as any;
         const wants: any[] = data.wants ?? [];
@@ -301,7 +301,7 @@ async function runBackgroundSync(userId: string, token: string, username: string
         await recordInterestSignals(items, "wantlist");
         totalSynced += items.length;
         await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
-        if (wants.length < 100) break;
+        if (wants.length < 500) break;
       }
       await updateWantlistSyncedAt(userId);
     }
@@ -1833,11 +1833,13 @@ function startGearSchedule() {
 // GET /api/gear — public gear listings
 app.get("/api/gear", async (_req, res) => {
   try {
-    const minPrice = parseFloat(_req.query.min_price as string) || 100;
+    const minPrice = parseFloat(_req.query.min_price as string) || 0;
+    const sort     = (_req.query.sort as string) || "bids";
+    const q        = (_req.query.q as string) || "";
     const limit    = Math.min(parseInt(_req.query.limit as string) || 200, 500);
     const offset   = parseInt(_req.query.offset as string) || 0;
     res.setHeader("Cache-Control", "public, max-age=300"); // 5 min
-    const { items, total } = await getGearListings(minPrice, limit, offset);
+    const { items, total } = await getGearListings(minPrice, limit, offset, sort, q);
     res.json({ items, total });
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -1882,15 +1884,54 @@ app.get("/api/ebay/deletion", (req, res) => {
 
 app.post("/api/ebay/deletion", (_req, res) => {
   // eBay sends POST for actual deletion notifications — just acknowledge
-  console.log("eBay account deletion notification received");
   res.status(200).json({ ok: true });
 });
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
+// Daily auto-sync of all user collections/wantlists at 4 AM Pacific
+function startDailySyncSchedule() {
+  function msUntilNext4amPacific() {
+    // Calculate next 4:00 AM Pacific (handles PST/PDT via Intl)
+    const now = new Date();
+    const pacific = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+    const diff = now.getTime() - pacific.getTime(); // offset from UTC
+    const next4am = new Date(pacific);
+    next4am.setHours(4, 0, 0, 0);
+    if (next4am.getTime() <= pacific.getTime()) next4am.setDate(next4am.getDate() + 1);
+    return (next4am.getTime() - pacific.getTime()) + diff;
+  }
+
+  async function runDailySync() {
+    console.log("[daily-sync] Starting scheduled sync for all users");
+    _syncAbort = false;
+    const users = await getAllUsersForSync();
+    for (const user of users) {
+      if (_syncAbort) { console.log("[daily-sync] Aborted"); break; }
+      try {
+        console.log(`[daily-sync] Syncing ${user.username}...`);
+        await runBackgroundSync(user.clerkUserId, user.token, user.username, true, true);
+        // 2-minute pause between users to let rate limits reset
+        await new Promise(r => setTimeout(r, 120000));
+      } catch (err) {
+        console.error(`[daily-sync] Error syncing ${user.username}:`, err);
+      }
+    }
+    console.log("[daily-sync] Complete");
+    // Schedule next run
+    setTimeout(() => { runDailySync(); }, msUntilNext4amPacific());
+  }
+
+  const ms = msUntilNext4amPacific();
+  const hours = Math.round(ms / 3600000 * 10) / 10;
+  console.log(`[daily-sync] Next auto-sync in ${hours}h (4 AM Pacific)`);
+  setTimeout(() => { runDailySync(); }, ms);
+}
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Discogs search API listening on port ${PORT}`);
   if (process.env.APP_DB_URL) {
     startFreshSyncSchedule();
     startGearSchedule();
+    startDailySyncSchedule();
   }
 });
