@@ -418,6 +418,13 @@ export async function updateSyncProgress(clerkUserId: string, status: string, pr
   );
 }
 
+export async function resetAllSyncingStatuses(): Promise<number> {
+  const r = await getPool().query(
+    `UPDATE user_tokens SET sync_status = 'stopped', sync_error = 'Stopped by admin' WHERE sync_status = 'syncing' RETURNING clerk_user_id`
+  );
+  return r.rowCount ?? 0;
+}
+
 export async function getSyncStatus(clerkUserId: string): Promise<{ collectionSyncedAt: Date | null; wantlistSyncedAt: Date | null; syncStatus: string; syncProgress: number; syncTotal: number; syncError: string | null }> {
   const r = await getPool().query(
     "SELECT collection_synced_at, wantlist_synced_at, sync_status, sync_progress, sync_total, sync_error FROM user_tokens WHERE clerk_user_id = $1",
