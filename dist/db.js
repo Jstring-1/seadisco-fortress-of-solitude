@@ -225,11 +225,12 @@ export async function deleteUserToken(clerkUserId) {
     await getPool().query("DELETE FROM user_tokens WHERE clerk_user_id = $1", [clerkUserId]);
 }
 export async function getRecentSearches(limit = 300) {
-    // Grab the latest `limit` unique searches, then randomise in the API layer
+    // Grab the latest `limit` unique searches from logged-in users only, then randomise in the API layer
     const r = await getPool().query(`SELECT params, searched_at FROM (
        SELECT DISTINCT ON (params) params, searched_at
        FROM search_history
        WHERE NOT (params ? '_type')
+         AND clerk_user_id <> 'anon'
        ORDER BY params, searched_at DESC
      ) sub
      ORDER BY searched_at DESC
@@ -241,6 +242,7 @@ export async function getRecentLiveSearches(limit = 200) {
        SELECT DISTINCT ON (params) params, searched_at
        FROM search_history
        WHERE params->>'_type' = 'live'
+         AND clerk_user_id <> 'anon'
        ORDER BY params, searched_at DESC
      ) sub
      ORDER BY searched_at DESC
