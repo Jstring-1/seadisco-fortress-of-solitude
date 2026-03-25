@@ -1057,10 +1057,10 @@ app.get("/search", async (req, res) => {
             perPage: req.query.per_page ? parseInt(req.query.per_page) : 12,
         });
         res.json(results);
-        // Record search history for logged-in users (fire-and-forget, page 1 only)
-        const userId = getClerkUserId(req);
+        // Record search history (fire-and-forget, page 1 only)
+        const userId = getClerkUserId(req) || "anon";
         const isFirstPage = !req.query.page || req.query.page === "1";
-        if (userId && isFirstPage) {
+        if (isFirstPage) {
             const artistParam = req.query.artist ? String(req.query.artist) : "";
             const p = {};
             // Single-letter keys: q a r l y g s f t o

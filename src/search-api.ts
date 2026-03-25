@@ -935,10 +935,10 @@ app.get("/search", async (req, res) => {
     });
     res.json(results);
 
-    // Record search history for logged-in users (fire-and-forget, page 1 only)
-    const userId = getClerkUserId(req);
+    // Record search history (fire-and-forget, page 1 only)
+    const userId = getClerkUserId(req) || "anon";
     const isFirstPage = !req.query.page || req.query.page === "1";
-    if (userId && isFirstPage) {
+    if (isFirstPage) {
       const artistParam = req.query.artist ? String(req.query.artist) : "";
       const p: Record<string, string> = {};
       // Single-letter keys: q a r l y g s f t o
