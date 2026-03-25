@@ -178,6 +178,7 @@ let _syncAbort = false;
 
 // Background sync worker — runs detached from the HTTP request
 async function runBackgroundSync(userId: string, token: string, username: string, syncCollection: boolean, syncWantlist: boolean) {
+  console.log(`Sync ${username}: starting background sync (collection=${syncCollection}, wantlist=${syncWantlist})`);
   const headers = { "Authorization": `Discogs token=${token}`, "User-Agent": "SeaDisco/1.0" };
   const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
   let totalSynced = 0;
@@ -237,6 +238,7 @@ async function runBackgroundSync(userId: string, token: string, username: string
       } catch {}
     }
 
+    console.log(`Sync ${username}: estimated total = ${estimatedTotal}`);
     await updateSyncProgress(userId, "syncing", 0, estimatedTotal);
 
     if (syncCollection) {
