@@ -3,7 +3,7 @@ import compression from "compression";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1607,8 +1607,213 @@ app.get("/api/concerts/:artist", async (req, res) => {
   res.json({ artist, events: deduped });
 });
 
+// ── eBay Gear integration ─────────────────────────────────────────────────
+const ebayClientId     = process.env.EBAY_CLIENT_ID ?? "";
+const ebayClientSecret = process.env.EBAY_CLIENT_SECRET ?? "";
+let ebayAccessToken    = "";
+let ebayTokenExpiry    = 0;
+
+async function getEbayToken(): Promise<string> {
+  if (ebayAccessToken && Date.now() < ebayTokenExpiry - 60000) return ebayAccessToken;
+  if (!ebayClientId || !ebayClientSecret) throw new Error("eBay credentials not configured");
+  const creds = Buffer.from(`${ebayClientId}:${ebayClientSecret}`).toString("base64");
+  const r = await fetch("https://api.ebay.com/identity/v1/oauth2/token", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      "Authorization": `Basic ${creds}`,
+    },
+    body: "grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope",
+  });
+  if (!r.ok) throw new Error(`eBay OAuth failed: ${r.status}`);
+  const data = await r.json() as { access_token: string; expires_in: number };
+  ebayAccessToken = data.access_token;
+  ebayTokenExpiry = Date.now() + data.expires_in * 1000;
+  console.log("eBay OAuth token refreshed");
+  return ebayAccessToken;
+}
+
+const GEAR_SEARCH_QUERIES = [
+  "vintage receiver",
+  "vintage amplifier",
+  "vintage turntable",
+  "vintage speakers hifi",
+  "vintage tape deck reel",
+  "hifi separates amplifier",
+  "tube amplifier audio",
+  "vintage preamp audio",
+];
+
+async function fetchEbayGearListings(): Promise<number> {
+  if (!ebayClientId || !ebayClientSecret) {
+    console.log("eBay gear fetch skipped — no credentials");
+    return 0;
+  }
+  console.log("Starting eBay gear fetch…");
+  let totalUpserted = 0;
+  try {
+    const token = await getEbayToken();
+    for (const query of GEAR_SEARCH_QUERIES) {
+      try {
+        // Auctions only, sorted by ending soonest (most active)
+        const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&limit=200&sort=endingSoonest&filter=price:[50..],priceCurrency:USD,buyingOptions:{AUCTION}`;
+        const r = await fetch(url, {
+          headers: { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" },
+        });
+        if (!r.ok) {
+          console.error(`eBay search "${query}" failed: ${r.status}`);
+          continue;
+        }
+        const data = await r.json() as any;
+        const summaries: any[] = data.itemSummaries ?? [];
+        console.log(`eBay "${query}": ${summaries.length} results`);
+
+        const items = summaries.map((s: any) => ({
+          itemId:          s.itemId,
+          title:           s.title ?? "",
+          price:           parseFloat(s.price?.value ?? "0"),
+          currency:        s.price?.currency ?? "USD",
+          condition:       s.condition ?? s.conditionId ?? "",
+          imageUrl:        s.image?.imageUrl ?? "",
+          itemUrl:         s.itemWebUrl ?? "",
+          locationCity:    s.itemLocation?.city ?? "",
+          locationState:   s.itemLocation?.stateOrProvince ?? "",
+          locationCountry: s.itemLocation?.country ?? "",
+          sellerUsername:  s.seller?.username ?? "",
+          sellerFeedback:  s.seller?.feedbackScore ?? 0,
+          buyingOptions:   s.buyingOptions ?? [],
+          bidCount:        s.bidCount ?? 0,
+          categories:      (s.categories ?? []).map((c: any) => c.categoryId),
+          categoryNames:   (s.categories ?? []).map((c: any) => c.categoryName),
+          itemEndDate:     s.itemEndDate ?? null,
+          thumbnailUrl:    (s.thumbnailImages ?? [])[0]?.imageUrl ?? "",
+          rawSummary:      s,
+        }));
+
+        const count = await upsertGearListings(items);
+        totalUpserted += count;
+        // Pace requests to avoid rate limiting
+        await new Promise(r => setTimeout(r, 1000));
+      } catch (err) {
+        console.error(`eBay search "${query}" error:`, err);
+      }
+    }
+    // Mark old listings as expired
+    const expired = await markExpiredGearListings();
+    if (expired) console.log(`Marked ${expired} gear listings as expired`);
+
+    await logGearFetch("browse_search", totalUpserted);
+    console.log(`eBay gear fetch complete: ${totalUpserted} items upserted`);
+  } catch (err) {
+    console.error("eBay gear fetch failed:", err);
+    await logGearFetch("browse_search", totalUpserted, String(err));
+  }
+  return totalUpserted;
+}
+
+async function fetchGearDetails(): Promise<number> {
+  if (!ebayClientId || !ebayClientSecret) return 0;
+  let detailed = 0;
+  try {
+    const token = await getEbayToken();
+    const items = await getGearNeedingDetail(50);
+    if (!items.length) return 0;
+    console.log(`Fetching details for ${items.length} gear listings…`);
+
+    for (const item of items) {
+      try {
+        const r = await fetch(`https://api.ebay.com/buy/browse/v1/item/${item.itemId}`, {
+          headers: { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" },
+        });
+        if (!r.ok) {
+          console.error(`eBay getItem ${item.itemId} failed: ${r.status}`);
+          continue;
+        }
+        const d = await r.json() as any;
+        const detailHtml = d.description ?? "";
+        const allImages = (d.additionalImages ?? []).map((img: any) => img.imageUrl).filter(Boolean);
+        if (d.image?.imageUrl) allImages.unshift(d.image.imageUrl);
+        const specifics: Record<string, string> = {};
+        for (const nv of (d.localizedAspects ?? [])) {
+          if (nv.name && nv.value) specifics[nv.name] = nv.value;
+        }
+        await updateGearDetail(item.itemId, detailHtml, allImages, specifics);
+        detailed++;
+        // ~17 seconds between calls to stay well within 5000/day
+        await new Promise(r => setTimeout(r, 2000));
+      } catch (err) {
+        console.error(`eBay detail ${item.itemId} error:`, err);
+      }
+    }
+    await logGearFetch("item_detail", detailed);
+    console.log(`eBay detail fetch complete: ${detailed} items detailed`);
+  } catch (err) {
+    console.error("eBay detail fetch failed:", err);
+    await logGearFetch("item_detail", detailed, String(err));
+  }
+  return detailed;
+}
+
+// Schedule: hourly gear fetch (keeps prices/bids current) + detail worker every 30 min
+function startGearSchedule() {
+  if (!ebayClientId || !ebayClientSecret) {
+    console.log("eBay gear schedule not started — no credentials");
+    return;
+  }
+  // Initial fetch after 10s delay
+  setTimeout(() => {
+    fetchEbayGearListings().then(() => fetchGearDetails());
+  }, 10000);
+
+  // Hourly fetch — upserts update price + bid_count for existing listings
+  setInterval(() => {
+    fetchEbayGearListings();
+  }, 60 * 60 * 1000);
+
+  // Detail worker every 30 minutes
+  setInterval(() => {
+    fetchGearDetails();
+  }, 30 * 60 * 1000);
+}
+
+// GET /api/gear — public gear listings
+app.get("/api/gear", async (_req, res) => {
+  try {
+    const minPrice = parseFloat(_req.query.min_price as string) || 100;
+    const limit    = Math.min(parseInt(_req.query.limit as string) || 200, 500);
+    const offset   = parseInt(_req.query.offset as string) || 0;
+    res.setHeader("Cache-Control", "public, max-age=300"); // 5 min
+    const { items, total } = await getGearListings(minPrice, limit, offset);
+    res.json({ items, total });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/gear/stats — admin stats
+app.get("/api/gear/stats", async (_req, res) => {
+  try {
+    const stats = await getGearStats();
+    res.json(stats);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/admin/gear/fetch — manual trigger for admin
+app.post("/api/admin/gear/fetch", express.json(), async (req, res) => {
+  const userId = getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  res.json({ ok: true, started: true });
+  fetchEbayGearListings().then(() => fetchGearDetails());
+});
+
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Discogs search API listening on port ${PORT}`);
-  if (process.env.APP_DB_URL) startFreshSyncSchedule();
+  if (process.env.APP_DB_URL) {
+    startFreshSyncSchedule();
+    startGearSchedule();
+  }
 });

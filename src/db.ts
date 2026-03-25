@@ -135,6 +135,50 @@ export async function initDb() {
   // Migration: add columns if missing on existing tables
   await getPool().query(`ALTER TABLE fresh_releases ADD COLUMN IF NOT EXISTS release_group_mbid TEXT`);
   await getPool().query(`ALTER TABLE fresh_releases ADD COLUMN IF NOT EXISTS artist_mbids TEXT[]`);
+
+  // ── Gear listings (eBay vintage electronics) ────────────────────────────
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS gear_listings (
+      item_id         TEXT PRIMARY KEY,
+      title           TEXT NOT NULL,
+      price           NUMERIC(10,2) NOT NULL,
+      currency        TEXT DEFAULT 'USD',
+      condition       TEXT,
+      image_url       TEXT,
+      item_url        TEXT,
+      location_city   TEXT,
+      location_state  TEXT,
+      location_country TEXT,
+      seller_username TEXT,
+      seller_feedback INTEGER,
+      buying_options  TEXT[],
+      bid_count       INTEGER DEFAULT 0,
+      categories      TEXT[],
+      category_names  TEXT[],
+      item_end_date   TIMESTAMPTZ,
+      detail_html     TEXT,
+      all_images      TEXT[],
+      item_specifics  JSONB,
+      thumbnail_url   TEXT,
+      raw_summary     JSONB,
+      fetched_at      TIMESTAMPTZ DEFAULT NOW(),
+      detailed_at     TIMESTAMPTZ,
+      expired         BOOLEAN DEFAULT false
+    )
+  `);
+  await getPool().query(`
+    CREATE INDEX IF NOT EXISTS gear_listings_bids_price_idx ON gear_listings (bid_count DESC, price DESC) WHERE NOT expired
+  `);
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS gear_fetch_log (
+      id          SERIAL PRIMARY KEY,
+      fetch_type  TEXT NOT NULL,
+      item_count  INTEGER DEFAULT 0,
+      error       TEXT,
+      started_at  TIMESTAMPTZ DEFAULT NOW(),
+      finished_at TIMESTAMPTZ
+    )
+  `);
 }
 
 export async function saveSearch(clerkUserId: string, params: Record<string, string>): Promise<void> {
@@ -934,4 +978,111 @@ export async function backfillInterestSignals(): Promise<{ collection: number; w
     wantCount++;
   }
   return { collection: collCount, wantlist: wantCount };
+}
+
+// ── Gear listings (eBay) ────────────────────────────────────────────────
+
+export async function upsertGearListings(items: Array<{
+  itemId: string; title: string; price: number; currency: string;
+  condition?: string; imageUrl?: string; itemUrl?: string;
+  locationCity?: string; locationState?: string; locationCountry?: string;
+  sellerUsername?: string; sellerFeedback?: number;
+  buyingOptions?: string[]; bidCount?: number;
+  categories?: string[]; categoryNames?: string[];
+  itemEndDate?: string; thumbnailUrl?: string; rawSummary?: object;
+}>): Promise<number> {
+  let count = 0;
+  for (const item of items) {
+    await getPool().query(
+      `INSERT INTO gear_listings (item_id, title, price, currency, condition, image_url, item_url,
+        location_city, location_state, location_country, seller_username, seller_feedback,
+        buying_options, bid_count, categories, category_names, item_end_date, thumbnail_url, raw_summary, fetched_at, expired)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW(),false)
+       ON CONFLICT (item_id) DO UPDATE SET
+         title=$2, price=$3, currency=$4, condition=$5, image_url=$6, item_url=$7,
+         location_city=$8, location_state=$9, location_country=$10, seller_username=$11,
+         seller_feedback=$12, buying_options=$13, bid_count=$14, categories=$15,
+         category_names=$16, item_end_date=$17, thumbnail_url=$18, raw_summary=$19,
+         fetched_at=NOW(), expired=false`,
+      [item.itemId, item.title, item.price, item.currency,
+       item.condition ?? null, item.imageUrl ?? null, item.itemUrl ?? null,
+       item.locationCity ?? null, item.locationState ?? null, item.locationCountry ?? null,
+       item.sellerUsername ?? null, item.sellerFeedback ?? null,
+       item.buyingOptions ?? [], item.bidCount ?? 0,
+       item.categories ?? [], item.categoryNames ?? [],
+       item.itemEndDate ?? null, item.thumbnailUrl ?? null,
+       JSON.stringify(item.rawSummary ?? {})]
+    );
+    count++;
+  }
+  return count;
+}
+
+export async function updateGearDetail(itemId: string, detailHtml: string, allImages: string[], itemSpecifics: object): Promise<void> {
+  await getPool().query(
+    `UPDATE gear_listings SET detail_html=$2, all_images=$3, item_specifics=$4, detailed_at=NOW() WHERE item_id=$1`,
+    [itemId, detailHtml, allImages, JSON.stringify(itemSpecifics)]
+  );
+}
+
+export async function getGearNeedingDetail(limit: number = 20): Promise<Array<{ itemId: string; price: number }>> {
+  const r = await getPool().query(
+    `SELECT item_id, price FROM gear_listings
+     WHERE detailed_at IS NULL AND NOT expired
+     ORDER BY bid_count DESC, price DESC LIMIT $1`,
+    [limit]
+  );
+  return r.rows.map(row => ({ itemId: row.item_id, price: row.price }));
+}
+
+export async function getGearListings(minPrice: number = 100, limit: number = 200, offset: number = 0): Promise<{ items: any[]; total: number }> {
+  const countR = await getPool().query(
+    `SELECT COUNT(*)::int AS cnt FROM gear_listings WHERE price >= $1 AND NOT expired`,
+    [minPrice]
+  );
+  const total = countR.rows[0]?.cnt ?? 0;
+  const r = await getPool().query(
+    `SELECT item_id, title, price, currency, condition, image_url, item_url,
+       location_city, location_state, location_country,
+       seller_username, seller_feedback, buying_options, bid_count,
+       categories, category_names, item_end_date,
+       detail_html, all_images, item_specifics, thumbnail_url,
+       fetched_at, detailed_at
+     FROM gear_listings
+     WHERE price >= $1 AND NOT expired
+     ORDER BY bid_count DESC, price DESC
+     LIMIT $2 OFFSET $3`,
+    [minPrice, limit, offset]
+  );
+  return { items: r.rows, total };
+}
+
+export async function markExpiredGearListings(): Promise<number> {
+  const r = await getPool().query(
+    `UPDATE gear_listings SET expired = true
+     WHERE NOT expired AND fetched_at < NOW() - INTERVAL '3 days'`
+  );
+  return r.rowCount ?? 0;
+}
+
+export async function getGearStats(): Promise<{ total: number; detailed: number; lastFetch: string | null }> {
+  const r = await getPool().query(
+    `SELECT COUNT(*)::int AS total,
+       COUNT(detailed_at)::int AS detailed,
+       MAX(fetched_at) AS last_fetch
+     FROM gear_listings WHERE NOT expired`
+  );
+  return {
+    total: r.rows[0]?.total ?? 0,
+    detailed: r.rows[0]?.detailed ?? 0,
+    lastFetch: r.rows[0]?.last_fetch ?? null,
+  };
+}
+
+export async function logGearFetch(fetchType: string, itemCount: number, error?: string): Promise<void> {
+  await getPool().query(
+    `INSERT INTO gear_fetch_log (fetch_type, item_count, error, finished_at)
+     VALUES ($1, $2, $3, NOW())`,
+    [fetchType, itemCount, error ?? null]
+  );
 }

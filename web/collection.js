@@ -52,16 +52,17 @@ function switchView(view, skipPushState = false) {
   const searchView = document.getElementById("search-view");
   const dropsView  = document.getElementById("drops-view");
   const liveView   = document.getElementById("live-view");
+  const gearView   = document.getElementById("gear-view");
   const infoView   = document.getElementById("info-view");
   if (!skipPushState) {
-    if (view === "drops" || view === "live" || view === "collection" || view === "wantlist" || view === "info" || view === "wanted") {
+    if (view === "drops" || view === "live" || view === "gear" || view === "collection" || view === "wantlist" || view === "info" || view === "wanted") {
       history.pushState({ view }, "", "?view=" + view);
     } else {
       history.pushState({}, "", location.pathname);
     }
   }
   if (typeof gtag === "function") {
-    const titles = { drops: "Drops", live: "Live", info: "Info", collection: "Collection", wantlist: "Wantlist", wanted: "Wants", search: "Search" };
+    const titles = { drops: "Drops", live: "Live", gear: "Gear", info: "Info", collection: "Collection", wantlist: "Wantlist", wanted: "Wants", search: "Search" };
     gtag("event", "page_view", {
       page_location: window.location.href,
       page_path:     window.location.pathname + window.location.search,
@@ -71,6 +72,7 @@ function switchView(view, skipPushState = false) {
   if (searchView) searchView.style.display = "none";
   if (dropsView)  dropsView.style.display  = "none";
   if (liveView)   liveView.style.display   = "none";
+  if (gearView)   gearView.style.display   = "none";
   if (infoView)   infoView.style.display   = "none";
 
   const mainForm    = document.getElementById("main-search-form");
@@ -78,7 +80,13 @@ function switchView(view, skipPushState = false) {
   const cwInput     = document.getElementById("cw-query");
   const wantedWrap  = document.getElementById("wanted-search-wrap");
 
-  if (view === "drops") {
+  if (view === "gear") {
+    if (gearView) gearView.style.display = "block";
+    if (mainForm) mainForm.style.display = "none";
+    if (cwWrap) cwWrap.style.display = "none";
+    if (wantedWrap) wantedWrap.style.display = "none";
+    loadGearListings();
+  } else if (view === "drops") {
     if (dropsView) dropsView.style.display = "block";
     if (mainForm) mainForm.style.display = "";
     if (cwWrap) cwWrap.style.display = "none";

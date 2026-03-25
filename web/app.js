@@ -15,7 +15,7 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
 (async function () {
   const p = new URLSearchParams(location.search);
   const view = p.get("view");
-  if (view === "drops" || view === "live" || view === "info") {
+  if (view === "drops" || view === "live" || view === "gear" || view === "info") {
     switchView(view, true);
     // Restore live search from shared URL
     if (view === "live" && (p.get("la") || p.get("lc") || p.get("lg"))) {
@@ -47,7 +47,7 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
 window.addEventListener("popstate", () => {
   const p = new URLSearchParams(location.search);
   const view = p.get("view");
-  if (view === "drops" || view === "live" || view === "collection" || view === "wantlist" || view === "info" || view === "wanted") {
+  if (view === "drops" || view === "live" || view === "gear" || view === "collection" || view === "wantlist" || view === "info" || view === "wanted") {
     switchView(view, true);
   } else {
     switchView("search", true);
