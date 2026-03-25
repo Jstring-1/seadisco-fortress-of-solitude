@@ -695,14 +695,19 @@ app.post("/api/admin/sync-all", async (req, res) => {
   })();
 });
 
-// POST /api/admin/sync-stop — abort all running syncs
+// POST /api/admin/sync-stop — abort all running syncs and reset statuses
 app.post("/api/admin/sync-stop", async (req, res) => {
   const userId = getClerkUserId(req);
   const adminId = process.env.ADMIN_CLERK_ID ?? "";
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   _syncAbort = true;
-  console.log("Admin: sync abort requested");
-  res.json({ ok: true, message: "Abort signal sent — running syncs will stop at next page" });
+  // Reset all "syncing" statuses to "stopped"
+  const { getPool } = await import("./db.js");
+  await getPool().query(
+    `UPDATE user_tokens SET sync_status = 'stopped', sync_error = 'Stopped by admin' WHERE sync_status = 'syncing'`
+  );
+  console.log("Admin: sync abort requested, all syncing statuses reset");
+  res.json({ ok: true, message: "All syncs stopped and statuses reset." });
 });
 
 // GET /api/admin/interests — interest signal stats, admin only
