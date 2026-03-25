@@ -786,6 +786,20 @@ a.drop-nomatch-tag:hover { border-color: var(--accent); color: var(--accent); }
   .drop-nomatch-tags { justify-content: center; }
 }
 
+/* Mobile pill readability */
+@media (max-width: 600px) {
+  .pill {
+    font-size: 0.78rem;
+    padding: 0.3rem 0.75rem;
+  }
+  .feed-pills,
+  .fresh-tag-cloud,
+  .cw-folder-cloud,
+  .live-recent-pills {
+    gap: 0.45rem;
+  }
+}
+
 /* Fresh grid responsive — now handled by .card-grid media queries */
 
 main, #drops-view {
