@@ -571,6 +571,31 @@ a.fresh-card-search-link:hover {
   opacity: 1;
 }
 
+/* ── Gear tab ──────────────────────────────────────────────────────────── */
+.gear-header {
+  margin-bottom: 0.75rem;
+}
+.gear-price-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+.gear-card {
+  text-decoration: none;
+  color: inherit;
+  border-bottom: 3px solid #b8860b;
+}
+.gear-card:hover {
+  border-color: #daa520;
+}
+.gear-price {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #daa520;
+  margin: 0.15rem 0;
+}
+
 /* Genre/style selects + tag text input on drops page */
 .fresh-filter-select,
 .fresh-filter-input {

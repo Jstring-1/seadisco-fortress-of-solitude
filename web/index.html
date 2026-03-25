@@ -73,6 +73,7 @@
         <button class="main-nav-tab active" data-view="search" onclick="switchView('search')">Search</button>
         <button class="main-nav-tab" data-view="drops" onclick="switchView('drops')">Drops</button>
         <button class="main-nav-tab" data-view="live" onclick="switchView('live')">Live</button>
+        <button class="main-nav-tab nav-disabled" data-view="gear" onclick="return false" title="Coming Soon" style="opacity:0.4;cursor:default">Gear</button>
         <button class="main-nav-tab" data-view="info" onclick="switchView('info')">Info</button>
         <button class="main-nav-tab nav-disabled" data-view="collection" onclick="switchView('collection')" title="Login to Access">Collection</button>
         <button class="main-nav-tab nav-disabled" data-view="wantlist" onclick="switchView('wantlist')" title="Login to Access">Wantlist</button>
@@ -344,6 +345,22 @@
   <div id="live-results"></div>
 </div>
 
+<div id="gear-view" style="display:none">
+  <div class="gear-header content-narrow">
+    <div class="gear-price-pills">
+      <span class="pill gear-price-pill active" data-min="100" onclick="setGearPriceFilter(100)">$100+</span>
+      <span class="pill gear-price-pill" data-min="200" onclick="setGearPriceFilter(200)">$200+</span>
+      <span class="pill gear-price-pill" data-min="500" onclick="setGearPriceFilter(500)">$500+</span>
+      <span class="pill gear-price-pill" data-min="1000" onclick="setGearPriceFilter(1000)">$1,000+</span>
+    </div>
+    <div id="gear-status" style="font-size:0.78rem;color:#555;margin-top:0.3rem"></div>
+  </div>
+  <div id="gear-results" class="card-grid"></div>
+  <div style="text-align:center;margin:1.5rem 0">
+    <button id="gear-load-more" onclick="loadMoreGear()" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--accent);padding:0.5rem 1.5rem;cursor:pointer;font-size:0.82rem" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">Load more</button>
+  </div>
+</div>
+
 <div id="info-view" class="content-narrow" style="display:none">
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">How SeaDisco Works</h2>
 
@@ -357,6 +374,9 @@
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Live</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">Search upcoming concerts and events by artist, city/zip code, or genre. Results pull from both <a href="https://www.ticketmaster.com" target="_blank" rel="noopener" style="color:#5a9aaa">Ticketmaster</a> and <a href="https://www.bandsintown.com" target="_blank" rel="noopener" style="color:#5a9aaa">Bandsintown</a>, merged and deduped. Artist searches include a Bandsintown photo when available. Each listing links to Google for tickets. Your last searched city is saved for convenience.</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Gear</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">Browse vintage hi-fi and audio equipment listings from eBay, updated daily. Filter by price tier — $100+, $200+, $500+, or $1,000+ — and scroll through receivers, amplifiers, turntables, speakers, and more. Each card links directly to the eBay listing.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Collection, Wantlist &amp; Wants</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Add your Discogs token to sync your full collection and wantlist — any size. Sync runs in the background and refreshes automatically every 6 hours. Both tabs have dedicated filters (artist, release, label, year, genre, style, format) with <strong style="color:#ccc">+</strong> (AND), <strong style="color:#ccc">|</strong> (OR), and <strong style="color:#ccc">-</strong> (exclude) operators. Green <strong style="color:#4caf50">✓</strong> and red <strong style="color:#c0392b">♡</strong> badges mark owned and wanted items across all results.</p>
@@ -440,7 +460,8 @@
 <script src="/modal.js?v=20260324d"></script>
 <script src="/drops.js?v=20260324d"></script>
 <script src="/live.js?v=20260324d"></script>
-<script src="/app.js?v=20260324d"></script>
+<script src="/gear.js?v=20260324e"></script>
+<script src="/app.js?v=20260324e"></script>
 
 </body>
 </html>
