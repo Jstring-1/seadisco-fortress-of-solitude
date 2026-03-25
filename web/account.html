@@ -108,6 +108,7 @@
         <div style="display:flex;align-items:center;gap:0.7rem;flex-wrap:wrap">
           <button id="account-sync-btn" onclick="accountSync()" style="font-size:0.82rem;padding:0.3rem 0.9rem;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-weight:600">Sync Now</button>
           <button onclick="adminSyncAll()" id="admin-sync-all-btn" style="display:none;font-size:0.78rem;padding:0.3rem 0.9rem;background:#2a2a2a;color:var(--fg);border:1px solid #444;border-radius:5px;cursor:pointer;font-weight:600">Sync All Users</button>
+          <button onclick="adminSyncStop()" id="admin-sync-stop-btn" style="display:none;font-size:0.78rem;padding:0.3rem 0.9rem;background:#6b1a1a;color:#fff;border:1px solid #933;border-radius:5px;cursor:pointer;font-weight:600">Stop All Syncs</button>
         </div>
         <div id="admin-sync-all-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.35rem"></div>
       </div>
@@ -615,7 +616,8 @@ async function loadAdminInbox() {
     if (!r.ok) return; // not admin — stay hidden
     const { items } = await r.json();
     document.getElementById("admin-inbox").style.display = "block";
-    document.getElementById("admin-sync-all-btn").style.display = "inline-block"; // reveal for admin only
+    document.getElementById("admin-sync-all-btn").style.display = "inline-block";
+    document.getElementById("admin-sync-stop-btn").style.display = "inline-block";
     loadAdminSearches();   // also load global search pool for admin
     loadInterestStats();   // also load interest signal stats for admin
     loadAdminSyncStatus(); // also load per-user sync status for admin
@@ -815,6 +817,26 @@ async function adminSyncAll() {
   } finally {
     btn.disabled = false;
     btn.textContent = "Sync All Users";
+  }
+}
+
+async function adminSyncStop() {
+  const btn = document.getElementById("admin-sync-stop-btn");
+  const statusEl = document.getElementById("admin-sync-all-status");
+  btn.disabled = true;
+  btn.textContent = "Stopping…";
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const r = await fetch("/api/admin/sync-stop", {
+      method: "POST",
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
+    }).then(r => r.json());
+    statusEl.textContent = r.message || "Stop signal sent.";
+  } catch {
+    statusEl.textContent = "Stop request failed.";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Stop All Syncs";
   }
 }
 

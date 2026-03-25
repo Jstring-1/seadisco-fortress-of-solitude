@@ -173,6 +173,9 @@ app.delete("/api/user/account", async (req, res) => {
   res.json({ ok: true });
 });
 
+// Abort flag for stopping all syncs
+let _syncAbort = false;
+
 // Background sync worker — runs detached from the HTTP request
 async function runBackgroundSync(userId: string, token: string, username: string, syncCollection: boolean, syncWantlist: boolean) {
   const headers = { "Authorization": `Discogs token=${token}`, "User-Agent": "SeaDisco/1.0" };
@@ -238,6 +241,7 @@ async function runBackgroundSync(userId: string, token: string, username: string
 
     if (syncCollection) {
       for (let page = 1; ; page++) {
+        if (_syncAbort) { console.log(`Sync ${username}: aborted`); await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted"); return; }
         if (page > 1) await delay(3000); // 3s pacing — leaves headroom for user searches
         const r = await fetchWithRetry(
           `https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=100&page=${page}`
@@ -276,6 +280,7 @@ async function runBackgroundSync(userId: string, token: string, username: string
 
     if (syncWantlist) {
       for (let page = 1; ; page++) {
+        if (_syncAbort) { console.log(`Sync ${username}: aborted`); await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted"); return; }
         if (page > 1) await delay(3000);
         const r = await fetchWithRetry(
           `https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=100&page=${page}`
@@ -674,11 +679,13 @@ app.post("/api/admin/sync-all", async (req, res) => {
   const userId = getClerkUserId(req);
   const adminId = process.env.ADMIN_CLERK_ID ?? "";
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  _syncAbort = false; // clear any previous abort
   const users = await getAllUsersForSync();
   res.json({ ok: true, queued: users.length });
   // Run syncs sequentially so server load and Discogs API stay manageable
   (async () => {
     for (const user of users) {
+      if (_syncAbort) { console.log("Sync-all: aborted, skipping remaining users"); break; }
       try {
         await runBackgroundSync(user.clerkUserId, user.token, user.username, true, true);
       } catch (err) {
@@ -686,6 +693,16 @@ app.post("/api/admin/sync-all", async (req, res) => {
       }
     }
   })();
+});
+
+// POST /api/admin/sync-stop — abort all running syncs
+app.post("/api/admin/sync-stop", async (req, res) => {
+  const userId = getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  _syncAbort = true;
+  console.log("Admin: sync abort requested");
+  res.json({ ok: true, message: "Abort signal sent — running syncs will stop at next page" });
 });
 
 // GET /api/admin/interests — interest signal stats, admin only
