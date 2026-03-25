@@ -404,6 +404,7 @@ body {
 
 /* ── Unified pill base ────────────────────────────────────────────────── */
 .pill {
+  display: inline-block;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 20px;
@@ -414,6 +415,7 @@ body {
   white-space: nowrap;
   transition: border-color 0.15s, color 0.15s, background 0.15s;
   user-select: none;
+  -webkit-appearance: none;
 }
 .pill:hover { border-color: var(--accent-dim); color: #bbb; }
 .pill.active { border-color: var(--accent); color: var(--accent); background: #0a2028; }
