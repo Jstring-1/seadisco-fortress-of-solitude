@@ -1910,6 +1910,16 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 #signed-out-section { display: none; }
 .user-email { color: #aaa; font-size: 0.85rem; margin-bottom: 1.2rem; }
 .section-divider { border: none; border-top: 1px solid #333; margin: 1.5rem 0; }
+.admin-pool-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 1.5rem;
+}
+@media (max-width: 640px) {
+  .admin-pool-grid {
+    grid-template-columns: 1fr;
+  }
+}
 
 /* ── Consistent footer ── */
 footer {
