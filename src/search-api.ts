@@ -179,15 +179,26 @@ async function runBackgroundSync(userId: string, token: string, username: string
   const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
   let totalSynced = 0;
 
-  // Fetch with retry — up to 3 attempts with 10s backoff on non-OK or network error
-  async function fetchWithRetry(url: string, retries = 3): Promise<Response> {
+  // Fetch with retry — up to 5 attempts with exponential backoff, respects Discogs rate limit headers
+  async function fetchWithRetry(url: string, retries = 5): Promise<Response> {
+    const backoffs = [15000, 30000, 60000, 90000, 120000];
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         const r = await fetch(url, { headers });
-        if (r.ok) return r;
+        if (r.ok) {
+          // Check remaining rate limit — if low, pause proactively
+          const remaining = parseInt(r.headers.get("x-discogs-ratelimit-remaining") ?? "10");
+          if (remaining <= 1) {
+            console.log(`Sync ${username}: rate limit nearly exhausted (${remaining} left), pausing 30s`);
+            await delay(30000);
+          } else if (remaining <= 5) {
+            await delay(3000);
+          }
+          return r;
+        }
         if (r.status === 429 || r.status >= 500) {
-          const waitMs = attempt * 10000;
-          console.warn(`Sync ${username}: HTTP ${r.status} on attempt ${attempt}, retrying in ${waitMs / 1000}s`);
+          const waitMs = backoffs[Math.min(attempt - 1, backoffs.length - 1)];
+          console.warn(`Sync ${username}: HTTP ${r.status} on attempt ${attempt}/${retries}, retrying in ${waitMs / 1000}s`);
           if (attempt < retries) await delay(waitMs);
           else throw new Error(`HTTP ${r.status} after ${retries} attempts`);
         } else {
@@ -195,8 +206,9 @@ async function runBackgroundSync(userId: string, token: string, username: string
         }
       } catch (err) {
         if (attempt === retries) throw err;
-        console.warn(`Sync ${username}: fetch error attempt ${attempt}:`, err);
-        await delay(attempt * 10000);
+        const waitMs = backoffs[Math.min(attempt - 1, backoffs.length - 1)];
+        console.warn(`Sync ${username}: fetch error attempt ${attempt}/${retries}:`, err);
+        await delay(waitMs);
       }
     }
     throw new Error("fetchWithRetry exhausted");
@@ -226,7 +238,7 @@ async function runBackgroundSync(userId: string, token: string, username: string
 
     if (syncCollection) {
       for (let page = 1; ; page++) {
-        if (page > 1) await delay(2000); // 2s pacing — leaves headroom for user searches
+        if (page > 1) await delay(3000); // 3s pacing — leaves headroom for user searches
         const r = await fetchWithRetry(
           `https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=100&page=${page}`
         );
@@ -264,7 +276,7 @@ async function runBackgroundSync(userId: string, token: string, username: string
 
     if (syncWantlist) {
       for (let page = 1; ; page++) {
-        if (page > 1) await delay(2000);
+        if (page > 1) await delay(3000);
         const r = await fetchWithRetry(
           `https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=100&page=${page}`
         );
