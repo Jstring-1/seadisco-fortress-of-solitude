@@ -782,10 +782,12 @@ async function loadAdminSyncStatus() {
       const statusText  = isSyncing ? `Syncing… ${u.syncProgress.toLocaleString()} / ${u.syncTotal.toLocaleString()} (${pct}%)`
                         : isError   ? `Error: ${u.syncError}`
                         : u.syncStatus === "complete" ? `Complete${countStr}` : `Idle${countStr}`;
+      const syncBtn = isSyncing ? '' : `<button onclick="adminSyncUser('${u.username}')" style="font-size:0.72rem;padding:0.15rem 0.5rem;background:#2a2a2a;color:var(--fg);border:1px solid #444;border-radius:4px;cursor:pointer">Sync</button>`;
       return `<div style="padding:0.45rem 0;border-bottom:1px solid #1a1a1a;display:grid;grid-template-columns:140px 1fr 1fr auto;gap:0.5rem 1rem;align-items:baseline;font-size:0.8rem">
         <span style="color:var(--fg);font-weight:600">@${u.username}</span>
         <span style="color:${statusColor}">${statusText}</span>
         <span style="color:#555">Coll: ${fmtTime(u.collectionSyncedAt)} · Want: ${fmtTime(u.wantlistSyncedAt)}</span>
+        <span>${syncBtn}</span>
       </div>`;
     }).join("");
 
@@ -818,6 +820,19 @@ async function adminSyncAll() {
     btn.disabled = false;
     btn.textContent = "Sync All Users";
   }
+}
+
+async function adminSyncUser(username) {
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    await fetch("/api/admin/sync-user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
+      body: JSON.stringify({ username })
+    });
+    loadAdminSyncStatus();
+    if (!_adminSyncPoll) _adminSyncPoll = setInterval(loadAdminSyncStatus, 5000);
+  } catch { alert("Sync failed for " + username); }
 }
 
 async function adminSyncStop() {

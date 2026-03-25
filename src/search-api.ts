@@ -242,7 +242,7 @@ async function runBackgroundSync(userId: string, token: string, username: string
     if (syncCollection) {
       for (let page = 1; ; page++) {
         if (_syncAbort) { console.log(`Sync ${username}: aborted`); await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted"); return; }
-        if (page > 1) await delay(3000); // 3s pacing — leaves headroom for user searches
+        if (page > 1) await delay(1200); // 1.2s pacing — Discogs allows 60/min
         const r = await fetchWithRetry(
           `https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=100&page=${page}`
         );
@@ -281,7 +281,7 @@ async function runBackgroundSync(userId: string, token: string, username: string
     if (syncWantlist) {
       for (let page = 1; ; page++) {
         if (_syncAbort) { console.log(`Sync ${username}: aborted`); await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted"); return; }
-        if (page > 1) await delay(3000);
+        if (page > 1) await delay(1200);
         const r = await fetchWithRetry(
           `https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=100&page=${page}`
         );
@@ -691,6 +691,27 @@ app.post("/api/admin/sync-all", async (req, res) => {
       } catch (err) {
         console.error(`Sync-all error for ${user.username}:`, err);
       }
+    }
+  })();
+});
+
+// POST /api/admin/sync-user — trigger background sync for a single user, admin only
+app.post("/api/admin/sync-user", async (req, res) => {
+  const userId = getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  const { username } = req.body as { username: string };
+  if (!username) { res.status(400).json({ error: "username required" }); return; }
+  const users = await getAllUsersForSync();
+  const user = users.find(u => u.username === username);
+  if (!user) { res.status(404).json({ error: "User not found" }); return; }
+  _syncAbort = false;
+  res.json({ ok: true, username });
+  (async () => {
+    try {
+      await runBackgroundSync(user.clerkUserId, user.token, user.username, true, true);
+    } catch (err) {
+      console.error(`Sync-user error for ${user.username}:`, err);
     }
   })();
 });
