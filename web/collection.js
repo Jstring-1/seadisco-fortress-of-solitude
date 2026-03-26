@@ -496,11 +496,20 @@ async function triggerSync(type = "both") {
         const sr = await apiFetch("/api/user/sync-status");
         const sd = await sr.json();
         if (sd.syncStatus === "syncing") {
-          const pct = sd.syncTotal ? Math.round((sd.syncProgress / sd.syncTotal) * 100) : 0;
-          if (el) el.textContent = `Syncing… ${sd.syncProgress.toLocaleString()} / ${sd.syncTotal.toLocaleString()} (${pct}%)`;
+          if (sd.syncTotal) {
+            const pct = Math.round((sd.syncProgress / sd.syncTotal) * 100);
+            if (el) el.textContent = `Syncing… ${sd.syncProgress.toLocaleString()} / ${sd.syncTotal.toLocaleString()} (${pct}%)`;
+          } else {
+            if (el) el.textContent = sd.syncProgress > 0 ? `Syncing… ${sd.syncProgress.toLocaleString()} new items` : `Syncing…`;
+          }
         } else {
           clearInterval(_mainSyncPoll); _mainSyncPoll = null;
-          if (el) el.innerHTML = `Sync complete &nbsp;·&nbsp; <a href="#" onclick="triggerSync('${type}');return false;" style="color:var(--accent);text-decoration:none">Sync now</a>`;
+          const completeMsg = sd.syncTotal
+            ? `Synced ${sd.syncProgress.toLocaleString()} items`
+            : sd.syncProgress > 0
+              ? `${sd.syncProgress.toLocaleString()} new items added`
+              : `Up to date`;
+          if (el) el.innerHTML = `${completeMsg} &nbsp;·&nbsp; <a href="#" onclick="triggerSync('${type}');return false;" style="color:var(--accent);text-decoration:none">Sync now</a>`;
           await loadDiscogsIds();
           if (_activeTab === "collection") loadCollectionTab(1);
           else if (_activeTab === "wantlist") loadWantlistTab(1);

@@ -270,8 +270,9 @@ async function runBackgroundSync(userId: string, token: string, username: string
     if (isIncrementalCollection) console.log(`Sync ${username}: incremental collection sync — last item added ${latestCollectionDate!.toISOString()}`);
     if (isIncrementalWantlist) console.log(`Sync ${username}: incremental wantlist sync — last item added ${latestWantlistDate!.toISOString()}`);
 
+    const isIncremental = isIncrementalCollection || isIncrementalWantlist;
     console.log(`Sync ${username}: estimated total = ${estimatedTotal}`);
-    await updateSyncProgress(userId, "syncing", 0, estimatedTotal);
+    await updateSyncProgress(userId, "syncing", 0, isIncremental ? 0 : estimatedTotal);
 
     if (syncCollection) {
       let hitExisting = false;
@@ -381,8 +382,14 @@ async function runBackgroundSync(userId: string, token: string, username: string
       await updateWantlistSyncedAt(userId);
     }
 
-    await updateSyncProgress(userId, "complete", totalSynced, estimatedTotal);
-    console.log(`Background sync complete for ${username}: ${totalSynced} items`);
+    if (isIncremental) {
+      // For incremental: store new item count in progress, 0 in total to signal incremental
+      await updateSyncProgress(userId, "complete", totalSynced, 0);
+      console.log(`Incremental sync complete for ${username}: ${totalSynced} new items added`);
+    } else {
+      await updateSyncProgress(userId, "complete", totalSynced, estimatedTotal);
+      console.log(`Full sync complete for ${username}: ${totalSynced} items`);
+    }
   } catch (err) {
     console.error(`Background sync error for ${username}:`, err);
     await updateSyncProgress(userId, "error", totalSynced, 0, String(err));
