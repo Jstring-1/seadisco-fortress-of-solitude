@@ -698,6 +698,12 @@ a.fresh-card-search-link:hover {
 .feed-src-vinyl-eyezz { color: #f44336; }
 .feed-src-techmoan { color: #2196f3; }
 .feed-src-the-vinyl-guide { color: #4caf50; }
+.feed-src-kexp { color: #ff9800; }
+.feed-src-tiny-desk-npr { color: #e91e63; }
+.feed-src-colors { color: #ffeb3b; }
+.feed-src-audiotree { color: #00bcd4; }
+.feed-src-the-needle-drop { color: #ff5722; }
+.feed-src-deep-cuts { color: #7c4dff; }
 
 @media (max-width: 600px) {
   .feed-card { flex-direction: column; }

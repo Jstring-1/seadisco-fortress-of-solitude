@@ -1902,11 +1902,28 @@ const RSS_FEEDS: Array<{ name: string; url: string; category: string }> = [
   { name: "Analog Planet", url: "https://www.analogplanet.com/feed/", category: "gear" },
 ];
 
-const YOUTUBE_CHANNELS: Array<{ name: string; channelId: string }> = [
+const YOUTUBE_CHANNELS: Array<{ name: string; channelId: string; category?: string }> = [
+  // Vinyl & collecting
   { name: "Vinyl Eyezz", channelId: "UCYkG_jJ2L0clu-_fqFfWGbQ" },
-  { name: "Techmoan", channelId: "UC5I2hjZYiW9gZPVkvzM8_Cw" },
   { name: "The Vinyl Guide", channelId: "UCdYYSNnFPIdMuiAaq0pSpTA" },
-  { name: "Analog Planet", channelId: "UCXnnKXr8oSTfZ7Y3R8CGAUQ" },
+  // Gear & audiophile
+  { name: "Techmoan", channelId: "UC5I2hjZYiW9gZPVkvzM8_Cw", category: "gear" },
+  { name: "Analog Planet", channelId: "UCXnnKXr8oSTfZ7Y3R8CGAUQ", category: "gear" },
+  // Live sessions & performances
+  { name: "KEXP", channelId: "UC3I2GFN_F8WudD_2jUZbojA" },
+  { name: "Tiny Desk (NPR)", channelId: "UC4eYXhJI4-7wSWc8UNRwD4A" },
+  { name: "COLORS", channelId: "UC2Qw1dzXDBAZPwS7zm37g8g" },
+  { name: "Audiotree", channelId: "UCelEMf7HHJgUy-6MJPClcXA" },
+  // Reviews
+  { name: "The Needle Drop", channelId: "UCt7fwAhXDy3oNFTAzF2o8Pw", category: "reviews" },
+  { name: "Deep Cuts", channelId: "UCVBp4LmZjEBpzB-6VsFU4cQ", category: "reviews" },
+];
+
+// Keyword searches for fresh music content
+const YOUTUBE_SEARCHES: Array<{ query: string; category: string }> = [
+  { query: "official music video 2026", category: "video" },
+  { query: "new album review 2026", category: "reviews" },
+  { query: "vinyl unboxing haul 2026", category: "video" },
 ];
 
 function decodeHtmlEntities(str: string): string {
@@ -2006,6 +2023,8 @@ async function fetchRssFeeds(): Promise<number> {
 async function fetchYouTubeVideos(): Promise<number> {
   if (!youtubeApiKey) { console.log("YouTube feed skip — no API key"); return 0; }
   let total = 0;
+
+  // Fetch from specific channels
   for (const ch of YOUTUBE_CHANNELS) {
     try {
       const url = `https://www.googleapis.com/youtube/v3/search?key=${youtubeApiKey}&channelId=${ch.channelId}&part=snippet&order=date&maxResults=5&type=video`;
@@ -2020,11 +2039,11 @@ async function fetchYouTubeVideos(): Promise<number> {
         await upsertFeedArticle({
           source: ch.name,
           sourceUrl: `https://www.youtube.com/watch?v=${videoId}`,
-          title: snippet.title?.replace(/&amp;/g, "&").replace(/&#39;/g, "'") ?? "",
+          title: decodeHtmlEntities(snippet.title ?? ""),
           summary: snippet.description?.slice(0, 300) ?? "",
           imageUrl: snippet.thumbnails?.high?.url ?? snippet.thumbnails?.medium?.url ?? "",
           author: snippet.channelTitle ?? ch.name,
-          category: "video",
+          category: ch.category ?? "video",
           contentType: "video",
           publishedAt: snippet.publishedAt ?? undefined,
         });
@@ -2036,6 +2055,40 @@ async function fetchYouTubeVideos(): Promise<number> {
       console.warn(`YouTube ${ch.name} failed:`, err);
     }
   }
+
+  // Keyword searches for fresh music content (last 7 days)
+  const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  for (const search of YOUTUBE_SEARCHES) {
+    try {
+      const url = `https://www.googleapis.com/youtube/v3/search?key=${youtubeApiKey}&q=${encodeURIComponent(search.query)}&part=snippet&order=date&maxResults=10&type=video&publishedAfter=${weekAgo}&videoCategoryId=10`;
+      const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      if (!r.ok) { console.warn(`YouTube search "${search.query}": HTTP ${r.status}`); continue; }
+      const data = await r.json() as any;
+      let count = 0;
+      for (const item of data.items ?? []) {
+        const videoId = item.id?.videoId;
+        if (!videoId) continue;
+        const snippet = item.snippet;
+        await upsertFeedArticle({
+          source: snippet.channelTitle ?? "YouTube",
+          sourceUrl: `https://www.youtube.com/watch?v=${videoId}`,
+          title: decodeHtmlEntities(snippet.title ?? ""),
+          summary: snippet.description?.slice(0, 300) ?? "",
+          imageUrl: snippet.thumbnails?.high?.url ?? snippet.thumbnails?.medium?.url ?? "",
+          author: snippet.channelTitle ?? "",
+          category: search.category,
+          contentType: "video",
+          publishedAt: snippet.publishedAt ?? undefined,
+        });
+        count++;
+      }
+      total += count;
+      console.log(`YouTube search "${search.query}": ${count} videos`);
+    } catch (err) {
+      console.warn(`YouTube search "${search.query}" failed:`, err);
+    }
+  }
+
   return total;
 }
 
@@ -2050,7 +2103,7 @@ function startFeedSchedule() {
   // Initial fetch after 15s
   setTimeout(() => fetchAllFeedContent(), 15000);
   // Refresh every 2 hours
-  setInterval(() => fetchAllFeedContent(), 2 * 60 * 60 * 1000);
+  setInterval(() => fetchAllFeedContent(), 4 * 60 * 60 * 1000); // every 4 hours (YouTube quota: 13 calls × 100 = 1300 units × 6/day = 7800 < 10K limit)
 }
 
 // GET /api/feed — public feed articles

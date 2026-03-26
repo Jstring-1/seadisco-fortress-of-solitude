@@ -20,6 +20,12 @@ const FEED_SOURCE_URLS = {
   "Vinyl Eyezz": "https://www.youtube.com/@VinylEyezz",
   "Techmoan": "https://www.youtube.com/@Techmoan",
   "The Vinyl Guide": "https://www.youtube.com/@TheVinylGuide",
+  "KEXP": "https://www.youtube.com/@kaboretv",
+  "Tiny Desk (NPR)": "https://www.youtube.com/@nprmusic",
+  "COLORS": "https://www.youtube.com/@COLORSxSTUDIOS",
+  "Audiotree": "https://www.youtube.com/@Audiotree",
+  "The Needle Drop": "https://www.youtube.com/@theneedledrop",
+  "Deep Cuts": "https://www.youtube.com/@DeepCutsMusic",
 };
 
 function renderFeedCard(item) {
@@ -35,7 +41,7 @@ function renderFeedCard(item) {
     pubDate = d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   }
 
-  const sourceClass = item.source.toLowerCase().replace(/\s+/g, "-");
+  const sourceClass = item.source.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "");
   const sourceUrl = FEED_SOURCE_URLS[item.source] || "#";
   const catLabel = (item.category || "news").charAt(0).toUpperCase() + (item.category || "news").slice(1);
 
