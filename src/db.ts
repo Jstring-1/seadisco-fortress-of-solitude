@@ -198,6 +198,22 @@ export async function initDb() {
       finished_at TIMESTAMPTZ
     )
   `);
+  // ── User locations (IP geolocation cache) ────────────────────────────────
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_locations (
+      id            SERIAL PRIMARY KEY,
+      ip_address    TEXT NOT NULL UNIQUE,
+      clerk_user_id TEXT,
+      latitude      NUMERIC(9,6),
+      longitude     NUMERIC(9,6),
+      city          TEXT,
+      region        TEXT,
+      country       TEXT,
+      fetched_at    TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS user_locations_clerk_idx ON user_locations (clerk_user_id) WHERE clerk_user_id IS NOT NULL`);
+
   // ── Live events (Ticketmaster upcoming) ─────────────────────────────────
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS live_events (
@@ -431,6 +447,7 @@ export async function deleteUserData(clerkUserId: string): Promise<void> {
   await getPool().query("DELETE FROM search_history WHERE clerk_user_id = $1", [clerkUserId]);
   await getPool().query("DELETE FROM user_collection WHERE clerk_user_id = $1", [clerkUserId]);
   await getPool().query("DELETE FROM user_wantlist   WHERE clerk_user_id = $1", [clerkUserId]);
+  await getPool().query("DELETE FROM user_locations  WHERE clerk_user_id = $1", [clerkUserId]);
 }
 
 export async function getDiscogsUsername(clerkUserId: string): Promise<string | null> {
@@ -1164,7 +1181,7 @@ export async function markExpiredGearListings(): Promise<number> {
 }
 
 // ── Auto-prune stale data ─────────────────────────────────────────────────
-export async function pruneAllStaleData(): Promise<{ interest: number; fresh: number; gear: number; gearLog: number; liveEvents: number }> {
+export async function pruneAllStaleData(): Promise<{ interest: number; fresh: number; gear: number; gearLog: number; liveEvents: number; locations: number }> {
   // Interest signals older than 6 months
   const i = await getPool().query(
     `DELETE FROM interest_signals WHERE recorded_at < NOW() - INTERVAL '6 months'`
@@ -1185,12 +1202,17 @@ export async function pruneAllStaleData(): Promise<{ interest: number; fresh: nu
   const le = await getPool().query(
     `DELETE FROM live_events WHERE event_date ~ '^\\d{4}-\\d{2}-\\d{2}' AND event_date::date < CURRENT_DATE`
   );
+  // Stale location cache (30 days)
+  const loc = await getPool().query(
+    `DELETE FROM user_locations WHERE fetched_at < NOW() - INTERVAL '30 days'`
+  );
   return {
     interest: i.rowCount ?? 0,
     fresh: f.rowCount ?? 0,
     gear: g.rowCount ?? 0,
     gearLog: gl.rowCount ?? 0,
     liveEvents: le.rowCount ?? 0,
+    locations: loc.rowCount ?? 0,
   };
 }
 
@@ -1319,5 +1341,41 @@ export async function pruneLiveEvents(): Promise<number> {
   const r = await getPool().query(
     `DELETE FROM live_events WHERE event_date ~ '^\\d{4}-\\d{2}-\\d{2}' AND event_date::date < CURRENT_DATE`
   );
+  return r.rowCount ?? 0;
+}
+
+// ── User locations (IP geolocation) ──────────────────────────────────────
+
+export async function getLocationByIp(ip: string): Promise<{ latitude: number; longitude: number; city: string; region: string; country: string } | null> {
+  const r = await getPool().query(
+    `SELECT latitude, longitude, city, region, country FROM user_locations
+     WHERE ip_address = $1 AND fetched_at > NOW() - INTERVAL '7 days'`,
+    [ip]
+  );
+  if (!r.rows.length) return null;
+  return {
+    latitude: parseFloat(r.rows[0].latitude),
+    longitude: parseFloat(r.rows[0].longitude),
+    city: r.rows[0].city,
+    region: r.rows[0].region,
+    country: r.rows[0].country,
+  };
+}
+
+export async function upsertLocation(ip: string, clerkUserId: string | null, lat: number, lon: number, city: string, region: string, country: string): Promise<void> {
+  await getPool().query(
+    `INSERT INTO user_locations (ip_address, clerk_user_id, latitude, longitude, city, region, country, fetched_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+     ON CONFLICT (ip_address) DO UPDATE SET
+       clerk_user_id = COALESCE(EXCLUDED.clerk_user_id, user_locations.clerk_user_id),
+       latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude,
+       city = EXCLUDED.city, region = EXCLUDED.region, country = EXCLUDED.country,
+       fetched_at = NOW()`,
+    [ip, clerkUserId, lat, lon, city, region, country]
+  );
+}
+
+export async function pruneLocations(): Promise<number> {
+  const r = await getPool().query(`DELETE FROM user_locations WHERE fetched_at < NOW() - INTERVAL '30 days'`);
   return r.rowCount ?? 0;
 }
