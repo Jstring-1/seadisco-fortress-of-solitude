@@ -124,6 +124,11 @@ async function loadFeedArticles(append = false) {
     const newItems = data.items || [];
     _feedTotal = data.total || 0;
 
+    // Shuffle new items for variety
+    for (let i = newItems.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [newItems[i], newItems[j]] = [newItems[j], newItems[i]];
+    }
     if (append) {
       _feedItems = _feedItems.concat(newItems);
     } else {
