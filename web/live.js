@@ -45,6 +45,8 @@ async function doLiveSearch(append = false) {
   const statusEl  = document.getElementById("live-status");
   const resultsEl = document.getElementById("live-results");
 
+  _hideLiveUpcoming();
+
   if (!append) {
     _livePage = 0;
     _liveTotal = 0;
@@ -256,10 +258,52 @@ function _liveFmtTime(t) {
   } catch { return t; }
 }
 
+// ── Upcoming events (pre-search filler) ──────────────────────────────────
+let _liveUpcomingLoaded = false;
+
+let _liveUpcomingAll = [];
+const LIVE_UPCOMING_PAGE = 8;
+
+async function loadLiveUpcoming() {
+  if (_liveUpcomingLoaded) return;
+  _liveUpcomingLoaded = true;
+  const wrap = document.getElementById("live-upcoming");
+  const list = document.getElementById("live-upcoming-list");
+  if (!wrap || !list) return;
+  try {
+    const data = await fetch("/api/live/upcoming").then(r => r.json());
+    _liveUpcomingAll = data.events ?? [];
+    if (!_liveUpcomingAll.length) { wrap.style.display = "none"; return; }
+    _renderUpcomingSlice(LIVE_UPCOMING_PAGE);
+    wrap.style.display = "";
+  } catch {
+    wrap.style.display = "none";
+  }
+}
+
+function _renderUpcomingSlice(count) {
+  const list = document.getElementById("live-upcoming-list");
+  if (!list) return;
+  const slice = _liveUpcomingAll.slice(0, count);
+  let html = _renderLiveEvents(slice, "");
+  if (count < _liveUpcomingAll.length) {
+    html += `<div style="text-align:center;padding:0.5rem 0">
+      <a href="#" onclick="event.preventDefault();_renderUpcomingSlice(${count + LIVE_UPCOMING_PAGE})" style="color:var(--accent);text-decoration:none;font-size:0.82rem">Load more events →</a>
+    </div>`;
+  }
+  list.innerHTML = html;
+}
+
+function _hideLiveUpcoming() {
+  const el = document.getElementById("live-upcoming");
+  if (el) el.style.display = "none";
+}
+
 // ── Recent live search pill cloud ────────────────────────────────────────
 let _liveRecentLoaded = false;
 
 async function loadLiveRecentFeed() {
+  loadLiveUpcoming();
   if (_liveRecentLoaded) return;
   _liveRecentLoaded = true;
   const el = document.getElementById("live-recent-feed");

@@ -604,19 +604,34 @@ async function loadRecentFeed() {
 }
 
 // ── Wanted sample cards for Find page filler ─────────────────────────────
+let _wantedSampleAll = [];
+const WANTED_SAMPLE_PAGE = 8;
+
 async function loadWantedSample() {
   try {
     const r = await fetch("/api/wanted-sample");
     if (!r.ok) return;
     const data = await r.json();
-    const items = data.items ?? [];
-    if (!items.length) return;
+    _wantedSampleAll = data.items ?? [];
+    if (!_wantedSampleAll.length) return;
     const wrap = document.getElementById("wanted-sample");
-    const grid = document.getElementById("wanted-sample-grid");
-    if (!wrap || !grid) return;
-    grid.innerHTML = items.map(item => renderCardFromBasicInfo(item)).join("");
+    if (!wrap) return;
+    _renderWantedSlice(WANTED_SAMPLE_PAGE);
     wrap.style.display = "";
   } catch { /* silent fail */ }
+}
+
+function _renderWantedSlice(count) {
+  const grid = document.getElementById("wanted-sample-grid");
+  if (!grid) return;
+  const slice = _wantedSampleAll.slice(0, count);
+  let html = slice.map(item => renderCardFromBasicInfo(item)).join("");
+  if (count < _wantedSampleAll.length) {
+    html += `<div class="wanted-load-more" style="grid-column:1/-1;text-align:center;padding:0.5rem 0">
+      <a href="#" onclick="event.preventDefault();_renderWantedSlice(${count + WANTED_SAMPLE_PAGE})" style="color:var(--accent);text-decoration:none;font-size:0.82rem">Load more →</a>
+    </div>`;
+  }
+  grid.innerHTML = html;
 }
 
 // ── Artist / entity navigation ───────────────────────────────────────────

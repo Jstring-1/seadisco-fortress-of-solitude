@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -178,6 +178,7 @@ app.delete("/api/user/account", async (req, res) => {
 
 // Abort flag for stopping all syncs
 let _syncAbort = false;
+const SYNC_STALL_TIMEOUT = 5 * 60 * 1000; // 5 minutes with no progress = stalled
 
 // Background sync worker — runs detached from the HTTP request
 async function runBackgroundSync(userId: string, token: string, username: string, syncCollection: boolean, syncWantlist: boolean) {
@@ -185,13 +186,30 @@ async function runBackgroundSync(userId: string, token: string, username: string
   const headers = { "Authorization": `Discogs token=${token}`, "User-Agent": "SeaDisco/1.0" };
   const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
   let totalSynced = 0;
+  let lastProgressAt = Date.now(); // tracks last time progress was made
+
+  // Timeout guard — checks every 60s if sync has stalled
+  let _syncDone = false;
+  let _thisSyncAbort = false; // per-sync abort flag (set by stall guard)
+  const stallGuard = setInterval(async () => {
+    if (_syncDone) { clearInterval(stallGuard); return; }
+    const stalledFor = Date.now() - lastProgressAt;
+    if (stalledFor >= SYNC_STALL_TIMEOUT) {
+      console.error(`Sync ${username}: STALLED — no progress for ${Math.round(stalledFor / 60000)}min, auto-aborting`);
+      _thisSyncAbort = true;
+      clearInterval(stallGuard);
+      try {
+        await updateSyncProgress(userId, "error", totalSynced, 0, `Stalled — no progress for ${Math.round(stalledFor / 60000)} minutes`);
+      } catch {}
+    }
+  }, 60_000);
 
   // Fetch with retry — up to 5 attempts with exponential backoff, respects Discogs rate limit headers
   async function fetchWithRetry(url: string, retries = 5): Promise<Response> {
     const backoffs = [15000, 30000, 60000, 90000, 120000];
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
-        const r = await fetch(url, { headers });
+        const r = await fetch(url, { headers, signal: AbortSignal.timeout(30000) });
         if (r.ok) {
           // Check remaining rate limit — if low, pause proactively
           const remaining = parseInt(r.headers.get("x-discogs-ratelimit-remaining") ?? "10");
@@ -229,6 +247,7 @@ async function runBackgroundSync(userId: string, token: string, username: string
         const r = await fetchWithRetry(`https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=1&page=1`);
         const d = await r.json() as any;
         estimatedTotal += d.pagination?.items ?? 0;
+        lastProgressAt = Date.now();
         await delay(500);
       } catch {}
     }
@@ -237,6 +256,7 @@ async function runBackgroundSync(userId: string, token: string, username: string
         const r = await fetchWithRetry(`https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=1&page=1`);
         const d = await r.json() as any;
         estimatedTotal += d.pagination?.items ?? 0;
+        lastProgressAt = Date.now();
         await delay(500);
       } catch {}
     }
@@ -246,7 +266,7 @@ async function runBackgroundSync(userId: string, token: string, username: string
 
     if (syncCollection) {
       for (let page = 1; ; page++) {
-        if (_syncAbort) { console.log(`Sync ${username}: aborted`); await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted"); return; }
+        if (_syncAbort || _thisSyncAbort) { console.log(`Sync ${username}: aborted`); await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted"); _syncDone = true; return; }
         if (page > 1) await delay(1200); // 1.2s pacing — Discogs allows 60/min
         const r = await fetchWithRetry(
           `https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=500&page=${page}&sort=added&sort_order=desc`
@@ -266,6 +286,7 @@ async function runBackgroundSync(userId: string, token: string, username: string
         await upsertCollectionItems(userId, items);
         await recordInterestSignals(items, "collection");
         totalSynced += items.length;
+        lastProgressAt = Date.now();
         await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
         if (releases.length < 500) break;
       }
@@ -280,12 +301,13 @@ async function runBackgroundSync(userId: string, token: string, username: string
           .filter((f: any) => f.id !== 0) // skip the virtual "All" folder
           .map((f: any) => ({ id: f.id as number, name: f.name as string, count: f.count as number }));
         if (folders.length) await upsertCollectionFolders(userId, folders);
+        lastProgressAt = Date.now();
       } catch { /* folder sync optional */ }
     }
 
     if (syncWantlist) {
       for (let page = 1; ; page++) {
-        if (_syncAbort) { console.log(`Sync ${username}: aborted`); await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted"); return; }
+        if (_syncAbort || _thisSyncAbort) { console.log(`Sync ${username}: aborted`); await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted"); _syncDone = true; return; }
         if (page > 1) await delay(1200);
         const r = await fetchWithRetry(
           `https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=500&page=${page}`
@@ -303,6 +325,7 @@ async function runBackgroundSync(userId: string, token: string, username: string
         await upsertWantlistItems(userId, items);
         await recordInterestSignals(items, "wantlist");
         totalSynced += items.length;
+        lastProgressAt = Date.now();
         await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
         if (wants.length < 500) break;
       }
@@ -314,6 +337,9 @@ async function runBackgroundSync(userId: string, token: string, username: string
   } catch (err) {
     console.error(`Background sync error for ${username}:`, err);
     await updateSyncProgress(userId, "error", totalSynced, 0, String(err));
+  } finally {
+    _syncDone = true;
+    clearInterval(stallGuard);
   }
 }
 
@@ -416,6 +442,57 @@ app.get("/api/user/wantlist", async (req, res) => {
   const { items, total } = await getWantlistPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
   res.json({ items, total, page, pages: Math.ceil(total / perPage) });
 });
+
+// GET /api/live/upcoming — serve upcoming events from DB
+app.get("/api/live/upcoming", async (_req, res) => {
+  try {
+    res.setHeader("Cache-Control", "public, max-age=600"); // 10 min
+    const events = await getLiveEvents(30);
+    res.json({ events });
+  } catch {
+    res.json({ events: [] });
+  }
+});
+
+// Background: fetch upcoming events from Ticketmaster and store in DB
+async function fetchUpcomingEvents(): Promise<number> {
+  if (!ticketmasterKey) return 0;
+  try {
+    const url = `https://app.ticketmaster.com/discovery/v2/events.json?apikey=${ticketmasterKey}&classificationName=music&size=50&sort=date,asc&countryCode=US`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!r.ok) return 0;
+    const data = await r.json() as any;
+    const events = (data._embedded?.events ?? []).map((ev: any) => {
+      const venue = ev._embedded?.venues?.[0];
+      return {
+        name: ev.name ?? "",
+        artist: ev._embedded?.attractions?.[0]?.name ?? "",
+        date: ev.dates?.start?.localDate ?? "",
+        time: ev.dates?.start?.localTime ?? "",
+        venue: venue?.name ?? "",
+        venueId: venue?.id ?? "",
+        city: venue?.city?.name ?? "",
+        region: venue?.state?.stateCode ?? "",
+        country: venue?.country?.countryCode ?? "",
+        url: ev.url ?? "",
+      };
+    });
+    const count = await upsertLiveEvents(events);
+    await pruneLiveEvents();
+    console.log(`[live-events] Fetched ${count} upcoming events, pruned past events`);
+    return count;
+  } catch (e) {
+    console.error("[live-events] Fetch error:", e);
+    return 0;
+  }
+}
+
+function startLiveEventsSchedule() {
+  // Initial fetch after 20s
+  setTimeout(() => fetchUpcomingEvents(), 20_000);
+  // Then every 4 hours
+  setInterval(() => fetchUpcomingEvents(), 4 * 60 * 60 * 1000);
+}
 
 // GET /api/wanted-sample — small public sample for Find page filler
 app.get("/api/wanted-sample", async (_req, res) => {
@@ -2146,6 +2223,15 @@ app.post("/api/admin/feed/fetch", express.json(), async (req, res) => {
   fetchAllFeedContent();
 });
 
+// POST /api/admin/live/fetch — manual trigger for admin
+app.post("/api/admin/live/fetch", express.json(), async (req, res) => {
+  const userId = getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  const count = await fetchUpcomingEvents();
+  res.json({ ok: true, count });
+});
+
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 // Daily auto-sync of all user collections/wantlists at 4 AM Pacific
 function startDailySyncSchedule() {
@@ -2193,5 +2279,6 @@ app.listen(PORT, "0.0.0.0", () => {
     startGearSchedule();
     startFeedSchedule();
     startDailySyncSchedule();
+    startLiveEventsSchedule();
   }
 });

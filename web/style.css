@@ -366,8 +366,6 @@ body {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
   gap: 0.6rem;
-  max-height: 480px;
-  overflow: hidden;
 }
 #recent-feed {
   padding-top: 2rem;
@@ -804,6 +802,9 @@ a.fresh-card-search-link:hover {
 .fresh-filter-input:focus  { outline: none; border-color: var(--accent); }
 .fresh-filter-select option { background: #0f1a20; }
 .fresh-filter-input::placeholder { color: #555; }
+
+/* ── Live upcoming events (pre-search filler) ────────────────────────── */
+#live-upcoming-list .live-event:last-child { border-bottom: none; }
 
 /* ── Live tab ─────────────────────────────────────────────────────────── */
 /* #live-view and #info-view now use .content-narrow class */
