@@ -8,32 +8,50 @@ let _feedLoading = false;
 let _feedDebounce = null;
 const FEED_PAGE_SIZE = 50;
 
+const FEED_SOURCE_URLS = {
+  "Pitchfork": "https://pitchfork.com",
+  "Pitchfork News": "https://pitchfork.com",
+  "Bandcamp Daily": "https://daily.bandcamp.com",
+  "Stereogum": "https://www.stereogum.com",
+  "The Vinyl Factory": "https://thevinylfactory.com",
+  "Aquarium Drunkard": "https://aquariumdrunkard.com",
+  "The Quietus": "https://thequietus.com",
+  "Analog Planet": "https://www.analogplanet.com",
+  "Vinyl Eyezz": "https://www.youtube.com/@VinylEyezz",
+  "Techmoan": "https://www.youtube.com/@Techmoan",
+  "The Vinyl Guide": "https://www.youtube.com/@TheVinylGuide",
+};
+
 function renderFeedCard(item) {
   const isVideo = item.content_type === "video";
   const img = item.image_url
     ? `<img src="${escHtml(item.image_url)}" alt="" loading="lazy" />`
     : `<div style="background:#1a1a1a;width:100%;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;color:#555;font-size:2rem">${isVideo ? "▶" : "📰"}</div>`;
 
-  // Relative time
-  let ago = "";
+  // Format published date
+  let pubDate = "";
   if (item.published_at) {
-    const mins = Math.round((Date.now() - new Date(item.published_at).getTime()) / 60000);
-    if (mins < 1) ago = "just now";
-    else if (mins < 60) ago = `${mins}m ago`;
-    else if (mins < 1440) { const hrs = Math.round(mins / 60); ago = `${hrs}h ago`; }
-    else { const days = Math.round(mins / 1440); ago = `${days}d ago`; }
+    const d = new Date(item.published_at);
+    pubDate = d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
   }
 
   const sourceClass = item.source.toLowerCase().replace(/\s+/g, "-");
+  const sourceUrl = FEED_SOURCE_URLS[item.source] || "#";
+  const catLabel = (item.category || "news").charAt(0).toUpperCase() + (item.category || "news").slice(1);
+  const authorLine = item.author
+    ? `${escHtml(item.author)} via <a href="${escHtml(sourceUrl)}" target="_blank" rel="noopener" class="feed-src-${sourceClass}" onclick="event.stopPropagation()">${escHtml(item.source)}</a>`
+    : `<a href="${escHtml(sourceUrl)}" target="_blank" rel="noopener" class="feed-src-${sourceClass}" onclick="event.stopPropagation()">${escHtml(item.source)}</a>`;
 
   if (isVideo) {
     const videoId = item.source_url.match(/[?&]v=([^&]+)/)?.[1] || "";
     return `<div class="feed-card feed-card-video" onclick="playFeedVideo('${videoId}', ${JSON.stringify(escHtml(item.title)).replace(/'/g, "\\'")})" style="cursor:pointer">
       <div class="feed-card-thumb">${img}<div class="feed-video-play">▶</div></div>
       <div class="feed-card-body">
-        <div class="feed-card-source feed-src-${sourceClass}">${escHtml(item.source)}</div>
+        <div class="feed-card-category">${escHtml(catLabel)}</div>
         <div class="feed-card-title">${escHtml(item.title)}</div>
-        ${ago ? `<div class="feed-card-meta">${ago}</div>` : ""}
+        <div class="feed-card-author">${authorLine}</div>
+        ${pubDate ? `<div class="feed-card-date">${pubDate}</div>` : ""}
+        ${item.summary ? `<div class="feed-card-summary">${escHtml(item.summary.length > 150 ? item.summary.slice(0, 147) + "…" : item.summary)}</div>` : ""}
       </div>
     </div>`;
   }
@@ -41,13 +59,11 @@ function renderFeedCard(item) {
   return `<a href="${escHtml(item.source_url)}" target="_blank" rel="noopener" class="feed-card feed-card-article">
     <div class="feed-card-thumb">${img}</div>
     <div class="feed-card-body">
-      <div class="feed-card-source feed-src-${sourceClass}">${escHtml(item.source)}</div>
+      <div class="feed-card-category">${escHtml(catLabel)}</div>
       <div class="feed-card-title">${escHtml(item.title)}</div>
+      <div class="feed-card-author">${authorLine}</div>
+      ${pubDate ? `<div class="feed-card-date">${pubDate}</div>` : ""}
       ${item.summary ? `<div class="feed-card-summary">${escHtml(item.summary.length > 150 ? item.summary.slice(0, 147) + "…" : item.summary)}</div>` : ""}
-      <div class="feed-card-meta">
-        ${item.author ? `<span>${escHtml(item.author)}</span>` : ""}
-        ${ago ? `<span>${ago}</span>` : ""}
-      </div>
     </div>
   </a>`;
 }
