@@ -198,6 +198,24 @@ export async function initDb() {
       finished_at TIMESTAMPTZ
     )
   `);
+  // ── Live events (Ticketmaster upcoming) ─────────────────────────────────
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS live_events (
+      id          SERIAL PRIMARY KEY,
+      event_name  TEXT NOT NULL,
+      artist      TEXT,
+      event_date  TEXT,
+      event_time  TEXT,
+      venue       TEXT,
+      venue_id    TEXT,
+      city        TEXT,
+      region      TEXT,
+      country     TEXT,
+      url         TEXT,
+      fetched_at  TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(url)
+    )
+  `);
 }
 
 export async function saveSearch(clerkUserId: string, params: Record<string, string>): Promise<void> {
@@ -1115,7 +1133,7 @@ export async function markExpiredGearListings(): Promise<number> {
 }
 
 // ── Auto-prune stale data ─────────────────────────────────────────────────
-export async function pruneAllStaleData(): Promise<{ interest: number; fresh: number; gear: number; gearLog: number }> {
+export async function pruneAllStaleData(): Promise<{ interest: number; fresh: number; gear: number; gearLog: number; liveEvents: number }> {
   // Interest signals older than 6 months
   const i = await getPool().query(
     `DELETE FROM interest_signals WHERE recorded_at < NOW() - INTERVAL '6 months'`
@@ -1132,11 +1150,16 @@ export async function pruneAllStaleData(): Promise<{ interest: number; fresh: nu
   const gl = await getPool().query(
     `DELETE FROM gear_fetch_log WHERE started_at < NOW() - INTERVAL '30 days'`
   );
+  // Past live events
+  const le = await getPool().query(
+    `DELETE FROM live_events WHERE event_date < CURRENT_DATE`
+  );
   return {
     interest: i.rowCount ?? 0,
     fresh: f.rowCount ?? 0,
     gear: g.rowCount ?? 0,
     gearLog: gl.rowCount ?? 0,
+    liveEvents: le.rowCount ?? 0,
   };
 }
 
@@ -1216,4 +1239,54 @@ export async function logGearFetch(fetchType: string, itemCount: number, error?:
      VALUES ($1, $2, $3, NOW())`,
     [fetchType, itemCount, error ?? null]
   );
+}
+
+// ── Live events (Ticketmaster upcoming) ─────────────────────────────────
+export async function upsertLiveEvents(events: Array<{
+  name: string; artist: string; date: string; time: string;
+  venue: string; venueId: string; city: string; region: string;
+  country: string; url: string;
+}>): Promise<number> {
+  let count = 0;
+  for (const ev of events) {
+    await getPool().query(
+      `INSERT INTO live_events (event_name, artist, event_date, event_time, venue, venue_id, city, region, country, url, fetched_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
+       ON CONFLICT (url) DO UPDATE SET
+         event_name = EXCLUDED.event_name,
+         artist = EXCLUDED.artist,
+         event_date = EXCLUDED.event_date,
+         event_time = EXCLUDED.event_time,
+         venue = EXCLUDED.venue,
+         venue_id = EXCLUDED.venue_id,
+         city = EXCLUDED.city,
+         region = EXCLUDED.region,
+         country = EXCLUDED.country,
+         fetched_at = NOW()`,
+      [ev.name, ev.artist, ev.date, ev.time, ev.venue, ev.venueId, ev.city, ev.region, ev.country, ev.url]
+    );
+    count++;
+  }
+  return count;
+}
+
+export async function getLiveEvents(limit: number = 30): Promise<object[]> {
+  const r = await getPool().query(
+    `SELECT event_name AS name, artist, event_date AS date, event_time AS time,
+            venue, venue_id AS "venueId", city, region, country, url
+     FROM live_events
+     WHERE event_date >= CURRENT_DATE
+     ORDER BY event_date ASC, event_time ASC
+     LIMIT $1`,
+    [limit]
+  );
+  return r.rows;
+}
+
+export async function pruneLiveEvents(): Promise<number> {
+  // Remove events that have already passed
+  const r = await getPool().query(
+    `DELETE FROM live_events WHERE event_date < CURRENT_DATE`
+  );
+  return r.rowCount ?? 0;
 }
