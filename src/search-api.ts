@@ -1909,6 +1909,17 @@ const YOUTUBE_CHANNELS: Array<{ name: string; channelId: string }> = [
   { name: "Analog Planet", channelId: "UCXnnKXr8oSTfZ7Y3R8CGAUQ" },
 ];
 
+function decodeHtmlEntities(str: string): string {
+  return str
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n)))
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&nbsp;/g, " ")
+    .replace(/&mdash;/g, "—").replace(/&ndash;/g, "–").replace(/&lsquo;/g, "'")
+    .replace(/&rsquo;/g, "'").replace(/&ldquo;/g, "\u201C").replace(/&rdquo;/g, "\u201D")
+    .replace(/&hellip;/g, "…");
+}
+
 function extractFromXml(xml: string, tag: string): string {
   const re = new RegExp(`<${tag}[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?</${tag}>`);
   const m = xml.match(re);
@@ -1950,21 +1961,20 @@ async function fetchRssFeeds(): Promise<number> {
       let count = 0;
       for (const itemXml of items.slice(0, 20)) { // Max 20 per feed
         try {
-          const title = extractFromXml(itemXml, "title")
-            .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#8217;/g, "'").replace(/&#8220;/g, '"').replace(/&#8221;/g, '"');
+          const title = decodeHtmlEntities(extractFromXml(itemXml, "title"));
           const link = extractFromXml(itemXml, "link") || extractFromXml(itemXml, "guid");
           if (!title || !link) continue;
 
-          let summary = extractFromXml(itemXml, "description")
-            .replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
-            .replace(/&#8217;/g, "'").replace(/&#8220;/g, '"').replace(/&#8221;/g, '"')
-            .trim();
+          let summary = decodeHtmlEntities(
+            extractFromXml(itemXml, "description").replace(/<[^>]+>/g, "")
+          ).trim();
           if (summary.length > 300) summary = summary.slice(0, 297) + "…";
 
           const imageUrl = extractImage(itemXml);
 
-          const author = extractFromXml(itemXml, "dc:creator") ||
-                         extractFromXml(itemXml, "author") || "";
+          const author = decodeHtmlEntities(
+            extractFromXml(itemXml, "dc:creator") || extractFromXml(itemXml, "author") || ""
+          );
 
           const pubDate = extractFromXml(itemXml, "pubDate") ||
                           extractFromXml(itemXml, "dc:date") || "";
