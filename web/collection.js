@@ -153,6 +153,9 @@ function switchView(view, skipPushState = false) {
     document.getElementById("pagination").style.display = "none";
     setStatus("");
     document.getElementById("blurb").style.display = "none";
+    document.getElementById("artist-alts").innerHTML = "";
+    if (typeof clearForm === "function") clearForm();
+    history.replaceState({}, "", location.pathname);
     const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "";
     const ws = document.getElementById("wanted-sample"); if (ws) ws.style.display = "";
   }
