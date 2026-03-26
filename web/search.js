@@ -615,7 +615,11 @@ async function loadWantedSample() {
     const grid = document.getElementById("wanted-sample-grid");
     if (!wrap || !grid) return;
     grid.innerHTML = items.map(item => renderCardFromBasicInfo(item)).join("");
-    wrap.style.display = "";
+    // Only show if currently on the Find view (not collection/wantlist/etc)
+    const view = new URLSearchParams(location.search).get("view") || "";
+    if (!view || view === "search" || view === "find") {
+      wrap.style.display = "";
+    }
   } catch { /* silent fail */ }
 }
 
