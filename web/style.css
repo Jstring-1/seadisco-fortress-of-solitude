@@ -360,6 +360,9 @@ body {
 #recent-feed {
   padding-top: 2rem;
   transition: opacity 0.4s ease;
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
 }
 .feed-label {
   font-size: 0.65rem;
@@ -448,6 +451,9 @@ body {
   gap: 0.35rem;
   margin-bottom: 0.6rem;
   min-height: 7.2rem;
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
 }
 /* .fresh-tag-pill extends .pill — no overrides needed */
 
