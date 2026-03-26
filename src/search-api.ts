@@ -542,7 +542,7 @@ app.get("/api/user/wantlist", async (req, res) => {
 app.get("/api/live/upcoming", async (_req, res) => {
   try {
     res.setHeader("Cache-Control", "public, max-age=600"); // 10 min
-    const events = await getLiveEvents(24);
+    const events = await getLiveEvents(50);
     res.json({ events });
   } catch {
     res.json({ events: [] });
@@ -574,7 +574,7 @@ app.get("/api/live/nearby", async (req, res) => {
       radius: "50",
       unit: "miles",
       classificationName: "music",
-      size: "24",
+      size: "50",
       sort: "date,asc",
       apikey: ticketmasterKey,
     });
