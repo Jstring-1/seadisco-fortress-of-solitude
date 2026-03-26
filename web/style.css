@@ -642,10 +642,10 @@ a.fresh-card-search-link:hover {
   display: flex; flex-direction: column; gap: 0.75rem;
 }
 .feed-card {
-  display: flex; flex-wrap: nowrap; gap: 0; background: var(--surface);
-  border: 1px solid var(--border); border-radius: 8px;
-  overflow: hidden; text-decoration: none; color: inherit;
-  transition: border-color 0.15s;
+  display: flex; flex-direction: row; flex-wrap: nowrap; gap: 0;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; overflow: hidden; text-decoration: none;
+  color: inherit; transition: border-color 0.15s;
 }
 .feed-card:hover { border-color: var(--accent); }
 .feed-card-thumb {
