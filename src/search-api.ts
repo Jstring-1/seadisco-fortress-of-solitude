@@ -488,12 +488,15 @@ async function fetchUpcomingEvents(): Promise<number> {
 }
 
 function startLiveEventsSchedule() {
-  // Initial fetch after 3 minutes (staggered: gear=1m, feed=2m, live=3m, fresh=4m)
+  // Initial fetch after 3 minutes
   setTimeout(() => fetchUpcomingEvents(), 3 * 60_000);
-  // Every 4 hours, but offset 30min from feed schedule so they don't collide
+  // Every 4 hours aligned to :50
+  const msTo50 = msUntilMinute(50);
+  console.log(`[live-events] Next scheduled fetch at :50 (in ${Math.round(msTo50 / 60000)}min)`);
   setTimeout(() => {
+    fetchUpcomingEvents();
     setInterval(() => fetchUpcomingEvents(), 4 * 60 * 60 * 1000);
-  }, 30 * 60_000);
+  }, msTo50);
 }
 
 // GET /api/wanted-sample — small public sample for Find page filler
@@ -1901,27 +1904,31 @@ async function fetchGearDetails(): Promise<number> {
   return detailed;
 }
 
-// Schedule: hourly gear fetch (keeps prices/bids current) + detail worker every 30 min
+// Schedule: gear search at :55, detail worker at :25 (30min offset)
 function startGearSchedule() {
   if (!ebayClientId || !ebayClientSecret) {
     console.log("eBay gear schedule not started — no credentials");
     return;
   }
-  // Initial fetch after 1 minute (staggered from other workers)
+  // Initial fetch after 1 minute
   setTimeout(() => {
     fetchEbayGearListings().then(() => fetchGearDetails());
   }, 60_000);
 
-  // Hourly fetch — upserts update price + bid_count for existing listings
-  // Offset by 5 min so it doesn't align with other hourly tasks
-  setInterval(() => {
-    fetchEbayGearListings();
-  }, 60 * 60 * 1000);
-
-  // Detail worker every 30 minutes, offset by 15 min from search
+  // Hourly gear search aligned to :55
+  const msTo55 = msUntilMinute(55);
+  console.log(`[gear] Next search at :55 (in ${Math.round(msTo55 / 60000)}min)`);
   setTimeout(() => {
+    fetchEbayGearListings();
+    setInterval(() => fetchEbayGearListings(), 60 * 60 * 1000);
+  }, msTo55);
+
+  // Detail worker aligned to :25 (30min offset from :55)
+  const msTo25 = msUntilMinute(25);
+  setTimeout(() => {
+    fetchGearDetails();
     setInterval(() => fetchGearDetails(), 30 * 60 * 1000);
-  }, 15 * 60_000);
+  }, msTo25);
 }
 
 // GET /api/gear — public gear listings
@@ -2196,10 +2203,15 @@ async function fetchAllFeedContent() {
 }
 
 function startFeedSchedule() {
-  // Initial fetch after 2 minutes (staggered from gear at 1min, live at 3min)
+  // Initial fetch after 2 minutes
   setTimeout(() => fetchAllFeedContent(), 2 * 60_000);
-  // Refresh every 4 hours (YouTube quota: 13 calls × 100 = 1300 units × 6/day = 7800 < 10K limit)
-  setInterval(() => fetchAllFeedContent(), 4 * 60 * 60 * 1000);
+  // Every 4 hours aligned to :40 (YouTube quota: 13 calls × 100 = 1300 units × 6/day = 7800 < 10K limit)
+  const msTo40 = msUntilMinute(40);
+  console.log(`[feed] Next scheduled fetch at :40 (in ${Math.round(msTo40 / 60000)}min)`);
+  setTimeout(() => {
+    fetchAllFeedContent();
+    setInterval(() => fetchAllFeedContent(), 4 * 60 * 60 * 1000);
+  }, msTo40);
 }
 
 // GET /api/feed — public feed articles
@@ -2234,6 +2246,15 @@ app.post("/api/admin/live/fetch", express.json(), async (req, res) => {
   const count = await fetchUpcomingEvents();
   res.json({ ok: true, count });
 });
+
+// Helper: ms until the next occurrence of :MM past the hour
+function msUntilMinute(minute: number): number {
+  const now = new Date();
+  const target = new Date(now);
+  target.setMinutes(minute, 0, 0);
+  if (target.getTime() <= now.getTime()) target.setHours(target.getHours() + 1);
+  return target.getTime() - now.getTime();
+}
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 // Daily auto-sync of all user collections/wantlists at 4 AM Pacific
