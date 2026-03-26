@@ -38,30 +38,35 @@ function renderFeedCard(item) {
   const sourceClass = item.source.toLowerCase().replace(/\s+/g, "-");
   const sourceUrl = FEED_SOURCE_URLS[item.source] || "#";
   const catLabel = (item.category || "news").charAt(0).toUpperCase() + (item.category || "news").slice(1);
-  const authorLine = item.author
-    ? `${escHtml(item.author)} via <a href="${escHtml(sourceUrl)}" target="_blank" rel="noopener" class="feed-src-${sourceClass}" onclick="event.stopPropagation()">${escHtml(item.source)}</a>`
-    : `<a href="${escHtml(sourceUrl)}" target="_blank" rel="noopener" class="feed-src-${sourceClass}" onclick="event.stopPropagation()">${escHtml(item.source)}</a>`;
 
   if (isVideo) {
     const videoId = item.source_url.match(/[?&]v=([^&]+)/)?.[1] || "";
+    const videoAuthorLine = item.author
+      ? `${escHtml(item.author)} via <a href="${escHtml(sourceUrl)}" target="_blank" rel="noopener" class="feed-src-${sourceClass}" onclick="event.stopPropagation()">${escHtml(item.source)}</a>`
+      : `<a href="${escHtml(sourceUrl)}" target="_blank" rel="noopener" class="feed-src-${sourceClass}" onclick="event.stopPropagation()">${escHtml(item.source)}</a>`;
     return `<div class="feed-card feed-card-video" onclick="playFeedVideo('${videoId}', ${JSON.stringify(escHtml(item.title)).replace(/'/g, "\\'")})" style="cursor:pointer">
       <div class="feed-card-thumb">${img}<div class="feed-video-play">▶</div></div>
       <div class="feed-card-body">
         <div class="feed-card-category">${escHtml(catLabel)}</div>
         <div class="feed-card-title">${escHtml(item.title)}</div>
-        <div class="feed-card-author">${authorLine}</div>
+        <div class="feed-card-author">${videoAuthorLine}</div>
         ${pubDate ? `<div class="feed-card-date">${pubDate}</div>` : ""}
         ${item.summary ? `<div class="feed-card-summary">${escHtml(item.summary.length > 150 ? item.summary.slice(0, 147) + "…" : item.summary)}</div>` : ""}
       </div>
     </div>`;
   }
 
+  // Article cards use <a> wrapper so source must be a <span>, not nested <a>
+  const articleAuthorLine = item.author
+    ? `${escHtml(item.author)} via <span class="feed-src-${sourceClass}">${escHtml(item.source)}</span>`
+    : `<span class="feed-src-${sourceClass}">${escHtml(item.source)}</span>`;
+
   return `<a href="${escHtml(item.source_url)}" target="_blank" rel="noopener" class="feed-card feed-card-article">
     <div class="feed-card-thumb">${img}</div>
     <div class="feed-card-body">
       <div class="feed-card-category">${escHtml(catLabel)}</div>
       <div class="feed-card-title">${escHtml(item.title)}</div>
-      <div class="feed-card-author">${authorLine}</div>
+      <div class="feed-card-author">${articleAuthorLine}</div>
       ${pubDate ? `<div class="feed-card-date">${pubDate}</div>` : ""}
       ${item.summary ? `<div class="feed-card-summary">${escHtml(item.summary.length > 150 ? item.summary.slice(0, 147) + "…" : item.summary)}</div>` : ""}
     </div>
