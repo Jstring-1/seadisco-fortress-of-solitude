@@ -124,9 +124,9 @@
     <button type="button" id="clear-btn" onclick="clearForm()" title="Clear form" style="background:none;border:none;padding:0.3rem 0.5rem;font-size:1.5rem;color:#555;cursor:pointer;line-height:1;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
   </div>
 
-  <div id="advanced-panel" style="margin-top:0.5rem">
+  <div id="advanced-panel">
     <!-- Row 1: Artist · Release · Label -->
-    <div class="filters">
+    <div class="filters" style="margin-top:0.5rem">
       <label>Artist <input type="text" id="f-artist" placeholder="e.g. Miles Davis" oninput="currentArtistId=null" /></label>
       <label>Release <input type="text" id="f-release" placeholder="e.g. Kind of Blue" /></label>
       <label>Label <input type="text" id="f-label" placeholder="e.g. Columbia" /></label>
