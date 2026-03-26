@@ -40,6 +40,7 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
 
   const deferLoad = (fn) => typeof requestIdleCallback === "function" ? requestIdleCallback(fn) : setTimeout(fn, 200);
   deferLoad(() => loadRecentFeed());
+  deferLoad(() => loadWantedSample());
   deferLoad(() => loadFreshReleases());
 })();
 

@@ -739,6 +739,13 @@ export async function getCollectionIds(clerkUserId: string): Promise<number[]> {
   return r.rows.map(row => row.discogs_release_id);
 }
 
+export async function getWantedSample(limit: number = 24): Promise<object[]> {
+  const r = await getPool().query(
+    `SELECT data FROM user_wantlist ORDER BY RANDOM() LIMIT $1`, [limit]
+  );
+  return r.rows.map(row => row.data);
+}
+
 export async function getWantedItems(): Promise<object[]> {
   const r = await getPool().query(
     `SELECT clerk_user_id, discogs_release_id, data FROM user_wantlist`
