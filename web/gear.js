@@ -44,9 +44,9 @@ function renderGearCard(item, idx) {
   // Show condition only if it's notable (not just "Used")
   const conditionShow = condition && condition !== "Used" ? condition : "";
 
-  return `<div class="card gear-card" onclick="openGearPopup(${idx})" style="cursor:pointer" title="${escHtml(item.title)}">
-    <div class="card-thumb-wrap">${img}</div>
-    <div class="card-body">
+  return `<div class="card gear-card" onclick="event.stopPropagation();openGearPopup(${idx})" role="button" tabindex="0" style="cursor:pointer;-webkit-tap-highlight-color:transparent" title="${escHtml(item.title)}">
+    <div class="card-thumb-wrap" style="pointer-events:none">${img}</div>
+    <div class="card-body" style="pointer-events:none">
       <div class="card-title">${escHtml(item.title.length > 65 ? item.title.slice(0, 63) + "…" : item.title)}</div>
       ${brandModel ? `<div class="card-sub" style="color:#aaa">${escHtml(brandModel)}</div>` : ""}
       <div class="gear-price">${priceStr}</div>
