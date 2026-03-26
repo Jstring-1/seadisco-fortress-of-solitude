@@ -98,11 +98,9 @@ export async function runFreshSync(): Promise<void> {
 }
 
 export function startFreshSyncSchedule(): void {
-  // Initial fetch after 4 minutes
-  setTimeout(() => runFreshSync(), 4 * 60_000);
   // Every 6 hours aligned to :30
   const msTo30 = msUntilMinute(30);
-  console.log(`[fresh-sync] scheduled every 6h at :30 (first run in 4 min, next :30 in ${Math.round(msTo30 / 60000)}min)`);
+  console.log(`[fresh-sync] Next fetch at :30 (in ${Math.round(msTo30 / 60000)}min), then every 6h`);
   setTimeout(() => {
     runFreshSync();
     setInterval(() => runFreshSync(), INTERVAL_MS);

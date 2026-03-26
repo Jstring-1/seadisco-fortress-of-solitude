@@ -488,11 +488,9 @@ async function fetchUpcomingEvents(): Promise<number> {
 }
 
 function startLiveEventsSchedule() {
-  // Initial fetch after 3 minutes
-  setTimeout(() => fetchUpcomingEvents(), 3 * 60_000);
   // Every 4 hours aligned to :50
   const msTo50 = msUntilMinute(50);
-  console.log(`[live-events] Next scheduled fetch at :50 (in ${Math.round(msTo50 / 60000)}min)`);
+  console.log(`[live-events] Next fetch at :50 (in ${Math.round(msTo50 / 60000)}min)`);
   setTimeout(() => {
     fetchUpcomingEvents();
     setInterval(() => fetchUpcomingEvents(), 4 * 60 * 60 * 1000);
@@ -1910,11 +1908,6 @@ function startGearSchedule() {
     console.log("eBay gear schedule not started — no credentials");
     return;
   }
-  // Initial fetch after 1 minute
-  setTimeout(() => {
-    fetchEbayGearListings().then(() => fetchGearDetails());
-  }, 60_000);
-
   // Hourly gear search aligned to :55
   const msTo55 = msUntilMinute(55);
   console.log(`[gear] Next search at :55 (in ${Math.round(msTo55 / 60000)}min)`);
@@ -1994,10 +1987,10 @@ const RSS_FEEDS: Array<{ name: string; url: string; category: string }> = [
   { name: "Pitchfork News", url: "https://pitchfork.com/feed/feed-news/rss", category: "news" },
   { name: "Bandcamp Daily", url: "https://daily.bandcamp.com/feed", category: "reviews" },
   { name: "Stereogum", url: "https://www.stereogum.com/feed/", category: "news" },
-  { name: "The Vinyl Factory", url: "https://thevinylfactory.com/feed/", category: "news" },
   { name: "Aquarium Drunkard", url: "https://aquariumdrunkard.com/feed/", category: "news" },
   { name: "The Quietus", url: "https://thequietus.com/feed", category: "reviews" },
-  { name: "Analog Planet", url: "https://www.analogplanet.com/feed/", category: "gear" },
+  { name: "BrooklynVegan", url: "https://www.brooklynvegan.com/feed/", category: "news" },
+  { name: "Resident Advisor", url: "https://ra.co/xml/news.xml", category: "news" },
 ];
 
 const YOUTUBE_CHANNELS: Array<{ name: string; channelId: string; category?: string }> = [
@@ -2203,11 +2196,9 @@ async function fetchAllFeedContent() {
 }
 
 function startFeedSchedule() {
-  // Initial fetch after 2 minutes
-  setTimeout(() => fetchAllFeedContent(), 2 * 60_000);
   // Every 4 hours aligned to :40 (YouTube quota: 13 calls × 100 = 1300 units × 6/day = 7800 < 10K limit)
   const msTo40 = msUntilMinute(40);
-  console.log(`[feed] Next scheduled fetch at :40 (in ${Math.round(msTo40 / 60000)}min)`);
+  console.log(`[feed] Next fetch at :40 (in ${Math.round(msTo40 / 60000)}min)`);
   setTimeout(() => {
     fetchAllFeedContent();
     setInterval(() => fetchAllFeedContent(), 4 * 60 * 60 * 1000);
