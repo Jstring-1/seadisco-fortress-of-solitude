@@ -103,7 +103,8 @@
         <div id="account-sync-status" style="font-size:0.82rem;color:var(--muted);margin-bottom:0.5rem">Loading sync status…</div>
         <div style="display:flex;align-items:center;gap:0.7rem;flex-wrap:wrap">
           <button id="account-sync-btn" onclick="accountSync()" style="font-size:0.82rem;padding:0.3rem 0.9rem;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-weight:600">Sync Now</button>
-          <button onclick="adminSyncAll()" id="admin-sync-all-btn" style="display:none;font-size:0.78rem;padding:0.3rem 0.9rem;background:#2a2a2a;color:var(--fg);border:1px solid #444;border-radius:5px;cursor:pointer;font-weight:600">Sync All Users</button>
+          <button onclick="adminSyncAll(false)" id="admin-sync-all-btn" style="display:none;font-size:0.78rem;padding:0.3rem 0.9rem;background:#2a2a2a;color:var(--fg);border:1px solid #444;border-radius:5px;cursor:pointer;font-weight:600">Full Sync All</button>
+          <button onclick="adminSyncAll(true)" id="admin-sync-inc-btn" style="display:none;font-size:0.78rem;padding:0.3rem 0.9rem;background:#2a2a2a;color:var(--fg);border:1px solid #444;border-radius:5px;cursor:pointer;font-weight:600">Incremental Sync All</button>
           <button onclick="adminSyncStop()" id="admin-sync-stop-btn" style="display:none;font-size:0.78rem;padding:0.3rem 0.9rem;background:#6b1a1a;color:#fff;border:1px solid #933;border-radius:5px;cursor:pointer;font-weight:600">Stop All Syncs</button>
           <button onclick="adminGearFetch()" id="admin-gear-fetch-btn" style="display:none;font-size:0.78rem;padding:0.3rem 0.9rem;background:#2a2a2a;color:var(--fg);border:1px solid #444;border-radius:5px;cursor:pointer;font-weight:600">Fetch eBay Gear</button>
           <button onclick="adminFeedFetch()" id="admin-feed-fetch-btn" style="display:none;font-size:0.78rem;padding:0.3rem 0.9rem;background:#2a2a2a;color:var(--fg);border:1px solid #444;border-radius:5px;cursor:pointer;font-weight:600">Fetch Feed</button>
@@ -620,6 +621,7 @@ async function loadAdminInbox() {
     const { items } = await r.json();
     document.getElementById("admin-inbox").style.display = "block";
     document.getElementById("admin-sync-all-btn").style.display = "inline-block";
+    document.getElementById("admin-sync-inc-btn").style.display = "inline-block";
     document.getElementById("admin-sync-stop-btn").style.display = "inline-block";
     document.getElementById("admin-gear-fetch-btn").style.display = "inline-block";
     document.getElementById("admin-feed-fetch-btn").style.display = "inline-block";
@@ -807,8 +809,8 @@ async function loadAdminSyncStatus() {
   } catch { el.textContent = "Could not load sync status."; }
 }
 
-async function adminSyncAll() {
-  const btn = document.getElementById("admin-sync-all-btn");
+async function adminSyncAll(incremental = false) {
+  const btn = incremental ? document.getElementById("admin-sync-inc-btn") : document.getElementById("admin-sync-all-btn");
   const statusEl = document.getElementById("admin-sync-all-status");
   btn.disabled = true;
   btn.textContent = "Starting…";
@@ -817,14 +819,16 @@ async function adminSyncAll() {
     const sessionToken = await clerk.session?.getToken();
     const r = await fetch("/api/admin/sync-all", {
       method: "POST",
-      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
+      headers: { "Content-Type": "application/json", ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
+      body: JSON.stringify({ incremental })
     }).then(r => r.json());
-    statusEl.textContent = `Sync kicked off for ${r.queued} user${r.queued !== 1 ? "s" : ""} — running in background.`;
+    const mode = r.mode === "incremental" ? "incremental" : "full";
+    statusEl.textContent = `${mode.charAt(0).toUpperCase() + mode.slice(1)} sync kicked off for ${r.queued} user${r.queued !== 1 ? "s" : ""} — running in background.`;
   } catch {
     statusEl.textContent = "Sync-all failed.";
   } finally {
     btn.disabled = false;
-    btn.textContent = "Sync All Users";
+    btn.textContent = incremental ? "Incremental Sync All" : "Full Sync All";
   }
 }
 
