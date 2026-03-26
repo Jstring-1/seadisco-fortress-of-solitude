@@ -2298,43 +2298,76 @@ function msUntilMinute(minute: number): number {
 }
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
-// Daily auto-sync of all user collections/wantlists at 4 AM Pacific
+// Scheduled syncs: incremental daily at 4 AM Pacific, full on Wed+Sat at 2 AM Pacific
 function startDailySyncSchedule() {
-  function msUntilNext4amPacific() {
-    // Calculate next 4:00 AM Pacific (handles PST/PDT via Intl)
+  function msUntilNextPacific(hour: number, dayFilter?: number[]): number {
     const now = new Date();
     const pacific = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
-    const diff = now.getTime() - pacific.getTime(); // offset from UTC
-    const next4am = new Date(pacific);
-    next4am.setHours(4, 0, 0, 0);
-    if (next4am.getTime() <= pacific.getTime()) next4am.setDate(next4am.getDate() + 1);
-    return (next4am.getTime() - pacific.getTime()) + diff;
+    const diff = now.getTime() - pacific.getTime();
+    const target = new Date(pacific);
+    target.setHours(hour, 0, 0, 0);
+    if (target.getTime() <= pacific.getTime()) target.setDate(target.getDate() + 1);
+    // If dayFilter specified, advance to next matching day (0=Sun, 3=Wed, 6=Sat)
+    if (dayFilter) {
+      while (!dayFilter.includes(target.getDay())) {
+        target.setDate(target.getDate() + 1);
+      }
+    }
+    return (target.getTime() - pacific.getTime()) + diff;
   }
 
-  async function runDailySync() {
-    console.log("[daily-sync] Starting scheduled sync for all users");
+  async function runScheduledSync(force: boolean) {
+    const mode = force ? "FULL" : "incremental";
+    console.log(`[sync-schedule] Starting ${mode} sync for all users`);
     _syncAbort = false;
     const users = await getAllUsersForSync();
     for (const user of users) {
-      if (_syncAbort) { console.log("[daily-sync] Aborted"); break; }
+      if (_syncAbort) { console.log("[sync-schedule] Aborted"); break; }
       try {
-        console.log(`[daily-sync] Syncing ${user.username}...`);
-        await runBackgroundSync(user.clerkUserId, user.token, user.username, true, true);
+        console.log(`[sync-schedule] ${mode} syncing ${user.username}...`);
+        await runBackgroundSync(user.clerkUserId, user.token, user.username, true, true, force);
         // 2-minute pause between users to let rate limits reset
         await new Promise(r => setTimeout(r, 120000));
       } catch (err) {
-        console.error(`[daily-sync] Error syncing ${user.username}:`, err);
+        console.error(`[sync-schedule] Error syncing ${user.username}:`, err);
       }
     }
-    console.log("[daily-sync] Complete");
-    // Schedule next run
-    setTimeout(() => { runDailySync(); }, msUntilNext4amPacific());
+    console.log(`[sync-schedule] ${mode} sync complete`);
   }
 
-  const ms = msUntilNext4amPacific();
-  const hours = Math.round(ms / 3600000 * 10) / 10;
-  console.log(`[daily-sync] Next auto-sync in ${hours}h (4 AM Pacific)`);
-  setTimeout(() => { runDailySync(); }, ms);
+  // Daily incremental sync at 4 AM Pacific
+  function scheduleDailyIncremental() {
+    const ms = msUntilNextPacific(4);
+    const hours = Math.round(ms / 3600000 * 10) / 10;
+    console.log(`[sync-schedule] Next incremental sync in ${hours}h (4 AM Pacific)`);
+    setTimeout(async () => {
+      // Skip if today is Wed or Sat (full sync handles those at 2 AM)
+      const pacific = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+      const day = pacific.getDay();
+      if (day === 3 || day === 6) {
+        console.log("[sync-schedule] Skipping 4 AM incremental — full sync day (Wed/Sat)");
+      } else {
+        await runScheduledSync(false);
+      }
+      scheduleDailyIncremental();
+    }, ms);
+  }
+
+  // Full sync at 2 AM Pacific on Wednesday (3) and Saturday (6)
+  function scheduleWeeklyFull() {
+    const ms = msUntilNextPacific(2, [3, 6]); // Wed=3, Sat=6
+    const hours = Math.round(ms / 3600000 * 10) / 10;
+    const nextDate = new Date(Date.now() + ms);
+    const dayName = nextDate.toLocaleDateString("en-US", { weekday: "long", timeZone: "America/Los_Angeles" });
+    console.log(`[sync-schedule] Next FULL sync in ${hours}h (2 AM Pacific, ${dayName})`);
+    setTimeout(async () => {
+      await runScheduledSync(true);
+      scheduleWeeklyFull();
+    }, ms);
+  }
+
+  scheduleDailyIncremental();
+  scheduleWeeklyFull();
 }
 
 app.listen(PORT, "0.0.0.0", () => {
