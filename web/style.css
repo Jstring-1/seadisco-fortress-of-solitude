@@ -1041,7 +1041,7 @@ main, #drops-view, #gear-view {
 .search-row {
   display: flex;
   gap: 0.5rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.5rem;
   align-items: center;
 }
 
