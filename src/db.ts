@@ -477,6 +477,24 @@ export async function getSyncStatus(clerkUserId: string): Promise<{ collectionSy
   };
 }
 
+// Get the most recent added_at date for a user's collection (for incremental sync)
+export async function getLatestCollectionAddedAt(clerkUserId: string): Promise<Date | null> {
+  const r = await getPool().query(
+    `SELECT MAX(added_at) AS latest FROM user_collection WHERE clerk_user_id = $1`,
+    [clerkUserId]
+  );
+  return r.rows[0]?.latest ?? null;
+}
+
+// Get the most recent added_at date for a user's wantlist (for incremental sync)
+export async function getLatestWantlistAddedAt(clerkUserId: string): Promise<Date | null> {
+  const r = await getPool().query(
+    `SELECT MAX(added_at) AS latest FROM user_wantlist WHERE clerk_user_id = $1`,
+    [clerkUserId]
+  );
+  return r.rows[0]?.latest ?? null;
+}
+
 export async function upsertCollectionItems(
   clerkUserId: string,
   items: Array<{ id: number; data: object; addedAt?: Date; folderId?: number; rating?: number; instanceId?: number; notes?: any[] }>
@@ -1152,7 +1170,7 @@ export async function pruneAllStaleData(): Promise<{ interest: number; fresh: nu
   );
   // Past live events
   const le = await getPool().query(
-    `DELETE FROM live_events WHERE event_date::date < CURRENT_DATE`
+    `DELETE FROM live_events WHERE event_date ~ '^\\d{4}-\\d{2}-\\d{2}' AND event_date::date < CURRENT_DATE`
   );
   return {
     interest: i.rowCount ?? 0,
@@ -1275,7 +1293,7 @@ export async function getLiveEvents(limit: number = 30): Promise<object[]> {
     `SELECT event_name AS name, artist, event_date AS date, event_time AS time,
             venue, venue_id AS "venueId", city, region, country, url
      FROM live_events
-     WHERE event_date::date >= CURRENT_DATE
+     WHERE event_date ~ '^\\d{4}-\\d{2}-\\d{2}' AND event_date::date >= CURRENT_DATE
      ORDER BY event_date ASC, event_time ASC
      LIMIT $1`,
     [limit]
@@ -1286,7 +1304,7 @@ export async function getLiveEvents(limit: number = 30): Promise<object[]> {
 export async function pruneLiveEvents(): Promise<number> {
   // Remove events that have already passed
   const r = await getPool().query(
-    `DELETE FROM live_events WHERE event_date::date < CURRENT_DATE`
+    `DELETE FROM live_events WHERE event_date ~ '^\\d{4}-\\d{2}-\\d{2}' AND event_date::date < CURRENT_DATE`
   );
   return r.rowCount ?? 0;
 }

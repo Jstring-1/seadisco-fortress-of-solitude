@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getLatestCollectionAddedAt, getLatestWantlistAddedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -261,10 +261,19 @@ async function runBackgroundSync(userId: string, token: string, username: string
       } catch {}
     }
 
+    // For incremental sync: get the latest added_at dates from DB
+    const latestCollectionDate = syncCollection ? await getLatestCollectionAddedAt(userId) : null;
+    const latestWantlistDate = syncWantlist ? await getLatestWantlistAddedAt(userId) : null;
+    const isIncrementalCollection = !!latestCollectionDate;
+    const isIncrementalWantlist = !!latestWantlistDate;
+    if (isIncrementalCollection) console.log(`Sync ${username}: incremental collection sync — last item added ${latestCollectionDate!.toISOString()}`);
+    if (isIncrementalWantlist) console.log(`Sync ${username}: incremental wantlist sync — last item added ${latestWantlistDate!.toISOString()}`);
+
     console.log(`Sync ${username}: estimated total = ${estimatedTotal}`);
     await updateSyncProgress(userId, "syncing", 0, estimatedTotal);
 
     if (syncCollection) {
+      let hitExisting = false;
       for (let page = 1; ; page++) {
         if (_syncAbort || _thisSyncAbort) { console.log(`Sync ${username}: aborted`); await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted"); _syncDone = true; return; }
         if (page > 1) await delay(1200); // 1.2s pacing — Discogs allows 60/min
@@ -283,6 +292,25 @@ async function runBackgroundSync(userId: string, token: string, username: string
           instanceId: item.instance_id ?? undefined,
           notes:      item.notes ?? undefined,
         })).filter(i => i.id);
+
+        // Incremental: if sorted by added desc, stop when we hit items older than our latest
+        if (isIncrementalCollection && latestCollectionDate) {
+          const newItems = items.filter(i => i.addedAt && i.addedAt > latestCollectionDate!);
+          if (newItems.length < items.length) {
+            // Some items are already in DB — upsert the new ones and stop
+            if (newItems.length > 0) {
+              await upsertCollectionItems(userId, newItems);
+              await recordInterestSignals(newItems, "collection");
+              totalSynced += newItems.length;
+            }
+            hitExisting = true;
+            console.log(`Sync ${username}: incremental collection done — ${totalSynced} new items found, stopping at page ${page}`);
+            lastProgressAt = Date.now();
+            await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
+            break;
+          }
+        }
+
         await upsertCollectionItems(userId, items);
         await recordInterestSignals(items, "collection");
         totalSynced += items.length;
@@ -291,6 +319,7 @@ async function runBackgroundSync(userId: string, token: string, username: string
         if (releases.length < 500) break;
       }
       await updateCollectionSyncedAt(userId);
+      if (hitExisting) console.log(`Sync ${username}: collection incremental sync complete`);
 
       // Sync folder list
       try {
@@ -306,11 +335,12 @@ async function runBackgroundSync(userId: string, token: string, username: string
     }
 
     if (syncWantlist) {
+      let hitExistingWant = false;
       for (let page = 1; ; page++) {
         if (_syncAbort || _thisSyncAbort) { console.log(`Sync ${username}: aborted`); await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted"); _syncDone = true; return; }
         if (page > 1) await delay(1200);
         const r = await fetchWithRetry(
-          `https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=500&page=${page}`
+          `https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=500&page=${page}&sort=added&sort_order=desc`
         );
         const data = await r.json() as any;
         const wants: any[] = data.wants ?? [];
@@ -322,6 +352,24 @@ async function runBackgroundSync(userId: string, token: string, username: string
           rating:  item.rating ?? 0,
           notes:   item.notes ?? undefined,
         })).filter(i => i.id);
+
+        // Incremental: stop when we hit items older than our latest
+        if (isIncrementalWantlist && latestWantlistDate) {
+          const newItems = items.filter(i => i.addedAt && i.addedAt > latestWantlistDate!);
+          if (newItems.length < items.length) {
+            if (newItems.length > 0) {
+              await upsertWantlistItems(userId, newItems);
+              await recordInterestSignals(newItems, "wantlist");
+              totalSynced += newItems.length;
+            }
+            hitExistingWant = true;
+            console.log(`Sync ${username}: incremental wantlist done — ${newItems.length} new items, stopping at page ${page}`);
+            lastProgressAt = Date.now();
+            await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
+            break;
+          }
+        }
+
         await upsertWantlistItems(userId, items);
         await recordInterestSignals(items, "wantlist");
         totalSynced += items.length;

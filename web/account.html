@@ -354,10 +354,10 @@ async function loadSyncStatus() {
     }
     statusEl.textContent = statusText;
 
-    // Auto-sync if either collection or wantlist is more than 6 hours stale
-    const sixHoursAgo = Date.now() - 6 * 60 * 60 * 1000;
-    const collStale = !d.collectionSyncedAt || new Date(d.collectionSyncedAt).getTime() < sixHoursAgo;
-    const wantStale = !d.wantlistSyncedAt   || new Date(d.wantlistSyncedAt).getTime()   < sixHoursAgo;
+    // Auto-sync if either collection or wantlist is more than 25 hours stale (daily sync at 4AM covers the rest)
+    const twentyFiveHoursAgo = Date.now() - 25 * 60 * 60 * 1000;
+    const collStale = !d.collectionSyncedAt || new Date(d.collectionSyncedAt).getTime() < twentyFiveHoursAgo;
+    const wantStale = !d.wantlistSyncedAt   || new Date(d.wantlistSyncedAt).getTime()   < twentyFiveHoursAgo;
     if ((collStale || wantStale) && d.syncStatus !== "syncing") {
       accountSync(true); // silent auto-sync
       return;
