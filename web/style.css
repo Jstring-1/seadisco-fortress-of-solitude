@@ -639,7 +639,7 @@ a.fresh-card-search-link:hover {
 }
 .feed-search-field { width: 180px; }
 .feed-grid {
-  display: flex; flex-direction: column; gap: 0.75rem;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem;
 }
 .feed-card {
   display: flex; flex-direction: row; flex-wrap: nowrap; gap: 0;
@@ -649,7 +649,7 @@ a.fresh-card-search-link:hover {
 }
 .feed-card:hover { border-color: var(--accent); }
 .feed-card-thumb {
-  flex-shrink: 0; width: 180px; min-height: 100px; max-height: 160px;
+  flex-shrink: 0; width: 120px; min-height: 80px; max-height: 130px;
   overflow: hidden; position: relative;
 }
 .feed-card-thumb img {
@@ -663,19 +663,20 @@ a.fresh-card-search-link:hover {
 }
 .feed-card:hover .feed-video-play { background: rgba(0,0,0,0.5); }
 .feed-card-body {
-  flex: 1; padding: 0.6rem 0.75rem; display: flex;
+  flex: 1; padding: 0.4rem 0.6rem; display: flex;
   flex-direction: column; justify-content: center; min-width: 0;
+  overflow: hidden;
 }
 .feed-card-category {
-  font-size: 0.68rem; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.05em; color: #666; margin-bottom: 0.15rem;
+  font-size: 0.62rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.05em; color: #666; margin-bottom: 0.1rem;
 }
 .feed-card-title {
-  font-size: 0.88rem; font-weight: 600; color: var(--fg);
-  line-height: 1.3; margin-bottom: 0.2rem;
+  font-size: 0.8rem; font-weight: 600; color: var(--fg);
+  line-height: 1.25; margin-bottom: 0.15rem;
 }
 .feed-card-author {
-  font-size: 0.76rem; color: var(--muted); margin-bottom: 0.5rem;
+  font-size: 0.7rem; color: var(--muted); margin-bottom: 0.35rem;
 }
 .feed-card-author a {
   text-decoration: none; font-weight: 600;
@@ -685,7 +686,7 @@ a.fresh-card-search-link:hover {
   font-size: 0.72rem; color: #555; margin-bottom: 0.2rem;
 }
 .feed-card-summary {
-  font-size: 0.78rem; color: var(--muted); line-height: 1.4;
+  font-size: 0.72rem; color: var(--muted); line-height: 1.35;
 }
 /* Source colors */
 .feed-src-pitchfork, .feed-src-pitchfork-news { color: #e44; }
@@ -705,9 +706,9 @@ a.fresh-card-search-link:hover {
 .feed-src-the-needle-drop { color: #ff5722; }
 .feed-src-deep-cuts { color: #7c4dff; }
 
-@media (max-width: 600px) {
-  .feed-card { flex-direction: column; }
-  .feed-card-thumb { width: 100%; height: 180px; }
+@media (max-width: 700px) {
+  .feed-grid { grid-template-columns: 1fr; }
+  .feed-card-thumb { width: 150px; }
   .feed-search-field { width: 100%; }
 }
 
