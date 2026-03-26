@@ -154,6 +154,7 @@ function switchView(view, skipPushState = false) {
     setStatus("");
     document.getElementById("blurb").style.display = "none";
     const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "";
+    const ws = document.getElementById("wanted-sample"); if (ws) ws.style.display = "";
   }
 }
 

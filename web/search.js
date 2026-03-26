@@ -387,6 +387,8 @@ function renderResults(items) {
     : items;
   const grid = document.getElementById("results");
   grid.innerHTML = filtered.map(item => renderCard(item)).join("");
+  // Hide wanted sample when showing search results
+  const ws = document.getElementById("wanted-sample"); if (ws) ws.style.display = "none";
 }
 
 function renderCard(item) {
@@ -599,6 +601,22 @@ async function loadRecentFeed() {
     const el = document.getElementById("recent-feed");
     if (el) el.style.display = "none";
   }
+}
+
+// ── Wanted sample cards for Find page filler ─────────────────────────────
+async function loadWantedSample() {
+  try {
+    const r = await fetch("/api/wanted-sample");
+    if (!r.ok) return;
+    const data = await r.json();
+    const items = data.items ?? [];
+    if (!items.length) return;
+    const wrap = document.getElementById("wanted-sample");
+    const grid = document.getElementById("wanted-sample-grid");
+    if (!wrap || !grid) return;
+    grid.innerHTML = items.map(item => renderCardFromBasicInfo(item)).join("");
+    wrap.style.display = "";
+  } catch { /* silent fail */ }
 }
 
 // ── Artist / entity navigation ───────────────────────────────────────────
