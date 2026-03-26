@@ -61,7 +61,7 @@ function escHtml(str) {
 function setStatus(msg, isError = false) {
   const el = document.getElementById("status");
   el.textContent = msg;
-  el.className = isError ? "error" : "";
+  el.className = isError ? "content-narrow error" : "content-narrow";
   el.style.display = msg ? "block" : "none";
 }
 
