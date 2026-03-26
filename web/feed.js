@@ -34,13 +34,6 @@ function renderFeedCard(item) {
     ? `<img src="${escHtml(item.image_url)}" alt="" loading="lazy" />`
     : `<div style="background:#1a1a1a;width:100%;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;color:#555;font-size:2rem">${isVideo ? "▶" : "📰"}</div>`;
 
-  // Format published date
-  let pubDate = "";
-  if (item.published_at) {
-    const d = new Date(item.published_at);
-    pubDate = d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-  }
-
   const sourceClass = item.source.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/-+$/, "");
   const catLabel = (item.category || "news").charAt(0).toUpperCase() + (item.category || "news").slice(1);
   const authorLine = item.author
@@ -53,7 +46,7 @@ function renderFeedCard(item) {
       <div class="feed-card-category">${escHtml(catLabel)}</div>
       <div class="feed-card-title">${escHtml(item.title)}</div>
       <div class="feed-card-author">${authorLine}</div>
-      ${pubDate ? `<div class="feed-card-date">${pubDate}</div>` : ""}
+
       ${item.summary ? `<div class="feed-card-summary">${escHtml(item.summary.length > 150 ? item.summary.slice(0, 147) + "…" : item.summary)}</div>` : ""}
     </div>
   </a>`;

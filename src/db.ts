@@ -1148,11 +1148,19 @@ export async function getFeedArticles(opts: {
   const offset = opts.offset ?? 0;
   const r = await getPool().query(
     `SELECT * FROM feed_articles ${where}
-     ORDER BY published_at DESC NULLS LAST
+     ORDER BY RANDOM()
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
     [...params, limit, offset]
   );
   return { items: r.rows, total };
+}
+
+export async function pruneFeedArticles(daysOld: number = 90): Promise<number> {
+  const r = await getPool().query(
+    `DELETE FROM feed_articles WHERE published_at < NOW() - INTERVAL '1 day' * $1`,
+    [daysOld]
+  );
+  return r.rowCount ?? 0;
 }
 
 export async function getGearStats(): Promise<{ total: number; detailed: number; lastFetch: string | null }> {
