@@ -128,6 +128,7 @@ function switchView(view, skipPushState = false) {
     _cwTab = "collection"; _cwQuery = "";
     document.getElementById("artist-alts").innerHTML = "";
     const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "none";
+    const ws1 = document.getElementById("wanted-sample"); if (ws1) ws1.style.display = "none";
     loadCwFacets("collection");
     loadCollectionFolders();
     loadCollectionTab(1);
@@ -141,6 +142,7 @@ function switchView(view, skipPushState = false) {
     _cwTab = "wantlist"; _cwQuery = "";
     document.getElementById("artist-alts").innerHTML = "";
     const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "none";
+    const ws2 = document.getElementById("wanted-sample"); if (ws2) ws2.style.display = "none";
     const fc = document.getElementById("cw-folder-cloud"); if (fc) fc.style.display = "none";
     loadCwFacets("wantlist");
     loadWantlistTab(1);
