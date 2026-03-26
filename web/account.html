@@ -814,13 +814,11 @@ async function loadAdminSyncStatus() {
       </div>`;
     }).join("");
 
-    // Auto-refresh every 5s while any sync is running
+    // Always poll: 5s while syncing, 15s when idle (catches externally triggered syncs)
     const anyRunning = users.some(u => u.syncStatus === "syncing");
-    if (anyRunning && !_adminSyncPoll) {
-      _adminSyncPoll = setInterval(loadAdminSyncStatus, 5000);
-    } else if (!anyRunning && _adminSyncPoll) {
-      clearInterval(_adminSyncPoll); _adminSyncPoll = null;
-    }
+    const interval = anyRunning ? 5000 : 15000;
+    if (_adminSyncPoll) clearInterval(_adminSyncPoll);
+    _adminSyncPoll = setInterval(loadAdminSyncStatus, interval);
   } catch { el.textContent = "Could not load sync status."; }
 }
 
