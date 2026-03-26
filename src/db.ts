@@ -1152,7 +1152,7 @@ export async function pruneAllStaleData(): Promise<{ interest: number; fresh: nu
   );
   // Past live events
   const le = await getPool().query(
-    `DELETE FROM live_events WHERE event_date < CURRENT_DATE`
+    `DELETE FROM live_events WHERE event_date::date < CURRENT_DATE`
   );
   return {
     interest: i.rowCount ?? 0,
@@ -1275,7 +1275,7 @@ export async function getLiveEvents(limit: number = 30): Promise<object[]> {
     `SELECT event_name AS name, artist, event_date AS date, event_time AS time,
             venue, venue_id AS "venueId", city, region, country, url
      FROM live_events
-     WHERE event_date >= CURRENT_DATE
+     WHERE event_date::date >= CURRENT_DATE
      ORDER BY event_date ASC, event_time ASC
      LIMIT $1`,
     [limit]
@@ -1286,7 +1286,7 @@ export async function getLiveEvents(limit: number = 30): Promise<object[]> {
 export async function pruneLiveEvents(): Promise<number> {
   // Remove events that have already passed
   const r = await getPool().query(
-    `DELETE FROM live_events WHERE event_date < CURRENT_DATE`
+    `DELETE FROM live_events WHERE event_date::date < CURRENT_DATE`
   );
   return r.rowCount ?? 0;
 }
