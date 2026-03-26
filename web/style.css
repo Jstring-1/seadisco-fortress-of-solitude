@@ -574,6 +574,9 @@ a.fresh-card-search-link:hover {
 /* ── Gear tab ──────────────────────────────────────────────────────────── */
 .gear-header {
   margin-bottom: 0.75rem;
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
 }
 .gear-controls {
   display: flex;
