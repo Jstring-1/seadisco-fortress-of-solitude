@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -19,6 +19,9 @@ const requireAuth = process.env.REQUIRE_AUTH === "true";
 // Concert API keys
 const ticketmasterKey = process.env.TICKETMASTER_API_KEY ?? "";
 const bandsintownAppId = "seadisco"; // Bandsintown just needs an app identifier
+
+// YouTube API key
+const youtubeApiKey = process.env.YOUTUBE_API_KEY ?? "";
 
 // Shared Discogs client (used as fallback when user has no personal token)
 const discogs = sharedToken ? new DiscogsClient(sharedToken) : null;
@@ -1887,6 +1890,183 @@ app.post("/api/ebay/deletion", (_req, res) => {
   res.status(200).json({ ok: true });
 });
 
+// ── Feed: RSS + YouTube ─────────────────────────────────────────────────
+const RSS_FEEDS: Array<{ name: string; url: string; category: string }> = [
+  { name: "Pitchfork", url: "https://pitchfork.com/feed/feed-album-reviews/rss", category: "reviews" },
+  { name: "Pitchfork News", url: "https://pitchfork.com/feed/feed-news/rss", category: "news" },
+  { name: "Bandcamp Daily", url: "https://daily.bandcamp.com/feed", category: "reviews" },
+  { name: "Stereogum", url: "https://www.stereogum.com/feed/", category: "news" },
+  { name: "The Vinyl Factory", url: "https://thevinylfactory.com/feed/", category: "news" },
+  { name: "Aquarium Drunkard", url: "https://aquariumdrunkard.com/feed/", category: "news" },
+  { name: "The Quietus", url: "https://thequietus.com/feed", category: "reviews" },
+  { name: "Analog Planet", url: "https://www.analogplanet.com/feed/", category: "gear" },
+];
+
+const YOUTUBE_CHANNELS: Array<{ name: string; channelId: string }> = [
+  { name: "Vinyl Eyezz", channelId: "UCYkG_jJ2L0clu-_fqFfWGbQ" },
+  { name: "Techmoan", channelId: "UC5I2hjZYiW9gZPVkvzM8_Cw" },
+  { name: "The Vinyl Guide", channelId: "UCdYYSNnFPIdMuiAaq0pSpTA" },
+  { name: "Analog Planet", channelId: "UCXnnKXr8oSTfZ7Y3R8CGAUQ" },
+];
+
+function extractFromXml(xml: string, tag: string): string {
+  const re = new RegExp(`<${tag}[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?</${tag}>`);
+  const m = xml.match(re);
+  return m ? m[1].trim() : "";
+}
+
+function extractAttr(xml: string, tag: string, attr: string): string {
+  const re = new RegExp(`<${tag}[^>]*${attr}=["']([^"']*)["']`);
+  const m = xml.match(re);
+  return m ? m[1] : "";
+}
+
+function extractImage(itemXml: string): string {
+  // Try media:content, media:thumbnail, enclosure, then img in description
+  let img = extractAttr(itemXml, "media:content", "url") ||
+            extractAttr(itemXml, "media:thumbnail", "url") ||
+            extractAttr(itemXml, "enclosure", "url");
+  if (!img) {
+    const desc = extractFromXml(itemXml, "description") + extractFromXml(itemXml, "content:encoded");
+    const imgMatch = desc.match(/<img[^>]+src=["']([^"']+)["']/);
+    if (imgMatch) img = imgMatch[1];
+  }
+  return img;
+}
+
+async function fetchRssFeeds(): Promise<number> {
+  let total = 0;
+  for (const feed of RSS_FEEDS) {
+    try {
+      const r = await fetch(feed.url, {
+        headers: { "User-Agent": "SeaDisco/1.0 (music feed aggregator)" },
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!r.ok) { console.warn(`RSS ${feed.name}: HTTP ${r.status}`); continue; }
+      const xml = await r.text();
+
+      // Split items
+      const items = xml.split(/<item[\s>]/).slice(1);
+      let count = 0;
+      for (const itemXml of items.slice(0, 20)) { // Max 20 per feed
+        try {
+          const title = extractFromXml(itemXml, "title")
+            .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&#8217;/g, "'").replace(/&#8220;/g, '"').replace(/&#8221;/g, '"');
+          const link = extractFromXml(itemXml, "link") || extractFromXml(itemXml, "guid");
+          if (!title || !link) continue;
+
+          let summary = extractFromXml(itemXml, "description")
+            .replace(/<[^>]+>/g, "").replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+            .replace(/&#8217;/g, "'").replace(/&#8220;/g, '"').replace(/&#8221;/g, '"')
+            .trim();
+          if (summary.length > 300) summary = summary.slice(0, 297) + "…";
+
+          const imageUrl = extractImage(itemXml);
+
+          const author = extractFromXml(itemXml, "dc:creator") ||
+                         extractFromXml(itemXml, "author") || "";
+
+          const pubDate = extractFromXml(itemXml, "pubDate") ||
+                          extractFromXml(itemXml, "dc:date") || "";
+          const publishedAt = pubDate ? new Date(pubDate).toISOString() : null;
+
+          await upsertFeedArticle({
+            source: feed.name,
+            sourceUrl: link,
+            title,
+            summary: summary || undefined,
+            imageUrl: imageUrl || undefined,
+            author: author || undefined,
+            category: feed.category,
+            contentType: "article",
+            publishedAt: publishedAt ?? undefined,
+          });
+          count++;
+        } catch (e) { /* skip bad item */ }
+      }
+      total += count;
+      console.log(`RSS ${feed.name}: ${count} articles`);
+    } catch (err) {
+      console.warn(`RSS ${feed.name} failed:`, err);
+    }
+  }
+  return total;
+}
+
+async function fetchYouTubeVideos(): Promise<number> {
+  if (!youtubeApiKey) { console.log("YouTube feed skip — no API key"); return 0; }
+  let total = 0;
+  for (const ch of YOUTUBE_CHANNELS) {
+    try {
+      const url = `https://www.googleapis.com/youtube/v3/search?key=${youtubeApiKey}&channelId=${ch.channelId}&part=snippet&order=date&maxResults=5&type=video`;
+      const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      if (!r.ok) { console.warn(`YouTube ${ch.name}: HTTP ${r.status}`); continue; }
+      const data = await r.json() as any;
+      let count = 0;
+      for (const item of data.items ?? []) {
+        const videoId = item.id?.videoId;
+        if (!videoId) continue;
+        const snippet = item.snippet;
+        await upsertFeedArticle({
+          source: ch.name,
+          sourceUrl: `https://www.youtube.com/watch?v=${videoId}`,
+          title: snippet.title?.replace(/&amp;/g, "&").replace(/&#39;/g, "'") ?? "",
+          summary: snippet.description?.slice(0, 300) ?? "",
+          imageUrl: snippet.thumbnails?.high?.url ?? snippet.thumbnails?.medium?.url ?? "",
+          author: snippet.channelTitle ?? ch.name,
+          category: "video",
+          contentType: "video",
+          publishedAt: snippet.publishedAt ?? undefined,
+        });
+        count++;
+      }
+      total += count;
+      console.log(`YouTube ${ch.name}: ${count} videos`);
+    } catch (err) {
+      console.warn(`YouTube ${ch.name} failed:`, err);
+    }
+  }
+  return total;
+}
+
+async function fetchAllFeedContent() {
+  console.log("Starting feed content fetch…");
+  const articles = await fetchRssFeeds();
+  const videos = await fetchYouTubeVideos();
+  console.log(`Feed fetch complete: ${articles} articles, ${videos} videos`);
+}
+
+function startFeedSchedule() {
+  // Initial fetch after 15s
+  setTimeout(() => fetchAllFeedContent(), 15000);
+  // Refresh every 2 hours
+  setInterval(() => fetchAllFeedContent(), 2 * 60 * 60 * 1000);
+}
+
+// GET /api/feed — public feed articles
+app.get("/api/feed", async (req, res) => {
+  try {
+    const category = (req.query.category as string) || "all";
+    const q = (req.query.q as string) || "";
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
+    const offset = parseInt(req.query.offset as string) || 0;
+    res.setHeader("Cache-Control", "public, max-age=300"); // 5 min
+    const { items, total } = await getFeedArticles({ category, limit, offset, q });
+    res.json({ items, total });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/admin/feed/fetch — manual trigger for admin
+app.post("/api/admin/feed/fetch", express.json(), async (req, res) => {
+  const userId = getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  res.json({ ok: true, started: true });
+  fetchAllFeedContent();
+});
+
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 // Daily auto-sync of all user collections/wantlists at 4 AM Pacific
 function startDailySyncSchedule() {
@@ -1932,6 +2112,7 @@ app.listen(PORT, "0.0.0.0", () => {
   if (process.env.APP_DB_URL) {
     startFreshSyncSchedule();
     startGearSchedule();
+    startFeedSchedule();
     startDailySyncSchedule();
   }
 });

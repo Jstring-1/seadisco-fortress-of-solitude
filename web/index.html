@@ -30,7 +30,7 @@
   <meta name="theme-color" content="#0c1015">
   <link rel="preconnect" href="https://api.discogs.com" />
   <link rel="preconnect" href="https://i.discogs.com" />
-  <link rel="stylesheet" href="/style.css?v=20260325b" />
+  <link rel="stylesheet" href="/style.css?v=20260325c" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -70,17 +70,13 @@
     </button>
     <div id="nav-tabs-wrap">
       <div id="main-nav-tabs">
-        <button class="main-nav-tab active" data-view="search" onclick="switchView('search')">Search</button>
+        <button class="main-nav-tab active" data-view="search" onclick="switchView('search')">Find</button>
         <button class="main-nav-tab" data-view="drops" onclick="switchView('drops')">Drops</button>
+        <button class="main-nav-tab" data-view="feed" onclick="switchView('feed')">Feed</button>
         <button class="main-nav-tab" data-view="live" onclick="switchView('live')">Live</button>
+        <button class="main-nav-tab" data-view="gear" onclick="switchView('gear')">Gear</button>
         <button class="main-nav-tab nav-disabled" data-view="collection" onclick="switchView('collection')" title="Login to Access">Collection</button>
         <button class="main-nav-tab nav-disabled" data-view="wantlist" onclick="switchView('wantlist')" title="Login to Access">Wantlist</button>
-        <button class="main-nav-tab nav-disabled" data-view="wanted" onclick="switchView('wanted')" title="Login to Access">Wants</button>
-        <button class="main-nav-tab" data-view="gear" onclick="switchView('gear')">Gear</button>
-        <button class="main-nav-tab" data-view="info" onclick="switchView('info')">Info</button>
-        <div id="nav-auth-wrap">
-          <a href="/account" class="main-nav-tab nav-auth-btn" id="nav-auth-btn">Account</a>
-        </div>
       </div>
       <div id="nav-auth-popup">Sign up and add your Discogs API token for unlimited searches</div>
     </div>
@@ -374,6 +370,28 @@
   </div>
 </div>
 
+<div id="feed-view" class="content-area" style="display:none">
+  <div class="feed-header">
+    <div class="feed-controls">
+      <div class="feed-cat-pills">
+        <button class="pill feed-cat-pill active" data-cat="all" onclick="setFeedCategory('all')">All</button>
+        <button class="pill feed-cat-pill" data-cat="news" onclick="setFeedCategory('news')">News</button>
+        <button class="pill feed-cat-pill" data-cat="reviews" onclick="setFeedCategory('reviews')">Reviews</button>
+        <button class="pill feed-cat-pill" data-cat="gear" onclick="setFeedCategory('gear')">Gear</button>
+        <button class="pill feed-cat-pill" data-cat="video" onclick="setFeedCategory('video')">Video</button>
+      </div>
+      <div class="feed-right-controls">
+        <input type="text" class="site-form-field feed-search-field" placeholder="Filter articles…" oninput="onFeedSearch(this.value)">
+      </div>
+    </div>
+    <div id="feed-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.5rem"></div>
+  </div>
+  <div id="feed-results" class="feed-grid"></div>
+  <div style="text-align:center;margin:1.5rem 0">
+    <button id="feed-load-more" onclick="loadMoreFeed()" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--accent);padding:0.5rem 1.5rem;cursor:pointer;font-size:0.82rem" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">Load more</button>
+  </div>
+</div>
+
 <div id="info-view" class="content-narrow" style="display:none">
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">How SeaDisco Works</h2>
 
@@ -400,6 +418,10 @@
 </div>
 
 <footer>
+  <div style="margin-bottom:0.5rem">
+    <a href="javascript:void(0)" onclick="switchView('info')" style="color:#5a9aaa;text-decoration:none;margin:0 0.5rem">Info</a> ·
+    <a href="/account" style="color:#5a9aaa;text-decoration:none;margin:0 0.5rem">Account</a>
+  </div>
   <div style="color:#555;font-style:italic">DISCLAIMER: AI be funky sometimes</div>
   Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Discogs</a>, <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Claude</a>, and <a href="https://listenbrainz.org" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">ListenBrainz</a>
   <div>© 2026 SeaDisco &nbsp;·&nbsp; Music data courtesy of Discogs API &nbsp;·&nbsp; Not affiliated with Discogs &nbsp;·&nbsp; Jimmy Witherfork Strikes Again</div>
@@ -467,14 +489,15 @@
   <div id="lightbox-counter"></div>
 </div>
 
-<script src="/utils.js?v=20260325b"></script>
-<script src="/search.js?v=20260325b"></script>
-<script src="/collection.js?v=20260325b"></script>
-<script src="/modal.js?v=20260325b"></script>
-<script src="/drops.js?v=20260325b"></script>
-<script src="/live.js?v=20260325b"></script>
-<script src="/gear.js?v=20260325b"></script>
-<script src="/app.js?v=20260325b"></script>
+<script src="/utils.js?v=20260325c"></script>
+<script src="/search.js?v=20260325c"></script>
+<script src="/collection.js?v=20260325c"></script>
+<script src="/modal.js?v=20260325c"></script>
+<script src="/drops.js?v=20260325c"></script>
+<script src="/live.js?v=20260325c"></script>
+<script src="/gear.js?v=20260325c"></script>
+<script src="/feed.js?v=20260325c"></script>
+<script src="/app.js?v=20260325c"></script>
 
 </body>
 </html>
