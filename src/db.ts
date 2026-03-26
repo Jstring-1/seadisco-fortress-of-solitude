@@ -169,6 +169,25 @@ export async function initDb() {
   await getPool().query(`
     CREATE INDEX IF NOT EXISTS gear_listings_bids_price_idx ON gear_listings (bid_count DESC, price DESC) WHERE NOT expired
   `);
+  // ── Feed articles (RSS + YouTube) ──────────────────────────────────────
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS feed_articles (
+      id              SERIAL PRIMARY KEY,
+      source          TEXT NOT NULL,
+      source_url      TEXT UNIQUE NOT NULL,
+      title           TEXT NOT NULL,
+      summary         TEXT,
+      image_url       TEXT,
+      author          TEXT,
+      category        TEXT DEFAULT 'news',
+      content_type    TEXT DEFAULT 'article',
+      published_at    TIMESTAMPTZ,
+      fetched_at      TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await getPool().query(`
+    CREATE INDEX IF NOT EXISTS feed_articles_published_idx ON feed_articles (published_at DESC)
+  `);
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS gear_fetch_log (
       id          SERIAL PRIMARY KEY,
@@ -1086,6 +1105,54 @@ export async function markExpiredGearListings(): Promise<number> {
      WHERE NOT expired AND fetched_at < NOW() - INTERVAL '3 days'`
   );
   return r.rowCount ?? 0;
+}
+
+// ── Feed articles ─────────────────────────────────────────────────────────
+export async function upsertFeedArticle(article: {
+  source: string; sourceUrl: string; title: string; summary?: string;
+  imageUrl?: string; author?: string; category?: string;
+  contentType?: string; publishedAt?: string;
+}): Promise<void> {
+  await getPool().query(
+    `INSERT INTO feed_articles (source, source_url, title, summary, image_url, author, category, content_type, published_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     ON CONFLICT (source_url) DO UPDATE SET
+       title = EXCLUDED.title,
+       summary = EXCLUDED.summary,
+       image_url = COALESCE(EXCLUDED.image_url, feed_articles.image_url),
+       author = COALESCE(EXCLUDED.author, feed_articles.author),
+       category = EXCLUDED.category,
+       published_at = COALESCE(EXCLUDED.published_at, feed_articles.published_at)`,
+    [article.source, article.sourceUrl, article.title, article.summary ?? null,
+     article.imageUrl ?? null, article.author ?? null, article.category ?? "news",
+     article.contentType ?? "article", article.publishedAt ?? null]
+  );
+}
+
+export async function getFeedArticles(opts: {
+  category?: string; limit?: number; offset?: number; q?: string;
+}): Promise<{ items: any[]; total: number }> {
+  const params: any[] = [];
+  let where = "WHERE 1=1";
+  if (opts.category && opts.category !== "all") {
+    params.push(opts.category);
+    where += ` AND category = $${params.length}`;
+  }
+  if (opts.q?.trim()) {
+    params.push(`%${opts.q.trim()}%`);
+    where += ` AND (title ILIKE $${params.length} OR summary ILIKE $${params.length} OR source ILIKE $${params.length})`;
+  }
+  const countR = await getPool().query(`SELECT COUNT(*)::int AS cnt FROM feed_articles ${where}`, params);
+  const total = countR.rows[0]?.cnt ?? 0;
+  const limit = opts.limit ?? 50;
+  const offset = opts.offset ?? 0;
+  const r = await getPool().query(
+    `SELECT * FROM feed_articles ${where}
+     ORDER BY published_at DESC NULLS LAST
+     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    [...params, limit, offset]
+  );
+  return { items: r.rows, total };
 }
 
 export async function getGearStats(): Promise<{ total: number; detailed: number; lastFetch: string | null }> {
