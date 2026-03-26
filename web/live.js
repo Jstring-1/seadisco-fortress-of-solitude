@@ -258,7 +258,7 @@ function _liveFmtTime(t) {
   } catch { return t; }
 }
 
-// ── Upcoming events (pre-search filler) ──────────────────────────────────
+// ── Upcoming events (pre-search filler, geo-targeted) ────────────────────
 let _liveUpcomingLoaded = false;
 
 let _liveUpcomingAll = [];
@@ -270,6 +270,34 @@ async function loadLiveUpcoming() {
   const wrap = document.getElementById("live-upcoming");
   const list = document.getElementById("live-upcoming-list");
   if (!wrap || !list) return;
+
+  // Try nearby events first (geo-targeted via IP)
+  try {
+    const params = new URLSearchParams();
+    const cached = JSON.parse(localStorage.getItem("seadisco_location") || "null");
+    if (cached && Date.now() - cached.ts < 86400000) {
+      params.set("lat", cached.lat);
+      params.set("lon", cached.lon);
+      params.set("city", cached.city || "");
+      params.set("region", cached.region || "");
+    }
+    const data = await fetch(`/api/live/nearby?${params}`).then(r => r.json());
+    if (data.location) {
+      localStorage.setItem("seadisco_location", JSON.stringify({ ...data.location, ts: Date.now() }));
+    }
+    if (data.events?.length) {
+      _liveUpcomingAll = data.events;
+      const label = wrap.querySelector(".feed-label");
+      if (label && data.location?.city) {
+        label.textContent = `Events near ${data.location.city}, ${data.location.region}`;
+      }
+      _renderUpcomingSlice(LIVE_UPCOMING_PAGE);
+      wrap.style.display = "";
+      return;
+    }
+  } catch {}
+
+  // Fall back to generic upcoming events
   try {
     const data = await fetch("/api/live/upcoming").then(r => r.json());
     _liveUpcomingAll = data.events ?? [];

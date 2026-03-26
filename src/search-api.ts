@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getLatestCollectionAddedAt, getLatestWantlistAddedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getLatestCollectionAddedAt, getLatestWantlistAddedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, getLocationByIp, upsertLocation } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -39,6 +39,45 @@ const IP_WHITELIST = new Set<string>([
 function clientIp(req: express.Request): string {
   const fwd = req.headers["x-forwarded-for"] as string | undefined;
   return (fwd ? fwd.split(",")[0] : req.ip ?? "unknown").replace(/^::ffff:/, "").trim();
+}
+
+// ── IP geolocation resolver (3-layer cache: memory → DB → ip-api.com) ───
+const locationCache = new Map<string, { lat: number; lon: number; city: string; region: string; country: string; ts: number }>();
+
+async function resolveLocation(req: express.Request): Promise<{ lat: number; lon: number; city: string; region: string; country: string } | null> {
+  const ip = clientIp(req);
+  if (ip === "unknown" || ip === "127.0.0.1" || ip === "::1") return null;
+
+  // 1. In-memory cache (1 hour)
+  const cached = locationCache.get(ip);
+  if (cached && Date.now() - cached.ts < 3600_000) {
+    return { lat: cached.lat, lon: cached.lon, city: cached.city, region: cached.region, country: cached.country };
+  }
+
+  // 2. DB cache (7 days)
+  try {
+    const dbRow = await getLocationByIp(ip);
+    if (dbRow) {
+      const loc = { lat: dbRow.latitude, lon: dbRow.longitude, city: dbRow.city, region: dbRow.region, country: dbRow.country };
+      locationCache.set(ip, { ...loc, ts: Date.now() });
+      return loc;
+    }
+  } catch {}
+
+  // 3. ip-api.com (free tier, HTTP only, 45 req/min)
+  try {
+    const r = await fetch(`http://ip-api.com/json/${ip}?fields=status,lat,lon,city,regionName,country`, { signal: AbortSignal.timeout(5000) });
+    const data = await r.json() as any;
+    if (data.status !== "success") return null;
+    const loc = { lat: data.lat as number, lon: data.lon as number, city: data.city as string, region: data.regionName as string, country: data.country as string };
+    locationCache.set(ip, { ...loc, ts: Date.now() });
+    // Persist to DB (fire-and-forget)
+    const userId = getClerkUserId(req);
+    upsertLocation(ip, userId, loc.lat, loc.lon, loc.city, loc.region, loc.country).catch(() => {});
+    return loc;
+  } catch {
+    return null;
+  }
 }
 
 function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
@@ -507,6 +546,60 @@ app.get("/api/live/upcoming", async (_req, res) => {
     res.json({ events });
   } catch {
     res.json({ events: [] });
+  }
+});
+
+// GET /api/live/nearby — geo-targeted events based on user IP
+app.get("/api/live/nearby", async (req, res) => {
+  // Allow client to pass cached lat/lon to skip IP lookup
+  let lat = parseFloat(req.query.lat as string);
+  let lon = parseFloat(req.query.lon as string);
+  let city = (req.query.city as string) || "";
+  let region = (req.query.region as string) || "";
+
+  if (isNaN(lat) || isNaN(lon)) {
+    const loc = await resolveLocation(req);
+    if (!loc) { res.json({ events: [], location: null }); return; }
+    lat = loc.lat;
+    lon = loc.lon;
+    city = loc.city;
+    region = loc.region;
+  }
+
+  if (!ticketmasterKey) { res.json({ events: [], location: { lat, lon, city, region } }); return; }
+
+  try {
+    const params = new URLSearchParams({
+      latlong: `${lat},${lon}`,
+      radius: "50",
+      unit: "miles",
+      classificationName: "music",
+      size: "24",
+      sort: "date,asc",
+      apikey: ticketmasterKey,
+    });
+    const tmRes = await fetch(`https://app.ticketmaster.com/discovery/v2/events.json?${params}`, { signal: AbortSignal.timeout(10000) });
+    if (!tmRes.ok) { res.json({ events: [], location: { lat, lon, city, region } }); return; }
+    const tmData = await tmRes.json() as any;
+    const events = (tmData._embedded?.events ?? []).map((ev: any) => {
+      const venue = ev._embedded?.venues?.[0];
+      return {
+        name: ev.name ?? "",
+        artist: ev._embedded?.attractions?.[0]?.name ?? "",
+        date: ev.dates?.start?.localDate ?? "",
+        time: ev.dates?.start?.localTime ?? "",
+        venue: venue?.name ?? "",
+        venueId: venue?.id ?? "",
+        city: venue?.city?.name ?? "",
+        region: venue?.state?.stateCode ?? "",
+        country: venue?.country?.countryCode ?? "",
+        url: ev.url ?? "",
+      };
+    });
+    res.setHeader("Cache-Control", "private, max-age=600");
+    res.json({ events, location: { lat, lon, city, region } });
+  } catch {
+    res.json({ events: [], location: { lat, lon, city, region } });
   }
 });
 
