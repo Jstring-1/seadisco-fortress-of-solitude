@@ -988,15 +988,15 @@ main, #drops-view, #gear-view {
   margin: 0 auto;
   padding: 0.4rem 0 1.5rem;
 }
-#live-view, #info-view {
+#live-view, #info-view, #feed-view {
   width: 90%;
   max-width: 900px;
   margin: 0 auto;
   padding: 0.4rem 0 1.5rem;
 }
-@media (max-width: 1024px) { main, #drops-view, #gear-view, #live-view, #info-view { width: 94%; } }
-@media (max-width: 640px)  { main, #drops-view, #gear-view, #live-view, #info-view { width: 97%; } }
-@media (max-width: 400px)  { main, #drops-view, #gear-view, #live-view, #info-view { width: 99%; } }
+@media (max-width: 1024px) { main, #drops-view, #gear-view, #live-view, #info-view, #feed-view { width: 94%; } }
+@media (max-width: 640px)  { main, #drops-view, #gear-view, #live-view, #info-view, #feed-view { width: 97%; } }
+@media (max-width: 400px)  { main, #drops-view, #gear-view, #live-view, #info-view, #feed-view { width: 99%; } }
 
 
 /* ── Content narrow utility ── */
