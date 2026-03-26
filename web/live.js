@@ -262,7 +262,7 @@ function _liveFmtTime(t) {
 let _liveUpcomingLoaded = false;
 
 let _liveUpcomingAll = [];
-const LIVE_UPCOMING_PAGE = 8;
+const LIVE_UPCOMING_PAGE = 24;
 
 async function loadLiveUpcoming() {
   if (_liveUpcomingLoaded) return;

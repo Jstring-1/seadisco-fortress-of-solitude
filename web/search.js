@@ -605,7 +605,7 @@ async function loadRecentFeed() {
 
 // ── Wanted sample cards for Find page filler ─────────────────────────────
 let _wantedSampleAll = [];
-const WANTED_SAMPLE_PAGE = 8;
+const WANTED_SAMPLE_PAGE = 12;
 
 async function loadWantedSample() {
   try {

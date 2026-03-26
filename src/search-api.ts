@@ -496,7 +496,7 @@ app.get("/api/user/wantlist", async (req, res) => {
 app.get("/api/live/upcoming", async (_req, res) => {
   try {
     res.setHeader("Cache-Control", "public, max-age=600"); // 10 min
-    const events = await getLiveEvents(30);
+    const events = await getLiveEvents(24);
     res.json({ events });
   } catch {
     res.json({ events: [] });
@@ -550,7 +550,7 @@ function startLiveEventsSchedule() {
 app.get("/api/wanted-sample", async (_req, res) => {
   try {
     res.setHeader("Cache-Control", "public, max-age=600"); // 10 min
-    const items = await getWantedSample(24);
+    const items = await getWantedSample(12);
     res.json({ items });
   } catch (e) {
     res.status(500).json({ error: String(e) });
