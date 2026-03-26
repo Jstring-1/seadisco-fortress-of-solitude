@@ -181,8 +181,8 @@ let _syncAbort = false;
 const SYNC_STALL_TIMEOUT = 5 * 60 * 1000; // 5 minutes with no progress = stalled
 
 // Background sync worker — runs detached from the HTTP request
-async function runBackgroundSync(userId: string, token: string, username: string, syncCollection: boolean, syncWantlist: boolean) {
-  console.log(`Sync ${username}: starting background sync (collection=${syncCollection}, wantlist=${syncWantlist})`);
+async function runBackgroundSync(userId: string, token: string, username: string, syncCollection: boolean, syncWantlist: boolean, force: boolean = false) {
+  console.log(`Sync ${username}: starting background sync (collection=${syncCollection}, wantlist=${syncWantlist}, force=${force})`);
   const headers = { "Authorization": `Discogs token=${token}`, "User-Agent": "SeaDisco/1.0" };
   const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
   let totalSynced = 0;
@@ -261,11 +261,12 @@ async function runBackgroundSync(userId: string, token: string, username: string
       } catch {}
     }
 
-    // For incremental sync: get the latest added_at dates from DB
-    const latestCollectionDate = syncCollection ? await getLatestCollectionAddedAt(userId) : null;
-    const latestWantlistDate = syncWantlist ? await getLatestWantlistAddedAt(userId) : null;
+    // For incremental sync: get the latest added_at dates from DB (skip if force=true)
+    const latestCollectionDate = (!force && syncCollection) ? await getLatestCollectionAddedAt(userId) : null;
+    const latestWantlistDate = (!force && syncWantlist) ? await getLatestWantlistAddedAt(userId) : null;
     const isIncrementalCollection = !!latestCollectionDate;
     const isIncrementalWantlist = !!latestWantlistDate;
+    if (force) console.log(`Sync ${username}: FULL sync forced`);
     if (isIncrementalCollection) console.log(`Sync ${username}: incremental collection sync — last item added ${latestCollectionDate!.toISOString()}`);
     if (isIncrementalWantlist) console.log(`Sync ${username}: incremental wantlist sync — last item added ${latestWantlistDate!.toISOString()}`);
 
@@ -818,20 +819,21 @@ app.get("/api/admin/sync-status", async (req, res) => {
   res.json({ users, freshStats });
 });
 
-// POST /api/admin/sync-all — trigger background sync for all users with tokens, admin only
-app.post("/api/admin/sync-all", async (req, res) => {
+// POST /api/admin/sync-all — trigger FULL background sync for all users, admin only
+app.post("/api/admin/sync-all", express.json(), async (req, res) => {
   const userId = getClerkUserId(req);
   const adminId = process.env.ADMIN_CLERK_ID ?? "";
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  const incremental = req.body?.incremental === true;
   _syncAbort = false; // clear any previous abort
   const users = await getAllUsersForSync();
-  res.json({ ok: true, queued: users.length });
+  res.json({ ok: true, queued: users.length, mode: incremental ? "incremental" : "full" });
   // Run syncs sequentially so server load and Discogs API stay manageable
   (async () => {
     for (const user of users) {
       if (_syncAbort) { console.log("Sync-all: aborted, skipping remaining users"); break; }
       try {
-        await runBackgroundSync(user.clerkUserId, user.token, user.username, true, true);
+        await runBackgroundSync(user.clerkUserId, user.token, user.username, true, true, !incremental);
       } catch (err) {
         console.error(`Sync-all error for ${user.username}:`, err);
       }
@@ -844,16 +846,16 @@ app.post("/api/admin/sync-user", express.json(), async (req, res) => {
   const userId = getClerkUserId(req);
   const adminId = process.env.ADMIN_CLERK_ID ?? "";
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
-  const { username } = req.body as { username: string };
+  const { username, incremental } = req.body as { username: string; incremental?: boolean };
   if (!username) { res.status(400).json({ error: "username required" }); return; }
   const users = await getAllUsersForSync();
   const user = users.find(u => u.username === username);
   if (!user) { res.status(404).json({ error: "User not found" }); return; }
   _syncAbort = false;
-  res.json({ ok: true, username });
+  res.json({ ok: true, username, mode: incremental ? "incremental" : "full" });
   (async () => {
     try {
-      await runBackgroundSync(user.clerkUserId, user.token, user.username, true, true);
+      await runBackgroundSync(user.clerkUserId, user.token, user.username, true, true, !incremental);
     } catch (err) {
       console.error(`Sync-user error for ${user.username}:`, err);
     }
