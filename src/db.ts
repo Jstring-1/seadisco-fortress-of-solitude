@@ -1107,6 +1107,32 @@ export async function markExpiredGearListings(): Promise<number> {
   return r.rowCount ?? 0;
 }
 
+// ── Auto-prune stale data ─────────────────────────────────────────────────
+export async function pruneAllStaleData(): Promise<{ interest: number; fresh: number; gear: number; gearLog: number }> {
+  // Interest signals older than 6 months
+  const i = await getPool().query(
+    `DELETE FROM interest_signals WHERE recorded_at < NOW() - INTERVAL '6 months'`
+  );
+  // Fresh releases older than 6 months
+  const f = await getPool().query(
+    `DELETE FROM fresh_releases WHERE fetched_at < NOW() - INTERVAL '6 months'`
+  );
+  // Expired gear listings (no longer live auctions)
+  const g = await getPool().query(
+    `DELETE FROM gear_listings WHERE expired = true`
+  );
+  // Gear fetch log older than 30 days
+  const gl = await getPool().query(
+    `DELETE FROM gear_fetch_log WHERE started_at < NOW() - INTERVAL '30 days'`
+  );
+  return {
+    interest: i.rowCount ?? 0,
+    fresh: f.rowCount ?? 0,
+    gear: g.rowCount ?? 0,
+    gearLog: gl.rowCount ?? 0,
+  };
+}
+
 // ── Feed articles ─────────────────────────────────────────────────────────
 export async function upsertFeedArticle(article: {
   source: string; sourceUrl: string; title: string; summary?: string;
