@@ -357,15 +357,10 @@ body {
 }
 
 /* ── Recent Searches pills (inline under results) ───────────────────────── */
-#wanted-sample {
-  max-width: 900px;
-  margin-left: auto;
-  margin-right: auto;
-}
 #wanted-sample-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-  gap: 0.6rem;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
 }
 #recent-feed {
   padding-top: 2rem;
