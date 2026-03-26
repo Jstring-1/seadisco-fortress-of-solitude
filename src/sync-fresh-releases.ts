@@ -98,9 +98,9 @@ export async function runFreshSync(): Promise<void> {
 }
 
 export function startFreshSyncSchedule(): void {
-  // Run once immediately (with a short delay so DB is ready)
-  setTimeout(() => runFreshSync(), 15_000);
+  // Run once after 4 minutes (staggered: gear=1m, feed=2m, live=3m, fresh=4m)
+  setTimeout(() => runFreshSync(), 4 * 60_000);
   // Then every 6 hours
   setInterval(() => runFreshSync(), INTERVAL_MS);
-  console.log("[fresh-sync] scheduled every 6 hours");
+  console.log("[fresh-sync] scheduled every 6 hours (first run in 4 min)");
 }

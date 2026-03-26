@@ -488,10 +488,12 @@ async function fetchUpcomingEvents(): Promise<number> {
 }
 
 function startLiveEventsSchedule() {
-  // Initial fetch after 20s
-  setTimeout(() => fetchUpcomingEvents(), 20_000);
-  // Then every 4 hours
-  setInterval(() => fetchUpcomingEvents(), 4 * 60 * 60 * 1000);
+  // Initial fetch after 3 minutes (staggered: gear=1m, feed=2m, live=3m, fresh=4m)
+  setTimeout(() => fetchUpcomingEvents(), 3 * 60_000);
+  // Every 4 hours, but offset 30min from feed schedule so they don't collide
+  setTimeout(() => {
+    setInterval(() => fetchUpcomingEvents(), 4 * 60 * 60 * 1000);
+  }, 30 * 60_000);
 }
 
 // GET /api/wanted-sample — small public sample for Find page filler
@@ -1905,20 +1907,21 @@ function startGearSchedule() {
     console.log("eBay gear schedule not started — no credentials");
     return;
   }
-  // Initial fetch after 10s delay
+  // Initial fetch after 1 minute (staggered from other workers)
   setTimeout(() => {
     fetchEbayGearListings().then(() => fetchGearDetails());
-  }, 10000);
+  }, 60_000);
 
   // Hourly fetch — upserts update price + bid_count for existing listings
+  // Offset by 5 min so it doesn't align with other hourly tasks
   setInterval(() => {
     fetchEbayGearListings();
   }, 60 * 60 * 1000);
 
-  // Detail worker every 30 minutes
-  setInterval(() => {
-    fetchGearDetails();
-  }, 30 * 60 * 1000);
+  // Detail worker every 30 minutes, offset by 15 min from search
+  setTimeout(() => {
+    setInterval(() => fetchGearDetails(), 30 * 60 * 1000);
+  }, 15 * 60_000);
 }
 
 // GET /api/gear — public gear listings
@@ -2193,10 +2196,10 @@ async function fetchAllFeedContent() {
 }
 
 function startFeedSchedule() {
-  // Initial fetch after 15s
-  setTimeout(() => fetchAllFeedContent(), 15000);
-  // Refresh every 2 hours
-  setInterval(() => fetchAllFeedContent(), 4 * 60 * 60 * 1000); // every 4 hours (YouTube quota: 13 calls × 100 = 1300 units × 6/day = 7800 < 10K limit)
+  // Initial fetch after 2 minutes (staggered from gear at 1min, live at 3min)
+  setTimeout(() => fetchAllFeedContent(), 2 * 60_000);
+  // Refresh every 4 hours (YouTube quota: 13 calls × 100 = 1300 units × 6/day = 7800 < 10K limit)
+  setInterval(() => fetchAllFeedContent(), 4 * 60 * 60 * 1000);
 }
 
 // GET /api/feed — public feed articles
