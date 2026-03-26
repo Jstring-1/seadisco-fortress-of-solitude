@@ -1148,7 +1148,7 @@ export async function getFeedArticles(opts: {
   const offset = opts.offset ?? 0;
   const r = await getPool().query(
     `SELECT * FROM feed_articles ${where}
-     ORDER BY RANDOM()
+     ORDER BY published_at DESC NULLS LAST
      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
     [...params, limit, offset]
   );
