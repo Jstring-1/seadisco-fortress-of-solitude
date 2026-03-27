@@ -1185,6 +1185,7 @@ export async function getFreshReleases(limit = 150): Promise<any[]> {
             release_group_mbid, artist_mbids
      FROM fresh_releases
      WHERE fetched_at > NOW() - INTERVAL '3 months'
+       AND cover_url IS NOT NULL
      ORDER BY RANDOM()
      LIMIT $1`,
     [limit]
@@ -1200,6 +1201,7 @@ export async function searchFreshReleases(query: string, limit = 200): Promise<a
             release_group_mbid, artist_mbids
      FROM fresh_releases
      WHERE fetched_at > NOW() - INTERVAL '3 months'
+       AND cover_url IS NOT NULL
        AND (
          artist_credit_name ILIKE $1
          OR release_name ILIKE $1
@@ -1740,6 +1742,7 @@ export async function getPersonalizedFreshReleases(clerkUserId: string, limit = 
        SELECT *, 1 AS priority
        FROM fresh_releases
        WHERE fetched_at > NOW() - INTERVAL '3 months'
+         AND cover_url IS NOT NULL
          AND tags && $1
        ORDER BY RANDOM()
        LIMIT $2
@@ -1748,6 +1751,7 @@ export async function getPersonalizedFreshReleases(clerkUserId: string, limit = 
        SELECT *, 2 AS priority
        FROM fresh_releases
        WHERE fetched_at > NOW() - INTERVAL '3 months'
+         AND cover_url IS NOT NULL
          AND id NOT IN (SELECT id FROM matched)
        ORDER BY RANDOM()
        LIMIT $2
