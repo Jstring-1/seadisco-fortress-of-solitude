@@ -2,7 +2,7 @@
 let _activeTab = "search";
 let _colPage = 1, _wlPage = 1;
 
-function renderCardFromBasicInfo(basicInfo) {
+function renderCardFromBasicInfo(basicInfo, index) {
   const artistName = (basicInfo.artists ?? []).map(a => a.name).join(", ");
   const labelStr   = (basicInfo.labels  ?? []).map(l => l.name).join(", ");
   const formatStr  = (basicInfo.formats ?? []).map(f => f.name + (f.descriptions?.length ? ` (${f.descriptions.join(", ")})` : "")).join(" · ");
@@ -22,7 +22,7 @@ function renderCardFromBasicInfo(basicInfo) {
     _rating:      basicInfo._rating ?? 0,
     _notes:       basicInfo._notes ?? [],
   };
-  return renderCard(syntheticItem);
+  return renderCard(syntheticItem, index);
 }
 
 function addNavTab(view) {
@@ -160,6 +160,15 @@ function switchView(view, skipPushState = false) {
     history.replaceState({}, "", location.pathname);
     const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "";
     const ws = document.getElementById("wanted-sample"); if (ws) ws.style.display = "";
+  }
+
+  // Animate the entering view
+  const shownId = { search: "search-view", drops: "drops-view", live: "live-view", gear: "gear-view", feed: "feed-view", info: "info-view", collection: "search-view", wantlist: "search-view", wanted: "search-view" }[view];
+  const shownEl = shownId && document.getElementById(shownId);
+  if (shownEl) {
+    shownEl.classList.remove("view-enter");
+    void shownEl.offsetWidth;
+    shownEl.classList.add("view-enter");
   }
 }
 
@@ -324,9 +333,9 @@ async function loadCollectionTab(page = 1, filters) {
   const f = filters || getCwFilters();
   setActiveTab("collection");
   document.getElementById("blurb").style.display = "none";
-  document.getElementById("results").innerHTML = "";
+  document.getElementById("results").innerHTML = renderSkeletonGrid(16);
   document.getElementById("pagination").style.display = "none";
-  setStatus("Loading collection…");
+  setStatus("");
   try {
     let url = `/api/user/collection?page=${page}&per_page=24`;
     if (f.q)       url += `&q=${encodeURIComponent(f.q)}`;
@@ -350,7 +359,10 @@ async function loadCollectionTab(page = 1, filters) {
     const hasFilter = Object.keys(f).length > 0 || cwRating || cwNotes;
     const filterDesc = Object.values(f).join(" + ");
     if (!items.length) {
-      setStatus(hasFilter ? `No collection items matching "${filterDesc}".` : "No collection items synced yet. Click 'Sync now' to fetch from Discogs.");
+      setStatus("");
+      document.getElementById("results").innerHTML = hasFilter
+        ? renderEmptyState("🔍", `No collection items matching "${filterDesc}"`, "Try adjusting your filters")
+        : renderEmptyState("📀", "No collection items synced", "Connect your Discogs token in Account to sync your collection");
       return;
     }
     const prefix = hasFilter ? `${data.total} results for "${filterDesc}"` : `${data.total} items in collection`;
@@ -361,6 +373,7 @@ async function loadCollectionTab(page = 1, filters) {
     renderCollectionPagination("collection");
   } catch (e) {
     setStatus("Failed to load collection: " + e.message, true);
+    showToast("Failed to load collection — please try again", "error");
   }
 }
 
@@ -369,9 +382,9 @@ async function loadWantlistTab(page = 1, filters) {
   const f = filters || getCwFilters();
   setActiveTab("wantlist");
   document.getElementById("blurb").style.display = "none";
-  document.getElementById("results").innerHTML = "";
+  document.getElementById("results").innerHTML = renderSkeletonGrid(16);
   document.getElementById("pagination").style.display = "none";
-  setStatus("Loading wantlist…");
+  setStatus("");
   try {
     let url = `/api/user/wantlist?page=${page}&per_page=24`;
     if (f.q)       url += `&q=${encodeURIComponent(f.q)}`;
@@ -394,7 +407,10 @@ async function loadWantlistTab(page = 1, filters) {
     const hasFilter = Object.keys(f).length > 0 || cwRating || cwNotes;
     const filterDesc = Object.values(f).join(" + ");
     if (!items.length) {
-      setStatus(hasFilter ? `No wantlist items matching "${filterDesc}".` : "No wantlist items synced yet. Click 'Sync now' to fetch from Discogs.");
+      setStatus("");
+      document.getElementById("results").innerHTML = hasFilter
+        ? renderEmptyState("🔍", `No wantlist items matching "${filterDesc}"`, "Try adjusting your filters")
+        : renderEmptyState("💿", "No wantlist items synced", "Connect your Discogs token in Account to sync your wantlist");
       return;
     }
     const prefix = hasFilter ? `${data.total} results for "${filterDesc}"` : `${data.total} items in wantlist`;
@@ -405,6 +421,7 @@ async function loadWantlistTab(page = 1, filters) {
     renderCollectionPagination("wantlist");
   } catch (e) {
     setStatus("Failed to load wantlist: " + e.message, true);
+    showToast("Failed to load wantlist — please try again", "error");
   }
 }
 
@@ -452,7 +469,7 @@ function renderWantedItems(items) {
   }
   const q = (document.getElementById("wanted-q")?.value ?? "").trim();
   setStatus(q ? `${items.length} wanted items matching "${q}"` : `${items.length} random community wantlist items`);
-  document.getElementById("results").innerHTML = items.map(item => renderCardFromBasicInfo(item)).join("");
+  document.getElementById("results").innerHTML = items.map((item, i) => renderCardFromBasicInfo(item, i)).join("");
 }
 
 function renderCollectionPagination(tab) {

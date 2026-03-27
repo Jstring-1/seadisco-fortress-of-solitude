@@ -50,8 +50,8 @@ async function doLiveSearch(append = false) {
   if (!append) {
     _livePage = 0;
     _liveTotal = 0;
-    statusEl.textContent = "Searching…";
-    resultsEl.innerHTML = "";
+    statusEl.textContent = "";
+    resultsEl.innerHTML = renderSkeletonRows(6);
   } else {
     // Remove the "load more" link before fetching
     const moreEl = document.getElementById("live-load-more");
@@ -72,7 +72,7 @@ async function doLiveSearch(append = false) {
 
     if (!events.length && !append) {
       statusEl.textContent = "";
-      resultsEl.innerHTML = `<div class="live-empty">No events found. Try broadening your search.</div>`;
+      resultsEl.innerHTML = renderEmptyState("🎵", "No events found", "Try a different artist, city, or genre");
       return;
     }
 
@@ -148,6 +148,7 @@ async function doLiveSearch(append = false) {
   } catch (err) {
     statusEl.textContent = "";
     if (!append) resultsEl.innerHTML = `<div class="live-empty">Failed to load events.</div>`;
+    showToast("Failed to load events — please try again", "error");
   }
 }
 

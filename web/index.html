@@ -31,7 +31,7 @@
   <link rel="preconnect" href="https://api.discogs.com" />
   <link rel="preconnect" href="https://i.discogs.com" />
   <link rel="preconnect" href="https://i.ebayimg.com" />
-  <link rel="stylesheet" href="/style.css?v=20260326b" />
+  <link rel="stylesheet" href="/style.css?v=20260326c" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -416,11 +416,14 @@
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Live</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">Search upcoming concerts and events by artist, city/zip code, or genre. Results pull from both <a href="https://www.ticketmaster.com" target="_blank" rel="noopener" style="color:#5a9aaa">Ticketmaster</a> and <a href="https://www.bandsintown.com" target="_blank" rel="noopener" style="color:#5a9aaa">Bandsintown</a>, merged and deduped. Artist searches include a Bandsintown photo when available. Each listing links to Google for tickets. Your last searched city is saved for convenience.</p>
 
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Feed</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">Music news, reviews, and videos from Pitchfork, Bandcamp Daily, Stereogum, The Quietus, Aquarium Drunkard, and select YouTube channels. Updated every 4 hours. Filter by category — news, reviews, gear, or video — or search by keyword.</p>
+
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Gear</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">Browse vintage hi-fi and audio equipment listings from eBay, updated daily. Filter by price tier — $100+, $200+, $500+, or $1,000+ — and scroll through receivers, amplifiers, turntables, speakers, and more. Each card links directly to the eBay listing.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">Browse live eBay auctions for vintage hi-fi and audio equipment, updated hourly. Filter by price tier, sort by ending soonest, most bids, or price. Each card shows current bid, bid count, and time remaining — click through to bid on eBay.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Collection, Wantlist &amp; Wants</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Add your Discogs token to sync your full collection and wantlist — any size. Sync runs in the background and refreshes automatically every 6 hours. Both tabs have dedicated filters (artist, release, label, year, genre, style, format) with <strong style="color:#ccc">+</strong> (AND), <strong style="color:#ccc">|</strong> (OR), and <strong style="color:#ccc">-</strong> (exclude) operators. Green <strong style="color:#4caf50">✓</strong> and red <strong style="color:#c0392b">♡</strong> badges mark owned and wanted items across all results.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Add your Discogs token to sync your full collection and wantlist — any size. Sync runs in the background and refreshes automatically each night. Both tabs have dedicated filters (artist, release, label, year, genre, style, format) with <strong style="color:#ccc">+</strong> (AND), <strong style="color:#ccc">|</strong> (OR), and <strong style="color:#ccc">-</strong> (exclude) operators. Green <strong style="color:#4caf50">✓</strong> and red <strong style="color:#c0392b">♡</strong> badges mark owned and wanted items across all results.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0">The <strong style="color:#ccc">Wants</strong> tab shows 500 random wantlist items pooled from all SeaDisco members — a quick way to see what collectors are after.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Account &amp; Limits</h3>
@@ -428,13 +431,31 @@
 </div>
 
 <footer>
-  <div style="margin-bottom:0.5rem">
-    <a href="javascript:void(0)" onclick="switchView('info')" style="color:#5a9aaa;text-decoration:none;margin:0 0.5rem">Info</a> ·
-    <a href="/account" style="color:#5a9aaa;text-decoration:none;margin:0 0.5rem">Account</a>
+  <div class="footer-grid">
+    <div class="footer-col">
+      <h4>Discover</h4>
+      <a href="javascript:void(0)" onclick="switchView('search')">Find</a>
+      <a href="javascript:void(0)" onclick="switchView('drops')">Drops</a>
+      <a href="javascript:void(0)" onclick="switchView('feed')">Feed</a>
+      <a href="javascript:void(0)" onclick="switchView('live')">Live</a>
+      <a href="javascript:void(0)" onclick="switchView('gear')">Gear</a>
+    </div>
+    <div class="footer-col">
+      <h4>Your Music</h4>
+      <a href="javascript:void(0)" onclick="switchView('collection')">Collection</a>
+      <a href="javascript:void(0)" onclick="switchView('wantlist')">Wantlist</a>
+      <a href="/account">Account</a>
+    </div>
+    <div class="footer-col">
+      <h4>About</h4>
+      <a href="javascript:void(0)" onclick="switchView('info')">Info</a>
+      <a href="https://www.discogs.com" target="_blank" rel="noopener">Discogs</a>
+      <a href="https://listenbrainz.org" target="_blank" rel="noopener">ListenBrainz</a>
+    </div>
   </div>
-  <div style="color:#555;font-style:italic">DISCLAIMER: AI be funky sometimes</div>
-  Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Discogs</a>, <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Claude</a>, and <a href="https://listenbrainz.org" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">ListenBrainz</a>
-  <div>© 2026 SeaDisco &nbsp;·&nbsp; Music data courtesy of Discogs API &nbsp;·&nbsp; Not affiliated with Discogs &nbsp;·&nbsp; Jimmy Witherfork Strikes Again</div>
+  <div style="color:#555;font-style:italic;margin-bottom:0.3rem">DISCLAIMER: AI be funky sometimes</div>
+  <div>Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Discogs</a>, <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">Claude</a>, and <a href="https://listenbrainz.org" target="_blank" rel="noopener" style="color:#3a5a6a;text-decoration:none">ListenBrainz</a></div>
+  <div style="margin-top:0.3rem">© 2026 SeaDisco &nbsp;·&nbsp; Music data courtesy of Discogs API &nbsp;·&nbsp; Not affiliated with Discogs &nbsp;·&nbsp; Jimmy Witherfork Strikes Again</div>
 </footer>
 
 
@@ -499,15 +520,15 @@
   <div id="lightbox-counter"></div>
 </div>
 
-<script src="/utils.js?v=20260326b"></script>
-<script src="/search.js?v=20260326b"></script>
-<script src="/collection.js?v=20260326b"></script>
-<script src="/modal.js?v=20260326b"></script>
-<script src="/drops.js?v=20260326b"></script>
-<script src="/live.js?v=20260326b"></script>
-<script src="/gear.js?v=20260326b"></script>
-<script src="/feed.js?v=20260326b"></script>
-<script src="/app.js?v=20260326b"></script>
+<script src="/utils.js?v=20260326c"></script>
+<script src="/search.js?v=20260326c"></script>
+<script src="/collection.js?v=20260326c"></script>
+<script src="/modal.js?v=20260326c"></script>
+<script src="/drops.js?v=20260326c"></script>
+<script src="/live.js?v=20260326c"></script>
+<script src="/gear.js?v=20260326c"></script>
+<script src="/feed.js?v=20260326c"></script>
+<script src="/app.js?v=20260326c"></script>
 
 </body>
 </html>

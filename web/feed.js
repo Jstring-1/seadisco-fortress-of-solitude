@@ -28,7 +28,7 @@ const FEED_SOURCE_URLS = {
   "Deep Cuts": "https://www.youtube.com/@DeepCutsMusic",
 };
 
-function renderFeedCard(item) {
+function renderFeedCard(item, index) {
   const isVideo = item.content_type === "video";
   const img = item.image_url
     ? `<img src="${escHtml(item.image_url)}" alt="" loading="lazy" />`
@@ -40,7 +40,8 @@ function renderFeedCard(item) {
     ? `${escHtml(item.author)} via <span class="feed-src-${sourceClass}">${escHtml(item.source)}</span>`
     : `<span class="feed-src-${sourceClass}">${escHtml(item.source)}</span>`;
 
-  return `<a href="${escHtml(item.source_url)}" target="_blank" rel="noopener" class="feed-card${isVideo ? " feed-card-video" : ""}">
+  const animIdx = index != null ? Math.min(index, 20) : 0;
+  return `<a href="${escHtml(item.source_url)}" target="_blank" rel="noopener" class="feed-card${isVideo ? " feed-card-video" : ""} card-animate" style="--i:${animIdx}">
     <div class="feed-card-thumb">${img}${isVideo ? '<div class="feed-video-play">▶</div>' : ""}</div>
     <div class="feed-card-body">
       <div class="feed-card-category">${escHtml(catLabel)}</div>
@@ -78,7 +79,7 @@ function openVideoPlayer(videoId, title) {
 function renderFeedGrid() {
   const grid = document.getElementById("feed-results");
   if (!grid) return;
-  grid.innerHTML = _feedItems.map((item, i) => renderFeedCard(item)).join("");
+  grid.innerHTML = _feedItems.map((item, i) => renderFeedCard(item, i)).join("");
 
   const loadMoreBtn = document.getElementById("feed-load-more");
   if (loadMoreBtn) {
@@ -111,6 +112,10 @@ async function loadFeedArticles(append = false) {
   _feedLoading = true;
   const status = document.getElementById("feed-status");
 
+  if (!append) {
+    document.getElementById("feed-results").innerHTML = renderFeedSkeletonGrid(8);
+  }
+
   try {
     const params = new URLSearchParams({
       category: _feedCategory,
@@ -139,9 +144,14 @@ async function loadFeedArticles(append = false) {
       status.textContent = `${_feedTotal} articles`;
     }
 
-    renderFeedGrid();
+    if (!_feedItems.length) {
+      document.getElementById("feed-results").innerHTML = renderEmptyState("📰", "No articles yet", "The feed updates every 4 hours with music news and reviews");
+    } else {
+      renderFeedGrid();
+    }
   } catch (e) {
     if (status) status.textContent = "Error loading feed";
+    showToast("Failed to load feed — please try again", "error");
   } finally {
     _feedLoading = false;
   }

@@ -44,7 +44,7 @@ function renderGearCard(item, idx) {
   // Show condition only if it's notable (not just "Used")
   const conditionShow = condition && condition !== "Used" ? condition : "";
 
-  return `<div class="card gear-card" onclick="event.stopPropagation();openGearPopup(${idx})" role="button" tabindex="0" style="cursor:pointer;-webkit-tap-highlight-color:transparent" title="${escHtml(item.title)}">
+  return `<div class="card gear-card card-animate" onclick="event.stopPropagation();openGearPopup(${idx})" role="button" tabindex="0" style="--i:${Math.min(idx, 20)};cursor:pointer;-webkit-tap-highlight-color:transparent" title="${escHtml(item.title)}">
     <div class="card-thumb-wrap" style="pointer-events:none">${img}</div>
     <div class="card-body" style="pointer-events:none">
       <div class="card-title">${escHtml(item.title.length > 65 ? item.title.slice(0, 63) + "…" : item.title)}</div>
@@ -167,7 +167,8 @@ async function loadGearListings(append = false) {
   if (!append) {
     _gearOffset = 0;
     _gearItems = [];
-    if (status) status.textContent = "Loading gear…";
+    if (status) status.textContent = "";
+    document.getElementById("gear-results").innerHTML = renderSkeletonGrid(12);
   } else {
     if (loadMore) loadMore.textContent = "Loading…";
   }
@@ -190,7 +191,8 @@ async function loadGearListings(append = false) {
 
     if (status) {
       if (!_gearItems.length) {
-        status.textContent = "No listings found at this price point.";
+        status.textContent = "";
+        document.getElementById("gear-results").innerHTML = renderEmptyState("🎛️", "No gear listings found", "Try adjusting your filters or check back later");
       } else {
         const newest = newItems.reduce((max, i) => i.fetched_at > max ? i.fetched_at : max, "");
         let ago = "";
@@ -215,6 +217,7 @@ async function loadGearListings(append = false) {
     }
   } catch (e) {
     if (status) status.textContent = "Failed to load gear listings.";
+    showToast("Failed to load gear listings — please try again", "error");
   }
   _gearLoading = false;
 }

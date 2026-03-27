@@ -146,3 +146,8 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
   } catch { /* auth unavailable — site works fine without it */ }
   finally { _authReady(); }
 })();
+
+// ── Service Worker registration ──────────────────────────────────────────
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("/sw.js").catch(() => {});
+}
