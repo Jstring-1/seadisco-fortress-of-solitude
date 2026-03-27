@@ -171,8 +171,19 @@ function liveGoBack() {
   document.getElementById("live-artist").value = _livePrevSearch.artist;
   document.getElementById("live-city").value   = _livePrevSearch.city;
   document.getElementById("live-genre").value  = _livePrevSearch.genre;
+  const hadSearch = _livePrevSearch.artist || _livePrevSearch.city || _livePrevSearch.genre;
   _livePrevSearch = null;
-  doLiveSearch();
+  if (hadSearch) {
+    doLiveSearch();
+  } else {
+    // Was on upcoming view — restore it
+    document.getElementById("live-results").innerHTML = "";
+    document.getElementById("live-status").textContent = "";
+    const h = document.getElementById("live-heading");
+    if (h) { h.textContent = ""; h.style.display = "none"; }
+    const up = document.getElementById("live-upcoming");
+    if (up) up.style.display = "";
+  }
 }
 
 async function liveSearchVenue(venueId, venueName) {
@@ -184,6 +195,7 @@ async function liveSearchVenue(venueId, venueName) {
   };
   const statusEl  = document.getElementById("live-status");
   const resultsEl = document.getElementById("live-results");
+  _hideLiveUpcoming();
   statusEl.textContent = `Loading events at ${venueName}…`;
   resultsEl.innerHTML = "";
 
