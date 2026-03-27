@@ -502,6 +502,51 @@ body {
 }
 /* .fresh-tag-pill extends .pill — no overrides needed */
 
+/* My Records sub-tabs */
+.records-sub-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.25rem;
+}
+.records-sub-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 0.5rem 1rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+}
+.records-sub-tab:hover { color: var(--text); }
+.records-sub-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* Lists grid */
+.lists-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 0.75rem;
+  padding: 0 1rem;
+}
+.list-card {
+  display: block;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  text-decoration: none;
+  transition: border-color 0.15s;
+}
+.list-card:hover { border-color: var(--accent); }
+.list-card-name { font-size: 0.95rem; color: var(--text); font-weight: 600; margin-bottom: 0.3rem; }
+.list-card-desc { font-size: 0.78rem; color: var(--muted); margin-bottom: 0.4rem; line-height: 1.4; }
+.list-card-meta { font-size: 0.72rem; color: var(--muted); opacity: 0.7; }
+
 /* Collection folder pill cloud */
 .cw-folder-cloud {
   display: flex;

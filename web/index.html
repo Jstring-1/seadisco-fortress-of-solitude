@@ -29,7 +29,7 @@
   <link rel="preconnect" href="https://api.discogs.com" />
   <link rel="preconnect" href="https://i.discogs.com" />
   <link rel="preconnect" href="https://i.ebayimg.com" />
-  <link rel="stylesheet" href="/style.css?v=20260326e" />
+  <link rel="stylesheet" href="/style.css?v=20260327a" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -75,8 +75,7 @@
         <button class="main-nav-tab" data-view="feed" onclick="switchView('feed')">Feed</button>
         <button class="main-nav-tab" data-view="live" onclick="switchView('live')">Live</button>
         <button class="main-nav-tab" data-view="gear" onclick="switchView('gear')">Gear</button>
-        <button class="main-nav-tab nav-disabled" data-view="collection" onclick="switchView('collection')" title="Login to Access">Collection</button>
-        <button class="main-nav-tab nav-disabled" data-view="wantlist" onclick="switchView('wantlist')" title="Login to Access">Wantlist</button>
+        <button class="main-nav-tab nav-disabled" data-view="records" onclick="switchView('records')" title="Login to Access">My Records</button>
       </div>
       <div id="nav-auth-popup">Sign up and add your Discogs API token for unlimited searches</div>
     </div>
@@ -199,14 +198,20 @@
   </div>
   </div><!-- /main-search-form -->
 
-  <!-- Collection / Wantlist local search — hidden until those views are active -->
-  <div id="cw-search-wrap" class="content-narrow" style="display:none">
-    <div class="search-row">
+  <!-- My Records sub-tabs + search — hidden until records view is active -->
+  <div id="records-wrap" class="content-narrow" style="display:none">
+    <div class="records-sub-tabs">
+      <button class="records-sub-tab active" data-rtab="collection" onclick="switchRecordsTab('collection')">Collection</button>
+      <button class="records-sub-tab" data-rtab="wantlist" onclick="switchRecordsTab('wantlist')">Wantlist</button>
+      <button class="records-sub-tab" data-rtab="lists" onclick="switchRecordsTab('lists')">Lists</button>
+      <button class="records-sub-tab" data-rtab="inventory" onclick="switchRecordsTab('inventory')">Inventory</button>
+    </div>
+    <div class="search-row" style="margin-top:0.5rem">
       <input type="text" id="cw-query" placeholder="Search your collection…" autocomplete="off"
         onkeydown="if(event.key==='Enter'){doCwSearch(1)}" />
       <button onclick="doCwSearch(1)" style="flex-shrink:0">Search</button>
     </div>
-    <div style="display:flex;align-items:center;gap:0.4rem;margin-top:0.3rem">
+    <div id="cw-controls-row" style="display:flex;align-items:center;gap:0.4rem;margin-top:0.3rem">
       <button type="button" id="cw-advanced-toggle" onclick="toggleCwAdvanced()" style="background:none;border:none;padding:0;font-size:0.78rem;color:#666;cursor:pointer;display:flex;align-items:center;gap:0.3rem;white-space:nowrap" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#666'">
         <span id="cw-advanced-arrow">▶</span> Filters
       </button>
@@ -422,9 +427,9 @@
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Gear</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">Browse live eBay auctions for vintage hi-fi and audio equipment, updated hourly. Filter by price tier, sort by ending soonest, most bids, or price. Each card shows current bid, bid count, and time remaining — click through to bid on eBay.</p>
 
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Collection, Wantlist &amp; Wants</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Add your Discogs token to sync your full collection and wantlist — any size. Sync runs in the background and refreshes automatically each night. Both tabs have dedicated filters (artist, release, label, year, genre, style, format) with <strong style="color:#ccc">+</strong> (AND), <strong style="color:#ccc">|</strong> (OR), and <strong style="color:#ccc">-</strong> (exclude) operators. Green <strong style="color:#4caf50">✓</strong> and red <strong style="color:#c0392b">♡</strong> badges mark owned and wanted items across all results.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">The <strong style="color:#ccc">Wants</strong> tab shows 500 random wantlist items pooled from all SeaDisco members — a quick way to see what collectors are after.</p>
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">My Records</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Add your Discogs token to sync your full collection, wantlist, inventory, and lists — any size. Sync runs in the background and refreshes automatically each night. The Collection and Wantlist tabs have dedicated filters (artist, release, label, year, genre, style, format) with <strong style="color:#ccc">+</strong> (AND), <strong style="color:#ccc">|</strong> (OR), and <strong style="color:#ccc">-</strong> (exclude) operators. Green <strong style="color:#4caf50">✓</strong> and red <strong style="color:#c0392b">♡</strong> badges mark owned and wanted items across all results.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">The <strong style="color:#ccc">Inventory</strong> tab shows your marketplace listings, and <strong style="color:#ccc">Lists</strong> displays your curated Discogs lists.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Account &amp; Limits</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">Anonymous users are capped at <strong style="color:#ccc">5 searches/day</strong> on a shared token. Sign up free and add your own Discogs token (<strong style="color:#ccc">discogs.com → Settings → Developers</strong>) for unlimited searches. The recent search cloud below results shows interesting searches from all users — click any pill to re-run it.</p>
@@ -442,8 +447,7 @@
     </div>
     <div class="footer-col">
       <h4>Your Music</h4>
-      <a href="javascript:void(0)" onclick="switchView('collection')">Collection</a>
-      <a href="javascript:void(0)" onclick="switchView('wantlist')">Wantlist</a>
+      <a href="javascript:void(0)" onclick="switchView('records')">My Records</a>
       <a href="/account">Account</a>
     </div>
     <div class="footer-col">
@@ -520,15 +524,15 @@
   <div id="lightbox-counter"></div>
 </div>
 
-<script src="/utils.js?v=20260326d"></script>
-<script src="/search.js?v=20260326d"></script>
-<script src="/collection.js?v=20260326d"></script>
-<script src="/modal.js?v=20260326d"></script>
-<script src="/drops.js?v=20260326d"></script>
-<script src="/live.js?v=20260326d"></script>
-<script src="/gear.js?v=20260326d"></script>
-<script src="/feed.js?v=20260326d"></script>
-<script src="/app.js?v=20260326d"></script>
+<script src="/utils.js?v=20260327a"></script>
+<script src="/search.js?v=20260327a"></script>
+<script src="/collection.js?v=20260327a"></script>
+<script src="/modal.js?v=20260327a"></script>
+<script src="/drops.js?v=20260327a"></script>
+<script src="/live.js?v=20260327a"></script>
+<script src="/gear.js?v=20260327a"></script>
+<script src="/feed.js?v=20260327a"></script>
+<script src="/app.js?v=20260327a"></script>
 
 </body>
 </html>

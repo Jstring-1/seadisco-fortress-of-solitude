@@ -1009,13 +1009,26 @@ export async function upsertInventoryItems(
   clerkUserId: string,
   items: Array<{ listingId: number; releaseId?: number; data: object; status?: string; priceValue?: number; priceCurrency?: string; condition?: string; sleeveCondition?: string; postedAt?: Date }>
 ): Promise<void> {
-  for (const item of items) {
+  if (!items.length) return;
+  // Dedupe by listingId within the batch (keep last occurrence)
+  const deduped = [...new Map(items.map(i => [i.listingId, i])).values()];
+  const CHUNK = 50;
+  for (let i = 0; i < deduped.length; i += CHUNK) {
+    const chunk = deduped.slice(i, i + CHUNK);
+    const values: string[] = [];
+    const params: any[] = [];
+    let idx = 1;
+    for (const item of chunk) {
+      values.push(`($${idx}, $${idx+1}, $${idx+2}, $${idx+3}, $${idx+4}, $${idx+5}, $${idx+6}, $${idx+7}, $${idx+8}, $${idx+9}, NOW())`);
+      params.push(clerkUserId, item.listingId, item.releaseId ?? null, JSON.stringify(item.data), item.status ?? "For Sale", item.priceValue ?? null, item.priceCurrency ?? "USD", item.condition ?? null, item.sleeveCondition ?? null, item.postedAt ?? null);
+      idx += 10;
+    }
     await getPool().query(
       `INSERT INTO user_inventory (clerk_user_id, listing_id, discogs_release_id, data, status, price_value, price_currency, condition, sleeve_condition, posted_at, synced_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+       VALUES ${values.join(", ")}
        ON CONFLICT (clerk_user_id, listing_id)
-       DO UPDATE SET data = $4, status = $5, price_value = $6, price_currency = $7, condition = $8, sleeve_condition = $9, posted_at = $10, synced_at = NOW()`,
-      [clerkUserId, item.listingId, item.releaseId ?? null, JSON.stringify(item.data), item.status ?? "For Sale", item.priceValue ?? null, item.priceCurrency ?? "USD", item.condition ?? null, item.sleeveCondition ?? null, item.postedAt ?? null]
+       DO UPDATE SET data = EXCLUDED.data, status = EXCLUDED.status, price_value = EXCLUDED.price_value, price_currency = EXCLUDED.price_currency, condition = EXCLUDED.condition, sleeve_condition = EXCLUDED.sleeve_condition, posted_at = EXCLUDED.posted_at, synced_at = NOW()`,
+      params
     );
   }
 }
@@ -1033,6 +1046,40 @@ export async function getInventoryCount(clerkUserId: string): Promise<number> {
     [clerkUserId]
   );
   return r.rows[0]?.cnt ?? 0;
+}
+
+export async function getInventoryPage(
+  clerkUserId: string, page = 1, perPage = 24, filters?: Record<string, any>
+): Promise<{ items: any[]; total: number }> {
+  const conditions = ["clerk_user_id = $1"];
+  const params: any[] = [clerkUserId];
+  let idx = 2;
+  if (filters?.q) {
+    conditions.push(`(data::text ILIKE $${idx})`);
+    params.push(`%${filters.q}%`); idx++;
+  }
+  if (filters?.status) {
+    conditions.push(`status = $${idx}`);
+    params.push(filters.status); idx++;
+  }
+  const where = conditions.join(" AND ");
+  const countR = await getPool().query(`SELECT COUNT(*)::int AS cnt FROM user_inventory WHERE ${where}`, params);
+  const total = countR.rows[0]?.cnt ?? 0;
+  const offset = (page - 1) * perPage;
+  params.push(perPage, offset);
+  const r = await getPool().query(
+    `SELECT listing_id, discogs_release_id, data, status, price_value, price_currency, condition, sleeve_condition, posted_at
+     FROM user_inventory WHERE ${where} ORDER BY posted_at DESC NULLS LAST LIMIT $${idx} OFFSET $${idx + 1}`, params
+  );
+  return { items: r.rows, total };
+}
+
+export async function getUserListsList(clerkUserId: string): Promise<any[]> {
+  const r = await getPool().query(
+    `SELECT list_id, name, description, item_count, is_public, synced_at FROM user_lists WHERE clerk_user_id = $1 ORDER BY name`,
+    [clerkUserId]
+  );
+  return r.rows;
 }
 
 // ── Lists ────────────────────────────────────────────────────────────────
