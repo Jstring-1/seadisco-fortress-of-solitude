@@ -2288,9 +2288,38 @@ async function fetchYouTubeVideos(): Promise<number> {
   if (!youtubeApiKey) { console.log("YouTube feed skip — no API key"); return 0; }
   let total = 0;
 
-  // Fetch from specific channels
+  // Load existing YouTube video URLs to skip channels with no new content
+  let existingUrls: Set<string> = new Set();
+  try {
+    const { getPool } = await import("./db.js");
+    const r = await getPool().query(
+      "SELECT source_url FROM feed_articles WHERE content_type = 'video' AND source_url LIKE 'https://www.youtube.com/watch%'"
+    );
+    existingUrls = new Set(r.rows.map((row: any) => row.source_url));
+  } catch {}
+  console.log(`[youtube] ${existingUrls.size} existing videos in DB`);
+
+  // Fetch from specific channels — use RSS feed (free, no quota) to check for new videos first
+  let skipped = 0;
   for (const ch of YOUTUBE_CHANNELS) {
     try {
+      // Check channel RSS feed (free, no quota) for latest video ID
+      const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${ch.channelId}`;
+      let hasNew = true;
+      try {
+        const rssR = await fetch(rssUrl, { signal: AbortSignal.timeout(5000), headers: { "User-Agent": "SeaDisco/1.0" } });
+        if (rssR.ok) {
+          const xml = await rssR.text();
+          // Extract first video ID from RSS
+          const vidMatch = xml.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
+          if (vidMatch) {
+            const latestUrl = `https://www.youtube.com/watch?v=${vidMatch[1]}`;
+            if (existingUrls.has(latestUrl)) { hasNew = false; }
+          }
+        }
+      } catch {}
+      if (!hasNew) { skipped++; continue; }
+
       const url = `https://www.googleapis.com/youtube/v3/search?key=${youtubeApiKey}&channelId=${ch.channelId}&part=snippet&order=date&maxResults=5&type=video`;
       const r = await loggedFetch("youtube", url, { signal: AbortSignal.timeout(10000), context: `channel: ${ch.name}` });
       if (!r.ok) { console.warn(`YouTube ${ch.name}: HTTP ${r.status}`); continue; }
@@ -2319,6 +2348,7 @@ async function fetchYouTubeVideos(): Promise<number> {
       console.warn(`YouTube ${ch.name} failed:`, err);
     }
   }
+  if (skipped) console.log(`[youtube] skipped ${skipped}/${YOUTUBE_CHANNELS.length} channels (no new videos)`);
 
   // Keyword searches for fresh music content (last 7 days)
   const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
