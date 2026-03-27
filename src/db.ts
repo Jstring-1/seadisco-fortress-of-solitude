@@ -1407,7 +1407,7 @@ export async function rebuildUserTasteProfile(clerkUserId: string): Promise<Tast
   const genreR = await getPool().query(
     `SELECT val, COUNT(*)::int AS cnt
      FROM user_collection, LATERAL jsonb_array_elements_text(data->'basic_information'->'genres') AS val
-     WHERE clerk_user_id = $1
+     WHERE clerk_user_id = $1 AND jsonb_typeof(data->'basic_information'->'genres') = 'array'
      GROUP BY val ORDER BY cnt DESC LIMIT 15`,
     [clerkUserId]
   );
@@ -1415,7 +1415,7 @@ export async function rebuildUserTasteProfile(clerkUserId: string): Promise<Tast
   const styleR = await getPool().query(
     `SELECT val, COUNT(*)::int AS cnt
      FROM user_collection, LATERAL jsonb_array_elements_text(data->'basic_information'->'styles') AS val
-     WHERE clerk_user_id = $1
+     WHERE clerk_user_id = $1 AND jsonb_typeof(data->'basic_information'->'styles') = 'array'
      GROUP BY val ORDER BY cnt DESC LIMIT 20`,
     [clerkUserId]
   );
@@ -1423,10 +1423,11 @@ export async function rebuildUserTasteProfile(clerkUserId: string): Promise<Tast
   const artistR = await getPool().query(
     `SELECT val->>'name' AS name, COUNT(*)::int AS cnt
      FROM user_collection, LATERAL jsonb_array_elements(data->'basic_information'->'artists') AS val
-     WHERE clerk_user_id = $1
+     WHERE clerk_user_id = $1 AND jsonb_typeof(data->'basic_information'->'artists') = 'array'
      GROUP BY val->>'name' ORDER BY cnt DESC LIMIT 30`,
     [clerkUserId]
   );
+  console.log(`Taste query results for ${clerkUserId}: ${genreR.rows.length} genres, ${styleR.rows.length} styles, ${artistR.rows.length} artists`);
 
   if (!genreR.rows.length && !styleR.rows.length) return null;
 

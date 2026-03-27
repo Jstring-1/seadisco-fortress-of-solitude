@@ -969,7 +969,7 @@ async function adminRebuildTaste() {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
     }).then(r => r.json());
-    statusEl.textContent = `Rebuilt ${r.rebuilt}/${r.total} taste profiles.`;
+    statusEl.textContent = `Rebuilt ${r.rebuilt}/${r.total} taste profiles.${r.errors?.length ? " Errors: " + r.errors.join("; ") : ""}`;
   } catch {
     statusEl.textContent = "Taste profile rebuild failed.";
   } finally {
