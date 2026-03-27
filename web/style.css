@@ -379,7 +379,7 @@ body {
 }
 .pill-strip-wrap {
   overflow: hidden;
-  max-height: 6.5rem;
+  max-height: 6.2rem;
   mask-image: linear-gradient(to right, transparent, black 40px, black calc(100% - 40px), transparent);
   -webkit-mask-image: linear-gradient(to right, transparent, black 40px, black calc(100% - 40px), transparent);
 }
@@ -459,7 +459,7 @@ body {
 }
 .fresh-tag-cloud-wrap {
   overflow: hidden;
-  max-height: 6.5rem;
+  max-height: 6.2rem;
   mask-image: linear-gradient(to right, transparent, black 40px, black calc(100% - 40px), transparent);
   -webkit-mask-image: linear-gradient(to right, transparent, black 40px, black calc(100% - 40px), transparent);
   margin-bottom: 0.6rem;
@@ -1025,6 +1025,10 @@ a.drop-nomatch-tag:hover { border-color: var(--accent); color: var(--accent); }
   .fresh-tag-cloud,
   .live-recent-pills {
     gap: 0.45rem;
+  }
+  .pill-strip-wrap,
+  .fresh-tag-cloud-wrap {
+    max-height: 7.8rem;
   }
   .cw-folder-cloud {
     gap: 0.45rem;
