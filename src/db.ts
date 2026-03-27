@@ -602,6 +602,10 @@ export async function upsertCollectionItems(
   items: Array<{ id: number; data: object; addedAt?: Date; folderId?: number; rating?: number; instanceId?: number; notes?: any[] }>
 ): Promise<void> {
   if (!items.length) return;
+  // Deduplicate by release ID within batch — keep last occurrence (user may own multiple copies)
+  const deduped = new Map<number, typeof items[0]>();
+  for (const item of items) deduped.set(item.id, item);
+  const unique = [...deduped.values()];
   const ids:        number[]       = [];
   const dataArr:    string[]       = [];
   const addedArr:   (Date | null)[] = [];
@@ -609,7 +613,7 @@ export async function upsertCollectionItems(
   const ratingArr:  number[]       = [];
   const instanceArr:(number|null)[]= [];
   const notesArr:   (string|null)[]= [];
-  for (const item of items) {
+  for (const item of unique) {
     ids.push(item.id);
     dataArr.push(JSON.stringify(item.data));
     addedArr.push(item.addedAt ?? null);
@@ -660,12 +664,16 @@ export async function upsertWantlistItems(
   items: Array<{ id: number; data: object; addedAt?: Date; rating?: number; notes?: any[] }>
 ): Promise<void> {
   if (!items.length) return;
+  // Deduplicate by release ID within batch
+  const deduped = new Map<number, typeof items[0]>();
+  for (const item of items) deduped.set(item.id, item);
+  const unique = [...deduped.values()];
   const ids:      number[]        = [];
   const dataArr:  string[]        = [];
   const addedArr: (Date | null)[] = [];
   const ratingArr:number[]        = [];
   const notesArr: (string|null)[] = [];
-  for (const item of items) {
+  for (const item of unique) {
     ids.push(item.id);
     dataArr.push(JSON.stringify(item.data));
     addedArr.push(item.addedAt ?? null);
@@ -1176,7 +1184,10 @@ export async function recordInterestSignals(
   items: Array<{ id: number; data: any }>,
   source: "collection" | "wantlist"
 ): Promise<void> {
-  const filtered = items.filter(i => i.data);
+  // Deduplicate by release ID within batch, then filter
+  const dedupMap = new Map<number, (typeof items)[0]>();
+  for (const item of items) if (item.data) dedupMap.set(item.id, item);
+  const filtered = [...dedupMap.values()];
   if (!filtered.length) return;
   // Batch in chunks of 100 to stay within parameter limits (7 params each = 700 per chunk)
   const CHUNK = 100;
