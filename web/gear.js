@@ -168,7 +168,7 @@ async function loadGearListings(append = false) {
     _gearOffset = 0;
     _gearItems = [];
     if (status) status.textContent = "";
-    document.getElementById("gear-results").innerHTML = renderSkeletonGrid(12);
+    document.getElementById("gear-results").innerHTML = renderSkeletonGrid(16);
   } else {
     if (loadMore) loadMore.textContent = "Loading…";
   }
