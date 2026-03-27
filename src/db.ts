@@ -1406,24 +1406,24 @@ export async function rebuildUserTasteProfile(clerkUserId: string): Promise<Tast
   // Count genres from collection
   const genreR = await getPool().query(
     `SELECT val, COUNT(*)::int AS cnt
-     FROM user_collection, LATERAL jsonb_array_elements_text(data->'basic_information'->'genres') AS val
-     WHERE clerk_user_id = $1 AND jsonb_typeof(data->'basic_information'->'genres') = 'array'
+     FROM user_collection, LATERAL jsonb_array_elements_text(data->'genres') AS val
+     WHERE clerk_user_id = $1 AND jsonb_typeof(data->'genres') = 'array'
      GROUP BY val ORDER BY cnt DESC LIMIT 15`,
     [clerkUserId]
   );
   // Count styles
   const styleR = await getPool().query(
     `SELECT val, COUNT(*)::int AS cnt
-     FROM user_collection, LATERAL jsonb_array_elements_text(data->'basic_information'->'styles') AS val
-     WHERE clerk_user_id = $1 AND jsonb_typeof(data->'basic_information'->'styles') = 'array'
+     FROM user_collection, LATERAL jsonb_array_elements_text(data->'styles') AS val
+     WHERE clerk_user_id = $1 AND jsonb_typeof(data->'styles') = 'array'
      GROUP BY val ORDER BY cnt DESC LIMIT 20`,
     [clerkUserId]
   );
   // Count artists
   const artistR = await getPool().query(
     `SELECT val->>'name' AS name, COUNT(*)::int AS cnt
-     FROM user_collection, LATERAL jsonb_array_elements(data->'basic_information'->'artists') AS val
-     WHERE clerk_user_id = $1 AND jsonb_typeof(data->'basic_information'->'artists') = 'array'
+     FROM user_collection, LATERAL jsonb_array_elements(data->'artists') AS val
+     WHERE clerk_user_id = $1 AND jsonb_typeof(data->'artists') = 'array'
      GROUP BY val->>'name' ORDER BY cnt DESC LIMIT 30`,
     [clerkUserId]
   );
