@@ -982,6 +982,15 @@ a.fresh-card-search-link:hover {
   color: #a89880;
 }
 .live-event-venue a { color: var(--accent); text-decoration: none; }
+.live-ext-link {
+  display: inline-block;
+  font-size: 0.7rem;
+  color: var(--muted) !important;
+  margin-left: 0.3rem;
+  opacity: 0.7;
+  transition: opacity 0.15s;
+}
+.live-ext-link:hover { opacity: 1; color: var(--accent) !important; }
 .live-event-source {
   font-size: 0.6rem;
   color: #444;
