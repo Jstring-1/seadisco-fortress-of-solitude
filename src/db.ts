@@ -601,15 +601,32 @@ export async function upsertCollectionItems(
   clerkUserId: string,
   items: Array<{ id: number; data: object; addedAt?: Date; folderId?: number; rating?: number; instanceId?: number; notes?: any[] }>
 ): Promise<void> {
+  if (!items.length) return;
+  const ids:        number[]       = [];
+  const dataArr:    string[]       = [];
+  const addedArr:   (Date | null)[] = [];
+  const folderArr:  number[]       = [];
+  const ratingArr:  number[]       = [];
+  const instanceArr:(number|null)[]= [];
+  const notesArr:   (string|null)[]= [];
   for (const item of items) {
-    await getPool().query(
-      `INSERT INTO user_collection (clerk_user_id, discogs_release_id, data, added_at, synced_at, folder_id, rating, instance_id, notes)
-       VALUES ($1, $2, $3, $4, NOW(), $5, $6, $7, $8)
-       ON CONFLICT (clerk_user_id, discogs_release_id)
-       DO UPDATE SET data = $3, added_at = $4, synced_at = NOW(), folder_id = $5, rating = $6, instance_id = $7, notes = $8`,
-      [clerkUserId, item.id, JSON.stringify(item.data), item.addedAt ?? null, item.folderId ?? 0, item.rating ?? 0, item.instanceId ?? null, item.notes ? JSON.stringify(item.notes) : null]
-    );
+    ids.push(item.id);
+    dataArr.push(JSON.stringify(item.data));
+    addedArr.push(item.addedAt ?? null);
+    folderArr.push(item.folderId ?? 0);
+    ratingArr.push(item.rating ?? 0);
+    instanceArr.push(item.instanceId ?? null);
+    notesArr.push(item.notes ? JSON.stringify(item.notes) : null);
   }
+  await getPool().query(
+    `INSERT INTO user_collection (clerk_user_id, discogs_release_id, data, added_at, synced_at, folder_id, rating, instance_id, notes)
+     SELECT $1, unnest($2::int[]), unnest($3::jsonb[]), unnest($4::timestamptz[]), NOW(), unnest($5::int[]), unnest($6::int[]), unnest($7::int[]), unnest($8::jsonb[])
+     ON CONFLICT (clerk_user_id, discogs_release_id)
+     DO UPDATE SET data = EXCLUDED.data, added_at = EXCLUDED.added_at, synced_at = NOW(),
+                   folder_id = EXCLUDED.folder_id, rating = EXCLUDED.rating,
+                   instance_id = EXCLUDED.instance_id, notes = EXCLUDED.notes`,
+    [clerkUserId, ids, dataArr, addedArr, folderArr, ratingArr, instanceArr, notesArr]
+  );
 }
 
 export async function upsertCollectionFolders(
@@ -642,15 +659,27 @@ export async function upsertWantlistItems(
   clerkUserId: string,
   items: Array<{ id: number; data: object; addedAt?: Date; rating?: number; notes?: any[] }>
 ): Promise<void> {
+  if (!items.length) return;
+  const ids:      number[]        = [];
+  const dataArr:  string[]        = [];
+  const addedArr: (Date | null)[] = [];
+  const ratingArr:number[]        = [];
+  const notesArr: (string|null)[] = [];
   for (const item of items) {
-    await getPool().query(
-      `INSERT INTO user_wantlist (clerk_user_id, discogs_release_id, data, added_at, synced_at, rating, notes)
-       VALUES ($1, $2, $3, $4, NOW(), $5, $6)
-       ON CONFLICT (clerk_user_id, discogs_release_id)
-       DO UPDATE SET data = $3, added_at = $4, synced_at = NOW(), rating = $5, notes = $6`,
-      [clerkUserId, item.id, JSON.stringify(item.data), item.addedAt ?? null, item.rating ?? 0, item.notes ? JSON.stringify(item.notes) : null]
-    );
+    ids.push(item.id);
+    dataArr.push(JSON.stringify(item.data));
+    addedArr.push(item.addedAt ?? null);
+    ratingArr.push(item.rating ?? 0);
+    notesArr.push(item.notes ? JSON.stringify(item.notes) : null);
   }
+  await getPool().query(
+    `INSERT INTO user_wantlist (clerk_user_id, discogs_release_id, data, added_at, synced_at, rating, notes)
+     SELECT $1, unnest($2::int[]), unnest($3::jsonb[]), unnest($4::timestamptz[]), NOW(), unnest($5::int[]), unnest($6::jsonb[])
+     ON CONFLICT (clerk_user_id, discogs_release_id)
+     DO UPDATE SET data = EXCLUDED.data, added_at = EXCLUDED.added_at, synced_at = NOW(),
+                   rating = EXCLUDED.rating, notes = EXCLUDED.notes`,
+    [clerkUserId, ids, dataArr, addedArr, ratingArr, notesArr]
+  );
 }
 
 export interface CwSearchFilters {
@@ -1147,20 +1176,34 @@ export async function recordInterestSignals(
   items: Array<{ id: number; data: any }>,
   source: "collection" | "wantlist"
 ): Promise<void> {
-  for (const item of items) {
-    const d = item.data;
-    if (!d) continue;
-    const artists: string[] = (d.artists ?? []).map((a: any) => a.name).filter(Boolean);
-    const labels:  string[] = (d.labels  ?? []).map((l: any) => l.name).filter(Boolean);
-    const genres:  string[] = d.genres ?? [];
-    const styles:  string[] = d.styles ?? [];
-    const year:    number | null = d.year || null;
+  const filtered = items.filter(i => i.data);
+  if (!filtered.length) return;
+  // Batch in chunks of 100 to stay within parameter limits (7 params each = 700 per chunk)
+  const CHUNK = 100;
+  for (let i = 0; i < filtered.length; i += CHUNK) {
+    const chunk = filtered.slice(i, i + CHUNK);
+    const values: string[] = [];
+    const params: any[] = [];
+    let p = 1;
+    for (const item of chunk) {
+      const d = item.data;
+      const artists = (d.artists ?? []).map((a: any) => a.name).filter(Boolean);
+      const labels  = (d.labels  ?? []).map((l: any) => l.name).filter(Boolean);
+      const genres  = d.genres ?? [];
+      const styles  = d.styles ?? [];
+      const year    = d.year || null;
+      values.push(`($${p}, $${p+1}, $${p+2}::text[], $${p+3}::text[], $${p+4}::text[], $${p+5}::text[], $${p+6})`);
+      params.push(item.id, source, artists, labels, genres, styles, year);
+      p += 7;
+    }
     await getPool().query(
       `INSERT INTO interest_signals (discogs_release_id, source, artists, labels, genres, styles, year)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       VALUES ${values.join(",")}
        ON CONFLICT (discogs_release_id, source)
-       DO UPDATE SET artists = $3, labels = $4, genres = $5, styles = $6, year = $7, recorded_at = NOW()`,
-      [item.id, source, artists, labels, genres, styles, year]
+       DO UPDATE SET artists = EXCLUDED.artists, labels = EXCLUDED.labels,
+                     genres = EXCLUDED.genres, styles = EXCLUDED.styles,
+                     year = EXCLUDED.year, recorded_at = NOW()`,
+      params
     );
   }
 }
