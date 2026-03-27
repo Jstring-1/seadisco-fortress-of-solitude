@@ -363,6 +363,7 @@ body {
   gap: 1rem;
 }
 #recent-feed {
+  display: none; /* temporarily hidden */
   padding-top: 2rem;
   transition: opacity 0.4s ease;
   max-width: 900px;
@@ -458,6 +459,7 @@ body {
   font-style: italic;
 }
 .fresh-tag-cloud-wrap {
+  display: none; /* temporarily hidden */
   overflow: hidden;
   max-height: 5.5rem;
   mask-image: linear-gradient(to right, transparent, black 40px, black calc(100% - 40px), transparent);
