@@ -589,12 +589,12 @@ async function loadRecentFeed() {
     });
     if (!filtered.length) { el.style.display = "none"; return; }
     _recentSearches = filtered;
-    const pillsHtml = `<div class="feed-label">Recent Searches</div><div class="feed-pills">${
+    const pillsHtml = `<div class="feed-label">Recent Searches</div><div class="pill-strip-wrap"><div class="feed-pills">${
       filtered.map((s, i) => {
         const { full, short } = feedLabel(s.params);
         return `<span class="pill feed-pill" data-idx="${i}" title="${escHtml(full)}">${escHtml(short)}</span>`;
       }).join("")
-    }</div>`;
+    }</div></div>`;
     el.style.opacity = "0";
     el.innerHTML = pillsHtml;
     el.querySelectorAll(".feed-pill").forEach((pill, i) => {

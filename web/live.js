@@ -356,7 +356,7 @@ async function loadLiveRecentFeed() {
       const short = full.length > 28 ? full.slice(0, 27) + "…" : full;
       return `<span class="pill feed-pill" data-live-idx="${i}" title="${escHtml(full)}">${escHtml(short)}</span>`;
     }).join("");
-    el.innerHTML = `<div class="feed-label">Recent Live Searches</div><div class="feed-pills">${pills}</div>`;
+    el.innerHTML = `<div class="feed-label">Recent Live Searches</div><div class="pill-strip-wrap"><div class="feed-pills">${pills}</div></div>`;
     el.querySelectorAll(".feed-pill").forEach((pill, i) => {
       pill.addEventListener("click", () => {
         const p = searches[i].params;
