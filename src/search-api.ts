@@ -546,6 +546,34 @@ app.get("/api/live/upcoming", async (_req, res) => {
   }
 });
 
+// Helper: extract full event data from a Ticketmaster event object
+function mapTmEvent(ev: any) {
+  const venue = ev._embedded?.venues?.[0];
+  const price = ev.priceRanges?.[0];
+  const venueUrl = venue?.externalLinks?.homepage?.[0]?.url
+    ?? venue?.url ?? "";
+  return {
+    name: ev.name ?? "",
+    artist: ev._embedded?.attractions?.[0]?.name ?? "",
+    date: ev.dates?.start?.localDate ?? "",
+    time: ev.dates?.start?.localTime ?? "",
+    venue: venue?.name ?? "",
+    venueId: venue?.id ?? "",
+    venueUrl,
+    city: venue?.city?.name ?? "",
+    region: venue?.state?.name ?? venue?.state?.stateCode ?? "",
+    country: venue?.country?.countryCode ?? "",
+    url: ev.url ?? "",
+    imageUrl: ev.images?.find((i: any) => i.ratio === "16_9" && i.width >= 500)?.url
+      ?? ev.images?.[0]?.url ?? "",
+    priceMin: price?.min ?? undefined,
+    priceMax: price?.max ?? undefined,
+    currency: price?.currency ?? undefined,
+    status: ev.dates?.status?.code ?? "",
+    source: "ticketmaster" as const,
+  };
+}
+
 // GET /api/live/nearby — geo-targeted events based on user IP
 app.get("/api/live/nearby", async (req, res) => {
   // Allow client to pass cached lat/lon to skip IP lookup
@@ -590,21 +618,7 @@ app.get("/api/live/nearby", async (req, res) => {
     const tmRes = await loggedFetch("ticketmaster", `https://app.ticketmaster.com/discovery/v2/events.json?${params}`, { signal: AbortSignal.timeout(10000), context: "personalized events" });
     if (!tmRes.ok) { res.json({ events: [], location: { lat, lon, city, region } }); return; }
     const tmData = await tmRes.json() as any;
-    const events = (tmData._embedded?.events ?? []).map((ev: any) => {
-      const venue = ev._embedded?.venues?.[0];
-      return {
-        name: ev.name ?? "",
-        artist: ev._embedded?.attractions?.[0]?.name ?? "",
-        date: ev.dates?.start?.localDate ?? "",
-        time: ev.dates?.start?.localTime ?? "",
-        venue: venue?.name ?? "",
-        venueId: venue?.id ?? "",
-        city: venue?.city?.name ?? "",
-        region: venue?.state?.stateCode ?? "",
-        country: venue?.country?.countryCode ?? "",
-        url: ev.url ?? "",
-      };
-    });
+    const events = (tmData._embedded?.events ?? []).map(mapTmEvent);
     res.setHeader("Cache-Control", "private, max-age=600");
     res.json({ events, location: { lat, lon, city, region } });
   } catch {
@@ -620,21 +634,7 @@ async function fetchUpcomingEvents(): Promise<number> {
     const r = await loggedFetch("ticketmaster", url, { signal: AbortSignal.timeout(30000), context: "scheduled fetch" });
     if (!r.ok) return 0;
     const data = await r.json() as any;
-    const events = (data._embedded?.events ?? []).map((ev: any) => {
-      const venue = ev._embedded?.venues?.[0];
-      return {
-        name: ev.name ?? "",
-        artist: ev._embedded?.attractions?.[0]?.name ?? "",
-        date: ev.dates?.start?.localDate ?? "",
-        time: ev.dates?.start?.localTime ?? "",
-        venue: venue?.name ?? "",
-        venueId: venue?.id ?? "",
-        city: venue?.city?.name ?? "",
-        region: venue?.state?.stateCode ?? "",
-        country: venue?.country?.countryCode ?? "",
-        url: ev.url ?? "",
-      };
-    });
+    const events = (data._embedded?.events ?? []).map(mapTmEvent);
     const count = await upsertLiveEvents(events);
     await pruneLiveEvents();
     console.log(`[live-events] Fetched ${count} upcoming events, pruned past events`);
@@ -1705,19 +1705,10 @@ app.get("/api/concerts/search", async (req, res) => {
               if (!matched && !(ev.name ?? "").toLowerCase().includes(artistLower)) continue;
               if (matched) eventArtist = matched.name;
             }
-            const venue = ev._embedded?.venues?.[0];
+            const mapped = mapTmEvent(ev);
             events.push({
-              artist:  eventArtist || ev.name?.split(/\s[-–—:]\s/)?.[0] || "",
-              name:    ev.name ?? "",
-              date:    ev.dates?.start?.localDate ?? "",
-              time:    ev.dates?.start?.localTime ?? "",
-              venue:   venue?.name ?? "",
-              venueId: venue?.id ?? "",
-              city:    venue?.city?.name ?? "",
-              region:  venue?.state?.name ?? "",
-              country: venue?.country?.countryCode ?? "",
-              url:     ev.url ?? "",
-              source:  "ticketmaster",
+              ...mapped,
+              artist: eventArtist || ev.name?.split(/\s[-–—:]\s/)?.[0] || "",
             });
           }
         } catch { /* parse error */ }
@@ -1801,23 +1792,15 @@ app.get("/api/concerts/venue/:venueId", async (req, res) => {
     const tmRes = await loggedFetch("ticketmaster", tmUrl, { context: "venue events" });
     if (!tmRes.ok) { res.json({ events: [], venueName: "" }); return; }
     const tmData = await tmRes.json() as any;
-    const events: Array<{ artist: string; name: string; date: string; time: string; venue: string; venueId: string; city: string; region: string; country: string }> = [];
+    const events: any[] = [];
     let venueName = "";
     for (const ev of (tmData._embedded?.events ?? [])) {
       const venue = ev._embedded?.venues?.[0];
       if (!venueName && venue?.name) venueName = venue.name;
-      const attractions = ev._embedded?.attractions ?? [];
-      const artistName = attractions[0]?.name ?? ev.name?.split(/\s[-–—:]\s/)?.[0] ?? "";
+      const mapped = mapTmEvent(ev);
       events.push({
-        artist:  artistName,
-        name:    ev.name ?? "",
-        date:    ev.dates?.start?.localDate ?? "",
-        time:    ev.dates?.start?.localTime ?? "",
-        venue:   venue?.name ?? "",
-        venueId: venue?.id ?? venueId,
-        city:    venue?.city?.name ?? "",
-        region:  venue?.state?.name ?? "",
-        country: venue?.country?.countryCode ?? "",
+        ...mapped,
+        venueId: mapped.venueId || venueId,
       });
     }
     const location = events[0] ? [events[0].city, events[0].region, events[0].country].filter(Boolean).join(", ") : "";
@@ -1858,18 +1841,7 @@ app.get("/api/concerts/:artist", async (req, res) => {
         try {
           const tmData = JSON.parse(tmBody);
           for (const ev of (tmData._embedded?.events ?? [])) {
-            const venue = ev._embedded?.venues?.[0];
-            events.push({
-              name:    ev.name ?? "",
-              date:    ev.dates?.start?.localDate ?? "",
-              time:    ev.dates?.start?.localTime ?? "",
-              venue:   venue?.name ?? "",
-              city:    venue?.city?.name ?? "",
-              region:  venue?.state?.name ?? "",
-              country: venue?.country?.countryCode ?? "",
-              url:     ev.url ?? "",
-              source:  "ticketmaster",
-            });
+            events.push(mapTmEvent(ev));
           }
         } catch { /* parse error */ }
       } else {

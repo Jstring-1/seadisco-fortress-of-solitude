@@ -14,6 +14,11 @@ function _renderLiveEvents(events, artist) {
     const venueLink = ev.venueId
       ? `<a href="#" onclick="event.preventDefault();liveSearchVenue('${escHtml(ev.venueId).replace(/'/g, "\\'")}','${escHtml(ev.venue).replace(/'/g, "\\'")}')">${escHtml(ev.venue)}</a>`
       : `<a href="https://www.google.com/search?q=${encodeURIComponent(`${ev.venue} ${ev.city} concerts`)}" target="_blank" rel="noopener">${escHtml(ev.venue)}</a>`;
+    // External link: prefer venue homepage, fall back to event ticket URL
+    const extUrl = ev.venueUrl || ev.url || "";
+    const extLink = extUrl
+      ? ` <a href="${escHtml(extUrl)}" target="_blank" rel="noopener" title="${ev.venueUrl ? 'Venue website' : 'Tickets'}" class="live-ext-link">↗</a>`
+      : "";
     html += `<div class="live-event">
       <div class="live-event-date">
         ${escHtml(fmtDate)}
@@ -23,7 +28,7 @@ function _renderLiveEvents(events, artist) {
         ${artistLine}
         <div class="live-event-name">${escHtml(ev.name)}</div>
         <div class="live-event-venue">
-          ${venueLink}
+          ${venueLink}${extLink}
           ${location ? ` — ${escHtml(location)}` : ""}
         </div>
       </div>
@@ -225,6 +230,10 @@ async function liveSearchVenue(venueId, venueName) {
       const artistLine = ev.artist
         ? `<div class="live-event-artist"><a href="#" onclick="event.preventDefault();liveSearchArtist('${escHtml(ev.artist).replace(/'/g, "\\'")}')">${escHtml(ev.artist)}</a></div>`
         : "";
+      const extUrl = ev.venueUrl || ev.url || "";
+      const extLink = extUrl
+        ? ` <a href="${escHtml(extUrl)}" target="_blank" rel="noopener" title="${ev.venueUrl ? 'Venue website' : 'Tickets'}" class="live-ext-link">↗</a>`
+        : "";
       html += `<div class="live-event">
         <div class="live-event-date">
           ${escHtml(fmtDate)}
@@ -232,7 +241,7 @@ async function liveSearchVenue(venueId, venueName) {
         </div>
         <div class="live-event-info">
           ${artistLine}
-          <div class="live-event-name">${escHtml(ev.name)}</div>
+          <div class="live-event-name">${escHtml(ev.name)}${extLink}</div>
         </div>
       </div>`;
     }

@@ -224,10 +224,16 @@ export async function initDb() {
       event_time  TEXT,
       venue       TEXT,
       venue_id    TEXT,
+      venue_url   TEXT,
       city        TEXT,
       region      TEXT,
       country     TEXT,
       url         TEXT,
+      image_url   TEXT,
+      price_min   NUMERIC,
+      price_max   NUMERIC,
+      currency    TEXT,
+      status      TEXT,
       fetched_at  TIMESTAMPTZ DEFAULT NOW(),
       UNIQUE(url)
     )
@@ -253,6 +259,14 @@ export async function initDb() {
   `);
   await getPool().query(`ALTER TABLE user_inventory ALTER COLUMN listing_id TYPE BIGINT`);
   await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS inventory_synced_at TIMESTAMP`);
+
+  // ── Live events: add new columns for richer TM data ─────────────────────
+  await getPool().query(`ALTER TABLE live_events ADD COLUMN IF NOT EXISTS venue_url TEXT`);
+  await getPool().query(`ALTER TABLE live_events ADD COLUMN IF NOT EXISTS image_url TEXT`);
+  await getPool().query(`ALTER TABLE live_events ADD COLUMN IF NOT EXISTS price_min NUMERIC`);
+  await getPool().query(`ALTER TABLE live_events ADD COLUMN IF NOT EXISTS price_max NUMERIC`);
+  await getPool().query(`ALTER TABLE live_events ADD COLUMN IF NOT EXISTS currency TEXT`);
+  await getPool().query(`ALTER TABLE live_events ADD COLUMN IF NOT EXISTS status TEXT`);
 
   // ── User lists (curated Discogs lists) ───────────────────────────────────
   await getPool().query(`
@@ -1565,14 +1579,15 @@ export async function logGearFetch(fetchType: string, itemCount: number, error?:
 // ── Live events (Ticketmaster upcoming) ─────────────────────────────────
 export async function upsertLiveEvents(events: Array<{
   name: string; artist: string; date: string; time: string;
-  venue: string; venueId: string; city: string; region: string;
-  country: string; url: string;
+  venue: string; venueId: string; venueUrl?: string; city: string; region: string;
+  country: string; url: string; imageUrl?: string; priceMin?: number; priceMax?: number;
+  currency?: string; status?: string;
 }>): Promise<number> {
   let count = 0;
   for (const ev of events) {
     await getPool().query(
-      `INSERT INTO live_events (event_name, artist, event_date, event_time, venue, venue_id, city, region, country, url, fetched_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
+      `INSERT INTO live_events (event_name, artist, event_date, event_time, venue, venue_id, venue_url, city, region, country, url, image_url, price_min, price_max, currency, status, fetched_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW())
        ON CONFLICT (url) DO UPDATE SET
          event_name = EXCLUDED.event_name,
          artist = EXCLUDED.artist,
@@ -1580,11 +1595,19 @@ export async function upsertLiveEvents(events: Array<{
          event_time = EXCLUDED.event_time,
          venue = EXCLUDED.venue,
          venue_id = EXCLUDED.venue_id,
+         venue_url = EXCLUDED.venue_url,
          city = EXCLUDED.city,
          region = EXCLUDED.region,
          country = EXCLUDED.country,
+         image_url = EXCLUDED.image_url,
+         price_min = EXCLUDED.price_min,
+         price_max = EXCLUDED.price_max,
+         currency = EXCLUDED.currency,
+         status = EXCLUDED.status,
          fetched_at = NOW()`,
-      [ev.name, ev.artist, ev.date, ev.time, ev.venue, ev.venueId, ev.city, ev.region, ev.country, ev.url]
+      [ev.name, ev.artist, ev.date, ev.time, ev.venue, ev.venueId, ev.venueUrl ?? null,
+       ev.city, ev.region, ev.country, ev.url, ev.imageUrl ?? null,
+       ev.priceMin ?? null, ev.priceMax ?? null, ev.currency ?? null, ev.status ?? null]
     );
     count++;
   }
@@ -1594,7 +1617,7 @@ export async function upsertLiveEvents(events: Array<{
 export async function getLiveEvents(limit: number = 30): Promise<object[]> {
   const r = await getPool().query(
     `SELECT event_name AS name, artist, event_date AS date, event_time AS time,
-            venue, venue_id AS "venueId", city, region, country, url
+            venue, venue_id AS "venueId", venue_url AS "venueUrl", city, region, country, url
      FROM live_events
      WHERE event_date ~ '^\\d{4}-\\d{2}-\\d{2}' AND event_date::date >= CURRENT_DATE
      ORDER BY event_date ASC, event_time ASC
