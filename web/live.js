@@ -282,7 +282,7 @@ async function loadLiveUpcoming() {
       params.set("city", cached.city || "");
       params.set("region", cached.region || "");
     }
-    const data = await fetch(`/api/live/nearby?${params}`).then(r => r.json());
+    const data = await apiFetch(`/api/live/nearby?${params}`).then(r => r.json());
     if (data.location) {
       localStorage.setItem("seadisco_location", JSON.stringify({ ...data.location, ts: Date.now() }));
     }
