@@ -1617,7 +1617,9 @@ export async function upsertLiveEvents(events: Array<{
 export async function getLiveEvents(limit: number = 30): Promise<object[]> {
   const r = await getPool().query(
     `SELECT event_name AS name, artist, event_date AS date, event_time AS time,
-            venue, venue_id AS "venueId", venue_url AS "venueUrl", city, region, country, url
+            venue, venue_id AS "venueId", venue_url AS "venueUrl", city, region, country, url,
+            image_url AS "imageUrl", price_min AS "priceMin", price_max AS "priceMax",
+            currency, status
      FROM live_events
      WHERE event_date ~ '^\\d{4}-\\d{2}-\\d{2}' AND event_date::date >= CURRENT_DATE
      ORDER BY event_date ASC, event_time ASC
