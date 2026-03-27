@@ -38,6 +38,7 @@ html { overflow-x: hidden; }
 @media (max-width: 640px) {
   #site-header { padding: 0.4rem 0.75rem; }
   #site-header img { height: 32px; }
+  .text-logo { font-size: 1.15rem; }
 
   #header-bar {
     flex-direction: column;
@@ -211,13 +212,33 @@ body {
   margin: 0 auto 50px;
 }
 
-.header-logo { display: flex; align-items: center; flex-shrink: 0; }
+.header-logo { display: flex; align-items: center; flex-shrink: 0; text-decoration: none; }
 
 #site-header img {
   height: 48px;
   width: auto;
   display: block;
 }
+
+/* Text logo */
+.text-logo {
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  font-size: 1.55rem;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  user-select: none;
+}
+.logo-hi {
+  color: #5cf0ee;
+  font-weight: 700;
+}
+.logo-lo {
+  color: rgba(92, 240, 238, 0.3);
+  font-weight: 400;
+}
+.logo-gap { width: 0.35em; display: inline-block; }
+.text-logo:hover .logo-hi { color: #fff; }
+.text-logo:hover .logo-lo { color: rgba(255, 255, 255, 0.3); }
 
 #site-tagline {
   font-size: 0.78rem;
