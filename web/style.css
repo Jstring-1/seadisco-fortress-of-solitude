@@ -377,20 +377,12 @@ body {
   text-align: center;
   margin-bottom: 0.55rem;
 }
-.pill-strip {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 0.35rem;
-  overflow: hidden;
-  mask-image: linear-gradient(to right, transparent, black 40px, black calc(100% - 40px), transparent);
-  -webkit-mask-image: linear-gradient(to right, transparent, black 40px, black calc(100% - 40px), transparent);
-  padding: 0.2rem 0;
-}
 .feed-pills {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 0.35rem;
   overflow: hidden;
+  max-height: 6.5rem;
   mask-image: linear-gradient(to right, transparent, black 40px, black calc(100% - 40px), transparent);
   -webkit-mask-image: linear-gradient(to right, transparent, black 40px, black calc(100% - 40px), transparent);
   padding: 0.2rem 0;
@@ -462,10 +454,11 @@ body {
 }
 .fresh-tag-cloud {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 0.35rem;
   margin-bottom: 0.6rem;
   overflow: hidden;
+  max-height: 6.5rem;
   mask-image: linear-gradient(to right, transparent, black 40px, black calc(100% - 40px), transparent);
   -webkit-mask-image: linear-gradient(to right, transparent, black 40px, black calc(100% - 40px), transparent);
   padding: 0.2rem 0;
