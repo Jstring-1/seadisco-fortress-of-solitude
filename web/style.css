@@ -379,7 +379,7 @@ body {
 }
 .pill-strip-wrap {
   overflow: hidden;
-  max-height: 4.6rem;
+  max-height: 5.2rem;
   mask-image: linear-gradient(to right, transparent, black 40px, black calc(100% - 40px), transparent);
   -webkit-mask-image: linear-gradient(to right, transparent, black 40px, black calc(100% - 40px), transparent);
 }
@@ -459,7 +459,7 @@ body {
 }
 .fresh-tag-cloud-wrap {
   overflow: hidden;
-  max-height: 4.6rem;
+  max-height: 5.2rem;
   mask-image: linear-gradient(to right, transparent, black 40px, black calc(100% - 40px), transparent);
   -webkit-mask-image: linear-gradient(to right, transparent, black 40px, black calc(100% - 40px), transparent);
   margin-bottom: 0.6rem;
