@@ -596,7 +596,7 @@ async function fetchUpcomingEvents(): Promise<number> {
   if (!ticketmasterKey) return 0;
   try {
     const url = `https://app.ticketmaster.com/discovery/v2/events.json?apikey=${ticketmasterKey}&classificationName=music&size=50&sort=date,asc&countryCode=US`;
-    const r = await loggedFetch("ticketmaster", url, { signal: AbortSignal.timeout(15000), context: "scheduled fetch" });
+    const r = await loggedFetch("ticketmaster", url, { signal: AbortSignal.timeout(30000), context: "scheduled fetch" });
     if (!r.ok) return 0;
     const data = await r.json() as any;
     const events = (data._embedded?.events ?? []).map((ev: any) => {
@@ -2142,7 +2142,6 @@ const RSS_FEEDS: Array<{ name: string; url: string; category: string }> = [
   { name: "Aquarium Drunkard", url: "https://aquariumdrunkard.com/feed/", category: "news" },
   { name: "The Quietus", url: "https://thequietus.com/feed", category: "reviews" },
   { name: "BrooklynVegan", url: "https://www.brooklynvegan.com/feed/", category: "news" },
-  { name: "Resident Advisor", url: "https://ra.co/xml/news.xml", category: "news" },
 ];
 
 const YOUTUBE_CHANNELS: Array<{ name: string; channelId: string; category?: string }> = [
@@ -2396,6 +2395,27 @@ app.post("/api/admin/live/fetch", express.json(), async (req, res) => {
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   const count = await fetchUpcomingEvents();
   res.json({ ok: true, count });
+});
+
+// POST /api/admin/extras/fetch — manual trigger for inventory/lists sync
+app.post("/api/admin/extras/fetch", express.json(), async (req, res) => {
+  const userId = getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  res.json({ ok: true, message: "Extras sync started" });
+  (async () => {
+    const users = await getAllUsersForSync();
+    for (const user of users) {
+      try {
+        const result = await syncUserExtras(user.clerkUserId, user.username, user.token);
+        console.log(`[admin-extras] ${user.username}: ${result.inventory} inventory, ${result.lists} lists`);
+        await sleep(30000); // 30s between users
+      } catch (err) {
+        console.error(`[admin-extras] Error syncing ${user.username}:`, err);
+      }
+    }
+    console.log("[admin-extras] Complete");
+  })();
 });
 
 // GET /api/user/taste-profile — user's own taste profile
