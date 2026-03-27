@@ -663,10 +663,12 @@ function startLiveEventsSchedule() {
 }
 
 // GET /api/wanted-sample — small public sample for Find page filler
-app.get("/api/wanted-sample", async (_req, res) => {
+app.get("/api/wanted-sample", async (req, res) => {
   try {
-    res.setHeader("Cache-Control", "public, max-age=600"); // 10 min
-    const items = await getWantedSample(16);
+    res.setHeader("Cache-Control", "public, max-age=60");
+    const excludeStr = (req.query.exclude as string) || "";
+    const excludeIds = excludeStr ? excludeStr.split(",").map(Number).filter(n => !isNaN(n)) : [];
+    const items = await getWantedSample(16, excludeIds);
     res.json({ items });
   } catch (e) {
     res.status(500).json({ error: String(e) });
