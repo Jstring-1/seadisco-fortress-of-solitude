@@ -22,7 +22,7 @@ html { overflow-x: hidden; }
   display: flex;
   align-items: center;
   gap: 0.3rem;
-  color: #555;
+  color: #6a5d4a;
 }
 /* ══════════════════════════════════════════════
    RESPONSIVE / MOBILE
@@ -181,7 +181,7 @@ html { overflow-x: hidden; }
   --accent2:   #ff8c5a;
   --accent-hi: #e8d44d;
   --text:      #e8dcc8;
-  --muted:     #8a7d6b;
+  --muted:     #a89880;
   --radius:    6px;
   --input-h:   28px;
 }
@@ -243,7 +243,7 @@ body {
 
 #site-tagline {
   font-size: 0.78rem;
-  color: #555;
+  color: #6a5d4a;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -450,7 +450,7 @@ body {
   border-radius: 20px;
   padding: 0.2rem 0.65rem;
   font-size: 0.72rem;
-  color: #777;
+  color: #8a7d68;
   cursor: pointer;
   white-space: nowrap;
   transition: border-color 0.15s, color 0.15s, background 0.15s;
@@ -477,7 +477,7 @@ body {
 .fresh-all-btn:hover:not(.main-nav-tab) { background: var(--surface); }
 #fresh-active-label {
   font-size: 0.72rem;
-  color: #555;
+  color: #6a5d4a;
   font-style: italic;
 }
 .fresh-tag-cloud-wrap {
@@ -726,7 +726,7 @@ a.fresh-card-search-link:hover {
 }
 .feed-card-category {
   font-size: 0.62rem; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.05em; color: #666; margin-bottom: 0.1rem;
+  letter-spacing: 0.05em; color: #7a6d58; margin-bottom: 0.1rem;
 }
 .feed-card-title {
   font-size: 0.8rem; font-weight: 600; color: var(--fg);
@@ -740,7 +740,7 @@ a.fresh-card-search-link:hover {
 }
 .feed-card-author a:hover { text-decoration: underline; }
 .feed-card-date {
-  font-size: 0.72rem; color: #555; margin-bottom: 0.2rem;
+  font-size: 0.72rem; color: #6a5d4a; margin-bottom: 0.2rem;
 }
 .feed-card-summary {
   font-size: 0.72rem; color: var(--muted); line-height: 1.35;
@@ -801,12 +801,12 @@ a.fresh-card-search-link:hover {
 .gear-popup-body { padding: 0.75rem 1rem 1rem; }
 .gear-popup-title { font-size: 0.95rem; margin: 0 0 0.4rem; color: var(--text); }
 .gear-popup-price { font-size: 1.1rem; font-weight: 700; color: #daa520; margin-bottom: 0.4rem; }
-.gear-popup-meta { font-size: 0.78rem; color: #999; margin-bottom: 0.2rem; }
+.gear-popup-meta { font-size: 0.78rem; color: #a89880; margin-bottom: 0.2rem; }
 .gear-popup-specs {
   margin-top: 0.6rem; border-top: 1px solid var(--border); padding-top: 0.5rem;
 }
 .gear-spec-row { font-size: 0.78rem; color: #bbb; margin-bottom: 0.15rem; }
-.gear-spec-label { color: #888; min-width: 100px; display: inline-block; }
+.gear-spec-label { color: #9a8d78; min-width: 100px; display: inline-block; }
 .gear-popup-description {
   margin-top: 0.6rem; border-top: 1px solid var(--border); padding-top: 0.5rem;
   font-size: 0.78rem; color: #bbb; max-height: 200px; overflow-y: auto; line-height: 1.4;
@@ -839,7 +839,7 @@ a.fresh-card-search-link:hover {
 .fresh-filter-select:focus,
 .fresh-filter-input:focus  { outline: none; border-color: var(--accent); }
 .fresh-filter-select option { background: #1a1510; }
-.fresh-filter-input::placeholder { color: #555; }
+.fresh-filter-input::placeholder { color: #6a5d4a; }
 
 /* ── Live upcoming events (pre-search filler) ────────────────────────── */
 #live-upcoming-list .live-event:last-child { border-bottom: none; }
@@ -857,7 +857,7 @@ a.fresh-card-search-link:hover {
   /* inherits height/font from global input/select rules */
 }
 .live-input { flex: 1; min-width: 80px; max-width: 240px; }
-.live-input::placeholder { color: #555; }
+.live-input::placeholder { color: #6a5d4a; }
 .live-input:focus, .live-select:focus { outline: none; border-color: var(--accent); }
 .live-select {
   width: 130px;
@@ -909,13 +909,13 @@ a.fresh-card-search-link:hover {
   flex-shrink: 0;
   width: 90px;
   font-size: 0.75rem;
-  color: #888;
+  color: #9a8d78;
   line-height: 1.4;
 }
 .live-event-time {
   display: block;
   font-size: 0.68rem;
-  color: #555;
+  color: #6a5d4a;
 }
 .live-event-info { flex: 1; min-width: 0; }
 .live-event-artist {
@@ -927,7 +927,7 @@ a.fresh-card-search-link:hover {
 .live-event-artist a { color: var(--accent); text-decoration: none; }
 .live-event-name {
   font-size: 0.75rem;
-  color: #777;
+  color: #8a7d68;
   margin-bottom: 0.15rem;
   white-space: nowrap;
   overflow: hidden;
@@ -935,7 +935,7 @@ a.fresh-card-search-link:hover {
 }
 .live-event-venue {
   font-size: 0.75rem;
-  color: #999;
+  color: #a89880;
 }
 .live-event-venue a { color: var(--accent); text-decoration: none; }
 .live-event-source {
@@ -947,7 +947,7 @@ a.fresh-card-search-link:hover {
 }
 .live-empty {
   text-align: center;
-  color: #555;
+  color: #6a5d4a;
   padding: 2rem 0;
   font-size: 0.85rem;
 }
@@ -958,7 +958,7 @@ a.fresh-card-search-link:hover {
   font-size: 0.78rem;
   border-top: 1px solid var(--border);
   margin-top: 0.25rem;
-  color: #777;
+  color: #8a7d68;
   line-height: 1.7;
 }
 .fresh-also-link {
@@ -1001,7 +1001,7 @@ a.fresh-card-search-link:hover {
 .drop-nomatch-title a:hover { text-decoration: underline; text-underline-offset: 2px; }
 .drop-nomatch-line {
   font-size: 0.78rem;
-  color: #888;
+  color: #9a8d78;
 }
 .drop-nomatch-tags {
   display: flex;
@@ -1015,14 +1015,14 @@ a.fresh-card-search-link:hover {
   border-radius: 12px;
   padding: 0.1rem 0.45rem;
   font-size: 0.65rem;
-  color: #999;
+  color: #a89880;
   text-decoration: none;
   white-space: nowrap;
 }
 a.drop-nomatch-tag:hover { border-color: var(--accent); color: var(--accent); }
 .drop-nomatch-msg {
   font-size: 0.82rem;
-  color: #777;
+  color: #8a7d68;
   font-style: italic;
   margin-top: 0.4rem;
 }
@@ -1268,7 +1268,7 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 }
 
 #video-title .vt-track { font-weight: 600; color: #fff; }
-#video-title .vt-sep   { color: #666; margin: 0 0.3em; }
+#video-title .vt-sep   { color: #7a6d58; margin: 0 0.3em; }
 
 #video-nav {
   display: flex;
@@ -1358,14 +1358,14 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 }
 .concert-item:hover { border-color: #4a3a20; }
 .concert-date { font-size: 0.72rem; color: var(--accent); font-weight: 600; line-height: 1.4; }
-.concert-date .concert-time { font-weight: normal; color: #777; display: block; }
+.concert-date .concert-time { font-weight: normal; color: #8a7d68; display: block; }
 .concert-details { min-width: 0; }
 .concert-event-name { font-size: 0.82rem; color: #ccc; font-weight: 500; }
-.concert-venue { font-size: 0.72rem; color: #999; margin-top: 0.15rem; }
+.concert-venue { font-size: 0.72rem; color: #a89880; margin-top: 0.15rem; }
 .concert-venue a { color: var(--accent); text-decoration: none; }
 .concert-venue a:hover { text-decoration: underline; }
-.concert-source { font-size: 0.6rem; color: #555; text-transform: uppercase; letter-spacing: 0.04em; }
-.concert-empty { padding: 2rem; text-align: center; color: #777; font-style: italic; }
+.concert-source { font-size: 0.6rem; color: #6a5d4a; text-transform: uppercase; letter-spacing: 0.04em; }
+.concert-empty { padding: 2rem; text-align: center; color: #8a7d68; font-style: italic; }
 
 /* ── Version overlay (layered over master popup) ── */
 #version-overlay {
@@ -1804,7 +1804,7 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   margin-top: auto;
   padding-top: 0.5rem;
   font-size: 0.7rem;
-  color: #666;
+  color: #7a6d58;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -1944,7 +1944,7 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 #alts-popup h4 {
   margin: 0 0 0.7rem;
   font-size: 0.8rem;
-  color: #888;
+  color: #9a8d78;
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
