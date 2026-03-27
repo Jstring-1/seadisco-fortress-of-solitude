@@ -299,6 +299,24 @@ export async function initDb() {
       updated_at    TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+
+  // ── API request log (errors + successes for all external API calls) ────
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS api_request_log (
+      id            SERIAL PRIMARY KEY,
+      service       TEXT NOT NULL,
+      endpoint      TEXT NOT NULL,
+      method        TEXT DEFAULT 'GET',
+      status_code   INTEGER,
+      success       BOOLEAN NOT NULL,
+      duration_ms   INTEGER,
+      error_message TEXT,
+      context       TEXT,
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS api_request_log_created_idx ON api_request_log (created_at DESC)`);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS api_request_log_service_idx ON api_request_log (service, created_at DESC)`);
 }
 
 export async function saveSearch(clerkUserId: string, params: Record<string, string>): Promise<void> {
@@ -1681,4 +1699,70 @@ export async function getPersonalizedFeedArticles(clerkUserId: string, opts: {
     [...params, limit, offset]
   );
   return { items: r.rows, total };
+}
+
+// ── API request logging ──────────────────────────────────────────────────
+export async function logApiRequest(opts: {
+  service: string;
+  endpoint: string;
+  method?: string;
+  statusCode?: number;
+  success: boolean;
+  durationMs?: number;
+  errorMessage?: string;
+  context?: string;
+}): Promise<void> {
+  try {
+    await getPool().query(
+      `INSERT INTO api_request_log (service, endpoint, method, status_code, success, duration_ms, error_message, context)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      [opts.service, opts.endpoint, opts.method ?? "GET", opts.statusCode ?? null, opts.success, opts.durationMs ?? null, opts.errorMessage ?? null, opts.context ?? null]
+    );
+  } catch {
+    // Don't let logging failures break the app
+  }
+  // Auto-prune: keep only last 10,000 rows
+  try {
+    await getPool().query(
+      `DELETE FROM api_request_log WHERE id NOT IN (SELECT id FROM api_request_log ORDER BY created_at DESC LIMIT 10000)`
+    );
+  } catch {}
+}
+
+export async function getApiRequestLog(opts?: { service?: string; limit?: number; offset?: number; successOnly?: boolean; errorsOnly?: boolean }): Promise<{ items: any[]; total: number }> {
+  const params: any[] = [];
+  let where = "WHERE 1=1";
+  if (opts?.service) {
+    params.push(opts.service);
+    where += ` AND service = $${params.length}`;
+  }
+  if (opts?.successOnly) where += " AND success = true";
+  if (opts?.errorsOnly) where += " AND success = false";
+
+  const countR = await getPool().query(`SELECT COUNT(*)::int AS cnt FROM api_request_log ${where}`, params);
+  const total = countR.rows[0]?.cnt ?? 0;
+  const limit = opts?.limit ?? 100;
+  const offset = opts?.offset ?? 0;
+
+  const r = await getPool().query(
+    `SELECT * FROM api_request_log ${where} ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    [...params, limit, offset]
+  );
+  return { items: r.rows, total };
+}
+
+export async function getApiRequestStats(): Promise<any[]> {
+  const r = await getPool().query(`
+    SELECT service,
+           COUNT(*)::int AS total_requests,
+           COUNT(*) FILTER (WHERE success)::int AS successes,
+           COUNT(*) FILTER (WHERE NOT success)::int AS failures,
+           ROUND(AVG(duration_ms))::int AS avg_duration_ms,
+           MAX(created_at) AS last_request_at
+    FROM api_request_log
+    WHERE created_at > NOW() - INTERVAL '24 hours'
+    GROUP BY service
+    ORDER BY total_requests DESC
+  `);
+  return r.rows;
 }

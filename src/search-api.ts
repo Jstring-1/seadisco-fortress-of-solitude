@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getLatestCollectionAddedAt, getLatestWantlistAddedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, getLocationByIp, upsertLocation, rebuildUserTasteProfile, getUserTasteProfile, getPersonalizedFreshReleases, getPersonalizedFeedArticles, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getLatestCollectionAddedAt, getLatestWantlistAddedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, getLocationByIp, upsertLocation, rebuildUserTasteProfile, getUserTasteProfile, getPersonalizedFreshReleases, getPersonalizedFeedArticles, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, logApiRequest, getApiRequestLog, getApiRequestStats } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -24,6 +24,28 @@ const bandsintownAppId = "seadisco"; // Bandsintown just needs an app identifier
 const youtubeApiKey = process.env.YOUTUBE_API_KEY ?? "";
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+// ── Logged fetch: wraps fetch() and logs the request to api_request_log ──
+async function loggedFetch(service: string, url: string, init?: RequestInit & { context?: string }): Promise<Response> {
+  const start = Date.now();
+  const method = init?.method ?? "GET";
+  const context = init?.context;
+  // Strip context from init before passing to real fetch
+  const { context: _ctx, ...fetchInit } = (init ?? {}) as any;
+  // Strip query params with tokens for safety
+  const cleanUrl = url.replace(/token=[^&]+/g, "token=***").replace(/key=[^&]+/g, "key=***").replace(/apikey=[^&]+/g, "apikey=***");
+  try {
+    const r = await fetch(url, fetchInit);
+    const ms = Date.now() - start;
+    // Fire-and-forget log
+    logApiRequest({ service, endpoint: cleanUrl, method, statusCode: r.status, success: r.ok, durationMs: ms, errorMessage: r.ok ? undefined : `HTTP ${r.status}`, context }).catch(() => {});
+    return r;
+  } catch (err: any) {
+    const ms = Date.now() - start;
+    logApiRequest({ service, endpoint: cleanUrl, method, statusCode: 0, success: false, durationMs: ms, errorMessage: err?.message ?? String(err), context }).catch(() => {});
+    throw err;
+  }
+}
 
 // Shared Discogs client (used as fallback when user has no personal token)
 const discogs = sharedToken ? new DiscogsClient(sharedToken) : null;
@@ -68,7 +90,7 @@ async function resolveLocation(req: express.Request): Promise<{ lat: number; lon
 
   // 3. ip-api.com (free tier, HTTP only, 45 req/min)
   try {
-    const r = await fetch(`http://ip-api.com/json/${ip}?fields=status,lat,lon,city,regionName,country`, { signal: AbortSignal.timeout(5000) });
+    const r = await loggedFetch("ip-api", `http://ip-api.com/json/${ip}?fields=status,lat,lon,city,regionName,country`, { signal: AbortSignal.timeout(5000) });
     const data = await r.json() as any;
     if (data.status !== "success") return null;
     const loc = { lat: data.lat as number, lon: data.lon as number, city: data.city as string, region: data.regionName as string, country: data.country as string };
@@ -190,8 +212,9 @@ app.post("/api/user/token", express.json(), async (req, res) => {
   await setUserToken(userId, token.trim());
   // Fetch Discogs username from /oauth/identity using the user's token
   try {
-    const identRes = await fetch("https://api.discogs.com/oauth/identity", {
-      headers: { "Authorization": `Discogs token=${token.trim()}`, "User-Agent": "SeaDisco/1.0" }
+    const identRes = await loggedFetch("discogs", "https://api.discogs.com/oauth/identity", {
+      headers: { "Authorization": `Discogs token=${token.trim()}`, "User-Agent": "SeaDisco/1.0" },
+      context: "save-token identity check",
     });
     if (identRes.ok) {
       const ident = await identRes.json() as { username?: string };
@@ -250,7 +273,7 @@ async function runBackgroundSync(userId: string, token: string, username: string
     const backoffs = [15000, 30000, 60000, 90000, 120000];
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
-        const r = await fetch(url, { headers, signal: AbortSignal.timeout(30000) });
+        const r = await loggedFetch("discogs", url, { headers, signal: AbortSignal.timeout(30000), context: `sync ${username}` });
         if (r.ok) {
           // Check remaining rate limit — if low, pause proactively
           const remaining = parseInt(r.headers.get("x-discogs-ratelimit-remaining") ?? "10");
@@ -475,8 +498,9 @@ app.post("/api/user/sync", express.json(), async (req, res) => {
   let username = await getDiscogsUsername(userId);
   if (!username) {
     try {
-      const identRes = await fetch("https://api.discogs.com/oauth/identity", {
-        headers: { "Authorization": `Discogs token=${token}`, "User-Agent": "SeaDisco/1.0" }
+      const identRes = await loggedFetch("discogs", "https://api.discogs.com/oauth/identity", {
+        headers: { "Authorization": `Discogs token=${token}`, "User-Agent": "SeaDisco/1.0" },
+        context: "sync identity check",
       });
       if (identRes.ok) {
         const ident = await identRes.json() as { username?: string };
@@ -596,7 +620,7 @@ app.get("/api/live/nearby", async (req, res) => {
       apikey: ticketmasterKey,
     });
     if (genreKeyword) params.set("keyword", genreKeyword);
-    const tmRes = await fetch(`https://app.ticketmaster.com/discovery/v2/events.json?${params}`, { signal: AbortSignal.timeout(10000) });
+    const tmRes = await loggedFetch("ticketmaster", `https://app.ticketmaster.com/discovery/v2/events.json?${params}`, { signal: AbortSignal.timeout(10000), context: "personalized events" });
     if (!tmRes.ok) { res.json({ events: [], location: { lat, lon, city, region } }); return; }
     const tmData = await tmRes.json() as any;
     const events = (tmData._embedded?.events ?? []).map((ev: any) => {
@@ -626,7 +650,7 @@ async function fetchUpcomingEvents(): Promise<number> {
   if (!ticketmasterKey) return 0;
   try {
     const url = `https://app.ticketmaster.com/discovery/v2/events.json?apikey=${ticketmasterKey}&classificationName=music&size=50&sort=date,asc&countryCode=US`;
-    const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    const r = await loggedFetch("ticketmaster", url, { signal: AbortSignal.timeout(15000), context: "scheduled fetch" });
     if (!r.ok) return 0;
     const data = await r.json() as any;
     const events = (data._embedded?.events ?? []).map((ev: any) => {
@@ -1027,7 +1051,7 @@ Each item in the items array must include:
 Return ONLY a valid JSON object, no markdown, no explanation.`;
 
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
+    const r = await loggedFetch("anthropic", "https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "x-api-key": anthropicKey,
@@ -1039,6 +1063,7 @@ Return ONLY a valid JSON object, no markdown, no explanation.`;
         max_tokens: 1700,
         messages: [{ role: "user", content: prompt }],
       }),
+      context: "ai-search suggestions",
     });
     const data = await r.json() as any;
     if (!r.ok) {
@@ -1075,7 +1100,7 @@ ${titleList}
 In 4–7 words, give a single honest phrase describing how well these results match the query. Be direct, like a librarian — e.g. "Strong match", "Partial match, try narrowing", "Loose results, refine your search", "Exact artist found", "Mixed bag, add more filters". No punctuation at the end. Return ONLY the phrase, nothing else.`;
 
   try {
-    const r = await fetch("https://api.anthropic.com/v1/messages", {
+    const r = await loggedFetch("anthropic", "https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "x-api-key": anthropicKey,
@@ -1087,6 +1112,7 @@ In 4–7 words, give a single honest phrase describing how well these results ma
         max_tokens: 24,
         messages: [{ role: "user", content: prompt }],
       }),
+      context: "result-quality rating",
     });
     const data = await r.json() as any;
     if (!r.ok) {
@@ -1524,7 +1550,7 @@ app.get("/genre-info", async (req, res) => {
   if (!anthropicKey) { res.json({ profile: null }); return; }
 
   try {
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
+    const response = await loggedFetch("anthropic", "https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: {
         "x-api-key": anthropicKey,
@@ -1539,6 +1565,7 @@ app.get("/genre-info", async (req, res) => {
           content: `Write 2–3 sentences describing "${genre}" as a music genre. State only well-established, verifiable facts: its geographic or cultural origins, defining musical characteristics, and time period it emerged. Do not name specific artists or albums. Do not speculate.`,
         }],
       }),
+      context: "genre profile",
     });
     const data = await response.json() as any;
     const profile = data?.content?.[0]?.text?.trim() ?? null;
@@ -1565,9 +1592,9 @@ app.get("/marketplace-stats/:id", async (req, res) => {
       releaseId = String(master?.main_release ?? id);
     }
 
-    const statsRes = await fetch(
+    const statsRes = await loggedFetch("discogs",
       `https://api.discogs.com/marketplace/stats/${releaseId}?curr_abbr=USD`,
-      { headers: { "Authorization": `Discogs token=${reqToken}`, "User-Agent": MB_UA } }
+      { headers: { "Authorization": `Discogs token=${reqToken}`, "User-Agent": MB_UA }, context: "marketplace stats" } as any
     );
     const stats = await statsRes.json() as any;
     res.json({
@@ -1588,9 +1615,9 @@ app.get("/master-versions/:id", async (req, res) => {
   const reqToken = await getTokenForRequest(req);
   if (!reqToken) { res.json({ versions: [] }); return; }
   try {
-    const r = await fetch(
+    const r = await loggedFetch("discogs",
       `https://api.discogs.com/masters/${id}/versions?per_page=100&sort=released&sort_order=asc`,
-      { headers: { "Authorization": `Discogs token=${reqToken}`, "User-Agent": MB_UA } }
+      { headers: { "Authorization": `Discogs token=${reqToken}`, "User-Agent": MB_UA }, context: "master versions" } as any
     );
     const data = await r.json() as any;
     const versions = (data.versions ?? []).map((v: any) => ({
@@ -1694,7 +1721,7 @@ app.get("/api/concerts/search", async (req, res) => {
       }
       const tmUrl = `https://app.ticketmaster.com/discovery/v2/events.json?${params}`;
       console.log("Live TM URL:", tmUrl.replace(ticketmasterKey, "***"));
-      const tmRes = await fetch(tmUrl);
+      const tmRes = await loggedFetch("ticketmaster", tmUrl, { context: "live search" });
       const tmBody = await tmRes.text();
       if (tmRes.ok) {
         try {
@@ -1805,7 +1832,7 @@ app.get("/api/concerts/venue/:venueId", async (req, res) => {
   if (!venueId || !ticketmasterKey) { res.json({ events: [], venueName: "" }); return; }
   try {
     const tmUrl = `https://app.ticketmaster.com/discovery/v2/events.json?venueId=${encodeURIComponent(venueId)}&classificationName=music&size=200&sort=date,asc&apikey=${ticketmasterKey}`;
-    const tmRes = await fetch(tmUrl);
+    const tmRes = await loggedFetch("ticketmaster", tmUrl, { context: "venue events" });
     if (!tmRes.ok) { res.json({ events: [], venueName: "" }); return; }
     const tmData = await tmRes.json() as any;
     const events: Array<{ artist: string; name: string; date: string; time: string; venue: string; venueId: string; city: string; region: string; country: string }> = [];
@@ -1859,7 +1886,7 @@ app.get("/api/concerts/:artist", async (req, res) => {
   if (ticketmasterKey) {
     try {
       const tmUrl = `https://app.ticketmaster.com/discovery/v2/events.json?keyword=${encodeURIComponent(artist)}&classificationName=music&size=20&sort=date,asc&apikey=${ticketmasterKey}`;
-      const tmRes = await fetch(tmUrl);
+      const tmRes = await loggedFetch("ticketmaster", tmUrl, { context: `artist: ${artist}` });
       const tmBody = await tmRes.text();
       if (tmRes.ok) {
         try {
@@ -1890,7 +1917,7 @@ app.get("/api/concerts/:artist", async (req, res) => {
   // Bandsintown API
   try {
     const bitUrl = `https://rest.bandsintown.com/artists/${encodeURIComponent(artist)}/events?app_id=${bandsintownAppId}&date=upcoming`;
-    const bitRes = await fetch(bitUrl);
+    const bitRes = await loggedFetch("bandsintown", bitUrl, { context: `artist: ${artist}` });
     const bitBody = await bitRes.text();
     if (bitRes.ok) {
       try {
@@ -1942,13 +1969,14 @@ async function getEbayToken(): Promise<string> {
   if (ebayAccessToken && Date.now() < ebayTokenExpiry - 60000) return ebayAccessToken;
   if (!ebayClientId || !ebayClientSecret) throw new Error("eBay credentials not configured");
   const creds = Buffer.from(`${ebayClientId}:${ebayClientSecret}`).toString("base64");
-  const r = await fetch("https://api.ebay.com/identity/v1/oauth2/token", {
+  const r = await loggedFetch("ebay", "https://api.ebay.com/identity/v1/oauth2/token", {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
       "Authorization": `Basic ${creds}`,
     },
     body: "grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope",
+    context: "oauth token",
   });
   if (!r.ok) throw new Error(`eBay OAuth failed: ${r.status}`);
   const data = await r.json() as { access_token: string; expires_in: number };
@@ -1982,8 +2010,9 @@ async function fetchEbayGearListings(): Promise<number> {
       try {
         // Auctions only, sorted by ending soonest (most active)
         const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&limit=200&sort=endingSoonest&filter=price:[50..],priceCurrency:USD,buyingOptions:{AUCTION}`;
-        const r = await fetch(url, {
+        const r = await loggedFetch("ebay", url, {
           headers: { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" },
+          context: `gear search: ${query}`,
         });
         if (!r.ok) {
           console.error(`eBay search "${query}" failed: ${r.status}`);
@@ -2047,8 +2076,9 @@ async function fetchGearDetails(): Promise<number> {
 
     for (const item of items) {
       try {
-        const r = await fetch(`https://api.ebay.com/buy/browse/v1/item/${item.itemId}`, {
+        const r = await loggedFetch("ebay", `https://api.ebay.com/buy/browse/v1/item/${item.itemId}`, {
           headers: { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" },
+          context: `gear detail: ${item.itemId}`,
         });
         if (!r.ok) {
           console.error(`eBay getItem ${item.itemId} failed: ${r.status}`);
@@ -2234,9 +2264,10 @@ async function fetchRssFeeds(): Promise<number> {
   let total = 0;
   for (const feed of RSS_FEEDS) {
     try {
-      const r = await fetch(feed.url, {
+      const r = await loggedFetch("rss", feed.url, {
         headers: { "User-Agent": "SeaDisco/1.0 (music feed aggregator)" },
         signal: AbortSignal.timeout(15000),
+        context: feed.name,
       });
       if (!r.ok) { console.warn(`RSS ${feed.name}: HTTP ${r.status}`); continue; }
       const xml = await r.text();
@@ -2296,7 +2327,7 @@ async function fetchYouTubeVideos(): Promise<number> {
   for (const ch of YOUTUBE_CHANNELS) {
     try {
       const url = `https://www.googleapis.com/youtube/v3/search?key=${youtubeApiKey}&channelId=${ch.channelId}&part=snippet&order=date&maxResults=5&type=video`;
-      const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      const r = await loggedFetch("youtube", url, { signal: AbortSignal.timeout(10000), context: `channel: ${ch.name}` });
       if (!r.ok) { console.warn(`YouTube ${ch.name}: HTTP ${r.status}`); continue; }
       const data = await r.json() as any;
       let count = 0;
@@ -2329,7 +2360,7 @@ async function fetchYouTubeVideos(): Promise<number> {
   for (const search of YOUTUBE_SEARCHES) {
     try {
       const url = `https://www.googleapis.com/youtube/v3/search?key=${youtubeApiKey}&q=${encodeURIComponent(search.query)}&part=snippet&order=date&maxResults=10&type=video&publishedAfter=${weekAgo}&videoCategoryId=10`;
-      const r = await fetch(url, { signal: AbortSignal.timeout(10000) });
+      const r = await loggedFetch("youtube", url, { signal: AbortSignal.timeout(10000), context: `search: ${search.query}` });
       if (!r.ok) { console.warn(`YouTube search "${search.query}": HTTP ${r.status}`); continue; }
       const data = await r.json() as any;
       let count = 0;
@@ -2450,6 +2481,28 @@ app.post("/api/admin/rebuild-taste", express.json(), async (req, res) => {
   res.json({ ok: true, rebuilt, total: users.length, errors });
 });
 
+// GET /api/admin/api-log — view API request log (last 24h by default)
+app.get("/api/admin/api-log", async (req, res) => {
+  const userId = getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  const service = req.query.service as string | undefined;
+  const limit = Math.min(parseInt(req.query.limit as string) || 200, 500);
+  const offset = parseInt(req.query.offset as string) || 0;
+  const errorsOnly = req.query.errors === "true";
+  const result = await getApiRequestLog({ service: service || undefined, limit, offset, errorsOnly });
+  res.json(result);
+});
+
+// GET /api/admin/api-stats — 24h summary by service
+app.get("/api/admin/api-stats", async (req, res) => {
+  const userId = getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  const stats = await getApiRequestStats();
+  res.json({ stats });
+});
+
 // Helper: ms until the next occurrence of :MM past the hour
 function msUntilMinute(minute: number): number {
   const now = new Date();
@@ -2540,7 +2593,7 @@ async function syncUserExtras(userId: string, username: string, token: string): 
   async function extrasFetch(url: string, retries = 3): Promise<Response> {
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
-        const r = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+        const r = await loggedFetch("discogs", url, { headers, signal: AbortSignal.timeout(15000), context: `extras: ${username}` });
         if (r.ok) return r;
         if (r.status === 429 || r.status >= 500) {
           if (attempt < retries) await sleep(15000 * attempt);

@@ -6,7 +6,7 @@
 
 import pg from "pg";
 const { Pool } = pg;
-import { upsertFreshRelease, pruneFreshReleases } from "./db.js";
+import { upsertFreshRelease, pruneFreshReleases, logApiRequest } from "./db.js";
 
 const LB_API  = "https://api.listenbrainz.org/1/explore/fresh-releases/";
 const CAA_URL = (mbid: string) => `https://coverartarchive.org/release/${mbid}/front-250`;
@@ -32,7 +32,9 @@ async function countFreshReleases(): Promise<number> {
 
 async function fetchListenBrainz(days: number): Promise<any[]> {
   const url = `${LB_API}?days=${days}&sort=release_date&past=true&future=false`;
+  const start = Date.now();
   const r = await fetch(url, { headers: { "User-Agent": UA } });
+  logApiRequest({ service: "listenbrainz", endpoint: url, statusCode: r.status, success: r.ok, durationMs: Date.now() - start, context: `${days}d fresh` }).catch(() => {});
   if (!r.ok) throw new Error(`ListenBrainz HTTP ${r.status}`);
   const data = await r.json() as any;
   return data.payload?.releases ?? data.releases ?? [];
@@ -41,11 +43,13 @@ async function fetchListenBrainz(days: number): Promise<any[]> {
 async function checkCoverArt(caaReleaseMbid: string): Promise<string | null> {
   if (!caaReleaseMbid) return null;
   try {
+    const start = Date.now();
     const r = await fetch(CAA_URL(caaReleaseMbid), {
       method: "HEAD",
       headers: { "User-Agent": UA },
       redirect: "follow",
     });
+    logApiRequest({ service: "coverartarchive", endpoint: CAA_URL(caaReleaseMbid), method: "HEAD", statusCode: r.status, success: r.ok, durationMs: Date.now() - start }).catch(() => {});
     if (r.ok) return CAA_URL(caaReleaseMbid);
   } catch { /* no art */ }
   return null;

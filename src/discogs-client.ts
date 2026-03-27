@@ -1,3 +1,5 @@
+import { logApiRequest } from "./db.js";
+
 const BASE_URL = "https://api.discogs.com";
 
 export class DiscogsClient {
@@ -21,7 +23,11 @@ export class DiscogsClient {
       }
     }
 
+    const start = Date.now();
     const response = await fetch(url.toString(), { headers: this.headers });
+    const ms = Date.now() - start;
+    const cleanPath = path.replace(/token=[^&]+/g, "token=***");
+    logApiRequest({ service: "discogs", endpoint: `${BASE_URL}${cleanPath}`, statusCode: response.status, success: response.ok, durationMs: ms, context: "client" }).catch(() => {});
 
     if (!response.ok) {
       const text = await response.text();
