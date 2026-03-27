@@ -120,6 +120,30 @@
         <div id="admin-sync-status-list" style="font-size:0.83rem;color:var(--muted)">Loading…</div>
       </div>
 
+      <!-- Admin API request log — only rendered for admin user -->
+      <div id="admin-api-log" style="display:none">
+        <hr class="section-divider" />
+        <h2 style="margin-bottom:0.5rem">API Request Log <span style="font-size:0.75rem;color:var(--muted);font-weight:400">(24h)</span></h2>
+        <div id="api-stats-summary" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem"></div>
+        <div style="margin-bottom:0.5rem">
+          <select id="api-log-filter" onchange="loadApiLog()" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:#1a1510;color:var(--text);border:1px solid var(--border);border-radius:4px">
+            <option value="">All Services</option>
+            <option value="discogs">Discogs</option>
+            <option value="ticketmaster">Ticketmaster</option>
+            <option value="ebay">eBay</option>
+            <option value="youtube">YouTube</option>
+            <option value="rss">RSS</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="bandsintown">Bandsintown</option>
+            <option value="listenbrainz">ListenBrainz</option>
+            <option value="coverartarchive">CoverArtArchive</option>
+            <option value="ip-api">IP Geolocation</option>
+          </select>
+          <label style="font-size:0.75rem;color:var(--muted);margin-left:0.5rem"><input type="checkbox" id="api-log-errors-only" onchange="loadApiLog()"> Errors only</label>
+        </div>
+        <div id="api-log-list" style="font-size:0.78rem;color:var(--muted);max-height:400px;overflow-y:auto"></div>
+      </div>
+
       <!-- Admin inbox — only rendered for admin user -->
       <div id="admin-inbox" style="display:none">
         <hr class="section-divider" />
@@ -647,6 +671,7 @@ async function loadAdminInbox() {
     loadAdminSearches();   // also load global search pool for admin
     loadInterestStats();   // also load interest signal stats for admin
     loadAdminSyncStatus(); // also load per-user sync status for admin
+    loadApiLog();          // also load API request log for admin
     const el = document.getElementById("feedback-list");
     if (!items.length) { el.textContent = "No feedback yet."; return; }
     el.innerHTML = items.map(({ id, user_email, message, created_at }) => {
@@ -976,6 +1001,63 @@ async function adminRebuildTaste() {
     btn.disabled = false;
     btn.textContent = "Rebuild Taste Profiles";
   }
+}
+
+async function loadApiLog() {
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const service = document.getElementById("api-log-filter").value;
+    const errorsOnly = document.getElementById("api-log-errors-only").checked;
+    const params = new URLSearchParams({ limit: "200" });
+    if (service) params.set("service", service);
+    if (errorsOnly) params.set("errors", "true");
+
+    // Load stats and log in parallel
+    const [statsRes, logRes] = await Promise.all([
+      fetch("/api/admin/api-stats", { headers: { Authorization: `Bearer ${sessionToken}` } }),
+      fetch(`/api/admin/api-log?${params}`, { headers: { Authorization: `Bearer ${sessionToken}` } }),
+    ]);
+
+    if (!statsRes.ok || !logRes.ok) return;
+    const { stats } = await statsRes.json();
+    const { items, total } = await logRes.json();
+
+    document.getElementById("admin-api-log").style.display = "block";
+
+    // Stats summary
+    const statsEl = document.getElementById("api-stats-summary");
+    if (stats.length) {
+      statsEl.innerHTML = stats.map(s => {
+        const failRate = s.total_requests ? Math.round((s.failures / s.total_requests) * 100) : 0;
+        const failColor = failRate > 20 ? "#ff6b35" : failRate > 5 ? "#e8d44d" : "#6b8f71";
+        return `<span style="display:inline-block;margin-right:1rem;margin-bottom:0.25rem"><strong>${s.service}</strong>: ${s.total_requests} req, <span style="color:${failColor}">${s.failures} fail (${failRate}%)</span>, avg ${s.avg_duration_ms ?? "?"}ms</span>`;
+      }).join("");
+    } else {
+      statsEl.textContent = "No API requests in the last 24 hours.";
+    }
+
+    // Log entries
+    const listEl = document.getElementById("api-log-list");
+    if (!items.length) { listEl.textContent = "No log entries found."; return; }
+    listEl.innerHTML = `<div style="margin-bottom:0.3rem;color:var(--text);font-size:0.75rem">${total} total entries</div>` +
+      items.map(item => {
+        const time = new Date(item.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        const statusColor = item.success ? "#6b8f71" : "#ff6b35";
+        const statusIcon = item.success ? "✓" : "✗";
+        const dur = item.duration_ms != null ? `${item.duration_ms}ms` : "";
+        const ctx = item.context ? `<span style="color:#8a7d6b"> · ${item.context}</span>` : "";
+        const err = item.error_message && !item.success ? `<div style="color:#cc5544;font-size:0.72rem;margin-top:0.15rem">${item.error_message.replace(/</g,"&lt;").slice(0, 200)}</div>` : "";
+        const endpoint = item.endpoint.length > 80 ? item.endpoint.slice(0, 80) + "…" : item.endpoint;
+        return `<div style="padding:0.3rem 0;border-bottom:1px solid #2a2015">
+          <span style="color:${statusColor};font-weight:600">${statusIcon}</span>
+          <span style="color:#a09580">${time}</span>
+          <span style="color:#e8d44d;font-weight:600;margin:0 0.3rem">${item.service}</span>
+          <span style="color:var(--text)">${item.status_code || ""}</span>
+          <span style="color:#8a7d6b;margin-left:0.3rem">${dur}</span>${ctx}
+          <div style="color:#8a7d6b;font-size:0.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${endpoint}</div>${err}
+        </div>`;
+      }).join("");
+  } catch { /* not admin */ }
 }
 
 async function deleteFeedbackItem(id) {
