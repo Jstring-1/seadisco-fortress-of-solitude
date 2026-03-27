@@ -19,17 +19,33 @@ function _renderLiveEvents(events, artist) {
     const extLink = extUrl
       ? ` <a href="${escHtml(extUrl)}" target="_blank" rel="noopener" title="${ev.venueUrl ? 'Venue website' : 'Tickets'}" class="live-ext-link">↗</a>`
       : "";
-    html += `<div class="live-event">
+    // Image thumbnail
+    const imgHtml = ev.imageUrl
+      ? `<img class="live-event-img" src="${escHtml(ev.imageUrl)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+      : "";
+    // Price range
+    const priceHtml = ev.priceMin
+      ? `<span class="live-event-price">${ev.currency === 'USD' ? '$' : (ev.currency || '$')}${Math.round(ev.priceMin)}${ev.priceMax && ev.priceMax !== ev.priceMin ? ` – ${ev.currency === 'USD' ? '$' : ''}${Math.round(ev.priceMax)}` : ""}</span>`
+      : "";
+    // Status badge (only show non-normal statuses)
+    const statusMap = { cancelled: "Cancelled", postponed: "Postponed", rescheduled: "Rescheduled", offsale: "Off Sale" };
+    const statusLabel = statusMap[ev.status] || "";
+    const statusHtml = statusLabel
+      ? `<span class="live-event-status live-status-${escHtml(ev.status)}">${statusLabel}</span>`
+      : "";
+    html += `<div class="live-event${statusLabel ? ' live-event-dimmed' : ''}">
       <div class="live-event-date">
         ${escHtml(fmtDate)}
         ${fmtTime ? `<span class="live-event-time">${escHtml(fmtTime)}</span>` : ""}
       </div>
+      ${imgHtml}
       <div class="live-event-info">
         ${artistLine}
-        <div class="live-event-name">${escHtml(ev.name)}</div>
+        <div class="live-event-name">${escHtml(ev.name)}${statusHtml}</div>
         <div class="live-event-venue">
           ${venueLink}${extLink}
           ${location ? ` — ${escHtml(location)}` : ""}
+          ${priceHtml}
         </div>
       </div>
     </div>`;
@@ -234,14 +250,27 @@ async function liveSearchVenue(venueId, venueName) {
       const extLink = extUrl
         ? ` <a href="${escHtml(extUrl)}" target="_blank" rel="noopener" title="${ev.venueUrl ? 'Venue website' : 'Tickets'}" class="live-ext-link">↗</a>`
         : "";
-      html += `<div class="live-event">
+      const imgHtml = ev.imageUrl
+        ? `<img class="live-event-img" src="${escHtml(ev.imageUrl)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+        : "";
+      const priceHtml = ev.priceMin
+        ? `<span class="live-event-price">${ev.currency === 'USD' ? '$' : (ev.currency || '$')}${Math.round(ev.priceMin)}${ev.priceMax && ev.priceMax !== ev.priceMin ? ` – ${ev.currency === 'USD' ? '$' : ''}${Math.round(ev.priceMax)}` : ""}</span>`
+        : "";
+      const statusMap = { cancelled: "Cancelled", postponed: "Postponed", rescheduled: "Rescheduled", offsale: "Off Sale" };
+      const statusLabel = statusMap[ev.status] || "";
+      const statusHtml = statusLabel
+        ? `<span class="live-event-status live-status-${escHtml(ev.status)}">${statusLabel}</span>`
+        : "";
+      html += `<div class="live-event${statusLabel ? ' live-event-dimmed' : ''}">
         <div class="live-event-date">
           ${escHtml(fmtDate)}
           ${fmtTime ? `<span class="live-event-time">${escHtml(fmtTime)}</span>` : ""}
         </div>
+        ${imgHtml}
         <div class="live-event-info">
           ${artistLine}
-          <div class="live-event-name">${escHtml(ev.name)}${extLink}</div>
+          <div class="live-event-name">${escHtml(ev.name)}${extLink}${statusHtml}</div>
+          ${priceHtml ? `<div class="live-event-venue">${priceHtml}</div>` : ""}
         </div>
       </div>`;
     }
