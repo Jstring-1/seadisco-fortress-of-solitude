@@ -552,6 +552,7 @@ function mapTmEvent(ev: any) {
   const price = ev.priceRanges?.[0];
   const venueUrl = venue?.externalLinks?.homepage?.[0]?.url
     ?? venue?.url ?? "";
+  const segment = ev.classifications?.[0]?.segment?.name?.toLowerCase() ?? "";
   return {
     name: ev.name ?? "",
     artist: ev._embedded?.attractions?.[0]?.name ?? "",
@@ -570,8 +571,15 @@ function mapTmEvent(ev: any) {
     priceMax: price?.max ?? undefined,
     currency: price?.currency ?? undefined,
     status: ev.dates?.status?.code ?? "",
+    segment,
     source: "ticketmaster" as const,
   };
+}
+
+/** Filter out non-music events (comedy, sports, etc.) that leak through TM's classificationName filter */
+function isMusicEvent(ev: { segment?: string }): boolean {
+  const seg = ev.segment ?? "";
+  return !seg || seg === "music";
 }
 
 // GET /api/live/nearby — geo-targeted events based on user IP
@@ -618,7 +626,7 @@ app.get("/api/live/nearby", async (req, res) => {
     const tmRes = await loggedFetch("ticketmaster", `https://app.ticketmaster.com/discovery/v2/events.json?${params}`, { signal: AbortSignal.timeout(10000), context: "personalized events" });
     if (!tmRes.ok) { res.json({ events: [], location: { lat, lon, city, region } }); return; }
     const tmData = await tmRes.json() as any;
-    const events = (tmData._embedded?.events ?? []).map(mapTmEvent);
+    const events = (tmData._embedded?.events ?? []).map(mapTmEvent).filter(isMusicEvent);
     res.setHeader("Cache-Control", "private, max-age=600");
     res.json({ events, location: { lat, lon, city, region } });
   } catch {
@@ -634,7 +642,7 @@ async function fetchUpcomingEvents(): Promise<number> {
     const r = await loggedFetch("ticketmaster", url, { signal: AbortSignal.timeout(30000), context: "scheduled fetch" });
     if (!r.ok) return 0;
     const data = await r.json() as any;
-    const events = (data._embedded?.events ?? []).map(mapTmEvent);
+    const events = (data._embedded?.events ?? []).map(mapTmEvent).filter(isMusicEvent);
     const count = await upsertLiveEvents(events);
     await pruneLiveEvents();
     console.log(`[live-events] Fetched ${count} upcoming events, pruned past events`);
@@ -1706,6 +1714,7 @@ app.get("/api/concerts/search", async (req, res) => {
               if (matched) eventArtist = matched.name;
             }
             const mapped = mapTmEvent(ev);
+            if (!isMusicEvent(mapped)) continue;
             events.push({
               ...mapped,
               artist: eventArtist || ev.name?.split(/\s[-–—:]\s/)?.[0] || "",
@@ -1798,6 +1807,7 @@ app.get("/api/concerts/venue/:venueId", async (req, res) => {
       const venue = ev._embedded?.venues?.[0];
       if (!venueName && venue?.name) venueName = venue.name;
       const mapped = mapTmEvent(ev);
+      if (!isMusicEvent(mapped)) continue;
       events.push({
         ...mapped,
         venueId: mapped.venueId || venueId,
@@ -1841,7 +1851,8 @@ app.get("/api/concerts/:artist", async (req, res) => {
         try {
           const tmData = JSON.parse(tmBody);
           for (const ev of (tmData._embedded?.events ?? [])) {
-            events.push(mapTmEvent(ev));
+            const mapped = mapTmEvent(ev);
+            if (isMusicEvent(mapped)) events.push(mapped);
           }
         } catch { /* parse error */ }
       } else {
