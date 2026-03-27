@@ -1497,6 +1497,13 @@ export async function upsertFeedArticle(article: {
   );
 }
 
+export async function getExistingYouTubeUrls(): Promise<Set<string>> {
+  const r = await getPool().query(
+    "SELECT source_url FROM feed_articles WHERE content_type = 'video' AND source_url LIKE 'https://www.youtube.com/watch%'"
+  );
+  return new Set(r.rows.map((row: any) => row.source_url));
+}
+
 export async function getFeedArticles(opts: {
   category?: string; limit?: number; offset?: number; q?: string;
 }): Promise<{ items: any[]; total: number }> {
