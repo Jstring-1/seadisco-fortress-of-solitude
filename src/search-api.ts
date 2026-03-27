@@ -2433,11 +2433,17 @@ app.post("/api/admin/rebuild-taste", express.json(), async (req, res) => {
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   const users = await getAllUsersForSync();
   let rebuilt = 0;
+  const errors: string[] = [];
   for (const u of users) {
-    const profile = await rebuildUserTasteProfile(u.clerkUserId).catch(() => null);
-    if (profile) rebuilt++;
+    try {
+      const profile = await rebuildUserTasteProfile(u.clerkUserId);
+      if (profile) rebuilt++;
+      else errors.push(`${u.username}: no collection data`);
+    } catch (err) {
+      errors.push(`${u.username}: ${String(err).slice(0, 100)}`);
+    }
   }
-  res.json({ ok: true, rebuilt, total: users.length });
+  res.json({ ok: true, rebuilt, total: users.length, errors });
 });
 
 // Helper: ms until the next occurrence of :MM past the hour
