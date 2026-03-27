@@ -608,6 +608,8 @@ async function loadRecentFeed() {
 }
 
 // ── Wanted sample cards for Find page filler ─────────────────────────────
+let _wantedSampleIds = new Set();
+
 async function loadWantedSample() {
   try {
     const r = await fetch("/api/wanted-sample");
@@ -615,16 +617,40 @@ async function loadWantedSample() {
     const data = await r.json();
     const items = data.items ?? [];
     if (!items.length) return;
+    _wantedSampleIds = new Set(items.map(i => i.id));
     const wrap = document.getElementById("wanted-sample");
     const grid = document.getElementById("wanted-sample-grid");
     if (!wrap || !grid) return;
     grid.innerHTML = items.map((item, i) => renderCardFromBasicInfo(item, i)).join("");
-    // Only show if currently on the Find view (not collection/wantlist/etc)
+    const moreBtn = document.getElementById("wanted-sample-more");
+    if (moreBtn) moreBtn.style.display = "";
     const view = new URLSearchParams(location.search).get("view") || "";
     if (!view || view === "search" || view === "find") {
       wrap.style.display = "";
     }
   } catch { /* silent fail */ }
+}
+
+async function loadMoreWantedSample() {
+  const btn = document.querySelector("#wanted-sample-more button");
+  if (btn) { btn.disabled = true; btn.textContent = "Loading…"; }
+  try {
+    const r = await fetch("/api/wanted-sample");
+    if (!r.ok) return;
+    const data = await r.json();
+    const items = (data.items ?? []).filter(i => !_wantedSampleIds.has(i.id));
+    if (!items.length) {
+      if (btn) btn.textContent = "No more available";
+      return;
+    }
+    items.forEach(i => _wantedSampleIds.add(i.id));
+    const grid = document.getElementById("wanted-sample-grid");
+    if (!grid) return;
+    const startIdx = grid.children.length;
+    grid.insertAdjacentHTML("beforeend", items.map((item, i) => renderCardFromBasicInfo(item, startIdx + i)).join(""));
+  } catch { /* silent */ } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Load More"; }
+  }
 }
 
 // ── Artist / entity navigation ───────────────────────────────────────────
