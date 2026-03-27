@@ -635,12 +635,13 @@ async function loadMoreWantedSample() {
   const btn = document.querySelector("#wanted-sample-more button");
   if (btn) { btn.disabled = true; btn.textContent = "Loading…"; }
   try {
-    const r = await fetch("/api/wanted-sample");
+    const exclude = Array.from(_wantedSampleIds).join(",");
+    const r = await fetch(`/api/wanted-sample?exclude=${encodeURIComponent(exclude)}`);
     if (!r.ok) return;
     const data = await r.json();
     const items = (data.items ?? []).filter(i => !_wantedSampleIds.has(i.id));
     if (!items.length) {
-      if (btn) btn.textContent = "No more available";
+      if (btn) { btn.textContent = "No more available"; btn.disabled = true; }
       return;
     }
     items.forEach(i => _wantedSampleIds.add(i.id));
@@ -649,7 +650,7 @@ async function loadMoreWantedSample() {
     const startIdx = grid.children.length;
     grid.insertAdjacentHTML("beforeend", items.map((item, i) => renderCardFromBasicInfo(item, startIdx + i)).join(""));
   } catch { /* silent */ } finally {
-    if (btn) { btn.disabled = false; btn.textContent = "Load More"; }
+    if (btn && btn.textContent === "Loading…") { btn.disabled = false; btn.textContent = "Load More"; }
   }
 }
 

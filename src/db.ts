@@ -804,22 +804,28 @@ export async function getCollectionIds(clerkUserId: string): Promise<number[]> {
   return r.rows.map(row => row.discogs_release_id);
 }
 
-export async function getWantedSample(limit: number = 24): Promise<object[]> {
+export async function getWantedSample(limit: number = 24, excludeIds: number[] = []): Promise<object[]> {
   // Distribute evenly across users: each user contributes at most ceil(limit/userCount) items
   const uc = await getPool().query(`SELECT COUNT(DISTINCT clerk_user_id)::int AS n FROM user_wantlist`);
   const userCount = Math.max(uc.rows[0]?.n ?? 1, 1);
   const perUser = Math.ceil(limit / userCount);
+  const excludeClause = excludeIds.length
+    ? `AND discogs_release_id != ALL($3)`
+    : "";
+  const params: any[] = [perUser, limit];
+  if (excludeIds.length) params.push(excludeIds);
   const r = await getPool().query(
     `WITH ranked AS (
-       SELECT data,
+       SELECT data, discogs_release_id,
               ROW_NUMBER() OVER (PARTITION BY clerk_user_id ORDER BY RANDOM()) AS rn
        FROM user_wantlist
+       WHERE 1=1 ${excludeClause}
      )
      SELECT data FROM ranked
      WHERE rn <= $1
      ORDER BY RANDOM()
      LIMIT $2`,
-    [perUser, limit]
+    params
   );
   return r.rows.map(row => row.data);
 }
