@@ -287,7 +287,7 @@ async function loadInventoryTab(page = 1, filters) {
   document.getElementById("pagination").style.display = "none";
   setStatus("");
   try {
-    let url = `/api/user/inventory?page=${page}&per_page=24`;
+    let url = `/api/user/inventory?page=${page}&per_page=96`;
     if (f.q) url += `&q=${encodeURIComponent(f.q)}`;
     const r = await apiFetch(url);
     const data = await r.json();
@@ -484,7 +484,7 @@ async function loadCollectionTab(page = 1, filters) {
   document.getElementById("pagination").style.display = "none";
   setStatus("");
   try {
-    let url = `/api/user/collection?page=${page}&per_page=24`;
+    let url = `/api/user/collection?page=${page}&per_page=96`;
     if (f.q)       url += `&q=${encodeURIComponent(f.q)}`;
     if (f.artist)  url += `&artist=${encodeURIComponent(f.artist)}`;
     if (f.release) url += `&release=${encodeURIComponent(f.release)}`;
@@ -533,7 +533,7 @@ async function loadWantlistTab(page = 1, filters) {
   document.getElementById("pagination").style.display = "none";
   setStatus("");
   try {
-    let url = `/api/user/wantlist?page=${page}&per_page=24`;
+    let url = `/api/user/wantlist?page=${page}&per_page=96`;
     if (f.q)       url += `&q=${encodeURIComponent(f.q)}`;
     if (f.artist)  url += `&artist=${encodeURIComponent(f.artist)}`;
     if (f.release) url += `&release=${encodeURIComponent(f.release)}`;
