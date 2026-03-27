@@ -6,7 +6,7 @@ function renderFreshGrid(releases) {
     grid.innerHTML = `<div style="color:var(--muted);font-size:0.8rem;grid-column:1/-1;text-align:center;padding:2rem 0">No releases found for this tag.</div>`;
     return;
   }
-  grid.innerHTML = releases.map(rel => {
+  grid.innerHTML = releases.map((rel, i) => {
     const img = rel.cover_url
       ? `<img src="${escHtml(rel.cover_url)}" alt="${escHtml(rel.release_name ?? '')}" loading="lazy" onerror="this.style.display='none'">`
       : `<div class="fresh-card-no-img">♪</div>`;
@@ -20,7 +20,7 @@ function renderFreshGrid(releases) {
 
     const mbData = `data-artist="${escHtml(rel.artist_credit_name ?? '')}" data-title="${escHtml(rel.release_name ?? '')}" data-cover="${escHtml(rel.cover_url ?? '')}" data-date="${escHtml(dateStr)}" data-type="${escHtml(types)}" data-tags="${escHtml((rel.tags ?? []).join(','))}" data-rgmbid="${escHtml(rel.release_group_mbid ?? '')}" data-artmbids="${escHtml((rel.artist_mbids ?? []).join(','))}"`;
 
-    return `<div class="card fresh-card" ${mbData} onclick="openDropCardPopup(this)">
+    return `<div class="card fresh-card card-animate" style="--i:${Math.min(i, 20)}" ${mbData} onclick="openDropCardPopup(this)">
       <div class="fresh-card-img">${img}</div>
       <div class="fresh-card-body">
         <div class="fresh-card-title">${escHtml(rel.release_name ?? "Unknown")}</div>
@@ -309,12 +309,18 @@ function initFreshGenreDropdown() {
 
 async function loadFreshReleases() {
   initFreshGenreDropdown();
+  document.getElementById("fresh-releases-grid").innerHTML = renderSkeletonGrid(16);
   try {
     const data = await fetch("/api/fresh-releases").then(r => r.json());
     _freshAll = data.releases ?? [];
     _freshBrowse = _freshAll;
-    if (!_freshAll.length) return;
+    if (!_freshAll.length) {
+      document.getElementById("fresh-releases-grid").innerHTML = renderEmptyState("🆕", "No new releases", "Check back soon — releases are updated every 6 hours");
+      return;
+    }
     rebuildFreshTagCloud(_freshAll);
     renderFreshGrid(_freshAll);
-  } catch { /* fresh releases unavailable */ }
+  } catch {
+    showToast("Failed to load releases — please try again", "error");
+  }
 }

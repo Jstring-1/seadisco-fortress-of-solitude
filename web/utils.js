@@ -300,3 +300,92 @@ function renderArtistRelations(members = [], groups = [], aliases = [], namevari
     + urlRow("Links", urls);
   return html ? `<div style="margin-top:0.6rem;padding-top:0.5rem;border-top:1px solid var(--border)">${html}</div>` : "";
 }
+
+// ── Toast notifications ──────────────────────────────────────────────────
+function showToast(message, type = "error", duration = 4000) {
+  let container = document.getElementById("toast-container");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "toast-container";
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type}`;
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add("toast-removing");
+    toast.addEventListener("animationend", () => toast.remove());
+  }, duration);
+}
+
+// ── Loading skeleton helpers ─────────────────────────────────────────────
+function renderSkeletonGrid(count = 12) {
+  return Array.from({ length: count }, () =>
+    `<div class="skeleton-card card-animate"><div class="skeleton-thumb"></div><div class="skeleton-line" style="margin-top:10px"></div><div class="skeleton-line short"></div><div class="skeleton-line shorter"></div></div>`
+  ).join("");
+}
+
+function renderSkeletonRows(count = 4) {
+  return Array.from({ length: count }, () =>
+    `<div style="display:flex;gap:0.75rem;align-items:center;padding:0.6rem 0;border-bottom:1px solid var(--border)"><div class="skeleton" style="width:50px;height:50px;border-radius:6px;flex-shrink:0"></div><div style="flex:1"><div class="skeleton-line"></div><div class="skeleton-line short" style="margin-top:8px"></div></div></div>`
+  ).join("");
+}
+
+function renderFeedSkeletonGrid(count = 8) {
+  return Array.from({ length: count }, () =>
+    `<div class="skeleton-card card-animate" style="display:flex;flex-direction:row;height:130px"><div class="skeleton" style="width:120px;height:100%;flex-shrink:0"></div><div style="flex:1;padding:0.5rem 0.6rem"><div class="skeleton-line" style="width:40%;margin-bottom:8px"></div><div class="skeleton-line"></div><div class="skeleton-line short" style="margin-top:8px"></div><div class="skeleton-line shorter" style="margin-top:8px"></div></div></div>`
+  ).join("");
+}
+
+// ── Empty state helper ───────────────────────────────────────────────────
+function renderEmptyState(icon, title, subtitle) {
+  return `<div class="empty-state"><div class="empty-state-icon">${icon}</div><div class="empty-state-title">${escHtml(title)}</div><div class="empty-state-subtitle">${escHtml(subtitle)}</div></div>`;
+}
+
+// ── Scroll-to-top button ─────────────────────────────────────────────────
+(function initScrollToTop() {
+  const btn = document.createElement("button");
+  btn.id = "scroll-top-btn";
+  btn.setAttribute("aria-label", "Scroll to top");
+  btn.innerHTML = "&#8593;";
+  document.body.appendChild(btn);
+  btn.addEventListener("click", () => window.scrollTo({ top: 0, behavior: "smooth" }));
+  window.addEventListener("scroll", () => {
+    btn.classList.toggle("visible", window.scrollY > 400);
+  }, { passive: true });
+})();
+
+// ── Keyboard shortcuts ───────────────────────────────────────────────────
+document.addEventListener("keydown", (e) => {
+  // Don't fire when typing in an input/textarea
+  const tag = document.activeElement?.tagName;
+  if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") {
+    if (e.key === "Escape") document.activeElement.blur();
+    return;
+  }
+  if (e.key === "Escape") {
+    // Close any open modal first
+    const overlay = document.getElementById("modal-overlay");
+    if (overlay && overlay.style.display !== "none" && overlay.style.display !== "") {
+      if (typeof closeModal === "function") closeModal();
+      return;
+    }
+    const vOverlay = document.getElementById("version-overlay");
+    if (vOverlay && vOverlay.style.display !== "none" && vOverlay.style.display !== "") {
+      if (typeof closeVersionPopup === "function") closeVersionPopup();
+      return;
+    }
+    // Clear search
+    const q = document.getElementById("query");
+    if (q && q.value) {
+      q.value = "";
+      q.focus();
+    }
+  }
+  if (e.key === "/" && !e.ctrlKey && !e.metaKey) {
+    e.preventDefault();
+    const q = document.getElementById("query");
+    if (q) { q.focus(); q.select(); }
+  }
+});

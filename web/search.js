@@ -113,8 +113,8 @@ async function doSearch(page = 1, skipPushState = false) {
   document.getElementById("blurb").style.display = "none";
   document.getElementById("artist-alts").innerHTML = "";
   closeAltsPopup();
-  setStatus("Searching…");
-  document.getElementById("results").innerHTML = "";
+  setStatus("");
+  document.getElementById("results").innerHTML = renderSkeletonGrid(12);
 
   if (page === 1) {
     const parts = [];
@@ -301,6 +301,7 @@ async function doSearch(page = 1, skipPushState = false) {
 
     if (!items.length) {
       setStatus("");
+      document.getElementById("results").innerHTML = renderEmptyState("🔍", "No results found", "Try a different search term or broaden your filters");
       document.getElementById("search-ai-summary").innerHTML = "<i>Couldn't find any results at Discogs.</i>";
       document.getElementById("search-info-block").style.display = "";
       return;
@@ -373,6 +374,7 @@ async function doSearch(page = 1, skipPushState = false) {
     }
   } catch (e) {
     setStatus("Search failed: " + e.message, true);
+    showToast("Search failed — please try again", "error");
   } finally {
     document.getElementById("search-btn").disabled = false;
   }
@@ -386,12 +388,12 @@ function renderResults(items) {
     ? items.filter(item => !window._collectionIds.has(Number(item.id)))
     : items;
   const grid = document.getElementById("results");
-  grid.innerHTML = filtered.map(item => renderCard(item)).join("");
+  grid.innerHTML = filtered.map((item, i) => renderCard(item, i)).join("");
   // Hide wanted sample when showing search results
   const ws = document.getElementById("wanted-sample"); if (ws) ws.style.display = "none";
 }
 
-function renderCard(item) {
+function renderCard(item, index) {
   const url  = item.uri ? `https://www.discogs.com${item.uri}` : "#";
   const type = item.type ?? "";
 
@@ -420,7 +422,9 @@ function renderCard(item) {
   const isArtist  = type === "artist";
   const isLabel   = type === "label";
   if (isRelease) itemCache.set(String(item.id), item);
-  const typeClass = `card card-type-${type}`;
+  const animClass = index != null ? " card-animate" : "";
+  const animStyle = index != null ? ` style="--i:${Math.min(index, 20)}"` : "";
+  const typeClass = `card card-type-${type}${animClass}`;
   const cardAttrs = isRelease
     ? `class="${typeClass}" href="#" onclick="openModal(event,'${item.id}','${type}','${url.replace(/'/g, "\\'")}')" `
     : (isArtist || isLabel)
@@ -454,7 +458,7 @@ function renderCard(item) {
   }
 
   return `
-    <a ${cardAttrs}>
+    <a ${cardAttrs}${animStyle}>
       ${thumbWrap}
       <div class="card-body">
         ${artist ? `<div class="card-artist">${escHtml(artist)}</div>` : ""}
@@ -614,7 +618,7 @@ async function loadWantedSample() {
     const wrap = document.getElementById("wanted-sample");
     const grid = document.getElementById("wanted-sample-grid");
     if (!wrap || !grid) return;
-    grid.innerHTML = items.map(item => renderCardFromBasicInfo(item)).join("");
+    grid.innerHTML = items.map((item, i) => renderCardFromBasicInfo(item, i)).join("");
     // Only show if currently on the Find view (not collection/wantlist/etc)
     const view = new URLSearchParams(location.search).get("view") || "";
     if (!view || view === "search" || view === "find") {
