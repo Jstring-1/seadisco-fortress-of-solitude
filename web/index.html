@@ -211,13 +211,12 @@
         onkeydown="if(event.key==='Enter'){doCwSearch(1)}" />
       <button onclick="doCwSearch(1)" style="flex-shrink:0">Search</button>
     </div>
-    <div id="cw-controls-row" style="display:flex;align-items:center;gap:0.4rem;margin-top:0.3rem;flex-wrap:nowrap">
-      <button type="button" id="cw-advanced-toggle" onclick="toggleCwAdvanced()" style="background:none;border:none;padding:0;font-size:0.78rem;color:#666;cursor:pointer;display:flex;align-items:center;gap:0.3rem;white-space:nowrap" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#666'">
+    <div id="cw-controls-row" style="display:flex;align-items:center;gap:0.4rem;margin-top:0.3rem">
+      <button type="button" id="cw-advanced-toggle" onclick="toggleCwAdvanced()" style="background:none;border:none;padding:0;font-size:0.78rem;color:#666;cursor:pointer;display:inline-flex;align-items:center;gap:0.3rem;white-space:nowrap;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#666'">
         <span id="cw-advanced-arrow">▶</span> Filters
       </button>
-      <button type="button" onclick="clearCwSearch()" title="Clear all filters" style="background:none;border:none;padding:0.3rem 0.5rem;font-size:1.5rem;color:#555;cursor:pointer;line-height:1;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
-      <span style="flex:1"></span>
-      <select id="cw-sort" onchange="doCwSearch(1)" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;height:22px;padding:0 0.4rem;font-family:inherit;font-size:0.68rem;line-height:22px;color:#aaa;box-sizing:border-box;cursor:pointer;color-scheme:dark;flex-shrink:0">
+      <button type="button" onclick="clearCwSearch()" title="Clear all filters" style="background:none;border:none;padding:0 0.4rem;font-size:1.2rem;color:#555;cursor:pointer;line-height:1;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
+      <select id="cw-sort" onchange="doCwSearch(1)" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;height:22px;padding:0 0.4rem;font-family:inherit;font-size:0.68rem;line-height:22px;color:#aaa;box-sizing:border-box;cursor:pointer;color-scheme:dark;flex-shrink:0;margin-left:auto">
         <option value="">Sort: Artist</option>
         <option value="title">Sort: Title</option>
         <option value="year">Sort: Year (Newest)</option>
