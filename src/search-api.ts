@@ -2413,12 +2413,12 @@ app.get("/api/feed", async (req, res) => {
     const offset = parseInt(req.query.offset as string) || 0;
     const userId = getClerkUserId(req);
     if (userId) {
-      res.setHeader("Cache-Control", "private, max-age=300");
       const { items, total } = await getPersonalizedFeedArticles(userId, { category, limit, offset, q });
+      res.setHeader("Cache-Control", items.length ? "private, max-age=300" : "no-cache");
       res.json({ items, total, personalized: true });
     } else {
-      res.setHeader("Cache-Control", "public, max-age=300");
       const { items, total } = await getFeedArticles({ category, limit, offset, q });
+      res.setHeader("Cache-Control", items.length ? "public, max-age=300" : "no-cache");
       res.json({ items, total });
     }
   } catch (e) {
