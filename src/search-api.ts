@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getLatestCollectionAddedAt, getLatestWantlistAddedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, getLocationByIp, upsertLocation, rebuildUserTasteProfile, getUserTasteProfile, getPersonalizedFreshReleases, getPersonalizedFeedArticles } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getLatestCollectionAddedAt, getLatestWantlistAddedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, getLocationByIp, upsertLocation, rebuildUserTasteProfile, getUserTasteProfile, getPersonalizedFreshReleases, getPersonalizedFeedArticles, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -22,6 +22,8 @@ const bandsintownAppId = "seadisco"; // Bandsintown just needs an app identifier
 
 // YouTube API key
 const youtubeApiKey = process.env.YOUTUBE_API_KEY ?? "";
+
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 // Shared Discogs client (used as fallback when user has no personal token)
 const discogs = sharedToken ? new DiscogsClient(sharedToken) : null;
@@ -2530,6 +2532,124 @@ function startDailySyncSchedule() {
   scheduleWeeklyFull();
 }
 
+// ── Inventory / Lists / Orders sync (5 AM Pacific daily) ──────────────────
+async function syncUserExtras(userId: string, username: string, token: string): Promise<{ inventory: number; lists: number }> {
+  const headers = { Authorization: `Discogs token=${token}`, "User-Agent": "SeaDisco/1.0" };
+
+  // Simple fetch with retry for extras sync
+  async function extrasFetch(url: string, retries = 3): Promise<Response> {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        const r = await fetch(url, { headers, signal: AbortSignal.timeout(15000) });
+        if (r.ok) return r;
+        if (r.status === 429 || r.status >= 500) {
+          if (attempt < retries) await sleep(15000 * attempt);
+          else throw new Error(`HTTP ${r.status} after ${retries} attempts`);
+        } else {
+          throw new Error(`HTTP ${r.status}`);
+        }
+      } catch (err) {
+        if (attempt >= retries) throw err;
+        await sleep(10000 * attempt);
+      }
+    }
+    throw new Error("unreachable");
+  }
+
+  let inventory = 0, lists = 0;
+
+  // Inventory (paginated)
+  try {
+    for (let page = 1; ; page++) {
+      if (page > 1) await sleep(1200);
+      const r = await extrasFetch(
+        `https://api.discogs.com/users/${encodeURIComponent(username)}/inventory?per_page=100&page=${page}&sort=listed&sort_order=desc`,
+      );
+      const data = await r.json() as any;
+      const listings: any[] = data.listings ?? [];
+      if (!listings.length) break;
+      const items = listings.map((l: any) => ({
+        listingId:      l.id as number,
+        releaseId:      l.release?.id ?? undefined,
+        data:           l as object,
+        status:         l.status ?? "For Sale",
+        priceValue:     parseFloat(l.price?.value) || undefined,
+        priceCurrency:  l.price?.currency ?? "USD",
+        condition:      l.condition ?? undefined,
+        sleeveCondition: l.sleeve_condition ?? undefined,
+        postedAt:       l.posted ? new Date(l.posted) : undefined,
+      }));
+      await upsertInventoryItems(userId, items);
+      inventory += items.length;
+      if (listings.length < 100) break;
+    }
+    await updateInventorySyncedAt(userId);
+    console.log(`[extras] ${username}: ${inventory} inventory listings synced`);
+  } catch (err) {
+    console.error(`[extras] ${username} inventory error:`, err);
+  }
+
+  // Lists (not paginated — returns all lists, then we store metadata)
+  try {
+    await sleep(1200);
+    const r = await extrasFetch(
+      `https://api.discogs.com/users/${encodeURIComponent(username)}/lists?per_page=100`,
+    );
+    const data = await r.json() as any;
+    const userLists: any[] = data.lists ?? [];
+    if (userLists.length) {
+      const items = userLists.map((l: any) => ({
+        listId:      l.id as number,
+        name:        l.name ?? "",
+        description: l.description ?? undefined,
+        itemCount:   l.item_count ?? 0,
+        isPublic:    l.public !== false,
+        data:        l as object,
+      }));
+      await upsertUserLists(userId, items);
+      lists = items.length;
+    }
+    console.log(`[extras] ${username}: ${lists} lists synced`);
+  } catch (err) {
+    console.error(`[extras] ${username} lists error:`, err);
+  }
+
+  return { inventory, lists };
+}
+
+function startExtrasSyncSchedule() {
+  function msUntilNext5amPacific(): number {
+    const now = new Date();
+    const pacific = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+    const diff = now.getTime() - pacific.getTime();
+    const target = new Date(pacific);
+    target.setHours(5, 0, 0, 0);
+    if (target.getTime() <= pacific.getTime()) target.setDate(target.getDate() + 1);
+    return target.getTime() - pacific.getTime() + diff;
+  }
+
+  function schedule() {
+    const ms = msUntilNext5amPacific();
+    const hours = Math.round(ms / 3600000 * 10) / 10;
+    console.log(`[extras-sync] Next extras sync in ${hours}h (5 AM Pacific)`);
+    setTimeout(async () => {
+      console.log("[extras-sync] Starting inventory/lists sync for all users");
+      const users = await getAllUsersForSync();
+      for (const user of users) {
+        try {
+          await syncUserExtras(user.clerkUserId, user.username, user.token);
+          await sleep(120000); // 2 min between users
+        } catch (err) {
+          console.error(`[extras-sync] Error syncing ${user.username}:`, err);
+        }
+      }
+      console.log("[extras-sync] Complete");
+      schedule();
+    }, ms);
+  }
+  schedule();
+}
+
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Discogs search API listening on port ${PORT}`);
   if (process.env.APP_DB_URL) {
@@ -2537,6 +2657,7 @@ app.listen(PORT, "0.0.0.0", () => {
     startGearSchedule();
     startFeedSchedule();
     startDailySyncSchedule();
+    startExtrasSyncSchedule();
     startLiveEventsSchedule();
   }
 });

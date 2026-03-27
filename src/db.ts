@@ -233,6 +233,61 @@ export async function initDb() {
     )
   `);
 
+  // ── User inventory (marketplace listings) ────────────────────────────────
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_inventory (
+      id                 SERIAL PRIMARY KEY,
+      clerk_user_id      TEXT NOT NULL,
+      listing_id         INTEGER NOT NULL,
+      discogs_release_id INTEGER,
+      data               JSONB NOT NULL,
+      status             TEXT DEFAULT 'For Sale',
+      price_value        NUMERIC(10,2),
+      price_currency     TEXT DEFAULT 'USD',
+      condition          TEXT,
+      sleeve_condition   TEXT,
+      posted_at          TIMESTAMP,
+      synced_at          TIMESTAMP DEFAULT NOW(),
+      UNIQUE(clerk_user_id, listing_id)
+    )
+  `);
+  await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS inventory_synced_at TIMESTAMP`);
+
+  // ── User lists (curated Discogs lists) ───────────────────────────────────
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_lists (
+      id              SERIAL PRIMARY KEY,
+      clerk_user_id   TEXT NOT NULL,
+      list_id         INTEGER NOT NULL,
+      name            TEXT,
+      description     TEXT,
+      item_count      INTEGER DEFAULT 0,
+      is_public       BOOLEAN DEFAULT true,
+      data            JSONB,
+      synced_at       TIMESTAMP DEFAULT NOW(),
+      UNIQUE(clerk_user_id, list_id)
+    )
+  `);
+
+  // ── User orders (marketplace buy/sell history) ──────────────────────────
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_orders (
+      id              SERIAL PRIMARY KEY,
+      clerk_user_id   TEXT NOT NULL,
+      order_id        INTEGER NOT NULL,
+      status          TEXT,
+      buyer_username  TEXT,
+      seller_username TEXT,
+      total_value     NUMERIC(10,2),
+      total_currency  TEXT DEFAULT 'USD',
+      item_count      INTEGER DEFAULT 0,
+      created_at      TIMESTAMPTZ,
+      data            JSONB,
+      synced_at       TIMESTAMP DEFAULT NOW(),
+      UNIQUE(clerk_user_id, order_id)
+    )
+  `);
+
   // ── User taste profiles (computed from collection genres/styles) ────────
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS user_taste_profiles (
@@ -890,6 +945,72 @@ export async function updateWantlistSyncedAt(clerkUserId: string): Promise<void>
     "UPDATE user_tokens SET wantlist_synced_at = NOW() WHERE clerk_user_id = $1",
     [clerkUserId]
   );
+}
+
+// ── Inventory (marketplace listings) ──────────────────────────────────────
+
+export async function upsertInventoryItems(
+  clerkUserId: string,
+  items: Array<{ listingId: number; releaseId?: number; data: object; status?: string; priceValue?: number; priceCurrency?: string; condition?: string; sleeveCondition?: string; postedAt?: Date }>
+): Promise<void> {
+  for (const item of items) {
+    await getPool().query(
+      `INSERT INTO user_inventory (clerk_user_id, listing_id, discogs_release_id, data, status, price_value, price_currency, condition, sleeve_condition, posted_at, synced_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+       ON CONFLICT (clerk_user_id, listing_id)
+       DO UPDATE SET data = $4, status = $5, price_value = $6, price_currency = $7, condition = $8, sleeve_condition = $9, posted_at = $10, synced_at = NOW()`,
+      [clerkUserId, item.listingId, item.releaseId ?? null, JSON.stringify(item.data), item.status ?? "For Sale", item.priceValue ?? null, item.priceCurrency ?? "USD", item.condition ?? null, item.sleeveCondition ?? null, item.postedAt ?? null]
+    );
+  }
+}
+
+export async function updateInventorySyncedAt(clerkUserId: string): Promise<void> {
+  await getPool().query(
+    "UPDATE user_tokens SET inventory_synced_at = NOW() WHERE clerk_user_id = $1",
+    [clerkUserId]
+  );
+}
+
+export async function getInventoryCount(clerkUserId: string): Promise<number> {
+  const r = await getPool().query(
+    "SELECT COUNT(*)::int AS cnt FROM user_inventory WHERE clerk_user_id = $1",
+    [clerkUserId]
+  );
+  return r.rows[0]?.cnt ?? 0;
+}
+
+// ── Lists ────────────────────────────────────────────────────────────────
+
+export async function upsertUserLists(
+  clerkUserId: string,
+  lists: Array<{ listId: number; name: string; description?: string; itemCount?: number; isPublic?: boolean; data?: object }>
+): Promise<void> {
+  for (const list of lists) {
+    await getPool().query(
+      `INSERT INTO user_lists (clerk_user_id, list_id, name, description, item_count, is_public, data, synced_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+       ON CONFLICT (clerk_user_id, list_id)
+       DO UPDATE SET name = $3, description = $4, item_count = $5, is_public = $6, data = $7, synced_at = NOW()`,
+      [clerkUserId, list.listId, list.name, list.description ?? null, list.itemCount ?? 0, list.isPublic ?? true, list.data ? JSON.stringify(list.data) : null]
+    );
+  }
+}
+
+// ── Orders ───────────────────────────────────────────────────────────────
+
+export async function upsertUserOrders(
+  clerkUserId: string,
+  orders: Array<{ orderId: number; status?: string; buyerUsername?: string; sellerUsername?: string; totalValue?: number; totalCurrency?: string; itemCount?: number; createdAt?: Date; data?: object }>
+): Promise<void> {
+  for (const order of orders) {
+    await getPool().query(
+      `INSERT INTO user_orders (clerk_user_id, order_id, status, buyer_username, seller_username, total_value, total_currency, item_count, created_at, data, synced_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+       ON CONFLICT (clerk_user_id, order_id)
+       DO UPDATE SET status = $3, buyer_username = $4, seller_username = $5, total_value = $6, total_currency = $7, item_count = $8, created_at = $9, data = $10, synced_at = NOW()`,
+      [clerkUserId, order.orderId, order.status ?? null, order.buyerUsername ?? null, order.sellerUsername ?? null, order.totalValue ?? null, order.totalCurrency ?? "USD", order.itemCount ?? 0, order.createdAt ?? null, order.data ? JSON.stringify(order.data) : null]
+    );
+  }
 }
 
 export async function upsertFreshRelease(r: {
