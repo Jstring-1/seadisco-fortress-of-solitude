@@ -90,7 +90,7 @@
   <span id="auth-status" style="display:none"></span>
   <div id="main-search-form" class="content-narrow">
   <div class="search-row">
-    <input type="text" id="query" placeholder="Search artists, releases, labels…" autocomplete="off" />
+    <input type="text" id="query" placeholder="Search Discogs" autocomplete="off" />
     <button id="search-btn" onclick="doSearch(1)" style="flex-shrink:0">Search</button>
   </div>
 
@@ -312,7 +312,7 @@
       <select id="fresh-style-select" class="fresh-filter-select" onchange="filterFreshByGenreStyle()" style="display:none">
         <option value="">Style</option>
       </select>
-      <input id="fresh-tag-input" class="fresh-filter-input" type="text" placeholder="Search drops…" oninput="debounceFreshSearch(this.value)" autocomplete="off" spellcheck="false">
+      <input id="fresh-tag-input" class="fresh-filter-input" type="text" placeholder="Search Latest Releases" oninput="debounceFreshSearch(this.value)" autocomplete="off" spellcheck="false">
     </div>
     <div class="fresh-tag-cloud-wrap"><div id="fresh-tag-cloud" class="fresh-tag-cloud"></div></div>
     <div id="fresh-releases-grid" class="card-grid fresh-grid"></div>
@@ -362,7 +362,7 @@
         <span class="pill gear-price-pill" data-min="1000" onclick="setGearPriceFilter(1000)">$1,000+</span>
       </div>
       <div class="gear-right-controls">
-        <input type="text" class="site-form-field gear-search-field" placeholder="Filter listings…" oninput="onGearSearch(this.value)">
+        <input type="text" class="site-form-field gear-search-field" placeholder="Filter Gear" oninput="onGearSearch(this.value)">
         <select class="site-form-field gear-sort" onchange="setGearSort(this.value)">
           <option value="ending">Ending Soonest</option>
           <option value="bids">Most Bids</option>
@@ -391,7 +391,7 @@
         <button class="pill feed-cat-pill" data-cat="video" onclick="setFeedCategory('video')">Video</button>
       </div>
       <div class="feed-right-controls">
-        <input type="text" class="site-form-field feed-search-field" placeholder="Filter articles…" oninput="onFeedSearch(this.value)">
+        <input type="text" class="site-form-field feed-search-field" placeholder="Filter Feed" oninput="onFeedSearch(this.value)">
       </div>
     </div>
     <div id="feed-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.5rem"></div>
