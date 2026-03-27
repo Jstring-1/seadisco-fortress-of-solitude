@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getLatestCollectionAddedAt, getLatestWantlistAddedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, getLocationByIp, upsertLocation } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getLatestCollectionAddedAt, getLatestWantlistAddedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, getLocationByIp, upsertLocation, rebuildUserTasteProfile, getUserTasteProfile, getPersonalizedFreshReleases, getPersonalizedFeedArticles } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -429,6 +429,10 @@ async function runBackgroundSync(userId: string, token: string, username: string
       await updateSyncProgress(userId, "complete", totalSynced, estimatedTotal);
       console.log(`Full sync complete for ${username}: ${totalSynced} items`);
     }
+    // Rebuild taste profile after successful sync
+    await rebuildUserTasteProfile(userId).catch(err =>
+      console.error(`Taste profile rebuild error for ${userId}:`, err)
+    );
   } catch (err) {
     console.error(`Background sync error for ${username}:`, err);
     await updateSyncProgress(userId, "error", totalSynced, 0, String(err));
@@ -568,6 +572,17 @@ app.get("/api/live/nearby", async (req, res) => {
 
   if (!ticketmasterKey) { res.json({ events: [], location: { lat, lon, city, region } }); return; }
 
+  // If logged in, add genre keyword from taste profile for more relevant results
+  const userId = getClerkUserId(req);
+  let genreKeyword = "";
+  if (userId) {
+    const profile = await getUserTasteProfile(userId).catch(() => null);
+    if (profile?.genre_keywords?.length) {
+      // Use top genre as keyword hint (Ticketmaster supports this)
+      genreKeyword = profile.genre_keywords[0];
+    }
+  }
+
   try {
     const params = new URLSearchParams({
       latlong: `${lat},${lon}`,
@@ -578,6 +593,7 @@ app.get("/api/live/nearby", async (req, res) => {
       sort: "date,asc",
       apikey: ticketmasterKey,
     });
+    if (genreKeyword) params.set("keyword", genreKeyword);
     const tmRes = await fetch(`https://app.ticketmaster.com/discovery/v2/events.json?${params}`, { signal: AbortSignal.timeout(10000) });
     if (!tmRes.ok) { res.json({ events: [], location: { lat, lon, city, region } }); return; }
     const tmData = await tmRes.json() as any;
@@ -1594,9 +1610,16 @@ app.get("/master-versions/:id", async (req, res) => {
 // GET /api/fresh-releases — 150 random releases from last 3 months, client-side filtered
 app.get("/api/fresh-releases", async (req, res) => {
   try {
-    res.setHeader("Cache-Control", "public, max-age=300"); // 5 min
-    const releases = await getFreshReleases(150);
-    res.json({ releases });
+    const userId = getClerkUserId(req);
+    if (userId) {
+      res.setHeader("Cache-Control", "private, max-age=300");
+      const releases = await getPersonalizedFreshReleases(userId, 150);
+      res.json({ releases, personalized: true });
+    } else {
+      res.setHeader("Cache-Control", "public, max-age=300");
+      const releases = await getFreshReleases(150);
+      res.json({ releases });
+    }
   } catch (err) {
     console.error("fresh-releases error:", err);
     res.json({ releases: [] });
@@ -2355,16 +2378,23 @@ function startFeedSchedule() {
   }, msTo40);
 }
 
-// GET /api/feed — public feed articles
+// GET /api/feed — personalized for logged-in users, public for anonymous
 app.get("/api/feed", async (req, res) => {
   try {
     const category = (req.query.category as string) || "all";
     const q = (req.query.q as string) || "";
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
     const offset = parseInt(req.query.offset as string) || 0;
-    res.setHeader("Cache-Control", "public, max-age=300"); // 5 min
-    const { items, total } = await getFeedArticles({ category, limit, offset, q });
-    res.json({ items, total });
+    const userId = getClerkUserId(req);
+    if (userId) {
+      res.setHeader("Cache-Control", "private, max-age=300");
+      const { items, total } = await getPersonalizedFeedArticles(userId, { category, limit, offset, q });
+      res.json({ items, total, personalized: true });
+    } else {
+      res.setHeader("Cache-Control", "public, max-age=300");
+      const { items, total } = await getFeedArticles({ category, limit, offset, q });
+      res.json({ items, total });
+    }
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
@@ -2386,6 +2416,28 @@ app.post("/api/admin/live/fetch", express.json(), async (req, res) => {
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   const count = await fetchUpcomingEvents();
   res.json({ ok: true, count });
+});
+
+// GET /api/user/taste-profile — user's own taste profile
+app.get("/api/user/taste-profile", async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Not authenticated" }); return; }
+  const profile = await getUserTasteProfile(userId);
+  res.json({ profile });
+});
+
+// POST /api/admin/rebuild-taste — rebuild taste profile for all users
+app.post("/api/admin/rebuild-taste", express.json(), async (req, res) => {
+  const userId = getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  const users = await getAllUsersForSync();
+  let rebuilt = 0;
+  for (const u of users) {
+    const profile = await rebuildUserTasteProfile(u.clerkUserId).catch(() => null);
+    if (profile) rebuilt++;
+  }
+  res.json({ ok: true, rebuilt, total: users.length });
 });
 
 // Helper: ms until the next occurrence of :MM past the hour

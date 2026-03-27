@@ -311,7 +311,7 @@ async function loadFreshReleases() {
   initFreshGenreDropdown();
   document.getElementById("fresh-releases-grid").innerHTML = renderSkeletonGrid(16);
   try {
-    const data = await fetch("/api/fresh-releases").then(r => r.json());
+    const data = await apiFetch("/api/fresh-releases").then(r => r.json());
     _freshAll = data.releases ?? [];
     _freshBrowse = _freshAll;
     if (!_freshAll.length) {
