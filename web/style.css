@@ -197,7 +197,7 @@ body {
 /* ── Scrollbars ── */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #2a3a44 transparent;
+  scrollbar-color: #3a3020 transparent;
 }
 *::-webkit-scrollbar { width: 6px; height: 6px; }
 *::-webkit-scrollbar-track { background: transparent; }
@@ -535,7 +535,7 @@ body {
   align-items: center;
   justify-content: center;
   font-size: 2rem;
-  color: #2a4050;
+  color: #3a3020;
 }
 .fresh-card-body {
   padding: 0.75rem 0.85rem 0.9rem;
@@ -567,7 +567,7 @@ body {
 }
 .fresh-card-type {
   font-size: 0.7rem;
-  color: #4a7080;
+  color: #6a5d4a;
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
@@ -583,7 +583,7 @@ body {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 0.1rem 0.35rem;
-  color: #5a8090;
+  color: #6a5d4a;
   white-space: nowrap;
 }
 /* kept for backward compat — cards no longer render links inline */
@@ -596,7 +596,7 @@ body {
 }
 .fresh-card-links a {
   font-size: 0.65rem;
-  color: #4a7080;
+  color: #6a5d4a;
   text-decoration: none;
   white-space: nowrap;
   overflow: hidden;
@@ -894,7 +894,7 @@ a.fresh-card-search-link:hover {
 .live-artist-name {
   font-size: 1rem;
   font-weight: 600;
-  color: #e2e2e2;
+  color: var(--text);
 }
 .live-artist-name a { color: var(--accent); text-decoration: none; }
 
@@ -995,7 +995,7 @@ a.fresh-card-search-link:hover {
 .drop-nomatch-title {
   font-size: 1.05rem;
   font-weight: 600;
-  color: #e2e2e2;
+  color: var(--text);
 }
 .drop-nomatch-title a { color: inherit; text-decoration: none; }
 .drop-nomatch-title a:hover { text-decoration: underline; text-underline-offset: 2px; }
@@ -1028,7 +1028,7 @@ a.drop-nomatch-tag:hover { border-color: var(--accent); color: var(--accent); }
 }
 .drop-nomatch-google {
   font-size: 0.75rem;
-  color: #5a9aaa;
+  color: var(--accent);
   text-decoration: none;
   margin-top: 0.15rem;
 }
@@ -1345,7 +1345,7 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 }
 #concert-close:hover { color: var(--text); background: #2e2518; }
 #concert-info { padding: 1rem; }
-.concert-artist-name { font-size: 1.1rem; font-weight: 600; color: #e2e2e2; margin-bottom: 0.75rem; }
+.concert-artist-name { font-size: 1.1rem; font-weight: 600; color: var(--text); margin-bottom: 0.75rem; }
 .concert-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; }
 .concert-item {
   border: 1px solid var(--border);
@@ -1362,7 +1362,7 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 .concert-details { min-width: 0; }
 .concert-event-name { font-size: 0.82rem; color: #ccc; font-weight: 500; }
 .concert-venue { font-size: 0.72rem; color: #999; margin-top: 0.15rem; }
-.concert-venue a { color: #5a9aaa; text-decoration: none; }
+.concert-venue a { color: var(--accent); text-decoration: none; }
 .concert-venue a:hover { text-decoration: underline; }
 .concert-source { font-size: 0.6rem; color: #555; text-transform: uppercase; letter-spacing: 0.04em; }
 .concert-empty { padding: 2rem; text-align: center; color: #777; font-style: italic; }
@@ -1771,7 +1771,7 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 
 .card-catno-line {
   font-size: 0.68rem;
-  color: #4a6a78;
+  color: #6a5d4a;
   margin-top: 0.15rem;
 }
 
@@ -2256,7 +2256,7 @@ footer {
 }
 .footer-col a {
   display: block;
-  color: #5a9aaa;
+  color: var(--accent);
   text-decoration: none;
   font-size: 0.78rem;
   padding: 0.15rem 0;
