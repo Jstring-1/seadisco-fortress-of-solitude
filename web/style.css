@@ -506,16 +506,15 @@ body {
 .records-sub-tabs {
   display: flex;
   gap: 0;
-  border-bottom: 1px solid var(--border);
   margin-bottom: 0.25rem;
 }
 .records-sub-tab {
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  padding: 0.5rem 1rem;
+  padding: 0.45rem 0.9rem;
   font-family: inherit;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   color: var(--muted);
   cursor: pointer;
   transition: color 0.15s, border-color 0.15s;
