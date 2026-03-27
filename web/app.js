@@ -27,9 +27,10 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
       if (lg) lg.value = p.get("lg") || "";
       doLiveSearch();
     }
-  } else if (view === "collection" || view === "wantlist" || view === "wanted") {
+  } else if (view === "records" || view === "collection" || view === "wantlist" || view === "wanted") {
     await authReadyPromise;
-    switchView(view, true);
+    // Map old collection/wantlist URLs to records
+    switchView(view === "collection" || view === "wantlist" ? "records" : view, true);
   } else if (p.toString()) {
     restoreFromParams(p);
     await authReadyPromise;
@@ -48,7 +49,9 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
 window.addEventListener("popstate", () => {
   const p = new URLSearchParams(location.search);
   const view = p.get("view");
-  if (view === "drops" || view === "live" || view === "gear" || view === "feed" || view === "collection" || view === "wantlist" || view === "info" || view === "wanted") {
+  // Map old collection/wantlist URLs to records
+  if (view === "collection" || view === "wantlist") { switchView("records", true); return; }
+  if (view === "drops" || view === "live" || view === "gear" || view === "feed" || view === "records" || view === "info" || view === "wanted") {
     switchView(view, true);
   } else {
     switchView("search", true);

@@ -30,6 +30,17 @@ async function countFreshReleases(): Promise<number> {
   finally { await pool.end(); }
 }
 
+async function getExistingMbids(): Promise<Set<string>> {
+  const connStr = process.env.APP_DB_URL;
+  if (!connStr) return new Set();
+  const pool = new Pool({ connectionString: connStr, ssl: { rejectUnauthorized: false } });
+  try {
+    const r = await pool.query("SELECT release_mbid FROM fresh_releases WHERE cover_url IS NOT NULL");
+    return new Set(r.rows.map(row => row.release_mbid));
+  } catch { return new Set(); }
+  finally { await pool.end(); }
+}
+
 async function fetchListenBrainz(days: number): Promise<any[]> {
   const url = `${LB_API}?days=${days}&sort=release_date&past=true&future=false`;
   const start = Date.now();
@@ -63,15 +74,19 @@ export async function runFreshSync(): Promise<void> {
     console.log(`[fresh-sync] DB has ${count} records — fetching ${days} day(s) from ListenBrainz`);
 
     const releases = await fetchListenBrainz(days);
-    console.log(`[fresh-sync] fetched ${releases.length} releases`);
+    const existingMbids = await getExistingMbids();
+    console.log(`[fresh-sync] fetched ${releases.length} releases, ${existingMbids.size} already have cover art`);
 
-    let saved = 0, skipped = 0;
+    let saved = 0, skipped = 0, reused = 0;
 
     for (const rel of releases) {
       const mbid       = rel.release_mbid as string;
       const caaRelMbid = (rel.caa_release_mbid ?? mbid) as string;
 
       if (!mbid) { skipped++; continue; }
+
+      // Skip CAA check if we already have this release with cover art
+      if (existingMbids.has(mbid)) { reused++; continue; }
 
       const coverUrl = await checkCoverArt(caaRelMbid);
       if (!coverUrl) { skipped++; continue; }
@@ -95,7 +110,7 @@ export async function runFreshSync(): Promise<void> {
     }
 
     const pruned = await pruneFreshReleases();
-    console.log(`[fresh-sync] done — saved: ${saved}, skipped: ${skipped}, pruned: ${pruned}`);
+    console.log(`[fresh-sync] done — saved: ${saved}, skipped: ${skipped}, reused: ${reused}, pruned: ${pruned}`);
   } catch (err) {
     console.error("[fresh-sync] error:", err);
   }

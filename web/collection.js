@@ -26,6 +26,8 @@ function renderCardFromBasicInfo(basicInfo, index) {
 }
 
 function addNavTab(view) {
+  // Map old collection/wantlist enables to the new "records" tab
+  if (view === "collection" || view === "wantlist") view = "records";
   const btn = document.querySelector(`#main-nav-tabs [data-view="${view}"]`);
   if (btn) { btn.classList.remove("nav-disabled"); btn.removeAttribute("title"); }
 }
@@ -56,14 +58,14 @@ function switchView(view, skipPushState = false) {
   const feedView   = document.getElementById("feed-view");
   const infoView   = document.getElementById("info-view");
   if (!skipPushState) {
-    if (view === "drops" || view === "live" || view === "gear" || view === "feed" || view === "collection" || view === "wantlist" || view === "info" || view === "wanted") {
+    if (view === "drops" || view === "live" || view === "gear" || view === "feed" || view === "records" || view === "info" || view === "wanted") {
       history.pushState({ view }, "", "?view=" + view);
     } else {
       history.pushState({}, "", location.pathname);
     }
   }
   if (typeof gtag === "function") {
-    const titles = { drops: "Drops", live: "Live", gear: "Gear", feed: "Feed", info: "Info", collection: "Collection", wantlist: "Wantlist", wanted: "Wants", search: "Find" };
+    const titles = { drops: "Drops", live: "Live", gear: "Gear", feed: "Feed", info: "Info", records: "My Records", wanted: "Wants", search: "Search" };
     gtag("event", "page_view", {
       page_location: window.location.href,
       page_path:     window.location.pathname + window.location.search,
@@ -78,78 +80,59 @@ function switchView(view, skipPushState = false) {
   if (infoView)   infoView.style.display   = "none";
 
   const mainForm    = document.getElementById("main-search-form");
-  const cwWrap      = document.getElementById("cw-search-wrap");
+  const recordsWrap = document.getElementById("records-wrap");
   const cwInput     = document.getElementById("cw-query");
   const wantedWrap  = document.getElementById("wanted-search-wrap");
 
   if (view === "gear") {
     if (gearView) gearView.style.display = "block";
     if (mainForm) mainForm.style.display = "none";
-    if (cwWrap) cwWrap.style.display = "none";
+    if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
     loadGearListings();
   } else if (view === "feed") {
     if (feedView) feedView.style.display = "block";
     if (mainForm) mainForm.style.display = "none";
-    if (cwWrap) cwWrap.style.display = "none";
+    if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
     loadFeedArticles();
   } else if (view === "drops") {
     if (dropsView) dropsView.style.display = "block";
     if (mainForm) mainForm.style.display = "";
-    if (cwWrap) cwWrap.style.display = "none";
+    if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
   } else if (view === "live") {
     if (liveView) liveView.style.display = "block";
     if (mainForm) mainForm.style.display = "none";
-    if (cwWrap) cwWrap.style.display = "none";
+    if (recordsWrap) recordsWrap.style.display = "none";
     if (typeof loadLiveRecentFeed === "function") loadLiveRecentFeed();
     if (wantedWrap) wantedWrap.style.display = "none";
   } else if (view === "info") {
     if (infoView) infoView.style.display = "block";
     if (mainForm) mainForm.style.display = "";
-    if (cwWrap) cwWrap.style.display = "none";
+    if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
   } else if (view === "wanted") {
     if (searchView) searchView.style.display = "";
     if (mainForm) mainForm.style.display = "none";
-    if (cwWrap) cwWrap.style.display = "none";
+    if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "";
     document.getElementById("artist-alts").innerHTML = "";
     const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "none";
     loadWantedTab();
-  } else if (view === "collection") {
+  } else if (view === "records") {
     if (searchView) searchView.style.display = "";
     if (mainForm) mainForm.style.display = "none";
-    if (cwWrap) cwWrap.style.display = "";
+    if (recordsWrap) recordsWrap.style.display = "";
     if (wantedWrap) wantedWrap.style.display = "none";
-    if (cwInput) { cwInput.placeholder = "Search your collection…"; cwInput.value = ""; }
-    clearCwFilters();
-    _cwTab = "collection"; _cwQuery = "";
     document.getElementById("artist-alts").innerHTML = "";
     const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "none";
     const ws1 = document.getElementById("wanted-sample"); if (ws1) ws1.style.display = "none";
-    loadCwFacets("collection");
-    loadCollectionFolders();
-    loadCollectionTab(1);
-  } else if (view === "wantlist") {
-    if (searchView) searchView.style.display = "";
-    if (mainForm) mainForm.style.display = "none";
-    if (cwWrap) cwWrap.style.display = "";
-    if (wantedWrap) wantedWrap.style.display = "none";
-    if (cwInput) { cwInput.placeholder = "Search your wantlist…"; cwInput.value = ""; }
-    clearCwFilters();
-    _cwTab = "wantlist"; _cwQuery = "";
-    document.getElementById("artist-alts").innerHTML = "";
-    const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "none";
-    const ws2 = document.getElementById("wanted-sample"); if (ws2) ws2.style.display = "none";
-    const fc = document.getElementById("cw-folder-cloud"); if (fc) fc.style.display = "none";
-    loadCwFacets("wantlist");
-    loadWantlistTab(1);
+    switchRecordsTab(_cwTab || "collection");
   } else {
     if (searchView) searchView.style.display = "";
     if (mainForm) mainForm.style.display = "";
-    if (cwWrap) cwWrap.style.display = "none";
+    if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
     document.getElementById("results").innerHTML = "";
     document.getElementById("pagination").style.display = "none";
@@ -163,7 +146,7 @@ function switchView(view, skipPushState = false) {
   }
 
   // Animate the entering view
-  const shownId = { search: "search-view", drops: "drops-view", live: "live-view", gear: "gear-view", feed: "feed-view", info: "info-view", collection: "search-view", wantlist: "search-view", wanted: "search-view" }[view];
+  const shownId = { search: "search-view", drops: "drops-view", live: "live-view", gear: "gear-view", feed: "feed-view", info: "info-view", records: "search-view", wanted: "search-view" }[view];
   const shownEl = shownId && document.getElementById(shownId);
   if (shownEl) {
     shownEl.classList.remove("view-enter");
@@ -238,9 +221,173 @@ function doCwSearch(page = 1) {
   _cwQuery = filters.q || "";
   if (_cwTab === "collection") {
     loadCollectionTab(page, filters);
-  } else {
+  } else if (_cwTab === "wantlist") {
     loadWantlistTab(page, filters);
+  } else if (_cwTab === "inventory") {
+    loadInventoryTab(page, filters);
+  } else if (_cwTab === "lists") {
+    loadListsTab();
   }
+}
+
+function switchRecordsTab(tab) {
+  _cwTab = tab;
+  _cwQuery = "";
+  // Update sub-tab active state
+  document.querySelectorAll(".records-sub-tab").forEach(btn =>
+    btn.classList.toggle("active", btn.dataset.rtab === tab)
+  );
+  // Reset search
+  const cwInput = document.getElementById("cw-query");
+  const controlsRow = document.getElementById("cw-controls-row");
+  const advPanel = document.getElementById("cw-advanced-panel");
+  const folderCloud = document.getElementById("cw-folder-cloud");
+  const exportBtn = document.getElementById("cw-export-btn");
+
+  clearCwFilters();
+
+  if (tab === "collection") {
+    if (cwInput) { cwInput.placeholder = "Search your collection\u2026"; cwInput.value = ""; }
+    if (controlsRow) controlsRow.style.display = "";
+    if (exportBtn) exportBtn.style.display = "";
+    loadCwFacets("collection");
+    loadCollectionFolders();
+    loadCollectionTab(1);
+  } else if (tab === "wantlist") {
+    if (cwInput) { cwInput.placeholder = "Search your wantlist\u2026"; cwInput.value = ""; }
+    if (controlsRow) controlsRow.style.display = "";
+    if (exportBtn) exportBtn.style.display = "";
+    if (folderCloud) folderCloud.style.display = "none";
+    loadCwFacets("wantlist");
+    loadWantlistTab(1);
+  } else if (tab === "inventory") {
+    if (cwInput) { cwInput.placeholder = "Search your inventory\u2026"; cwInput.value = ""; }
+    if (controlsRow) controlsRow.style.display = "none";
+    if (advPanel) advPanel.style.display = "none";
+    if (folderCloud) folderCloud.style.display = "none";
+    loadInventoryTab(1);
+  } else if (tab === "lists") {
+    if (cwInput) { cwInput.placeholder = "Search your lists\u2026"; cwInput.value = ""; }
+    if (controlsRow) controlsRow.style.display = "none";
+    if (advPanel) advPanel.style.display = "none";
+    if (folderCloud) folderCloud.style.display = "none";
+    loadListsTab();
+  }
+}
+
+let _invPage = 1;
+async function loadInventoryTab(page = 1, filters) {
+  _invPage = page;
+  const f = filters || {};
+  const q = document.getElementById("cw-query")?.value?.trim() || "";
+  if (q) f.q = q;
+  setActiveTab("inventory");
+  document.getElementById("blurb").style.display = "none";
+  document.getElementById("results").innerHTML = renderSkeletonGrid(16);
+  document.getElementById("pagination").style.display = "none";
+  setStatus("");
+  try {
+    let url = `/api/user/inventory?page=${page}&per_page=24`;
+    if (f.q) url += `&q=${encodeURIComponent(f.q)}`;
+    const r = await apiFetch(url);
+    const data = await r.json();
+    const items = data.items ?? [];
+    if (!items.length) {
+      setStatus("");
+      document.getElementById("results").innerHTML = f.q
+        ? renderEmptyState("\uD83D\uDD0D", `No inventory items matching "${f.q}"`, "Try a different search")
+        : renderEmptyState("\uD83D\uDCE6", "No inventory items synced", "Your Discogs marketplace inventory will appear here after syncing");
+      return;
+    }
+    setStatus(`${data.total} inventory listings \u2014 page ${page} of ${data.pages}`);
+    document.getElementById("results").innerHTML = items.map((item, i) => renderInventoryCard(item, i)).join("");
+    totalPages = data.pages;
+    currentPage = page;
+    renderInventoryPagination();
+  } catch (e) {
+    setStatus("Failed to load inventory: " + e.message, true);
+  }
+}
+
+function renderInventoryCard(item, index) {
+  const d = item.data || {};
+  const release = d.release || {};
+  const artist = release.artist || release.description || "";
+  const title = release.title || release.description || "Untitled";
+  const thumb = release.thumbnail || release.images?.[0]?.uri150 || "";
+  const price = item.price_value ? `${item.price_currency || "$"}${Number(item.price_value).toFixed(2)}` : "";
+  const cond = item.condition || "";
+  const status = item.status || "For Sale";
+
+  const syntheticItem = {
+    id: item.discogs_release_id || release.id || 0,
+    type: "release",
+    title: artist ? `${artist} - ${title}` : title,
+    cover_image: thumb,
+    label: [],
+    format: release.format ? [release.format] : [],
+    genre: [],
+    year: "",
+    country: "",
+    uri: item.discogs_release_id ? `/release/${item.discogs_release_id}` : "",
+    _price: price,
+    _condition: cond,
+    _status: status,
+  };
+  return renderCard(syntheticItem, index);
+}
+
+function renderInventoryPagination() {
+  if (totalPages <= 1) return;
+  const pag = document.getElementById("pagination");
+  pag.style.display = "flex";
+  document.getElementById("page-info").textContent = `${currentPage} / ${totalPages}`;
+  document.getElementById("prev-btn").disabled = currentPage <= 1;
+  document.getElementById("next-btn").disabled = currentPage >= totalPages;
+  document.getElementById("prev-btn").onclick = currentPage > 1
+    ? () => { window.scrollTo({top:0,behavior:'smooth'}); loadInventoryTab(currentPage - 1); }
+    : null;
+  document.getElementById("next-btn").onclick = currentPage < totalPages
+    ? () => { window.scrollTo({top:0,behavior:'smooth'}); loadInventoryTab(currentPage + 1); }
+    : null;
+}
+
+async function loadListsTab() {
+  setActiveTab("lists");
+  document.getElementById("blurb").style.display = "none";
+  document.getElementById("results").innerHTML = renderSkeletonGrid(4);
+  document.getElementById("pagination").style.display = "none";
+  setStatus("");
+  try {
+    const r = await apiFetch("/api/user/lists");
+    const data = await r.json();
+    const lists = data.lists ?? [];
+    const q = (document.getElementById("cw-query")?.value ?? "").trim().toLowerCase();
+    const filtered = q ? lists.filter(l => (l.name || "").toLowerCase().includes(q) || (l.description || "").toLowerCase().includes(q)) : lists;
+    if (!filtered.length) {
+      setStatus("");
+      document.getElementById("results").innerHTML = lists.length
+        ? renderEmptyState("\uD83D\uDD0D", `No lists matching "${q}"`, "Try a different search")
+        : renderEmptyState("\uD83D\uDCCB", "No lists synced", "Your Discogs lists will appear here after syncing");
+      return;
+    }
+    setStatus(`${filtered.length} list${filtered.length !== 1 ? "s" : ""}`);
+    document.getElementById("results").innerHTML = `<div class="lists-grid">${filtered.map(renderListCard).join("")}</div>`;
+  } catch (e) {
+    setStatus("Failed to load lists: " + e.message, true);
+  }
+}
+
+function renderListCard(list) {
+  const name = escHtml(list.name || "Untitled");
+  const desc = escHtml(list.description || "");
+  const count = list.item_count ?? 0;
+  const vis = list.is_public ? "Public" : "Private";
+  return `<a href="https://www.discogs.com/lists/${list.list_id}" target="_blank" rel="noopener" class="list-card">
+    <div class="list-card-name">${name}</div>
+    ${desc ? `<div class="list-card-desc">${desc}</div>` : ""}
+    <div class="list-card-meta">${count} item${count !== 1 ? "s" : ""} \u00b7 ${vis}</div>
+  </a>`;
 }
 
 function clearCwSearch() {
