@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getLatestCollectionAddedAt, getLatestWantlistAddedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, getLocationByIp, upsertLocation, rebuildUserTasteProfile, getUserTasteProfile, getPersonalizedFreshReleases, getPersonalizedFeedArticles, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, logApiRequest, getApiRequestLog, getApiRequestStats } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, getLocationByIp, upsertLocation, rebuildUserTasteProfile, getUserTasteProfile, getPersonalizedFreshReleases, getPersonalizedFeedArticles, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, logApiRequest, getApiRequestLog, getApiRequestStats } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -245,8 +245,8 @@ let _syncAbort = false;
 const SYNC_STALL_TIMEOUT = 5 * 60 * 1000; // 5 minutes with no progress = stalled
 
 // Background sync worker — runs detached from the HTTP request
-async function runBackgroundSync(userId: string, token: string, username: string, syncCollection: boolean, syncWantlist: boolean, force: boolean = false) {
-  console.log(`Sync ${username}: starting background sync (collection=${syncCollection}, wantlist=${syncWantlist}, force=${force})`);
+async function runBackgroundSync(userId: string, token: string, username: string, syncCollection: boolean, syncWantlist: boolean) {
+  console.log(`Sync ${username}: starting full sync (collection=${syncCollection}, wantlist=${syncWantlist})`);
   const headers = { "Authorization": `Discogs token=${token}`, "User-Agent": "SeaDisco/1.0" };
   const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
   let totalSynced = 0;
@@ -325,21 +325,10 @@ async function runBackgroundSync(userId: string, token: string, username: string
       } catch {}
     }
 
-    // For incremental sync: get the latest added_at dates from DB (skip if force=true)
-    const latestCollectionDate = (!force && syncCollection) ? await getLatestCollectionAddedAt(userId) : null;
-    const latestWantlistDate = (!force && syncWantlist) ? await getLatestWantlistAddedAt(userId) : null;
-    const isIncrementalCollection = !!latestCollectionDate;
-    const isIncrementalWantlist = !!latestWantlistDate;
-    if (force) console.log(`Sync ${username}: FULL sync forced`);
-    if (isIncrementalCollection) console.log(`Sync ${username}: incremental collection sync — last item added ${latestCollectionDate!.toISOString()}`);
-    if (isIncrementalWantlist) console.log(`Sync ${username}: incremental wantlist sync — last item added ${latestWantlistDate!.toISOString()}`);
-
-    const isIncremental = isIncrementalCollection || isIncrementalWantlist;
     console.log(`Sync ${username}: estimated total = ${estimatedTotal}`);
-    await updateSyncProgress(userId, "syncing", 0, isIncremental ? 0 : estimatedTotal);
+    await updateSyncProgress(userId, "syncing", 0, estimatedTotal);
 
     if (syncCollection) {
-      let hitExisting = false;
       for (let page = 1; ; page++) {
         if (_syncAbort || _thisSyncAbort) { console.log(`Sync ${username}: aborted`); await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted"); _syncDone = true; return; }
         if (page > 1) await delay(1200); // 1.2s pacing — Discogs allows 60/min
@@ -359,24 +348,6 @@ async function runBackgroundSync(userId: string, token: string, username: string
           notes:      item.notes ?? undefined,
         })).filter(i => i.id);
 
-        // Incremental: if sorted by added desc, stop when we hit items older than our latest
-        if (isIncrementalCollection && latestCollectionDate) {
-          const newItems = items.filter(i => i.addedAt && i.addedAt > latestCollectionDate!);
-          if (newItems.length < items.length) {
-            // Some items are already in DB — upsert the new ones and stop
-            if (newItems.length > 0) {
-              await upsertCollectionItems(userId, newItems);
-              await recordInterestSignals(newItems, "collection");
-              totalSynced += newItems.length;
-            }
-            hitExisting = true;
-            console.log(`Sync ${username}: incremental collection done — ${totalSynced} new items found, stopping at page ${page}`);
-            lastProgressAt = Date.now();
-            await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
-            break;
-          }
-        }
-
         await upsertCollectionItems(userId, items);
         await recordInterestSignals(items, "collection");
         totalSynced += items.length;
@@ -385,7 +356,6 @@ async function runBackgroundSync(userId: string, token: string, username: string
         if (releases.length < 500) break;
       }
       await updateCollectionSyncedAt(userId);
-      if (hitExisting) console.log(`Sync ${username}: collection incremental sync complete`);
 
       // Sync folder list
       try {
@@ -401,7 +371,6 @@ async function runBackgroundSync(userId: string, token: string, username: string
     }
 
     if (syncWantlist) {
-      let hitExistingWant = false;
       for (let page = 1; ; page++) {
         if (_syncAbort || _thisSyncAbort) { console.log(`Sync ${username}: aborted`); await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted"); _syncDone = true; return; }
         if (page > 1) await delay(1200);
@@ -419,23 +388,6 @@ async function runBackgroundSync(userId: string, token: string, username: string
           notes:   item.notes ?? undefined,
         })).filter(i => i.id);
 
-        // Incremental: stop when we hit items older than our latest
-        if (isIncrementalWantlist && latestWantlistDate) {
-          const newItems = items.filter(i => i.addedAt && i.addedAt > latestWantlistDate!);
-          if (newItems.length < items.length) {
-            if (newItems.length > 0) {
-              await upsertWantlistItems(userId, newItems);
-              await recordInterestSignals(newItems, "wantlist");
-              totalSynced += newItems.length;
-            }
-            hitExistingWant = true;
-            console.log(`Sync ${username}: incremental wantlist done — ${newItems.length} new items, stopping at page ${page}`);
-            lastProgressAt = Date.now();
-            await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
-            break;
-          }
-        }
-
         await upsertWantlistItems(userId, items);
         await recordInterestSignals(items, "wantlist");
         totalSynced += items.length;
@@ -446,14 +398,8 @@ async function runBackgroundSync(userId: string, token: string, username: string
       await updateWantlistSyncedAt(userId);
     }
 
-    if (isIncremental) {
-      // For incremental: store new item count in progress, 0 in total to signal incremental
-      await updateSyncProgress(userId, "complete", totalSynced, 0);
-      console.log(`Incremental sync complete for ${username}: ${totalSynced} new items added`);
-    } else {
-      await updateSyncProgress(userId, "complete", totalSynced, estimatedTotal);
-      console.log(`Full sync complete for ${username}: ${totalSynced} items`);
-    }
+    await updateSyncProgress(userId, "complete", totalSynced, estimatedTotal);
+    console.log(`Full sync complete for ${username}: ${totalSynced} items`);
     // Rebuild taste profile after successful sync
     await rebuildUserTasteProfile(userId).catch(err =>
       console.error(`Taste profile rebuild error for ${userId}:`, err)
@@ -516,7 +462,7 @@ app.post("/api/user/sync", express.json(), async (req, res) => {
   // Respond immediately, sync runs in background
   res.json({ ok: true, started: true });
 
-  // Fire and forget — runs in background
+  // Fire and forget — runs in background (full sync for user-initiated)
   runBackgroundSync(userId, token, username, syncCollection && !collectionRecent, syncWantlist && !wantlistRecent).catch(err => {
     console.error("Background sync uncaught error:", err);
   });
@@ -968,16 +914,15 @@ app.post("/api/admin/sync-all", express.json(), async (req, res) => {
   const userId = getClerkUserId(req);
   const adminId = process.env.ADMIN_CLERK_ID ?? "";
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
-  const incremental = req.body?.incremental === true;
   _syncAbort = false; // clear any previous abort
   const users = await getAllUsersForSync();
-  res.json({ ok: true, queued: users.length, mode: incremental ? "incremental" : "full" });
+  res.json({ ok: true, queued: users.length, mode: "full" });
   // Run syncs sequentially so server load and Discogs API stay manageable
   (async () => {
     for (const user of users) {
       if (_syncAbort) { console.log("Sync-all: aborted, skipping remaining users"); break; }
       try {
-        await runBackgroundSync(user.clerkUserId, user.token, user.username, true, true, !incremental);
+        await runBackgroundSync(user.clerkUserId, user.token, user.username, true, true);
       } catch (err) {
         console.error(`Sync-all error for ${user.username}:`, err);
       }
@@ -990,16 +935,16 @@ app.post("/api/admin/sync-user", express.json(), async (req, res) => {
   const userId = getClerkUserId(req);
   const adminId = process.env.ADMIN_CLERK_ID ?? "";
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
-  const { username, incremental } = req.body as { username: string; incremental?: boolean };
+  const { username } = req.body as { username: string };
   if (!username) { res.status(400).json({ error: "username required" }); return; }
   const users = await getAllUsersForSync();
   const user = users.find(u => u.username === username);
   if (!user) { res.status(404).json({ error: "User not found" }); return; }
   _syncAbort = false;
-  res.json({ ok: true, username, mode: incremental ? "incremental" : "full" });
+  res.json({ ok: true, username, mode: "full" });
   (async () => {
     try {
-      await runBackgroundSync(user.clerkUserId, user.token, user.username, true, true, !incremental);
+      await runBackgroundSync(user.clerkUserId, user.token, user.username, true, true);
     } catch (err) {
       console.error(`Sync-user error for ${user.username}:`, err);
     }
@@ -2513,76 +2458,48 @@ function msUntilMinute(minute: number): number {
 }
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
-// Scheduled syncs: incremental daily at 4 AM Pacific, full on Wed+Sat at 2 AM Pacific
+// Scheduled sync: full sync every night at 4 AM Pacific
 function startDailySyncSchedule() {
-  function msUntilNextPacific(hour: number, dayFilter?: number[]): number {
+  function msUntilNextPacific(hour: number): number {
     const now = new Date();
     const pacific = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
     const diff = now.getTime() - pacific.getTime();
     const target = new Date(pacific);
     target.setHours(hour, 0, 0, 0);
     if (target.getTime() <= pacific.getTime()) target.setDate(target.getDate() + 1);
-    // If dayFilter specified, advance to next matching day (0=Sun, 3=Wed, 6=Sat)
-    if (dayFilter) {
-      while (!dayFilter.includes(target.getDay())) {
-        target.setDate(target.getDate() + 1);
-      }
-    }
     return (target.getTime() - pacific.getTime()) + diff;
   }
 
-  async function runScheduledSync(force: boolean) {
-    const mode = force ? "FULL" : "incremental";
-    console.log(`[sync-schedule] Starting ${mode} sync for all users`);
+  async function runScheduledSync() {
+    console.log(`[sync-schedule] Starting full sync for all users`);
     _syncAbort = false;
     const users = await getAllUsersForSync();
     for (const user of users) {
       if (_syncAbort) { console.log("[sync-schedule] Aborted"); break; }
       try {
-        console.log(`[sync-schedule] ${mode} syncing ${user.username}...`);
-        await runBackgroundSync(user.clerkUserId, user.token, user.username, true, true, force);
-        // 2-minute pause between users to let rate limits reset
-        await new Promise(r => setTimeout(r, 120000));
+        console.log(`[sync-schedule] Full syncing ${user.username}...`);
+        await runBackgroundSync(user.clerkUserId, user.token, user.username, true, true);
+        // 30s pause between users to let rate limits settle
+        await new Promise(r => setTimeout(r, 30000));
       } catch (err) {
         console.error(`[sync-schedule] Error syncing ${user.username}:`, err);
       }
     }
-    console.log(`[sync-schedule] ${mode} sync complete`);
+    console.log(`[sync-schedule] Full sync complete`);
   }
 
-  // Daily incremental sync at 4 AM Pacific
-  function scheduleDailyIncremental() {
+  // Daily full sync at 4 AM Pacific
+  function scheduleDailySync() {
     const ms = msUntilNextPacific(4);
     const hours = Math.round(ms / 3600000 * 10) / 10;
-    console.log(`[sync-schedule] Next incremental sync in ${hours}h (4 AM Pacific)`);
+    console.log(`[sync-schedule] Next full sync in ${hours}h (4 AM Pacific)`);
     setTimeout(async () => {
-      // Skip if today is Wed or Sat (full sync handles those at 2 AM)
-      const pacific = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
-      const day = pacific.getDay();
-      if (day === 3 || day === 6) {
-        console.log("[sync-schedule] Skipping 4 AM incremental — full sync day (Wed/Sat)");
-      } else {
-        await runScheduledSync(false);
-      }
-      scheduleDailyIncremental();
+      await runScheduledSync();
+      scheduleDailySync();
     }, ms);
   }
 
-  // Full sync at 2 AM Pacific on Wednesday (3) and Saturday (6)
-  function scheduleWeeklyFull() {
-    const ms = msUntilNextPacific(2, [3, 6]); // Wed=3, Sat=6
-    const hours = Math.round(ms / 3600000 * 10) / 10;
-    const nextDate = new Date(Date.now() + ms);
-    const dayName = nextDate.toLocaleDateString("en-US", { weekday: "long", timeZone: "America/Los_Angeles" });
-    console.log(`[sync-schedule] Next FULL sync in ${hours}h (2 AM Pacific, ${dayName})`);
-    setTimeout(async () => {
-      await runScheduledSync(true);
-      scheduleWeeklyFull();
-    }, ms);
-  }
-
-  scheduleDailyIncremental();
-  scheduleWeeklyFull();
+  scheduleDailySync();
 }
 
 // ── Inventory / Lists / Orders sync (5 AM Pacific daily) ──────────────────
