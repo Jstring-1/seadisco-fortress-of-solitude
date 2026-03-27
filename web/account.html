@@ -106,6 +106,7 @@
           <button onclick="adminGearFetch()" id="admin-gear-fetch-btn" style="display:none;font-size:0.78rem;padding:0.3rem 0.9rem;background:#2a2a2a;color:var(--fg);border:1px solid #444;border-radius:5px;cursor:pointer;font-weight:600">Fetch eBay Gear</button>
           <button onclick="adminFeedFetch()" id="admin-feed-fetch-btn" style="display:none;font-size:0.78rem;padding:0.3rem 0.9rem;background:#2a2a2a;color:var(--fg);border:1px solid #444;border-radius:5px;cursor:pointer;font-weight:600">Fetch Feed</button>
           <button onclick="adminLiveFetch()" id="admin-live-fetch-btn" style="display:none;font-size:0.78rem;padding:0.3rem 0.9rem;background:#2a2a2a;color:var(--fg);border:1px solid #444;border-radius:5px;cursor:pointer;font-weight:600">Fetch Live Events</button>
+          <button onclick="adminExtrasFetch()" id="admin-extras-fetch-btn" style="display:none;font-size:0.78rem;padding:0.3rem 0.9rem;background:#2a2a2a;color:var(--fg);border:1px solid #444;border-radius:5px;cursor:pointer;font-weight:600">Fetch Inventory/Lists</button>
           <button onclick="adminRebuildTaste()" id="admin-taste-btn" style="display:none;font-size:0.78rem;padding:0.3rem 0.9rem;background:#2a2a2a;color:var(--fg);border:1px solid #444;border-radius:5px;cursor:pointer;font-weight:600">Rebuild Taste Profiles</button>
         </div>
         <div id="admin-sync-all-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.35rem"></div>
@@ -665,6 +666,7 @@ async function loadAdminInbox() {
     document.getElementById("admin-gear-fetch-btn").style.display = "inline-block";
     document.getElementById("admin-feed-fetch-btn").style.display = "inline-block";
     document.getElementById("admin-live-fetch-btn").style.display = "inline-block";
+    document.getElementById("admin-extras-fetch-btn").style.display = "inline-block";
     document.getElementById("admin-taste-btn").style.display = "inline-block";
     loadAdminSearches();   // also load global search pool for admin
     loadInterestStats();   // also load interest signal stats for admin
@@ -976,6 +978,26 @@ async function adminLiveFetch() {
   } finally {
     btn.disabled = false;
     btn.textContent = "Fetch Live Events";
+  }
+}
+
+async function adminExtrasFetch() {
+  const btn = document.getElementById("admin-extras-fetch-btn");
+  const statusEl = document.getElementById("admin-sync-all-status");
+  btn.disabled = true;
+  btn.textContent = "Fetching…";
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const r = await fetch("/api/admin/extras/fetch", {
+      method: "POST",
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
+    }).then(r => r.json());
+    statusEl.textContent = "Inventory/lists sync started — running in background.";
+  } catch {
+    statusEl.textContent = "Inventory/lists fetch failed.";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Fetch Inventory/Lists";
   }
 }
 

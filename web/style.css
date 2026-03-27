@@ -225,7 +225,7 @@ body {
 .text-logo {
   font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
   font-size: 1.55rem;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.03em;
   line-height: 1;
   user-select: none;
 }
@@ -237,7 +237,7 @@ body {
   color: rgba(255, 107, 53, 0.3);
   font-weight: 400;
 }
-.logo-gap { width: 0.35em; display: inline-block; }
+.logo-gap { width: 0.2em; display: inline-block; }
 .text-logo:hover .logo-hi { color: #e8d44d; }
 .text-logo:hover .logo-lo { color: rgba(232, 212, 77, 0.3); }
 
