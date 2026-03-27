@@ -35,7 +35,8 @@ async function getExistingMbids(): Promise<Set<string>> {
   if (!connStr) return new Set();
   const pool = new Pool({ connectionString: connStr, ssl: { rejectUnauthorized: false } });
   try {
-    const r = await pool.query("SELECT release_mbid FROM fresh_releases WHERE cover_url IS NOT NULL");
+    // Return ALL known MBIDs — including those with no cover art — so we don't re-check them
+    const r = await pool.query("SELECT release_mbid FROM fresh_releases");
     return new Set(r.rows.map(row => row.release_mbid));
   } catch { return new Set(); }
   finally { await pool.end(); }
@@ -85,12 +86,12 @@ export async function runFreshSync(): Promise<void> {
 
       if (!mbid) { skipped++; continue; }
 
-      // Skip CAA check if we already have this release with cover art
+      // Skip if we already know about this release (with or without art)
       if (existingMbids.has(mbid)) { reused++; continue; }
 
       const coverUrl = await checkCoverArt(caaRelMbid);
-      if (!coverUrl) { skipped++; continue; }
 
+      // Save ALL releases to DB — even without cover art — so we never re-check CAA
       await upsertFreshRelease({
         release_mbid:       mbid,
         release_name:       rel.release_name                   ?? null,
@@ -105,7 +106,7 @@ export async function runFreshSync(): Promise<void> {
         release_group_mbid: rel.release_group_mbid             ?? null,
         artist_mbids:       rel.artist_mbids                   ?? [],
       });
-      saved++;
+      if (coverUrl) saved++; else skipped++;
       await sleep(DELAY_MS);
     }
 
