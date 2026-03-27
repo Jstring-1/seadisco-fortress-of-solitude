@@ -2532,13 +2532,16 @@ async function syncUserExtras(userId: string, username: string, token: string): 
       try {
         const r = await loggedFetch("discogs", url, { headers, signal: AbortSignal.timeout(15000), context: `extras: ${username}` });
         if (r.ok) return r;
+        // 401/403 = auth issue, don't retry
+        if (r.status === 401 || r.status === 403) throw new Error(`HTTP ${r.status} — skipping (auth)`);
         if (r.status === 429 || r.status >= 500) {
-          if (attempt < retries) await sleep(15000 * attempt);
-          else throw new Error(`HTTP ${r.status} after ${retries} attempts`);
-        } else {
-          throw new Error(`HTTP ${r.status}`);
+          if (attempt < retries) { await sleep(15000 * attempt); continue; }
+          throw new Error(`HTTP ${r.status} after ${retries} attempts`);
         }
-      } catch (err) {
+        throw new Error(`HTTP ${r.status}`);
+      } catch (err: any) {
+        // Don't retry auth errors
+        if (err?.message?.includes("auth")) throw err;
         if (attempt >= retries) throw err;
         await sleep(10000 * attempt);
       }
@@ -2628,7 +2631,7 @@ function startExtrasSyncSchedule() {
       for (const user of users) {
         try {
           await syncUserExtras(user.clerkUserId, user.username, user.token);
-          await sleep(120000); // 2 min between users
+          await sleep(30000); // 30s between users
         } catch (err) {
           console.error(`[extras-sync] Error syncing ${user.username}:`, err);
         }

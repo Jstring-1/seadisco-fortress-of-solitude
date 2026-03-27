@@ -238,7 +238,7 @@ export async function initDb() {
     CREATE TABLE IF NOT EXISTS user_inventory (
       id                 SERIAL PRIMARY KEY,
       clerk_user_id      TEXT NOT NULL,
-      listing_id         INTEGER NOT NULL,
+      listing_id         BIGINT NOT NULL,
       discogs_release_id INTEGER,
       data               JSONB NOT NULL,
       status             TEXT DEFAULT 'For Sale',
@@ -251,6 +251,7 @@ export async function initDb() {
       UNIQUE(clerk_user_id, listing_id)
     )
   `);
+  await getPool().query(`ALTER TABLE user_inventory ALTER COLUMN listing_id TYPE BIGINT`);
   await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS inventory_synced_at TIMESTAMP`);
 
   // ── User lists (curated Discogs lists) ───────────────────────────────────
