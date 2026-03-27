@@ -289,9 +289,7 @@ async function loadLiveUpcoming() {
     if (data.events?.length) {
       _liveUpcomingAll = data.events;
       const label = wrap.querySelector(".feed-label");
-      if (label && data.location?.city) {
-        label.textContent = `Events near ${data.location.city}, ${data.location.region}`;
-      }
+      if (label) label.style.display = "none";
       _renderUpcomingSlice(LIVE_UPCOMING_PAGE);
       wrap.style.display = "";
       return;
