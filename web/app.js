@@ -31,10 +31,25 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
     await authReadyPromise;
     // Map old collection/wantlist URLs to records
     switchView(view === "collection" || view === "wantlist" ? "records" : view, true);
-  } else if (p.toString()) {
+  } else if (p.get("q") || p.get("ar") || p.get("re") || p.get("yr") || p.get("lb") || p.get("gn")) {
     restoreFromParams(p);
     await authReadyPromise;
     doSearch(parseInt(p.get("pg") ?? "1"), true);
+  }
+  // Open album popup from URL (works even without a search query)
+  const openParam = p.get("op");
+  if (openParam && !document.getElementById("modal-overlay")?.classList.contains("open")) {
+    const colon = openParam.indexOf(":");
+    if (colon > 0) {
+      const pType = openParam.slice(0, colon);
+      const pId   = openParam.slice(colon + 1);
+      const pUrl  = `https://www.discogs.com/${pType}/${pId}`;
+      openModal(null, pId, pType, pUrl);
+      const versionParam = p.get("vr");
+      if (versionParam) setTimeout(() => openVersionPopup(null, versionParam), 1200);
+      const videoParam = p.get("vd");
+      if (videoParam) setTimeout(() => openVideo(null, `https://www.youtube.com/watch?v=${videoParam}`), 1200);
+    }
   }
   const ctArtist = p.get("ct");
   if (ctArtist) openConcertPopup(null, ctArtist);
