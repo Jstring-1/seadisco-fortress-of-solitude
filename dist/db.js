@@ -132,6 +132,206 @@ export async function initDb() {
     // Migration: add columns if missing on existing tables
     await getPool().query(`ALTER TABLE fresh_releases ADD COLUMN IF NOT EXISTS release_group_mbid TEXT`);
     await getPool().query(`ALTER TABLE fresh_releases ADD COLUMN IF NOT EXISTS artist_mbids TEXT[]`);
+    // ── Gear listings (eBay vintage electronics) ────────────────────────────
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS gear_listings (
+      item_id         TEXT PRIMARY KEY,
+      title           TEXT NOT NULL,
+      price           NUMERIC(10,2) NOT NULL,
+      currency        TEXT DEFAULT 'USD',
+      condition       TEXT,
+      image_url       TEXT,
+      item_url        TEXT,
+      location_city   TEXT,
+      location_state  TEXT,
+      location_country TEXT,
+      seller_username TEXT,
+      seller_feedback INTEGER,
+      buying_options  TEXT[],
+      bid_count       INTEGER DEFAULT 0,
+      categories      TEXT[],
+      category_names  TEXT[],
+      item_end_date   TIMESTAMPTZ,
+      detail_html     TEXT,
+      all_images      TEXT[],
+      item_specifics  JSONB,
+      thumbnail_url   TEXT,
+      raw_summary     JSONB,
+      fetched_at      TIMESTAMPTZ DEFAULT NOW(),
+      detailed_at     TIMESTAMPTZ,
+      expired         BOOLEAN DEFAULT false
+    )
+  `);
+    await getPool().query(`
+    CREATE INDEX IF NOT EXISTS gear_listings_bids_price_idx ON gear_listings (bid_count DESC, price DESC) WHERE NOT expired
+  `);
+    // ── Feed articles (RSS + YouTube) ──────────────────────────────────────
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS feed_articles (
+      id              SERIAL PRIMARY KEY,
+      source          TEXT NOT NULL,
+      source_url      TEXT UNIQUE NOT NULL,
+      title           TEXT NOT NULL,
+      summary         TEXT,
+      image_url       TEXT,
+      author          TEXT,
+      category        TEXT DEFAULT 'news',
+      content_type    TEXT DEFAULT 'article',
+      published_at    TIMESTAMPTZ,
+      fetched_at      TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+    await getPool().query(`
+    CREATE INDEX IF NOT EXISTS feed_articles_published_idx ON feed_articles (published_at DESC)
+  `);
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS gear_fetch_log (
+      id          SERIAL PRIMARY KEY,
+      fetch_type  TEXT NOT NULL,
+      item_count  INTEGER DEFAULT 0,
+      error       TEXT,
+      started_at  TIMESTAMPTZ DEFAULT NOW(),
+      finished_at TIMESTAMPTZ
+    )
+  `);
+    // ── User locations (IP geolocation cache) ────────────────────────────────
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_locations (
+      id            SERIAL PRIMARY KEY,
+      ip_address    TEXT NOT NULL UNIQUE,
+      clerk_user_id TEXT,
+      latitude      NUMERIC(9,6),
+      longitude     NUMERIC(9,6),
+      city          TEXT,
+      region        TEXT,
+      country       TEXT,
+      fetched_at    TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS user_locations_clerk_idx ON user_locations (clerk_user_id) WHERE clerk_user_id IS NOT NULL`);
+    // ── Live events (Ticketmaster upcoming) ─────────────────────────────────
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS live_events (
+      id          SERIAL PRIMARY KEY,
+      event_name  TEXT NOT NULL,
+      artist      TEXT,
+      event_date  TEXT,
+      event_time  TEXT,
+      venue       TEXT,
+      venue_id    TEXT,
+      venue_url   TEXT,
+      city        TEXT,
+      region      TEXT,
+      country     TEXT,
+      url         TEXT,
+      image_url   TEXT,
+      price_min   NUMERIC,
+      price_max   NUMERIC,
+      currency    TEXT,
+      status      TEXT,
+      fetched_at  TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(url)
+    )
+  `);
+    // ── User inventory (marketplace listings) ────────────────────────────────
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_inventory (
+      id                 SERIAL PRIMARY KEY,
+      clerk_user_id      TEXT NOT NULL,
+      listing_id         BIGINT NOT NULL,
+      discogs_release_id INTEGER,
+      data               JSONB NOT NULL,
+      status             TEXT DEFAULT 'For Sale',
+      price_value        NUMERIC(10,2),
+      price_currency     TEXT DEFAULT 'USD',
+      condition          TEXT,
+      sleeve_condition   TEXT,
+      posted_at          TIMESTAMP,
+      synced_at          TIMESTAMP DEFAULT NOW(),
+      UNIQUE(clerk_user_id, listing_id)
+    )
+  `);
+    await getPool().query(`ALTER TABLE user_inventory ALTER COLUMN listing_id TYPE BIGINT`);
+    await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS inventory_synced_at TIMESTAMP`);
+    // ── Live events: add new columns for richer TM data ─────────────────────
+    await getPool().query(`ALTER TABLE live_events ADD COLUMN IF NOT EXISTS venue_url TEXT`);
+    await getPool().query(`ALTER TABLE live_events ADD COLUMN IF NOT EXISTS image_url TEXT`);
+    await getPool().query(`ALTER TABLE live_events ADD COLUMN IF NOT EXISTS price_min NUMERIC`);
+    await getPool().query(`ALTER TABLE live_events ADD COLUMN IF NOT EXISTS price_max NUMERIC`);
+    await getPool().query(`ALTER TABLE live_events ADD COLUMN IF NOT EXISTS currency TEXT`);
+    await getPool().query(`ALTER TABLE live_events ADD COLUMN IF NOT EXISTS status TEXT`);
+    // ── User lists (curated Discogs lists) ───────────────────────────────────
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_lists (
+      id              SERIAL PRIMARY KEY,
+      clerk_user_id   TEXT NOT NULL,
+      list_id         INTEGER NOT NULL,
+      name            TEXT,
+      description     TEXT,
+      item_count      INTEGER DEFAULT 0,
+      is_public       BOOLEAN DEFAULT true,
+      data            JSONB,
+      synced_at       TIMESTAMP DEFAULT NOW(),
+      UNIQUE(clerk_user_id, list_id)
+    )
+  `);
+    // ── User orders (marketplace buy/sell history) ──────────────────────────
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_orders (
+      id              SERIAL PRIMARY KEY,
+      clerk_user_id   TEXT NOT NULL,
+      order_id        INTEGER NOT NULL,
+      status          TEXT,
+      buyer_username  TEXT,
+      seller_username TEXT,
+      total_value     NUMERIC(10,2),
+      total_currency  TEXT DEFAULT 'USD',
+      item_count      INTEGER DEFAULT 0,
+      created_at      TIMESTAMPTZ,
+      data            JSONB,
+      synced_at       TIMESTAMP DEFAULT NOW(),
+      UNIQUE(clerk_user_id, order_id)
+    )
+  `);
+    // ── User taste profiles (computed from collection genres/styles) ────────
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_taste_profiles (
+      clerk_user_id TEXT PRIMARY KEY,
+      top_genres    JSONB DEFAULT '[]',
+      top_styles    JSONB DEFAULT '[]',
+      top_artists   JSONB DEFAULT '[]',
+      genre_keywords TEXT[] DEFAULT '{}',
+      updated_at    TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+    // ── API request log (errors + successes for all external API calls) ────
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS api_request_log (
+      id            SERIAL PRIMARY KEY,
+      service       TEXT NOT NULL,
+      endpoint      TEXT NOT NULL,
+      method        TEXT DEFAULT 'GET',
+      status_code   INTEGER,
+      success       BOOLEAN NOT NULL,
+      duration_ms   INTEGER,
+      error_message TEXT,
+      context       TEXT,
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS api_request_log_created_idx ON api_request_log (created_at DESC)`);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS api_request_log_service_idx ON api_request_log (service, created_at DESC)`);
+    // ── Release cache (full Discogs release/master detail saved on user click) ─
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS release_cache (
+      discogs_id      INTEGER NOT NULL,
+      type            TEXT NOT NULL DEFAULT 'release',
+      data            JSONB NOT NULL,
+      cached_at       TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(discogs_id, type)
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_id_type_idx ON release_cache (discogs_id, type)`);
 }
 export async function saveSearch(clerkUserId, params) {
     // Skip if identical params were saved in the last 5 minutes (prevents double-saves)
@@ -272,6 +472,7 @@ export async function deleteUserData(clerkUserId) {
     await getPool().query("DELETE FROM search_history WHERE clerk_user_id = $1", [clerkUserId]);
     await getPool().query("DELETE FROM user_collection WHERE clerk_user_id = $1", [clerkUserId]);
     await getPool().query("DELETE FROM user_wantlist   WHERE clerk_user_id = $1", [clerkUserId]);
+    await getPool().query("DELETE FROM user_locations  WHERE clerk_user_id = $1", [clerkUserId]);
 }
 export async function getDiscogsUsername(clerkUserId) {
     const r = await getPool().query("SELECT discogs_username FROM user_tokens WHERE clerk_user_id = $1", [clerkUserId]);
@@ -282,6 +483,10 @@ export async function setDiscogsUsername(clerkUserId, username) {
 }
 export async function updateSyncProgress(clerkUserId, status, progress, total, error) {
     await getPool().query(`UPDATE user_tokens SET sync_status = $2, sync_progress = $3, sync_total = $4, sync_error = $5 WHERE clerk_user_id = $1`, [clerkUserId, status, progress, total, error ?? null]);
+}
+export async function resetAllSyncingStatuses() {
+    const r = await getPool().query(`UPDATE user_tokens SET sync_status = 'stopped', sync_error = 'Stopped by admin' WHERE sync_status = 'syncing' RETURNING clerk_user_id`);
+    return r.rowCount ?? 0;
 }
 export async function getSyncStatus(clerkUserId) {
     const r = await getPool().query("SELECT collection_synced_at, wantlist_synced_at, sync_status, sync_progress, sync_total, sync_error FROM user_tokens WHERE clerk_user_id = $1", [clerkUserId]);
@@ -294,13 +499,46 @@ export async function getSyncStatus(clerkUserId) {
         syncError: r.rows[0]?.sync_error ?? null,
     };
 }
+// Get the most recent added_at date for a user's collection (for incremental sync)
+export async function getLatestCollectionAddedAt(clerkUserId) {
+    const r = await getPool().query(`SELECT MAX(added_at) AS latest FROM user_collection WHERE clerk_user_id = $1`, [clerkUserId]);
+    return r.rows[0]?.latest ?? null;
+}
+// Get the most recent added_at date for a user's wantlist (for incremental sync)
+export async function getLatestWantlistAddedAt(clerkUserId) {
+    const r = await getPool().query(`SELECT MAX(added_at) AS latest FROM user_wantlist WHERE clerk_user_id = $1`, [clerkUserId]);
+    return r.rows[0]?.latest ?? null;
+}
 export async function upsertCollectionItems(clerkUserId, items) {
-    for (const item of items) {
-        await getPool().query(`INSERT INTO user_collection (clerk_user_id, discogs_release_id, data, added_at, synced_at, folder_id, rating, instance_id, notes)
-       VALUES ($1, $2, $3, $4, NOW(), $5, $6, $7, $8)
-       ON CONFLICT (clerk_user_id, discogs_release_id)
-       DO UPDATE SET data = $3, added_at = $4, synced_at = NOW(), folder_id = $5, rating = $6, instance_id = $7, notes = $8`, [clerkUserId, item.id, JSON.stringify(item.data), item.addedAt ?? null, item.folderId ?? 0, item.rating ?? 0, item.instanceId ?? null, item.notes ? JSON.stringify(item.notes) : null]);
+    if (!items.length)
+        return;
+    // Deduplicate by release ID within batch — keep last occurrence (user may own multiple copies)
+    const deduped = new Map();
+    for (const item of items)
+        deduped.set(item.id, item);
+    const unique = [...deduped.values()];
+    const ids = [];
+    const dataArr = [];
+    const addedArr = [];
+    const folderArr = [];
+    const ratingArr = [];
+    const instanceArr = [];
+    const notesArr = [];
+    for (const item of unique) {
+        ids.push(item.id);
+        dataArr.push(JSON.stringify(item.data));
+        addedArr.push(item.addedAt ?? null);
+        folderArr.push(item.folderId ?? 0);
+        ratingArr.push(item.rating ?? 0);
+        instanceArr.push(item.instanceId ?? null);
+        notesArr.push(item.notes ? JSON.stringify(item.notes) : null);
     }
+    await getPool().query(`INSERT INTO user_collection (clerk_user_id, discogs_release_id, data, added_at, synced_at, folder_id, rating, instance_id, notes)
+     SELECT $1, unnest($2::int[]), unnest($3::jsonb[]), unnest($4::timestamptz[]), NOW(), unnest($5::int[]), unnest($6::int[]), unnest($7::int[]), unnest($8::jsonb[])
+     ON CONFLICT (clerk_user_id, discogs_release_id)
+     DO UPDATE SET data = EXCLUDED.data, added_at = EXCLUDED.added_at, synced_at = NOW(),
+                   folder_id = EXCLUDED.folder_id, rating = EXCLUDED.rating,
+                   instance_id = EXCLUDED.instance_id, notes = EXCLUDED.notes`, [clerkUserId, ids, dataArr, addedArr, folderArr, ratingArr, instanceArr, notesArr]);
 }
 export async function upsertCollectionFolders(clerkUserId, folders) {
     // Clear old folders and re-insert
@@ -316,12 +554,30 @@ export async function getCollectionFolderList(clerkUserId) {
     return r.rows.map(row => ({ folderId: row.folder_id, name: row.folder_name, count: row.item_count }));
 }
 export async function upsertWantlistItems(clerkUserId, items) {
-    for (const item of items) {
-        await getPool().query(`INSERT INTO user_wantlist (clerk_user_id, discogs_release_id, data, added_at, synced_at, rating, notes)
-       VALUES ($1, $2, $3, $4, NOW(), $5, $6)
-       ON CONFLICT (clerk_user_id, discogs_release_id)
-       DO UPDATE SET data = $3, added_at = $4, synced_at = NOW(), rating = $5, notes = $6`, [clerkUserId, item.id, JSON.stringify(item.data), item.addedAt ?? null, item.rating ?? 0, item.notes ? JSON.stringify(item.notes) : null]);
+    if (!items.length)
+        return;
+    // Deduplicate by release ID within batch
+    const deduped = new Map();
+    for (const item of items)
+        deduped.set(item.id, item);
+    const unique = [...deduped.values()];
+    const ids = [];
+    const dataArr = [];
+    const addedArr = [];
+    const ratingArr = [];
+    const notesArr = [];
+    for (const item of unique) {
+        ids.push(item.id);
+        dataArr.push(JSON.stringify(item.data));
+        addedArr.push(item.addedAt ?? null);
+        ratingArr.push(item.rating ?? 0);
+        notesArr.push(item.notes ? JSON.stringify(item.notes) : null);
     }
+    await getPool().query(`INSERT INTO user_wantlist (clerk_user_id, discogs_release_id, data, added_at, synced_at, rating, notes)
+     SELECT $1, unnest($2::int[]), unnest($3::jsonb[]), unnest($4::timestamptz[]), NOW(), unnest($5::int[]), unnest($6::jsonb[])
+     ON CONFLICT (clerk_user_id, discogs_release_id)
+     DO UPDATE SET data = EXCLUDED.data, added_at = EXCLUDED.added_at, synced_at = NOW(),
+                   rating = EXCLUDED.rating, notes = EXCLUDED.notes`, [clerkUserId, ids, dataArr, addedArr, ratingArr, notesArr]);
 }
 function cwOrderBy(sort) {
     switch (sort) {
@@ -480,6 +736,29 @@ export async function getCollectionIds(clerkUserId) {
     const r = await getPool().query("SELECT discogs_release_id FROM user_collection WHERE clerk_user_id = $1", [clerkUserId]);
     return r.rows.map(row => row.discogs_release_id);
 }
+export async function getWantedSample(limit = 24, excludeIds = []) {
+    // Distribute evenly across users: each user contributes at most ceil(limit/userCount) items
+    const uc = await getPool().query(`SELECT COUNT(DISTINCT clerk_user_id)::int AS n FROM user_wantlist`);
+    const userCount = Math.max(uc.rows[0]?.n ?? 1, 1);
+    const perUser = Math.ceil(limit / userCount);
+    const excludeClause = excludeIds.length
+        ? `AND discogs_release_id != ALL($3)`
+        : "";
+    const params = [perUser, limit];
+    if (excludeIds.length)
+        params.push(excludeIds);
+    const r = await getPool().query(`WITH ranked AS (
+       SELECT data, discogs_release_id,
+              ROW_NUMBER() OVER (PARTITION BY clerk_user_id ORDER BY RANDOM()) AS rn
+       FROM user_wantlist
+       WHERE 1=1 ${excludeClause}
+     )
+     SELECT data FROM ranked
+     WHERE rn <= $1
+     ORDER BY RANDOM()
+     LIMIT $2`, params);
+    return r.rows.map(row => row.data);
+}
 export async function getWantedItems() {
     const r = await getPool().query(`SELECT clerk_user_id, discogs_release_id, data FROM user_wantlist`);
     // Group by user
@@ -524,6 +803,81 @@ export async function updateCollectionSyncedAt(clerkUserId) {
 }
 export async function updateWantlistSyncedAt(clerkUserId) {
     await getPool().query("UPDATE user_tokens SET wantlist_synced_at = NOW() WHERE clerk_user_id = $1", [clerkUserId]);
+}
+// ── Inventory (marketplace listings) ──────────────────────────────────────
+export async function upsertInventoryItems(clerkUserId, items) {
+    if (!items.length)
+        return;
+    // Dedupe by listingId within the batch (keep last occurrence)
+    const deduped = [...new Map(items.map(i => [i.listingId, i])).values()];
+    const CHUNK = 50;
+    for (let i = 0; i < deduped.length; i += CHUNK) {
+        const chunk = deduped.slice(i, i + CHUNK);
+        const values = [];
+        const params = [];
+        let idx = 1;
+        for (const item of chunk) {
+            values.push(`($${idx}, $${idx + 1}, $${idx + 2}, $${idx + 3}, $${idx + 4}, $${idx + 5}, $${idx + 6}, $${idx + 7}, $${idx + 8}, $${idx + 9}, NOW())`);
+            params.push(clerkUserId, item.listingId, item.releaseId ?? null, JSON.stringify(item.data), item.status ?? "For Sale", item.priceValue ?? null, item.priceCurrency ?? "USD", item.condition ?? null, item.sleeveCondition ?? null, item.postedAt ?? null);
+            idx += 10;
+        }
+        await getPool().query(`INSERT INTO user_inventory (clerk_user_id, listing_id, discogs_release_id, data, status, price_value, price_currency, condition, sleeve_condition, posted_at, synced_at)
+       VALUES ${values.join(", ")}
+       ON CONFLICT (clerk_user_id, listing_id)
+       DO UPDATE SET data = EXCLUDED.data, status = EXCLUDED.status, price_value = EXCLUDED.price_value, price_currency = EXCLUDED.price_currency, condition = EXCLUDED.condition, sleeve_condition = EXCLUDED.sleeve_condition, posted_at = EXCLUDED.posted_at, synced_at = NOW()`, params);
+    }
+}
+export async function updateInventorySyncedAt(clerkUserId) {
+    await getPool().query("UPDATE user_tokens SET inventory_synced_at = NOW() WHERE clerk_user_id = $1", [clerkUserId]);
+}
+export async function getInventoryCount(clerkUserId) {
+    const r = await getPool().query("SELECT COUNT(*)::int AS cnt FROM user_inventory WHERE clerk_user_id = $1", [clerkUserId]);
+    return r.rows[0]?.cnt ?? 0;
+}
+export async function getInventoryPage(clerkUserId, page = 1, perPage = 24, filters) {
+    const conditions = ["clerk_user_id = $1"];
+    const params = [clerkUserId];
+    let idx = 2;
+    if (filters?.q) {
+        conditions.push(`(data::text ILIKE $${idx})`);
+        params.push(`%${filters.q}%`);
+        idx++;
+    }
+    if (filters?.status) {
+        conditions.push(`status = $${idx}`);
+        params.push(filters.status);
+        idx++;
+    }
+    const where = conditions.join(" AND ");
+    const countR = await getPool().query(`SELECT COUNT(*)::int AS cnt FROM user_inventory WHERE ${where}`, params);
+    const total = countR.rows[0]?.cnt ?? 0;
+    const offset = (page - 1) * perPage;
+    params.push(perPage, offset);
+    const r = await getPool().query(`SELECT listing_id, discogs_release_id, data, status, price_value, price_currency, condition, sleeve_condition, posted_at
+     FROM user_inventory WHERE ${where} ORDER BY posted_at DESC NULLS LAST LIMIT $${idx} OFFSET $${idx + 1}`, params);
+    return { items: r.rows, total };
+}
+export async function getUserListsList(clerkUserId) {
+    const r = await getPool().query(`SELECT list_id, name, description, item_count, is_public, synced_at FROM user_lists WHERE clerk_user_id = $1 ORDER BY name`, [clerkUserId]);
+    return r.rows;
+}
+// ── Lists ────────────────────────────────────────────────────────────────
+export async function upsertUserLists(clerkUserId, lists) {
+    for (const list of lists) {
+        await getPool().query(`INSERT INTO user_lists (clerk_user_id, list_id, name, description, item_count, is_public, data, synced_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+       ON CONFLICT (clerk_user_id, list_id)
+       DO UPDATE SET name = $3, description = $4, item_count = $5, is_public = $6, data = $7, synced_at = NOW()`, [clerkUserId, list.listId, list.name, list.description ?? null, list.itemCount ?? 0, list.isPublic ?? true, list.data ? JSON.stringify(list.data) : null]);
+    }
+}
+// ── Orders ───────────────────────────────────────────────────────────────
+export async function upsertUserOrders(clerkUserId, orders) {
+    for (const order of orders) {
+        await getPool().query(`INSERT INTO user_orders (clerk_user_id, order_id, status, buyer_username, seller_username, total_value, total_currency, item_count, created_at, data, synced_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+       ON CONFLICT (clerk_user_id, order_id)
+       DO UPDATE SET status = $3, buyer_username = $4, seller_username = $5, total_value = $6, total_currency = $7, item_count = $8, created_at = $9, data = $10, synced_at = NOW()`, [clerkUserId, order.orderId, order.status ?? null, order.buyerUsername ?? null, order.sellerUsername ?? null, order.totalValue ?? null, order.totalCurrency ?? "USD", order.itemCount ?? 0, order.createdAt ?? null, order.data ? JSON.stringify(order.data) : null]);
+    }
 }
 export async function upsertFreshRelease(r) {
     await getPool().query(`INSERT INTO fresh_releases
@@ -570,6 +924,7 @@ export async function getFreshReleases(limit = 150) {
             release_group_mbid, artist_mbids
      FROM fresh_releases
      WHERE fetched_at > NOW() - INTERVAL '3 months'
+       AND cover_url IS NOT NULL
      ORDER BY RANDOM()
      LIMIT $1`, [limit]);
     return r.rows;
@@ -581,6 +936,7 @@ export async function searchFreshReleases(query, limit = 200) {
             release_group_mbid, artist_mbids
      FROM fresh_releases
      WHERE fetched_at > NOW() - INTERVAL '3 months'
+       AND cover_url IS NOT NULL
        AND (
          artist_credit_name ILIKE $1
          OR release_name ILIKE $1
@@ -602,19 +958,38 @@ export async function getFreshTopTags(limit = 24) {
 }
 // ── Interest signals (anonymous, survives account deletion) ──
 export async function recordInterestSignals(items, source) {
-    for (const item of items) {
-        const d = item.data;
-        if (!d)
-            continue;
-        const artists = (d.artists ?? []).map((a) => a.name).filter(Boolean);
-        const labels = (d.labels ?? []).map((l) => l.name).filter(Boolean);
-        const genres = d.genres ?? [];
-        const styles = d.styles ?? [];
-        const year = d.year || null;
+    // Deduplicate by release ID within batch, then filter
+    const dedupMap = new Map();
+    for (const item of items)
+        if (item.data)
+            dedupMap.set(item.id, item);
+    const filtered = [...dedupMap.values()];
+    if (!filtered.length)
+        return;
+    // Batch in chunks of 100 to stay within parameter limits (7 params each = 700 per chunk)
+    const CHUNK = 100;
+    for (let i = 0; i < filtered.length; i += CHUNK) {
+        const chunk = filtered.slice(i, i + CHUNK);
+        const values = [];
+        const params = [];
+        let p = 1;
+        for (const item of chunk) {
+            const d = item.data;
+            const artists = (d.artists ?? []).map((a) => a.name).filter(Boolean);
+            const labels = (d.labels ?? []).map((l) => l.name).filter(Boolean);
+            const genres = d.genres ?? [];
+            const styles = d.styles ?? [];
+            const year = d.year || null;
+            values.push(`($${p}, $${p + 1}, $${p + 2}::text[], $${p + 3}::text[], $${p + 4}::text[], $${p + 5}::text[], $${p + 6})`);
+            params.push(item.id, source, artists, labels, genres, styles, year);
+            p += 7;
+        }
         await getPool().query(`INSERT INTO interest_signals (discogs_release_id, source, artists, labels, genres, styles, year)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       VALUES ${values.join(",")}
        ON CONFLICT (discogs_release_id, source)
-       DO UPDATE SET artists = $3, labels = $4, genres = $5, styles = $6, year = $7, recorded_at = NOW()`, [item.id, source, artists, labels, genres, styles, year]);
+       DO UPDATE SET artists = EXCLUDED.artists, labels = EXCLUDED.labels,
+                     genres = EXCLUDED.genres, styles = EXCLUDED.styles,
+                     year = EXCLUDED.year, recorded_at = NOW()`, params);
     }
 }
 export async function getInterestStats() {
@@ -665,4 +1040,479 @@ export async function backfillInterestSignals() {
         wantCount++;
     }
     return { collection: collCount, wantlist: wantCount };
+}
+// ── Gear listings (eBay) ────────────────────────────────────────────────
+export async function upsertGearListings(items) {
+    let count = 0;
+    for (const item of items) {
+        await getPool().query(`INSERT INTO gear_listings (item_id, title, price, currency, condition, image_url, item_url,
+        location_city, location_state, location_country, seller_username, seller_feedback,
+        buying_options, bid_count, categories, category_names, item_end_date, thumbnail_url, raw_summary, fetched_at, expired)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW(),false)
+       ON CONFLICT (item_id) DO UPDATE SET
+         title=$2, price=$3, currency=$4, condition=$5, image_url=$6, item_url=$7,
+         location_city=$8, location_state=$9, location_country=$10, seller_username=$11,
+         seller_feedback=$12, buying_options=$13, bid_count=$14, categories=$15,
+         category_names=$16, item_end_date=$17, thumbnail_url=$18, raw_summary=$19,
+         fetched_at=NOW(), expired=false`, [item.itemId, item.title, item.price, item.currency,
+            item.condition ?? null, item.imageUrl ?? null, item.itemUrl ?? null,
+            item.locationCity ?? null, item.locationState ?? null, item.locationCountry ?? null,
+            item.sellerUsername ?? null, item.sellerFeedback ?? null,
+            item.buyingOptions ?? [], item.bidCount ?? 0,
+            item.categories ?? [], item.categoryNames ?? [],
+            item.itemEndDate ?? null, item.thumbnailUrl ?? null,
+            JSON.stringify(item.rawSummary ?? {})]);
+        count++;
+    }
+    return count;
+}
+export async function updateGearDetail(itemId, detailHtml, allImages, itemSpecifics) {
+    await getPool().query(`UPDATE gear_listings SET detail_html=$2, all_images=$3, item_specifics=$4, detailed_at=NOW() WHERE item_id=$1`, [itemId, detailHtml, allImages, JSON.stringify(itemSpecifics)]);
+}
+export async function getGearNeedingDetail(limit = 20) {
+    const r = await getPool().query(`SELECT item_id, price FROM gear_listings
+     WHERE detailed_at IS NULL AND NOT expired
+     ORDER BY bid_count DESC, price DESC LIMIT $1`, [limit]);
+    return r.rows.map(row => ({ itemId: row.item_id, price: row.price }));
+}
+export async function getGearListings(minPrice = 0, limit = 200, offset = 0, sort = "bids", q = "") {
+    const params = [minPrice];
+    let where = `WHERE price >= $1 AND NOT expired
+    AND (condition IS NULL OR condition NOT ILIKE '%for parts%')
+    AND (item_end_date IS NULL OR item_end_date > NOW())`;
+    if (q.trim()) {
+        params.push(`%${q.trim()}%`);
+        where += ` AND title ILIKE $${params.length}`;
+    }
+    const countR = await getPool().query(`SELECT COUNT(*)::int AS cnt FROM gear_listings ${where}`, params);
+    const total = countR.rows[0]?.cnt ?? 0;
+    const orderMap = {
+        bids: "bid_count DESC, price DESC",
+        price_desc: "price DESC",
+        price_asc: "price ASC",
+        ending: "item_end_date ASC NULLS LAST",
+        newest: "fetched_at DESC",
+    };
+    const orderBy = orderMap[sort] ?? orderMap.bids;
+    const r = await getPool().query(`SELECT item_id, title, price, currency, condition, image_url, item_url,
+       location_city, location_state, location_country,
+       seller_username, seller_feedback, buying_options, bid_count,
+       categories, category_names, item_end_date,
+       detail_html, all_images, item_specifics, thumbnail_url,
+       fetched_at, detailed_at
+     FROM gear_listings
+     ${where}
+     ORDER BY ${orderBy}
+     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`, [...params, limit, offset]);
+    return { items: r.rows, total };
+}
+export async function markExpiredGearListings() {
+    const r = await getPool().query(`UPDATE gear_listings SET expired = true
+     WHERE NOT expired AND fetched_at < NOW() - INTERVAL '3 days'`);
+    return r.rowCount ?? 0;
+}
+// ── Auto-prune stale data ─────────────────────────────────────────────────
+export async function pruneAllStaleData() {
+    // Interest signals older than 6 months
+    const i = await getPool().query(`DELETE FROM interest_signals WHERE recorded_at < NOW() - INTERVAL '6 months'`);
+    // Fresh releases older than 6 months
+    const f = await getPool().query(`DELETE FROM fresh_releases WHERE fetched_at < NOW() - INTERVAL '6 months'`);
+    // Expired gear listings (no longer live auctions)
+    const g = await getPool().query(`DELETE FROM gear_listings WHERE expired = true`);
+    // Gear fetch log older than 30 days
+    const gl = await getPool().query(`DELETE FROM gear_fetch_log WHERE started_at < NOW() - INTERVAL '30 days'`);
+    // Past live events
+    const le = await getPool().query(`DELETE FROM live_events WHERE event_date ~ '^\\d{4}-\\d{2}-\\d{2}' AND event_date::date < CURRENT_DATE`);
+    // Stale location cache (30 days)
+    const loc = await getPool().query(`DELETE FROM user_locations WHERE fetched_at < NOW() - INTERVAL '30 days'`);
+    return {
+        interest: i.rowCount ?? 0,
+        fresh: f.rowCount ?? 0,
+        gear: g.rowCount ?? 0,
+        gearLog: gl.rowCount ?? 0,
+        liveEvents: le.rowCount ?? 0,
+        locations: loc.rowCount ?? 0,
+    };
+}
+// ── Feed articles ─────────────────────────────────────────────────────────
+export async function upsertFeedArticle(article) {
+    await getPool().query(`INSERT INTO feed_articles (source, source_url, title, summary, image_url, author, category, content_type, published_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+     ON CONFLICT (source_url) DO UPDATE SET
+       title = EXCLUDED.title,
+       summary = EXCLUDED.summary,
+       image_url = COALESCE(EXCLUDED.image_url, feed_articles.image_url),
+       author = COALESCE(EXCLUDED.author, feed_articles.author),
+       category = EXCLUDED.category,
+       published_at = COALESCE(EXCLUDED.published_at, feed_articles.published_at)`, [article.source, article.sourceUrl, article.title, article.summary ?? null,
+        article.imageUrl ?? null, article.author ?? null, article.category ?? "news",
+        article.contentType ?? "article", article.publishedAt ?? null]);
+}
+export async function getExistingYouTubeUrls() {
+    const r = await getPool().query("SELECT source_url FROM feed_articles WHERE content_type = 'video' AND source_url LIKE 'https://www.youtube.com/watch%'");
+    return new Set(r.rows.map((row) => row.source_url));
+}
+export async function getFeedArticles(opts) {
+    const params = [];
+    let where = "WHERE 1=1";
+    if (opts.category && opts.category !== "all") {
+        params.push(opts.category);
+        where += ` AND category = $${params.length}`;
+    }
+    if (opts.q?.trim()) {
+        params.push(`%${opts.q.trim()}%`);
+        where += ` AND (title ILIKE $${params.length} OR summary ILIKE $${params.length} OR source ILIKE $${params.length})`;
+    }
+    const countR = await getPool().query(`SELECT COUNT(*)::int AS cnt FROM feed_articles ${where}`, params);
+    const total = countR.rows[0]?.cnt ?? 0;
+    const limit = opts.limit ?? 50;
+    const offset = opts.offset ?? 0;
+    const r = await getPool().query(`SELECT * FROM feed_articles ${where}
+     ORDER BY published_at DESC NULLS LAST
+     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`, [...params, limit, offset]);
+    return { items: r.rows, total };
+}
+export async function pruneFeedArticles(daysOld = 90) {
+    const r = await getPool().query(`DELETE FROM feed_articles WHERE published_at < NOW() - INTERVAL '1 day' * $1`, [daysOld]);
+    return r.rowCount ?? 0;
+}
+export async function getGearStats() {
+    const r = await getPool().query(`SELECT COUNT(*)::int AS total,
+       COUNT(detailed_at)::int AS detailed,
+       MAX(fetched_at) AS last_fetch
+     FROM gear_listings WHERE NOT expired`);
+    return {
+        total: r.rows[0]?.total ?? 0,
+        detailed: r.rows[0]?.detailed ?? 0,
+        lastFetch: r.rows[0]?.last_fetch ?? null,
+    };
+}
+export async function logGearFetch(fetchType, itemCount, error) {
+    await getPool().query(`INSERT INTO gear_fetch_log (fetch_type, item_count, error, finished_at)
+     VALUES ($1, $2, $3, NOW())`, [fetchType, itemCount, error ?? null]);
+}
+// ── Live events (Ticketmaster upcoming) ─────────────────────────────────
+export async function upsertLiveEvents(events) {
+    let count = 0;
+    for (const ev of events) {
+        await getPool().query(`INSERT INTO live_events (event_name, artist, event_date, event_time, venue, venue_id, venue_url, city, region, country, url, image_url, price_min, price_max, currency, status, fetched_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,NOW())
+       ON CONFLICT (url) DO UPDATE SET
+         event_name = EXCLUDED.event_name,
+         artist = EXCLUDED.artist,
+         event_date = EXCLUDED.event_date,
+         event_time = EXCLUDED.event_time,
+         venue = EXCLUDED.venue,
+         venue_id = EXCLUDED.venue_id,
+         venue_url = EXCLUDED.venue_url,
+         city = EXCLUDED.city,
+         region = EXCLUDED.region,
+         country = EXCLUDED.country,
+         image_url = EXCLUDED.image_url,
+         price_min = EXCLUDED.price_min,
+         price_max = EXCLUDED.price_max,
+         currency = EXCLUDED.currency,
+         status = EXCLUDED.status,
+         fetched_at = NOW()`, [ev.name, ev.artist, ev.date, ev.time, ev.venue, ev.venueId, ev.venueUrl ?? null,
+            ev.city, ev.region, ev.country, ev.url, ev.imageUrl ?? null,
+            ev.priceMin ?? null, ev.priceMax ?? null, ev.currency ?? null, ev.status ?? null]);
+        count++;
+    }
+    return count;
+}
+export async function getLiveEvents(limit = 30) {
+    const r = await getPool().query(`SELECT event_name AS name, artist, event_date AS date, event_time AS time,
+            venue, venue_id AS "venueId", venue_url AS "venueUrl", city, region, country, url,
+            image_url AS "imageUrl", price_min AS "priceMin", price_max AS "priceMax",
+            currency, status
+     FROM live_events
+     WHERE event_date ~ '^\\d{4}-\\d{2}-\\d{2}' AND event_date::date >= CURRENT_DATE
+     ORDER BY event_date ASC, event_time ASC
+     LIMIT $1`, [limit]);
+    return r.rows;
+}
+export async function pruneLiveEvents() {
+    // Remove events that have already passed
+    const r = await getPool().query(`DELETE FROM live_events WHERE event_date ~ '^\\d{4}-\\d{2}-\\d{2}' AND event_date::date < CURRENT_DATE`);
+    return r.rowCount ?? 0;
+}
+// ── User locations (IP geolocation) ──────────────────────────────────────
+export async function getLocationByIp(ip) {
+    const r = await getPool().query(`SELECT latitude, longitude, city, region, country FROM user_locations
+     WHERE ip_address = $1 AND fetched_at > NOW() - INTERVAL '7 days'`, [ip]);
+    if (!r.rows.length)
+        return null;
+    return {
+        latitude: parseFloat(r.rows[0].latitude),
+        longitude: parseFloat(r.rows[0].longitude),
+        city: r.rows[0].city,
+        region: r.rows[0].region,
+        country: r.rows[0].country,
+    };
+}
+export async function upsertLocation(ip, clerkUserId, lat, lon, city, region, country) {
+    await getPool().query(`INSERT INTO user_locations (ip_address, clerk_user_id, latitude, longitude, city, region, country, fetched_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+     ON CONFLICT (ip_address) DO UPDATE SET
+       clerk_user_id = COALESCE(EXCLUDED.clerk_user_id, user_locations.clerk_user_id),
+       latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude,
+       city = EXCLUDED.city, region = EXCLUDED.region, country = EXCLUDED.country,
+       fetched_at = NOW()`, [ip, clerkUserId, lat, lon, city, region, country]);
+}
+export async function pruneLocations() {
+    const r = await getPool().query(`DELETE FROM user_locations WHERE fetched_at < NOW() - INTERVAL '30 days'`);
+    return r.rowCount ?? 0;
+}
+export async function rebuildUserTasteProfile(clerkUserId) {
+    // Count genres from collection
+    const genreR = await getPool().query(`SELECT val, COUNT(*)::int AS cnt
+     FROM user_collection, LATERAL jsonb_array_elements_text(data->'genres') AS val
+     WHERE clerk_user_id = $1 AND jsonb_typeof(data->'genres') = 'array'
+     GROUP BY val ORDER BY cnt DESC LIMIT 15`, [clerkUserId]);
+    // Count styles
+    const styleR = await getPool().query(`SELECT val, COUNT(*)::int AS cnt
+     FROM user_collection, LATERAL jsonb_array_elements_text(data->'styles') AS val
+     WHERE clerk_user_id = $1 AND jsonb_typeof(data->'styles') = 'array'
+     GROUP BY val ORDER BY cnt DESC LIMIT 20`, [clerkUserId]);
+    // Count artists
+    const artistR = await getPool().query(`SELECT val->>'name' AS name, COUNT(*)::int AS cnt
+     FROM user_collection, LATERAL jsonb_array_elements(data->'artists') AS val
+     WHERE clerk_user_id = $1 AND jsonb_typeof(data->'artists') = 'array'
+     GROUP BY val->>'name' ORDER BY cnt DESC LIMIT 30`, [clerkUserId]);
+    console.log(`Taste query results for ${clerkUserId}: ${genreR.rows.length} genres, ${styleR.rows.length} styles, ${artistR.rows.length} artists`);
+    if (!genreR.rows.length && !styleR.rows.length)
+        return null;
+    const topGenres = genreR.rows.map((r) => ({ name: r.val, count: r.cnt }));
+    const topStyles = styleR.rows.map((r) => ({ name: r.val, count: r.cnt }));
+    const topArtists = artistR.rows.map((r) => ({ name: r.name, count: r.cnt }));
+    // Build keyword list for Ticketmaster genre matching
+    // Combine top 5 genres + top 8 styles, lowercased
+    const keywords = [
+        ...topGenres.slice(0, 5).map(g => g.name.toLowerCase()),
+        ...topStyles.slice(0, 8).map(s => s.name.toLowerCase()),
+    ];
+    await getPool().query(`INSERT INTO user_taste_profiles (clerk_user_id, top_genres, top_styles, top_artists, genre_keywords, updated_at)
+     VALUES ($1, $2, $3, $4, $5, NOW())
+     ON CONFLICT (clerk_user_id) DO UPDATE SET
+       top_genres = EXCLUDED.top_genres,
+       top_styles = EXCLUDED.top_styles,
+       top_artists = EXCLUDED.top_artists,
+       genre_keywords = EXCLUDED.genre_keywords,
+       updated_at = NOW()`, [clerkUserId, JSON.stringify(topGenres), JSON.stringify(topStyles), JSON.stringify(topArtists), keywords]);
+    const profile = { top_genres: topGenres, top_styles: topStyles, top_artists: topArtists, genre_keywords: keywords };
+    console.log(`Taste profile rebuilt for ${clerkUserId}: ${topGenres.length} genres, ${topStyles.length} styles, ${topArtists.length} artists`);
+    return profile;
+}
+export async function getUserTasteProfile(clerkUserId) {
+    const r = await getPool().query(`SELECT top_genres, top_styles, top_artists, genre_keywords FROM user_taste_profiles WHERE clerk_user_id = $1`, [clerkUserId]);
+    if (!r.rows.length)
+        return null;
+    const row = r.rows[0];
+    return {
+        top_genres: row.top_genres ?? [],
+        top_styles: row.top_styles ?? [],
+        top_artists: row.top_artists ?? [],
+        genre_keywords: row.genre_keywords ?? [],
+    };
+}
+// Personalized fresh releases — prioritize user's genres/styles
+export async function getPersonalizedFreshReleases(clerkUserId, limit = 150) {
+    const profile = await getUserTasteProfile(clerkUserId);
+    if (!profile || !profile.genre_keywords.length)
+        return getFreshReleases(limit);
+    // Get releases that match user's taste, fill remainder with random
+    const keywords = profile.genre_keywords;
+    const r = await getPool().query(`WITH matched AS (
+       SELECT *, 1 AS priority
+       FROM fresh_releases
+       WHERE fetched_at > NOW() - INTERVAL '3 months'
+         AND cover_url IS NOT NULL
+         AND tags && $1
+       ORDER BY RANDOM()
+       LIMIT $2
+     ),
+     filler AS (
+       SELECT *, 2 AS priority
+       FROM fresh_releases
+       WHERE fetched_at > NOW() - INTERVAL '3 months'
+         AND cover_url IS NOT NULL
+         AND id NOT IN (SELECT id FROM matched)
+       ORDER BY RANDOM()
+       LIMIT $2
+     )
+     SELECT * FROM (
+       SELECT * FROM matched
+       UNION ALL
+       SELECT * FROM filler
+     ) combined
+     ORDER BY priority, RANDOM()
+     LIMIT $2`, [keywords, limit]);
+    return r.rows;
+}
+// Personalized feed — boost articles matching user's artists/genres
+export async function getPersonalizedFeedArticles(clerkUserId, opts) {
+    const profile = await getUserTasteProfile(clerkUserId);
+    if (!profile || !profile.top_artists.length)
+        return getFeedArticles(opts);
+    // Build search terms from top artists (first 10)
+    const artistNames = profile.top_artists.slice(0, 10).map(a => a.name.toLowerCase());
+    const genreNames = profile.genre_keywords.slice(0, 5);
+    const searchTerms = [...artistNames, ...genreNames];
+    // Build CASE scoring expression
+    const params = [];
+    let scoreClauses = [];
+    for (const term of searchTerms) {
+        params.push(`%${term}%`);
+        scoreClauses.push(`CASE WHEN LOWER(title || ' ' || COALESCE(summary,'')) LIKE $${params.length} THEN 1 ELSE 0 END`);
+    }
+    const scoreExpr = scoreClauses.length ? scoreClauses.join(" + ") : "0";
+    let where = "WHERE 1=1";
+    if (opts.category && opts.category !== "all") {
+        params.push(opts.category);
+        where += ` AND category = $${params.length}`;
+    }
+    if (opts.q?.trim()) {
+        params.push(`%${opts.q.trim()}%`);
+        where += ` AND (title ILIKE $${params.length} OR summary ILIKE $${params.length} OR source ILIKE $${params.length})`;
+    }
+    const countR = await getPool().query(`SELECT COUNT(*)::int AS cnt FROM feed_articles ${where}`, params);
+    const total = countR.rows[0]?.cnt ?? 0;
+    const limit = opts.limit ?? 50;
+    const offset = opts.offset ?? 0;
+    const r = await getPool().query(`SELECT *, (${scoreExpr}) AS relevance_score
+     FROM feed_articles ${where}
+     ORDER BY relevance_score DESC, published_at DESC NULLS LAST
+     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`, [...params, limit, offset]);
+    return { items: r.rows, total };
+}
+// ── API request logging ──────────────────────────────────────────────────
+export async function logApiRequest(opts) {
+    try {
+        await getPool().query(`INSERT INTO api_request_log (service, endpoint, method, status_code, success, duration_ms, error_message, context)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, [opts.service, opts.endpoint, opts.method ?? "GET", opts.statusCode ?? null, opts.success, opts.durationMs ?? null, opts.errorMessage ?? null, opts.context ?? null]);
+    }
+    catch {
+        // Don't let logging failures break the app
+    }
+    // Auto-prune: keep only last 10,000 rows
+    try {
+        await getPool().query(`DELETE FROM api_request_log WHERE id NOT IN (SELECT id FROM api_request_log ORDER BY created_at DESC LIMIT 10000)`);
+    }
+    catch { }
+}
+export async function getApiRequestLog(opts) {
+    const params = [];
+    let where = "WHERE 1=1";
+    const hours = opts?.hours ?? 24;
+    params.push(hours);
+    where += ` AND created_at > NOW() - INTERVAL '1 hour' * $${params.length}`;
+    if (opts?.service) {
+        params.push(opts.service);
+        where += ` AND service = $${params.length}`;
+    }
+    if (opts?.successOnly)
+        where += " AND success = true";
+    if (opts?.errorsOnly)
+        where += " AND success = false";
+    const countR = await getPool().query(`SELECT COUNT(*)::int AS cnt FROM api_request_log ${where}`, params);
+    const total = countR.rows[0]?.cnt ?? 0;
+    const limit = opts?.limit ?? 100;
+    const offset = opts?.offset ?? 0;
+    const r = await getPool().query(`SELECT * FROM api_request_log ${where} ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`, [...params, limit, offset]);
+    return { items: r.rows, total };
+}
+// ── User collection/wantlist stats (admin) ────────────────────────────────
+export async function getUserCollectionStats() {
+    const pool = getPool();
+    // Per-user stats
+    const perUser = await pool.query(`
+    SELECT
+      u.clerk_user_id,
+      u.discogs_username AS username,
+      COALESCE(c.coll_count, 0)::int AS collection_count,
+      COALESCE(w.want_count, 0)::int AS wantlist_count,
+      COALESCE(i.inv_count, 0)::int AS inventory_count,
+      COALESCE(l.list_count, 0)::int AS list_count,
+      c.oldest_added AS coll_oldest,
+      c.newest_added AS coll_newest,
+      c.top_genres,
+      c.top_styles
+    FROM user_tokens u
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*)::int AS coll_count,
+             MIN(added_at) AS oldest_added,
+             MAX(added_at) AS newest_added,
+             (SELECT array_agg(g ORDER BY cnt DESC) FROM (
+               SELECT g, COUNT(*)::int AS cnt
+               FROM user_collection uc2,
+                    jsonb_array_elements_text(uc2.data->'genres') AS g
+               WHERE uc2.clerk_user_id = u.clerk_user_id
+               GROUP BY g ORDER BY cnt DESC LIMIT 5
+             ) sub) AS top_genres,
+             (SELECT array_agg(s ORDER BY cnt DESC) FROM (
+               SELECT s, COUNT(*)::int AS cnt
+               FROM user_collection uc3,
+                    jsonb_array_elements_text(uc3.data->'styles') AS s
+               WHERE uc3.clerk_user_id = u.clerk_user_id
+               GROUP BY s ORDER BY cnt DESC LIMIT 5
+             ) sub2) AS top_styles
+      FROM user_collection uc
+      WHERE uc.clerk_user_id = u.clerk_user_id
+    ) c ON true
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*)::int AS want_count
+      FROM user_wantlist uw
+      WHERE uw.clerk_user_id = u.clerk_user_id
+    ) w ON true
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*)::int AS inv_count
+      FROM user_inventory ui
+      WHERE ui.clerk_user_id = u.clerk_user_id
+    ) i ON true
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*)::int AS list_count
+      FROM user_lists ul
+      WHERE ul.clerk_user_id = u.clerk_user_id
+    ) l ON true
+    WHERE u.discogs_username IS NOT NULL
+    ORDER BY c.coll_count DESC NULLS LAST
+  `);
+    // Global totals
+    const globalQ = await pool.query(`
+    SELECT
+      (SELECT COUNT(*)::int FROM user_collection) AS total_collection,
+      (SELECT COUNT(*)::int FROM user_wantlist) AS total_wantlist,
+      (SELECT COUNT(*)::int FROM user_inventory) AS total_inventory,
+      (SELECT COUNT(DISTINCT discogs_release_id)::int FROM user_collection) AS unique_releases,
+      (SELECT COUNT(DISTINCT discogs_release_id)::int FROM user_wantlist) AS unique_wants
+  `);
+    return { users: perUser.rows, global: globalQ.rows[0] };
+}
+// ── Release cache ─────────────────────────────────────────────────────────
+/** Get a cached release/master from DB. Returns null if not cached. */
+export async function getCachedRelease(discogsId, type) {
+    const r = await getPool().query(`SELECT data FROM release_cache WHERE discogs_id = $1 AND type = $2`, [discogsId, type]);
+    return r.rows[0]?.data ?? null;
+}
+/** Save a release/master response to cache. Overwrites if already present. */
+export async function cacheRelease(discogsId, type, data) {
+    await getPool().query(`INSERT INTO release_cache (discogs_id, type, data, cached_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (discogs_id, type)
+     DO UPDATE SET data = EXCLUDED.data, cached_at = NOW()`, [discogsId, type, JSON.stringify(data)]);
+}
+export async function getApiRequestStats(hours = 24) {
+    const r = await getPool().query(`
+    SELECT service,
+           COUNT(*)::int AS total_requests,
+           COUNT(*) FILTER (WHERE success)::int AS successes,
+           COUNT(*) FILTER (WHERE NOT success)::int AS failures,
+           ROUND(AVG(duration_ms))::int AS avg_duration_ms,
+           MAX(created_at) AS last_request_at
+    FROM api_request_log
+    WHERE created_at > NOW() - INTERVAL '1 hour' * $1
+    GROUP BY service
+    ORDER BY total_requests DESC
+  `, [hours]);
+    return r.rows;
 }

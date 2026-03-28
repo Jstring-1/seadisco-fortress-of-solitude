@@ -1,9 +1,10 @@
 import express from "express";
 import compression from "compression";
+import crypto from "crypto";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, getLocationByIp, upsertLocation, rebuildUserTasteProfile, getUserTasteProfile, getPersonalizedFreshReleases, getPersonalizedFeedArticles, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sharedToken = process.env.DISCOGS_TOKEN ?? "";
@@ -15,6 +16,38 @@ const requireAuth = process.env.REQUIRE_AUTH === "true";
 // Concert API keys
 const ticketmasterKey = process.env.TICKETMASTER_API_KEY ?? "";
 const bandsintownAppId = "seadisco"; // Bandsintown just needs an app identifier
+// YouTube API key
+const youtubeApiKey = process.env.YOUTUBE_API_KEY ?? "";
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+// ── Global API kill switch ──────────────────────────────────────────────
+let _apiKillSwitch = false;
+// ── Logged fetch: wraps fetch() and logs the request to api_request_log ──
+async function loggedFetch(service, url, init) {
+    if (_apiKillSwitch) {
+        const cleanUrl = url.replace(/token=[^&]+/g, "token=***").replace(/key=[^&]+/g, "key=***").replace(/apikey=[^&]+/g, "apikey=***");
+        logApiRequest({ service, endpoint: cleanUrl, method: init?.method ?? "GET", statusCode: 0, success: false, durationMs: 0, errorMessage: "BLOCKED — API kill switch active", context: init?.context }).catch(() => { });
+        throw new Error("API kill switch is active — all outgoing requests blocked");
+    }
+    const start = Date.now();
+    const method = init?.method ?? "GET";
+    const context = init?.context;
+    // Strip context from init before passing to real fetch
+    const { context: _ctx, ...fetchInit } = (init ?? {});
+    // Strip query params with tokens for safety
+    const cleanUrl = url.replace(/token=[^&]+/g, "token=***").replace(/key=[^&]+/g, "key=***").replace(/apikey=[^&]+/g, "apikey=***");
+    try {
+        const r = await fetch(url, fetchInit);
+        const ms = Date.now() - start;
+        // Fire-and-forget log
+        logApiRequest({ service, endpoint: cleanUrl, method, statusCode: r.status, success: r.ok, durationMs: ms, errorMessage: r.ok ? undefined : `HTTP ${r.status}`, context }).catch(() => { });
+        return r;
+    }
+    catch (err) {
+        const ms = Date.now() - start;
+        logApiRequest({ service, endpoint: cleanUrl, method, statusCode: 0, success: false, durationMs: ms, errorMessage: err?.message ?? String(err), context }).catch(() => { });
+        throw err;
+    }
+}
 // Shared Discogs client (used as fallback when user has no personal token)
 const discogs = sharedToken ? new DiscogsClient(sharedToken) : null;
 // ── IP rate limiter for unauthenticated (shared-token) searches ───────────
@@ -28,6 +61,44 @@ const IP_WHITELIST = new Set([
 function clientIp(req) {
     const fwd = req.headers["x-forwarded-for"];
     return (fwd ? fwd.split(",")[0] : req.ip ?? "unknown").replace(/^::ffff:/, "").trim();
+}
+// ── IP geolocation resolver (3-layer cache: memory → DB → ip-api.com) ───
+const locationCache = new Map();
+async function resolveLocation(req) {
+    const ip = clientIp(req);
+    if (ip === "unknown" || ip === "127.0.0.1" || ip === "::1")
+        return null;
+    // 1. In-memory cache (1 hour)
+    const cached = locationCache.get(ip);
+    if (cached && Date.now() - cached.ts < 3600_000) {
+        return { lat: cached.lat, lon: cached.lon, city: cached.city, region: cached.region, country: cached.country };
+    }
+    // 2. DB cache (7 days)
+    try {
+        const dbRow = await getLocationByIp(ip);
+        if (dbRow) {
+            const loc = { lat: dbRow.latitude, lon: dbRow.longitude, city: dbRow.city, region: dbRow.region, country: dbRow.country };
+            locationCache.set(ip, { ...loc, ts: Date.now() });
+            return loc;
+        }
+    }
+    catch { }
+    // 3. ip-api.com (free tier, HTTP only, 45 req/min)
+    try {
+        const r = await loggedFetch("ip-api", `http://ip-api.com/json/${ip}?fields=status,lat,lon,city,regionName,country`, { signal: AbortSignal.timeout(5000) });
+        const data = await r.json();
+        if (data.status !== "success")
+            return null;
+        const loc = { lat: data.lat, lon: data.lon, city: data.city, region: data.regionName, country: data.country };
+        locationCache.set(ip, { ...loc, ts: Date.now() });
+        // Persist to DB (fire-and-forget)
+        const userId = getClerkUserId(req);
+        upsertLocation(ip, userId, loc.lat, loc.lon, loc.city, loc.region, loc.country).catch(() => { });
+        return loc;
+    }
+    catch {
+        return null;
+    }
 }
 function checkRateLimit(ip) {
     if (IP_WHITELIST.has(ip))
@@ -147,8 +218,9 @@ app.post("/api/user/token", express.json(), async (req, res) => {
     await setUserToken(userId, token.trim());
     // Fetch Discogs username from /oauth/identity using the user's token
     try {
-        const identRes = await fetch("https://api.discogs.com/oauth/identity", {
-            headers: { "Authorization": `Discogs token=${token.trim()}`, "User-Agent": "SeaDisco/1.0" }
+        const identRes = await loggedFetch("discogs", "https://api.discogs.com/oauth/identity", {
+            headers: { "Authorization": `Discogs token=${token.trim()}`, "User-Agent": "SeaDisco/1.0" },
+            context: "save-token identity check",
         });
         if (identRes.ok) {
             const ident = await identRes.json();
@@ -179,21 +251,56 @@ app.delete("/api/user/account", async (req, res) => {
     await deleteUserData(userId);
     res.json({ ok: true });
 });
+// Abort flag for stopping all syncs
+let _syncAbort = false;
+const SYNC_STALL_TIMEOUT = 5 * 60 * 1000; // 5 minutes with no progress = stalled
 // Background sync worker — runs detached from the HTTP request
 async function runBackgroundSync(userId, token, username, syncCollection, syncWantlist) {
+    console.log(`Sync ${username}: starting full sync (collection=${syncCollection}, wantlist=${syncWantlist})`);
     const headers = { "Authorization": `Discogs token=${token}`, "User-Agent": "SeaDisco/1.0" };
     const delay = (ms) => new Promise(r => setTimeout(r, ms));
     let totalSynced = 0;
-    // Fetch with retry — up to 3 attempts with 10s backoff on non-OK or network error
-    async function fetchWithRetry(url, retries = 3) {
+    let lastProgressAt = Date.now(); // tracks last time progress was made
+    // Timeout guard — checks every 60s if sync has stalled
+    let _syncDone = false;
+    let _thisSyncAbort = false; // per-sync abort flag (set by stall guard)
+    const stallGuard = setInterval(async () => {
+        if (_syncDone) {
+            clearInterval(stallGuard);
+            return;
+        }
+        const stalledFor = Date.now() - lastProgressAt;
+        if (stalledFor >= SYNC_STALL_TIMEOUT) {
+            console.error(`Sync ${username}: STALLED — no progress for ${Math.round(stalledFor / 60000)}min, auto-aborting`);
+            _thisSyncAbort = true;
+            clearInterval(stallGuard);
+            try {
+                await updateSyncProgress(userId, "error", totalSynced, 0, `Stalled — no progress for ${Math.round(stalledFor / 60000)} minutes`);
+            }
+            catch { }
+        }
+    }, 60_000);
+    // Fetch with retry — up to 5 attempts with exponential backoff, respects Discogs rate limit headers
+    async function fetchWithRetry(url, retries = 5) {
+        const backoffs = [15000, 30000, 60000, 90000, 120000];
         for (let attempt = 1; attempt <= retries; attempt++) {
             try {
-                const r = await fetch(url, { headers });
-                if (r.ok)
+                const r = await loggedFetch("discogs", url, { headers, signal: AbortSignal.timeout(30000), context: `sync ${username}` });
+                if (r.ok) {
+                    // Check remaining rate limit — if low, pause proactively
+                    const remaining = parseInt(r.headers.get("x-discogs-ratelimit-remaining") ?? "10");
+                    if (remaining <= 1) {
+                        console.log(`Sync ${username}: rate limit nearly exhausted (${remaining} left), pausing 30s`);
+                        await delay(30000);
+                    }
+                    else if (remaining <= 5) {
+                        await delay(3000);
+                    }
                     return r;
+                }
                 if (r.status === 429 || r.status >= 500) {
-                    const waitMs = attempt * 10000;
-                    console.warn(`Sync ${username}: HTTP ${r.status} on attempt ${attempt}, retrying in ${waitMs / 1000}s`);
+                    const waitMs = backoffs[Math.min(attempt - 1, backoffs.length - 1)];
+                    console.warn(`Sync ${username}: HTTP ${r.status} on attempt ${attempt}/${retries}, retrying in ${waitMs / 1000}s`);
                     if (attempt < retries)
                         await delay(waitMs);
                     else
@@ -206,8 +313,9 @@ async function runBackgroundSync(userId, token, username, syncCollection, syncWa
             catch (err) {
                 if (attempt === retries)
                     throw err;
-                console.warn(`Sync ${username}: fetch error attempt ${attempt}:`, err);
-                await delay(attempt * 10000);
+                const waitMs = backoffs[Math.min(attempt - 1, backoffs.length - 1)];
+                console.warn(`Sync ${username}: fetch error attempt ${attempt}/${retries}:`, err);
+                await delay(waitMs);
             }
         }
         throw new Error("fetchWithRetry exhausted");
@@ -220,6 +328,7 @@ async function runBackgroundSync(userId, token, username, syncCollection, syncWa
                 const r = await fetchWithRetry(`https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=1&page=1`);
                 const d = await r.json();
                 estimatedTotal += d.pagination?.items ?? 0;
+                lastProgressAt = Date.now();
                 await delay(500);
             }
             catch { }
@@ -229,16 +338,24 @@ async function runBackgroundSync(userId, token, username, syncCollection, syncWa
                 const r = await fetchWithRetry(`https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=1&page=1`);
                 const d = await r.json();
                 estimatedTotal += d.pagination?.items ?? 0;
+                lastProgressAt = Date.now();
                 await delay(500);
             }
             catch { }
         }
+        console.log(`Sync ${username}: estimated total = ${estimatedTotal}`);
         await updateSyncProgress(userId, "syncing", 0, estimatedTotal);
         if (syncCollection) {
             for (let page = 1;; page++) {
+                if (_syncAbort || _thisSyncAbort) {
+                    console.log(`Sync ${username}: aborted`);
+                    await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted");
+                    _syncDone = true;
+                    return;
+                }
                 if (page > 1)
-                    await delay(2000); // 2s pacing — leaves headroom for user searches
-                const r = await fetchWithRetry(`https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=100&page=${page}`);
+                    await delay(1200); // 1.2s pacing — Discogs allows 60/min
+                const r = await fetchWithRetry(`https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=500&page=${page}&sort=added&sort_order=desc`);
                 const data = await r.json();
                 const releases = data.releases ?? [];
                 if (!releases.length)
@@ -255,8 +372,9 @@ async function runBackgroundSync(userId, token, username, syncCollection, syncWa
                 await upsertCollectionItems(userId, items);
                 await recordInterestSignals(items, "collection");
                 totalSynced += items.length;
+                lastProgressAt = Date.now();
                 await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
-                if (releases.length < 100)
+                if (releases.length < 500)
                     break;
             }
             await updateCollectionSyncedAt(userId);
@@ -270,14 +388,21 @@ async function runBackgroundSync(userId, token, username, syncCollection, syncWa
                     .map((f) => ({ id: f.id, name: f.name, count: f.count }));
                 if (folders.length)
                     await upsertCollectionFolders(userId, folders);
+                lastProgressAt = Date.now();
             }
             catch { /* folder sync optional */ }
         }
         if (syncWantlist) {
             for (let page = 1;; page++) {
+                if (_syncAbort || _thisSyncAbort) {
+                    console.log(`Sync ${username}: aborted`);
+                    await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted");
+                    _syncDone = true;
+                    return;
+                }
                 if (page > 1)
-                    await delay(2000);
-                const r = await fetchWithRetry(`https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=100&page=${page}`);
+                    await delay(1200);
+                const r = await fetchWithRetry(`https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=500&page=${page}&sort=added&sort_order=desc`);
                 const data = await r.json();
                 const wants = data.wants ?? [];
                 if (!wants.length)
@@ -292,18 +417,25 @@ async function runBackgroundSync(userId, token, username, syncCollection, syncWa
                 await upsertWantlistItems(userId, items);
                 await recordInterestSignals(items, "wantlist");
                 totalSynced += items.length;
+                lastProgressAt = Date.now();
                 await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
-                if (wants.length < 100)
+                if (wants.length < 500)
                     break;
             }
             await updateWantlistSyncedAt(userId);
         }
         await updateSyncProgress(userId, "complete", totalSynced, estimatedTotal);
-        console.log(`Background sync complete for ${username}: ${totalSynced} items`);
+        console.log(`Full sync complete for ${username}: ${totalSynced} items`);
+        // Rebuild taste profile after successful sync
+        await rebuildUserTasteProfile(userId).catch(err => console.error(`Taste profile rebuild error for ${userId}:`, err));
     }
     catch (err) {
         console.error(`Background sync error for ${username}:`, err);
         await updateSyncProgress(userId, "error", totalSynced, 0, String(err));
+    }
+    finally {
+        _syncDone = true;
+        clearInterval(stallGuard);
     }
 }
 // POST /api/user/sync — kick off background sync of collection and/or wantlist
@@ -338,8 +470,9 @@ app.post("/api/user/sync", express.json(), async (req, res) => {
     let username = await getDiscogsUsername(userId);
     if (!username) {
         try {
-            const identRes = await fetch("https://api.discogs.com/oauth/identity", {
-                headers: { "Authorization": `Discogs token=${token}`, "User-Agent": "SeaDisco/1.0" }
+            const identRes = await loggedFetch("discogs", "https://api.discogs.com/oauth/identity", {
+                headers: { "Authorization": `Discogs token=${token}`, "User-Agent": "SeaDisco/1.0" },
+                context: "sync identity check",
             });
             if (identRes.ok) {
                 const ident = await identRes.json();
@@ -357,7 +490,7 @@ app.post("/api/user/sync", express.json(), async (req, res) => {
     }
     // Respond immediately, sync runs in background
     res.json({ ok: true, started: true });
-    // Fire and forget — runs in background
+    // Fire and forget — runs in background (full sync for user-initiated)
     runBackgroundSync(userId, token, username, syncCollection && !collectionRecent, syncWantlist && !wantlistRecent).catch(err => {
         console.error("Background sync uncaught error:", err);
     });
@@ -428,6 +561,178 @@ app.get("/api/user/wantlist", async (req, res) => {
         filters.sort = sort;
     const { items, total } = await getWantlistPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
     res.json({ items, total, page, pages: Math.ceil(total / perPage) });
+});
+// GET /api/user/inventory — paginated inventory listings
+app.get("/api/user/inventory", async (req, res) => {
+    const userId = getClerkUserId(req);
+    if (!userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const page = parseInt(req.query.page) || 1;
+    const perPage = parseInt(req.query.per_page) || 24;
+    const filters = {};
+    const q = (req.query.q ?? "").trim();
+    if (q)
+        filters.q = q;
+    const { items, total } = await getInventoryPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
+    res.json({ items, total, page, pages: Math.ceil(total / perPage) });
+});
+// GET /api/user/lists — user's Discogs lists
+app.get("/api/user/lists", async (req, res) => {
+    const userId = getClerkUserId(req);
+    if (!userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const lists = await getUserListsList(userId);
+    res.json({ lists });
+});
+// GET /api/live/upcoming — serve upcoming events from DB
+app.get("/api/live/upcoming", async (_req, res) => {
+    try {
+        res.setHeader("Cache-Control", "no-store");
+        const events = await getLiveEvents(50);
+        res.json({ events });
+    }
+    catch {
+        res.json({ events: [] });
+    }
+});
+// Helper: extract full event data from a Ticketmaster event object
+function mapTmEvent(ev) {
+    const venue = ev._embedded?.venues?.[0];
+    const price = ev.priceRanges?.[0];
+    const venueUrl = venue?.externalLinks?.homepage?.[0]?.url
+        ?? venue?.url ?? "";
+    const segment = ev.classifications?.[0]?.segment?.name?.toLowerCase() ?? "";
+    return {
+        name: ev.name ?? "",
+        artist: ev._embedded?.attractions?.[0]?.name ?? "",
+        date: ev.dates?.start?.localDate ?? "",
+        time: ev.dates?.start?.localTime ?? "",
+        venue: venue?.name ?? "",
+        venueId: venue?.id ?? "",
+        venueUrl,
+        city: venue?.city?.name ?? "",
+        region: venue?.state?.name ?? venue?.state?.stateCode ?? "",
+        country: venue?.country?.countryCode ?? "",
+        url: ev.url ?? "",
+        imageUrl: ev.images?.find((i) => i.ratio === "16_9" && i.width >= 500)?.url
+            ?? ev.images?.[0]?.url ?? "",
+        priceMin: price?.min ?? undefined,
+        priceMax: price?.max ?? undefined,
+        currency: price?.currency ?? undefined,
+        status: ev.dates?.status?.code ?? "",
+        segment,
+        source: "ticketmaster",
+    };
+}
+/** Filter out non-music events (comedy, sports, etc.) that leak through TM's classificationName filter */
+function isMusicEvent(ev) {
+    const seg = ev.segment ?? "";
+    return !seg || seg === "music";
+}
+// GET /api/live/nearby — geo-targeted events based on user IP
+app.get("/api/live/nearby", async (req, res) => {
+    // Allow client to pass cached lat/lon to skip IP lookup
+    let lat = parseFloat(req.query.lat);
+    let lon = parseFloat(req.query.lon);
+    let city = req.query.city || "";
+    let region = req.query.region || "";
+    if (isNaN(lat) || isNaN(lon)) {
+        const loc = await resolveLocation(req);
+        if (!loc) {
+            res.json({ events: [], location: null });
+            return;
+        }
+        lat = loc.lat;
+        lon = loc.lon;
+        city = loc.city;
+        region = loc.region;
+    }
+    if (!ticketmasterKey) {
+        res.json({ events: [], location: { lat, lon, city, region } });
+        return;
+    }
+    // If logged in, add genre keyword from taste profile for more relevant results
+    const userId = getClerkUserId(req);
+    let genreKeyword = "";
+    if (userId) {
+        const profile = await getUserTasteProfile(userId).catch(() => null);
+        if (profile?.genre_keywords?.length) {
+            // Use top genre as keyword hint (Ticketmaster supports this)
+            genreKeyword = profile.genre_keywords[0];
+        }
+    }
+    try {
+        const params = new URLSearchParams({
+            latlong: `${lat},${lon}`,
+            radius: "50",
+            unit: "miles",
+            classificationName: "music",
+            size: "50",
+            sort: "date,asc",
+            apikey: ticketmasterKey,
+        });
+        if (genreKeyword)
+            params.set("keyword", genreKeyword);
+        const tmRes = await loggedFetch("ticketmaster", `https://app.ticketmaster.com/discovery/v2/events.json?${params}`, { signal: AbortSignal.timeout(10000), context: "personalized events" });
+        if (!tmRes.ok) {
+            res.json({ events: [], location: { lat, lon, city, region } });
+            return;
+        }
+        const tmData = await tmRes.json();
+        const events = (tmData._embedded?.events ?? []).map(mapTmEvent).filter(isMusicEvent);
+        res.setHeader("Cache-Control", "no-store");
+        res.json({ events, location: { lat, lon, city, region } });
+    }
+    catch {
+        res.json({ events: [], location: { lat, lon, city, region } });
+    }
+});
+// Background: fetch upcoming events from Ticketmaster and store in DB
+async function fetchUpcomingEvents() {
+    if (!ticketmasterKey)
+        return 0;
+    try {
+        const url = `https://app.ticketmaster.com/discovery/v2/events.json?apikey=${ticketmasterKey}&classificationName=music&size=50&sort=date,asc&countryCode=US`;
+        const r = await loggedFetch("ticketmaster", url, { signal: AbortSignal.timeout(30000), context: "scheduled fetch" });
+        if (!r.ok)
+            return 0;
+        const data = await r.json();
+        const events = (data._embedded?.events ?? []).map(mapTmEvent).filter(isMusicEvent);
+        const count = await upsertLiveEvents(events);
+        await pruneLiveEvents();
+        console.log(`[live-events] Fetched ${count} upcoming events, pruned past events`);
+        return count;
+    }
+    catch (e) {
+        console.error("[live-events] Fetch error:", e);
+        return 0;
+    }
+}
+function startLiveEventsSchedule() {
+    // Every 4 hours aligned to :50
+    const msTo50 = msUntilMinute(50);
+    console.log(`[live-events] Next fetch at :50 (in ${Math.round(msTo50 / 60000)}min)`);
+    setTimeout(() => {
+        fetchUpcomingEvents();
+        setInterval(() => fetchUpcomingEvents(), 4 * 60 * 60 * 1000);
+    }, msTo50);
+}
+// GET /api/wanted-sample — small public sample for Find page filler
+app.get("/api/wanted-sample", async (req, res) => {
+    try {
+        res.setHeader("Cache-Control", "public, max-age=60");
+        const excludeStr = req.query.exclude || "";
+        const excludeIds = excludeStr ? excludeStr.split(",").map(Number).filter(n => !isNaN(n)) : [];
+        const items = await getWantedSample(16, excludeIds);
+        res.json({ items });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e) });
+    }
 });
 // GET /api/wanted — all community wantlist items, deduped and shuffled (requires login)
 app.get("/api/wanted", async (req, res) => {
@@ -748,19 +1053,24 @@ app.get("/api/admin/sync-status", async (req, res) => {
     const [users, freshStats] = await Promise.all([getAllUsersSyncStatus(), getFreshStats()]);
     res.json({ users, freshStats });
 });
-// POST /api/admin/sync-all — trigger background sync for all users with tokens, admin only
-app.post("/api/admin/sync-all", async (req, res) => {
+// POST /api/admin/sync-all — trigger FULL background sync for all users, admin only
+app.post("/api/admin/sync-all", express.json(), async (req, res) => {
     const userId = getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
         return;
     }
+    _syncAbort = false; // clear any previous abort
     const users = await getAllUsersForSync();
-    res.json({ ok: true, queued: users.length });
+    res.json({ ok: true, queued: users.length, mode: "full" });
     // Run syncs sequentially so server load and Discogs API stay manageable
     (async () => {
         for (const user of users) {
+            if (_syncAbort) {
+                console.log("Sync-all: aborted, skipping remaining users");
+                break;
+            }
             try {
                 await runBackgroundSync(user.clerkUserId, user.token, user.username, true, true);
             }
@@ -769,6 +1079,88 @@ app.post("/api/admin/sync-all", async (req, res) => {
             }
         }
     })();
+});
+// POST /api/admin/sync-user — trigger background sync for a single user, admin only
+app.post("/api/admin/sync-user", express.json(), async (req, res) => {
+    const userId = getClerkUserId(req);
+    const adminId = process.env.ADMIN_CLERK_ID ?? "";
+    if (!userId || !adminId || userId !== adminId) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+    }
+    const { username } = req.body;
+    if (!username) {
+        res.status(400).json({ error: "username required" });
+        return;
+    }
+    const users = await getAllUsersForSync();
+    const user = users.find(u => u.username === username);
+    if (!user) {
+        res.status(404).json({ error: "User not found" });
+        return;
+    }
+    _syncAbort = false;
+    res.json({ ok: true, username, mode: "full" });
+    (async () => {
+        try {
+            await runBackgroundSync(user.clerkUserId, user.token, user.username, true, true);
+        }
+        catch (err) {
+            console.error(`Sync-user error for ${user.username}:`, err);
+        }
+    })();
+});
+// POST /api/admin/sync-stop — abort all running syncs and reset statuses
+app.post("/api/admin/sync-stop", async (req, res) => {
+    const userId = getClerkUserId(req);
+    const adminId = process.env.ADMIN_CLERK_ID ?? "";
+    if (!userId || !adminId || userId !== adminId) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+    }
+    _syncAbort = true;
+    const count = await resetAllSyncingStatuses();
+    console.log(`Admin: sync abort requested, ${count} syncing statuses reset`);
+    res.json({ ok: true, message: `All syncs stopped — ${count} reset.` });
+});
+// POST /api/admin/api-kill — toggle global API kill switch
+app.post("/api/admin/api-kill", async (req, res) => {
+    const userId = getClerkUserId(req);
+    const adminId = process.env.ADMIN_CLERK_ID ?? "";
+    if (!userId || !adminId || userId !== adminId) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+    }
+    const { enabled } = req.body ?? {};
+    _apiKillSwitch = enabled !== undefined ? !!enabled : !_apiKillSwitch;
+    console.log(`Admin: API kill switch ${_apiKillSwitch ? "ENABLED — all outgoing requests blocked" : "DISABLED — requests flowing"}`);
+    res.json({ ok: true, killSwitch: _apiKillSwitch });
+});
+// GET /api/admin/api-kill — check kill switch status
+app.get("/api/admin/api-kill", async (req, res) => {
+    const userId = getClerkUserId(req);
+    const adminId = process.env.ADMIN_CLERK_ID ?? "";
+    if (!userId || !adminId || userId !== adminId) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+    }
+    res.json({ killSwitch: _apiKillSwitch });
+});
+// GET /api/admin/collection-stats — per-user and global collection/wantlist stats
+app.get("/api/admin/collection-stats", async (req, res) => {
+    const userId = getClerkUserId(req);
+    const adminId = process.env.ADMIN_CLERK_ID ?? "";
+    if (!userId || !adminId || userId !== adminId) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+    }
+    try {
+        const stats = await getUserCollectionStats();
+        res.json(stats);
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
 });
 // GET /api/admin/interests — interest signal stats, admin only
 app.get("/api/admin/interests", async (req, res) => {
@@ -812,7 +1204,7 @@ Each item in the items array must include:
 
 Return ONLY a valid JSON object, no markdown, no explanation.`;
     try {
-        const r = await fetch("https://api.anthropic.com/v1/messages", {
+        const r = await loggedFetch("anthropic", "https://api.anthropic.com/v1/messages", {
             method: "POST",
             headers: {
                 "x-api-key": anthropicKey,
@@ -824,6 +1216,7 @@ Return ONLY a valid JSON object, no markdown, no explanation.`;
                 max_tokens: 1700,
                 messages: [{ role: "user", content: prompt }],
             }),
+            context: "ai-search suggestions",
         });
         const data = await r.json();
         if (!r.ok) {
@@ -864,7 +1257,7 @@ ${titleList}
 
 In 4–7 words, give a single honest phrase describing how well these results match the query. Be direct, like a librarian — e.g. "Strong match", "Partial match, try narrowing", "Loose results, refine your search", "Exact artist found", "Mixed bag, add more filters". No punctuation at the end. Return ONLY the phrase, nothing else.`;
     try {
-        const r = await fetch("https://api.anthropic.com/v1/messages", {
+        const r = await loggedFetch("anthropic", "https://api.anthropic.com/v1/messages", {
             method: "POST",
             headers: {
                 "x-api-key": anthropicKey,
@@ -876,6 +1269,7 @@ In 4–7 words, give a single honest phrase describing how well these results ma
                 max_tokens: 24,
                 messages: [{ role: "user", content: prompt }],
             }),
+            context: "result-quality rating",
         });
         const data = await r.json();
         if (!r.ok) {
@@ -1101,6 +1495,7 @@ app.get("/search", async (req, res) => {
 });
 // GET /release/:id
 app.get("/release/:id", async (req, res) => {
+    const id = parseInt(req.params.id, 10);
     const dc = await getDiscogsForRequest(req, true);
     if (!dc) {
         res.status(503).json({ error: "No Discogs token configured" });
@@ -1108,6 +1503,8 @@ app.get("/release/:id", async (req, res) => {
     }
     try {
         const result = await dc.getRelease(req.params.id);
+        // Always save fresh data to cache
+        cacheRelease(id, "release", result).catch(() => { });
         res.json(result);
     }
     catch (err) {
@@ -1117,6 +1514,7 @@ app.get("/release/:id", async (req, res) => {
 });
 // GET /master/:id
 app.get("/master/:id", async (req, res) => {
+    const id = parseInt(req.params.id, 10);
     const dc = await getDiscogsForRequest(req, true);
     if (!dc) {
         res.status(503).json({ error: "No Discogs token configured" });
@@ -1124,6 +1522,8 @@ app.get("/master/:id", async (req, res) => {
     }
     try {
         const result = await dc.getMasterRelease(req.params.id);
+        // Always save fresh data to cache
+        cacheRelease(id, "master", result).catch(() => { });
         res.json(result);
     }
     catch (err) {
@@ -1345,7 +1745,7 @@ app.get("/genre-info", async (req, res) => {
         return;
     }
     try {
-        const response = await fetch("https://api.anthropic.com/v1/messages", {
+        const response = await loggedFetch("anthropic", "https://api.anthropic.com/v1/messages", {
             method: "POST",
             headers: {
                 "x-api-key": anthropicKey,
@@ -1360,6 +1760,7 @@ app.get("/genre-info", async (req, res) => {
                         content: `Write 2–3 sentences describing "${genre}" as a music genre. State only well-established, verifiable facts: its geographic or cultural origins, defining musical characteristics, and time period it emerged. Do not name specific artists or albums. Do not speculate.`,
                     }],
             }),
+            context: "genre profile",
         });
         const data = await response.json();
         const profile = data?.content?.[0]?.text?.trim() ?? null;
@@ -1384,10 +1785,14 @@ app.get("/marketplace-stats/:id", async (req, res) => {
     try {
         let releaseId = id;
         if (type === "master") {
-            const master = await dc.getMasterRelease(id);
+            // Try cache first for the master lookup
+            const cachedMaster = await getCachedRelease(parseInt(id, 10), "master").catch(() => null);
+            const master = cachedMaster ?? await dc.getMasterRelease(id);
+            if (!cachedMaster && master)
+                cacheRelease(parseInt(id, 10), "master", master).catch(() => { });
             releaseId = String(master?.main_release ?? id);
         }
-        const statsRes = await fetch(`https://api.discogs.com/marketplace/stats/${releaseId}?curr_abbr=USD`, { headers: { "Authorization": `Discogs token=${reqToken}`, "User-Agent": MB_UA } });
+        const statsRes = await loggedFetch("discogs", `https://api.discogs.com/marketplace/stats/${releaseId}?curr_abbr=USD`, { headers: { "Authorization": `Discogs token=${reqToken}`, "User-Agent": MB_UA }, context: "marketplace stats" });
         const stats = await statsRes.json();
         res.json({
             numForSale: stats?.num_for_sale ?? 0,
@@ -1410,7 +1815,7 @@ app.get("/master-versions/:id", async (req, res) => {
         return;
     }
     try {
-        const r = await fetch(`https://api.discogs.com/masters/${id}/versions?per_page=100&sort=released&sort_order=asc`, { headers: { "Authorization": `Discogs token=${reqToken}`, "User-Agent": MB_UA } });
+        const r = await loggedFetch("discogs", `https://api.discogs.com/masters/${id}/versions?per_page=100&sort=released&sort_order=asc`, { headers: { "Authorization": `Discogs token=${reqToken}`, "User-Agent": MB_UA }, context: "master versions" });
         const data = await r.json();
         const versions = (data.versions ?? []).map((v) => ({
             id: v.id,
@@ -1433,9 +1838,17 @@ app.get("/master-versions/:id", async (req, res) => {
 // GET /api/fresh-releases — 150 random releases from last 3 months, client-side filtered
 app.get("/api/fresh-releases", async (req, res) => {
     try {
-        res.setHeader("Cache-Control", "public, max-age=300"); // 5 min
-        const releases = await getFreshReleases(150);
-        res.json({ releases });
+        const userId = getClerkUserId(req);
+        if (userId) {
+            res.setHeader("Cache-Control", "private, max-age=300");
+            const releases = await getPersonalizedFreshReleases(userId, 150);
+            res.json({ releases, personalized: true });
+        }
+        else {
+            res.setHeader("Cache-Control", "public, max-age=300");
+            const releases = await getFreshReleases(150);
+            res.json({ releases });
+        }
     }
     catch (err) {
         console.error("fresh-releases error:", err);
@@ -1498,7 +1911,7 @@ app.get("/api/concerts/search", async (req, res) => {
             }
             const tmUrl = `https://app.ticketmaster.com/discovery/v2/events.json?${params}`;
             console.log("Live TM URL:", tmUrl.replace(ticketmasterKey, "***"));
-            const tmRes = await fetch(tmUrl);
+            const tmRes = await loggedFetch("ticketmaster", tmUrl, { context: "live search" });
             const tmBody = await tmRes.text();
             if (tmRes.ok) {
                 try {
@@ -1516,19 +1929,12 @@ app.get("/api/concerts/search", async (req, res) => {
                             if (matched)
                                 eventArtist = matched.name;
                         }
-                        const venue = ev._embedded?.venues?.[0];
+                        const mapped = mapTmEvent(ev);
+                        if (!isMusicEvent(mapped))
+                            continue;
                         events.push({
+                            ...mapped,
                             artist: eventArtist || ev.name?.split(/\s[-–—:]\s/)?.[0] || "",
-                            name: ev.name ?? "",
-                            date: ev.dates?.start?.localDate ?? "",
-                            time: ev.dates?.start?.localTime ?? "",
-                            venue: venue?.name ?? "",
-                            venueId: venue?.id ?? "",
-                            city: venue?.city?.name ?? "",
-                            region: venue?.state?.name ?? "",
-                            country: venue?.country?.countryCode ?? "",
-                            url: ev.url ?? "",
-                            source: "ticketmaster",
                         });
                     }
                 }
@@ -1619,7 +2025,7 @@ app.get("/api/concerts/venue/:venueId", async (req, res) => {
     }
     try {
         const tmUrl = `https://app.ticketmaster.com/discovery/v2/events.json?venueId=${encodeURIComponent(venueId)}&classificationName=music&size=200&sort=date,asc&apikey=${ticketmasterKey}`;
-        const tmRes = await fetch(tmUrl);
+        const tmRes = await loggedFetch("ticketmaster", tmUrl, { context: "venue events" });
         if (!tmRes.ok) {
             res.json({ events: [], venueName: "" });
             return;
@@ -1631,18 +2037,12 @@ app.get("/api/concerts/venue/:venueId", async (req, res) => {
             const venue = ev._embedded?.venues?.[0];
             if (!venueName && venue?.name)
                 venueName = venue.name;
-            const attractions = ev._embedded?.attractions ?? [];
-            const artistName = attractions[0]?.name ?? ev.name?.split(/\s[-–—:]\s/)?.[0] ?? "";
+            const mapped = mapTmEvent(ev);
+            if (!isMusicEvent(mapped))
+                continue;
             events.push({
-                artist: artistName,
-                name: ev.name ?? "",
-                date: ev.dates?.start?.localDate ?? "",
-                time: ev.dates?.start?.localTime ?? "",
-                venue: venue?.name ?? "",
-                venueId: venue?.id ?? venueId,
-                city: venue?.city?.name ?? "",
-                region: venue?.state?.name ?? "",
-                country: venue?.country?.countryCode ?? "",
+                ...mapped,
+                venueId: mapped.venueId || venueId,
             });
         }
         const location = events[0] ? [events[0].city, events[0].region, events[0].country].filter(Boolean).join(", ") : "";
@@ -1666,24 +2066,15 @@ app.get("/api/concerts/:artist", async (req, res) => {
     if (ticketmasterKey) {
         try {
             const tmUrl = `https://app.ticketmaster.com/discovery/v2/events.json?keyword=${encodeURIComponent(artist)}&classificationName=music&size=20&sort=date,asc&apikey=${ticketmasterKey}`;
-            const tmRes = await fetch(tmUrl);
+            const tmRes = await loggedFetch("ticketmaster", tmUrl, { context: `artist: ${artist}` });
             const tmBody = await tmRes.text();
             if (tmRes.ok) {
                 try {
                     const tmData = JSON.parse(tmBody);
                     for (const ev of (tmData._embedded?.events ?? [])) {
-                        const venue = ev._embedded?.venues?.[0];
-                        events.push({
-                            name: ev.name ?? "",
-                            date: ev.dates?.start?.localDate ?? "",
-                            time: ev.dates?.start?.localTime ?? "",
-                            venue: venue?.name ?? "",
-                            city: venue?.city?.name ?? "",
-                            region: venue?.state?.name ?? "",
-                            country: venue?.country?.countryCode ?? "",
-                            url: ev.url ?? "",
-                            source: "ticketmaster",
-                        });
+                        const mapped = mapTmEvent(ev);
+                        if (isMusicEvent(mapped))
+                            events.push(mapped);
                     }
                 }
                 catch { /* parse error */ }
@@ -1702,7 +2093,7 @@ app.get("/api/concerts/:artist", async (req, res) => {
     // Bandsintown API
     try {
         const bitUrl = `https://rest.bandsintown.com/artists/${encodeURIComponent(artist)}/events?app_id=${bandsintownAppId}&date=upcoming`;
-        const bitRes = await fetch(bitUrl);
+        const bitRes = await loggedFetch("bandsintown", bitUrl, { context: `artist: ${artist}` });
         const bitBody = await bitRes.text();
         if (bitRes.ok) {
             try {
@@ -1747,9 +2138,809 @@ app.get("/api/concerts/:artist", async (req, res) => {
     console.log(`Concerts for "${artist}": ${events.length} raw, ${deduped.length} deduped`);
     res.json({ artist, events: deduped });
 });
+// ── eBay Gear integration ─────────────────────────────────────────────────
+const ebayClientId = process.env.EBAY_CLIENT_ID ?? "";
+const ebayClientSecret = process.env.EBAY_CLIENT_SECRET ?? "";
+let ebayAccessToken = "";
+let ebayTokenExpiry = 0;
+async function getEbayToken() {
+    if (ebayAccessToken && Date.now() < ebayTokenExpiry - 60000)
+        return ebayAccessToken;
+    if (!ebayClientId || !ebayClientSecret)
+        throw new Error("eBay credentials not configured");
+    const creds = Buffer.from(`${ebayClientId}:${ebayClientSecret}`).toString("base64");
+    const r = await loggedFetch("ebay", "https://api.ebay.com/identity/v1/oauth2/token", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Authorization": `Basic ${creds}`,
+        },
+        body: "grant_type=client_credentials&scope=https%3A%2F%2Fapi.ebay.com%2Foauth%2Fapi_scope",
+        context: "oauth token",
+    });
+    if (!r.ok)
+        throw new Error(`eBay OAuth failed: ${r.status}`);
+    const data = await r.json();
+    ebayAccessToken = data.access_token;
+    ebayTokenExpiry = Date.now() + data.expires_in * 1000;
+    console.log("eBay OAuth token refreshed");
+    return ebayAccessToken;
+}
+const GEAR_SEARCH_QUERIES = [
+    "vintage receiver",
+    "vintage amplifier",
+    "vintage turntable",
+    "vintage speakers hifi",
+    "vintage tape deck reel",
+    "hifi separates amplifier",
+    "tube amplifier audio",
+    "vintage preamp audio",
+];
+async function fetchEbayGearListings() {
+    if (!ebayClientId || !ebayClientSecret) {
+        console.log("eBay gear fetch skipped — no credentials");
+        return 0;
+    }
+    console.log("Starting eBay gear fetch…");
+    let totalUpserted = 0;
+    try {
+        const token = await getEbayToken();
+        for (const query of GEAR_SEARCH_QUERIES) {
+            try {
+                // Auctions only, sorted by ending soonest (most active)
+                const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&limit=200&sort=endingSoonest&filter=price:[50..],priceCurrency:USD,buyingOptions:{AUCTION}`;
+                const r = await loggedFetch("ebay", url, {
+                    headers: { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" },
+                    context: `gear search: ${query}`,
+                });
+                if (!r.ok) {
+                    console.error(`eBay search "${query}" failed: ${r.status}`);
+                    continue;
+                }
+                const data = await r.json();
+                const summaries = data.itemSummaries ?? [];
+                console.log(`eBay "${query}": ${summaries.length} results`);
+                const items = summaries.map((s) => ({
+                    itemId: s.itemId,
+                    title: s.title ?? "",
+                    price: parseFloat(s.currentBidPrice?.value ?? s.price?.value ?? "0"),
+                    currency: s.currentBidPrice?.currency ?? s.price?.currency ?? "USD",
+                    condition: s.condition ?? s.conditionId ?? "",
+                    imageUrl: s.image?.imageUrl ?? "",
+                    itemUrl: s.itemWebUrl ?? "",
+                    locationCity: s.itemLocation?.city ?? "",
+                    locationState: s.itemLocation?.stateOrProvince ?? "",
+                    locationCountry: s.itemLocation?.country ?? "",
+                    sellerUsername: s.seller?.username ?? "",
+                    sellerFeedback: s.seller?.feedbackScore ?? 0,
+                    buyingOptions: s.buyingOptions ?? [],
+                    bidCount: s.bidCount ?? 0,
+                    categories: (s.categories ?? []).map((c) => c.categoryId),
+                    categoryNames: (s.categories ?? []).map((c) => c.categoryName),
+                    itemEndDate: s.itemEndDate ?? null,
+                    thumbnailUrl: (s.thumbnailImages ?? [])[0]?.imageUrl ?? "",
+                    rawSummary: s,
+                }));
+                const count = await upsertGearListings(items);
+                totalUpserted += count;
+                // Pace requests to avoid rate limiting
+                await new Promise(r => setTimeout(r, 1000));
+            }
+            catch (err) {
+                console.error(`eBay search "${query}" error:`, err);
+            }
+        }
+        // Mark old listings as expired
+        const expired = await markExpiredGearListings();
+        if (expired)
+            console.log(`Marked ${expired} gear listings as expired`);
+        await logGearFetch("browse_search", totalUpserted);
+        console.log(`eBay gear fetch complete: ${totalUpserted} items upserted`);
+    }
+    catch (err) {
+        console.error("eBay gear fetch failed:", err);
+        await logGearFetch("browse_search", totalUpserted, String(err));
+    }
+    return totalUpserted;
+}
+async function fetchGearDetails() {
+    if (!ebayClientId || !ebayClientSecret)
+        return 0;
+    let detailed = 0;
+    try {
+        const token = await getEbayToken();
+        const items = await getGearNeedingDetail(50);
+        if (!items.length)
+            return 0;
+        console.log(`Fetching details for ${items.length} gear listings…`);
+        for (const item of items) {
+            try {
+                const r = await loggedFetch("ebay", `https://api.ebay.com/buy/browse/v1/item/${item.itemId}`, {
+                    headers: { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" },
+                    context: `gear detail: ${item.itemId}`,
+                });
+                if (!r.ok) {
+                    console.error(`eBay getItem ${item.itemId} failed: ${r.status}`);
+                    continue;
+                }
+                const d = await r.json();
+                const detailHtml = d.description ?? "";
+                const allImages = (d.additionalImages ?? []).map((img) => img.imageUrl).filter(Boolean);
+                if (d.image?.imageUrl)
+                    allImages.unshift(d.image.imageUrl);
+                const specifics = {};
+                for (const nv of (d.localizedAspects ?? [])) {
+                    if (nv.name && nv.value)
+                        specifics[nv.name] = nv.value;
+                }
+                await updateGearDetail(item.itemId, detailHtml, allImages, specifics);
+                detailed++;
+                // ~17 seconds between calls to stay well within 5000/day
+                await new Promise(r => setTimeout(r, 2000));
+            }
+            catch (err) {
+                console.error(`eBay detail ${item.itemId} error:`, err);
+            }
+        }
+        await logGearFetch("item_detail", detailed);
+        console.log(`eBay detail fetch complete: ${detailed} items detailed`);
+    }
+    catch (err) {
+        console.error("eBay detail fetch failed:", err);
+        await logGearFetch("item_detail", detailed, String(err));
+    }
+    return detailed;
+}
+// Schedule: gear search at :55, detail worker at :25 (30min offset)
+function startGearSchedule() {
+    if (!ebayClientId || !ebayClientSecret) {
+        console.log("eBay gear schedule not started — no credentials");
+        return;
+    }
+    // Hourly gear search aligned to :55
+    const msTo55 = msUntilMinute(55);
+    console.log(`[gear] Next search at :55 (in ${Math.round(msTo55 / 60000)}min)`);
+    setTimeout(() => {
+        fetchEbayGearListings();
+        setInterval(() => fetchEbayGearListings(), 60 * 60 * 1000);
+    }, msTo55);
+    // Detail worker aligned to :25 (30min offset from :55)
+    const msTo25 = msUntilMinute(25);
+    setTimeout(() => {
+        fetchGearDetails();
+        setInterval(() => fetchGearDetails(), 30 * 60 * 1000);
+    }, msTo25);
+}
+// GET /api/gear — public gear listings
+app.get("/api/gear", async (_req, res) => {
+    try {
+        const minPrice = parseFloat(_req.query.min_price) || 0;
+        const sort = _req.query.sort || "bids";
+        const q = _req.query.q || "";
+        const limit = Math.min(parseInt(_req.query.limit) || 200, 500);
+        const offset = parseInt(_req.query.offset) || 0;
+        res.setHeader("Cache-Control", "public, max-age=300"); // 5 min
+        const { items, total } = await getGearListings(minPrice, limit, offset, sort, q);
+        res.json({ items, total });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e) });
+    }
+});
+// GET /api/gear/stats — admin stats
+app.get("/api/gear/stats", async (_req, res) => {
+    try {
+        const stats = await getGearStats();
+        res.json(stats);
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e) });
+    }
+});
+// POST /api/admin/gear/fetch — manual trigger for admin
+app.post("/api/admin/gear/fetch", express.json(), async (req, res) => {
+    const userId = getClerkUserId(req);
+    const adminId = process.env.ADMIN_CLERK_ID ?? "";
+    if (!userId || !adminId || userId !== adminId) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+    }
+    res.json({ ok: true, started: true });
+    fetchEbayGearListings().then(() => fetchGearDetails());
+});
+// ── eBay Marketplace Account Deletion Notification (compliance) ──────────
+const EBAY_VERIFICATION_TOKEN = "seadisco2026accountdeletiontoken";
+app.get("/api/ebay/deletion", (req, res) => {
+    // eBay sends a GET with challenge_code to verify the endpoint
+    const challengeCode = req.query.challenge_code;
+    if (!challengeCode)
+        return res.status(400).json({ error: "missing challenge_code" });
+    const hash = crypto.createHash("sha256");
+    hash.update(challengeCode);
+    hash.update(EBAY_VERIFICATION_TOKEN);
+    hash.update("https://discogs-mcp-server-production-c794.up.railway.app/api/ebay/deletion");
+    const responseHash = hash.digest("hex");
+    res.json({ challengeResponse: responseHash });
+});
+app.post("/api/ebay/deletion", (_req, res) => {
+    // eBay sends POST for actual deletion notifications — just acknowledge
+    res.status(200).json({ ok: true });
+});
+// ── Feed: RSS + YouTube ─────────────────────────────────────────────────
+const RSS_FEEDS = [
+    { name: "Pitchfork", url: "https://pitchfork.com/feed/feed-album-reviews/rss", category: "reviews" },
+    { name: "Pitchfork News", url: "https://pitchfork.com/feed/feed-news/rss", category: "news" },
+    { name: "Bandcamp Daily", url: "https://daily.bandcamp.com/feed", category: "reviews" },
+    { name: "Stereogum", url: "https://www.stereogum.com/feed/", category: "news" },
+    { name: "Aquarium Drunkard", url: "https://aquariumdrunkard.com/feed/", category: "news" },
+    { name: "The Quietus", url: "https://thequietus.com/feed", category: "reviews" },
+    { name: "BrooklynVegan", url: "https://www.brooklynvegan.com/feed/", category: "news" },
+];
+const YOUTUBE_CHANNELS = [
+    // Vinyl & collecting
+    { name: "Vinyl Eyezz", channelId: "UCYkG_jJ2L0clu-_fqFfWGbQ" },
+    { name: "The Vinyl Guide", channelId: "UCdYYSNnFPIdMuiAaq0pSpTA" },
+    // Gear & audiophile
+    { name: "Techmoan", channelId: "UC5I2hjZYiW9gZPVkvzM8_Cw", category: "gear" },
+    { name: "Analog Planet", channelId: "UCXnnKXr8oSTfZ7Y3R8CGAUQ", category: "gear" },
+    // Live sessions & performances
+    { name: "KEXP", channelId: "UC3I2GFN_F8WudD_2jUZbojA" },
+    { name: "Tiny Desk (NPR)", channelId: "UC4eYXhJI4-7wSWc8UNRwD4A" },
+    { name: "COLORS", channelId: "UC2Qw1dzXDBAZPwS7zm37g8g" },
+    { name: "Audiotree", channelId: "UCelEMf7HHJgUy-6MJPClcXA" },
+    // Reviews
+    { name: "The Needle Drop", channelId: "UCt7fwAhXDy3oNFTAzF2o8Pw", category: "reviews" },
+    { name: "Deep Cuts", channelId: "UCVBp4LmZjEBpzB-6VsFU4cQ", category: "reviews" },
+];
+// Keyword searches for fresh music content
+const YOUTUBE_SEARCHES = [
+    { query: "official music video 2026", category: "video" },
+    { query: "new album review 2026", category: "reviews" },
+    { query: "vinyl unboxing haul 2026", category: "video" },
+];
+function decodeHtmlEntities(str) {
+    return str
+        .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n)))
+        .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => String.fromCharCode(parseInt(n, 16)))
+        .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&nbsp;/g, " ")
+        .replace(/&mdash;/g, "—").replace(/&ndash;/g, "–").replace(/&lsquo;/g, "'")
+        .replace(/&rsquo;/g, "'").replace(/&ldquo;/g, "\u201C").replace(/&rdquo;/g, "\u201D")
+        .replace(/&hellip;/g, "…");
+}
+function extractFromXml(xml, tag) {
+    const re = new RegExp(`<${tag}[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?</${tag}>`);
+    const m = xml.match(re);
+    return m ? m[1].trim() : "";
+}
+function extractAttr(xml, tag, attr) {
+    const re = new RegExp(`<${tag}[^>]*${attr}=["']([^"']*)["']`);
+    const m = xml.match(re);
+    return m ? m[1] : "";
+}
+function extractImage(itemXml) {
+    // Try media:content, media:thumbnail, enclosure, then img in description
+    let img = extractAttr(itemXml, "media:content", "url") ||
+        extractAttr(itemXml, "media:thumbnail", "url") ||
+        extractAttr(itemXml, "enclosure", "url");
+    if (!img) {
+        const desc = extractFromXml(itemXml, "description") + extractFromXml(itemXml, "content:encoded");
+        const imgMatch = desc.match(/<img[^>]+src=["']([^"']+)["']/);
+        if (imgMatch)
+            img = imgMatch[1];
+    }
+    return img;
+}
+async function fetchRssFeeds() {
+    let total = 0;
+    for (const feed of RSS_FEEDS) {
+        try {
+            const r = await loggedFetch("rss", feed.url, {
+                headers: { "User-Agent": "SeaDisco/1.0 (music feed aggregator)" },
+                signal: AbortSignal.timeout(15000),
+                context: feed.name,
+            });
+            if (!r.ok) {
+                console.warn(`RSS ${feed.name}: HTTP ${r.status}`);
+                continue;
+            }
+            const xml = await r.text();
+            // Split items
+            const items = xml.split(/<item[\s>]/).slice(1);
+            let count = 0;
+            for (const itemXml of items.slice(0, 20)) { // Max 20 per feed
+                try {
+                    const title = decodeHtmlEntities(extractFromXml(itemXml, "title"));
+                    const link = extractFromXml(itemXml, "link") || extractFromXml(itemXml, "guid");
+                    if (!title || !link)
+                        continue;
+                    let summary = decodeHtmlEntities(extractFromXml(itemXml, "description").replace(/<[^>]+>/g, "")).trim();
+                    if (summary.length > 300)
+                        summary = summary.slice(0, 297) + "…";
+                    const imageUrl = extractImage(itemXml);
+                    const author = decodeHtmlEntities(extractFromXml(itemXml, "dc:creator") || extractFromXml(itemXml, "author") || "");
+                    const pubDate = extractFromXml(itemXml, "pubDate") ||
+                        extractFromXml(itemXml, "dc:date") || "";
+                    const publishedAt = pubDate ? new Date(pubDate).toISOString() : null;
+                    await upsertFeedArticle({
+                        source: feed.name,
+                        sourceUrl: link,
+                        title,
+                        summary: summary || undefined,
+                        imageUrl: imageUrl || undefined,
+                        author: author || undefined,
+                        category: feed.category,
+                        contentType: "article",
+                        publishedAt: publishedAt ?? undefined,
+                    });
+                    count++;
+                }
+                catch (e) { /* skip bad item */ }
+            }
+            total += count;
+            console.log(`RSS ${feed.name}: ${count} articles`);
+        }
+        catch (err) {
+            console.warn(`RSS ${feed.name} failed:`, err);
+        }
+    }
+    return total;
+}
+async function fetchYouTubeVideos() {
+    if (!youtubeApiKey) {
+        console.log("YouTube feed skip — no API key");
+        return 0;
+    }
+    let total = 0;
+    // Load existing YouTube video URLs to skip channels with no new content
+    let existingUrls = new Set();
+    try {
+        existingUrls = await getExistingYouTubeUrls();
+    }
+    catch { }
+    console.log(`[youtube] ${existingUrls.size} existing videos in DB`);
+    // Fetch from specific channels — use RSS feed (free, no quota) to check for new videos first
+    let skipped = 0;
+    for (const ch of YOUTUBE_CHANNELS) {
+        try {
+            // Check channel RSS feed (free, no quota) for latest video ID
+            const rssUrl = `https://www.youtube.com/feeds/videos.xml?channel_id=${ch.channelId}`;
+            let hasNew = true;
+            try {
+                const rssR = await fetch(rssUrl, { signal: AbortSignal.timeout(5000), headers: { "User-Agent": "SeaDisco/1.0" } });
+                if (rssR.ok) {
+                    const xml = await rssR.text();
+                    // Extract first video ID from RSS
+                    const vidMatch = xml.match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
+                    if (vidMatch) {
+                        const latestUrl = `https://www.youtube.com/watch?v=${vidMatch[1]}`;
+                        if (existingUrls.has(latestUrl)) {
+                            hasNew = false;
+                        }
+                    }
+                }
+            }
+            catch { }
+            if (!hasNew) {
+                skipped++;
+                continue;
+            }
+            const url = `https://www.googleapis.com/youtube/v3/search?key=${youtubeApiKey}&channelId=${ch.channelId}&part=snippet&order=date&maxResults=5&type=video`;
+            const r = await loggedFetch("youtube", url, { signal: AbortSignal.timeout(10000), context: `channel: ${ch.name}` });
+            if (!r.ok) {
+                console.warn(`YouTube ${ch.name}: HTTP ${r.status}`);
+                continue;
+            }
+            const data = await r.json();
+            let count = 0;
+            for (const item of data.items ?? []) {
+                const videoId = item.id?.videoId;
+                if (!videoId)
+                    continue;
+                const snippet = item.snippet;
+                await upsertFeedArticle({
+                    source: ch.name,
+                    sourceUrl: `https://www.youtube.com/watch?v=${videoId}`,
+                    title: decodeHtmlEntities(snippet.title ?? ""),
+                    summary: snippet.description?.slice(0, 300) ?? "",
+                    imageUrl: snippet.thumbnails?.high?.url ?? snippet.thumbnails?.medium?.url ?? "",
+                    author: snippet.channelTitle ?? ch.name,
+                    category: ch.category ?? "video",
+                    contentType: "video",
+                    publishedAt: snippet.publishedAt ?? undefined,
+                });
+                count++;
+            }
+            total += count;
+            console.log(`YouTube ${ch.name}: ${count} videos`);
+        }
+        catch (err) {
+            console.warn(`YouTube ${ch.name} failed:`, err);
+        }
+    }
+    if (skipped)
+        console.log(`[youtube] skipped ${skipped}/${YOUTUBE_CHANNELS.length} channels (no new videos)`);
+    // Keyword searches for fresh music content (last 7 days)
+    const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    for (const search of YOUTUBE_SEARCHES) {
+        try {
+            const url = `https://www.googleapis.com/youtube/v3/search?key=${youtubeApiKey}&q=${encodeURIComponent(search.query)}&part=snippet&order=date&maxResults=10&type=video&publishedAfter=${weekAgo}&videoCategoryId=10`;
+            const r = await loggedFetch("youtube", url, { signal: AbortSignal.timeout(10000), context: `search: ${search.query}` });
+            if (!r.ok) {
+                console.warn(`YouTube search "${search.query}": HTTP ${r.status}`);
+                continue;
+            }
+            const data = await r.json();
+            let count = 0;
+            for (const item of data.items ?? []) {
+                const videoId = item.id?.videoId;
+                if (!videoId)
+                    continue;
+                const snippet = item.snippet;
+                await upsertFeedArticle({
+                    source: snippet.channelTitle ?? "YouTube",
+                    sourceUrl: `https://www.youtube.com/watch?v=${videoId}`,
+                    title: decodeHtmlEntities(snippet.title ?? ""),
+                    summary: snippet.description?.slice(0, 300) ?? "",
+                    imageUrl: snippet.thumbnails?.high?.url ?? snippet.thumbnails?.medium?.url ?? "",
+                    author: snippet.channelTitle ?? "",
+                    category: search.category,
+                    contentType: "video",
+                    publishedAt: snippet.publishedAt ?? undefined,
+                });
+                count++;
+            }
+            total += count;
+            console.log(`YouTube search "${search.query}": ${count} videos`);
+        }
+        catch (err) {
+            console.warn(`YouTube search "${search.query}" failed:`, err);
+        }
+    }
+    return total;
+}
+async function fetchAllFeedContent() {
+    console.log("Starting feed content fetch…");
+    const articles = await fetchRssFeeds();
+    const videos = await fetchYouTubeVideos();
+    const pruned = await pruneFeedArticles(90);
+    const stale = await pruneAllStaleData();
+    console.log(`Feed fetch complete: ${articles} articles, ${videos} videos, ${pruned} feed pruned`);
+    if (stale.interest || stale.fresh || stale.gear || stale.gearLog) {
+        console.log(`Pruned stale: ${stale.interest} interest signals, ${stale.fresh} fresh releases, ${stale.gear} expired gear, ${stale.gearLog} gear logs`);
+    }
+}
+function startFeedSchedule() {
+    // Every 4 hours aligned to :40 (YouTube quota: 13 calls × 100 = 1300 units × 6/day = 7800 < 10K limit)
+    const msTo40 = msUntilMinute(40);
+    console.log(`[feed] Next fetch at :40 (in ${Math.round(msTo40 / 60000)}min)`);
+    setTimeout(() => {
+        fetchAllFeedContent();
+        setInterval(() => fetchAllFeedContent(), 4 * 60 * 60 * 1000);
+    }, msTo40);
+}
+// GET /api/feed — personalized for logged-in users, public for anonymous
+app.get("/api/feed", async (req, res) => {
+    try {
+        const category = req.query.category || "all";
+        const q = req.query.q || "";
+        const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+        const offset = parseInt(req.query.offset) || 0;
+        const userId = getClerkUserId(req);
+        if (userId) {
+            const { items, total } = await getPersonalizedFeedArticles(userId, { category, limit, offset, q });
+            res.setHeader("Cache-Control", items.length ? "private, max-age=300" : "no-cache");
+            res.json({ items, total, personalized: true });
+        }
+        else {
+            const { items, total } = await getFeedArticles({ category, limit, offset, q });
+            res.setHeader("Cache-Control", items.length ? "public, max-age=300" : "no-cache");
+            res.json({ items, total });
+        }
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e) });
+    }
+});
+// POST /api/admin/feed/fetch — manual trigger for admin
+app.post("/api/admin/feed/fetch", express.json(), async (req, res) => {
+    const userId = getClerkUserId(req);
+    const adminId = process.env.ADMIN_CLERK_ID ?? "";
+    if (!userId || !adminId || userId !== adminId) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+    }
+    res.json({ ok: true, started: true });
+    fetchAllFeedContent();
+});
+// POST /api/admin/live/fetch — manual trigger for admin
+app.post("/api/admin/live/fetch", express.json(), async (req, res) => {
+    const userId = getClerkUserId(req);
+    const adminId = process.env.ADMIN_CLERK_ID ?? "";
+    if (!userId || !adminId || userId !== adminId) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+    }
+    const count = await fetchUpcomingEvents();
+    res.json({ ok: true, count });
+});
+// POST /api/admin/extras/fetch — manual trigger for inventory/lists sync
+app.post("/api/admin/extras/fetch", express.json(), async (req, res) => {
+    const userId = getClerkUserId(req);
+    const adminId = process.env.ADMIN_CLERK_ID ?? "";
+    if (!userId || !adminId || userId !== adminId) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+    }
+    res.json({ ok: true, message: "Extras sync started" });
+    (async () => {
+        const users = await getAllUsersForSync();
+        for (const user of users) {
+            try {
+                const result = await syncUserExtras(user.clerkUserId, user.username, user.token);
+                console.log(`[admin-extras] ${user.username}: ${result.inventory} inventory, ${result.lists} lists`);
+                await sleep(30000); // 30s between users
+            }
+            catch (err) {
+                console.error(`[admin-extras] Error syncing ${user.username}:`, err);
+            }
+        }
+        console.log("[admin-extras] Complete");
+    })();
+});
+// GET /api/user/taste-profile — user's own taste profile
+app.get("/api/user/taste-profile", async (req, res) => {
+    const userId = getClerkUserId(req);
+    if (!userId) {
+        res.status(401).json({ error: "Not authenticated" });
+        return;
+    }
+    const profile = await getUserTasteProfile(userId);
+    res.json({ profile });
+});
+// POST /api/admin/rebuild-taste — rebuild taste profile for all users
+app.post("/api/admin/rebuild-taste", express.json(), async (req, res) => {
+    const userId = getClerkUserId(req);
+    const adminId = process.env.ADMIN_CLERK_ID ?? "";
+    if (!userId || !adminId || userId !== adminId) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+    }
+    const users = await getAllUsersForSync();
+    let rebuilt = 0;
+    const errors = [];
+    for (const u of users) {
+        try {
+            const profile = await rebuildUserTasteProfile(u.clerkUserId);
+            if (profile)
+                rebuilt++;
+            else
+                errors.push(`${u.username}: no collection data`);
+        }
+        catch (err) {
+            errors.push(`${u.username}: ${String(err).slice(0, 100)}`);
+        }
+    }
+    res.json({ ok: true, rebuilt, total: users.length, errors });
+});
+// GET /api/admin/api-log — view API request log (last 24h by default)
+app.get("/api/admin/api-log", async (req, res) => {
+    const userId = getClerkUserId(req);
+    const adminId = process.env.ADMIN_CLERK_ID ?? "";
+    if (!userId || !adminId || userId !== adminId) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+    }
+    const service = req.query.service;
+    const limit = Math.min(parseInt(req.query.limit) || 200, 500);
+    const offset = parseInt(req.query.offset) || 0;
+    const errorsOnly = req.query.errors === "true";
+    const hours = Math.min(parseInt(req.query.hours) || 24, 168); // max 7 days
+    const result = await getApiRequestLog({ service: service || undefined, limit, offset, errorsOnly, hours });
+    res.json(result);
+});
+// GET /api/admin/api-stats — 24h summary by service
+app.get("/api/admin/api-stats", async (req, res) => {
+    const userId = getClerkUserId(req);
+    const adminId = process.env.ADMIN_CLERK_ID ?? "";
+    if (!userId || !adminId || userId !== adminId) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+    }
+    const hours = Math.min(parseInt(req.query.hours) || 24, 168);
+    const stats = await getApiRequestStats(hours);
+    res.json({ stats });
+});
+// Helper: ms until the next occurrence of :MM past the hour
+function msUntilMinute(minute) {
+    const now = new Date();
+    const target = new Date(now);
+    target.setMinutes(minute, 0, 0);
+    if (target.getTime() <= now.getTime())
+        target.setHours(target.getHours() + 1);
+    return target.getTime() - now.getTime();
+}
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
+// Scheduled sync: full sync every night at 4 AM Pacific
+function startDailySyncSchedule() {
+    function msUntilNextPacific(hour) {
+        const now = new Date();
+        // Get current Pacific wall-clock time
+        const pacificStr = now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" });
+        const pacific = new Date(pacificStr);
+        // Build target as same "fake" date with desired hour
+        const target = new Date(pacific);
+        target.setHours(hour, 0, 0, 0);
+        if (target.getTime() <= pacific.getTime())
+            target.setDate(target.getDate() + 1);
+        // The wall-clock difference IS the real elapsed time
+        return target.getTime() - pacific.getTime();
+    }
+    async function runScheduledSync() {
+        console.log(`[sync-schedule] Starting full sync for all users`);
+        _syncAbort = false;
+        const users = await getAllUsersForSync();
+        for (const user of users) {
+            if (_syncAbort) {
+                console.log("[sync-schedule] Aborted");
+                break;
+            }
+            try {
+                console.log(`[sync-schedule] Full syncing ${user.username}...`);
+                await runBackgroundSync(user.clerkUserId, user.token, user.username, true, true);
+                // 30s pause between users to let rate limits settle
+                await new Promise(r => setTimeout(r, 30000));
+            }
+            catch (err) {
+                console.error(`[sync-schedule] Error syncing ${user.username}:`, err);
+            }
+        }
+        console.log(`[sync-schedule] Full sync complete`);
+    }
+    // Daily full sync at 4 AM Pacific
+    function scheduleDailySync() {
+        const ms = msUntilNextPacific(4);
+        const hours = Math.round(ms / 3600000 * 10) / 10;
+        console.log(`[sync-schedule] Next full sync in ${hours}h (4 AM Pacific)`);
+        setTimeout(async () => {
+            await runScheduledSync();
+            scheduleDailySync();
+        }, ms);
+    }
+    scheduleDailySync();
+}
+// ── Inventory / Lists / Orders sync (5 AM Pacific daily) ──────────────────
+async function syncUserExtras(userId, username, token) {
+    const headers = { Authorization: `Discogs token=${token}`, "User-Agent": "SeaDisco/1.0" };
+    // Simple fetch with retry for extras sync
+    async function extrasFetch(url, retries = 3) {
+        for (let attempt = 1; attempt <= retries; attempt++) {
+            try {
+                const r = await loggedFetch("discogs", url, { headers, signal: AbortSignal.timeout(15000), context: `extras: ${username}` });
+                if (r.ok)
+                    return r;
+                // 401/403 = auth issue, don't retry
+                if (r.status === 401 || r.status === 403)
+                    throw new Error(`HTTP ${r.status} — skipping (auth)`);
+                if (r.status === 429 || r.status >= 500) {
+                    if (attempt < retries) {
+                        await sleep(15000 * attempt);
+                        continue;
+                    }
+                    throw new Error(`HTTP ${r.status} after ${retries} attempts`);
+                }
+                throw new Error(`HTTP ${r.status}`);
+            }
+            catch (err) {
+                // Don't retry auth errors
+                if (err?.message?.includes("auth"))
+                    throw err;
+                if (attempt >= retries)
+                    throw err;
+                await sleep(10000 * attempt);
+            }
+        }
+        throw new Error("unreachable");
+    }
+    let inventory = 0, lists = 0;
+    // Inventory (paginated)
+    try {
+        for (let page = 1;; page++) {
+            if (page > 1)
+                await sleep(1200);
+            const r = await extrasFetch(`https://api.discogs.com/users/${encodeURIComponent(username)}/inventory?per_page=100&page=${page}&sort=listed&sort_order=desc`);
+            const data = await r.json();
+            const listings = data.listings ?? [];
+            if (!listings.length)
+                break;
+            const items = listings.map((l) => ({
+                listingId: l.id,
+                releaseId: l.release?.id ?? undefined,
+                data: l,
+                status: l.status ?? "For Sale",
+                priceValue: parseFloat(l.price?.value) || undefined,
+                priceCurrency: l.price?.currency ?? "USD",
+                condition: l.condition ?? undefined,
+                sleeveCondition: l.sleeve_condition ?? undefined,
+                postedAt: l.posted ? new Date(l.posted) : undefined,
+            }));
+            await upsertInventoryItems(userId, items);
+            inventory += items.length;
+            if (listings.length < 100)
+                break;
+        }
+        await updateInventorySyncedAt(userId);
+        console.log(`[extras] ${username}: ${inventory} inventory listings synced`);
+    }
+    catch (err) {
+        console.error(`[extras] ${username} inventory error:`, err);
+    }
+    // Lists (not paginated — returns all lists, then we store metadata)
+    try {
+        await sleep(1200);
+        const r = await extrasFetch(`https://api.discogs.com/users/${encodeURIComponent(username)}/lists?per_page=100`);
+        const data = await r.json();
+        const userLists = data.lists ?? [];
+        if (userLists.length) {
+            const items = userLists.map((l) => ({
+                listId: l.id,
+                name: l.name ?? "",
+                description: l.description ?? undefined,
+                itemCount: l.item_count ?? 0,
+                isPublic: l.public !== false,
+                data: l,
+            }));
+            await upsertUserLists(userId, items);
+            lists = items.length;
+        }
+        console.log(`[extras] ${username}: ${lists} lists synced`);
+    }
+    catch (err) {
+        console.error(`[extras] ${username} lists error:`, err);
+    }
+    return { inventory, lists };
+}
+function startExtrasSyncSchedule() {
+    function msUntilNext5amPacific() {
+        const now = new Date();
+        const pacific = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+        const diff = now.getTime() - pacific.getTime();
+        const target = new Date(pacific);
+        target.setHours(5, 0, 0, 0);
+        if (target.getTime() <= pacific.getTime())
+            target.setDate(target.getDate() + 1);
+        return target.getTime() - pacific.getTime() + diff;
+    }
+    function schedule() {
+        const ms = msUntilNext5amPacific();
+        const hours = Math.round(ms / 3600000 * 10) / 10;
+        console.log(`[extras-sync] Next extras sync in ${hours}h (5 AM Pacific)`);
+        setTimeout(async () => {
+            console.log("[extras-sync] Starting inventory/lists sync for all users");
+            const users = await getAllUsersForSync();
+            for (const user of users) {
+                try {
+                    await syncUserExtras(user.clerkUserId, user.username, user.token);
+                    await sleep(30000); // 30s between users
+                }
+                catch (err) {
+                    console.error(`[extras-sync] Error syncing ${user.username}:`, err);
+                }
+            }
+            console.log("[extras-sync] Complete");
+            schedule();
+        }, ms);
+    }
+    schedule();
+}
 app.listen(PORT, "0.0.0.0", () => {
     console.log(`Discogs search API listening on port ${PORT}`);
-    if (process.env.APP_DB_URL)
+    if (process.env.APP_DB_URL) {
         startFreshSyncSchedule();
+        startGearSchedule();
+        startFeedSchedule();
+        startDailySyncSchedule();
+        startExtrasSyncSchedule();
+        startLiveEventsSchedule();
+    }
 });
