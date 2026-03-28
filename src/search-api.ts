@@ -25,8 +25,16 @@ const youtubeApiKey = process.env.YOUTUBE_API_KEY ?? "";
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
+// ── Global API kill switch ──────────────────────────────────────────────
+let _apiKillSwitch = false;
+
 // ── Logged fetch: wraps fetch() and logs the request to api_request_log ──
 async function loggedFetch(service: string, url: string, init?: RequestInit & { context?: string }): Promise<Response> {
+  if (_apiKillSwitch) {
+    const cleanUrl = url.replace(/token=[^&]+/g, "token=***").replace(/key=[^&]+/g, "key=***").replace(/apikey=[^&]+/g, "apikey=***");
+    logApiRequest({ service, endpoint: cleanUrl, method: init?.method ?? "GET", statusCode: 0, success: false, durationMs: 0, errorMessage: "BLOCKED — API kill switch active", context: init?.context }).catch(() => {});
+    throw new Error("API kill switch is active — all outgoing requests blocked");
+  }
   const start = Date.now();
   const method = init?.method ?? "GET";
   const context = init?.context;
@@ -989,6 +997,25 @@ app.post("/api/admin/sync-stop", async (req, res) => {
   const count = await resetAllSyncingStatuses();
   console.log(`Admin: sync abort requested, ${count} syncing statuses reset`);
   res.json({ ok: true, message: `All syncs stopped — ${count} reset.` });
+});
+
+// POST /api/admin/api-kill — toggle global API kill switch
+app.post("/api/admin/api-kill", async (req, res) => {
+  const userId = getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  const { enabled } = req.body ?? {};
+  _apiKillSwitch = enabled !== undefined ? !!enabled : !_apiKillSwitch;
+  console.log(`Admin: API kill switch ${_apiKillSwitch ? "ENABLED — all outgoing requests blocked" : "DISABLED — requests flowing"}`);
+  res.json({ ok: true, killSwitch: _apiKillSwitch });
+});
+
+// GET /api/admin/api-kill — check kill switch status
+app.get("/api/admin/api-kill", async (req, res) => {
+  const userId = getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  res.json({ killSwitch: _apiKillSwitch });
 });
 
 // GET /api/admin/interests — interest signal stats, admin only
