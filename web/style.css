@@ -2316,6 +2316,11 @@ footer {
   text-align: center;
   padding: 3rem 1.5rem;
   color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 40vh;
 }
 .empty-state-icon {
   font-size: 2.5rem;
