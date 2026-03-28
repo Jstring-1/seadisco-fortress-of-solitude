@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, getLocationByIp, upsertLocation, rebuildUserTasteProfile, getUserTasteProfile, getPersonalizedFreshReleases, getPersonalizedFeedArticles, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, getLocationByIp, upsertLocation, rebuildUserTasteProfile, getUserTasteProfile, getPersonalizedFreshReleases, getPersonalizedFeedArticles, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1327,10 +1327,19 @@ app.get("/search", async (req, res) => {
 
 // GET /release/:id
 app.get("/release/:id", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  // Check cache first
+  try {
+    const cached = await getCachedRelease(id, "release");
+    if (cached) { res.json(cached); return; }
+  } catch (_) { /* cache miss — continue to API */ }
+
   const dc = await getDiscogsForRequest(req, true);
   if (!dc) { res.status(503).json({ error: "No Discogs token configured" }); return; }
   try {
     const result = await dc.getRelease(req.params.id);
+    // Save to cache in background
+    cacheRelease(id, "release", result as object).catch(() => {});
     res.json(result);
   } catch (err) {
     console.error(err);
@@ -1340,10 +1349,19 @@ app.get("/release/:id", async (req, res) => {
 
 // GET /master/:id
 app.get("/master/:id", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  // Check cache first
+  try {
+    const cached = await getCachedRelease(id, "master");
+    if (cached) { res.json(cached); return; }
+  } catch (_) { /* cache miss — continue to API */ }
+
   const dc = await getDiscogsForRequest(req, true);
   if (!dc) { res.status(503).json({ error: "No Discogs token configured" }); return; }
   try {
     const result = await dc.getMasterRelease(req.params.id);
+    // Save to cache in background
+    cacheRelease(id, "master", result as object).catch(() => {});
     res.json(result);
   } catch (err) {
     console.error(err);
@@ -1602,7 +1620,10 @@ app.get("/marketplace-stats/:id", async (req, res) => {
   try {
     let releaseId = id;
     if (type === "master") {
-      const master = await dc.getMasterRelease(id) as any;
+      // Try cache first for the master lookup
+      const cachedMaster = await getCachedRelease(parseInt(id, 10), "master").catch(() => null);
+      const master = cachedMaster ?? await dc.getMasterRelease(id) as any;
+      if (!cachedMaster && master) cacheRelease(parseInt(id, 10), "master", master).catch(() => {});
       releaseId = String(master?.main_release ?? id);
     }
 
