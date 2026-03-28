@@ -48,7 +48,8 @@
         <h2 style="margin-bottom:0.4rem">Actions</h2>
         <div style="display:flex;align-items:center;gap:0.7rem;flex-wrap:wrap">
           <button onclick="adminSyncAll()" id="admin-sync-all-btn" class="admin-btn">Sync All Users</button>
-          <button onclick="adminSyncStop()" id="admin-sync-stop-btn" class="admin-btn admin-btn-danger">Stop All Syncs</button>
+          <button onclick="adminSyncStop()" id="admin-sync-stop-btn" class="admin-btn admin-btn-danger">Stop User Syncs</button>
+          <button onclick="toggleApiKill()" id="admin-api-kill-btn" class="admin-btn admin-btn-danger">Kill All APIs</button>
           <button onclick="adminGearFetch()" id="admin-gear-fetch-btn" class="admin-btn">Fetch eBay Gear</button>
           <button onclick="adminFeedFetch()" id="admin-feed-fetch-btn" class="admin-btn">Fetch Feed</button>
           <button onclick="adminLiveFetch()" id="admin-live-fetch-btn" class="admin-btn">Fetch Live Events</button>
@@ -198,6 +199,7 @@ async function initClerk() {
     loadApiLog();
     loadInterestStats();
     loadAdminSearches();
+    checkKillStatus();
   } catch {
     document.getElementById("loading-section").style.display = "none";
     document.getElementById("denied-section").style.display = "block";
@@ -312,7 +314,48 @@ async function adminSyncStop() {
     }).then(r => r.json());
     statusEl.textContent = r.message || "Stop signal sent.";
   } catch { statusEl.textContent = "Stop request failed."; }
-  finally { btn.disabled = false; btn.textContent = "Stop All Syncs"; }
+  finally { btn.disabled = false; btn.textContent = "Stop User Syncs"; }
+}
+
+async function toggleApiKill() {
+  const btn = document.getElementById("admin-api-kill-btn");
+  const statusEl = document.getElementById("admin-action-status");
+  btn.disabled = true;
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const r = await fetch("/api/admin/api-kill", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+    }).then(r => r.json());
+    updateKillButton(r.killSwitch);
+    statusEl.textContent = r.killSwitch
+      ? "ALL outgoing API requests are now BLOCKED."
+      : "API requests resumed \u2014 all services flowing.";
+  } catch { statusEl.textContent = "Kill switch toggle failed."; }
+  finally { btn.disabled = false; }
+}
+
+function updateKillButton(active) {
+  const btn = document.getElementById("admin-api-kill-btn");
+  if (active) {
+    btn.textContent = "Resume APIs";
+    btn.style.background = "#1a6b1a";
+    btn.style.borderColor = "#3a3";
+  } else {
+    btn.textContent = "Kill All APIs";
+    btn.style.background = "#6b1a1a";
+    btn.style.borderColor = "#933";
+  }
+}
+
+async function checkKillStatus() {
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const r = await fetch("/api/admin/api-kill", {
+      headers: { Authorization: `Bearer ${sessionToken}` }
+    }).then(r => r.json());
+    updateKillButton(r.killSwitch);
+  } catch {}
 }
 
 async function adminGearFetch() {
