@@ -411,9 +411,10 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const notes       = d.notes ? stripDiscogsMarkup(d.notes) : "";
   const catno     = (d.labels ?? [])[0]?.catno ?? "";
   const releaseId = d.id ?? searchResult.id ?? "";
-  const typeLabel = targetId === "version-info"
-    ? `Version: ${releaseId}`
-    : searchResult.type === "master" ? "Master Release" : searchResult.type === "release" ? "Release" : "";
+  const typeName = targetId === "version-info"
+    ? "Version"
+    : searchResult.type === "master" ? "Master" : searchResult.type === "release" ? "Release" : "";
+  const typeLabel = typeName && releaseId ? `${typeName}: ${releaseId}` : typeName;
 
   const videoMap = new Map();
   for (const v of (d.videos ?? [])) {
@@ -508,7 +509,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
                title="${allImages.length > 1 ? `View ${allImages.length} photos` : 'View photo'}" />`
              : `<div class="album-cover-placeholder">♪</div>`}
       <div class="album-meta">
-        ${typeLabel ? `<div class="album-type-badge">${escHtml(typeLabel)}</div>` : ""}
+        ${typeLabel ? `<div class="album-type-badge" style="cursor:pointer;user-select:none" onclick="navigator.clipboard.writeText('${escHtml(String(releaseId))}');this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy ID">${escHtml(typeLabel)}</div>` : ""}
         <h2>${escHtml(title)} <a href="#" class="album-title-search" onclick="event.preventDefault();closeModal();document.getElementById('query').value='${escHtml(title.replace(/'/g, "\\'"))}';toggleAdvanced(false);document.querySelector('input[name=\\'result-type\\'][value=\\'\\']').checked=true;doSearch(1)" title="Search for other versions">⌕</a>${window._collectionIds?.has(Number(releaseId)) ? ` <span class="collection-badge" title="In your collection">✓</span>` : ""}${window._wantlistIds?.has(Number(releaseId)) ? ` <span class="wantlist-badge" title="In your wantlist">♡</span>` : ""}</h2>
         ${artists.length ? `<div class="album-artist">${artists.map(n => `<a href="#" class="modal-artist-link" data-artist="${escHtml(n)}" onclick="searchArtistFromModal(event,this)">${escHtml(n)}</a>`).join(", ")}</div>` : ""}
         ${detailRows ? `<div class="album-detail-grid">${detailRows}</div>` : ""}
@@ -521,8 +522,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
           if (have || want) parts.push(`${(have ?? 0).toLocaleString()} have · ${(want ?? 0).toLocaleString()} want`);
           return parts.length ? `<div style="font-size:0.72rem;color:#888;margin-top:0.35rem">${parts.join('<span style="color:#444;margin:0 0.35em">·</span>')}</div>` : "";
         })()}
-        ${releaseId ? `<div class="release-id-copy" onclick="navigator.clipboard.writeText('${escHtml(String(releaseId))}');this.querySelector('.copy-ok').style.opacity=1;setTimeout(()=>this.querySelector('.copy-ok').style.opacity=0,1200)" title="Click to copy release ID" style="font-size:0.7rem;color:#7a6d58;margin-top:0.4rem;cursor:pointer;user-select:none;display:inline-flex;align-items:center;gap:0.3rem">${isMaster ? 'Master' : 'Release'} ID: <span style="color:var(--accent);font-weight:600">${escHtml(String(releaseId))}</span> <span class="copy-ok" style="color:#6b8f71;opacity:0;transition:opacity 0.2s;font-size:0.68rem">copied!</span></div>` : ""}
-        ${discogsUrl ? `<a href="${discogsUrl}" target="_blank" rel="noopener" style="font-size:0.75rem;color:var(--accent);text-decoration:none;margin-top:0.25rem;display:inline-block">View on Discogs ↗</a>` : ""}
+        ${discogsUrl ? `<a href="${discogsUrl}" target="_blank" rel="noopener" style="font-size:0.75rem;color:var(--accent);text-decoration:none;margin-top:0.4rem;display:inline-block">View on Discogs ↗</a>` : ""}
         ${stats?.numForSale > 0 && stats?.lowestPrice != null
           ? `<a href="https://www.discogs.com/sell/list?release_id=${escHtml(String(stats.releaseId))}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#888;text-decoration:none;margin-top:0.2rem;display:block">${escHtml(String(stats.numForSale))} available from $${parseFloat(stats.lowestPrice).toFixed(2)}</a>`
           : (stats?.numForSale === 0 ? `<div style="font-size:0.75rem;color:#555;margin-top:0.2rem">Not currently available on Discogs marketplace</div>` : "")
