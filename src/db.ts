@@ -1879,9 +1879,12 @@ export async function logApiRequest(opts: {
   } catch {}
 }
 
-export async function getApiRequestLog(opts?: { service?: string; limit?: number; offset?: number; successOnly?: boolean; errorsOnly?: boolean }): Promise<{ items: any[]; total: number }> {
+export async function getApiRequestLog(opts?: { service?: string; limit?: number; offset?: number; successOnly?: boolean; errorsOnly?: boolean; hours?: number }): Promise<{ items: any[]; total: number }> {
   const params: any[] = [];
   let where = "WHERE 1=1";
+  const hours = opts?.hours ?? 24;
+  params.push(hours);
+  where += ` AND created_at > NOW() - INTERVAL '1 hour' * $${params.length}`;
   if (opts?.service) {
     params.push(opts.service);
     where += ` AND service = $${params.length}`;
@@ -1994,7 +1997,7 @@ export async function cacheRelease(discogsId: number, type: "release" | "master"
   );
 }
 
-export async function getApiRequestStats(): Promise<any[]> {
+export async function getApiRequestStats(hours: number = 24): Promise<any[]> {
   const r = await getPool().query(`
     SELECT service,
            COUNT(*)::int AS total_requests,
@@ -2003,9 +2006,9 @@ export async function getApiRequestStats(): Promise<any[]> {
            ROUND(AVG(duration_ms))::int AS avg_duration_ms,
            MAX(created_at) AS last_request_at
     FROM api_request_log
-    WHERE created_at > NOW() - INTERVAL '24 hours'
+    WHERE created_at > NOW() - INTERVAL '1 hour' * $1
     GROUP BY service
     ORDER BY total_requests DESC
-  `);
+  `, [hours]);
   return r.rows;
 }

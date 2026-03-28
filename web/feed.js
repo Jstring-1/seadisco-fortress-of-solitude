@@ -107,7 +107,7 @@ function onFeedSearch(val) {
   }, 350);
 }
 
-async function loadFeedArticles(append = false) {
+async function loadFeedArticles(append = false, _retryCount = 0) {
   if (_feedLoading) return;
   _feedLoading = true;
   const status = document.getElementById("feed-status");
@@ -145,12 +145,24 @@ async function loadFeedArticles(append = false) {
     }
 
     if (!_feedItems.length) {
+      // Auto-retry once after 2s — the feed DB may not have been ready
+      if (_retryCount < 1 && !_feedQuery) {
+        _feedLoading = false;
+        setTimeout(() => loadFeedArticles(false, _retryCount + 1), 2000);
+        return;
+      }
       document.getElementById("feed-results").innerHTML = renderEmptyState("📰", "No articles yet", "The feed updates every 4 hours with music news and reviews")
-        + `<div style="text-align:center;margin-top:1rem"><button onclick="loadFeed()" style="background:var(--accent);color:#fff;border:none;padding:0.5rem 1.2rem;border-radius:4px;cursor:pointer;font-size:0.85rem">Refresh Feed</button></div>`;
+        + `<div style="text-align:center;margin-top:1rem"><button onclick="loadFeedArticles()" style="background:var(--accent);color:#fff;border:none;padding:0.5rem 1.2rem;border-radius:4px;cursor:pointer;font-size:0.85rem">Refresh Feed</button></div>`;
     } else {
       renderFeedGrid();
     }
   } catch (e) {
+    // Auto-retry once on network/parse error
+    if (_retryCount < 1) {
+      _feedLoading = false;
+      setTimeout(() => loadFeedArticles(append, _retryCount + 1), 2000);
+      return;
+    }
     if (status) status.textContent = "Error loading feed";
     showToast("Failed to load feed — please try again", "error");
   } finally {

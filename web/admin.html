@@ -80,9 +80,9 @@
 
       <!-- API Request Log -->
       <div class="admin-section admin-section-a">
-        <h2 style="margin-bottom:0.5rem">API Request Log <span style="font-size:0.75rem;color:var(--muted);font-weight:400">(24h)</span></h2>
+        <h2 style="margin-bottom:0.5rem">API Request Log <span id="api-log-range-label" style="font-size:0.75rem;color:var(--muted);font-weight:400">(24h)</span></h2>
         <div id="api-stats-summary" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem"></div>
-        <div style="margin-bottom:0.5rem">
+        <div style="margin-bottom:0.5rem;display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center">
           <select id="api-log-filter" onchange="loadApiLog()" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:#1a1510;color:var(--text);border:1px solid var(--border);border-radius:4px">
             <option value="">All Services</option>
             <option value="discogs">Discogs</option>
@@ -96,7 +96,11 @@
             <option value="coverartarchive">CoverArtArchive</option>
             <option value="ip-api">IP Geolocation</option>
           </select>
-          <label style="font-size:0.75rem;color:var(--muted);margin-left:0.5rem"><input type="checkbox" id="api-log-errors-only" onchange="loadApiLog()"> Errors only</label>
+          <select id="api-log-hours" onchange="loadApiLog()" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:#1a1510;color:var(--text);border:1px solid var(--border);border-radius:4px">
+            <option value="24">Last 24 hours</option>
+            <option value="168">Last 7 days</option>
+          </select>
+          <label style="font-size:0.75rem;color:var(--muted);margin-left:0.3rem"><input type="checkbox" id="api-log-errors-only" onchange="loadApiLog()"> Errors only</label>
         </div>
         <div id="api-log-list" style="font-size:0.82rem;color:var(--muted);max-height:500px;overflow-y:auto"></div>
       </div>
@@ -447,12 +451,17 @@ async function loadApiLog() {
     const sessionToken = await clerk.session?.getToken();
     const service = document.getElementById("api-log-filter").value;
     const errorsOnly = document.getElementById("api-log-errors-only").checked;
-    const params = new URLSearchParams({ limit: "200" });
+    const hours = document.getElementById("api-log-hours").value || "24";
+    const params = new URLSearchParams({ limit: "200", hours });
     if (service) params.set("service", service);
     if (errorsOnly) params.set("errors", "true");
 
+    // Update header label
+    const rangeLabel = document.getElementById("api-log-range-label");
+    if (rangeLabel) rangeLabel.textContent = hours === "168" ? "(7 days)" : "(24h)";
+
     const [statsRes, logRes] = await Promise.all([
-      fetch("/api/admin/api-stats", { headers: { Authorization: `Bearer ${sessionToken}` } }),
+      fetch(`/api/admin/api-stats?hours=${hours}`, { headers: { Authorization: `Bearer ${sessionToken}` } }),
       fetch(`/api/admin/api-log?${params}`, { headers: { Authorization: `Bearer ${sessionToken}` } }),
     ]);
     if (!statsRes.ok || !logRes.ok) return;
