@@ -1889,6 +1889,77 @@ export async function getApiRequestLog(opts?: { service?: string; limit?: number
   return { items: r.rows, total };
 }
 
+// ── User collection/wantlist stats (admin) ────────────────────────────────
+export async function getUserCollectionStats(): Promise<{ users: any[]; global: any }> {
+  const pool = getPool();
+
+  // Per-user stats
+  const perUser = await pool.query(`
+    SELECT
+      u.clerk_user_id,
+      u.discogs_username AS username,
+      COALESCE(c.coll_count, 0)::int AS collection_count,
+      COALESCE(w.want_count, 0)::int AS wantlist_count,
+      COALESCE(i.inv_count, 0)::int AS inventory_count,
+      COALESCE(l.list_count, 0)::int AS list_count,
+      c.oldest_added AS coll_oldest,
+      c.newest_added AS coll_newest,
+      c.top_genres,
+      c.top_styles
+    FROM user_tokens u
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*)::int AS coll_count,
+             MIN(added_at) AS oldest_added,
+             MAX(added_at) AS newest_added,
+             (SELECT array_agg(g ORDER BY cnt DESC) FROM (
+               SELECT g, COUNT(*)::int AS cnt
+               FROM user_collection uc2,
+                    jsonb_array_elements_text(uc2.data->'genres') AS g
+               WHERE uc2.clerk_user_id = u.clerk_user_id
+               GROUP BY g ORDER BY cnt DESC LIMIT 5
+             ) sub) AS top_genres,
+             (SELECT array_agg(s ORDER BY cnt DESC) FROM (
+               SELECT s, COUNT(*)::int AS cnt
+               FROM user_collection uc3,
+                    jsonb_array_elements_text(uc3.data->'styles') AS s
+               WHERE uc3.clerk_user_id = u.clerk_user_id
+               GROUP BY s ORDER BY cnt DESC LIMIT 5
+             ) sub2) AS top_styles
+      FROM user_collection uc
+      WHERE uc.clerk_user_id = u.clerk_user_id
+    ) c ON true
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*)::int AS want_count
+      FROM user_wantlist uw
+      WHERE uw.clerk_user_id = u.clerk_user_id
+    ) w ON true
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*)::int AS inv_count
+      FROM user_inventory ui
+      WHERE ui.clerk_user_id = u.clerk_user_id
+    ) i ON true
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*)::int AS list_count
+      FROM user_lists ul
+      WHERE ul.clerk_user_id = u.clerk_user_id
+    ) l ON true
+    WHERE u.discogs_username IS NOT NULL
+    ORDER BY c.coll_count DESC NULLS LAST
+  `);
+
+  // Global totals
+  const globalQ = await pool.query(`
+    SELECT
+      (SELECT COUNT(*)::int FROM user_collection) AS total_collection,
+      (SELECT COUNT(*)::int FROM user_wantlist) AS total_wantlist,
+      (SELECT COUNT(*)::int FROM user_inventory) AS total_inventory,
+      (SELECT COUNT(DISTINCT discogs_release_id)::int FROM user_collection) AS unique_releases,
+      (SELECT COUNT(DISTINCT discogs_release_id)::int FROM user_wantlist) AS unique_wants
+  `);
+
+  return { users: perUser.rows, global: globalQ.rows[0] };
+}
+
 export async function getApiRequestStats(): Promise<any[]> {
   const r = await getPool().query(`
     SELECT service,
