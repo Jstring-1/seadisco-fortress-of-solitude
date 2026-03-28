@@ -64,6 +64,11 @@
       <h2 style="margin-bottom:0.5rem">Feedback Inbox</h2>
       <div id="feedback-list" style="font-size:0.85rem;color:var(--muted)">Loading...</div>
 
+      <!-- Collection Stats -->
+      <hr class="section-divider" />
+      <h2 style="margin-bottom:0.5rem">Collection Stats</h2>
+      <div id="collection-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
+
       <!-- User Sync Status -->
       <hr class="section-divider" />
       <h2 style="margin-bottom:0.5rem">User Sync Status</h2>
@@ -199,6 +204,7 @@ async function initClerk() {
     loadApiLog();
     loadInterestStats();
     loadAdminSearches();
+    loadCollectionStats();
     checkKillStatus();
   } catch {
     document.getElementById("loading-section").style.display = "none";
@@ -539,6 +545,53 @@ async function deleteFeedbackItem(id) {
     headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
   });
   if (r.ok) document.getElementById(`fb-${id}`)?.remove();
+}
+
+// ── Collection Stats ──────────────────────────────────────────────────
+async function loadCollectionStats() {
+  const el = document.getElementById("collection-stats");
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const data = await fetch("/api/admin/collection-stats", {
+      headers: { Authorization: `Bearer ${sessionToken}` }
+    }).then(r => r.json());
+    if (data.error) { el.textContent = "Could not load."; return; }
+
+    const g = data.global;
+    const globalHtml = `<div style="display:flex;flex-wrap:wrap;gap:0.8rem 2rem;margin-bottom:1rem;font-size:0.82rem">
+      <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(g.total_collection ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">total collection items</span></div>
+      <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(g.total_wantlist ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">total wantlist items</span></div>
+      <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(g.total_inventory ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">inventory items</span></div>
+      <div><span style="color:var(--text);font-weight:600">${(g.unique_releases ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">unique releases</span></div>
+      <div><span style="color:var(--text);font-weight:600">${(g.unique_wants ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">unique wants</span></div>
+    </div>`;
+
+    const fmtDate = d => d ? new Date(d).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "\u2014";
+    const userRows = (data.users ?? []).map(u => {
+      const genres = (u.top_genres ?? []).slice(0, 5).join(", ");
+      const styles = (u.top_styles ?? []).slice(0, 5).join(", ");
+      return `<tr>
+        <td style="color:var(--text);font-weight:600;white-space:nowrap">@${u.username}</td>
+        <td style="text-align:right;color:var(--accent);font-weight:600">${(u.collection_count ?? 0).toLocaleString()}</td>
+        <td style="text-align:right">${(u.wantlist_count ?? 0).toLocaleString()}</td>
+        <td style="text-align:right">${(u.inventory_count ?? 0).toLocaleString()}</td>
+        <td style="text-align:right">${(u.list_count ?? 0).toLocaleString()}</td>
+        <td style="white-space:nowrap">${fmtDate(u.coll_oldest)} \u2013 ${fmtDate(u.coll_newest)}</td>
+        <td style="font-size:0.72rem;color:#8a7d6b;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${genres}">${genres || "\u2014"}</td>
+        <td style="font-size:0.72rem;color:#8a7d6b;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${styles}">${styles || "\u2014"}</td>
+      </tr>`;
+    }).join("");
+
+    el.innerHTML = globalHtml + `
+      <table class="api-log-table" style="font-size:0.78rem">
+        <thead><tr>
+          <th>User</th><th style="text-align:right">Collection</th><th style="text-align:right">Wantlist</th>
+          <th style="text-align:right">Inventory</th><th style="text-align:right">Lists</th>
+          <th>Date Range</th><th>Top Genres</th><th>Top Styles</th>
+        </tr></thead>
+        <tbody>${userRows}</tbody>
+      </table>`;
+  } catch { el.textContent = "Could not load collection stats."; }
 }
 
 // ── Interest Signals ──────────────────────────────────────────────────
