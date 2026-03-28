@@ -1020,7 +1020,6 @@ a.fresh-card-search-link:hover {
 .live-status-postponed { background: #4a3a10; color: #e8d44d; }
 .live-status-rescheduled { background: #1a3a2a; color: #6bcf8e; }
 .live-status-offsale { background: #2a2520; color: var(--muted); }
-.live-event-dimmed { opacity: 0.6; }
 .live-event-source {
   font-size: 0.6rem;
   color: #444;
