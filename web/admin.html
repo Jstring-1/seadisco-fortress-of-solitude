@@ -44,7 +44,7 @@
     <div id="admin-content" style="display:none">
 
       <!-- Action buttons -->
-      <div id="admin-actions">
+      <div class="admin-section admin-section-a">
         <h2 style="margin-bottom:0.4rem">Actions</h2>
         <div style="display:flex;align-items:center;gap:0.7rem;flex-wrap:wrap">
           <button onclick="adminSyncAll()" id="admin-sync-all-btn" class="admin-btn">Sync All Users</button>
@@ -60,50 +60,55 @@
       </div>
 
       <!-- Feedback Inbox -->
-      <hr class="section-divider" />
-      <h2 style="margin-bottom:0.5rem">Feedback Inbox</h2>
-      <div id="feedback-list" style="font-size:0.85rem;color:var(--muted)">Loading...</div>
+      <div class="admin-section admin-section-b">
+        <h2 style="margin-bottom:0.5rem">Feedback Inbox</h2>
+        <div id="feedback-list" style="font-size:0.85rem;color:var(--muted)">Loading...</div>
+      </div>
 
       <!-- Collection Stats -->
-      <hr class="section-divider" />
-      <h2 style="margin-bottom:0.5rem">Collection Stats</h2>
-      <div id="collection-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
+      <div class="admin-section admin-section-a">
+        <h2 style="margin-bottom:0.5rem">Collection Stats</h2>
+        <div id="collection-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
+      </div>
 
       <!-- User Sync Status -->
-      <hr class="section-divider" />
-      <h2 style="margin-bottom:0.5rem">User Sync Status</h2>
-      <div id="admin-fresh-stats" style="font-size:0.8rem;color:#555;margin-bottom:0.75rem"></div>
-      <div id="admin-sync-status-list" style="font-size:0.83rem;color:var(--muted)">Loading...</div>
+      <div class="admin-section admin-section-b">
+        <h2 style="margin-bottom:0.5rem">User Sync Status</h2>
+        <div id="admin-fresh-stats" style="font-size:0.8rem;color:#555;margin-bottom:0.75rem"></div>
+        <div id="admin-sync-status-list" style="font-size:0.83rem;color:var(--muted)">Loading...</div>
+      </div>
 
       <!-- API Request Log -->
-      <hr class="section-divider" />
-      <h2 style="margin-bottom:0.5rem">API Request Log <span style="font-size:0.75rem;color:var(--muted);font-weight:400">(24h)</span></h2>
-      <div id="api-stats-summary" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem"></div>
-      <div style="margin-bottom:0.5rem">
-        <select id="api-log-filter" onchange="loadApiLog()" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:#1a1510;color:var(--text);border:1px solid var(--border);border-radius:4px">
-          <option value="">All Services</option>
-          <option value="discogs">Discogs</option>
-          <option value="ticketmaster">Ticketmaster</option>
-          <option value="ebay">eBay</option>
-          <option value="youtube">YouTube</option>
-          <option value="rss">RSS</option>
-          <option value="anthropic">Anthropic</option>
-          <option value="bandsintown">Bandsintown</option>
-          <option value="listenbrainz">ListenBrainz</option>
-          <option value="coverartarchive">CoverArtArchive</option>
-          <option value="ip-api">IP Geolocation</option>
-        </select>
-        <label style="font-size:0.75rem;color:var(--muted);margin-left:0.5rem"><input type="checkbox" id="api-log-errors-only" onchange="loadApiLog()"> Errors only</label>
+      <div class="admin-section admin-section-a">
+        <h2 style="margin-bottom:0.5rem">API Request Log <span style="font-size:0.75rem;color:var(--muted);font-weight:400">(24h)</span></h2>
+        <div id="api-stats-summary" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem"></div>
+        <div style="margin-bottom:0.5rem">
+          <select id="api-log-filter" onchange="loadApiLog()" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:#1a1510;color:var(--text);border:1px solid var(--border);border-radius:4px">
+            <option value="">All Services</option>
+            <option value="discogs">Discogs</option>
+            <option value="ticketmaster">Ticketmaster</option>
+            <option value="ebay">eBay</option>
+            <option value="youtube">YouTube</option>
+            <option value="rss">RSS</option>
+            <option value="anthropic">Anthropic</option>
+            <option value="bandsintown">Bandsintown</option>
+            <option value="listenbrainz">ListenBrainz</option>
+            <option value="coverartarchive">CoverArtArchive</option>
+            <option value="ip-api">IP Geolocation</option>
+          </select>
+          <label style="font-size:0.75rem;color:var(--muted);margin-left:0.5rem"><input type="checkbox" id="api-log-errors-only" onchange="loadApiLog()"> Errors only</label>
+        </div>
+        <div id="api-log-list" style="font-size:0.82rem;color:var(--muted);max-height:500px;overflow-y:auto"></div>
       </div>
-      <div id="api-log-list" style="font-size:0.82rem;color:var(--muted);max-height:500px;overflow-y:auto"></div>
 
       <!-- Interest Signals -->
-      <hr class="section-divider" />
-      <h2 style="margin-bottom:0.5rem">Interest Signals</h2>
-      <div id="interest-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
+      <div class="admin-section admin-section-b">
+        <h2 style="margin-bottom:0.5rem">Interest Signals</h2>
+        <div id="interest-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
+      </div>
 
       <!-- Global Search Pool -->
-      <hr class="section-divider" />
+      <div class="admin-section admin-section-a">
       <div class="admin-pool-grid">
         <div id="admin-searches">
           <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem">
@@ -119,6 +124,7 @@
           </div>
           <div id="global-live-search-list" style="font-size:0.8rem;color:var(--muted);max-height:520px;overflow-y:auto;overflow-x:hidden">Loading...</div>
         </div>
+      </div>
       </div>
 
     </div>
@@ -750,6 +756,16 @@ document.addEventListener("click", e => {
 }
 .admin-btn-danger:hover { background: #7b2a2a; }
 
+/* Alternating section backgrounds */
+.admin-section {
+  padding: 1rem 1.2rem;
+  margin: 0 -1.2rem;
+  border-radius: 6px;
+}
+.admin-section + .admin-section { margin-top: 0.25rem; }
+.admin-section-a { background: rgba(255,255,255,0.015); }
+.admin-section-b { background: rgba(255,107,53,0.02); }
+
 /* API Log table */
 .api-log-table {
   width: 100%;
@@ -768,7 +784,7 @@ document.addEventListener("click", e => {
   border-bottom: 1px solid #3a3020;
   position: sticky;
   top: 0;
-  background: var(--card-bg, #1a1510);
+  background: #1a1510;
 }
 .api-log-table tbody tr { border-bottom: 1px solid #2a2015; }
 .api-log-table tbody tr:hover { background: rgba(255,255,255,0.02); }
