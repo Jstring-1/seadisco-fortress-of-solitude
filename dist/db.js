@@ -1414,12 +1414,8 @@ export async function getApiRequestLog(opts) {
         where += " AND success = true";
     if (opts?.errorsOnly)
         where += " AND success = false";
-    const countR = await getPool().query(`SELECT COUNT(*)::int AS cnt FROM api_request_log ${where}`, params);
-    const total = countR.rows[0]?.cnt ?? 0;
-    const limit = opts?.limit ?? 100;
-    const offset = opts?.offset ?? 0;
-    const r = await getPool().query(`SELECT * FROM api_request_log ${where} ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`, [...params, limit, offset]);
-    return { items: r.rows, total };
+    const r = await getPool().query(`SELECT * FROM api_request_log ${where} ORDER BY created_at DESC`, params);
+    return { items: r.rows, total: r.rows.length };
 }
 // ── User collection/wantlist stats (admin) ────────────────────────────────
 export async function getUserCollectionStats() {

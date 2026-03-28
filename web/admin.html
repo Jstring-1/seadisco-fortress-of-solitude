@@ -390,7 +390,7 @@ async function loadApiLog() {
     const service = document.getElementById("api-log-filter").value;
     const errorsOnly = document.getElementById("api-log-errors-only").checked;
     const hours = document.getElementById("api-log-hours").value || "24";
-    const params = new URLSearchParams({ limit: "200", hours });
+    const params = new URLSearchParams({ hours });
     if (service) params.set("service", service);
     if (errorsOnly) params.set("errors", "true");
 
@@ -398,13 +398,23 @@ async function loadApiLog() {
     const rangeLabel = document.getElementById("api-log-range-label");
     if (rangeLabel) rangeLabel.textContent = hours === "168" ? "(7 days)" : "(24h)";
 
-    const [statsRes, logRes] = await Promise.all([
-      fetch(`/api/admin/api-stats?hours=${hours}`, { headers: { Authorization: `Bearer ${sessionToken}` } }),
-      fetch(`/api/admin/api-log?${params}`, { headers: { Authorization: `Bearer ${sessionToken}` } }),
-    ]);
-    if (!statsRes.ok || !logRes.ok) return;
-    const { stats } = await statsRes.json();
+    const logRes = await fetch(`/api/admin/api-log?${params}`, { headers: { Authorization: `Bearer ${sessionToken}` } });
+    if (!logRes.ok) return;
     const { items, total } = await logRes.json();
+
+    // Derive stats from the same items so they always match
+    const statsMap = {};
+    for (const it of items) {
+      const s = statsMap[it.service] ??= { service: it.service, total_requests: 0, successes: 0, failures: 0, durations: [], last_request_at: null };
+      s.total_requests++;
+      if (it.success) s.successes++; else s.failures++;
+      if (it.duration_ms != null) s.durations.push(it.duration_ms);
+      if (!s.last_request_at || new Date(it.created_at) > new Date(s.last_request_at)) s.last_request_at = it.created_at;
+    }
+    const stats = Object.values(statsMap).map(s => ({
+      ...s,
+      avg_duration_ms: s.durations.length ? Math.round(s.durations.reduce((a, b) => a + b, 0) / s.durations.length) : null
+    })).sort((a, b) => b.total_requests - a.total_requests);
 
     const statsEl = document.getElementById("api-stats-summary");
     if (stats.length) {
@@ -462,7 +472,7 @@ async function loadApiLog() {
       </tr>`;
     }).join("");
 
-    listEl.innerHTML = `<div style="margin-bottom:0.4rem;color:var(--text);font-size:0.78rem;font-weight:600">${total} total entries</div>
+    listEl.innerHTML = `<div style="margin-bottom:0.4rem;color:var(--text);font-size:0.78rem;font-weight:600">${total} entries</div>
       <table class="api-log-table">
         <thead><tr>
           <th></th><th>Time</th><th>Service</th><th>Status</th><th>Duration</th><th>Context</th><th>Endpoint</th>
