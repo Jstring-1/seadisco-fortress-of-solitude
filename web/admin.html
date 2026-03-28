@@ -59,6 +59,11 @@
         <div id="admin-action-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.35rem"></div>
       </div>
 
+      <!-- Feedback Inbox -->
+      <hr class="section-divider" />
+      <h2 style="margin-bottom:0.5rem">Feedback Inbox</h2>
+      <div id="feedback-list" style="font-size:0.85rem;color:var(--muted)">Loading...</div>
+
       <!-- User Sync Status -->
       <hr class="section-divider" />
       <h2 style="margin-bottom:0.5rem">User Sync Status</h2>
@@ -85,12 +90,7 @@
         </select>
         <label style="font-size:0.75rem;color:var(--muted);margin-left:0.5rem"><input type="checkbox" id="api-log-errors-only" onchange="loadApiLog()"> Errors only</label>
       </div>
-      <div id="api-log-list" style="font-size:0.78rem;color:var(--muted);max-height:400px;overflow-y:auto"></div>
-
-      <!-- Feedback Inbox -->
-      <hr class="section-divider" />
-      <h2 style="margin-bottom:0.5rem">Feedback Inbox</h2>
-      <div id="feedback-list" style="font-size:0.85rem;color:var(--muted)">Loading...</div>
+      <div id="api-log-list" style="font-size:0.82rem;color:var(--muted);max-height:500px;overflow-y:auto"></div>
 
       <!-- Interest Signals -->
       <hr class="section-divider" />
@@ -449,33 +449,63 @@ async function loadApiLog() {
 
     const statsEl = document.getElementById("api-stats-summary");
     if (stats.length) {
-      statsEl.innerHTML = stats.map(s => {
+      const svcColors = {
+        discogs: "#7eb8da", ticketmaster: "#4fc3f7", ebay: "#e8d44d", youtube: "#ff6b6b",
+        rss: "#a0d468", anthropic: "#d4a0ff", bandsintown: "#ff9a76", listenbrainz: "#81c784",
+        coverartarchive: "#b0bec5", "ip-api": "#90a4ae"
+      };
+      statsEl.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:0.4rem 1.2rem">` + stats.map(s => {
         const failRate = s.total_requests ? Math.round((s.failures / s.total_requests) * 100) : 0;
         const failColor = failRate > 20 ? "#ff6b35" : failRate > 5 ? "#e8d44d" : "#6b8f71";
-        return `<span style="display:inline-block;margin-right:1rem;margin-bottom:0.25rem"><strong>${s.service}</strong>: ${s.total_requests} req, <span style="color:${failColor}">${s.failures} fail (${failRate}%)</span>, avg ${s.avg_duration_ms ?? "?"}ms</span>`;
-      }).join("");
+        const svcColor = svcColors[s.service] || "#e8d44d";
+        return `<div style="font-size:0.78rem;line-height:1.5">
+          <strong style="color:${svcColor};text-transform:uppercase;letter-spacing:0.03em">${s.service}</strong>
+          <span style="color:var(--muted);margin-left:0.3rem">${s.total_requests}</span>
+          <span style="color:${failColor};margin-left:0.2rem">${s.failures > 0 ? `(${s.failures} fail)` : ''}</span>
+          <span style="color:#7a6d58;margin-left:0.2rem">${s.avg_duration_ms ?? "?"}ms</span>
+        </div>`;
+      }).join("") + `</div>`;
     } else {
       statsEl.textContent = "No API requests in the last 24 hours.";
     }
 
     const listEl = document.getElementById("api-log-list");
     if (!items.length) { listEl.textContent = "No log entries found."; return; }
-    listEl.innerHTML = `<div style="margin-bottom:0.3rem;color:var(--text);font-size:0.75rem">${total} total entries</div>` +
+
+    // Service color map for visual scanning
+    const svcColors = {
+      discogs: "#7eb8da", ticketmaster: "#4fc3f7", ebay: "#e8d44d", youtube: "#ff6b6b",
+      rss: "#a0d468", anthropic: "#d4a0ff", bandsintown: "#ff9a76", listenbrainz: "#81c784",
+      coverartarchive: "#b0bec5", "ip-api": "#90a4ae"
+    };
+
+    listEl.innerHTML = `<div style="margin-bottom:0.5rem;color:var(--text);font-size:0.78rem;font-weight:600">${total} total entries</div>` +
       items.map(item => {
-        const time = new Date(item.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
-        const statusColor = item.success ? "#6b8f71" : "#ff6b35";
-        const statusIcon = item.success ? "\u2713" : "\u2717";
-        const dur = item.duration_ms != null ? `${item.duration_ms}ms` : "";
-        const ctx = item.context ? `<span style="color:#8a7d6b"> \u00b7 ${item.context}</span>` : "";
-        const err = item.error_message && !item.success ? `<div style="color:#cc5544;font-size:0.72rem;margin-top:0.15rem">${item.error_message.replace(/</g,"&lt;").slice(0, 200)}</div>` : "";
-        const endpoint = item.endpoint.length > 80 ? item.endpoint.slice(0, 80) + "\u2026" : item.endpoint;
-        return `<div style="padding:0.3rem 0;border-bottom:1px solid #2a2015">
-          <span style="color:${statusColor};font-weight:600">${statusIcon}</span>
-          <span style="color:#a09580">${time}</span>
-          <span style="color:#e8d44d;font-weight:600;margin:0 0.3rem">${item.service}</span>
-          <span style="color:var(--text)">${item.status_code || ""}</span>
-          <span style="color:#8a7d6b;margin-left:0.3rem">${dur}</span>${ctx}
-          <div style="color:#8a7d6b;font-size:0.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${endpoint}</div>${err}
+        const time = new Date(item.created_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        const date = new Date(item.created_at).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+        const ok = item.success;
+        const statusColor = ok ? "#6b8f71" : "#ff6b35";
+        const statusIcon = ok ? "\u2713" : "\u2717";
+        const svcColor = svcColors[item.service] || "#e8d44d";
+        const dur = item.duration_ms != null ? item.duration_ms : "";
+        const durColor = dur > 5000 ? "#ff6b35" : dur > 2000 ? "#e8d44d" : "#8a7d6b";
+        const ctx = item.context || "";
+        const err = item.error_message && !ok ? item.error_message.replace(/</g,"&lt;").slice(0, 200) : "";
+        // Shorten endpoint: strip protocol + domain, keep path + key params
+        let ep = item.endpoint.replace(/^https?:\/\/[^/]+/, "");
+        if (ep.length > 90) ep = ep.slice(0, 90) + "\u2026";
+
+        return `<div class="api-log-row${ok ? '' : ' api-log-err'}">
+          <div class="api-log-meta">
+            <span class="api-log-icon" style="color:${statusColor}">${statusIcon}</span>
+            <span class="api-log-time">${date} ${time}</span>
+            <span class="api-log-svc" style="color:${svcColor}">${item.service}</span>
+            <span class="api-log-code" style="color:${ok ? '#6b8f71' : '#ff6b35'}">${item.status_code || "\u2014"}</span>
+            <span class="api-log-dur" style="color:${durColor}">${dur ? dur + 'ms' : ''}</span>
+            ${ctx ? `<span class="api-log-ctx">${ctx}</span>` : ''}
+          </div>
+          <div class="api-log-ep">${ep}</div>
+          ${err ? `<div class="api-log-errmsg">${err}</div>` : ''}
         </div>`;
       }).join("");
   } catch { /* not admin */ }
@@ -664,6 +694,29 @@ document.addEventListener("click", e => {
   border: 1px solid #933;
 }
 .admin-btn-danger:hover { background: #7b2a2a; }
+
+/* API Log rows */
+.api-log-row {
+  padding: 0.4rem 0;
+  border-bottom: 1px solid #2a2015;
+}
+.api-log-row:hover { background: rgba(255,255,255,0.02); }
+.api-log-err { border-left: 3px solid #ff6b35; padding-left: 0.5rem; }
+.api-log-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  line-height: 1.6;
+}
+.api-log-icon { font-weight: 700; font-size: 0.85rem; }
+.api-log-time { color: #a09580; font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.api-log-svc { font-weight: 700; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.03em; }
+.api-log-code { font-weight: 600; font-size: 0.8rem; }
+.api-log-dur { font-size: 0.75rem; font-variant-numeric: tabular-nums; }
+.api-log-ctx { color: #8a7d6b; font-size: 0.75rem; }
+.api-log-ep { color: #7a6d58; font-size: 0.72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-top: 0.1rem; }
+.api-log-errmsg { color: #cc5544; font-size: 0.74rem; margin-top: 0.15rem; padding: 0.2rem 0.4rem; background: rgba(204,85,68,0.08); border-radius: 3px; }
 </style>
 
 </body>
