@@ -1328,17 +1328,11 @@ app.get("/search", async (req, res) => {
 // GET /release/:id
 app.get("/release/:id", async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  // Check cache first
-  try {
-    const cached = await getCachedRelease(id, "release");
-    if (cached) { res.json(cached); return; }
-  } catch (_) { /* cache miss — continue to API */ }
-
   const dc = await getDiscogsForRequest(req, true);
   if (!dc) { res.status(503).json({ error: "No Discogs token configured" }); return; }
   try {
     const result = await dc.getRelease(req.params.id);
-    // Save to cache in background
+    // Always save fresh data to cache
     cacheRelease(id, "release", result as object).catch(() => {});
     res.json(result);
   } catch (err) {
@@ -1350,17 +1344,11 @@ app.get("/release/:id", async (req, res) => {
 // GET /master/:id
 app.get("/master/:id", async (req, res) => {
   const id = parseInt(req.params.id, 10);
-  // Check cache first
-  try {
-    const cached = await getCachedRelease(id, "master");
-    if (cached) { res.json(cached); return; }
-  } catch (_) { /* cache miss — continue to API */ }
-
   const dc = await getDiscogsForRequest(req, true);
   if (!dc) { res.status(503).json({ error: "No Discogs token configured" }); return; }
   try {
     const result = await dc.getMasterRelease(req.params.id);
-    // Save to cache in background
+    // Always save fresh data to cache
     cacheRelease(id, "master", result as object).catch(() => {});
     res.json(result);
   } catch (err) {
