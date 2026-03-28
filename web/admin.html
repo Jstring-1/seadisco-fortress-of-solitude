@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SeaDisco — Admin</title>
+  <meta name="robots" content="noindex, nofollow" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎹</text></svg>">
+  <link rel="stylesheet" href="/style.css?v=20260327a" />
+</head>
+<body>
+
+<header id="site-header">
+  <a href="/" class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
+  <nav id="main-nav">
+    <button id="nav-hamburger" onclick="toggleMobileNav()" aria-label="Open navigation">
+      <span></span><span></span><span></span>
+    </button>
+    <div id="nav-tabs-wrap">
+      <div id="main-nav-tabs">
+        <a class="main-nav-tab" href="/">Search</a>
+        <a class="main-nav-tab" href="/?view=drops">Drops</a>
+        <a class="main-nav-tab" href="/?view=feed">Feed</a>
+        <a class="main-nav-tab" href="/?view=live">Live</a>
+        <a class="main-nav-tab" href="/?view=gear">Gear</a>
+        <a class="main-nav-tab" href="/?view=records">My Records</a>
+      </div>
+    </div>
+  </nav>
+</header>
+
+<main>
+  <div class="account-box">
+    <h2>Admin Dashboard</h2>
+
+    <div id="loading-section">
+      <p style="color:var(--muted)">Checking access...</p>
+    </div>
+
+    <div id="denied-section" style="display:none">
+      <p style="color:#e88">Access denied. Admin only.</p>
+    </div>
+
+    <div id="admin-content" style="display:none">
+
+      <!-- Action buttons -->
+      <div id="admin-actions">
+        <h2 style="margin-bottom:0.4rem">Actions</h2>
+        <div style="display:flex;align-items:center;gap:0.7rem;flex-wrap:wrap">
+          <button onclick="adminSyncAll()" id="admin-sync-all-btn" class="admin-btn">Sync All Users</button>
+          <button onclick="adminSyncStop()" id="admin-sync-stop-btn" class="admin-btn admin-btn-danger">Stop All Syncs</button>
+          <button onclick="adminGearFetch()" id="admin-gear-fetch-btn" class="admin-btn">Fetch eBay Gear</button>
+          <button onclick="adminFeedFetch()" id="admin-feed-fetch-btn" class="admin-btn">Fetch Feed</button>
+          <button onclick="adminLiveFetch()" id="admin-live-fetch-btn" class="admin-btn">Fetch Live Events</button>
+          <button onclick="adminExtrasFetch()" id="admin-extras-fetch-btn" class="admin-btn">Fetch Inventory/Lists</button>
+          <button onclick="adminRebuildTaste()" id="admin-taste-btn" class="admin-btn">Rebuild Taste Profiles</button>
+        </div>
+        <div id="admin-action-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.35rem"></div>
+      </div>
+
+      <!-- User Sync Status -->
+      <hr class="section-divider" />
+      <h2 style="margin-bottom:0.5rem">User Sync Status</h2>
+      <div id="admin-fresh-stats" style="font-size:0.8rem;color:#555;margin-bottom:0.75rem"></div>
+      <div id="admin-sync-status-list" style="font-size:0.83rem;color:var(--muted)">Loading...</div>
+
+      <!-- API Request Log -->
+      <hr class="section-divider" />
+      <h2 style="margin-bottom:0.5rem">API Request Log <span style="font-size:0.75rem;color:var(--muted);font-weight:400">(24h)</span></h2>
+      <div id="api-stats-summary" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem"></div>
+      <div style="margin-bottom:0.5rem">
+        <select id="api-log-filter" onchange="loadApiLog()" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:#1a1510;color:var(--text);border:1px solid var(--border);border-radius:4px">
+          <option value="">All Services</option>
+          <option value="discogs">Discogs</option>
+          <option value="ticketmaster">Ticketmaster</option>
+          <option value="ebay">eBay</option>
+          <option value="youtube">YouTube</option>
+          <option value="rss">RSS</option>
+          <option value="anthropic">Anthropic</option>
+          <option value="bandsintown">Bandsintown</option>
+          <option value="listenbrainz">ListenBrainz</option>
+          <option value="coverartarchive">CoverArtArchive</option>
+          <option value="ip-api">IP Geolocation</option>
+        </select>
+        <label style="font-size:0.75rem;color:var(--muted);margin-left:0.5rem"><input type="checkbox" id="api-log-errors-only" onchange="loadApiLog()"> Errors only</label>
+      </div>
+      <div id="api-log-list" style="font-size:0.78rem;color:var(--muted);max-height:400px;overflow-y:auto"></div>
+
+      <!-- Feedback Inbox -->
+      <hr class="section-divider" />
+      <h2 style="margin-bottom:0.5rem">Feedback Inbox</h2>
+      <div id="feedback-list" style="font-size:0.85rem;color:var(--muted)">Loading...</div>
+
+      <!-- Interest Signals -->
+      <hr class="section-divider" />
+      <h2 style="margin-bottom:0.5rem">Interest Signals</h2>
+      <div id="interest-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
+
+      <!-- Global Search Pool -->
+      <hr class="section-divider" />
+      <div class="admin-pool-grid">
+        <div id="admin-searches">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem">
+            <h2 style="margin:0;font-size:1rem">Global Search Pool</h2>
+            <span id="admin-search-count" style="font-size:0.72rem;color:#555"></span>
+          </div>
+          <div id="global-search-list" style="font-size:0.8rem;color:var(--muted);max-height:520px;overflow-y:auto;overflow-x:hidden">Loading...</div>
+        </div>
+        <div id="admin-live-searches">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem">
+            <h2 style="margin:0;font-size:1rem">Live Search Pool</h2>
+            <span id="admin-live-search-count" style="font-size:0.72rem;color:#555"></span>
+          </div>
+          <div id="global-live-search-list" style="font-size:0.8rem;color:var(--muted);max-height:520px;overflow-y:auto;overflow-x:hidden">Loading...</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</main>
+
+<footer>
+  <div class="footer-grid">
+    <div class="footer-col">
+      <h4>Discover</h4>
+      <a href="/">Search</a>
+      <a href="/?view=drops">Drops</a>
+      <a href="/?view=feed">Feed</a>
+      <a href="/?view=live">Live</a>
+      <a href="/?view=gear">Gear</a>
+    </div>
+    <div class="footer-col">
+      <h4>Your Music</h4>
+      <a href="/?view=records">My Records</a>
+      <a href="/account">Account</a>
+    </div>
+    <div class="footer-col">
+      <h4>About</h4>
+      <a href="/?view=info">Info</a>
+      <a href="https://www.discogs.com" target="_blank" rel="noopener">Discogs</a>
+      <a href="https://listenbrainz.org" target="_blank" rel="noopener">ListenBrainz</a>
+    </div>
+  </div>
+  <div style="color:#555;font-style:italic;margin-bottom:0.3rem">DISCLAIMER: AI be funky sometimes</div>
+  <div>Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Discogs</a>, <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Claude</a>, and <a href="https://listenbrainz.org" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">ListenBrainz</a></div>
+  <div style="margin-top:0.3rem">&copy; 2026 SeaDisco &nbsp;&middot;&nbsp; Music data courtesy of Discogs API &nbsp;&middot;&nbsp; Not affiliated with Discogs &nbsp;&middot;&nbsp; Jimmy Witherfork Strikes Again</div>
+</footer>
+
+<script>
+let clerk = null;
+
+async function initClerk() {
+  const cfg = await fetch("/api/config").then(r => r.json()).catch(() => ({}));
+  const pk = cfg.clerkPublishableKey;
+  if (!pk) {
+    document.getElementById("loading-section").innerHTML = '<p style="color:#e88">Auth not configured.</p>';
+    return;
+  }
+  const frontendApi = atob(pk.replace(/^pk_(test|live)_/, "")).replace(/\$$/, "");
+  await new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = `https://${frontendApi}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js`;
+    s.setAttribute("data-clerk-publishable-key", pk);
+    s.setAttribute("crossorigin", "anonymous");
+    s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+  await new Promise(r => setTimeout(r, 50));
+  clerk = window.Clerk;
+  if (!clerk) throw new Error("Clerk did not initialize");
+  await clerk.load();
+
+  if (!clerk.user) {
+    document.getElementById("loading-section").style.display = "none";
+    document.getElementById("denied-section").style.display = "block";
+    return;
+  }
+
+  // Verify admin access by calling an admin endpoint
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const r = await fetch("/api/admin/feedback", {
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
+    });
+    if (!r.ok) {
+      document.getElementById("loading-section").style.display = "none";
+      document.getElementById("denied-section").style.display = "block";
+      return;
+    }
+    const { items } = await r.json();
+
+    document.getElementById("loading-section").style.display = "none";
+    document.getElementById("admin-content").style.display = "block";
+
+    // Load all admin sections
+    renderFeedback(items);
+    loadAdminSyncStatus();
+    loadApiLog();
+    loadInterestStats();
+    loadAdminSearches();
+  } catch {
+    document.getElementById("loading-section").style.display = "none";
+    document.getElementById("denied-section").style.display = "block";
+  }
+}
+
+function fmtTime(ts) {
+  if (!ts) return "never";
+  const diff = Math.round((Date.now() - new Date(ts)) / 60000);
+  if (diff < 1) return "just now";
+  if (diff < 60) return `${diff}m ago`;
+  const h = Math.round(diff / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+}
+
+// ── User Sync Status ──────────────────────────────────────────────────
+let _adminSyncPoll = null;
+
+async function loadAdminSyncStatus() {
+  const el = document.getElementById("admin-sync-status-list");
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const { users, freshStats } = await fetch("/api/admin/sync-status", {
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
+    }).then(r => r.json());
+
+    const freshEl = document.getElementById("admin-fresh-stats");
+    if (freshEl && freshStats) {
+      const fmt = d => d ? new Date(d).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "\u2014";
+      freshEl.textContent = `Drops DB: ${(freshStats.count ?? 0).toLocaleString()} releases \u00b7 ${(freshStats.tagCount ?? 0).toLocaleString()} tags \u00b7 ${fmt(freshStats.oldest)} \u2013 ${fmt(freshStats.newest)}`;
+    }
+    if (!users?.length) { el.textContent = "No users with Discogs tokens."; return; }
+
+    el.innerHTML = users.map(u => {
+      const isSyncing = u.syncStatus === "syncing";
+      const isError = u.syncStatus === "error";
+      const isComplete = u.syncStatus === "complete";
+      const pct = u.syncTotal ? Math.round((u.syncProgress / u.syncTotal) * 100) : 0;
+      const statusColor = isError ? "#c0392b" : isSyncing ? "var(--accent)" : isComplete ? "#4caf50" : "#555";
+      let statusText;
+      if (isSyncing) {
+        statusText = u.syncTotal
+          ? `Syncing\u2026 ${u.syncProgress.toLocaleString()} / ${u.syncTotal.toLocaleString()} (${pct}%)`
+          : `Syncing\u2026 ${u.syncProgress.toLocaleString()} items`;
+      } else if (isError) {
+        statusText = `Error: ${u.syncError}`;
+      } else if (isComplete) {
+        statusText = u.syncTotal
+          ? `Complete \u2014 ${u.syncProgress.toLocaleString()} / ${u.syncTotal.toLocaleString()} items`
+          : u.syncProgress > 0
+            ? `Complete \u2014 ${u.syncProgress.toLocaleString()} items`
+            : `Complete \u2014 up to date`;
+      } else {
+        const countStr = u.syncProgress > 0 ? ` \u2014 ${u.syncProgress.toLocaleString()} items` : "";
+        statusText = `Idle${countStr}`;
+      }
+      const syncBtn = isSyncing ? '' : `<button onclick="adminSyncUser('${u.username}')" class="admin-btn" style="font-size:0.72rem;padding:0.15rem 0.5rem">Sync</button>`;
+      return `<div style="padding:0.45rem 0;border-bottom:1px solid #1a1a1a;display:grid;grid-template-columns:140px 1fr 1fr auto;gap:0.5rem 1rem;align-items:baseline;font-size:0.8rem">
+        <span style="color:var(--fg);font-weight:600">@${u.username}</span>
+        <span style="color:${statusColor}">${statusText}</span>
+        <span style="color:#555">Coll: ${fmtTime(u.collectionSyncedAt)} \u00b7 Want: ${fmtTime(u.wantlistSyncedAt)}</span>
+        <span>${syncBtn}</span>
+      </div>`;
+    }).join("");
+
+    const anyRunning = users.some(u => u.syncStatus === "syncing");
+    const interval = anyRunning ? 5000 : 15000;
+    if (_adminSyncPoll) clearInterval(_adminSyncPoll);
+    _adminSyncPoll = setInterval(loadAdminSyncStatus, interval);
+  } catch { el.textContent = "Could not load sync status."; }
+}
+
+// ── Admin actions ─────────────────────────────────────────────────────
+async function adminSyncAll() {
+  const btn = document.getElementById("admin-sync-all-btn");
+  const statusEl = document.getElementById("admin-action-status");
+  btn.disabled = true; btn.textContent = "Starting\u2026";
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const r = await fetch("/api/admin/sync-all", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+    }).then(r => r.json());
+    statusEl.textContent = `Full sync kicked off for ${r.queued} user${r.queued !== 1 ? "s" : ""}.`;
+    loadAdminSyncStatus();
+  } catch { statusEl.textContent = "Sync-all failed."; }
+  finally { btn.disabled = false; btn.textContent = "Sync All Users"; }
+}
+
+async function adminSyncUser(username) {
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    await fetch("/api/admin/sync-user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+      body: JSON.stringify({ username })
+    });
+    loadAdminSyncStatus();
+  } catch { alert("Sync failed for " + username); }
+}
+
+async function adminSyncStop() {
+  const btn = document.getElementById("admin-sync-stop-btn");
+  const statusEl = document.getElementById("admin-action-status");
+  btn.disabled = true; btn.textContent = "Stopping\u2026";
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const r = await fetch("/api/admin/sync-stop", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${sessionToken}` }
+    }).then(r => r.json());
+    statusEl.textContent = r.message || "Stop signal sent.";
+  } catch { statusEl.textContent = "Stop request failed."; }
+  finally { btn.disabled = false; btn.textContent = "Stop All Syncs"; }
+}
+
+async function adminGearFetch() {
+  const btn = document.getElementById("admin-gear-fetch-btn");
+  const statusEl = document.getElementById("admin-action-status");
+  btn.disabled = true; btn.textContent = "Fetching\u2026";
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const r = await fetch("/api/admin/gear/fetch", {
+      method: "POST", headers: { Authorization: `Bearer ${sessionToken}` }
+    }).then(r => r.json());
+    statusEl.textContent = r.message || "Gear fetch triggered.";
+  } catch { statusEl.textContent = "Gear fetch failed."; }
+  finally { btn.disabled = false; btn.textContent = "Fetch eBay Gear"; }
+}
+
+async function adminFeedFetch() {
+  const btn = document.getElementById("admin-feed-fetch-btn");
+  const statusEl = document.getElementById("admin-action-status");
+  btn.disabled = true; btn.textContent = "Fetching\u2026";
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const r = await fetch("/api/admin/feed/fetch", {
+      method: "POST", headers: { Authorization: `Bearer ${sessionToken}` }
+    }).then(r => r.json());
+    statusEl.textContent = r.message || "Feed fetch triggered.";
+  } catch { statusEl.textContent = "Feed fetch failed."; }
+  finally { btn.disabled = false; btn.textContent = "Fetch Feed"; }
+}
+
+async function adminLiveFetch() {
+  const btn = document.getElementById("admin-live-fetch-btn");
+  const statusEl = document.getElementById("admin-action-status");
+  btn.disabled = true; btn.textContent = "Fetching\u2026";
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const r = await fetch("/api/admin/live/fetch", {
+      method: "POST", headers: { Authorization: `Bearer ${sessionToken}` }
+    }).then(r => r.json());
+    statusEl.textContent = r.count != null ? `Fetched ${r.count} live events.` : "Live events fetch triggered.";
+  } catch { statusEl.textContent = "Live events fetch failed."; }
+  finally { btn.disabled = false; btn.textContent = "Fetch Live Events"; }
+}
+
+async function adminExtrasFetch() {
+  const btn = document.getElementById("admin-extras-fetch-btn");
+  const statusEl = document.getElementById("admin-action-status");
+  btn.disabled = true; btn.textContent = "Fetching\u2026";
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    await fetch("/api/admin/extras/fetch", {
+      method: "POST", headers: { Authorization: `Bearer ${sessionToken}` }
+    }).then(r => r.json());
+    statusEl.textContent = "Inventory/lists sync started \u2014 running in background.";
+  } catch { statusEl.textContent = "Inventory/lists fetch failed."; }
+  finally { btn.disabled = false; btn.textContent = "Fetch Inventory/Lists"; }
+}
+
+async function adminRebuildTaste() {
+  const btn = document.getElementById("admin-taste-btn");
+  const statusEl = document.getElementById("admin-action-status");
+  btn.disabled = true; btn.textContent = "Rebuilding\u2026";
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const r = await fetch("/api/admin/rebuild-taste", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+    }).then(r => r.json());
+    statusEl.textContent = `Rebuilt ${r.rebuilt}/${r.total} taste profiles.${r.errors?.length ? " Errors: " + r.errors.join("; ") : ""}`;
+  } catch { statusEl.textContent = "Taste profile rebuild failed."; }
+  finally { btn.disabled = false; btn.textContent = "Rebuild Taste Profiles"; }
+}
+
+// ── API Request Log ───────────────────────────────────────────────────
+async function loadApiLog() {
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const service = document.getElementById("api-log-filter").value;
+    const errorsOnly = document.getElementById("api-log-errors-only").checked;
+    const params = new URLSearchParams({ limit: "200" });
+    if (service) params.set("service", service);
+    if (errorsOnly) params.set("errors", "true");
+
+    const [statsRes, logRes] = await Promise.all([
+      fetch("/api/admin/api-stats", { headers: { Authorization: `Bearer ${sessionToken}` } }),
+      fetch(`/api/admin/api-log?${params}`, { headers: { Authorization: `Bearer ${sessionToken}` } }),
+    ]);
+    if (!statsRes.ok || !logRes.ok) return;
+    const { stats } = await statsRes.json();
+    const { items, total } = await logRes.json();
+
+    const statsEl = document.getElementById("api-stats-summary");
+    if (stats.length) {
+      statsEl.innerHTML = stats.map(s => {
+        const failRate = s.total_requests ? Math.round((s.failures / s.total_requests) * 100) : 0;
+        const failColor = failRate > 20 ? "#ff6b35" : failRate > 5 ? "#e8d44d" : "#6b8f71";
+        return `<span style="display:inline-block;margin-right:1rem;margin-bottom:0.25rem"><strong>${s.service}</strong>: ${s.total_requests} req, <span style="color:${failColor}">${s.failures} fail (${failRate}%)</span>, avg ${s.avg_duration_ms ?? "?"}ms</span>`;
+      }).join("");
+    } else {
+      statsEl.textContent = "No API requests in the last 24 hours.";
+    }
+
+    const listEl = document.getElementById("api-log-list");
+    if (!items.length) { listEl.textContent = "No log entries found."; return; }
+    listEl.innerHTML = `<div style="margin-bottom:0.3rem;color:var(--text);font-size:0.75rem">${total} total entries</div>` +
+      items.map(item => {
+        const time = new Date(item.created_at).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+        const statusColor = item.success ? "#6b8f71" : "#ff6b35";
+        const statusIcon = item.success ? "\u2713" : "\u2717";
+        const dur = item.duration_ms != null ? `${item.duration_ms}ms` : "";
+        const ctx = item.context ? `<span style="color:#8a7d6b"> \u00b7 ${item.context}</span>` : "";
+        const err = item.error_message && !item.success ? `<div style="color:#cc5544;font-size:0.72rem;margin-top:0.15rem">${item.error_message.replace(/</g,"&lt;").slice(0, 200)}</div>` : "";
+        const endpoint = item.endpoint.length > 80 ? item.endpoint.slice(0, 80) + "\u2026" : item.endpoint;
+        return `<div style="padding:0.3rem 0;border-bottom:1px solid #2a2015">
+          <span style="color:${statusColor};font-weight:600">${statusIcon}</span>
+          <span style="color:#a09580">${time}</span>
+          <span style="color:#e8d44d;font-weight:600;margin:0 0.3rem">${item.service}</span>
+          <span style="color:var(--text)">${item.status_code || ""}</span>
+          <span style="color:#8a7d6b;margin-left:0.3rem">${dur}</span>${ctx}
+          <div style="color:#8a7d6b;font-size:0.72rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${endpoint}</div>${err}
+        </div>`;
+      }).join("");
+  } catch { /* not admin */ }
+}
+
+// ── Feedback Inbox ────────────────────────────────────────────────────
+function renderFeedback(items) {
+  const el = document.getElementById("feedback-list");
+  if (!items.length) { el.textContent = "No feedback yet."; return; }
+  el.innerHTML = items.map(({ id, user_email, message, created_at }) => {
+    const date = new Date(created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    return `<div id="fb-${id}" style="padding:0.6rem 0;border-bottom:1px solid #222">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.25rem">
+        <span style="color:#aaa;font-size:0.8rem">${user_email || "unknown"}</span>
+        <div style="display:flex;gap:0.75rem;align-items:center">
+          <span style="color:#555;font-size:0.75rem">${date}</span>
+          <button onclick="deleteFeedbackItem(${id})" style="background:none;border:none;color:#666;cursor:pointer;font-size:0.75rem;padding:0" title="Delete">\u2715</button>
+        </div>
+      </div>
+      <div style="color:var(--fg)">${message.replace(/</g,"&lt;")}</div>
+    </div>`;
+  }).join("");
+}
+
+async function deleteFeedbackItem(id) {
+  const sessionToken = await clerk.session?.getToken();
+  const r = await fetch(`/api/admin/feedback/${id}`, {
+    method: "DELETE",
+    headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
+  });
+  if (r.ok) document.getElementById(`fb-${id}`)?.remove();
+}
+
+// ── Interest Signals ──────────────────────────────────────────────────
+async function loadInterestStats() {
+  const el = document.getElementById("interest-stats");
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const stats = await fetch("/api/admin/interests", {
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
+    }).then(r => r.json());
+    if (stats.error) { el.textContent = "Could not load."; return; }
+    const appBase = window.location.origin;
+    const artistLink = (name, cnt) => {
+      const url = `${appBase}/?a=${encodeURIComponent(name)}`;
+      return `<a href="${url}" target="_blank" style="color:var(--accent);text-decoration:none" title="Search ${name}">${name}</a> <span style="color:#555">(${cnt})</span>`;
+    };
+    const labelLink = (name, cnt) => {
+      const url = `${appBase}/?l=${encodeURIComponent(name)}`;
+      return `<a href="${url}" target="_blank" style="color:var(--accent);text-decoration:none" title="Search ${name} label">${name}</a> <span style="color:#555">(${cnt})</span>`;
+    };
+    const plainList = (items, max = 30) => items.slice(0, max).map(i => `${i.name} <span style="color:#555">(${i.cnt})</span>`).join(" \u00b7 ");
+    const tagCloud = (items, linkFn, max = 50) => items.slice(0, max).map(i => linkFn(i.name, i.cnt)).join(" \u00b7 ");
+
+    el.innerHTML = `
+      <div style="margin-bottom:0.6rem"><strong style="color:var(--fg);font-size:0.85rem">${stats.totalReleases.toLocaleString()}</strong> <span style="color:#777;font-size:0.72rem">releases tracked across all users</span></div>
+      <div style="margin-bottom:0.5rem">
+        <div style="color:#aaa;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.2rem">Top Artists</div>
+        <div style="line-height:1.7;font-size:0.7rem">${tagCloud(stats.topArtists, artistLink, 50)}</div>
+      </div>
+      <div style="margin-bottom:0.5rem">
+        <div style="color:#aaa;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.2rem">Top Labels</div>
+        <div style="line-height:1.7;font-size:0.7rem">${tagCloud(stats.topLabels, labelLink, 50)}</div>
+      </div>
+      <div style="margin-bottom:0.5rem">
+        <div style="color:#aaa;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.2rem">Top Genres</div>
+        <div style="line-height:1.7;font-size:0.7rem">${plainList(stats.topGenres, 30)}</div>
+      </div>
+      <div>
+        <div style="color:#aaa;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.2rem">Top Styles</div>
+        <div style="line-height:1.7;font-size:0.7rem">${plainList(stats.topStyles, 50)}</div>
+      </div>
+    `;
+  } catch { el.textContent = "Could not load interest stats."; }
+}
+
+// ── Global Search Pool ────────────────────────────────────────────────
+function searchLabel(raw) {
+  if (raw._type === "live") {
+    const parts = [];
+    if (raw.artist) parts.push(raw.artist);
+    if (raw.city) parts.push(raw.city);
+    if (raw.genre) parts.push(raw.genre);
+    return "\ud83c\udfa4 " + (parts.join(" \u00b7 ") || "Live search");
+  }
+  const m = { artist:"a", release_title:"r", label:"l", year:"y", genre:"g", style:"s", format:"f", type:"t", sort:"o" };
+  const p = {};
+  for (const [k, v] of Object.entries(raw)) { if (v) p[m[k] ?? k] = v; }
+  const parts = [];
+  if (p.q && (!p.a || p.q.toLowerCase() !== p.a.toLowerCase())) parts.push(p.q);
+  if (p.a) parts.push(p.a);
+  if (p.r) parts.push(p.r);
+  if (p.l) parts.push(`${p.l} label`);
+  if (p.g) parts.push(p.g);
+  if (p.s) parts.push(p.s);
+  if (p.f && p.f !== "Vinyl") parts.push(p.f);
+  if (p.y) parts.push(p.y);
+  return parts.join(" \u00b7 ") || "Search";
+}
+
+async function loadAdminSearches() {
+  const el = document.getElementById("global-search-list");
+  const countEl = document.getElementById("admin-search-count");
+  const liveEl = document.getElementById("global-live-search-list");
+  const liveCountEl = document.getElementById("admin-live-search-count");
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const data = await fetch("/api/admin/searches", {
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
+    }).then(r => r.json());
+    const all = data.searches ?? [];
+    const discogs = all.filter(s => s.params?._type !== "live");
+    const live = all.filter(s => s.params?._type === "live");
+
+    const renderRow = ({ id, params, searched_at }) => {
+      const label = searchLabel(params);
+      const date = new Date(searched_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      return `<div id="gs-${id}" style="display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0;border-bottom:1px solid #1a1a1a;gap:0.5rem">
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.8rem;color:var(--accent)">${label}</span>
+        <span style="color:#444;font-size:0.72rem;flex-shrink:0">${date}</span>
+        <button onclick="deleteGlobalSearch(${id})" style="background:none;border:none;color:#555;cursor:pointer;font-size:0.85rem;padding:0 0.1rem;flex-shrink:0;line-height:1" title="Delete">\u2715</button>
+      </div>`;
+    };
+
+    countEl.textContent = `${discogs.length} entries`;
+    el.innerHTML = discogs.length ? discogs.map(renderRow).join("") : "No searches.";
+    liveCountEl.textContent = `${live.length} entries`;
+    liveEl.innerHTML = live.length ? live.map(renderRow).join("") : "No live searches.";
+  } catch {
+    el.textContent = "Could not load global searches.";
+    liveEl.textContent = "Could not load live searches.";
+  }
+}
+
+async function deleteGlobalSearch(id) {
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const r = await fetch(`/api/admin/search/${id}`, {
+      method: "DELETE",
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
+    });
+    if (r.ok) {
+      document.getElementById(`gs-${id}`)?.remove();
+      const discogsRemaining = document.querySelectorAll("#global-search-list [id^='gs-']").length;
+      const liveRemaining = document.querySelectorAll("#global-live-search-list [id^='gs-']").length;
+      document.getElementById("admin-search-count").textContent = `${discogsRemaining} entries`;
+      document.getElementById("admin-live-search-count").textContent = `${liveRemaining} entries`;
+      if (!discogsRemaining) document.getElementById("global-search-list").textContent = "No searches.";
+      if (!liveRemaining) document.getElementById("global-live-search-list").textContent = "No live searches.";
+    }
+  } catch { /* ignore */ }
+}
+
+initClerk().catch(err => {
+  console.error("initClerk failed:", err);
+  document.getElementById("loading-section").innerHTML =
+    `<p style="color:#e88">Failed to load auth: ${err.message ?? err}</p>`;
+});
+
+function toggleMobileNav() {
+  document.getElementById("main-nav-tabs").classList.toggle("mobile-open");
+}
+document.addEventListener("click", e => {
+  if (!e.target.closest("#main-nav-tabs") && !e.target.closest("#nav-hamburger")) {
+    document.getElementById("main-nav-tabs")?.classList.remove("mobile-open");
+  }
+});
+</script>
+
+<style>
+.admin-btn {
+  font-size: 0.78rem;
+  padding: 0.3rem 0.9rem;
+  background: #2a2a2a;
+  color: var(--fg);
+  border: 1px solid #444;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.admin-btn:hover { background: #3a3a3a; }
+.admin-btn:disabled { opacity: 0.5; cursor: default; }
+.admin-btn-danger {
+  background: #6b1a1a;
+  color: #fff;
+  border: 1px solid #933;
+}
+.admin-btn-danger:hover { background: #7b2a2a; }
+</style>
+
+</body>
+</html>
