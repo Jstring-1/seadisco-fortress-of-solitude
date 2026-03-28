@@ -100,8 +100,11 @@ async function doSearch(page = 1, skipPushState = false) {
     return;
   }
 
-  switchView("search", true);
-  setActiveTab("search");
+  // Only switch view on first page — pagination should not reset the view/form
+  if (page === 1) {
+    switchView("search", true);
+    setActiveTab("search");
+  }
 
   if (!skipPushState) pushSearchState(q, artistRaw, release, year, label, genre, sort, resultType, page);
 
