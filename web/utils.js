@@ -159,12 +159,7 @@ function toTitleCase(s) {
   return s.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1));
 }
 
-function normP(p) {
-  const m = { artist:"a", release_title:"r", label:"l", year:"y", genre:"g", style:"s", format:"f", type:"t", sort:"o" };
-  const o = {};
-  for (const [k, v] of Object.entries(p)) { if (v) o[m[k] ?? k] = v; }
-  return o;
-}
+// normP — now in shared.js
 
 function feedLabel(raw) {
   const p = normP(raw);
