@@ -546,7 +546,7 @@ app.get("/api/user/lists", async (req, res) => {
 // GET /api/live/upcoming — serve upcoming events from DB
 app.get("/api/live/upcoming", async (_req, res) => {
   try {
-    res.setHeader("Cache-Control", "public, max-age=600"); // 10 min
+    res.setHeader("Cache-Control", "no-store");
     const events = await getLiveEvents(50);
     res.json({ events });
   } catch {
@@ -635,7 +635,7 @@ app.get("/api/live/nearby", async (req, res) => {
     if (!tmRes.ok) { res.json({ events: [], location: { lat, lon, city, region } }); return; }
     const tmData = await tmRes.json() as any;
     const events = (tmData._embedded?.events ?? []).map(mapTmEvent).filter(isMusicEvent);
-    res.setHeader("Cache-Control", "private, max-age=600");
+    res.setHeader("Cache-Control", "no-store");
     res.json({ events, location: { lat, lon, city, region } });
   } catch {
     res.json({ events: [], location: { lat, lon, city, region } });

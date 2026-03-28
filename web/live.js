@@ -33,7 +33,7 @@ function _renderLiveEvents(events, artist) {
     const statusHtml = statusLabel
       ? `<span class="live-event-status live-status-${escHtml(ev.status)}">${statusLabel}</span>`
       : "";
-    html += `<div class="live-event${statusLabel ? ' live-event-dimmed' : ''}">
+    html += `<div class="live-event${statusLabel ? ' live-event-has-status' : ''}">
       <div class="live-event-date">
         ${escHtml(fmtDate)}
         ${fmtTime ? `<span class="live-event-time">${escHtml(fmtTime)}</span>` : ""}
@@ -261,7 +261,7 @@ async function liveSearchVenue(venueId, venueName) {
       const statusHtml = statusLabel
         ? `<span class="live-event-status live-status-${escHtml(ev.status)}">${statusLabel}</span>`
         : "";
-      html += `<div class="live-event${statusLabel ? ' live-event-dimmed' : ''}">
+      html += `<div class="live-event${statusLabel ? ' live-event-has-status' : ''}">
         <div class="live-event-date">
           ${escHtml(fmtDate)}
           ${fmtTime ? `<span class="live-event-time">${escHtml(fmtTime)}</span>` : ""}
