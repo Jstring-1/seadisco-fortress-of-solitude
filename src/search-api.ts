@@ -2534,7 +2534,8 @@ app.get("/api/admin/api-log", async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit as string) || 200, 500);
   const offset = parseInt(req.query.offset as string) || 0;
   const errorsOnly = req.query.errors === "true";
-  const result = await getApiRequestLog({ service: service || undefined, limit, offset, errorsOnly });
+  const hours = Math.min(parseInt(req.query.hours as string) || 24, 168); // max 7 days
+  const result = await getApiRequestLog({ service: service || undefined, limit, offset, errorsOnly, hours });
   res.json(result);
 });
 
@@ -2543,7 +2544,8 @@ app.get("/api/admin/api-stats", async (req, res) => {
   const userId = getClerkUserId(req);
   const adminId = process.env.ADMIN_CLERK_ID ?? "";
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
-  const stats = await getApiRequestStats();
+  const hours = Math.min(parseInt(req.query.hours as string) || 24, 168);
+  const stats = await getApiRequestStats(hours);
   res.json({ stats });
 });
 
@@ -2561,12 +2563,15 @@ const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
 function startDailySyncSchedule() {
   function msUntilNextPacific(hour: number): number {
     const now = new Date();
-    const pacific = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
-    const diff = now.getTime() - pacific.getTime();
+    // Get current Pacific wall-clock time
+    const pacificStr = now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" });
+    const pacific = new Date(pacificStr);
+    // Build target as same "fake" date with desired hour
     const target = new Date(pacific);
     target.setHours(hour, 0, 0, 0);
     if (target.getTime() <= pacific.getTime()) target.setDate(target.getDate() + 1);
-    return (target.getTime() - pacific.getTime()) + diff;
+    // The wall-clock difference IS the real elapsed time
+    return target.getTime() - pacific.getTime();
   }
 
   async function runScheduledSync() {

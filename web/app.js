@@ -44,11 +44,16 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
       const pType = openParam.slice(0, colon);
       const pId   = openParam.slice(colon + 1);
       const pUrl  = `https://www.discogs.com/${pType}/${pId}`;
-      openModal(null, pId, pType, pUrl);
+      // Small delay ensures DOM + Clerk are settled before opening
+      setTimeout(() => {
+        try {
+          openModal(null, pId, pType, pUrl);
+        } catch (e) { console.error("[op] openModal error:", e); }
+      }, 150);
       const versionParam = p.get("vr");
-      if (versionParam) setTimeout(() => openVersionPopup(null, versionParam), 1200);
+      if (versionParam) setTimeout(() => openVersionPopup(null, versionParam), 1400);
       const videoParam = p.get("vd");
-      if (videoParam) setTimeout(() => openVideo(null, `https://www.youtube.com/watch?v=${videoParam}`), 1200);
+      if (videoParam) setTimeout(() => openVideo(null, `https://www.youtube.com/watch?v=${videoParam}`), 1400);
     }
   }
   const ctArtist = p.get("ct");
