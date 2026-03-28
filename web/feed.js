@@ -145,7 +145,8 @@ async function loadFeedArticles(append = false) {
     }
 
     if (!_feedItems.length) {
-      document.getElementById("feed-results").innerHTML = renderEmptyState("📰", "No articles yet", "The feed updates every 4 hours with music news and reviews");
+      document.getElementById("feed-results").innerHTML = renderEmptyState("📰", "No articles yet", "The feed updates every 4 hours with music news and reviews")
+        + `<div style="text-align:center;margin-top:1rem"><button onclick="loadFeed()" style="background:var(--accent);color:#fff;border:none;padding:0.5rem 1.2rem;border-radius:4px;cursor:pointer;font-size:0.85rem">Refresh Feed</button></div>`;
     } else {
       renderFeedGrid();
     }
