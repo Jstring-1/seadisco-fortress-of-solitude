@@ -1,7 +1,8 @@
-const CACHE_NAME = "seadisco-v1";
+const CACHE_NAME = "seadisco-v2";
 const SHELL_FILES = [
   "/",
   "/style.css",
+  "/shared.js",
   "/utils.js",
   "/search.js",
   "/collection.js",

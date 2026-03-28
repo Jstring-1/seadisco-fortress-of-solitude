@@ -61,26 +61,9 @@
 </head>
 <body>
 
-<header id="site-header">
-  <a href="https://seadisco.com" class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
-  <h1 class="sr-only">SeaDisco — Music Discovery Platform: Search, News, Concerts, Gear &amp; Collection</h1>
-  <nav id="main-nav">
-    <button id="nav-hamburger" onclick="toggleMobileNav()" aria-label="Open navigation">
-      <span></span><span></span><span></span>
-    </button>
-    <div id="nav-tabs-wrap">
-      <div id="main-nav-tabs">
-        <button class="main-nav-tab active" data-view="search" onclick="switchView('search')">Search</button>
-        <button class="main-nav-tab" data-view="drops" onclick="switchView('drops')">Drops</button>
-        <button class="main-nav-tab" data-view="feed" onclick="switchView('feed')">Feed</button>
-        <button class="main-nav-tab" data-view="live" onclick="switchView('live')">Live</button>
-        <button class="main-nav-tab" data-view="gear" onclick="switchView('gear')">Gear</button>
-        <button class="main-nav-tab nav-disabled" data-view="records" onclick="switchView('records')" title="Login to Access">My Records</button>
-      </div>
-      <div id="nav-auth-popup">Sign up and add your Discogs API token for unlimited searches</div>
-    </div>
-  </nav>
-</header>
+<header id="site-header"></header>
+<script src="/shared.js?v=20260328a"></script>
+<script>renderSharedHeader({ spa: true, active: "search" });</script>
 <div id="search-view">
 
 <main>
@@ -435,32 +418,8 @@
   <p style="font-size:0.84rem;color:#aaa;margin:0">Anonymous users are capped at <strong style="color:#ccc">5 searches/day</strong> on a shared token. Sign up free and add your own Discogs token (<strong style="color:#ccc">discogs.com → Settings → Developers</strong>) for unlimited searches. The recent search cloud below results shows interesting searches from all users — click any pill to re-run it.</p>
 </div>
 
-<footer>
-  <div class="footer-grid">
-    <div class="footer-col">
-      <h4>Discover</h4>
-      <a href="javascript:void(0)" onclick="switchView('search')">Search</a>
-      <a href="javascript:void(0)" onclick="switchView('drops')">Drops</a>
-      <a href="javascript:void(0)" onclick="switchView('feed')">Feed</a>
-      <a href="javascript:void(0)" onclick="switchView('live')">Live</a>
-      <a href="javascript:void(0)" onclick="switchView('gear')">Gear</a>
-    </div>
-    <div class="footer-col">
-      <h4>Your Music</h4>
-      <a href="javascript:void(0)" onclick="switchView('records')">My Records</a>
-      <a href="/account">Account</a>
-    </div>
-    <div class="footer-col">
-      <h4>About</h4>
-      <a href="javascript:void(0)" onclick="switchView('info')">Info</a>
-      <a href="https://www.discogs.com" target="_blank" rel="noopener">Discogs</a>
-      <a href="https://listenbrainz.org" target="_blank" rel="noopener">ListenBrainz</a>
-    </div>
-  </div>
-  <div style="color:#555;font-style:italic;margin-bottom:0.3rem">DISCLAIMER: AI be funky sometimes</div>
-  <div>Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Discogs</a>, <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Claude</a>, and <a href="https://listenbrainz.org" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">ListenBrainz</a></div>
-  <div style="margin-top:0.3rem">© 2026 SeaDisco &nbsp;·&nbsp; Music data courtesy of Discogs API &nbsp;·&nbsp; Not affiliated with Discogs &nbsp;·&nbsp; Jimmy Witherfork Strikes Again</div>
-</footer>
+<footer></footer>
+<script>renderSharedFooter({ spa: true });</script>
 
 
 <div id="modal-overlay">
