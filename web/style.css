@@ -1629,6 +1629,19 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   padding: 0.1rem 0.4rem;
   display: inline-block;
   margin-bottom: 0.35rem;
+  position: relative;
+  transition: color 0.15s;
+}
+#album-info .album-type-badge[data-copied="true"],
+#version-info .album-type-badge[data-copied="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+#album-info .album-type-badge[data-copied="true"]::after,
+#version-info .album-type-badge[data-copied="true"]::after {
+  content: " ✓ copied";
+  font-size: 0.6rem;
+  color: var(--accent);
 }
 
 #album-info .album-meta h2, #version-info .album-meta h2 {
