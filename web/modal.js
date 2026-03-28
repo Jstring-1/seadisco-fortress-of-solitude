@@ -527,7 +527,6 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
           ? `<a href="https://www.discogs.com/sell/list?release_id=${escHtml(String(stats.releaseId))}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#888;text-decoration:none;margin-top:0.2rem;display:block">${escHtml(String(stats.numForSale))} available from $${parseFloat(stats.lowestPrice).toFixed(2)}</a>`
           : (stats?.numForSale === 0 ? `<div style="font-size:0.75rem;color:#555;margin-top:0.2rem">Not currently available on Discogs marketplace</div>` : "")
         }
-        ${artists.length ? `<a href="#" onclick="openConcertPopup(event,'${escHtml(artists[0]).replace(/'/g, "\\'")}')" style="font-size:0.75rem;color:#5a9aaa;text-decoration:none;margin-top:0.2rem;display:block">Concerts ♪</a>` : ""}
       </div>
     </div>
     ${trackHTML}

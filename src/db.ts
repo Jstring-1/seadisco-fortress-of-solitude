@@ -332,6 +332,18 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS api_request_log_created_idx ON api_request_log (created_at DESC)`);
   await getPool().query(`CREATE INDEX IF NOT EXISTS api_request_log_service_idx ON api_request_log (service, created_at DESC)`);
+
+  // ── Release cache (full Discogs release/master detail saved on user click) ─
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS release_cache (
+      discogs_id      INTEGER NOT NULL,
+      type            TEXT NOT NULL DEFAULT 'release',
+      data            JSONB NOT NULL,
+      cached_at       TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(discogs_id, type)
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_id_type_idx ON release_cache (discogs_id, type)`);
 }
 
 export async function saveSearch(clerkUserId: string, params: Record<string, string>): Promise<void> {
@@ -1958,6 +1970,28 @@ export async function getUserCollectionStats(): Promise<{ users: any[]; global: 
   `);
 
   return { users: perUser.rows, global: globalQ.rows[0] };
+}
+
+// ── Release cache ─────────────────────────────────────────────────────────
+
+/** Get a cached release/master from DB. Returns null if not cached. */
+export async function getCachedRelease(discogsId: number, type: "release" | "master"): Promise<any | null> {
+  const r = await getPool().query(
+    `SELECT data FROM release_cache WHERE discogs_id = $1 AND type = $2`,
+    [discogsId, type]
+  );
+  return r.rows[0]?.data ?? null;
+}
+
+/** Save a release/master response to cache. Overwrites if already present. */
+export async function cacheRelease(discogsId: number, type: "release" | "master", data: object): Promise<void> {
+  await getPool().query(
+    `INSERT INTO release_cache (discogs_id, type, data, cached_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (discogs_id, type)
+     DO UPDATE SET data = EXCLUDED.data, cached_at = NOW()`,
+    [discogsId, type, JSON.stringify(data)]
+  );
 }
 
 export async function getApiRequestStats(): Promise<any[]> {
