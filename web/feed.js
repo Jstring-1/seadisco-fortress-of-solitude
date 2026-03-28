@@ -124,7 +124,7 @@ async function loadFeedArticles(append = false, _retryCount = 0) {
     });
     if (_feedQuery) params.set("q", _feedQuery);
 
-    const r = await apiFetch(`/api/feed?${params}`);
+    const r = await apiFetch(`/api/feed?${params}`, { cache: "no-store" });
     const data = await r.json();
     const newItems = data.items || [];
     _feedTotal = data.total || 0;
@@ -151,8 +151,7 @@ async function loadFeedArticles(append = false, _retryCount = 0) {
         setTimeout(() => loadFeedArticles(false, _retryCount + 1), 2000);
         return;
       }
-      document.getElementById("feed-results").innerHTML = renderEmptyState("📰", "No articles yet", "The feed updates every 4 hours with music news and reviews")
-        + `<div style="text-align:center;margin-top:1rem"><button onclick="loadFeedArticles()" style="background:var(--accent);color:#fff;border:none;padding:0.5rem 1.2rem;border-radius:4px;cursor:pointer;font-size:0.85rem">Refresh Feed</button></div>`;
+      document.getElementById("feed-results").innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-state-icon">📰</div><div class="empty-state-title">No articles yet</div><div class="empty-state-subtitle">The feed updates every 4 hours with music news and reviews</div><button onclick="loadFeedArticles()" style="background:var(--accent);color:#fff;border:none;padding:0.5rem 1.2rem;border-radius:4px;cursor:pointer;font-size:0.85rem;margin-top:1rem">Refresh Feed</button></div>`;
     } else {
       renderFeedGrid();
     }

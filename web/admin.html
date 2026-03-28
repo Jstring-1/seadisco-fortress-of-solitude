@@ -47,14 +47,14 @@
       <div class="admin-section admin-section-a">
         <h2 style="margin-bottom:0.4rem">Actions</h2>
         <div style="display:flex;align-items:center;gap:0.7rem;flex-wrap:wrap">
-          <button onclick="adminSyncAll()" id="admin-sync-all-btn" class="admin-btn">Sync All Users</button>
-          <button onclick="adminSyncStop()" id="admin-sync-stop-btn" class="admin-btn admin-btn-danger">Stop User Syncs</button>
+          <button onclick="adminSyncAll()" id="admin-sync-all-btn" class="admin-btn admin-btn-sync">Sync All Users</button>
+          <button onclick="adminSyncStop()" id="admin-sync-stop-btn" class="admin-btn admin-btn-stop">Stop User Syncs</button>
           <button onclick="toggleApiKill()" id="admin-api-kill-btn" class="admin-btn admin-btn-danger">Kill All APIs</button>
-          <button onclick="adminGearFetch()" id="admin-gear-fetch-btn" class="admin-btn">Fetch eBay Gear</button>
-          <button onclick="adminFeedFetch()" id="admin-feed-fetch-btn" class="admin-btn">Fetch Feed</button>
-          <button onclick="adminLiveFetch()" id="admin-live-fetch-btn" class="admin-btn">Fetch Live Events</button>
-          <button onclick="adminExtrasFetch()" id="admin-extras-fetch-btn" class="admin-btn">Fetch Inventory/Lists</button>
-          <button onclick="adminRebuildTaste()" id="admin-taste-btn" class="admin-btn">Rebuild Taste Profiles</button>
+          <button onclick="adminGearFetch()" id="admin-gear-fetch-btn" class="admin-btn admin-btn-gear">Fetch eBay Gear</button>
+          <button onclick="adminFeedFetch()" id="admin-feed-fetch-btn" class="admin-btn admin-btn-feed">Fetch Feed</button>
+          <button onclick="adminLiveFetch()" id="admin-live-fetch-btn" class="admin-btn admin-btn-live">Fetch Live Events</button>
+          <button onclick="adminExtrasFetch()" id="admin-extras-fetch-btn" class="admin-btn admin-btn-extras">Fetch Inventory/Lists</button>
+          <button onclick="adminRebuildTaste()" id="admin-taste-btn" class="admin-btn admin-btn-taste">Rebuild Taste Profiles</button>
         </div>
         <div id="admin-action-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.35rem"></div>
       </div>
@@ -764,6 +764,20 @@ document.addEventListener("click", e => {
   border: 1px solid #933;
 }
 .admin-btn-danger:hover { background: #7b2a2a; }
+.admin-btn-sync { background: #1a3a5c; border-color: #2a5a8a; color: #7eb8da; }
+.admin-btn-sync:hover { background: #1f4a70; }
+.admin-btn-stop { background: #4a3a10; border-color: #6a5a20; color: #e8d44d; }
+.admin-btn-stop:hover { background: #5a4a18; }
+.admin-btn-gear { background: #3a2a10; border-color: #6a4a20; color: #e8a84d; }
+.admin-btn-gear:hover { background: #4a3a18; }
+.admin-btn-feed { background: #1a3a2a; border-color: #2a5a3a; color: #6bcf8e; }
+.admin-btn-feed:hover { background: #1f4a32; }
+.admin-btn-live { background: #2a1a3a; border-color: #4a2a5a; color: #b88adb; }
+.admin-btn-live:hover { background: #3a2a4a; }
+.admin-btn-extras { background: #1a2a3a; border-color: #2a4a5a; color: #6ab0c8; }
+.admin-btn-extras:hover { background: #1f3a4a; }
+.admin-btn-taste { background: #3a1a2a; border-color: #5a2a3a; color: #d88aaf; }
+.admin-btn-taste:hover { background: #4a2a3a; }
 
 /* Alternating section backgrounds */
 .admin-section {
