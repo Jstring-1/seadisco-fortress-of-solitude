@@ -1879,7 +1879,7 @@ export async function logApiRequest(opts: {
   } catch {}
 }
 
-export async function getApiRequestLog(opts?: { service?: string; limit?: number; offset?: number; successOnly?: boolean; errorsOnly?: boolean; hours?: number }): Promise<{ items: any[]; total: number }> {
+export async function getApiRequestLog(opts?: { service?: string; successOnly?: boolean; errorsOnly?: boolean; hours?: number }): Promise<{ items: any[]; total: number }> {
   const params: any[] = [];
   let where = "WHERE 1=1";
   const hours = opts?.hours ?? 24;
@@ -1892,16 +1892,11 @@ export async function getApiRequestLog(opts?: { service?: string; limit?: number
   if (opts?.successOnly) where += " AND success = true";
   if (opts?.errorsOnly) where += " AND success = false";
 
-  const countR = await getPool().query(`SELECT COUNT(*)::int AS cnt FROM api_request_log ${where}`, params);
-  const total = countR.rows[0]?.cnt ?? 0;
-  const limit = opts?.limit ?? 100;
-  const offset = opts?.offset ?? 0;
-
   const r = await getPool().query(
-    `SELECT * FROM api_request_log ${where} ORDER BY created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-    [...params, limit, offset]
+    `SELECT * FROM api_request_log ${where} ORDER BY created_at DESC`,
+    params
   );
-  return { items: r.rows, total };
+  return { items: r.rows, total: r.rows.length };
 }
 
 // ── User collection/wantlist stats (admin) ────────────────────────────────

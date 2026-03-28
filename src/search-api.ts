@@ -2531,11 +2531,9 @@ app.get("/api/admin/api-log", async (req, res) => {
   const adminId = process.env.ADMIN_CLERK_ID ?? "";
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   const service = req.query.service as string | undefined;
-  const limit = Math.min(parseInt(req.query.limit as string) || 200, 500);
-  const offset = parseInt(req.query.offset as string) || 0;
   const errorsOnly = req.query.errors === "true";
   const hours = Math.min(parseInt(req.query.hours as string) || 24, 168); // max 7 days
-  const result = await getApiRequestLog({ service: service || undefined, limit, offset, errorsOnly, hours });
+  const result = await getApiRequestLog({ service: service || undefined, errorsOnly, hours });
   res.json(result);
 });
 

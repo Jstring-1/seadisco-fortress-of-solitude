@@ -2732,11 +2732,9 @@ app.get("/api/admin/api-log", async (req, res) => {
         return;
     }
     const service = req.query.service;
-    const limit = Math.min(parseInt(req.query.limit) || 200, 500);
-    const offset = parseInt(req.query.offset) || 0;
     const errorsOnly = req.query.errors === "true";
     const hours = Math.min(parseInt(req.query.hours) || 24, 168); // max 7 days
-    const result = await getApiRequestLog({ service: service || undefined, limit, offset, errorsOnly, hours });
+    const result = await getApiRequestLog({ service: service || undefined, errorsOnly, hours });
     res.json(result);
 });
 // GET /api/admin/api-stats — 24h summary by service
