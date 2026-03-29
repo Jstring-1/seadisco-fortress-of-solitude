@@ -315,7 +315,7 @@ function showToast(message, type = "error", duration = 4000) {
 }
 
 // ── Loading skeleton helpers ─────────────────────────────────────────────
-function renderSkeletonGrid(count = 12) {
+function renderSkeletonGrid(count = 16) {
   return Array.from({ length: count }, () =>
     `<div class="skeleton-card card-animate"><div class="skeleton-thumb"></div><div class="skeleton-line" style="margin-top:10px"></div><div class="skeleton-line short"></div><div class="skeleton-line shorter"></div></div>`
   ).join("");
@@ -327,7 +327,7 @@ function renderSkeletonRows(count = 4) {
   ).join("");
 }
 
-function renderFeedSkeletonGrid(count = 8) {
+function renderFeedSkeletonGrid(count = 16) {
   return Array.from({ length: count }, () =>
     `<div class="skeleton-card card-animate" style="display:flex;flex-direction:row;height:130px"><div class="skeleton" style="width:120px;height:100%;flex-shrink:0"></div><div style="flex:1;padding:0.5rem 0.6rem"><div class="skeleton-line" style="width:40%;margin-bottom:8px"></div><div class="skeleton-line"></div><div class="skeleton-line short" style="margin-top:8px"></div><div class="skeleton-line shorter" style="margin-top:8px"></div></div></div>`
   ).join("");

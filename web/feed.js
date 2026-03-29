@@ -113,7 +113,7 @@ async function loadFeedArticles(append = false, _retryCount = 0) {
   const status = document.getElementById("feed-status");
 
   if (!append) {
-    document.getElementById("feed-results").innerHTML = renderFeedSkeletonGrid(8);
+    document.getElementById("feed-results").innerHTML = renderFeedSkeletonGrid(16);
   }
 
   // Wait for auth so personalized feed works on first load
