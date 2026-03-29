@@ -1,4 +1,4 @@
-const CACHE_NAME = "seadisco-v2";
+const CACHE_NAME = "seadisco-v3";
 const SHELL_FILES = [
   "/",
   "/style.css",

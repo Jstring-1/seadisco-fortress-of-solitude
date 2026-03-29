@@ -49,7 +49,11 @@ function switchView(view, skipPushState = false) {
   const feedView   = document.getElementById("feed-view");
   const infoView   = document.getElementById("info-view");
   if (!skipPushState) {
-    if (view === "drops" || view === "live" || view === "gear" || view === "feed" || view === "records" || view === "info" || view === "wanted") {
+    if (view === "records") {
+      const tab = _cwTab || "collection";
+      const url = tab === "collection" ? "?view=records" : `?view=records&tab=${tab}`;
+      history.pushState({ view, tab }, "", url);
+    } else if (view === "drops" || view === "live" || view === "gear" || view === "feed" || view === "info" || view === "wanted") {
       history.pushState({ view }, "", "?view=" + view);
     } else {
       history.pushState({}, "", location.pathname);
@@ -119,7 +123,7 @@ function switchView(view, skipPushState = false) {
     document.getElementById("artist-alts").innerHTML = "";
     const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "none";
     const ws1 = document.getElementById("wanted-sample"); if (ws1) ws1.style.display = "none";
-    switchRecordsTab(_cwTab || "collection");
+    switchRecordsTab(_cwTab || "collection", true);
   } else {
     if (searchView) searchView.style.display = "";
     if (mainForm) mainForm.style.display = "";
@@ -221,9 +225,14 @@ function doCwSearch(page = 1) {
   }
 }
 
-function switchRecordsTab(tab) {
+function switchRecordsTab(tab, skipPush) {
   _cwTab = tab;
   _cwQuery = "";
+  // Update URL to reflect active sub-tab
+  if (!skipPush) {
+    const url = tab === "collection" ? "?view=records" : `?view=records&tab=${tab}`;
+    history.pushState({ view: "records", tab }, "", url);
+  }
   // Update sub-tab active state
   document.querySelectorAll(".records-sub-tab").forEach(btn =>
     btn.classList.toggle("active", btn.dataset.rtab === tab)
