@@ -2445,9 +2445,16 @@ app.get("/api/feed", async (req, res) => {
     const offset = parseInt(req.query.offset as string) || 0;
     const userId = getClerkUserId(req);
     if (userId) {
-      const { items, total } = await getPersonalizedFeedArticles(userId, { category, limit, offset, q });
-      res.setHeader("Cache-Control", items.length ? "private, max-age=300" : "no-cache");
-      res.json({ items, total, personalized: true });
+      try {
+        const { items, total } = await getPersonalizedFeedArticles(userId, { category, limit, offset, q });
+        res.setHeader("Cache-Control", items.length ? "private, max-age=300" : "no-cache");
+        res.json({ items, total, personalized: true });
+      } catch (personalErr) {
+        console.error("Personalized feed failed, falling back to generic:", personalErr);
+        const { items, total } = await getFeedArticles({ category, limit, offset, q });
+        res.setHeader("Cache-Control", items.length ? "public, max-age=300" : "no-cache");
+        res.json({ items, total });
+      }
     } else {
       const { items, total } = await getFeedArticles({ category, limit, offset, q });
       res.setHeader("Cache-Control", items.length ? "public, max-age=300" : "no-cache");
