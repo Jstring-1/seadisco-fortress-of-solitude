@@ -355,7 +355,7 @@ function renderInventoryPagination() {
 async function loadListsTab() {
   setActiveTab("lists");
   document.getElementById("blurb").style.display = "none";
-  document.getElementById("results").innerHTML = renderSkeletonGrid(4);
+  document.getElementById("results").innerHTML = renderSkeletonGrid(16);
   document.getElementById("pagination").style.display = "none";
   setStatus("");
   try {

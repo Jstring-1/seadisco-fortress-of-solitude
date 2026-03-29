@@ -119,7 +119,7 @@ async function doSearch(page = 1, skipPushState = false) {
     document.getElementById("artist-alts").innerHTML = "";
     closeAltsPopup();
     setStatus("");
-    document.getElementById("results").innerHTML = renderSkeletonGrid(12);
+    document.getElementById("results").innerHTML = renderSkeletonGrid(16);
   } else {
     // Show loading indicator for "load more"
     const lmBtn = document.getElementById("search-load-more-btn");
