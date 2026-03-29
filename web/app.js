@@ -29,8 +29,13 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
     }
   } else if (view === "records" || view === "collection" || view === "wantlist" || view === "wanted") {
     await authReadyPromise;
-    // Map old collection/wantlist URLs to records
-    switchView(view === "collection" || view === "wantlist" ? "records" : view, true);
+    // Map old collection/wantlist URLs to records, restore sub-tab
+    const mappedView = view === "collection" || view === "wantlist" ? "records" : view;
+    if (mappedView === "records") {
+      const tab = p.get("tab") || (view === "wantlist" ? "wantlist" : "collection");
+      _cwTab = tab;
+    }
+    switchView(mappedView, true);
   } else if (p.get("q") || p.get("ar") || p.get("re") || p.get("yr") || p.get("lb") || p.get("gn")) {
     restoreFromParams(p);
     await authReadyPromise;
@@ -69,9 +74,13 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
 window.addEventListener("popstate", () => {
   const p = new URLSearchParams(location.search);
   const view = p.get("view");
-  // Map old collection/wantlist URLs to records
-  if (view === "collection" || view === "wantlist") { switchView("records", true); return; }
+  // Map old collection/wantlist URLs to records, restore sub-tab
+  if (view === "collection" || view === "wantlist") {
+    _cwTab = view === "wantlist" ? "wantlist" : "collection";
+    switchView("records", true); return;
+  }
   if (view === "drops" || view === "live" || view === "gear" || view === "feed" || view === "records" || view === "info" || view === "wanted") {
+    if (view === "records") _cwTab = p.get("tab") || "collection";
     switchView(view, true);
   } else {
     switchView("search", true);
