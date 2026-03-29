@@ -263,10 +263,14 @@
   <div id="alts-popup"><h4>Other artists</h4></div>
   <div id="blurb" class="content-narrow"></div>
   <div id="results" class="card-grid"></div>
+  <div id="search-load-more" style="display:none;text-align:center;margin-top:1rem">
+    <a href="#" id="search-load-more-btn" onclick="event.preventDefault();loadMoreResults()" style="color:var(--accent);text-decoration:none;font-size:0.85rem">Load more results →</a>
+    <span id="search-load-more-info" style="color:var(--muted);font-size:0.78rem;margin-left:0.6rem"></span>
+  </div>
   <div id="pagination" style="display:none">
-    <button id="prev-btn" onclick="window.scrollTo({top:0,behavior:'smooth'});doSearch(currentPage-1)">← Prev</button>
+    <button id="prev-btn">← Prev</button>
     <span id="page-info"></span>
-    <button id="next-btn" onclick="window.scrollTo({top:0,behavior:'smooth'});doSearch(currentPage+1)">Next →</button>
+    <button id="next-btn">Next →</button>
   </div>
   <div id="wanted-sample" class="content-area" style="margin-top:0.5rem;display:none">
     <div id="wanted-sample-grid" class="card-grid"></div>
