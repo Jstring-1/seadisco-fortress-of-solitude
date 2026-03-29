@@ -110,14 +110,21 @@ async function doSearch(page = 1, skipPushState = false) {
 
   if (page === 1) detectedArtist = null;
 
+  const _append = page > 1;
   currentPage = page;
   document.getElementById("search-btn").disabled = true;
-  document.getElementById("pagination").style.display = "none";
-  document.getElementById("blurb").style.display = "none";
-  document.getElementById("artist-alts").innerHTML = "";
-  closeAltsPopup();
-  setStatus("");
-  document.getElementById("results").innerHTML = renderSkeletonGrid(12);
+  document.getElementById("search-load-more").style.display = "none";
+  if (!_append) {
+    document.getElementById("blurb").style.display = "none";
+    document.getElementById("artist-alts").innerHTML = "";
+    closeAltsPopup();
+    setStatus("");
+    document.getElementById("results").innerHTML = renderSkeletonGrid(12);
+  } else {
+    // Show loading indicator for "load more"
+    const link = document.getElementById("search-load-more-btn");
+    if (link) link.textContent = "Loading…";
+  }
 
   if (page === 1) {
     const parts = [];
@@ -311,10 +318,11 @@ async function doSearch(page = 1, skipPushState = false) {
     }
 
     setStatus("");
-    const returnedMsg = `Returned :: ${totalItems_new.toLocaleString()} results — page ${currentPage} of ${totalPages}`;
+    const shown = _append ? document.getElementById("results").querySelectorAll(".card, .card-animate").length + items.length : items.length;
+    const returnedMsg = `Returned :: ${totalItems_new.toLocaleString()} results — showing ${shown}`;
     document.getElementById("search-returned").textContent = returnedMsg;
     document.getElementById("search-info-block").style.display = "";
-    renderResults(items);
+    renderResults(items, _append);
     renderPagination();
 
     {
@@ -384,14 +392,21 @@ async function doSearch(page = 1, skipPushState = false) {
 }
 
 // ── Render cards ──────────────────────────────────────────────────────────
-function renderResults(items) {
-  window._lastResults = items;
+function renderResults(items, append = false) {
+  if (!append) window._lastResults = items;
+  else window._lastResults = (window._lastResults || []).concat(items);
   const hideOwned = document.getElementById("hide-owned")?.checked;
   const filtered = hideOwned && window._collectionIds?.size
     ? items.filter(item => !window._collectionIds.has(Number(item.id)))
     : items;
   const grid = document.getElementById("results");
-  grid.innerHTML = filtered.map((item, i) => renderCard(item, i)).join("");
+  const startIdx = append ? grid.querySelectorAll(".card, .card-animate").length : 0;
+  const html = filtered.map((item, i) => renderCard(item, startIdx + i)).join("");
+  if (append) {
+    grid.insertAdjacentHTML("beforeend", html);
+  } else {
+    grid.innerHTML = html;
+  }
   // Hide wanted sample when showing search results
   const ws = document.getElementById("wanted-sample"); if (ws) ws.style.display = "none";
 }
@@ -500,13 +515,18 @@ function showCardNotes(event, releaseId) {
   popup.style.left = Math.min(rect.left + window.scrollX, window.innerWidth - 290) + "px";
 }
 
-// ── Pagination ────────────────────────────────────────────────────────────
+// ── Load More ─────────────────────────────────────────────────────────
+function loadMoreResults() {
+  doSearch(currentPage + 1, true);
+}
+
 function renderPagination() {
-  if (totalPages <= 1) return;
-  document.getElementById("pagination").style.display = "flex";
-  document.getElementById("page-info").textContent = `${currentPage} / ${totalPages}`;
-  document.getElementById("prev-btn").disabled = currentPage <= 1;
-  document.getElementById("next-btn").disabled = currentPage >= totalPages;
+  const el = document.getElementById("search-load-more");
+  if (currentPage >= totalPages) { el.style.display = "none"; return; }
+  el.style.display = "";
+  const link = document.getElementById("search-load-more-btn");
+  link.textContent = "Load more results →";
+  document.getElementById("search-load-more-info").textContent = `Page ${currentPage} of ${totalPages}`;
 }
 
 // ── AI search ─────────────────────────────────────────────────────────────
@@ -517,6 +537,7 @@ async function doAiSearch(q) {
   const blurbEl = document.getElementById("blurb");
   document.getElementById("results").innerHTML = "";
   document.getElementById("pagination").style.display = "none";
+  document.getElementById("search-load-more").style.display = "none";
   document.getElementById("artist-alts").innerHTML = "";
   blurbEl.style.display = "none";
   setStatus("Asking Claude…");
