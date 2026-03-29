@@ -713,13 +713,13 @@ async function fetchUpcomingEvents() {
     }
 }
 function startLiveEventsSchedule() {
-    // Every 4 hours aligned to :50
-    const msTo50 = msUntilMinute(50);
-    console.log(`[live-events] Next fetch at :50 (in ${Math.round(msTo50 / 60000)}min)`);
+    // Every 6 hours starting at 3:40 AM Pacific
+    const ms = msUntilPacific(3, 40, 6);
+    console.log(`[live-events] Next fetch in ${Math.round(ms / 60000)}min, then every 6h`);
     setTimeout(() => {
         fetchUpcomingEvents();
-        setInterval(() => fetchUpcomingEvents(), 4 * 60 * 60 * 1000);
-    }, msTo50);
+        setInterval(() => fetchUpcomingEvents(), 6 * 60 * 60 * 1000);
+    }, ms);
 }
 // GET /api/wanted-sample — small public sample for Find page filler
 app.get("/api/wanted-sample", async (req, res) => {
@@ -2297,19 +2297,20 @@ function startGearSchedule() {
         console.log("eBay gear schedule not started — no credentials");
         return;
     }
-    // Hourly gear search aligned to :55
-    const msTo55 = msUntilMinute(55);
-    console.log(`[gear] Next search at :55 (in ${Math.round(msTo55 / 60000)}min)`);
+    // Hourly gear search at :50 past the hour (anchored to 4:50 AM Pacific)
+    const msSearch = msUntilPacific(4, 50, 1);
+    console.log(`[gear] Next search in ${Math.round(msSearch / 60000)}min, then every 1h`);
     setTimeout(() => {
         fetchEbayGearListings();
         setInterval(() => fetchEbayGearListings(), 60 * 60 * 1000);
-    }, msTo55);
-    // Detail worker aligned to :25 (30min offset from :55)
-    const msTo25 = msUntilMinute(25);
+    }, msSearch);
+    // Detail worker every 30min at :55 past the hour (anchored to 4:55 AM Pacific)
+    const msDetail = msUntilPacific(4, 55, 1);
+    console.log(`[gear-detail] Next detail fetch in ${Math.round(msDetail / 60000)}min, then every 30min`);
     setTimeout(() => {
         fetchGearDetails();
         setInterval(() => fetchGearDetails(), 30 * 60 * 1000);
-    }, msTo25);
+    }, msDetail);
 }
 // GET /api/gear — public gear listings
 app.get("/api/gear", async (_req, res) => {
@@ -2611,13 +2612,13 @@ async function fetchAllFeedContent() {
     }
 }
 function startFeedSchedule() {
-    // Every 4 hours aligned to :40 (YouTube quota: 13 calls × 100 = 1300 units × 6/day = 7800 < 10K limit)
-    const msTo40 = msUntilMinute(40);
-    console.log(`[feed] Next fetch at :40 (in ${Math.round(msTo40 / 60000)}min)`);
+    // Every 6 hours starting at 2:30 AM Pacific (YouTube quota: 13 calls × 100 = 1300 units × 4/day = 5200 < 10K limit)
+    const ms = msUntilPacific(2, 30, 6);
+    console.log(`[feed] Next fetch in ${Math.round(ms / 60000)}min, then every 6h`);
     setTimeout(() => {
         fetchAllFeedContent();
-        setInterval(() => fetchAllFeedContent(), 4 * 60 * 60 * 1000);
-    }, msTo40);
+        setInterval(() => fetchAllFeedContent(), 6 * 60 * 60 * 1000);
+    }, ms);
 }
 // GET /api/feed — personalized for logged-in users, public for anonymous
 app.get("/api/feed", async (req, res) => {
@@ -2757,31 +2758,25 @@ app.get("/api/admin/api-stats", async (req, res) => {
     const stats = await getApiRequestStats(hours);
     res.json({ stats });
 });
-// Helper: ms until the next occurrence of :MM past the hour
-function msUntilMinute(minute) {
+// Helper: ms until the next occurrence of HH:MM Pacific, repeating every intervalH hours
+function msUntilPacific(hour, minute, intervalH) {
     const now = new Date();
-    const target = new Date(now);
-    target.setMinutes(minute, 0, 0);
-    if (target.getTime() <= now.getTime())
-        target.setHours(target.getHours() + 1);
-    return target.getTime() - now.getTime();
+    const pacificStr = now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" });
+    const pacific = new Date(pacificStr);
+    // Try each upcoming slot today and tomorrow
+    const base = new Date(pacific);
+    base.setHours(hour, minute, 0, 0);
+    // Rewind to the most recent slot at or before now, then step forward
+    while (base.getTime() > pacific.getTime())
+        base.setTime(base.getTime() - intervalH * 3600000);
+    // Step forward to the next future slot
+    while (base.getTime() <= pacific.getTime())
+        base.setTime(base.getTime() + intervalH * 3600000);
+    return base.getTime() - pacific.getTime();
 }
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
-// Scheduled sync: full sync every night at 4 AM Pacific
+// Scheduled sync: collection/wantlist every 6 hours starting at midnight Pacific
 function startDailySyncSchedule() {
-    function msUntilNextPacific(hour) {
-        const now = new Date();
-        // Get current Pacific wall-clock time
-        const pacificStr = now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" });
-        const pacific = new Date(pacificStr);
-        // Build target as same "fake" date with desired hour
-        const target = new Date(pacific);
-        target.setHours(hour, 0, 0, 0);
-        if (target.getTime() <= pacific.getTime())
-            target.setDate(target.getDate() + 1);
-        // The wall-clock difference IS the real elapsed time
-        return target.getTime() - pacific.getTime();
-    }
     async function runScheduledSync() {
         console.log(`[sync-schedule] Starting full sync for all users`);
         _syncAbort = false;
@@ -2803,17 +2798,16 @@ function startDailySyncSchedule() {
         }
         console.log(`[sync-schedule] Full sync complete`);
     }
-    // Daily full sync at 4 AM Pacific
-    function scheduleDailySync() {
-        const ms = msUntilNextPacific(4);
+    function schedule() {
+        const ms = msUntilPacific(0, 0, 6);
         const hours = Math.round(ms / 3600000 * 10) / 10;
-        console.log(`[sync-schedule] Next full sync in ${hours}h (4 AM Pacific)`);
+        console.log(`[sync-schedule] Next full sync in ${hours}h (midnight Pacific, every 6h)`);
         setTimeout(async () => {
             await runScheduledSync();
-            scheduleDailySync();
+            schedule();
         }, ms);
     }
-    scheduleDailySync();
+    schedule();
 }
 // ── Inventory / Lists / Orders sync (5 AM Pacific daily) ──────────────────
 async function syncUserExtras(userId, username, token) {
@@ -2907,20 +2901,10 @@ async function syncUserExtras(userId, username, token) {
     return { inventory, lists };
 }
 function startExtrasSyncSchedule() {
-    function msUntilNext5amPacific() {
-        const now = new Date();
-        const pacific = new Date(now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
-        const diff = now.getTime() - pacific.getTime();
-        const target = new Date(pacific);
-        target.setHours(5, 0, 0, 0);
-        if (target.getTime() <= pacific.getTime())
-            target.setDate(target.getDate() + 1);
-        return target.getTime() - pacific.getTime() + diff;
-    }
     function schedule() {
-        const ms = msUntilNext5amPacific();
+        const ms = msUntilPacific(0, 15, 6);
         const hours = Math.round(ms / 3600000 * 10) / 10;
-        console.log(`[extras-sync] Next extras sync in ${hours}h (5 AM Pacific)`);
+        console.log(`[extras-sync] Next extras sync in ${hours}h (12:15 AM Pacific, every 6h)`);
         setTimeout(async () => {
             console.log("[extras-sync] Starting inventory/lists sync for all users");
             const users = await getAllUsersForSync();

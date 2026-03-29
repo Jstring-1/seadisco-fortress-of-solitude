@@ -127,19 +127,23 @@ export async function runFreshSync() {
     }
 }
 export function startFreshSyncSchedule() {
-    // Every 6 hours aligned to :30
-    const msTo30 = msUntilMinute(30);
-    console.log(`[fresh-sync] Next fetch at :30 (in ${Math.round(msTo30 / 60000)}min), then every 6h`);
+    // Every 6 hours starting at 1:20 AM Pacific
+    const ms = msUntilPacific(1, 20, 6);
+    console.log(`[fresh-sync] Next fetch in ${Math.round(ms / 60000)}min, then every 6h`);
     setTimeout(() => {
         runFreshSync();
         setInterval(() => runFreshSync(), INTERVAL_MS);
-    }, msTo30);
+    }, ms);
 }
-function msUntilMinute(minute) {
+function msUntilPacific(hour, minute, intervalH) {
     const now = new Date();
-    const target = new Date(now);
-    target.setMinutes(minute, 0, 0);
-    if (target.getTime() <= now.getTime())
-        target.setHours(target.getHours() + 1);
-    return target.getTime() - now.getTime();
+    const pacificStr = now.toLocaleString("en-US", { timeZone: "America/Los_Angeles" });
+    const pacific = new Date(pacificStr);
+    const base = new Date(pacific);
+    base.setHours(hour, minute, 0, 0);
+    while (base.getTime() > pacific.getTime())
+        base.setTime(base.getTime() - intervalH * 3600000);
+    while (base.getTime() <= pacific.getTime())
+        base.setTime(base.getTime() + intervalH * 3600000);
+    return base.getTime() - pacific.getTime();
 }
