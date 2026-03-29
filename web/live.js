@@ -161,8 +161,8 @@ async function doLiveSearch(append = false) {
     // Add "Load more" link if there are more pages
     if (hasMore) {
       resultsEl.insertAdjacentHTML("beforeend",
-        `<div id="live-load-more" style="text-align:center;padding:1rem 0">
-          <a href="#" onclick="event.preventDefault();_livePage++;doLiveSearch(true)" style="color:var(--accent);text-decoration:none;font-size:0.85rem">Load more events →</a>
+        `<div id="live-load-more" class="load-more-wrap">
+          <button class="load-more-btn" onclick="_livePage++;doLiveSearch(true)">Load more</button>
         </div>`);
     }
 
@@ -364,8 +364,8 @@ function _renderUpcomingSlice(count) {
   const slice = _liveUpcomingAll.slice(0, count);
   let html = _renderLiveEvents(slice, "");
   if (count < _liveUpcomingAll.length) {
-    html += `<div style="text-align:center;padding:0.5rem 0">
-      <a href="#" onclick="event.preventDefault();_renderUpcomingSlice(${count + LIVE_UPCOMING_PAGE})" style="color:var(--accent);text-decoration:none;font-size:0.82rem">Load more events →</a>
+    html += `<div class="load-more-wrap">
+      <button class="load-more-btn" onclick="_renderUpcomingSlice(${count + LIVE_UPCOMING_PAGE})">Load more</button>
     </div>`;
   }
   list.innerHTML = html;

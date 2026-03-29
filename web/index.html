@@ -263,9 +263,8 @@
   <div id="alts-popup"><h4>Other artists</h4></div>
   <div id="blurb" class="content-narrow"></div>
   <div id="results" class="card-grid"></div>
-  <div id="search-load-more" style="display:none;text-align:center;margin-top:1rem">
-    <a href="#" id="search-load-more-btn" onclick="event.preventDefault();loadMoreResults()" style="color:var(--accent);text-decoration:none;font-size:0.85rem">Load more results →</a>
-    <span id="search-load-more-info" style="color:var(--muted);font-size:0.78rem;margin-left:0.6rem"></span>
+  <div id="search-load-more" class="load-more-wrap" style="display:none">
+    <button id="search-load-more-btn" class="load-more-btn" onclick="loadMoreResults()">Load more results</button>
   </div>
   <div id="pagination" style="display:none">
     <button id="prev-btn">← Prev</button>
@@ -274,8 +273,8 @@
   </div>
   <div id="wanted-sample" class="content-area" style="margin-top:0.5rem;display:none">
     <div id="wanted-sample-grid" class="card-grid"></div>
-    <div id="wanted-sample-more" style="text-align:center;margin-top:0.75rem;display:none">
-      <button onclick="loadMoreWantedSample()" style="background:none;border:1px solid var(--border);color:var(--muted);padding:0.4rem 1.5rem;border-radius:var(--radius);cursor:pointer;font-size:0.78rem">Load More</button>
+    <div id="wanted-sample-more" class="load-more-wrap" style="display:none">
+      <button class="load-more-btn" onclick="loadMoreWantedSample()">Load more</button>
     </div>
   </div>
   <div id="recent-feed" style="margin-top:1.5rem">
@@ -367,8 +366,8 @@
     <div id="gear-status" style="font-size:0.78rem;color:#555;margin-top:0.3rem"></div>
   </div>
   <div id="gear-results" class="card-grid content-area"></div>
-  <div style="text-align:center;margin:1.5rem 0">
-    <button id="gear-load-more" onclick="loadMoreGear()" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--accent);padding:0.5rem 1.5rem;cursor:pointer;font-size:0.82rem" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">Load more</button>
+  <div class="load-more-wrap">
+    <button id="gear-load-more" class="load-more-btn" onclick="loadMoreGear()" style="display:none">Load more</button>
   </div>
 </div>
 
@@ -389,8 +388,8 @@
     <div id="feed-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.5rem"></div>
   </div>
   <div id="feed-results" class="feed-grid"></div>
-  <div style="text-align:center;margin:1.5rem 0">
-    <button id="feed-load-more" onclick="loadMoreFeed()" style="display:none;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--accent);padding:0.5rem 1.5rem;cursor:pointer;font-size:0.82rem" onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">Load more</button>
+  <div class="load-more-wrap">
+    <button id="feed-load-more" class="load-more-btn" onclick="loadMoreFeed()" style="display:none">Load more</button>
   </div>
 </div>
 
