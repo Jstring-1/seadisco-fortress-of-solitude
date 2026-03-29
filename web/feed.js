@@ -116,6 +116,11 @@ async function loadFeedArticles(append = false, _retryCount = 0) {
     document.getElementById("feed-results").innerHTML = renderFeedSkeletonGrid(8);
   }
 
+  // Wait for auth so personalized feed works on first load
+  if (typeof authReadyPromise !== "undefined") {
+    try { await Promise.race([authReadyPromise, new Promise(r => setTimeout(r, 3000))]); } catch {}
+  }
+
   try {
     const params = new URLSearchParams({
       category: _feedCategory,
@@ -125,6 +130,7 @@ async function loadFeedArticles(append = false, _retryCount = 0) {
     if (_feedQuery) params.set("q", _feedQuery);
 
     const r = await apiFetch(`/api/feed?${params}`, { cache: "no-store" });
+    if (!r.ok) throw new Error(`Feed API returned ${r.status}`);
     const data = await r.json();
     const newItems = data.items || [];
     _feedTotal = data.total || 0;
