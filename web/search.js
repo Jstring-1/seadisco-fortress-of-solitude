@@ -122,8 +122,8 @@ async function doSearch(page = 1, skipPushState = false) {
     document.getElementById("results").innerHTML = renderSkeletonGrid(12);
   } else {
     // Show loading indicator for "load more"
-    const link = document.getElementById("search-load-more-btn");
-    if (link) link.textContent = "Loading…";
+    const lmBtn = document.getElementById("search-load-more-btn");
+    if (lmBtn) { lmBtn.classList.add("loading"); lmBtn.textContent = "Loading…"; }
   }
 
   if (page === 1) {
@@ -524,9 +524,9 @@ function renderPagination() {
   const el = document.getElementById("search-load-more");
   if (currentPage >= totalPages) { el.style.display = "none"; return; }
   el.style.display = "";
-  const link = document.getElementById("search-load-more-btn");
-  link.textContent = "Load more results →";
-  document.getElementById("search-load-more-info").textContent = `Page ${currentPage} of ${totalPages}`;
+  const btn = document.getElementById("search-load-more-btn");
+  btn.classList.remove("loading");
+  btn.textContent = "Load more results";
 }
 
 // ── AI search ─────────────────────────────────────────────────────────────

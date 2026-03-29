@@ -2173,6 +2173,31 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   }
 }
 
+/* ── Load More ── */
+.load-more-wrap {
+  text-align: center;
+  padding: 1.2rem 0;
+}
+.load-more-btn {
+  display: inline-block;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--accent);
+  padding: 0.45rem 1.5rem;
+  cursor: pointer;
+  font-size: 0.82rem;
+  text-decoration: none;
+  transition: border-color 0.2s, opacity 0.2s;
+}
+.load-more-btn:hover {
+  border-color: var(--accent);
+}
+.load-more-btn.loading {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 /* ── Consistent footer ── */
 footer {
   text-align: center;
