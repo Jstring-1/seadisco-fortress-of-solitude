@@ -289,7 +289,7 @@ body {
 .main-nav-tab:hover         { color: var(--muted); background: none; } /* suppress browser <a> hover */
 #main-nav-tabs > .main-nav-tab:first-child { border-radius: 6px 0 0 6px; }
 .main-nav-tab.active        { color: var(--accent); font-weight: 600; background: rgba(255,107,53,0.08); }
-.main-nav-tab.nav-disabled  { color: #2e2518; cursor: default; }
+.main-nav-tab.nav-disabled  { color: var(--muted); cursor: pointer; text-decoration: none; font-size: 0.7rem; letter-spacing: 0.04em; }
 /* ─ Auth wrap + Account button ─────────────────────────────────────────── */
 #nav-auth-wrap {
   display: flex;
