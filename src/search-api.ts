@@ -2429,8 +2429,9 @@ async function fetchAllFeedContent() {
   const pruned = await pruneFeedArticles(90);
   const stale = await pruneAllStaleData();
   console.log(`Feed fetch complete: ${articles} articles, ${videos} videos, ${pruned} feed pruned`);
-  if (stale.interest || stale.fresh || stale.gear || stale.gearLog) {
-    console.log(`Pruned stale: ${stale.interest} interest signals, ${stale.fresh} fresh releases, ${stale.gear} expired gear, ${stale.gearLog} gear logs`);
+  const staleTotal = Object.values(stale).reduce((a, b) => a + b, 0);
+  if (staleTotal > 0) {
+    console.log(`Pruned stale data: ${JSON.stringify(stale)}`);
   }
 }
 
@@ -2620,17 +2621,13 @@ async function syncUserExtras(userId: string, username: string, token: string): 
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         const r = await loggedFetch("discogs", url, { headers, signal: AbortSignal.timeout(15000), context: `extras: ${username}` });
-        if (r.ok) return r;
-        // 401/403 = auth issue, don't retry
-        if (r.status === 401 || r.status === 403) throw new Error(`HTTP ${r.status} — skipping (auth)`);
+        if (r.ok || r.status === 401 || r.status === 403) return r;
         if (r.status === 429 || r.status >= 500) {
           if (attempt < retries) { await sleep(15000 * attempt); continue; }
           throw new Error(`HTTP ${r.status} after ${retries} attempts`);
         }
         throw new Error(`HTTP ${r.status}`);
       } catch (err: any) {
-        // Don't retry auth errors
-        if (err?.message?.includes("auth")) throw err;
         if (attempt >= retries) throw err;
         await sleep(10000 * attempt);
       }
@@ -2640,13 +2637,14 @@ async function syncUserExtras(userId: string, username: string, token: string): 
 
   let inventory = 0, lists = 0;
 
-  // Inventory (paginated)
+  // Inventory (paginated) — Discogs returns 401 if user isn't a seller
   try {
     for (let page = 1; ; page++) {
       if (page > 1) await sleep(1200);
       const r = await extrasFetch(
         `https://api.discogs.com/users/${encodeURIComponent(username)}/inventory?per_page=100&page=${page}&sort=listed&sort_order=desc`,
       );
+      if (r.status === 401 || r.status === 403) { console.log(`[extras] ${username}: no inventory (${r.status})`); break; }
       const data = await r.json() as any;
       const listings: any[] = data.listings ?? [];
       if (!listings.length) break;
@@ -2671,13 +2669,14 @@ async function syncUserExtras(userId: string, username: string, token: string): 
     console.error(`[extras] ${username} inventory error:`, err);
   }
 
-  // Lists (not paginated — returns all lists, then we store metadata)
+  // Lists (not paginated) — Discogs returns 401 if user has no public lists
   try {
     await sleep(1200);
     const r = await extrasFetch(
       `https://api.discogs.com/users/${encodeURIComponent(username)}/lists?per_page=100`,
     );
-    const data = await r.json() as any;
+    if (r.status === 401 || r.status === 403) { console.log(`[extras] ${username}: no lists (${r.status})`); }
+    const data = r.ok ? (await r.json() as any) : { lists: [] };
     const userLists: any[] = data.lists ?? [];
     if (userLists.length) {
       const items = userLists.map((l: any) => ({
