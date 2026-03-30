@@ -2,6 +2,17 @@
 let _activeTab = "search";
 let _colPage = 1, _wlPage = 1;
 
+function saveCwSort() {
+  const v = document.getElementById("cw-sort")?.value ?? "";
+  try { localStorage.setItem("cw-sort", v); } catch {}
+}
+function restoreCwSort() {
+  try {
+    const v = localStorage.getItem("cw-sort");
+    if (v !== null) { const el = document.getElementById("cw-sort"); if (el) el.value = v; }
+  } catch {}
+}
+
 function renderCardFromBasicInfo(basicInfo, index) {
   const artistName = (basicInfo.artists ?? []).map(a => a.name).join(", ");
   const labelStr   = (basicInfo.labels  ?? []).map(l => l.name).join(", ");
@@ -483,8 +494,7 @@ function clearCwFilters() {
   ["cw-query","cw-artist","cw-release","cw-label","cw-year","cw-genre","cw-style","cw-format","cw-notes"].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = "";
   });
-  const sortEl = document.getElementById("cw-sort");
-  if (sortEl) sortEl.value = "";
+  restoreCwSort();
   const ratingEl = document.getElementById("cw-rating");
   if (ratingEl) ratingEl.value = "";
   toggleCwAdvanced(false);

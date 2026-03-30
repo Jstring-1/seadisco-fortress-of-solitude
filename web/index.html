@@ -199,7 +199,7 @@
         <span id="cw-advanced-arrow">▶</span> Filters
       </button>
       <button type="button" onclick="clearCwSearch()" title="Clear all filters" style="background:none;border:none;padding:0 0.4rem;font-size:1.2rem;color:#555;cursor:pointer;line-height:1;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
-      <select id="cw-sort" onchange="doCwSearch(1)" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;height:22px;padding:0 0.4rem;font-family:inherit;font-size:0.68rem;line-height:22px;color:#aaa;box-sizing:border-box;cursor:pointer;color-scheme:dark;flex-shrink:0;margin-left:auto">
+      <select id="cw-sort" onchange="saveCwSort();doCwSearch(1)" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;height:22px;padding:0 0.4rem;font-family:inherit;font-size:0.68rem;line-height:22px;color:#aaa;box-sizing:border-box;cursor:pointer;color-scheme:dark;flex-shrink:0;margin-left:auto">
         <option value="">Sort: Artist</option>
         <option value="title">Sort: Title</option>
         <option value="year">Sort: Year (Newest)</option>
