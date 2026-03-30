@@ -384,14 +384,6 @@ body {
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 1rem;
 }
-#recent-feed {
-  display: none; /* temporarily hidden */
-  padding-top: 2rem;
-  transition: opacity 0.4s ease;
-  max-width: 900px;
-  margin-left: auto;
-  margin-right: auto;
-}
 .feed-label {
   font-size: 0.65rem;
   text-transform: uppercase;
@@ -2254,26 +2246,6 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   background: var(--surface);
   border-radius: var(--radius);
   padding: 2rem;
-}
-.account-nav {
-  display: flex;
-  gap: 0;
-  margin-bottom: 1.5rem;
-}
-.account-nav-tab {
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--muted);
-  font-size: 0.85rem;
-  padding: 0.6rem 1rem;
-  cursor: pointer;
-  transition: color 0.2s, border-color 0.2s;
-}
-.account-nav-tab:hover { color: var(--text); }
-.account-nav-tab.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
 }
 .account-tab-content h3 {
   font-size: 0.95rem;

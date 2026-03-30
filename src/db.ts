@@ -1262,22 +1262,6 @@ export async function upsertVinylListings(items: Array<{
   return count;
 }
 
-export async function updateVinylDetail(itemId: string, detailHtml: string, allImages: string[], itemSpecifics: object): Promise<void> {
-  await getPool().query(
-    `UPDATE vinyl_listings SET detail_html=$2, all_images=$3, item_specifics=$4, detailed_at=NOW() WHERE item_id=$1`,
-    [itemId, detailHtml, allImages, JSON.stringify(itemSpecifics)]
-  );
-}
-
-export async function getVinylNeedingDetail(limit: number = 20): Promise<Array<{ itemId: string; price: number }>> {
-  const r = await getPool().query(
-    `SELECT item_id, price FROM vinyl_listings
-     WHERE detailed_at IS NULL AND NOT expired
-     ORDER BY bid_count DESC, price DESC LIMIT $1`,
-    [limit]
-  );
-  return r.rows.map(row => ({ itemId: row.item_id, price: row.price }));
-}
 
 export async function getVinylListings(minPrice: number = 0, limit: number = 200, offset: number = 0, sort: string = "ending", q: string = ""): Promise<{ items: any[]; total: number }> {
   const params: any[] = [minPrice];

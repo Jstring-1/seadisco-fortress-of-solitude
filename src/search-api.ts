@@ -1865,7 +1865,10 @@ app.get("/api/gear", async (_req, res) => {
 });
 
 // GET /api/gear/stats — admin stats
-app.get("/api/gear/stats", async (_req, res) => {
+app.get("/api/gear/stats", async (req, res) => {
+  const userId = getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   try {
     const stats = await getGearStats();
     res.json(stats);
@@ -1994,7 +1997,10 @@ app.get("/api/vinyl", async (_req, res) => {
 });
 
 // GET /api/vinyl/stats — admin stats
-app.get("/api/vinyl/stats", async (_req, res) => {
+app.get("/api/vinyl/stats", async (req, res) => {
+  const userId = getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   try {
     const stats = await getVinylStats();
     res.json(stats);
