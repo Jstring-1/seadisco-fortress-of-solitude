@@ -1894,43 +1894,60 @@ async function fetchEbayVinylListings(): Promise<number> {
   let totalUpserted = 0;
   try {
     const token = await getEbayToken();
-    // Single category-based search: Records (176985), 12" LPs, $10+ auctions
-    const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?category_ids=176985&limit=200&sort=endingSoonest&filter=price:[10..],priceCurrency:USD,buyingOptions:{AUCTION}&aspect_filter=categoryId:176985,Record%20Size:12%22`;
-    const r = await loggedFetch("ebay", url, {
-      headers: { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" },
-      context: "vinyl search: 12in LP",
-    });
-    if (!r.ok) {
-      console.error(`eBay vinyl search failed: ${r.status}`);
-    } else {
-      const data = await r.json() as any;
-      const summaries: any[] = data.itemSummaries ?? [];
-      console.log(`eBay vinyl: ${summaries.length} results`);
+    const baseUrl = `https://api.ebay.com/buy/browse/v1/item_summary/search?category_ids=176985&limit=200&sort=endingSoonest&filter=price:[10..],priceCurrency:USD,buyingOptions:{AUCTION}&aspect_filter=categoryId:176985,Record%20Size:12%22`;
 
-      const items = summaries.map((s: any) => ({
-        itemId:          s.itemId,
-        title:           s.title ?? "",
-        price:           parseFloat(s.currentBidPrice?.value ?? s.price?.value ?? "0"),
-        currency:        s.currentBidPrice?.currency ?? s.price?.currency ?? "USD",
-        condition:       s.condition ?? s.conditionId ?? "",
-        imageUrl:        s.image?.imageUrl ?? "",
-        itemUrl:         s.itemWebUrl ?? "",
-        locationCity:    s.itemLocation?.city ?? "",
-        locationState:   s.itemLocation?.stateOrProvince ?? "",
-        locationCountry: s.itemLocation?.country ?? "",
-        sellerUsername:  s.seller?.username ?? "",
-        sellerFeedback:  s.seller?.feedbackScore ?? 0,
-        buyingOptions:   s.buyingOptions ?? [],
-        bidCount:        s.bidCount ?? 0,
-        categories:      (s.categories ?? []).map((c: any) => c.categoryId),
-        categoryNames:   (s.categories ?? []).map((c: any) => c.categoryName),
-        itemEndDate:     s.itemEndDate ?? null,
-        thumbnailUrl:    (s.thumbnailImages ?? [])[0]?.imageUrl ?? "",
-        rawSummary:      s,
-      }));
+    // Paginate through up to 1000 results (5 pages × 200)
+    for (let offset = 0; offset < 1000; offset += 200) {
+      try {
+        const url = offset > 0 ? `${baseUrl}&offset=${offset}` : baseUrl;
+        const r = await loggedFetch("ebay", url, {
+          headers: { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" },
+          context: `vinyl search: 12in LP (offset ${offset})`,
+        });
+        if (!r.ok) {
+          console.error(`eBay vinyl search (offset ${offset}) failed: ${r.status}`);
+          break;
+        }
+        const data = await r.json() as any;
+        const summaries: any[] = data.itemSummaries ?? [];
+        const ebayTotal = data.total ?? 0;
+        console.log(`eBay vinyl (offset ${offset}): ${summaries.length} results (${ebayTotal} total available)`);
 
-      const count = await upsertVinylListings(items);
-      totalUpserted += count;
+        if (!summaries.length) break;
+
+        const items = summaries.map((s: any) => ({
+          itemId:          s.itemId,
+          title:           s.title ?? "",
+          price:           parseFloat(s.currentBidPrice?.value ?? s.price?.value ?? "0"),
+          currency:        s.currentBidPrice?.currency ?? s.price?.currency ?? "USD",
+          condition:       s.condition ?? s.conditionId ?? "",
+          imageUrl:        s.image?.imageUrl ?? "",
+          itemUrl:         s.itemWebUrl ?? "",
+          locationCity:    s.itemLocation?.city ?? "",
+          locationState:   s.itemLocation?.stateOrProvince ?? "",
+          locationCountry: s.itemLocation?.country ?? "",
+          sellerUsername:  s.seller?.username ?? "",
+          sellerFeedback:  s.seller?.feedbackScore ?? 0,
+          buyingOptions:   s.buyingOptions ?? [],
+          bidCount:        s.bidCount ?? 0,
+          categories:      (s.categories ?? []).map((c: any) => c.categoryId),
+          categoryNames:   (s.categories ?? []).map((c: any) => c.categoryName),
+          itemEndDate:     s.itemEndDate ?? null,
+          thumbnailUrl:    (s.thumbnailImages ?? [])[0]?.imageUrl ?? "",
+          rawSummary:      s,
+        }));
+
+        const count = await upsertVinylListings(items);
+        totalUpserted += count;
+
+        // Stop if we've fetched all available results
+        if (offset + summaries.length >= ebayTotal) break;
+        // Pace requests
+        await new Promise(r => setTimeout(r, 1000));
+      } catch (err) {
+        console.error(`eBay vinyl search (offset ${offset}) error:`, err);
+        break;
+      }
     }
     // Mark old listings as expired
     const expired = await markExpiredVinylListings();
