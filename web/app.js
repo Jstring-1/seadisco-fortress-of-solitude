@@ -65,7 +65,6 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
   if (ctArtist) openConcertPopup(null, ctArtist);
 
   const deferLoad = (fn) => typeof requestIdleCallback === "function" ? requestIdleCallback(fn) : setTimeout(fn, 200);
-  deferLoad(() => loadRecentFeed());
   deferLoad(() => loadWantedSample());
   deferLoad(() => loadFreshReleases());
 })();

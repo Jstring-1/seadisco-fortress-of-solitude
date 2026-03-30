@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveSearch, markSearchBio, getSearchHistory, deleteSearch, clearSearchHistory, deleteSearchGlobal, deleteSearchById, getRecentSearches, getRecentLiveSearches, dumpSearchHistory, truncateSearchHistory, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, getLocationByIp, upsertLocation, rebuildUserTasteProfile, getUserTasteProfile, getPersonalizedFreshReleases, getPersonalizedFeedArticles, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, getLocationByIp, upsertLocation, rebuildUserTasteProfile, getUserTasteProfile, getPersonalizedFreshReleases, getPersonalizedFeedArticles, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sharedToken = process.env.DISCOGS_TOKEN ?? "";
@@ -889,42 +889,6 @@ app.get("/api/user/sync-status", async (req, res) => {
 function stripArtistSuffix(name) {
     return name ? name.replace(/\s*\(\d+\)$/, "").trim() : undefined;
 }
-// GET /api/user/history — recent searches for the logged-in user
-app.get("/api/user/history", async (req, res) => {
-    const userId = getClerkUserId(req);
-    if (!userId) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-    const raw = await getSearchHistory(userId);
-    const history = raw.map((s) => ({ ...s, params: normalizeParams(s.params) }));
-    res.json({ history });
-});
-// DELETE /api/user/search — delete one saved search by params
-app.delete("/api/user/search", express.json(), async (req, res) => {
-    const userId = getClerkUserId(req);
-    if (!userId) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-    const { params } = req.body ?? {};
-    if (!params) {
-        res.status(400).json({ error: "Missing params" });
-        return;
-    }
-    await deleteSearch(userId, params);
-    res.json({ ok: true });
-});
-// DELETE /api/user/searches — clear all saved searches for the user
-app.delete("/api/user/searches", async (req, res) => {
-    const userId = getClerkUserId(req);
-    if (!userId) {
-        res.status(401).json({ error: "Unauthorized" });
-        return;
-    }
-    await clearSearchHistory(userId);
-    res.json({ ok: true });
-});
 // POST /api/feedback — save feedback from signed-in user
 app.post("/api/feedback", express.json(), async (req, res) => {
     const userId = getClerkUserId(req);
@@ -960,77 +924,6 @@ app.delete("/api/admin/feedback/:id", async (req, res) => {
         return;
     }
     await deleteFeedback(parseInt(req.params.id));
-    res.json({ ok: true });
-});
-// GET /api/admin/searches — full search history, admin only
-app.get("/api/admin/searches", async (req, res) => {
-    const userId = getClerkUserId(req);
-    const adminId = process.env.ADMIN_CLERK_ID ?? "";
-    if (!userId || !adminId || userId !== adminId) {
-        res.status(403).json({ error: "Forbidden" });
-        return;
-    }
-    const raw = await dumpSearchHistory();
-    const searches = raw.map(s => ({
-        ...s,
-        params: s.params?._type === "live" ? s.params : normalizeParams(s.params),
-    }));
-    res.json({ searches });
-});
-// GET /api/admin/search-dump — full search history export, admin only
-app.get("/api/admin/search-dump", async (req, res) => {
-    const userId = getClerkUserId(req);
-    const adminId = process.env.ADMIN_CLERK_ID ?? "";
-    if (!userId || !adminId || userId !== adminId) {
-        res.status(403).json({ error: "Forbidden" });
-        return;
-    }
-    const rows = await dumpSearchHistory();
-    res.setHeader("Content-Type", "application/json");
-    res.setHeader("Content-Disposition", "attachment; filename=search-history.json");
-    res.json({ count: rows.length, searches: rows });
-});
-// DELETE /api/admin/search-all — wipe entire search history, admin only
-app.delete("/api/admin/search-all", async (req, res) => {
-    const userId = getClerkUserId(req);
-    const adminId = process.env.ADMIN_CLERK_ID ?? "";
-    if (!userId || !adminId || userId !== adminId) {
-        res.status(403).json({ error: "Forbidden" });
-        return;
-    }
-    const deleted = await truncateSearchHistory();
-    res.json({ ok: true, deleted });
-});
-// DELETE /api/admin/search — delete a search by params across all users, admin only
-app.delete("/api/admin/search", express.json(), async (req, res) => {
-    const userId = getClerkUserId(req);
-    const adminId = process.env.ADMIN_CLERK_ID ?? "";
-    if (!userId || !adminId || userId !== adminId) {
-        res.status(403).json({ error: "Forbidden" });
-        return;
-    }
-    const { params } = req.body ?? {};
-    if (!params) {
-        res.status(400).json({ error: "Missing params" });
-        return;
-    }
-    await deleteSearchGlobal(params);
-    res.json({ ok: true });
-});
-// DELETE /api/admin/search/:id — delete a single search row by ID, admin only
-app.delete("/api/admin/search/:id", async (req, res) => {
-    const userId = getClerkUserId(req);
-    const adminId = process.env.ADMIN_CLERK_ID ?? "";
-    if (!userId || !adminId || userId !== adminId) {
-        res.status(403).json({ error: "Forbidden" });
-        return;
-    }
-    const id = parseInt(req.params.id);
-    if (!id) {
-        res.status(400).json({ error: "Invalid id" });
-        return;
-    }
-    await deleteSearchById(id);
     res.json({ ok: true });
 });
 // POST /api/admin/backfill-interests — one-time backfill from existing collection/wantlist data
@@ -1294,118 +1187,6 @@ In 4–7 words, give a single honest phrase describing how well these results ma
         res.json({ phrase: null });
     }
 });
-// POST /api/user/mb — mark most recent search as having a bio
-// Save live (concert) searches
-app.post("/api/user/live-search", express.json(), async (req, res) => {
-    const userId = getClerkUserId(req);
-    // Allow anonymous saves too — use "anon" as placeholder
-    const uid = userId || "anon";
-    const params = req.body?.params;
-    if (!params || typeof params !== "object") {
-        res.json({ ok: true });
-        return;
-    }
-    try {
-        // Tag as live search so we can distinguish from Discogs searches
-        await saveSearch(uid, { ...params, _type: "live" });
-        res.json({ ok: true });
-    }
-    catch {
-        res.json({ ok: true });
-    }
-});
-app.post("/api/user/mb", async (req, res) => {
-    const userId = getClerkUserId(req);
-    if (!userId) {
-        res.status(401).json({ error: "not signed in" });
-        return;
-    }
-    try {
-        await markSearchBio(userId);
-        res.json({ ok: true });
-    }
-    catch {
-        res.status(500).json({ error: "failed" });
-    }
-});
-// GET /api/recent-searches — anonymous global feed
-// Normalize old full-name param keys to single-letter keys
-function normalizeParams(p) {
-    const keyMap = {
-        artist: "a", release_title: "r", label: "l", year: "y",
-        genre: "g", style: "s", format: "f", type: "t", sort: "o",
-    };
-    const out = {};
-    for (const [k, v] of Object.entries(p)) {
-        if (v)
-            out[keyMap[k] ?? k] = v;
-    }
-    return out;
-}
-app.get("/api/recent-searches", async (_req, res) => {
-    res.setHeader("Cache-Control", "public, max-age=120"); // 2 min
-    if (!process.env.APP_DB_URL) {
-        res.json({ searches: [] });
-        return;
-    }
-    try {
-        const raw = await getRecentSearches(300);
-        // Normalize all params to single-letter keys (handles old entries with full names)
-        const normalized = raw.map(s => ({ ...s, params: normalizeParams(s.params) }));
-        // Deduplicate by normalised content: lowercase q/artist/label/release/genre/style/year
-        // Searches differing only in format, type, or sort are treated as the same
-        const seen = new Set();
-        const searches = normalized.filter(({ params }) => {
-            const sig = [params.q, params.a, params.r, params.l, params.g, params.s, params.y]
-                .map(v => (v ?? "").toLowerCase().trim())
-                .join("|");
-            if (!sig.replace(/\|/g, "").trim() || seen.has(sig))
-                return false;
-            seen.add(sig);
-            return true;
-        });
-        // Shuffle the latest 300 and return 48 random pills
-        for (let i = searches.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [searches[i], searches[j]] = [searches[j], searches[i]];
-        }
-        res.json({ searches: searches.slice(0, 48) });
-    }
-    catch {
-        res.json({ searches: [] });
-    }
-});
-// GET /api/recent-live-searches — recent concert searches for Live tab pill cloud
-app.get("/api/recent-live-searches", async (_req, res) => {
-    res.setHeader("Cache-Control", "public, max-age=120");
-    if (!process.env.APP_DB_URL) {
-        res.json({ searches: [] });
-        return;
-    }
-    try {
-        const raw = await getRecentLiveSearches(200);
-        // Dedupe by content signature
-        const seen = new Set();
-        const searches = raw.filter(({ params }) => {
-            const sig = [params.artist, params.city, params.genre]
-                .map(v => (v ?? "").toLowerCase().trim())
-                .join("|");
-            if (!sig.replace(/\|/g, "").trim() || seen.has(sig))
-                return false;
-            seen.add(sig);
-            return true;
-        });
-        // Shuffle and return 48
-        for (let i = searches.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
-            [searches[i], searches[j]] = [searches[j], searches[i]];
-        }
-        res.json({ searches: searches.slice(0, 48) });
-    }
-    catch {
-        res.json({ searches: [] });
-    }
-});
 // GET /search?q=pink+floyd&type=master&year=1973&page=1&per_page=10
 app.get("/search", async (req, res) => {
     const rawQ = req.query.q ?? "";
@@ -1459,42 +1240,6 @@ app.get("/search", async (req, res) => {
             perPage: req.query.per_page ? parseInt(req.query.per_page) : 12,
         });
         res.json(results);
-        // Record search history (fire-and-forget, page 1 only)
-        const userId = getClerkUserId(req) || "anon";
-        const isFirstPage = !req.query.page || req.query.page === "1";
-        if (isFirstPage) {
-            const artistParam = req.query.artist ? String(req.query.artist) : "";
-            const p = {};
-            // Single-letter keys: q a r l y g s f t o
-            if (rawQ && rawQ.toLowerCase() !== artistParam.toLowerCase())
-                p.q = rawQ;
-            if (artistParam)
-                p.a = artistParam;
-            if (req.query.release_title)
-                p.r = String(req.query.release_title);
-            if (req.query.label)
-                p.l = String(req.query.label);
-            if (req.query.year)
-                p.y = String(req.query.year);
-            if (req.query.genre)
-                p.g = String(req.query.genre);
-            if (req.query.style)
-                p.s = String(req.query.style);
-            const fmt = req.query.format ? String(req.query.format) : "";
-            if (fmt && fmt !== "Vinyl")
-                p.f = fmt;
-            if (req.query.type)
-                p.t = String(req.query.type);
-            if (req.query.sort) {
-                const sortOrder = req.query.sort_order ? `:${String(req.query.sort_order)}` : "";
-                p.o = `${String(req.query.sort)}${sortOrder}`;
-            }
-            const hasResults = results?.results?.length > 0;
-            // Only save when there are meaningful search terms (not just type/sort/format)
-            const hasMeaningful = p.q || p.a || p.r || p.l || p.g || p.s || p.y;
-            if (hasMeaningful && hasResults)
-                saveSearch(userId, p).catch(() => { });
-        }
     }
     catch (err) {
         console.error(err);

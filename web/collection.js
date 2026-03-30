@@ -113,7 +113,6 @@ function switchView(view, skipPushState = false) {
     if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "";
     document.getElementById("artist-alts").innerHTML = "";
-    const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "none";
     loadWantedTab();
   } else if (view === "records") {
     if (searchView) searchView.style.display = "";
@@ -121,7 +120,6 @@ function switchView(view, skipPushState = false) {
     if (recordsWrap) recordsWrap.style.display = "";
     if (wantedWrap) wantedWrap.style.display = "none";
     document.getElementById("artist-alts").innerHTML = "";
-    const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "none";
     const ws1 = document.getElementById("wanted-sample"); if (ws1) ws1.style.display = "none";
     switchRecordsTab(_cwTab || "collection", true);
   } else {
@@ -136,7 +134,6 @@ function switchView(view, skipPushState = false) {
     document.getElementById("artist-alts").innerHTML = "";
     if (typeof clearForm === "function") clearForm();
     history.replaceState({}, "", location.pathname);
-    const feed = document.getElementById("recent-feed"); if (feed) feed.style.display = "";
     const ws = document.getElementById("wanted-sample"); if (ws) ws.style.display = "";
   }
 

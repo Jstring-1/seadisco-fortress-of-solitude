@@ -109,19 +109,6 @@ async function doLiveSearch(append = false) {
       history.replaceState({}, "", "?" + u.toString());
     }
 
-    // Save live search to DB only on first page and when results found
-    if (!append && events.length) {
-      const liveParams = {};
-      if (artist) liveParams.artist = artist;
-      if (city)   liveParams.city = city;
-      if (genre)  liveParams.genre = genre;
-      apiFetch("/api/user/live-search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ params: liveParams }),
-      }).catch(() => {});
-    }
-
     const parts = [];
     if (artist) parts.push(artist);
     if (city)   parts.push(city);
@@ -377,44 +364,6 @@ function _hideLiveUpcoming() {
 }
 
 // ── Recent live search pill cloud ────────────────────────────────────────
-let _liveRecentLoaded = false;
-
 async function loadLiveRecentFeed() {
   loadLiveUpcoming();
-  if (_liveRecentLoaded) return;
-  _liveRecentLoaded = true;
-  const el = document.getElementById("live-recent-feed");
-  if (!el) return;
-  try {
-    const data = await fetch("/api/recent-live-searches").then(r => r.json());
-    const searches = data.searches ?? [];
-    if (!searches.length) { el.style.display = "none"; return; }
-    // Shuffle client-side for variety on cached responses
-    for (let i = searches.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [searches[i], searches[j]] = [searches[j], searches[i]];
-    }
-    const pills = searches.map((s, i) => {
-      const p = s.params;
-      const parts = [];
-      if (p.artist) parts.push(p.artist);
-      if (p.city)   parts.push(p.city);
-      if (p.genre)  parts.push(p.genre);
-      const full = parts.join(" · ");
-      const short = full.length > 28 ? full.slice(0, 27) + "…" : full;
-      return `<span class="pill feed-pill" data-live-idx="${i}" title="${escHtml(full)}">${escHtml(short)}</span>`;
-    }).join("");
-    el.innerHTML = `<div class="feed-label">Recent Live Searches</div><div class="pill-strip-wrap"><div class="feed-pills">${pills}</div></div>`;
-    el.querySelectorAll(".feed-pill").forEach((pill, i) => {
-      pill.addEventListener("click", () => {
-        const p = searches[i].params;
-        document.getElementById("live-artist").value = p.artist || "";
-        document.getElementById("live-city").value   = p.city || "";
-        document.getElementById("live-genre").value  = p.genre || "";
-        doLiveSearch();
-      });
-    });
-  } catch {
-    if (el) el.style.display = "none";
-  }
 }

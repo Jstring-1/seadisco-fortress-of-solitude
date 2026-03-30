@@ -96,26 +96,6 @@
         <div id="interest-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
       </div>
 
-      <!-- Global Search Pool -->
-      <div class="admin-section admin-section-a">
-      <div class="admin-pool-grid">
-        <div id="admin-searches">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem">
-            <h2 style="margin:0;font-size:1rem">Global Search Pool</h2>
-            <span id="admin-search-count" style="font-size:0.72rem;color:#555"></span>
-          </div>
-          <div id="global-search-list" style="font-size:0.8rem;color:var(--muted);max-height:520px;overflow-y:auto;overflow-x:hidden">Loading...</div>
-        </div>
-        <div id="admin-live-searches">
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.5rem">
-            <h2 style="margin:0;font-size:1rem">Live Search Pool</h2>
-            <span id="admin-live-search-count" style="font-size:0.72rem;color:#555"></span>
-          </div>
-          <div id="global-live-search-list" style="font-size:0.8rem;color:var(--muted);max-height:520px;overflow-y:auto;overflow-x:hidden">Loading...</div>
-        </div>
-      </div>
-      </div>
-
     </div>
   </div>
 </main>
@@ -159,7 +139,6 @@ async function initClerk() {
     loadAdminSyncStatus();
     loadApiLog();
     loadInterestStats();
-    loadAdminSearches();
     loadCollectionStats();
     checkKillStatus();
   } catch {
@@ -598,62 +577,6 @@ async function loadInterestStats() {
       </div>
     `;
   } catch { el.textContent = "Could not load interest stats."; }
-}
-
-// ── Global Search Pool ────────────────────────────────────────────────
-// searchLabel, normP — now in shared.js
-
-async function loadAdminSearches() {
-  const el = document.getElementById("global-search-list");
-  const countEl = document.getElementById("admin-search-count");
-  const liveEl = document.getElementById("global-live-search-list");
-  const liveCountEl = document.getElementById("admin-live-search-count");
-  try {
-    const sessionToken = await clerk.session?.getToken();
-    const data = await fetch("/api/admin/searches", {
-      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
-    }).then(r => r.json());
-    const all = data.searches ?? [];
-    const discogs = all.filter(s => s.params?._type !== "live");
-    const live = all.filter(s => s.params?._type === "live");
-
-    const renderRow = ({ id, params, searched_at }) => {
-      const label = searchLabel(params);
-      const date = new Date(searched_at).toLocaleDateString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
-      return `<div id="gs-${id}" style="display:flex;justify-content:space-between;align-items:center;padding:0.3rem 0;border-bottom:1px solid #1a1a1a;gap:0.5rem">
-        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.8rem;color:var(--accent)">${label}</span>
-        <span style="color:#444;font-size:0.72rem;flex-shrink:0">${date}</span>
-        <button onclick="deleteGlobalSearch(${id})" style="background:none;border:none;color:#555;cursor:pointer;font-size:0.85rem;padding:0 0.1rem;flex-shrink:0;line-height:1" title="Delete">\u2715</button>
-      </div>`;
-    };
-
-    countEl.textContent = `${discogs.length} entries`;
-    el.innerHTML = discogs.length ? discogs.map(renderRow).join("") : "No searches.";
-    liveCountEl.textContent = `${live.length} entries`;
-    liveEl.innerHTML = live.length ? live.map(renderRow).join("") : "No live searches.";
-  } catch {
-    el.textContent = "Could not load global searches.";
-    liveEl.textContent = "Could not load live searches.";
-  }
-}
-
-async function deleteGlobalSearch(id) {
-  try {
-    const sessionToken = await clerk.session?.getToken();
-    const r = await fetch(`/api/admin/search/${id}`, {
-      method: "DELETE",
-      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
-    });
-    if (r.ok) {
-      document.getElementById(`gs-${id}`)?.remove();
-      const discogsRemaining = document.querySelectorAll("#global-search-list [id^='gs-']").length;
-      const liveRemaining = document.querySelectorAll("#global-live-search-list [id^='gs-']").length;
-      document.getElementById("admin-search-count").textContent = `${discogsRemaining} entries`;
-      document.getElementById("admin-live-search-count").textContent = `${liveRemaining} entries`;
-      if (!discogsRemaining) document.getElementById("global-search-list").textContent = "No searches.";
-      if (!liveRemaining) document.getElementById("global-live-search-list").textContent = "No live searches.";
-    }
-  } catch { /* ignore */ }
 }
 
 initClerk().catch(err => {
