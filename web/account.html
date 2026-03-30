@@ -117,9 +117,7 @@
       <h3>What We Collect</h3>
       <p>When you create an account, we store your email address (provided by our authentication provider, Clerk) and any Discogs Personal Access Token you choose to save.</p>
       <p>When you sync your collection, we store a local copy of your Discogs collection, wantlist, inventory, and list metadata so you can browse and search them on SeaDisco.</p>
-      <p>We generate a "taste profile" from your collection data (top artists, genres, and styles) to personalize your music feed. This profile is derived entirely from your Discogs data and contains no additional personal information.</p>
-      <p>When you search for live events, we temporarily store your most recent search city to pre-fill the field on your next visit. This location data is automatically deleted after 30 days.</p>
-      <p>We log API usage for operational monitoring. This data is used solely for debugging and improving the service. We do not store your search queries.</p>
+      <p>We log API usage for operational monitoring. This data is used solely for debugging and improving the service. We do not store your search queries, location data, or taste profiles.</p>
 
       <h3>Third-Party Services</h3>
       <p>SeaDisco integrates with the following third-party services:</p>
@@ -134,16 +132,16 @@
       </ul>
 
       <h3>How We Use Your Data</h3>
-      <p>Your Discogs token is used solely to make API requests to Discogs on your behalf. We never share your token with any other service or third party. Your collection data is used only to display your records and personalize your feed within SeaDisco.</p>
+      <p>Your Discogs token is used solely to make API requests to Discogs on your behalf. We never share your token with any other service or third party. Your collection data is used only to display your records within SeaDisco.</p>
       <p>We do not sell, rent, or share your personal data with anyone.</p>
 
       <h3>Data Storage &amp; Security</h3>
       <p>All data is stored in a secured PostgreSQL database hosted on Railway. Your Discogs token is stored encrypted at rest by the database provider. Access to the database is restricted to the application server only.</p>
 
       <h3>Data Retention &amp; Deletion</h3>
-      <p>User data (collection, wantlist, inventory, lists, taste profile, orders, and location data) is automatically purged after 30 days or deleted by the user. Your authentication tokens are retained for as long as your account exists.</p>
+      <p>User data (collection, wantlist, inventory, lists, and orders) is automatically purged after 30 days or deleted by the user. Your authentication tokens are retained for as long as your account exists.</p>
       <p>Temporary operational data is also pruned automatically: expired gear listings, past live events, API logs, and feed article caches.</p>
-      <p>You can delete your account at any time from the Account tab. Deleting your account <strong>permanently removes all of your data</strong> from our database, including your email, Discogs token, collection, wantlist, inventory, lists, taste profile, interest signals, and location data. Your Clerk authentication account is also deleted. This action is immediate and irreversible — there is no way to recover your data after deletion.</p>
+      <p>You can delete your account at any time from the Account tab. Deleting your account <strong>permanently removes all of your data</strong> from our database, including your email, Discogs token, collection, wantlist, inventory, lists, and orders. Your Clerk authentication account is also deleted. This action is immediate and irreversible — there is no way to recover your data after deletion.</p>
 
       <h3>Cookies</h3>
       <p>SeaDisco uses cookies only for authentication (via Clerk) and anonymous analytics (via Google Analytics). We do not use advertising or tracking cookies, and we do not sell any data.</p>

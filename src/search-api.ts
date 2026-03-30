@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, recordInterestSignals, getInterestStats, backfillInterestSignals, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, getLocationByIp, upsertLocation, rebuildUserTasteProfile, getUserTasteProfile, getPersonalizedFreshReleases, getPersonalizedFeedArticles, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease } from "./db.js";
 import { startFreshSyncSchedule } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -73,44 +73,6 @@ function clientIp(req: express.Request): string {
   return (fwd ? fwd.split(",")[0] : req.ip ?? "unknown").replace(/^::ffff:/, "").trim();
 }
 
-// ── IP geolocation resolver (3-layer cache: memory → DB → ip-api.com) ───
-const locationCache = new Map<string, { lat: number; lon: number; city: string; region: string; country: string; ts: number }>();
-
-async function resolveLocation(req: express.Request): Promise<{ lat: number; lon: number; city: string; region: string; country: string } | null> {
-  const ip = clientIp(req);
-  if (ip === "unknown" || ip === "127.0.0.1" || ip === "::1") return null;
-
-  // 1. In-memory cache (1 hour)
-  const cached = locationCache.get(ip);
-  if (cached && Date.now() - cached.ts < 3600_000) {
-    return { lat: cached.lat, lon: cached.lon, city: cached.city, region: cached.region, country: cached.country };
-  }
-
-  // 2. DB cache (7 days)
-  try {
-    const dbRow = await getLocationByIp(ip);
-    if (dbRow) {
-      const loc = { lat: dbRow.latitude, lon: dbRow.longitude, city: dbRow.city, region: dbRow.region, country: dbRow.country };
-      locationCache.set(ip, { ...loc, ts: Date.now() });
-      return loc;
-    }
-  } catch {}
-
-  // 3. ip-api.com (free tier, HTTP only, 45 req/min)
-  try {
-    const r = await loggedFetch("ip-api", `http://ip-api.com/json/${ip}?fields=status,lat,lon,city,regionName,country`, { signal: AbortSignal.timeout(5000) });
-    const data = await r.json() as any;
-    if (data.status !== "success") return null;
-    const loc = { lat: data.lat as number, lon: data.lon as number, city: data.city as string, region: data.regionName as string, country: data.country as string };
-    locationCache.set(ip, { ...loc, ts: Date.now() });
-    // Persist to DB (fire-and-forget)
-    const userId = getClerkUserId(req);
-    upsertLocation(ip, userId, loc.lat, loc.lon, loc.city, loc.region, loc.country).catch(() => {});
-    return loc;
-  } catch {
-    return null;
-  }
-}
 
 function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
   if (IP_WHITELIST.has(ip)) return { allowed: true, remaining: UNAUTH_LIMIT };
@@ -357,7 +319,6 @@ async function runBackgroundSync(userId: string, token: string, username: string
         })).filter(i => i.id);
 
         await upsertCollectionItems(userId, items);
-        await recordInterestSignals(items, "collection");
         totalSynced += items.length;
         lastProgressAt = Date.now();
         await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
@@ -397,7 +358,6 @@ async function runBackgroundSync(userId: string, token: string, username: string
         })).filter(i => i.id);
 
         await upsertWantlistItems(userId, items);
-        await recordInterestSignals(items, "wantlist");
         totalSynced += items.length;
         lastProgressAt = Date.now();
         await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
@@ -408,10 +368,6 @@ async function runBackgroundSync(userId: string, token: string, username: string
 
     await updateSyncProgress(userId, "complete", totalSynced, estimatedTotal);
     console.log(`Full sync complete for ${username}: ${totalSynced} items`);
-    // Rebuild taste profile after successful sync
-    await rebuildUserTasteProfile(userId).catch(err =>
-      console.error(`Taste profile rebuild error for ${userId}:`, err)
-    );
   } catch (err) {
     console.error(`Background sync error for ${username}:`, err);
     await updateSyncProgress(userId, "error", totalSynced, 0, String(err));
@@ -606,26 +562,11 @@ app.get("/api/live/nearby", async (req, res) => {
   let region = (req.query.region as string) || "";
 
   if (isNaN(lat) || isNaN(lon)) {
-    const loc = await resolveLocation(req);
-    if (!loc) { res.json({ events: [], location: null }); return; }
-    lat = loc.lat;
-    lon = loc.lon;
-    city = loc.city;
-    region = loc.region;
+    res.json({ events: [], location: null });
+    return;
   }
 
   if (!ticketmasterKey) { res.json({ events: [], location: { lat, lon, city, region } }); return; }
-
-  // If logged in, add genre keyword from taste profile for more relevant results
-  const userId = getClerkUserId(req);
-  let genreKeyword = "";
-  if (userId) {
-    const profile = await getUserTasteProfile(userId).catch(() => null);
-    if (profile?.genre_keywords?.length) {
-      // Use top genre as keyword hint (Ticketmaster supports this)
-      genreKeyword = profile.genre_keywords[0];
-    }
-  }
 
   try {
     const params = new URLSearchParams({
@@ -637,8 +578,7 @@ app.get("/api/live/nearby", async (req, res) => {
       sort: "date,asc",
       apikey: ticketmasterKey,
     });
-    if (genreKeyword) params.set("keyword", genreKeyword);
-    const tmRes = await loggedFetch("ticketmaster", `https://app.ticketmaster.com/discovery/v2/events.json?${params}`, { signal: AbortSignal.timeout(10000), context: "personalized events" });
+    const tmRes = await loggedFetch("ticketmaster", `https://app.ticketmaster.com/discovery/v2/events.json?${params}`, { signal: AbortSignal.timeout(10000), context: "nearby events" });
     if (!tmRes.ok) { res.json({ events: [], location: { lat, lon, city, region } }); return; }
     const tmData = await tmRes.json() as any;
     const events = (tmData._embedded?.events ?? []).map(mapTmEvent).filter(isMusicEvent);
@@ -848,20 +788,6 @@ app.delete("/api/admin/feedback/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
-// POST /api/admin/backfill-interests — one-time backfill from existing collection/wantlist data
-app.post("/api/admin/backfill-interests", async (req, res) => {
-  const userId = getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
-  try {
-    const counts = await backfillInterestSignals();
-    res.json({ ok: true, ...counts });
-  } catch (err) {
-    console.error("Backfill error:", err);
-    res.status(500).json({ error: "Backfill failed" });
-  }
-});
-
 // GET /api/admin/sync-status — per-user sync status + fresh releases stats, admin only
 app.get("/api/admin/sync-status", async (req, res) => {
   const userId = getClerkUserId(req);
@@ -954,15 +880,6 @@ app.get("/api/admin/collection-stats", async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: String(err) });
   }
-});
-
-// GET /api/admin/interests — interest signal stats, admin only
-app.get("/api/admin/interests", async (req, res) => {
-  const userId = getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
-  const stats = await getInterestStats();
-  res.json(stats);
 });
 
 // POST /api/ai-search — Claude music recommendations
@@ -1469,19 +1386,12 @@ app.get("/master-versions/:id", async (req, res) => {
   }
 });
 
-// GET /api/fresh-releases — 150 random releases from last 3 months, client-side filtered
-app.get("/api/fresh-releases", async (req, res) => {
+// GET /api/fresh-releases — 150 random releases from last 3 months
+app.get("/api/fresh-releases", async (_req, res) => {
   try {
-    const userId = getClerkUserId(req);
-    if (userId) {
-      res.setHeader("Cache-Control", "private, max-age=300");
-      const releases = await getPersonalizedFreshReleases(userId, 150);
-      res.json({ releases, personalized: true });
-    } else {
-      res.setHeader("Cache-Control", "public, max-age=300");
-      const releases = await getFreshReleases(150);
-      res.json({ releases });
-    }
+    res.setHeader("Cache-Control", "public, max-age=300");
+    const releases = await getFreshReleases(150);
+    res.json({ releases });
   } catch (err) {
     console.error("fresh-releases error:", err);
     res.json({ releases: [] });
@@ -2246,30 +2156,16 @@ function startFeedSchedule() {
   }, ms);
 }
 
-// GET /api/feed — personalized for logged-in users, public for anonymous
+// GET /api/feed — public feed articles
 app.get("/api/feed", async (req, res) => {
   try {
     const category = (req.query.category as string) || "all";
     const q = (req.query.q as string) || "";
     const limit = Math.min(parseInt(req.query.limit as string) || 50, 200);
     const offset = parseInt(req.query.offset as string) || 0;
-    const userId = getClerkUserId(req);
-    if (userId) {
-      try {
-        const { items, total } = await getPersonalizedFeedArticles(userId, { category, limit, offset, q });
-        res.setHeader("Cache-Control", items.length ? "private, max-age=300" : "no-cache");
-        res.json({ items, total, personalized: true });
-      } catch (personalErr) {
-        console.error("Personalized feed failed, falling back to generic:", personalErr);
-        const { items, total } = await getFeedArticles({ category, limit, offset, q });
-        res.setHeader("Cache-Control", items.length ? "public, max-age=300" : "no-cache");
-        res.json({ items, total });
-      }
-    } else {
-      const { items, total } = await getFeedArticles({ category, limit, offset, q });
-      res.setHeader("Cache-Control", items.length ? "public, max-age=300" : "no-cache");
-      res.json({ items, total });
-    }
+    const { items, total } = await getFeedArticles({ category, limit, offset, q });
+    res.setHeader("Cache-Control", items.length ? "public, max-age=300" : "no-cache");
+    res.json({ items, total });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
@@ -2312,34 +2208,6 @@ app.post("/api/admin/extras/fetch", express.json(), async (req, res) => {
     }
     console.log("[admin-extras] Complete");
   })();
-});
-
-// GET /api/user/taste-profile — user's own taste profile
-app.get("/api/user/taste-profile", async (req, res) => {
-  const userId = getClerkUserId(req);
-  if (!userId) { res.status(401).json({ error: "Not authenticated" }); return; }
-  const profile = await getUserTasteProfile(userId);
-  res.json({ profile });
-});
-
-// POST /api/admin/rebuild-taste — rebuild taste profile for all users
-app.post("/api/admin/rebuild-taste", express.json(), async (req, res) => {
-  const userId = getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
-  const users = await getAllUsersForSync();
-  let rebuilt = 0;
-  const errors: string[] = [];
-  for (const u of users) {
-    try {
-      const profile = await rebuildUserTasteProfile(u.clerkUserId);
-      if (profile) rebuilt++;
-      else errors.push(`${u.username}: no collection data`);
-    } catch (err) {
-      errors.push(`${u.username}: ${String(err).slice(0, 100)}`);
-    }
-  }
-  res.json({ ok: true, rebuilt, total: users.length, errors });
 });
 
 // GET /api/admin/api-log — view API request log (last 24h by default)
