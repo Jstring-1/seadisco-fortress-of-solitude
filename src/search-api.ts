@@ -1974,7 +1974,7 @@ function startVinylSchedule() {
   setTimeout(() => {
     fetchEbayVinylListings();
     setInterval(() => fetchEbayVinylListings(), 60 * 60 * 1000);
-  }, msDetail);
+  }, msSearch);
 }
 
 // GET /api/vinyl — public vinyl listings
