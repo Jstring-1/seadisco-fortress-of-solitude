@@ -54,37 +54,41 @@ function switchView(view, skipPushState = false) {
   document.querySelectorAll(".main-nav-tab").forEach(btn =>
     btn.classList.toggle("active", btn.dataset.view === view)
   );
-  const searchView = document.getElementById("search-view");
-  const dropsView  = document.getElementById("drops-view");
-  const liveView   = document.getElementById("live-view");
-  const gearView   = document.getElementById("gear-view");
-  const feedView   = document.getElementById("feed-view");
-  const infoView   = document.getElementById("info-view");
+  const searchView  = document.getElementById("search-view");
+  const dropsView   = document.getElementById("drops-view");
+  const liveView    = document.getElementById("live-view");
+  const gearView    = document.getElementById("gear-view");
+  const feedView    = document.getElementById("feed-view");
+  const infoView    = document.getElementById("info-view");
+  const privacyView = document.getElementById("privacy-view");
+  const termsView   = document.getElementById("terms-view");
   if (!skipPushState) {
     if (view === "records") {
       const tab = _cwTab || "collection";
       const url = tab === "collection" ? "?view=records" : `?view=records&tab=${tab}`;
       history.pushState({ view, tab }, "", url);
-    } else if (view === "drops" || view === "live" || view === "gear" || view === "feed" || view === "info" || view === "wanted") {
+    } else if (view === "drops" || view === "live" || view === "gear" || view === "feed" || view === "info" || view === "privacy" || view === "terms" || view === "wanted") {
       history.pushState({ view }, "", "?view=" + view);
     } else {
       history.pushState({}, "", location.pathname);
     }
   }
   if (typeof gtag === "function") {
-    const titles = { drops: "Drops", live: "Live", gear: "Gear", feed: "Feed", info: "Info", records: "My Records", wanted: "Wants", search: "Search" };
+    const titles = { drops: "Drops", live: "Live", gear: "Gear", feed: "Feed", info: "Info", privacy: "Privacy Policy", terms: "Terms of Service", records: "My Records", wanted: "Wants", search: "Search" };
     gtag("event", "page_view", {
       page_location: window.location.href,
       page_path:     window.location.pathname + window.location.search,
       page_title:    "SeaDisco – " + (titles[view] ?? view)
     });
   }
-  if (searchView) searchView.style.display = "none";
-  if (dropsView)  dropsView.style.display  = "none";
-  if (liveView)   liveView.style.display   = "none";
-  if (gearView)   gearView.style.display   = "none";
-  if (feedView)   feedView.style.display   = "none";
-  if (infoView)   infoView.style.display   = "none";
+  if (searchView)  searchView.style.display  = "none";
+  if (dropsView)   dropsView.style.display   = "none";
+  if (liveView)    liveView.style.display    = "none";
+  if (gearView)    gearView.style.display    = "none";
+  if (feedView)    feedView.style.display    = "none";
+  if (infoView)    infoView.style.display    = "none";
+  if (privacyView) privacyView.style.display = "none";
+  if (termsView)   termsView.style.display   = "none";
 
   const mainForm    = document.getElementById("main-search-form");
   const recordsWrap = document.getElementById("records-wrap");
@@ -119,6 +123,16 @@ function switchView(view, skipPushState = false) {
     if (mainForm) mainForm.style.display = "";
     if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
+  } else if (view === "privacy") {
+    if (privacyView) privacyView.style.display = "block";
+    if (mainForm) mainForm.style.display = "none";
+    if (recordsWrap) recordsWrap.style.display = "none";
+    if (wantedWrap) wantedWrap.style.display = "none";
+  } else if (view === "terms") {
+    if (termsView) termsView.style.display = "block";
+    if (mainForm) mainForm.style.display = "none";
+    if (recordsWrap) recordsWrap.style.display = "none";
+    if (wantedWrap) wantedWrap.style.display = "none";
   } else if (view === "wanted") {
     if (searchView) searchView.style.display = "";
     if (mainForm) mainForm.style.display = "none";
@@ -150,7 +164,7 @@ function switchView(view, skipPushState = false) {
   }
 
   // Animate the entering view
-  const shownId = { search: "search-view", drops: "drops-view", live: "live-view", gear: "gear-view", feed: "feed-view", info: "info-view", records: "search-view", wanted: "search-view" }[view];
+  const shownId = { search: "search-view", drops: "drops-view", live: "live-view", gear: "gear-view", feed: "feed-view", info: "info-view", privacy: "privacy-view", terms: "terms-view", records: "search-view", wanted: "search-view" }[view];
   const shownEl = shownId && document.getElementById(shownId);
   if (shownEl) {
     shownEl.classList.remove("view-enter");
