@@ -98,8 +98,10 @@ function renderSharedHeader(opts) {
   const tab = (label, view) => {
     if (isSPA) {
       const cls = view === active ? ' active' : '';
-      const dis = view === 'records' ? ' nav-disabled' : '';
-      return `<button class="main-nav-tab${cls}${dis}" data-view="${view}" onclick="switchView('${view}')"${dis ? ' title="Login to Access"' : ''}>${label}</button>`;
+      if (view === 'records') {
+        return `<a class="main-nav-tab nav-disabled" href="/account" data-view="${view}">SIGN UP/IN</a>`;
+      }
+      return `<button class="main-nav-tab${cls}" data-view="${view}" onclick="switchView('${view}')">${label}</button>`;
     }
     const href = view === "search" ? "/" : `/?view=${view}`;
     const cls = view === active ? ' class="main-nav-tab active"' : ' class="main-nav-tab"';
@@ -158,8 +160,8 @@ function renderSharedFooter(opts) {
       <div class="footer-col">
         <h4>About</h4>
         ${link("Info", "info")}
-        <a href="https://www.discogs.com" target="_blank" rel="noopener">Discogs</a>
-        <a href="https://listenbrainz.org" target="_blank" rel="noopener">ListenBrainz</a>
+        <a href="/account?tab=privacy">Privacy Policy</a>
+        <a href="/account?tab=terms">Terms of Service</a>
       </div>
     </div>
     <div style="color:#555;font-style:italic;margin-bottom:0.3rem">DISCLAIMER: AI be funky sometimes</div>

@@ -28,8 +28,20 @@ function renderCardFromBasicInfo(basicInfo, index) {
 function addNavTab(view) {
   // Map old collection/wantlist enables to the new "records" tab
   if (view === "collection" || view === "wantlist") view = "records";
-  const btn = document.querySelector(`#main-nav-tabs [data-view="${view}"]`);
-  if (btn) { btn.classList.remove("nav-disabled"); btn.removeAttribute("title"); }
+  const el = document.querySelector(`#main-nav-tabs [data-view="${view}"]`);
+  if (!el) return;
+  // Replace the sign-in link with a proper nav button
+  if (el.tagName === "A" && view === "records") {
+    const btn = document.createElement("button");
+    btn.className = "main-nav-tab";
+    btn.dataset.view = view;
+    btn.textContent = "My Records";
+    btn.onclick = () => switchView(view);
+    el.replaceWith(btn);
+  } else {
+    el.classList.remove("nav-disabled");
+    el.removeAttribute("title");
+  }
 }
 
 // toggleMobileNav — now in shared.js
