@@ -303,7 +303,6 @@ async function doSearch(page = 1, skipPushState = false) {
         blurbEl.innerHTML = heading + bioHtml + readMore + relLinks;
         blurbEl.style.display = "block";
 
-        apiFetch("/api/user/mb", { method: "POST" }).catch(() => {});
         const bu = new URL(window.location.href);
         if (!bu.searchParams.has("b")) { bu.searchParams.set("b", "y"); history.replaceState({}, "", bu.toString()); }
       }
@@ -597,39 +596,6 @@ async function doAiSearch(q) {
   }
 }
 
-// ── Recent searches feed ─────────────────────────────────────────────────
-let _recentSearches = [];
-
-async function loadRecentFeed() {
-  try {
-    const data = await fetch("/api/recent-searches").then(r => r.json());
-    const searches = data.searches ?? [];
-    const el = document.getElementById("recent-feed");
-    if (!el) return;
-    if (!searches.length) { el.style.display = "none"; return; }
-    const filtered = searches.filter(s => {
-      const { full } = feedLabel(s.params);
-      return full !== "Search";
-    });
-    if (!filtered.length) { el.style.display = "none"; return; }
-    _recentSearches = filtered;
-    const pillsHtml = `<div class="feed-label">Recent Searches</div><div class="pill-strip-wrap"><div class="feed-pills">${
-      filtered.map((s, i) => {
-        const { full, short } = feedLabel(s.params);
-        return `<span class="pill feed-pill" data-idx="${i}" title="${escHtml(full)}">${escHtml(short)}</span>`;
-      }).join("")
-    }</div></div>`;
-    el.style.opacity = "0";
-    el.innerHTML = pillsHtml;
-    el.querySelectorAll(".feed-pill").forEach((pill, i) => {
-      pill.addEventListener("click", () => feedApply(filtered[i].params));
-    });
-    requestAnimationFrame(() => { el.style.opacity = "1"; });
-  } catch {
-    const el = document.getElementById("recent-feed");
-    if (el) el.style.display = "none";
-  }
-}
 
 // ── Wanted sample cards for Find page filler ─────────────────────────────
 let _wantedSampleIds = new Set();

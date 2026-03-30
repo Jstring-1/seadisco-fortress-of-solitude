@@ -20,18 +20,6 @@ export async function initDb() {
     )
   `);
     await getPool().query(`
-    CREATE TABLE IF NOT EXISTS search_history (
-      id            SERIAL PRIMARY KEY,
-      clerk_user_id TEXT NOT NULL,
-      params        JSONB NOT NULL,
-      searched_at   TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
-    await getPool().query(`
-    CREATE INDEX IF NOT EXISTS search_history_user_idx
-    ON search_history (clerk_user_id, searched_at DESC)
-  `);
-    await getPool().query(`
     CREATE TABLE IF NOT EXISTS feedback (
       id            SERIAL PRIMARY KEY,
       clerk_user_id TEXT NOT NULL,
@@ -333,56 +321,6 @@ export async function initDb() {
   `);
     await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_id_type_idx ON release_cache (discogs_id, type)`);
 }
-export async function saveSearch(clerkUserId, params) {
-    // Skip if identical params were saved in the last 5 minutes (prevents double-saves)
-    const recent = await getPool().query(`SELECT 1 FROM search_history
-     WHERE clerk_user_id = $1 AND params = $2
-       AND searched_at > NOW() - INTERVAL '5 minutes'
-     LIMIT 1`, [clerkUserId, JSON.stringify(params)]);
-    if (recent.rows.length)
-        return;
-    await getPool().query(`INSERT INTO search_history (clerk_user_id, params) VALUES ($1, $2)`, [clerkUserId, JSON.stringify(params)]);
-    // Keep only the most recent 500 searches per user
-    await getPool().query(`DELETE FROM search_history
-     WHERE clerk_user_id = $1
-       AND id NOT IN (
-         SELECT id FROM search_history
-         WHERE clerk_user_id = $1
-         ORDER BY searched_at DESC
-         LIMIT 500
-       )`, [clerkUserId]);
-}
-export async function markSearchBio(clerkUserId) {
-    // Add b=y to the params of the most recent search
-    await getPool().query(`UPDATE search_history SET params = params || '{"b":"y"}'::jsonb
-     WHERE id = (
-       SELECT id FROM search_history
-       WHERE clerk_user_id = $1
-       ORDER BY searched_at DESC
-       LIMIT 1
-     )`, [clerkUserId]);
-}
-export async function deleteSearch(clerkUserId, params) {
-    await getPool().query("DELETE FROM search_history WHERE clerk_user_id = $1 AND params = $2", [clerkUserId, JSON.stringify(params)]);
-}
-export async function clearSearchHistory(clerkUserId) {
-    await getPool().query("DELETE FROM search_history WHERE clerk_user_id = $1", [clerkUserId]);
-}
-export async function deleteSearchGlobal(params) {
-    await getPool().query("DELETE FROM search_history WHERE params = $1", [JSON.stringify(params)]);
-}
-export async function deleteSearchById(id) {
-    await getPool().query("DELETE FROM search_history WHERE id = $1", [id]);
-}
-export async function getSearchHistory(clerkUserId, limit = 50) {
-    const r = await getPool().query(`SELECT params, MAX(searched_at) AS searched_at
-     FROM search_history
-     WHERE clerk_user_id = $1 AND NOT (params ? '_type')
-     GROUP BY params
-     ORDER BY MAX(searched_at) DESC
-     LIMIT $2`, [clerkUserId, limit]);
-    return r.rows;
-}
 export async function getAllUsersSyncStatus() {
     const r = await getPool().query(`SELECT discogs_username, collection_synced_at, wantlist_synced_at,
             sync_status, sync_progress, sync_total, sync_error
@@ -424,39 +362,6 @@ export async function setUserToken(clerkUserId, token) {
 export async function deleteUserToken(clerkUserId) {
     await getPool().query("DELETE FROM user_tokens WHERE clerk_user_id = $1", [clerkUserId]);
 }
-export async function getRecentSearches(limit = 300) {
-    // Grab the latest `limit` unique searches from logged-in users only, then randomise in the API layer
-    const r = await getPool().query(`SELECT params, searched_at FROM (
-       SELECT DISTINCT ON (params) params, searched_at
-       FROM search_history
-       WHERE NOT (params ? '_type')
-         AND clerk_user_id <> 'anon'
-       ORDER BY params, searched_at DESC
-     ) sub
-     ORDER BY searched_at DESC
-     LIMIT $1`, [limit]);
-    return r.rows;
-}
-export async function getRecentLiveSearches(limit = 200) {
-    const r = await getPool().query(`SELECT params, searched_at FROM (
-       SELECT DISTINCT ON (params) params, searched_at
-       FROM search_history
-       WHERE params->>'_type' = 'live'
-         AND clerk_user_id <> 'anon'
-       ORDER BY params, searched_at DESC
-     ) sub
-     ORDER BY searched_at DESC
-     LIMIT $1`, [limit]);
-    return r.rows;
-}
-export async function dumpSearchHistory() {
-    const r = await getPool().query(`SELECT id, clerk_user_id, params, searched_at FROM search_history ORDER BY searched_at DESC`);
-    return r.rows;
-}
-export async function truncateSearchHistory() {
-    const r = await getPool().query(`DELETE FROM search_history`);
-    return r.rowCount ?? 0;
-}
 export async function saveFeedback(clerkUserId, userEmail, message) {
     await getPool().query(`INSERT INTO feedback (clerk_user_id, user_email, message) VALUES ($1, $2, $3)`, [clerkUserId, userEmail, message]);
 }
@@ -477,7 +382,6 @@ export async function deleteUserData(clerkUserId) {
         "user_collection_folders",
         "user_collection",
         "user_wantlist",
-        "search_history",
         "user_locations",
         "user_tokens", // last — other tables may reference it
     ];
@@ -1137,8 +1041,6 @@ export async function pruneAllStaleData() {
     const le = await getPool().query(`DELETE FROM live_events WHERE event_date ~ '^\\d{4}-\\d{2}-\\d{2}' AND event_date::date < CURRENT_DATE`);
     // Stale location cache (30 days)
     const loc = await getPool().query(`DELETE FROM user_locations WHERE fetched_at < ${interval30d}`);
-    // Search history older than 30 days
-    const sh = await getPool().query(`DELETE FROM search_history WHERE searched_at < ${interval30d}`);
     // User collection older than 30 days
     const col = await getPool().query(`DELETE FROM user_collection WHERE synced_at < ${interval30d}`);
     // User wantlist older than 30 days
@@ -1160,7 +1062,6 @@ export async function pruneAllStaleData() {
         gearLog: gl.rowCount ?? 0,
         liveEvents: le.rowCount ?? 0,
         locations: loc.rowCount ?? 0,
-        searchHistory: sh.rowCount ?? 0,
         collection: col.rowCount ?? 0,
         wantlist: wl.rowCount ?? 0,
         folders: fld.rowCount ?? 0,
