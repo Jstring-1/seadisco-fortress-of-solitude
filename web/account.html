@@ -257,15 +257,15 @@ async function loadSyncStatus() {
       return;
     }
 
-    // Dim the sync button if both were synced within the last hour
-    const oneHourAgo = Date.now() - 60 * 60 * 1000;
-    const collRecent = d.collectionSyncedAt && new Date(d.collectionSyncedAt).getTime() > oneHourAgo;
-    const wantRecent = d.wantlistSyncedAt && new Date(d.wantlistSyncedAt).getTime() > oneHourAgo;
+    // Dim the sync button if both were synced within the last 5 minutes
+    const cooldownAgo = Date.now() - 5 * 60 * 1000;
+    const collRecent = d.collectionSyncedAt && new Date(d.collectionSyncedAt).getTime() > cooldownAgo;
+    const wantRecent = d.wantlistSyncedAt && new Date(d.wantlistSyncedAt).getTime() > cooldownAgo;
     if (collRecent && wantRecent) {
       btn.disabled = true;
       btn.style.opacity = "0.4";
       btn.style.cursor = "default";
-      btn.title = "Synced recently — available again in an hour";
+      btn.title = "Synced recently — available again in a few minutes";
     } else {
       btn.disabled = false;
       btn.style.opacity = "1";
@@ -305,9 +305,9 @@ async function accountSync(silent = false) {
     }).then(r => r.json());
     if (r.skipped) {
       if (!silent) {
-        statusEl.textContent = "Synced recently — try again in an hour.";
+        statusEl.textContent = "Synced recently — try again in a few minutes.";
         btn.textContent = "Sync Now";
-        btn.title = "Synced recently — available again in an hour";
+        btn.title = "Synced recently — available again in a few minutes";
       }
       return;
     }

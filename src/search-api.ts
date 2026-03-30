@@ -421,7 +421,7 @@ async function runBackgroundSync(userId: string, token: string, username: string
   }
 }
 
-// POST /api/user/sync — kick off background sync of collection and/or wantlist
+// POST /api/user/sync — kick off background sync of collection, wantlist, inventory & lists
 app.post("/api/user/sync", express.json(), async (req, res) => {
   const userId = getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
@@ -430,11 +430,11 @@ app.post("/api/user/sync", express.json(), async (req, res) => {
   const syncCollection = type === "collection" || type === "both";
   const syncWantlist   = type === "wantlist"   || type === "both";
 
-  // Check cooldown: skip individual types if synced within last hour
+  // Check cooldown: skip if synced within last 5 minutes
   const syncStatus = await getSyncStatus(userId);
-  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-  const collectionRecent = syncCollection && !!syncStatus.collectionSyncedAt && syncStatus.collectionSyncedAt > oneHourAgo;
-  const wantlistRecent   = syncWantlist   && !!syncStatus.wantlistSyncedAt   && syncStatus.wantlistSyncedAt   > oneHourAgo;
+  const cooldownAgo = new Date(Date.now() - 5 * 60 * 1000);
+  const collectionRecent = syncCollection && !!syncStatus.collectionSyncedAt && syncStatus.collectionSyncedAt > cooldownAgo;
+  const wantlistRecent   = syncWantlist   && !!syncStatus.wantlistSyncedAt   && syncStatus.wantlistSyncedAt   > cooldownAgo;
   if (collectionRecent && wantlistRecent) {
     res.json({ ok: true, skipped: true, reason: "Recently synced" });
     return;
@@ -471,9 +471,16 @@ app.post("/api/user/sync", express.json(), async (req, res) => {
   res.json({ ok: true, started: true });
 
   // Fire and forget — runs in background (full sync for user-initiated)
-  runBackgroundSync(userId, token, username, syncCollection && !collectionRecent, syncWantlist && !wantlistRecent).catch(err => {
-    console.error("Background sync uncaught error:", err);
-  });
+  (async () => {
+    try {
+      await runBackgroundSync(userId, token, username, syncCollection && !collectionRecent, syncWantlist && !wantlistRecent);
+      // Also sync inventory & lists after collection/wantlist
+      await syncUserExtras(userId, username, token);
+      console.log(`[user-sync] ${username}: extras sync complete`);
+    } catch (err) {
+      console.error("Background sync uncaught error:", err);
+    }
+  })();
 });
 
 // GET /api/user/collection — paginated cached collection (with optional filters)
