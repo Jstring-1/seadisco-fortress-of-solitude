@@ -156,7 +156,15 @@ function renderSharedFooter(opts) {
       </div>
       <div class="footer-col">
         <h4>Your Music</h4>
-        ${link("My Records", "records")}
+        ${isSPA
+          ? `<a href="javascript:void(0)" onclick="_cwTab='collection';switchView('records')">Collection</a>
+             <a href="javascript:void(0)" onclick="_cwTab='wantlist';switchView('records')">Wantlist</a>
+             <a href="javascript:void(0)" onclick="_cwTab='inventory';switchView('records')">Inventory</a>
+             <a href="javascript:void(0)" onclick="_cwTab='lists';switchView('records')">Lists</a>`
+          : `<a href="/?view=records">Collection</a>
+             <a href="/?view=records&tab=wantlist">Wantlist</a>
+             <a href="/?view=records&tab=inventory">Inventory</a>
+             <a href="/?view=records&tab=lists">Lists</a>`}
         <a href="/account">Account</a>
       </div>
       <div class="footer-col">
