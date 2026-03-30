@@ -2151,7 +2151,6 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 .account-nav {
   display: flex;
   gap: 0;
-  border-bottom: 1px solid var(--border);
   margin-bottom: 1.5rem;
 }
 .account-nav-tab {
