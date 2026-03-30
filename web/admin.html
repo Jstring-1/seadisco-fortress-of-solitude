@@ -32,13 +32,13 @@
       <div class="admin-section admin-section-a">
         <h2 style="margin-bottom:0.4rem">Actions</h2>
         <div style="display:flex;align-items:center;gap:0.7rem;flex-wrap:wrap">
-          <button onclick="adminSyncAll()" id="admin-sync-all-btn" class="admin-btn admin-btn-sync">Sync All Users</button>
-          <button onclick="adminSyncStop()" id="admin-sync-stop-btn" class="admin-btn admin-btn-stop">Stop User Syncs</button>
-          <button onclick="toggleApiKill()" id="admin-api-kill-btn" class="admin-btn admin-btn-danger">Kill All APIs</button>
-          <button onclick="adminGearFetch()" id="admin-gear-fetch-btn" class="admin-btn admin-btn-gear">Fetch eBay Gear</button>
+          <button onclick="adminDropsFetch()" id="admin-drops-fetch-btn" class="admin-btn admin-btn-extras">Fetch Drops</button>
           <button onclick="adminFeedFetch()" id="admin-feed-fetch-btn" class="admin-btn admin-btn-feed">Fetch Feed</button>
-          <button onclick="adminLiveFetch()" id="admin-live-fetch-btn" class="admin-btn admin-btn-live">Fetch Live Events</button>
-          <button onclick="adminExtrasFetch()" id="admin-extras-fetch-btn" class="admin-btn admin-btn-extras">Fetch Inventory/Lists</button>
+          <button onclick="adminLiveFetch()" id="admin-live-fetch-btn" class="admin-btn admin-btn-live">Fetch Live</button>
+          <button onclick="adminGearFetch()" id="admin-gear-fetch-btn" class="admin-btn admin-btn-gear">Fetch Gear</button>
+          <button onclick="adminSyncAll()" id="admin-sync-all-btn" class="admin-btn admin-btn-sync">Sync All</button>
+          <button onclick="adminSyncStop()" id="admin-sync-stop-btn" class="admin-btn admin-btn-stop">Stop All</button>
+          <button onclick="toggleApiKill()" id="admin-api-kill-btn" class="admin-btn admin-btn-danger">Kill All</button>
         </div>
         <div id="admin-action-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.35rem"></div>
       </div>
@@ -213,7 +213,7 @@ async function adminSyncAll() {
     statusEl.textContent = `Full sync kicked off for ${r.queued} user${r.queued !== 1 ? "s" : ""}.`;
     loadAdminSyncStatus();
   } catch { statusEl.textContent = "Sync-all failed."; }
-  finally { btn.disabled = false; btn.textContent = "Sync All Users"; }
+  finally { btn.disabled = false; btn.textContent = "Sync All"; }
 }
 
 async function adminSyncUser(username) {
@@ -240,7 +240,7 @@ async function adminSyncStop() {
     }).then(r => r.json());
     statusEl.textContent = r.message || "Stop signal sent.";
   } catch { statusEl.textContent = "Stop request failed."; }
-  finally { btn.disabled = false; btn.textContent = "Stop User Syncs"; }
+  finally { btn.disabled = false; btn.textContent = "Stop All"; }
 }
 
 async function toggleApiKill() {
@@ -295,7 +295,7 @@ async function adminGearFetch() {
     }).then(r => r.json());
     statusEl.textContent = r.message || "Gear fetch triggered.";
   } catch { statusEl.textContent = "Gear fetch failed."; }
-  finally { btn.disabled = false; btn.textContent = "Fetch eBay Gear"; }
+  finally { btn.disabled = false; btn.textContent = "Fetch Gear"; }
 }
 
 async function adminFeedFetch() {
@@ -323,21 +323,21 @@ async function adminLiveFetch() {
     }).then(r => r.json());
     statusEl.textContent = r.count != null ? `Fetched ${r.count} live events.` : "Live events fetch triggered.";
   } catch { statusEl.textContent = "Live events fetch failed."; }
-  finally { btn.disabled = false; btn.textContent = "Fetch Live Events"; }
+  finally { btn.disabled = false; btn.textContent = "Fetch Live"; }
 }
 
-async function adminExtrasFetch() {
-  const btn = document.getElementById("admin-extras-fetch-btn");
+async function adminDropsFetch() {
+  const btn = document.getElementById("admin-drops-fetch-btn");
   const statusEl = document.getElementById("admin-action-status");
   btn.disabled = true; btn.textContent = "Fetching\u2026";
   try {
     const sessionToken = await clerk.session?.getToken();
-    await fetch("/api/admin/extras/fetch", {
+    await fetch("/api/admin/drops/fetch", {
       method: "POST", headers: { Authorization: `Bearer ${sessionToken}` }
     }).then(r => r.json());
-    statusEl.textContent = "Inventory/lists sync started \u2014 running in background.";
-  } catch { statusEl.textContent = "Inventory/lists fetch failed."; }
-  finally { btn.disabled = false; btn.textContent = "Fetch Inventory/Lists"; }
+    statusEl.textContent = "Drops fetch started — running in background.";
+  } catch { statusEl.textContent = "Drops fetch failed."; }
+  finally { btn.disabled = false; btn.textContent = "Fetch Drops"; }
 }
 
 // ── API Request Log ───────────────────────────────────────────────────
