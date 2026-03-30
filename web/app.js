@@ -15,7 +15,7 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
 (async function () {
   const p = new URLSearchParams(location.search);
   const view = p.get("view");
-  if (view === "drops" || view === "live" || view === "gear" || view === "feed" || view === "info" || view === "privacy" || view === "terms") {
+  if (view === "drops" || view === "live" || view === "buy" || view === "gear" || view === "feed" || view === "info" || view === "privacy" || view === "terms") {
     switchView(view, true);
     // Restore live search from shared URL
     if (view === "live" && (p.get("la") || p.get("lc") || p.get("lg"))) {
@@ -78,7 +78,7 @@ window.addEventListener("popstate", () => {
     _cwTab = view === "wantlist" ? "wantlist" : "collection";
     switchView("records", true); return;
   }
-  if (view === "drops" || view === "live" || view === "gear" || view === "feed" || view === "records" || view === "info" || view === "privacy" || view === "terms" || view === "wanted") {
+  if (view === "drops" || view === "live" || view === "buy" || view === "gear" || view === "feed" || view === "records" || view === "info" || view === "privacy" || view === "terms" || view === "wanted") {
     if (view === "records") _cwTab = p.get("tab") || "collection";
     switchView(view, true);
   } else {

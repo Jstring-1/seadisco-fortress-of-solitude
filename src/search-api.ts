@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, updateVinylDetail, getVinylNeedingDetail, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease } from "./db.js";
 import { startFreshSyncSchedule, runFreshSync } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1883,6 +1883,169 @@ app.post("/api/admin/gear/fetch", express.json(), async (req, res) => {
   fetchEbayGearListings().then(() => fetchGearDetails());
 });
 
+// ── Vinyl LP listings (eBay 12" records) ────────────────────────────────
+
+async function fetchEbayVinylListings(): Promise<number> {
+  if (!ebayClientId || !ebayClientSecret) {
+    console.log("eBay vinyl fetch skipped — no credentials");
+    return 0;
+  }
+  console.log("Starting eBay vinyl fetch…");
+  let totalUpserted = 0;
+  try {
+    const token = await getEbayToken();
+    // Single category-based search: Records (176985), 12" LPs, $10+ auctions
+    const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?category_ids=176985&limit=200&sort=endingSoonest&filter=price:[10..],priceCurrency:USD,buyingOptions:{AUCTION}&aspect_filter=categoryId:176985,Record%20Size:12%22`;
+    const r = await loggedFetch("ebay", url, {
+      headers: { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" },
+      context: "vinyl search: 12in LP",
+    });
+    if (!r.ok) {
+      console.error(`eBay vinyl search failed: ${r.status}`);
+    } else {
+      const data = await r.json() as any;
+      const summaries: any[] = data.itemSummaries ?? [];
+      console.log(`eBay vinyl: ${summaries.length} results`);
+
+      const items = summaries.map((s: any) => ({
+        itemId:          s.itemId,
+        title:           s.title ?? "",
+        price:           parseFloat(s.currentBidPrice?.value ?? s.price?.value ?? "0"),
+        currency:        s.currentBidPrice?.currency ?? s.price?.currency ?? "USD",
+        condition:       s.condition ?? s.conditionId ?? "",
+        imageUrl:        s.image?.imageUrl ?? "",
+        itemUrl:         s.itemWebUrl ?? "",
+        locationCity:    s.itemLocation?.city ?? "",
+        locationState:   s.itemLocation?.stateOrProvince ?? "",
+        locationCountry: s.itemLocation?.country ?? "",
+        sellerUsername:  s.seller?.username ?? "",
+        sellerFeedback:  s.seller?.feedbackScore ?? 0,
+        buyingOptions:   s.buyingOptions ?? [],
+        bidCount:        s.bidCount ?? 0,
+        categories:      (s.categories ?? []).map((c: any) => c.categoryId),
+        categoryNames:   (s.categories ?? []).map((c: any) => c.categoryName),
+        itemEndDate:     s.itemEndDate ?? null,
+        thumbnailUrl:    (s.thumbnailImages ?? [])[0]?.imageUrl ?? "",
+        rawSummary:      s,
+      }));
+
+      const count = await upsertVinylListings(items);
+      totalUpserted += count;
+    }
+    // Mark old listings as expired
+    const expired = await markExpiredVinylListings();
+    if (expired) console.log(`Marked ${expired} vinyl listings as expired`);
+
+    await logVinylFetch("browse_search", totalUpserted);
+    console.log(`eBay vinyl fetch complete: ${totalUpserted} items upserted`);
+  } catch (err) {
+    console.error("eBay vinyl fetch failed:", err);
+    await logVinylFetch("browse_search", totalUpserted, String(err));
+  }
+  return totalUpserted;
+}
+
+async function fetchVinylDetails(): Promise<number> {
+  if (!ebayClientId || !ebayClientSecret) return 0;
+  let detailed = 0;
+  try {
+    const token = await getEbayToken();
+    const items = await getVinylNeedingDetail(50);
+    if (!items.length) return 0;
+    console.log(`Fetching details for ${items.length} vinyl listings…`);
+
+    for (const item of items) {
+      try {
+        const r = await loggedFetch("ebay", `https://api.ebay.com/buy/browse/v1/item/${item.itemId}`, {
+          headers: { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" },
+          context: `vinyl detail: ${item.itemId}`,
+        });
+        if (!r.ok) {
+          console.error(`eBay getItem ${item.itemId} failed: ${r.status}`);
+          continue;
+        }
+        const d = await r.json() as any;
+        const detailHtml = d.description ?? "";
+        const allImages = (d.additionalImages ?? []).map((img: any) => img.imageUrl).filter(Boolean);
+        if (d.image?.imageUrl) allImages.unshift(d.image.imageUrl);
+        const specifics: Record<string, string> = {};
+        for (const nv of (d.localizedAspects ?? [])) {
+          if (nv.name && nv.value) specifics[nv.name] = nv.value;
+        }
+        await updateVinylDetail(item.itemId, detailHtml, allImages, specifics);
+        detailed++;
+        await new Promise(r => setTimeout(r, 2000));
+      } catch (err) {
+        console.error(`eBay vinyl detail ${item.itemId} error:`, err);
+      }
+    }
+    await logVinylFetch("item_detail", detailed);
+    console.log(`eBay vinyl detail fetch complete: ${detailed} items detailed`);
+  } catch (err) {
+    console.error("eBay vinyl detail fetch failed:", err);
+    await logVinylFetch("item_detail", detailed, String(err));
+  }
+  return detailed;
+}
+
+// Schedule: vinyl search at :20 past the hour (staggered from gear at :50), detail at :25
+function startVinylSchedule() {
+  if (!ebayClientId || !ebayClientSecret) {
+    console.log("eBay vinyl schedule not started — no credentials");
+    return;
+  }
+  // Hourly vinyl search at :20 past the hour (anchored to 5:20 AM Pacific — 30min offset from gear)
+  const msSearch = msUntilPacific(5, 20, 1);
+  console.log(`[vinyl] Next search in ${Math.round(msSearch / 60000)}min, then every 1h`);
+  setTimeout(() => {
+    fetchEbayVinylListings();
+    setInterval(() => fetchEbayVinylListings(), 60 * 60 * 1000);
+  }, msSearch);
+
+  // Detail worker every 30min at :40 past the hour (anchored to 5:40 AM Pacific)
+  const msDetail = msUntilPacific(5, 40, 1);
+  console.log(`[vinyl-detail] Next detail fetch in ${Math.round(msDetail / 60000)}min, then every 30min`);
+  setTimeout(() => {
+    fetchVinylDetails();
+    setInterval(() => fetchVinylDetails(), 30 * 60 * 1000);
+  }, msDetail);
+}
+
+// GET /api/vinyl — public vinyl listings
+app.get("/api/vinyl", async (_req, res) => {
+  try {
+    const minPrice = parseFloat(_req.query.min_price as string) || 0;
+    const sort     = (_req.query.sort as string) || "ending";
+    const q        = (_req.query.q as string) || "";
+    const limit    = Math.min(parseInt(_req.query.limit as string) || 200, 500);
+    const offset   = parseInt(_req.query.offset as string) || 0;
+    res.setHeader("Cache-Control", "public, max-age=300");
+    const { items, total } = await getVinylListings(minPrice, limit, offset, sort, q);
+    res.json({ items, total });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/vinyl/stats — admin stats
+app.get("/api/vinyl/stats", async (_req, res) => {
+  try {
+    const stats = await getVinylStats();
+    res.json(stats);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/admin/vinyl/fetch — manual trigger for admin
+app.post("/api/admin/vinyl/fetch", express.json(), async (req, res) => {
+  const userId = getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  res.json({ ok: true, started: true });
+  fetchEbayVinylListings().then(() => fetchVinylDetails());
+});
+
 // ── eBay Marketplace Account Deletion Notification (compliance) ──────────
 const EBAY_VERIFICATION_TOKEN = "seadisco2026accountdeletiontoken";
 
@@ -2404,6 +2567,7 @@ app.listen(PORT, "0.0.0.0", () => {
   if (process.env.APP_DB_URL) {
     startFreshSyncSchedule();
     startGearSchedule();
+    startVinylSchedule();
     startFeedSchedule();
     startDailySyncSchedule();
     startExtrasSyncSchedule();

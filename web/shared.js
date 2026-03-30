@@ -123,6 +123,7 @@ function renderSharedHeader(opts) {
           ${tab("Drops", "drops")}
           ${tab("Feed", "feed")}
           ${tab("Live", "live")}
+          ${tab("Buy", "buy")}
           ${tab("Gear", "gear")}
           ${tab("My Records", "records")}
         </div>
@@ -150,6 +151,7 @@ function renderSharedFooter(opts) {
         ${link("Drops", "drops")}
         ${link("Feed", "feed")}
         ${link("Live", "live")}
+        ${link("Buy", "buy")}
         ${link("Gear", "gear")}
       </div>
       <div class="footer-col">

@@ -328,6 +328,35 @@
   <div id="live-results"></div>
 </div>
 
+<div id="buy-view" style="display:none">
+  <div class="buy-header content-area">
+    <div class="buy-controls">
+      <div class="buy-price-pills">
+        <span class="pill buy-price-pill active" data-min="0" onclick="setBuyPriceFilter(0)">All</span>
+        <span class="pill buy-price-pill" data-min="25" onclick="setBuyPriceFilter(25)">$25+</span>
+        <span class="pill buy-price-pill" data-min="50" onclick="setBuyPriceFilter(50)">$50+</span>
+        <span class="pill buy-price-pill" data-min="100" onclick="setBuyPriceFilter(100)">$100+</span>
+        <span class="pill buy-price-pill" data-min="250" onclick="setBuyPriceFilter(250)">$250+</span>
+      </div>
+      <div class="buy-right-controls">
+        <input type="text" class="site-form-field buy-search-field" placeholder="Filter Vinyl" oninput="onBuySearch(this.value)">
+        <select class="site-form-field buy-sort" onchange="setBuySort(this.value)">
+          <option value="ending">Ending Soonest</option>
+          <option value="bids">Most Bids</option>
+          <option value="price_desc">Price: High → Low</option>
+          <option value="price_asc">Price: Low → High</option>
+          <option value="newest">Newly Listed</option>
+        </select>
+      </div>
+    </div>
+    <div id="buy-status" style="font-size:0.78rem;color:#555;margin-top:0.3rem"></div>
+  </div>
+  <div id="buy-results" class="card-grid content-area"></div>
+  <div class="load-more-wrap">
+    <button id="buy-load-more" class="load-more-btn" onclick="loadMoreBuy()" style="display:none">Load more</button>
+  </div>
+</div>
+
 <div id="gear-view" style="display:none">
   <div class="gear-header content-area">
     <div class="gear-controls">
@@ -555,6 +584,7 @@
 <script src="/modal.js?v=20260329a"></script>
 <script src="/drops.js?v=20260329a"></script>
 <script src="/live.js?v=20260329a"></script>
+<script src="/buy.js?v=20260330a"></script>
 <script src="/gear.js?v=20260329a"></script>
 <script src="/feed.js?v=20260329a"></script>
 <script src="/app.js?v=20260329a"></script>
