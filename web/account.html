@@ -6,6 +6,11 @@
   <title>SeaDisco — Account</title>
   <meta name="description" content="Manage your SeaDisco account. Connect your Discogs token to sync your vinyl collection and wantlist, unlock unlimited searches, and personalize your music discovery experience." />
   <meta name="robots" content="noindex, nofollow" />
+  <link rel="canonical" href="https://seadisco.com/account" />
+  <meta property="og:title" content="SeaDisco — Account" />
+  <meta property="og:description" content="Manage your SeaDisco account. Connect your Discogs token for unlimited searches and collection syncing." />
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://seadisco.com/account" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎹</text></svg>">
   <link rel="manifest" href="/site.webmanifest">
@@ -42,7 +47,7 @@
         <p style="color:var(--text);font-size:1rem;margin-bottom:1rem">
           SeaDisco is powered by the Discogs music database. Free visitors get a handful of searches —
           connect your own free Discogs token and you get <strong style="color:var(--accent)">your own unlimited search quota</strong>,
-          collection and wantlist syncing, and a personalized music feed.
+          collection and wantlist syncing, and a curated music news feed.
         </p>
         <p style="margin-bottom:0.6rem"><strong style="color:var(--text)">Here's all it takes:</strong></p>
         <ol style="color:var(--muted);font-size:0.9rem;line-height:1.9;padding-left:1.2rem;margin-bottom:1.2rem">
@@ -102,85 +107,6 @@
       </div>
     </div>
 
-    <!-- ═══ Privacy Policy tab ═══ -->
-    <div id="tab-privacy" class="account-tab-content" style="display:none">
-      <h2>Privacy Policy</h2>
-      <p style="color:var(--muted);font-size:0.82rem;margin-bottom:1.5rem">Last updated: March 29, 2026</p>
-
-      <h3>What We Collect</h3>
-      <p>When you create an account, we store your email address (provided by our authentication provider, Clerk) and any Discogs Personal Access Token you choose to save.</p>
-      <p>When you sync your collection, we store a local copy of your Discogs collection, wantlist, inventory, and list metadata so you can browse and search them on SeaDisco.</p>
-      <p>We log API usage for operational monitoring. This data is used solely for debugging and improving the service. We do not store your search queries, location data, or taste profiles.</p>
-
-      <h3>Third-Party Services</h3>
-      <p>SeaDisco integrates with the following third-party services:</p>
-      <ul>
-        <li><strong>Discogs</strong> — music database searches and collection syncing, using your personal API token</li>
-        <li><strong>Clerk</strong> — authentication and account management</li>
-        <li><strong>Ticketmaster &amp; Bandsintown</strong> — live event data (no personal data is shared)</li>
-        <li><strong>eBay</strong> — vintage audio gear listings (no personal data is shared)</li>
-        <li><strong>ListenBrainz / MusicBrainz</strong> — fresh release data (no personal data is shared)</li>
-        <li><strong>YouTube</strong> — music video embeds in the feed (standard YouTube embed; subject to Google's privacy policy)</li>
-        <li><strong>Google Analytics</strong> — anonymous usage statistics to help us improve the site</li>
-      </ul>
-
-      <h3>How We Use Your Data</h3>
-      <p>Your Discogs token is used solely to make API requests to Discogs on your behalf. We never share your token with any other service or third party. Your collection data is used only to display your records within SeaDisco.</p>
-      <p>We do not sell, rent, or share your personal data with anyone.</p>
-
-      <h3>Data Storage &amp; Security</h3>
-      <p>All data is stored in a secured PostgreSQL database hosted on Railway. Your Discogs token is stored encrypted at rest by the database provider. Access to the database is restricted to the application server only.</p>
-
-      <h3>Data Retention &amp; Deletion</h3>
-      <p>User data (collection, wantlist, inventory, lists, and orders) is automatically purged after 30 days or deleted by the user. Your authentication tokens are retained for as long as your account exists.</p>
-      <p>Temporary operational data is also pruned automatically: expired gear listings, past live events, API logs, and feed article caches.</p>
-      <p>You can delete your account at any time from the Account tab. Deleting your account <strong>permanently removes all of your data</strong> from our database, including your email, Discogs token, collection, wantlist, inventory, lists, and orders. Your Clerk authentication account is also deleted. This action is immediate and irreversible — there is no way to recover your data after deletion.</p>
-
-      <h3>Cookies</h3>
-      <p>SeaDisco uses cookies only for authentication (via Clerk) and anonymous analytics (via Google Analytics). We do not use advertising or tracking cookies, and we do not sell any data.</p>
-
-      <h3>Contact</h3>
-      <p>If you have questions about this policy, use the "Send feedback" button on the Account tab.</p>
-    </div>
-
-    <!-- ═══ Terms of Service tab ═══ -->
-    <div id="tab-terms" class="account-tab-content" style="display:none">
-      <h2>Terms of Service</h2>
-      <p style="color:var(--muted);font-size:0.82rem;margin-bottom:1.5rem">Last updated: March 29, 2026</p>
-
-      <h3>Acceptance</h3>
-      <p>By using SeaDisco, you agree to these terms. If you don't agree, please don't use the site.</p>
-
-      <h3>What SeaDisco Is</h3>
-      <p>SeaDisco is a music discovery tool that searches the Discogs database, aggregates live event listings, curates a music news feed, and helps you browse your vinyl collection. It is a personal project provided as-is.</p>
-
-      <h3>Your Account</h3>
-      <p>You are responsible for keeping your Discogs API token secure. Do not share your token with others. SeaDisco uses your token only to interact with the Discogs API on your behalf.</p>
-
-      <h3>Acceptable Use</h3>
-      <p>Don't abuse the service. This includes but is not limited to:</p>
-      <ul>
-        <li>Automated scraping or excessive API usage beyond normal browsing</li>
-        <li>Attempting to access other users' data</li>
-        <li>Using the service to violate Discogs' own terms of service</li>
-      </ul>
-
-      <h3>Third-Party Content</h3>
-      <p>Search results, album artwork, event listings, news articles, and videos are sourced from third parties (Discogs, Ticketmaster, Bandsintown, eBay, YouTube, RSS feeds, etc.). SeaDisco does not own or control this content. All trademarks and copyrights belong to their respective owners.</p>
-
-      <h3>Availability &amp; Warranty</h3>
-      <p>SeaDisco is provided "as is" without warranties of any kind. We don't guarantee uptime, accuracy of search results, or availability of any feature. The service may change or shut down at any time.</p>
-
-      <h3>Limitation of Liability</h3>
-      <p>SeaDisco and its operators are not liable for any damages arising from your use of the service, including but not limited to lost data, missed events, or inaccurate pricing information.</p>
-
-      <h3>Changes to These Terms</h3>
-      <p>We may update these terms from time to time. Continued use of SeaDisco after changes constitutes acceptance of the new terms.</p>
-
-      <h3>Contact</h3>
-      <p>Questions? Use the "Send feedback" button on the Account tab or email <strong>hello@seadisco.com</strong>.</p>
-    </div>
-
   </div>
 </main>
 <footer></footer>
@@ -204,33 +130,6 @@
 <script>
 let clerk = null;
 
-// ── Tab switching ──
-function switchAccountTab(tab) {
-  document.querySelectorAll(".account-tab-content").forEach(el => el.style.display = "none");
-  document.querySelectorAll(".account-nav-tab").forEach(btn => btn.classList.toggle("active", btn.dataset.tab === tab));
-  const target = document.getElementById("tab-" + tab);
-  if (target) target.style.display = "block";
-  // Update URL
-  const url = tab === "account" ? "/account" : `/account?tab=${tab}`;
-  history.pushState({ tab }, "", url);
-}
-
-// Restore tab from URL on load
-(function() {
-  const p = new URLSearchParams(location.search);
-  const tab = p.get("tab");
-  if (tab === "privacy" || tab === "terms") switchAccountTab(tab);
-})();
-
-// Back/forward
-window.addEventListener("popstate", () => {
-  const p = new URLSearchParams(location.search);
-  const tab = p.get("tab") || "account";
-  document.querySelectorAll(".account-tab-content").forEach(el => el.style.display = "none");
-  document.querySelectorAll(".account-nav-tab").forEach(btn => btn.classList.toggle("active", btn.dataset.tab === tab));
-  const target = document.getElementById("tab-" + tab);
-  if (target) target.style.display = "block";
-});
 
 // ── Auth ──
 async function initClerk() {
