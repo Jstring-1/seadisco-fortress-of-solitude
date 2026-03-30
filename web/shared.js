@@ -160,8 +160,8 @@ function renderSharedFooter(opts) {
       <div class="footer-col">
         <h4>About</h4>
         ${link("Info", "info")}
-        <a href="/account?tab=privacy">Privacy Policy</a>
-        <a href="/account?tab=terms">Terms of Service</a>
+        ${link("Privacy Policy", "privacy")}
+        ${link("Terms of Service", "terms")}
       </div>
     </div>
     <div style="color:#555;font-style:italic;margin-bottom:0.3rem">DISCLAIMER: AI be funky sometimes</div>

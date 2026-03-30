@@ -29,7 +29,7 @@
   <link rel="preconnect" href="https://api.discogs.com" />
   <link rel="preconnect" href="https://i.discogs.com" />
   <link rel="preconnect" href="https://i.ebayimg.com" />
-  <link rel="stylesheet" href="/style.css?v=20260328b" />
+  <link rel="stylesheet" href="/style.css?v=20260329a" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -62,7 +62,7 @@
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260328b"></script>
+<script src="/shared.js?v=20260329a"></script>
 <script>renderSharedHeader({ spa: true, active: "search" });</script>
 <div id="search-view">
 
@@ -407,6 +407,83 @@
   <p style="font-size:0.84rem;color:#aaa;margin:0">Anonymous users are capped at <strong style="color:#ccc">5 searches/day</strong> on a shared token. Sign up free and add your own Discogs token (<strong style="color:#ccc">discogs.com → Settings → Developers</strong>) for unlimited searches.</p>
 </div>
 
+<div id="privacy-view" class="content-narrow" style="display:none">
+  <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">Privacy Policy</h2>
+  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: March 29, 2026</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">What We Collect</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you create an account, we store your email address (provided by our authentication provider, Clerk) and any Discogs Personal Access Token you choose to save.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you sync your collection, we store a local copy of your Discogs collection, wantlist, inventory, and list metadata so you can browse and search them on SeaDisco.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">We log API usage for operational monitoring. This data is used solely for debugging and improving the service. We do not store your search queries, location data, or taste profiles.</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Third-Party Services</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">SeaDisco integrates with the following third-party services:</p>
+  <ul style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem;padding-left:1.2rem">
+    <li><strong style="color:#ccc">Discogs</strong> — music database searches and collection syncing, using your personal API token</li>
+    <li><strong style="color:#ccc">Clerk</strong> — authentication and account management</li>
+    <li><strong style="color:#ccc">Ticketmaster &amp; Bandsintown</strong> — live event data (no personal data is shared)</li>
+    <li><strong style="color:#ccc">eBay</strong> — vintage audio gear listings (no personal data is shared)</li>
+    <li><strong style="color:#ccc">ListenBrainz / MusicBrainz</strong> — fresh release data (no personal data is shared)</li>
+    <li><strong style="color:#ccc">YouTube</strong> — music video embeds in the feed (standard YouTube embed; subject to Google's privacy policy)</li>
+    <li><strong style="color:#ccc">Google Analytics</strong> — anonymous usage statistics to help us improve the site</li>
+  </ul>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">How We Use Your Data</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Your Discogs token is used solely to make API requests to Discogs on your behalf. We never share your token with any other service or third party. Your collection data is used only to display your records within SeaDisco.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">We do not sell, rent, or share your personal data with anyone.</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Data Storage &amp; Security</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">All data is stored in a secured PostgreSQL database hosted on Railway. Your Discogs token is stored encrypted at rest by the database provider. Access to the database is restricted to the application server only.</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Data Retention &amp; Deletion</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">User data (collection, wantlist, inventory, lists, and orders) is automatically purged after 30 days or deleted by the user. Your authentication tokens are retained for as long as your account exists.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Temporary operational data is also pruned automatically: expired gear listings, past live events, API logs, and feed article caches.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">You can delete your account at any time from the Account tab. Deleting your account <strong style="color:#ccc">permanently removes all of your data</strong> from our database, including your email, Discogs token, collection, wantlist, inventory, lists, and orders. Your Clerk authentication account is also deleted. This action is immediate and irreversible — there is no way to recover your data after deletion.</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Cookies</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco uses cookies only for authentication (via Clerk) and anonymous analytics (via Google Analytics). We do not use advertising or tracking cookies, and we do not sell any data.</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Contact</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">If you have questions about this policy, use the "Send feedback" button on the <a href="/account" style="color:#5a9aaa">Account</a> page.</p>
+</div>
+
+<div id="terms-view" class="content-narrow" style="display:none">
+  <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">Terms of Service</h2>
+  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: March 29, 2026</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Acceptance</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">By using SeaDisco, you agree to these terms. If you don't agree, please don't use the site.</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">What SeaDisco Is</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco is a music discovery tool that searches the Discogs database, aggregates live event listings, curates a music news feed, and helps you browse your vinyl collection. It is a personal project provided as-is.</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Your Account</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">You are responsible for keeping your Discogs API token secure. Do not share your token with others. SeaDisco uses your token only to interact with the Discogs API on your behalf.</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Acceptable Use</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Don't abuse the service. This includes but is not limited to:</p>
+  <ul style="font-size:0.84rem;color:#aaa;margin:0;padding-left:1.2rem">
+    <li>Automated scraping or excessive API usage beyond normal browsing</li>
+    <li>Attempting to access other users' data</li>
+    <li>Using the service to violate Discogs' own terms of service</li>
+  </ul>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Third-Party Content</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">Search results, album artwork, event listings, news articles, and videos are sourced from third parties (Discogs, Ticketmaster, Bandsintown, eBay, YouTube, RSS feeds, etc.). SeaDisco does not own or control this content. All trademarks and copyrights belong to their respective owners.</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Availability &amp; Warranty</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco is provided "as is" without warranties of any kind. We don't guarantee uptime, accuracy of search results, or availability of any feature. The service may change or shut down at any time.</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Limitation of Liability</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco and its operators are not liable for any damages arising from your use of the service, including but not limited to lost data, missed events, or inaccurate pricing information.</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Changes to These Terms</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">We may update these terms from time to time. Continued use of SeaDisco after changes constitutes acceptance of the new terms.</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Contact</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">Questions? Use the "Send feedback" button on the <a href="/account" style="color:#5a9aaa">Account</a> page or email <strong style="color:#ccc">hello@seadisco.com</strong>.</p>
+</div>
+
 <footer></footer>
 <script>renderSharedFooter({ spa: true });</script>
 
@@ -472,15 +549,15 @@
   <div id="lightbox-counter"></div>
 </div>
 
-<script src="/utils.js?v=20260328b"></script>
-<script src="/search.js?v=20260328b"></script>
-<script src="/collection.js?v=20260328b"></script>
-<script src="/modal.js?v=20260328b"></script>
-<script src="/drops.js?v=20260328b"></script>
-<script src="/live.js?v=20260328b"></script>
-<script src="/gear.js?v=20260328b"></script>
-<script src="/feed.js?v=20260328b"></script>
-<script src="/app.js?v=20260328b"></script>
+<script src="/utils.js?v=20260329a"></script>
+<script src="/search.js?v=20260329a"></script>
+<script src="/collection.js?v=20260329a"></script>
+<script src="/modal.js?v=20260329a"></script>
+<script src="/drops.js?v=20260329a"></script>
+<script src="/live.js?v=20260329a"></script>
+<script src="/gear.js?v=20260329a"></script>
+<script src="/feed.js?v=20260329a"></script>
+<script src="/app.js?v=20260329a"></script>
 
 </body>
 </html>
