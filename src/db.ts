@@ -135,6 +135,49 @@ export async function initDb() {
   await getPool().query(`
     CREATE INDEX IF NOT EXISTS gear_listings_bids_price_idx ON gear_listings (bid_count DESC, price DESC) WHERE NOT expired
   `);
+  // ── Vinyl listings (eBay 12" LP auctions) ──────────────────────────────
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS vinyl_listings (
+      item_id         TEXT PRIMARY KEY,
+      title           TEXT NOT NULL,
+      price           NUMERIC(10,2) NOT NULL,
+      currency        TEXT DEFAULT 'USD',
+      condition       TEXT,
+      image_url       TEXT,
+      item_url        TEXT,
+      location_city   TEXT,
+      location_state  TEXT,
+      location_country TEXT,
+      seller_username TEXT,
+      seller_feedback INTEGER,
+      buying_options  TEXT[],
+      bid_count       INTEGER DEFAULT 0,
+      categories      TEXT[],
+      category_names  TEXT[],
+      item_end_date   TIMESTAMPTZ,
+      detail_html     TEXT,
+      all_images      TEXT[],
+      item_specifics  JSONB,
+      thumbnail_url   TEXT,
+      raw_summary     JSONB,
+      fetched_at      TIMESTAMPTZ DEFAULT NOW(),
+      detailed_at     TIMESTAMPTZ,
+      expired         BOOLEAN DEFAULT false
+    )
+  `);
+  await getPool().query(`
+    CREATE INDEX IF NOT EXISTS vinyl_listings_bids_price_idx ON vinyl_listings (bid_count DESC, price DESC) WHERE NOT expired
+  `);
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS vinyl_fetch_log (
+      id          SERIAL PRIMARY KEY,
+      fetch_type  TEXT NOT NULL,
+      item_count  INTEGER DEFAULT 0,
+      error       TEXT,
+      started_at  TIMESTAMPTZ DEFAULT NOW(),
+      finished_at TIMESTAMPTZ
+    )
+  `);
   // ── Feed articles (RSS + YouTube) ──────────────────────────────────────
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS feed_articles (
@@ -1181,9 +1224,131 @@ export async function markExpiredGearListings(): Promise<number> {
   return r.rowCount ?? 0;
 }
 
+// ── Vinyl listings (eBay 12" LP auctions) ─────────────────────────────────
+
+export async function upsertVinylListings(items: Array<{
+  itemId: string; title: string; price: number; currency: string;
+  condition?: string; imageUrl?: string; itemUrl?: string;
+  locationCity?: string; locationState?: string; locationCountry?: string;
+  sellerUsername?: string; sellerFeedback?: number;
+  buyingOptions?: string[]; bidCount?: number;
+  categories?: string[]; categoryNames?: string[];
+  itemEndDate?: string; thumbnailUrl?: string; rawSummary?: object;
+}>): Promise<number> {
+  let count = 0;
+  for (const item of items) {
+    await getPool().query(
+      `INSERT INTO vinyl_listings (item_id, title, price, currency, condition, image_url, item_url,
+        location_city, location_state, location_country, seller_username, seller_feedback,
+        buying_options, bid_count, categories, category_names, item_end_date, thumbnail_url, raw_summary, fetched_at, expired)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,NOW(),false)
+       ON CONFLICT (item_id) DO UPDATE SET
+         title=$2, price=$3, currency=$4, condition=$5, image_url=$6, item_url=$7,
+         location_city=$8, location_state=$9, location_country=$10, seller_username=$11,
+         seller_feedback=$12, buying_options=$13, bid_count=$14, categories=$15,
+         category_names=$16, item_end_date=$17, thumbnail_url=$18, raw_summary=$19,
+         fetched_at=NOW(), expired=false`,
+      [item.itemId, item.title, item.price, item.currency,
+       item.condition ?? null, item.imageUrl ?? null, item.itemUrl ?? null,
+       item.locationCity ?? null, item.locationState ?? null, item.locationCountry ?? null,
+       item.sellerUsername ?? null, item.sellerFeedback ?? null,
+       item.buyingOptions ?? [], item.bidCount ?? 0,
+       item.categories ?? [], item.categoryNames ?? [],
+       item.itemEndDate ?? null, item.thumbnailUrl ?? null,
+       JSON.stringify(item.rawSummary ?? {})]
+    );
+    count++;
+  }
+  return count;
+}
+
+export async function updateVinylDetail(itemId: string, detailHtml: string, allImages: string[], itemSpecifics: object): Promise<void> {
+  await getPool().query(
+    `UPDATE vinyl_listings SET detail_html=$2, all_images=$3, item_specifics=$4, detailed_at=NOW() WHERE item_id=$1`,
+    [itemId, detailHtml, allImages, JSON.stringify(itemSpecifics)]
+  );
+}
+
+export async function getVinylNeedingDetail(limit: number = 20): Promise<Array<{ itemId: string; price: number }>> {
+  const r = await getPool().query(
+    `SELECT item_id, price FROM vinyl_listings
+     WHERE detailed_at IS NULL AND NOT expired
+     ORDER BY bid_count DESC, price DESC LIMIT $1`,
+    [limit]
+  );
+  return r.rows.map(row => ({ itemId: row.item_id, price: row.price }));
+}
+
+export async function getVinylListings(minPrice: number = 0, limit: number = 200, offset: number = 0, sort: string = "ending", q: string = ""): Promise<{ items: any[]; total: number }> {
+  const params: any[] = [minPrice];
+  let where = `WHERE price >= $1 AND NOT expired
+    AND (item_end_date IS NULL OR item_end_date > NOW())`;
+  if (q.trim()) {
+    params.push(`%${q.trim()}%`);
+    where += ` AND title ILIKE $${params.length}`;
+  }
+  const countR = await getPool().query(
+    `SELECT COUNT(*)::int AS cnt FROM vinyl_listings ${where}`,
+    params
+  );
+  const total = countR.rows[0]?.cnt ?? 0;
+  const orderMap: Record<string, string> = {
+    bids: "bid_count DESC, price DESC",
+    price_desc: "price DESC",
+    price_asc: "price ASC",
+    ending: "item_end_date ASC NULLS LAST",
+    newest: "fetched_at DESC",
+  };
+  const orderBy = orderMap[sort] ?? orderMap.ending;
+  const r = await getPool().query(
+    `SELECT item_id, title, price, currency, condition, image_url, item_url,
+       location_city, location_state, location_country,
+       seller_username, seller_feedback, buying_options, bid_count,
+       categories, category_names, item_end_date,
+       detail_html, all_images, item_specifics, thumbnail_url,
+       fetched_at, detailed_at
+     FROM vinyl_listings
+     ${where}
+     ORDER BY ${orderBy}
+     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+    [...params, limit, offset]
+  );
+  return { items: r.rows, total };
+}
+
+export async function markExpiredVinylListings(): Promise<number> {
+  const r = await getPool().query(
+    `UPDATE vinyl_listings SET expired = true
+     WHERE NOT expired AND fetched_at < NOW() - INTERVAL '3 days'`
+  );
+  return r.rowCount ?? 0;
+}
+
+export async function getVinylStats(): Promise<{ total: number; detailed: number; lastFetch: string | null }> {
+  const r = await getPool().query(
+    `SELECT COUNT(*)::int AS total,
+       COUNT(detailed_at)::int AS detailed,
+       MAX(fetched_at) AS last_fetch
+     FROM vinyl_listings WHERE NOT expired`
+  );
+  return {
+    total: r.rows[0]?.total ?? 0,
+    detailed: r.rows[0]?.detailed ?? 0,
+    lastFetch: r.rows[0]?.last_fetch ?? null,
+  };
+}
+
+export async function logVinylFetch(fetchType: string, itemCount: number, error?: string): Promise<void> {
+  await getPool().query(
+    `INSERT INTO vinyl_fetch_log (fetch_type, item_count, error, finished_at)
+     VALUES ($1, $2, $3, NOW())`,
+    [fetchType, itemCount, error ?? null]
+  );
+}
+
 // ── Auto-prune stale data ─────────────────────────────────────────────────
 export async function pruneAllStaleData(): Promise<{
-  fresh: number; gear: number; gearLog: number; liveEvents: number;
+  fresh: number; gear: number; gearLog: number; vinyl: number; vinylLog: number; liveEvents: number;
   collection: number; wantlist: number; folders: number;
   inventory: number; lists: number; orders: number;
 }> {
@@ -1200,6 +1365,14 @@ export async function pruneAllStaleData(): Promise<{
   // Gear fetch log older than 30 days
   const gl = await getPool().query(
     `DELETE FROM gear_fetch_log WHERE started_at < ${interval30d}`
+  );
+  // Expired vinyl listings
+  const v = await getPool().query(
+    `DELETE FROM vinyl_listings WHERE expired = true`
+  );
+  // Vinyl fetch log older than 30 days
+  const vl = await getPool().query(
+    `DELETE FROM vinyl_fetch_log WHERE started_at < ${interval30d}`
   );
   // Past live events
   const le = await getPool().query(
@@ -1233,6 +1406,8 @@ export async function pruneAllStaleData(): Promise<{
     fresh: f.rowCount ?? 0,
     gear: g.rowCount ?? 0,
     gearLog: gl.rowCount ?? 0,
+    vinyl: v.rowCount ?? 0,
+    vinylLog: vl.rowCount ?? 0,
     liveEvents: le.rowCount ?? 0,
     collection: col.rowCount ?? 0,
     wantlist: wl.rowCount ?? 0,

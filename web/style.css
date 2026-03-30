@@ -723,6 +723,113 @@ a.fresh-card-search-link:hover {
   color: #cc6644;
 }
 
+/* ── Buy tab (vinyl auctions) ── */
+.buy-header {
+  margin-bottom: 0.75rem;
+  max-width: 900px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.buy-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+.buy-price-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+.buy-right-controls {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+.buy-search-field {
+  width: 160px;
+}
+.buy-sort {
+  width: auto;
+  min-width: 140px;
+}
+.buy-card {
+  text-decoration: none;
+  color: inherit;
+  border-bottom: 3px solid #2a6ea8;
+  transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.buy-card:hover {
+  border-color: #4a9eda;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+}
+.buy-price {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #4a9eda;
+  margin: 0.15rem 0;
+}
+.buy-bids {
+  color: #5ab0e8;
+  font-weight: 600;
+}
+.buy-time-left {
+  color: #cc6644;
+}
+
+/* Buy popup */
+.buy-popup-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 9999;
+  display: flex; align-items: center; justify-content: center; padding: 1rem;
+}
+.buy-popup {
+  background: var(--surface); border-radius: 10px; max-width: 600px; width: 100%;
+  max-height: 85vh; overflow-y: auto; position: relative; padding: 0;
+}
+.buy-popup::-webkit-scrollbar { width: 6px; }
+.buy-popup::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+.buy-popup-close {
+  position: absolute; top: 0.5rem; right: 0.5rem; background: rgba(0,0,0,0.6);
+  color: #fff; border: none; border-radius: 50%; width: 28px; height: 28px;
+  font-size: 1rem; cursor: pointer; z-index: 2; line-height: 1;
+}
+.buy-popup-close:hover { background: rgba(0,0,0,0.85); }
+.buy-popup-main-img {
+  width: 100%; max-height: 350px; object-fit: contain; background: #111;
+  border-radius: 10px 10px 0 0;
+}
+.buy-popup-gallery {
+  display: flex; gap: 4px; padding: 0.4rem 0.75rem; overflow-x: auto;
+}
+.buy-popup-gallery img {
+  width: 56px; height: 56px; object-fit: cover; border-radius: 4px;
+  cursor: pointer; border: 1px solid #333; flex-shrink: 0;
+}
+.buy-popup-gallery img:hover { border-color: #4a9eda; }
+.buy-popup-body { padding: 0.75rem 1rem 1rem; }
+.buy-popup-title { font-size: 0.95rem; margin: 0 0 0.4rem; color: var(--text); }
+.buy-popup-price { font-size: 1.1rem; font-weight: 700; color: #4a9eda; margin-bottom: 0.4rem; }
+.buy-popup-meta { font-size: 0.78rem; color: #a89880; margin-bottom: 0.2rem; }
+.buy-popup-specs {
+  margin-top: 0.6rem; border-top: 1px solid var(--border); padding-top: 0.5rem;
+}
+.buy-spec-row { font-size: 0.78rem; color: #bbb; margin-bottom: 0.15rem; }
+.buy-spec-label { color: #9a8d78; min-width: 100px; display: inline-block; }
+.buy-popup-description {
+  margin-top: 0.6rem; border-top: 1px solid var(--border); padding-top: 0.5rem;
+  font-size: 0.78rem; color: #bbb; max-height: 200px; overflow-y: auto; line-height: 1.4;
+}
+.buy-popup-description img { max-width: 100%; height: auto; }
+.buy-popup-ebay-link {
+  display: inline-block; margin-top: 0.75rem; padding: 0.4rem 1rem;
+  background: #4a9eda; color: #000; border-radius: 6px; text-decoration: none;
+  font-size: 0.82rem; font-weight: 600;
+}
+.buy-popup-ebay-link:hover { background: #5ab0e8; }
+
 /* ── Feed tab ── */
 .feed-header { margin-bottom: 0.75rem; }
 .feed-controls {
@@ -1143,7 +1250,7 @@ a.drop-nomatch-tag:hover { border-color: var(--accent); color: var(--accent); }
 
 /* Fresh grid responsive — now handled by .card-grid media queries */
 
-main, #drops-view, #gear-view {
+main, #drops-view, #buy-view, #gear-view {
   width: 90%;
   max-width: 1400px;
   margin: 0 auto;
@@ -1155,9 +1262,9 @@ main, #drops-view, #gear-view {
   margin: 0 auto;
   padding: 0.4rem 0 1.5rem;
 }
-@media (max-width: 1024px) { main, #drops-view, #gear-view, #live-view, #info-view, #feed-view, #privacy-view, #terms-view { width: 94%; } }
-@media (max-width: 640px)  { main, #drops-view, #gear-view, #live-view, #info-view, #feed-view, #privacy-view, #terms-view { width: 97%; } }
-@media (max-width: 400px)  { main, #drops-view, #gear-view, #live-view, #info-view, #feed-view, #privacy-view, #terms-view { width: 99%; } }
+@media (max-width: 1024px) { main, #drops-view, #buy-view, #gear-view, #live-view, #info-view, #feed-view, #privacy-view, #terms-view { width: 94%; } }
+@media (max-width: 640px)  { main, #drops-view, #buy-view, #gear-view, #live-view, #info-view, #feed-view, #privacy-view, #terms-view { width: 97%; } }
+@media (max-width: 400px)  { main, #drops-view, #buy-view, #gear-view, #live-view, #info-view, #feed-view, #privacy-view, #terms-view { width: 99%; } }
 
 
 /* ── Content narrow utility ── */
