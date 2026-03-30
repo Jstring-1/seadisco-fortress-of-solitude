@@ -39,7 +39,6 @@
           <button onclick="adminFeedFetch()" id="admin-feed-fetch-btn" class="admin-btn admin-btn-feed">Fetch Feed</button>
           <button onclick="adminLiveFetch()" id="admin-live-fetch-btn" class="admin-btn admin-btn-live">Fetch Live Events</button>
           <button onclick="adminExtrasFetch()" id="admin-extras-fetch-btn" class="admin-btn admin-btn-extras">Fetch Inventory/Lists</button>
-          <button onclick="adminRebuildTaste()" id="admin-taste-btn" class="admin-btn admin-btn-taste">Rebuild Taste Profiles</button>
         </div>
         <div id="admin-action-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.35rem"></div>
       </div>
@@ -90,12 +89,6 @@
         <div id="api-log-list" style="font-size:0.82rem;color:var(--muted);max-height:500px;overflow-y:auto"></div>
       </div>
 
-      <!-- Interest Signals -->
-      <div class="admin-section admin-section-b">
-        <h2 style="margin-bottom:0.5rem">Interest Signals</h2>
-        <div id="interest-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
-      </div>
-
     </div>
   </div>
 </main>
@@ -138,7 +131,6 @@ async function initClerk() {
     renderFeedback(items);
     loadAdminSyncStatus();
     loadApiLog();
-    loadInterestStats();
     loadCollectionStats();
     checkKillStatus();
   } catch {
@@ -347,21 +339,6 @@ async function adminExtrasFetch() {
   finally { btn.disabled = false; btn.textContent = "Fetch Inventory/Lists"; }
 }
 
-async function adminRebuildTaste() {
-  const btn = document.getElementById("admin-taste-btn");
-  const statusEl = document.getElementById("admin-action-status");
-  btn.disabled = true; btn.textContent = "Rebuilding\u2026";
-  try {
-    const sessionToken = await clerk.session?.getToken();
-    const r = await fetch("/api/admin/rebuild-taste", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
-    }).then(r => r.json());
-    statusEl.textContent = `Rebuilt ${r.rebuilt}/${r.total} taste profiles.${r.errors?.length ? " Errors: " + r.errors.join("; ") : ""}`;
-  } catch { statusEl.textContent = "Taste profile rebuild failed."; }
-  finally { btn.disabled = false; btn.textContent = "Rebuild Taste Profiles"; }
-}
-
 // ── API Request Log ───────────────────────────────────────────────────
 async function loadApiLog() {
   try {
@@ -534,49 +511,6 @@ async function loadCollectionStats() {
         <tbody>${userRows}</tbody>
       </table>`;
   } catch { el.textContent = "Could not load collection stats."; }
-}
-
-// ── Interest Signals ──────────────────────────────────────────────────
-async function loadInterestStats() {
-  const el = document.getElementById("interest-stats");
-  try {
-    const sessionToken = await clerk.session?.getToken();
-    const stats = await fetch("/api/admin/interests", {
-      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
-    }).then(r => r.json());
-    if (stats.error) { el.textContent = "Could not load."; return; }
-    const appBase = window.location.origin;
-    const artistLink = (name, cnt) => {
-      const url = `${appBase}/?a=${encodeURIComponent(name)}`;
-      return `<a href="${url}" target="_blank" style="color:var(--accent);text-decoration:none" title="Search ${name}">${name}</a> <span style="color:#555">(${cnt})</span>`;
-    };
-    const labelLink = (name, cnt) => {
-      const url = `${appBase}/?l=${encodeURIComponent(name)}`;
-      return `<a href="${url}" target="_blank" style="color:var(--accent);text-decoration:none" title="Search ${name} label">${name}</a> <span style="color:#555">(${cnt})</span>`;
-    };
-    const plainList = (items, max = 30) => items.slice(0, max).map(i => `${i.name} <span style="color:#555">(${i.cnt})</span>`).join(" \u00b7 ");
-    const tagCloud = (items, linkFn, max = 50) => items.slice(0, max).map(i => linkFn(i.name, i.cnt)).join(" \u00b7 ");
-
-    el.innerHTML = `
-      <div style="margin-bottom:0.6rem"><strong style="color:var(--fg);font-size:0.85rem">${stats.totalReleases.toLocaleString()}</strong> <span style="color:#777;font-size:0.72rem">releases tracked across all users</span></div>
-      <div style="margin-bottom:0.5rem">
-        <div style="color:#aaa;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.2rem">Top Artists</div>
-        <div style="line-height:1.7;font-size:0.7rem">${tagCloud(stats.topArtists, artistLink, 50)}</div>
-      </div>
-      <div style="margin-bottom:0.5rem">
-        <div style="color:#aaa;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.2rem">Top Labels</div>
-        <div style="line-height:1.7;font-size:0.7rem">${tagCloud(stats.topLabels, labelLink, 50)}</div>
-      </div>
-      <div style="margin-bottom:0.5rem">
-        <div style="color:#aaa;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.2rem">Top Genres</div>
-        <div style="line-height:1.7;font-size:0.7rem">${plainList(stats.topGenres, 30)}</div>
-      </div>
-      <div>
-        <div style="color:#aaa;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.2rem">Top Styles</div>
-        <div style="line-height:1.7;font-size:0.7rem">${plainList(stats.topStyles, 50)}</div>
-      </div>
-    `;
-  } catch { el.textContent = "Could not load interest stats."; }
 }
 
 initClerk().catch(err => {

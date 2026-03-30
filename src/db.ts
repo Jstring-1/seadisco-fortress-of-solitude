@@ -80,28 +80,6 @@ export async function initDb() {
       UNIQUE(clerk_user_id, discogs_release_id)
     )
   `);
-  // Anonymous interest signals — survives account deletion
-  await getPool().query(`
-    CREATE TABLE IF NOT EXISTS interest_signals (
-      id                 SERIAL PRIMARY KEY,
-      discogs_release_id INTEGER NOT NULL,
-      source             TEXT NOT NULL,
-      artists            TEXT[],
-      labels             TEXT[],
-      genres             TEXT[],
-      styles             TEXT[],
-      year               INTEGER,
-      recorded_at        TIMESTAMPTZ DEFAULT NOW(),
-      UNIQUE(discogs_release_id, source)
-    )
-  `);
-  await getPool().query(`
-    CREATE INDEX IF NOT EXISTS interest_signals_artists_idx ON interest_signals USING GIN (artists)
-  `);
-  await getPool().query(`
-    CREATE INDEX IF NOT EXISTS interest_signals_genres_idx ON interest_signals USING GIN (genres)
-  `);
-
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS fresh_releases (
       id                  SERIAL PRIMARY KEY,
@@ -186,22 +164,6 @@ export async function initDb() {
       finished_at TIMESTAMPTZ
     )
   `);
-  // ── User locations (IP geolocation cache) ────────────────────────────────
-  await getPool().query(`
-    CREATE TABLE IF NOT EXISTS user_locations (
-      id            SERIAL PRIMARY KEY,
-      ip_address    TEXT NOT NULL UNIQUE,
-      clerk_user_id TEXT,
-      latitude      NUMERIC(9,6),
-      longitude     NUMERIC(9,6),
-      city          TEXT,
-      region        TEXT,
-      country       TEXT,
-      fetched_at    TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
-  await getPool().query(`CREATE INDEX IF NOT EXISTS user_locations_clerk_idx ON user_locations (clerk_user_id) WHERE clerk_user_id IS NOT NULL`);
-
   // ── Live events (Ticketmaster upcoming) ─────────────────────────────────
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS live_events (
@@ -288,18 +250,6 @@ export async function initDb() {
       data            JSONB,
       synced_at       TIMESTAMP DEFAULT NOW(),
       UNIQUE(clerk_user_id, order_id)
-    )
-  `);
-
-  // ── User taste profiles (computed from collection genres/styles) ────────
-  await getPool().query(`
-    CREATE TABLE IF NOT EXISTS user_taste_profiles (
-      clerk_user_id TEXT PRIMARY KEY,
-      top_genres    JSONB DEFAULT '[]',
-      top_styles    JSONB DEFAULT '[]',
-      top_artists   JSONB DEFAULT '[]',
-      genre_keywords TEXT[] DEFAULT '{}',
-      updated_at    TIMESTAMPTZ DEFAULT NOW()
     )
   `);
 
@@ -423,15 +373,12 @@ export async function deleteFeedback(id: number): Promise<void> {
 
 export async function deleteUserData(clerkUserId: string): Promise<void> {
   const tables = [
-    "user_taste_profiles",
-    "interest_signals",
     "user_orders",
     "user_lists",
     "user_inventory",
     "user_collection_folders",
     "user_collection",
     "user_wantlist",
-    "user_locations",
     "user_tokens",         // last — other tables may reference it
   ];
   for (const table of tables) {
@@ -1133,116 +1080,6 @@ export async function getFreshTopTags(limit = 24): Promise<Array<{ tag: string; 
 
 // ── Interest signals (anonymous, survives account deletion) ──
 
-export async function recordInterestSignals(
-  items: Array<{ id: number; data: any }>,
-  source: "collection" | "wantlist"
-): Promise<void> {
-  // Deduplicate by release ID within batch, then filter
-  const dedupMap = new Map<number, (typeof items)[0]>();
-  for (const item of items) if (item.data) dedupMap.set(item.id, item);
-  const filtered = [...dedupMap.values()];
-  if (!filtered.length) return;
-  // Batch in chunks of 100 to stay within parameter limits (7 params each = 700 per chunk)
-  const CHUNK = 100;
-  for (let i = 0; i < filtered.length; i += CHUNK) {
-    const chunk = filtered.slice(i, i + CHUNK);
-    const values: string[] = [];
-    const params: any[] = [];
-    let p = 1;
-    for (const item of chunk) {
-      const d = item.data;
-      const artists = (d.artists ?? []).map((a: any) => a.name).filter(Boolean);
-      const labels  = (d.labels  ?? []).map((l: any) => l.name).filter(Boolean);
-      const genres  = d.genres ?? [];
-      const styles  = d.styles ?? [];
-      const year    = d.year || null;
-      values.push(`($${p}, $${p+1}, $${p+2}::text[], $${p+3}::text[], $${p+4}::text[], $${p+5}::text[], $${p+6})`);
-      params.push(item.id, source, artists, labels, genres, styles, year);
-      p += 7;
-    }
-    await getPool().query(
-      `INSERT INTO interest_signals (discogs_release_id, source, artists, labels, genres, styles, year)
-       VALUES ${values.join(",")}
-       ON CONFLICT (discogs_release_id, source)
-       DO UPDATE SET artists = EXCLUDED.artists, labels = EXCLUDED.labels,
-                     genres = EXCLUDED.genres, styles = EXCLUDED.styles,
-                     year = EXCLUDED.year, recorded_at = NOW()`,
-      params
-    );
-  }
-}
-
-export async function getInterestStats(): Promise<{
-  totalReleases: number;
-  topArtists: Array<{ name: string; cnt: number }>;
-  topLabels:  Array<{ name: string; cnt: number }>;
-  topGenres:  Array<{ name: string; cnt: number }>;
-  topStyles:  Array<{ name: string; cnt: number }>;
-}> {
-  const [totalR, artistsR, labelsR, genresR, stylesR] = await Promise.all([
-    getPool().query("SELECT COUNT(*)::int AS cnt FROM interest_signals"),
-    getPool().query(
-      `SELECT unnest(artists) AS name, COUNT(*)::int AS cnt
-       FROM interest_signals GROUP BY name ORDER BY cnt DESC LIMIT 50`
-    ),
-    getPool().query(
-      `SELECT unnest(labels) AS name, COUNT(*)::int AS cnt
-       FROM interest_signals GROUP BY name ORDER BY cnt DESC LIMIT 50`
-    ),
-    getPool().query(
-      `SELECT unnest(genres) AS name, COUNT(*)::int AS cnt
-       FROM interest_signals GROUP BY name ORDER BY cnt DESC LIMIT 30`
-    ),
-    getPool().query(
-      `SELECT unnest(styles) AS name, COUNT(*)::int AS cnt
-       FROM interest_signals GROUP BY name ORDER BY cnt DESC LIMIT 50`
-    ),
-  ]);
-  return {
-    totalReleases: totalR.rows[0]?.cnt ?? 0,
-    topArtists: artistsR.rows,
-    topLabels:  labelsR.rows,
-    topGenres:  genresR.rows,
-    topStyles:  stylesR.rows,
-  };
-}
-
-export async function backfillInterestSignals(): Promise<{ collection: number; wantlist: number }> {
-  let collCount = 0;
-  let wantCount = 0;
-  const coll = await getPool().query("SELECT discogs_release_id, data FROM user_collection");
-  for (const row of coll.rows) {
-    const artists: string[] = (row.data?.artists ?? []).map((a: any) => a.name).filter(Boolean);
-    const labels:  string[] = (row.data?.labels  ?? []).map((l: any) => l.name).filter(Boolean);
-    const genres:  string[] = row.data?.genres ?? [];
-    const styles:  string[] = row.data?.styles ?? [];
-    const year:    number | null = row.data?.year || null;
-    await getPool().query(
-      `INSERT INTO interest_signals (discogs_release_id, source, artists, labels, genres, styles, year)
-       VALUES ($1, 'collection', $2, $3, $4, $5, $6)
-       ON CONFLICT (discogs_release_id, source) DO NOTHING`,
-      [row.discogs_release_id, artists, labels, genres, styles, year]
-    );
-    collCount++;
-  }
-  const want = await getPool().query("SELECT discogs_release_id, data FROM user_wantlist");
-  for (const row of want.rows) {
-    const artists: string[] = (row.data?.artists ?? []).map((a: any) => a.name).filter(Boolean);
-    const labels:  string[] = (row.data?.labels  ?? []).map((l: any) => l.name).filter(Boolean);
-    const genres:  string[] = row.data?.genres ?? [];
-    const styles:  string[] = row.data?.styles ?? [];
-    const year:    number | null = row.data?.year || null;
-    await getPool().query(
-      `INSERT INTO interest_signals (discogs_release_id, source, artists, labels, genres, styles, year)
-       VALUES ($1, 'wantlist', $2, $3, $4, $5, $6)
-       ON CONFLICT (discogs_release_id, source) DO NOTHING`,
-      [row.discogs_release_id, artists, labels, genres, styles, year]
-    );
-    wantCount++;
-  }
-  return { collection: collCount, wantlist: wantCount };
-}
-
 // ── Gear listings (eBay) ────────────────────────────────────────────────
 
 export async function upsertGearListings(items: Array<{
@@ -1346,17 +1183,12 @@ export async function markExpiredGearListings(): Promise<number> {
 
 // ── Auto-prune stale data ─────────────────────────────────────────────────
 export async function pruneAllStaleData(): Promise<{
-  interest: number; fresh: number; gear: number; gearLog: number;
-  liveEvents: number; locations: number;
+  fresh: number; gear: number; gearLog: number; liveEvents: number;
   collection: number; wantlist: number; folders: number;
-  inventory: number; lists: number; orders: number; tasteProfiles: number;
+  inventory: number; lists: number; orders: number;
 }> {
   const interval30d = `NOW() - INTERVAL '30 days'`;
 
-  // Interest signals older than 30 days
-  const i = await getPool().query(
-    `DELETE FROM interest_signals WHERE recorded_at < ${interval30d}`
-  );
   // Fresh releases older than 6 months (not user data, just catalog cache)
   const f = await getPool().query(
     `DELETE FROM fresh_releases WHERE fetched_at < NOW() - INTERVAL '6 months'`
@@ -1372,10 +1204,6 @@ export async function pruneAllStaleData(): Promise<{
   // Past live events
   const le = await getPool().query(
     `DELETE FROM live_events WHERE event_date ~ '^\\d{4}-\\d{2}-\\d{2}' AND event_date::date < CURRENT_DATE`
-  );
-  // Stale location cache (30 days)
-  const loc = await getPool().query(
-    `DELETE FROM user_locations WHERE fetched_at < ${interval30d}`
   );
   // User collection older than 30 days
   const col = await getPool().query(
@@ -1401,24 +1229,17 @@ export async function pruneAllStaleData(): Promise<{
   const ord = await getPool().query(
     `DELETE FROM user_orders WHERE synced_at < ${interval30d}`
   );
-  // User taste profiles older than 30 days
-  const tp = await getPool().query(
-    `DELETE FROM user_taste_profiles WHERE updated_at < ${interval30d}`
-  );
   return {
-    interest: i.rowCount ?? 0,
     fresh: f.rowCount ?? 0,
     gear: g.rowCount ?? 0,
     gearLog: gl.rowCount ?? 0,
     liveEvents: le.rowCount ?? 0,
-    locations: loc.rowCount ?? 0,
     collection: col.rowCount ?? 0,
     wantlist: wl.rowCount ?? 0,
     folders: fld.rowCount ?? 0,
     inventory: inv.rowCount ?? 0,
     lists: lst.rowCount ?? 0,
     orders: ord.rowCount ?? 0,
-    tasteProfiles: tp.rowCount ?? 0,
   };
 }
 
@@ -1566,208 +1387,6 @@ export async function pruneLiveEvents(): Promise<number> {
     `DELETE FROM live_events WHERE event_date ~ '^\\d{4}-\\d{2}-\\d{2}' AND event_date::date < CURRENT_DATE`
   );
   return r.rowCount ?? 0;
-}
-
-// ── User locations (IP geolocation) ──────────────────────────────────────
-
-export async function getLocationByIp(ip: string): Promise<{ latitude: number; longitude: number; city: string; region: string; country: string } | null> {
-  const r = await getPool().query(
-    `SELECT latitude, longitude, city, region, country FROM user_locations
-     WHERE ip_address = $1 AND fetched_at > NOW() - INTERVAL '7 days'`,
-    [ip]
-  );
-  if (!r.rows.length) return null;
-  return {
-    latitude: parseFloat(r.rows[0].latitude),
-    longitude: parseFloat(r.rows[0].longitude),
-    city: r.rows[0].city,
-    region: r.rows[0].region,
-    country: r.rows[0].country,
-  };
-}
-
-export async function upsertLocation(ip: string, clerkUserId: string | null, lat: number, lon: number, city: string, region: string, country: string): Promise<void> {
-  await getPool().query(
-    `INSERT INTO user_locations (ip_address, clerk_user_id, latitude, longitude, city, region, country, fetched_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-     ON CONFLICT (ip_address) DO UPDATE SET
-       clerk_user_id = COALESCE(EXCLUDED.clerk_user_id, user_locations.clerk_user_id),
-       latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude,
-       city = EXCLUDED.city, region = EXCLUDED.region, country = EXCLUDED.country,
-       fetched_at = NOW()`,
-    [ip, clerkUserId, lat, lon, city, region, country]
-  );
-}
-
-export async function pruneLocations(): Promise<number> {
-  const r = await getPool().query(`DELETE FROM user_locations WHERE fetched_at < NOW() - INTERVAL '30 days'`);
-  return r.rowCount ?? 0;
-}
-
-// ── User taste profiles ──────────────────────────────────────────────────
-
-interface TasteEntry { name: string; count: number }
-export interface TasteProfile {
-  top_genres: TasteEntry[];
-  top_styles: TasteEntry[];
-  top_artists: TasteEntry[];
-  genre_keywords: string[];
-}
-
-export async function rebuildUserTasteProfile(clerkUserId: string): Promise<TasteProfile | null> {
-  // Count genres from collection
-  const genreR = await getPool().query(
-    `SELECT val, COUNT(*)::int AS cnt
-     FROM user_collection, LATERAL jsonb_array_elements_text(data->'genres') AS val
-     WHERE clerk_user_id = $1 AND jsonb_typeof(data->'genres') = 'array'
-     GROUP BY val ORDER BY cnt DESC LIMIT 15`,
-    [clerkUserId]
-  );
-  // Count styles
-  const styleR = await getPool().query(
-    `SELECT val, COUNT(*)::int AS cnt
-     FROM user_collection, LATERAL jsonb_array_elements_text(data->'styles') AS val
-     WHERE clerk_user_id = $1 AND jsonb_typeof(data->'styles') = 'array'
-     GROUP BY val ORDER BY cnt DESC LIMIT 20`,
-    [clerkUserId]
-  );
-  // Count artists
-  const artistR = await getPool().query(
-    `SELECT val->>'name' AS name, COUNT(*)::int AS cnt
-     FROM user_collection, LATERAL jsonb_array_elements(data->'artists') AS val
-     WHERE clerk_user_id = $1 AND jsonb_typeof(data->'artists') = 'array'
-     GROUP BY val->>'name' ORDER BY cnt DESC LIMIT 30`,
-    [clerkUserId]
-  );
-  console.log(`Taste query results for ${clerkUserId}: ${genreR.rows.length} genres, ${styleR.rows.length} styles, ${artistR.rows.length} artists`);
-
-  if (!genreR.rows.length && !styleR.rows.length) return null;
-
-  const topGenres: TasteEntry[] = genreR.rows.map((r: any) => ({ name: r.val, count: r.cnt }));
-  const topStyles: TasteEntry[] = styleR.rows.map((r: any) => ({ name: r.val, count: r.cnt }));
-  const topArtists: TasteEntry[] = artistR.rows.map((r: any) => ({ name: r.name, count: r.cnt }));
-
-  // Build keyword list for Ticketmaster genre matching
-  // Combine top 5 genres + top 8 styles, lowercased
-  const keywords = [
-    ...topGenres.slice(0, 5).map(g => g.name.toLowerCase()),
-    ...topStyles.slice(0, 8).map(s => s.name.toLowerCase()),
-  ];
-
-  await getPool().query(
-    `INSERT INTO user_taste_profiles (clerk_user_id, top_genres, top_styles, top_artists, genre_keywords, updated_at)
-     VALUES ($1, $2, $3, $4, $5, NOW())
-     ON CONFLICT (clerk_user_id) DO UPDATE SET
-       top_genres = EXCLUDED.top_genres,
-       top_styles = EXCLUDED.top_styles,
-       top_artists = EXCLUDED.top_artists,
-       genre_keywords = EXCLUDED.genre_keywords,
-       updated_at = NOW()`,
-    [clerkUserId, JSON.stringify(topGenres), JSON.stringify(topStyles), JSON.stringify(topArtists), keywords]
-  );
-
-  const profile: TasteProfile = { top_genres: topGenres, top_styles: topStyles, top_artists: topArtists, genre_keywords: keywords };
-  console.log(`Taste profile rebuilt for ${clerkUserId}: ${topGenres.length} genres, ${topStyles.length} styles, ${topArtists.length} artists`);
-  return profile;
-}
-
-export async function getUserTasteProfile(clerkUserId: string): Promise<TasteProfile | null> {
-  const r = await getPool().query(
-    `SELECT top_genres, top_styles, top_artists, genre_keywords FROM user_taste_profiles WHERE clerk_user_id = $1`,
-    [clerkUserId]
-  );
-  if (!r.rows.length) return null;
-  const row = r.rows[0];
-  return {
-    top_genres: row.top_genres ?? [],
-    top_styles: row.top_styles ?? [],
-    top_artists: row.top_artists ?? [],
-    genre_keywords: row.genre_keywords ?? [],
-  };
-}
-
-// Personalized fresh releases — prioritize user's genres/styles
-export async function getPersonalizedFreshReleases(clerkUserId: string, limit = 150): Promise<any[]> {
-  const profile = await getUserTasteProfile(clerkUserId);
-  if (!profile || !profile.genre_keywords.length) return getFreshReleases(limit);
-
-  // Get releases that match user's taste, fill remainder with random
-  const keywords = profile.genre_keywords;
-  const r = await getPool().query(
-    `WITH matched AS (
-       SELECT *, 1 AS priority
-       FROM fresh_releases
-       WHERE fetched_at > NOW() - INTERVAL '3 months'
-         AND cover_url IS NOT NULL
-         AND tags && $1
-       ORDER BY RANDOM()
-       LIMIT $2
-     ),
-     filler AS (
-       SELECT *, 2 AS priority
-       FROM fresh_releases
-       WHERE fetched_at > NOW() - INTERVAL '3 months'
-         AND cover_url IS NOT NULL
-         AND id NOT IN (SELECT id FROM matched)
-       ORDER BY RANDOM()
-       LIMIT $2
-     )
-     SELECT * FROM (
-       SELECT * FROM matched
-       UNION ALL
-       SELECT * FROM filler
-     ) combined
-     ORDER BY priority, RANDOM()
-     LIMIT $2`,
-    [keywords, limit]
-  );
-  return r.rows;
-}
-
-// Personalized feed — boost articles matching user's artists/genres
-export async function getPersonalizedFeedArticles(clerkUserId: string, opts: {
-  category?: string; limit?: number; offset?: number; q?: string;
-}): Promise<{ items: any[]; total: number }> {
-  const profile = await getUserTasteProfile(clerkUserId);
-  if (!profile || !profile.top_artists.length) return getFeedArticles(opts);
-
-  // Build search terms from top artists (first 10)
-  const artistNames = profile.top_artists.slice(0, 10).map(a => a.name.toLowerCase());
-  const genreNames = profile.genre_keywords.slice(0, 5);
-  const searchTerms = [...artistNames, ...genreNames];
-
-  // Build CASE scoring expression
-  const params: any[] = [];
-  let scoreClauses: string[] = [];
-  for (const term of searchTerms) {
-    params.push(`%${term}%`);
-    scoreClauses.push(`CASE WHEN LOWER(title || ' ' || COALESCE(summary,'')) LIKE $${params.length} THEN 1 ELSE 0 END`);
-  }
-  const scoreExpr = scoreClauses.length ? scoreClauses.join(" + ") : "0";
-
-  let where = "WHERE 1=1";
-  if (opts.category && opts.category !== "all") {
-    params.push(opts.category);
-    where += ` AND category = $${params.length}`;
-  }
-  if (opts.q?.trim()) {
-    params.push(`%${opts.q.trim()}%`);
-    where += ` AND (title ILIKE $${params.length} OR summary ILIKE $${params.length} OR source ILIKE $${params.length})`;
-  }
-
-  const countR = await getPool().query(`SELECT COUNT(*)::int AS cnt FROM feed_articles ${where}`, params);
-  const total = countR.rows[0]?.cnt ?? 0;
-  const limit = opts.limit ?? 50;
-  const offset = opts.offset ?? 0;
-
-  const r = await getPool().query(
-    `SELECT *, (${scoreExpr}) AS relevance_score
-     FROM feed_articles ${where}
-     ORDER BY relevance_score DESC, published_at DESC NULLS LAST
-     LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
-    [...params, limit, offset]
-  );
-  return { items: r.rows, total };
 }
 
 // ── API request logging ──────────────────────────────────────────────────

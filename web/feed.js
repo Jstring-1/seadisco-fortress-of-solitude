@@ -116,11 +116,6 @@ async function loadFeedArticles(append = false, _retryCount = 0) {
     document.getElementById("feed-results").innerHTML = renderFeedSkeletonGrid(16);
   }
 
-  // Wait for auth so personalized feed works on first load
-  if (typeof authReadyPromise !== "undefined") {
-    try { await Promise.race([authReadyPromise, new Promise(r => setTimeout(r, 3000))]); } catch {}
-  }
-
   try {
     const params = new URLSearchParams({
       category: _feedCategory,
