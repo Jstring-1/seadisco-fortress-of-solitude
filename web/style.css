@@ -2148,6 +2148,39 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   border-radius: var(--radius);
   padding: 2rem;
 }
+.account-nav {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.5rem;
+}
+.account-nav-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+}
+.account-nav-tab:hover { color: var(--text); }
+.account-nav-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.account-tab-content h3 {
+  font-size: 0.95rem;
+  color: var(--fg);
+  margin: 1.4rem 0 0.5rem;
+}
+.account-tab-content ul {
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.8;
+  padding-left: 1.2rem;
+}
+.account-tab-content li { margin-bottom: 0.3rem; }
 .account-box h2 { margin-top: 0; font-size: 1.2rem; color: var(--fg); }
 .account-box p  { color: var(--muted); font-size: 0.9rem; line-height: 1.5; }
 .account-box a  { color: #aaa; }

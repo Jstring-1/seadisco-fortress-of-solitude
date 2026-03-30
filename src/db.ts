@@ -555,11 +555,22 @@ export async function deleteFeedback(id: number): Promise<void> {
 }
 
 export async function deleteUserData(clerkUserId: string): Promise<void> {
-  await getPool().query("DELETE FROM user_tokens    WHERE clerk_user_id = $1", [clerkUserId]);
-  await getPool().query("DELETE FROM search_history WHERE clerk_user_id = $1", [clerkUserId]);
-  await getPool().query("DELETE FROM user_collection WHERE clerk_user_id = $1", [clerkUserId]);
-  await getPool().query("DELETE FROM user_wantlist   WHERE clerk_user_id = $1", [clerkUserId]);
-  await getPool().query("DELETE FROM user_locations  WHERE clerk_user_id = $1", [clerkUserId]);
+  const tables = [
+    "user_taste_profiles",
+    "interest_signals",
+    "user_orders",
+    "user_lists",
+    "user_inventory",
+    "user_collection_folders",
+    "user_collection",
+    "user_wantlist",
+    "search_history",
+    "user_locations",
+    "user_tokens",         // last — other tables may reference it
+  ];
+  for (const table of tables) {
+    await getPool().query(`DELETE FROM ${table} WHERE clerk_user_id = $1`, [clerkUserId]);
+  }
 }
 
 export async function getDiscogsUsername(clerkUserId: string): Promise<string | null> {
@@ -1468,12 +1479,19 @@ export async function markExpiredGearListings(): Promise<number> {
 }
 
 // ── Auto-prune stale data ─────────────────────────────────────────────────
-export async function pruneAllStaleData(): Promise<{ interest: number; fresh: number; gear: number; gearLog: number; liveEvents: number; locations: number }> {
-  // Interest signals older than 6 months
+export async function pruneAllStaleData(): Promise<{
+  interest: number; fresh: number; gear: number; gearLog: number;
+  liveEvents: number; locations: number; searchHistory: number;
+  collection: number; wantlist: number; folders: number;
+  inventory: number; lists: number; orders: number; tasteProfiles: number;
+}> {
+  const interval30d = `NOW() - INTERVAL '30 days'`;
+
+  // Interest signals older than 30 days
   const i = await getPool().query(
-    `DELETE FROM interest_signals WHERE recorded_at < NOW() - INTERVAL '6 months'`
+    `DELETE FROM interest_signals WHERE recorded_at < ${interval30d}`
   );
-  // Fresh releases older than 6 months
+  // Fresh releases older than 6 months (not user data, just catalog cache)
   const f = await getPool().query(
     `DELETE FROM fresh_releases WHERE fetched_at < NOW() - INTERVAL '6 months'`
   );
@@ -1483,7 +1501,7 @@ export async function pruneAllStaleData(): Promise<{ interest: number; fresh: nu
   );
   // Gear fetch log older than 30 days
   const gl = await getPool().query(
-    `DELETE FROM gear_fetch_log WHERE started_at < NOW() - INTERVAL '30 days'`
+    `DELETE FROM gear_fetch_log WHERE started_at < ${interval30d}`
   );
   // Past live events
   const le = await getPool().query(
@@ -1491,7 +1509,39 @@ export async function pruneAllStaleData(): Promise<{ interest: number; fresh: nu
   );
   // Stale location cache (30 days)
   const loc = await getPool().query(
-    `DELETE FROM user_locations WHERE fetched_at < NOW() - INTERVAL '30 days'`
+    `DELETE FROM user_locations WHERE fetched_at < ${interval30d}`
+  );
+  // Search history older than 30 days
+  const sh = await getPool().query(
+    `DELETE FROM search_history WHERE searched_at < ${interval30d}`
+  );
+  // User collection older than 30 days
+  const col = await getPool().query(
+    `DELETE FROM user_collection WHERE synced_at < ${interval30d}`
+  );
+  // User wantlist older than 30 days
+  const wl = await getPool().query(
+    `DELETE FROM user_wantlist WHERE synced_at < ${interval30d}`
+  );
+  // User collection folders older than 30 days
+  const fld = await getPool().query(
+    `DELETE FROM user_collection_folders WHERE synced_at < ${interval30d}`
+  );
+  // User inventory older than 30 days
+  const inv = await getPool().query(
+    `DELETE FROM user_inventory WHERE synced_at < ${interval30d}`
+  );
+  // User lists older than 30 days
+  const lst = await getPool().query(
+    `DELETE FROM user_lists WHERE synced_at < ${interval30d}`
+  );
+  // User orders older than 30 days
+  const ord = await getPool().query(
+    `DELETE FROM user_orders WHERE synced_at < ${interval30d}`
+  );
+  // User taste profiles older than 30 days
+  const tp = await getPool().query(
+    `DELETE FROM user_taste_profiles WHERE updated_at < ${interval30d}`
   );
   return {
     interest: i.rowCount ?? 0,
@@ -1500,6 +1550,14 @@ export async function pruneAllStaleData(): Promise<{ interest: number; fresh: nu
     gearLog: gl.rowCount ?? 0,
     liveEvents: le.rowCount ?? 0,
     locations: loc.rowCount ?? 0,
+    searchHistory: sh.rowCount ?? 0,
+    collection: col.rowCount ?? 0,
+    wantlist: wl.rowCount ?? 0,
+    folders: fld.rowCount ?? 0,
+    inventory: inv.rowCount ?? 0,
+    lists: lst.rowCount ?? 0,
+    orders: ord.rowCount ?? 0,
+    tasteProfiles: tp.rowCount ?? 0,
   };
 }
 
