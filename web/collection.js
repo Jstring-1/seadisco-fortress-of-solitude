@@ -161,14 +161,7 @@ function switchView(view, skipPushState = false) {
     if (mainForm) mainForm.style.display = "";
     if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
-    document.getElementById("results").innerHTML = "";
-    document.getElementById("pagination").style.display = "none";
-    setStatus("");
-    document.getElementById("blurb").style.display = "none";
-    document.getElementById("artist-alts").innerHTML = "";
-    if (typeof clearForm === "function") clearForm();
     history.replaceState({}, "", location.pathname);
-    const ws = document.getElementById("wanted-sample"); if (ws) ws.style.display = "";
   }
 
   // Animate the entering view
