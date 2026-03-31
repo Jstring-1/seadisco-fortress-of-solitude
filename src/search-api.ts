@@ -2043,9 +2043,9 @@ app.get("/master-versions/:id", async (req, res) => {
       url:          v.resource_url ? `https://www.discogs.com/release/${v.id}` : null,
     }));
     res.json({ versions });
-  } catch (err) {
-    console.error(err);
-    res.json({ versions: [] });
+  } catch (err: any) {
+    console.error(`[master-versions/${id}] Error:`, err?.message ?? err);
+    res.status(500).json({ error: err?.message ?? "Failed to load versions", versions: [] });
   }
 });
 

@@ -967,7 +967,9 @@ async function loadMasterVersions(event, masterId) {
   const list = document.getElementById("master-versions-list");
   if (!list) return;
   try {
-    const data = await apiFetch(`${API}/master-versions/${masterId}`).then(r => r.json());
+    const resp = await apiFetch(`${API}/master-versions/${masterId}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
     _masterVersions = data.versions ?? [];
     if (!_masterVersions.length) { list.textContent = "No pressings found."; return; }
 
@@ -991,6 +993,7 @@ async function loadMasterVersions(event, masterId) {
       <div class="mv-grid" style="display:grid;grid-template-columns:auto auto auto auto 1fr;gap:0.2rem 0.7rem;font-size:0.75rem"></div>`;
     renderMasterVersions("");
   } catch(e) {
+    console.error("loadMasterVersions error:", e);
     list.textContent = "Failed to load pressings.";
   }
 }
