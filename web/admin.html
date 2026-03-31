@@ -6,12 +6,12 @@
   <title>SeaDisco — Admin</title>
   <meta name="robots" content="noindex, nofollow" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎹</text></svg>">
-  <link rel="stylesheet" href="/style.css?v=20260330c" />
+  <link rel="stylesheet" href="/style.css?v=20260330e" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260330c"></script>
+<script src="/shared.js?v=20260330e"></script>
 <script>renderSharedHeader();</script>
 
 <main>
@@ -37,6 +37,7 @@
           <button onclick="adminLiveFetch()" id="admin-live-fetch-btn" class="admin-btn admin-btn-live">Fetch Live</button>
           <button onclick="adminVinylFetch()" id="admin-vinyl-fetch-btn" class="admin-btn admin-btn-vinyl">Fetch Vinyl</button>
           <button onclick="adminGearFetch()" id="admin-gear-fetch-btn" class="admin-btn admin-btn-gear">Fetch Gear</button>
+          <button onclick="adminPriceFetch()" id="admin-price-fetch-btn" class="admin-btn admin-btn-vinyl">Fetch Prices</button>
           <button onclick="adminSyncAll()" id="admin-sync-all-btn" class="admin-btn admin-btn-sync">Sync All</button>
           <button onclick="adminSyncStop()" id="admin-sync-stop-btn" class="admin-btn admin-btn-stop">Stop All</button>
           <button onclick="toggleApiKill()" id="admin-api-kill-btn" class="admin-btn admin-btn-danger">Kill All</button>
@@ -56,15 +57,21 @@
         <div id="collection-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
       </div>
 
-      <!-- User Sync Status -->
+      <!-- Price Tracking -->
       <div class="admin-section admin-section-b">
+        <h2 style="margin-bottom:0.5rem">Price Tracking</h2>
+        <div id="price-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
+      </div>
+
+      <!-- User Sync Status -->
+      <div class="admin-section admin-section-a">
         <h2 style="margin-bottom:0.5rem">User Sync Status</h2>
         <div id="admin-fresh-stats" style="font-size:0.8rem;color:#555;margin-bottom:0.75rem"></div>
         <div id="admin-sync-status-list" style="font-size:0.83rem;color:var(--muted)">Loading...</div>
       </div>
 
       <!-- API Request Log -->
-      <div class="admin-section admin-section-a">
+      <div class="admin-section admin-section-b">
         <h2 style="margin-bottom:0.5rem">API Request Log <span id="api-log-range-label" style="font-size:0.75rem;color:var(--muted);font-weight:400">(24h)</span></h2>
         <div id="api-stats-summary" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem"></div>
         <div style="margin-bottom:0.5rem;display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center">
@@ -134,6 +141,7 @@ async function initClerk() {
     loadAdminSyncStatus();
     loadApiLog();
     loadCollectionStats();
+    loadPriceStats();
     checkKillStatus();
   } catch {
     document.getElementById("loading-section").style.display = "none";
@@ -185,8 +193,16 @@ async function loadAdminSyncStatus() {
         statusText = `Idle${countStr}`;
       }
       const syncBtn = isSyncing ? '' : `<button onclick="adminSyncUser('${u.username}')" class="admin-btn" style="font-size:0.72rem;padding:0.15rem 0.5rem">Sync</button>`;
+      const authBadge = u.authMethod === 'oauth'
+        ? '<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:3px;background:#1a3a5c;color:#7eb8da;font-weight:600;margin-left:0.4rem">OAuth</span>'
+        : u.authMethod === 'pat'
+          ? '<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:3px;background:#1a3a1a;color:#6bcf8e;font-weight:600;margin-left:0.4rem">PAT</span>'
+          : '<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:3px;background:#2a2a2a;color:#666;font-weight:600;margin-left:0.4rem">\u2014</span>';
+      const alertBadge = (u.alertCount > 0)
+        ? `<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:3px;background:#3a2a10;color:#e8d44d;font-weight:600;margin-left:0.3rem">${u.alertCount} alert${u.alertCount !== 1 ? 's' : ''}</span>`
+        : '';
       return `<div style="padding:0.45rem 0;border-bottom:1px solid #1a1a1a;display:grid;grid-template-columns:140px 1fr 1fr auto;gap:0.5rem 1rem;align-items:baseline;font-size:0.8rem">
-        <span style="color:var(--fg);font-weight:600">@${u.username}</span>
+        <span style="color:var(--fg);font-weight:600">@${u.username}${authBadge}${alertBadge}</span>
         <span style="color:${statusColor}">${statusText}</span>
         <span style="color:#555">Coll: ${fmtTime(u.collectionSyncedAt)} \u00b7 Want: ${fmtTime(u.wantlistSyncedAt)}</span>
         <span>${syncBtn}</span>
@@ -353,6 +369,41 @@ async function adminDropsFetch() {
     statusEl.textContent = "Drops fetch started — running in background.";
   } catch { statusEl.textContent = "Drops fetch failed."; }
   finally { btn.disabled = false; btn.textContent = "Fetch Drops"; }
+}
+
+async function adminPriceFetch() {
+  const btn = document.getElementById("admin-price-fetch-btn");
+  const statusEl = document.getElementById("admin-action-status");
+  btn.disabled = true; btn.textContent = "Fetching\u2026";
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    await fetch("/api/admin/price-update", {
+      method: "POST", headers: { Authorization: `Bearer ${sessionToken}` }
+    }).then(r => r.json());
+    statusEl.textContent = "Price update started \u2014 running in background.";
+    setTimeout(loadPriceStats, 5000);
+  } catch { statusEl.textContent = "Price fetch failed."; }
+  finally { btn.disabled = false; btn.textContent = "Fetch Prices"; }
+}
+
+// ── Price Tracking Stats ─────────────────────────────────────────────
+async function loadPriceStats() {
+  const el = document.getElementById("price-stats");
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const data = await fetch("/api/admin/price-stats", {
+      headers: { Authorization: `Bearer ${sessionToken}` }
+    }).then(r => r.json());
+    if (data.error) { el.textContent = "Could not load."; return; }
+    const lastUpdate = data.lastPriceUpdate ? fmtTime(data.lastPriceUpdate) : "\u2014";
+    el.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:0.8rem 2rem;font-size:0.82rem">
+      <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(data.cacheCount ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">price cache entries</span></div>
+      <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(data.historyRows ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">price history rows</span></div>
+      <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(data.activeAlerts ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">active alerts</span></div>
+      <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(data.triggeredAlerts24h ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">triggered alerts (24h)</span></div>
+      <div><span style="color:var(--text);font-weight:600">${lastUpdate}</span> <span style="color:#8a7d6b">last price update</span></div>
+    </div>`;
+  } catch { el.textContent = "Could not load price stats."; }
 }
 
 // ── API Request Log ───────────────────────────────────────────────────

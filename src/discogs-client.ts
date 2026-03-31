@@ -1,16 +1,50 @@
+import crypto from "crypto";
 import { logApiRequest } from "./db.js";
 
 const BASE_URL = "https://api.discogs.com";
 
-export class DiscogsClient {
-  private headers: Record<string, string>;
+export interface OAuthCredentials {
+  consumerKey: string;
+  consumerSecret: string;
+  accessToken: string;
+  accessSecret: string;
+}
 
-  constructor(token: string, appName = "discogs-mcp/1.0") {
-    this.headers = {
-      Authorization: `Discogs token=${token}`,
-      "User-Agent": appName,
-      Accept: "application/vnd.discogs.v2.discogs+json",
+export class DiscogsClient {
+  private token: string | null;
+  private oauth: OAuthCredentials | null;
+  private appName: string;
+
+  constructor(tokenOrOAuth: string | OAuthCredentials, appName = "SeaDisco/1.0") {
+    this.appName = appName;
+    if (typeof tokenOrOAuth === "string") {
+      this.token = tokenOrOAuth;
+      this.oauth = null;
+    } else {
+      this.token = null;
+      this.oauth = tokenOrOAuth;
+    }
+  }
+
+  /** Build authorization headers for an external URL — either PAT or OAuth 1.0a signed.
+   *  Use this when you need to make raw fetch() calls with proper auth (e.g. sync). */
+  public buildHeaders(method: string, url: string): Record<string, string> {
+    return this.getAuthHeaders(method, url);
+  }
+
+  /** Build authorization headers — either PAT or OAuth 1.0a signed */
+  private getAuthHeaders(method: string, url: string): Record<string, string> {
+    const common = {
+      "User-Agent": this.appName,
+      "Accept": "application/vnd.discogs.v2.discogs+json",
     };
+    if (this.token) {
+      return { ...common, Authorization: `Discogs token=${this.token}` };
+    }
+    if (this.oauth) {
+      return { ...common, Authorization: signOAuth(method, url, this.oauth) };
+    }
+    return common;
   }
 
   private async get<T>(path: string, params?: Record<string, string>): Promise<T> {
@@ -23,8 +57,11 @@ export class DiscogsClient {
       }
     }
 
+    const fullUrl = url.toString();
+    const headers = this.getAuthHeaders("GET", fullUrl);
+
     const start = Date.now();
-    const response = await fetch(url.toString(), { headers: this.headers });
+    const response = await fetch(fullUrl, { headers });
     const ms = Date.now() - start;
     const cleanPath = path.replace(/token=[^&]+/g, "token=***");
     logApiRequest({ service: "discogs", endpoint: `${BASE_URL}${cleanPath}`, statusCode: response.status, success: response.ok, durationMs: ms, context: "client" }).catch(() => {});
@@ -136,4 +173,83 @@ export class DiscogsClient {
   async getPriceSuggestions(releaseId: number | string) {
     return this.get(`/marketplace/price_suggestions/${releaseId}`);
   }
+}
+
+// ── OAuth 1.0a signing ───────────────────────────────────────────────────
+
+function percentEncode(str: string): string {
+  return encodeURIComponent(str).replace(/[!'()*]/g, c => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
+export function signOAuth(method: string, url: string, creds: OAuthCredentials, extraParams?: Record<string, string>): string {
+  const nonce = crypto.randomBytes(16).toString("hex");
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+
+  const oauthParams: Record<string, string> = {
+    oauth_consumer_key: creds.consumerKey,
+    oauth_nonce: nonce,
+    oauth_signature_method: "HMAC-SHA1",
+    oauth_timestamp: timestamp,
+    oauth_token: creds.accessToken,
+    oauth_version: "1.0",
+    ...extraParams,
+  };
+
+  // Parse URL and combine all params
+  const parsed = new URL(url);
+  const allParams: Record<string, string> = { ...oauthParams };
+  parsed.searchParams.forEach((v, k) => { allParams[k] = v; });
+
+  // Sort and encode
+  const paramString = Object.keys(allParams).sort()
+    .map(k => `${percentEncode(k)}=${percentEncode(allParams[k])}`)
+    .join("&");
+
+  const baseUrl = `${parsed.origin}${parsed.pathname}`;
+  const baseString = `${method.toUpperCase()}&${percentEncode(baseUrl)}&${percentEncode(paramString)}`;
+  const signingKey = `${percentEncode(creds.consumerSecret)}&${percentEncode(creds.accessSecret)}`;
+  const signature = crypto.createHmac("sha1", signingKey).update(baseString).digest("base64");
+
+  oauthParams["oauth_signature"] = signature;
+
+  const header = "OAuth " + Object.keys(oauthParams).sort()
+    .map(k => `${percentEncode(k)}="${percentEncode(oauthParams[k])}"`)
+    .join(", ");
+
+  return header;
+}
+
+/** Sign an OAuth request for the initial token exchange (no access token yet) */
+export function signOAuthRequest(method: string, url: string, consumerKey: string, consumerSecret: string, token?: string, tokenSecret?: string, verifier?: string): string {
+  const nonce = crypto.randomBytes(16).toString("hex");
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+
+  const oauthParams: Record<string, string> = {
+    oauth_consumer_key: consumerKey,
+    oauth_nonce: nonce,
+    oauth_signature_method: "HMAC-SHA1",
+    oauth_timestamp: timestamp,
+    oauth_version: "1.0",
+  };
+  if (token) oauthParams["oauth_token"] = token;
+  if (verifier) oauthParams["oauth_verifier"] = verifier;
+
+  const parsed = new URL(url);
+  const allParams: Record<string, string> = { ...oauthParams };
+  parsed.searchParams.forEach((v, k) => { allParams[k] = v; });
+
+  const paramString = Object.keys(allParams).sort()
+    .map(k => `${percentEncode(k)}=${percentEncode(allParams[k])}`)
+    .join("&");
+
+  const baseUrl = `${parsed.origin}${parsed.pathname}`;
+  const baseString = `${method.toUpperCase()}&${percentEncode(baseUrl)}&${percentEncode(paramString)}`;
+  const signingKey = `${percentEncode(consumerSecret)}&${percentEncode(tokenSecret ?? "")}`;
+  const signature = crypto.createHmac("sha1", signingKey).update(baseString).digest("base64");
+
+  oauthParams["oauth_signature"] = signature;
+
+  return "OAuth " + Object.keys(oauthParams).sort()
+    .map(k => `${percentEncode(k)}="${percentEncode(oauthParams[k])}"`)
+    .join(", ");
 }
