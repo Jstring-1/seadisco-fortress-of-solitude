@@ -173,7 +173,7 @@ export function signOAuth(method, url, creds, extraParams) {
     return header;
 }
 /** Sign an OAuth request for the initial token exchange (no access token yet) */
-export function signOAuthRequest(method, url, consumerKey, consumerSecret, token, tokenSecret, verifier) {
+export function signOAuthRequest(method, url, consumerKey, consumerSecret, token, tokenSecret, verifier, callback) {
     const nonce = crypto.randomBytes(16).toString("hex");
     const timestamp = Math.floor(Date.now() / 1000).toString();
     const oauthParams = {
@@ -187,6 +187,8 @@ export function signOAuthRequest(method, url, consumerKey, consumerSecret, token
         oauthParams["oauth_token"] = token;
     if (verifier)
         oauthParams["oauth_verifier"] = verifier;
+    if (callback)
+        oauthParams["oauth_callback"] = callback;
     const parsed = new URL(url);
     const allParams = { ...oauthParams };
     parsed.searchParams.forEach((v, k) => { allParams[k] = v; });

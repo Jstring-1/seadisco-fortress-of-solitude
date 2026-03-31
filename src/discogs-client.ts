@@ -220,7 +220,7 @@ export function signOAuth(method: string, url: string, creds: OAuthCredentials, 
 }
 
 /** Sign an OAuth request for the initial token exchange (no access token yet) */
-export function signOAuthRequest(method: string, url: string, consumerKey: string, consumerSecret: string, token?: string, tokenSecret?: string, verifier?: string): string {
+export function signOAuthRequest(method: string, url: string, consumerKey: string, consumerSecret: string, token?: string, tokenSecret?: string, verifier?: string, callback?: string): string {
   const nonce = crypto.randomBytes(16).toString("hex");
   const timestamp = Math.floor(Date.now() / 1000).toString();
 
@@ -233,6 +233,7 @@ export function signOAuthRequest(method: string, url: string, consumerKey: strin
   };
   if (token) oauthParams["oauth_token"] = token;
   if (verifier) oauthParams["oauth_verifier"] = verifier;
+  if (callback) oauthParams["oauth_callback"] = callback;
 
   const parsed = new URL(url);
   const allParams: Record<string, string> = { ...oauthParams };

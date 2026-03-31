@@ -295,16 +295,15 @@ app.get("/api/auth/discogs/start", async (req, res) => {
   try {
     // Step 1: Get request token from Discogs
     const requestTokenUrl = "https://api.discogs.com/oauth/request_token";
-    const callbackUrl = `${req.protocol}://${req.get("host")}/api/auth/discogs/callback`;
-    const authHeader = signOAuthRequest("POST", requestTokenUrl, discogsConsumerKey, discogsConsumerSecret);
+    const proto = req.get("x-forwarded-proto") || req.protocol;
+    const callbackUrl = `${proto}://${req.get("host")}/api/auth/discogs/callback`;
+    const authHeader = signOAuthRequest("POST", requestTokenUrl, discogsConsumerKey, discogsConsumerSecret, undefined, undefined, undefined, callbackUrl);
     const rtRes = await loggedFetch("discogs", requestTokenUrl, {
       method: "POST",
       headers: {
         "Authorization": authHeader,
-        "Content-Type": "application/x-www-form-urlencoded",
         "User-Agent": "SeaDisco/1.0",
       },
-      body: `oauth_callback=${encodeURIComponent(callbackUrl)}`,
       context: "oauth-request-token",
     });
     if (!rtRes.ok) {
