@@ -320,6 +320,7 @@ function openVideo(event, url) {
   const mp = document.getElementById("mini-player");
   mp.classList.add("open");
   mp.classList.add("expanded");
+  document.body.classList.add("player-open");
   loadYTVideo(id);
   updateVideoNavButtons();
 }
@@ -359,6 +360,7 @@ function playNextVideo() {
 function closeVideo() {
   const mp = document.getElementById("mini-player");
   mp.classList.remove("open", "expanded");
+  document.body.classList.remove("player-open");
   if (ytPlayer && typeof ytPlayer.stopVideo === "function") {
     ytPlayer.stopVideo();
     ytPlayer.destroy();
