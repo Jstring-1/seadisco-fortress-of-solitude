@@ -384,3 +384,126 @@ document.addEventListener("keydown", (e) => {
     if (q) { q.focus(); q.select(); }
   }
 });
+
+// ── Saved searches ──────────────────────────────────────────────────────
+const _savedSearchCache = {};
+
+async function loadSavedSearches(view) {
+  try {
+    const data = await apiFetch(`/api/user/saved-searches?view=${encodeURIComponent(view)}`).then(r => r.json());
+    _savedSearchCache[view] = data.searches ?? [];
+  } catch { _savedSearchCache[view] = []; }
+  return _savedSearchCache[view];
+}
+
+function buildSavedSearchUI(view, getParamsFn, applyFn, containerEl) {
+  if (!containerEl) return;
+  const wrap = document.createElement("div");
+  wrap.className = "saved-search-wrap";
+  wrap.id = `saved-search-${view}`;
+  wrap.innerHTML = `
+    <button class="saved-search-toggle" id="ss-toggle-${view}" onclick="toggleSavedDropdown('${view}')" title="Saved searches">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+    </button>
+    <div class="saved-search-dropdown" id="ss-dropdown-${view}" style="display:none">
+      <div class="ss-header">
+        <span style="font-weight:600;font-size:0.72rem;color:#aaa">Saved Searches</span>
+        <button class="ss-save-btn" id="ss-save-${view}" onclick="saveCurrentSearch('${view}')" title="Save current search">+ Save</button>
+      </div>
+      <div class="ss-list" id="ss-list-${view}"></div>
+    </div>`;
+  containerEl.appendChild(wrap);
+
+  // Store callbacks on the element
+  wrap._getParams = getParamsFn;
+  wrap._apply = applyFn;
+
+  // Load saved searches if logged in
+  if (window._clerk?.user) {
+    loadSavedSearches(view).then(searches => renderSavedList(view, searches));
+  }
+}
+
+function toggleSavedDropdown(view) {
+  const dd = document.getElementById(`ss-dropdown-${view}`);
+  if (!dd) return;
+  const showing = dd.style.display !== "none";
+  // Close all other dropdowns first
+  document.querySelectorAll(".saved-search-dropdown").forEach(d => d.style.display = "none");
+  if (!showing) {
+    dd.style.display = "";
+    // Refresh list
+    loadSavedSearches(view).then(searches => renderSavedList(view, searches));
+  }
+}
+
+function renderSavedList(view, searches) {
+  const list = document.getElementById(`ss-list-${view}`);
+  if (!list) return;
+  if (!searches.length) {
+    list.innerHTML = '<div class="ss-empty">No saved searches</div>';
+    return;
+  }
+  list.innerHTML = searches.map(s =>
+    `<div class="ss-item" id="ss-item-${s.id}">
+      <button class="ss-item-btn" onclick="applySavedSearch('${escHtml(view)}',${s.id})" title="${escHtml(JSON.stringify(s.params))}">${escHtml(s.label)}</button>
+      <button class="ss-item-del" onclick="deleteSavedSearchItem(event,'${escHtml(view)}',${s.id})" title="Remove">&times;</button>
+    </div>`
+  ).join("");
+}
+
+async function saveCurrentSearch(view) {
+  const wrap = document.getElementById(`saved-search-${view}`);
+  if (!wrap?._getParams) return;
+  const params = wrap._getParams();
+  // Build a short label from the params
+  const parts = [];
+  for (const [k, v] of Object.entries(params)) {
+    if (v && k !== "page" && k !== "per_page") parts.push(String(v));
+  }
+  const label = parts.join(" · ").slice(0, 200) || "Untitled";
+  try {
+    const r = await apiFetch("/api/user/saved-searches", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ view, label, params })
+    }).then(r => r.json());
+    if (r.ok) {
+      showToast("Search saved");
+      loadSavedSearches(view).then(searches => renderSavedList(view, searches));
+    } else {
+      showToast(r.error || "Failed to save", "error");
+    }
+  } catch { showToast("Failed to save search", "error"); }
+}
+
+function applySavedSearch(view, id) {
+  const wrap = document.getElementById(`saved-search-${view}`);
+  const searches = _savedSearchCache[view] ?? [];
+  const s = searches.find(x => x.id === id);
+  if (!s || !wrap?._apply) return;
+  wrap._apply(s.params);
+  // Close dropdown
+  const dd = document.getElementById(`ss-dropdown-${view}`);
+  if (dd) dd.style.display = "none";
+}
+
+async function deleteSavedSearchItem(event, view, id) {
+  event.stopPropagation();
+  try {
+    await apiFetch(`/api/user/saved-searches/${id}`, { method: "DELETE" });
+    const el = document.getElementById(`ss-item-${id}`);
+    if (el) el.remove();
+    _savedSearchCache[view] = (_savedSearchCache[view] ?? []).filter(s => s.id !== id);
+    const list = document.getElementById(`ss-list-${view}`);
+    if (list && !list.children.length) list.innerHTML = '<div class="ss-empty">No saved searches</div>';
+    showToast("Search removed");
+  } catch { showToast("Failed to remove", "error"); }
+}
+
+// Close dropdowns when clicking outside
+document.addEventListener("click", e => {
+  if (!e.target.closest(".saved-search-wrap")) {
+    document.querySelectorAll(".saved-search-dropdown").forEach(d => d.style.display = "none");
+  }
+});
