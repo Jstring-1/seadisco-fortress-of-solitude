@@ -358,7 +358,7 @@ authReadyPromise.then(() => {
         if (rating && p.rating) rating.value = p.rating;
         if (typeof doCwSearch === "function") doCwSearch(1);
       },
-      cwControls
+      cwSearchRow
     );
   }
 });
