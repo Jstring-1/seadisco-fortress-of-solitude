@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, updateCollectionNotes, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getCollectionValue, getCollectionWithPrices, getStaleReleaseIds, getAlertedReleaseIds, createPriceAlert, getUserAlerts, deletePriceAlert, checkAndTriggerAlerts, getTriggeredAlerts, dismissTriggeredAlert, prunePriceHistory, getPriceStats } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, updateCollectionNotes, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats } from "./db.js";
 import { startFreshSyncSchedule, runFreshSync } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -1228,33 +1228,6 @@ app.get("/api/user/collection/instance", async (req, res) => {
 
 // ── Phase 4: Price Intelligence & Alerts ─────────────────────────────────
 
-// GET /api/user/collection/value — collection value summary
-app.get("/api/user/collection/value", async (req, res) => {
-  const userId = getClerkUserId(req);
-  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-  try {
-    const value = await getCollectionValue(userId);
-    res.json(value);
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
-// GET /api/user/collection/prices — per-item prices, sortable
-app.get("/api/user/collection/prices", async (req, res) => {
-  const userId = getClerkUserId(req);
-  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-  const sort = (req.query.sort as string) ?? "value_desc";
-  const page = Math.max(1, parseInt(req.query.page as string) || 1);
-  const perPage = Math.min(200, parseInt(req.query.per_page as string) || 96);
-  try {
-    const data = await getCollectionWithPrices(userId, sort, perPage, (page - 1) * perPage);
-    res.json({ ...data, page, pages: Math.ceil(data.total / perPage) });
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
 // GET /api/price-history/:releaseId — price history for sparklines
 app.get("/api/price-history/:releaseId", async (req, res) => {
   const releaseId = parseInt(req.params.releaseId);
@@ -1280,90 +1253,15 @@ app.get("/api/price/:releaseId", async (req, res) => {
   }
 });
 
-// POST /api/user/alerts — create a price alert
-app.post("/api/user/alerts", express.json(), async (req, res) => {
-  const userId = getClerkUserId(req);
-  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-  const { releaseId, type = "below", threshold, currency = "USD" } = req.body ?? {};
-  if (!releaseId || !threshold) { res.status(400).json({ error: "releaseId and threshold required" }); return; }
-  if (type !== "below" && type !== "above") { res.status(400).json({ error: "type must be 'below' or 'above'" }); return; }
-  if (typeof threshold !== "number" || threshold <= 0) { res.status(400).json({ error: "threshold must be a positive number" }); return; }
-  if (threshold >= 100000) { res.status(400).json({ error: "threshold must be less than 100000" }); return; }
-  try {
-    const id = await createPriceAlert(userId, releaseId, type, threshold, currency);
-    res.json({ ok: true, id });
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
-// GET /api/user/alerts — list user's alerts
-app.get("/api/user/alerts", async (req, res) => {
-  const userId = getClerkUserId(req);
-  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-  try {
-    const alerts = await getUserAlerts(userId);
-    res.json({ alerts });
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
-// DELETE /api/user/alerts/:id — delete an alert
-app.delete("/api/user/alerts/:id", async (req, res) => {
-  const userId = getClerkUserId(req);
-  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-  try {
-    await deletePriceAlert(userId, parseInt(req.params.id));
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
-// GET /api/user/alerts/triggered — un-dismissed triggered alerts
-app.get("/api/user/alerts/triggered", async (req, res) => {
-  const userId = getClerkUserId(req);
-  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-  try {
-    const alerts = await getTriggeredAlerts(userId);
-    res.json({ alerts });
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
-// POST /api/user/alerts/dismiss — dismiss a triggered alert
-app.post("/api/user/alerts/dismiss", express.json(), async (req, res) => {
-  const userId = getClerkUserId(req);
-  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-  const { alertId } = req.body ?? {};
-  if (!alertId) { res.status(400).json({ error: "alertId required" }); return; }
-  try {
-    await dismissTriggeredAlert(userId, alertId);
-    res.json({ ok: true });
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
 // ── Background price updater ─────────────────────────────────────────────
 async function runPriceUpdate() {
   if (_apiKillSwitch) return;
   _lastPriceUpdate = new Date();
   console.log("[price-update] Starting background price update…");
   try {
-    // Priority: alerted releases first, then stale ones
-    const alertedIds = await getAlertedReleaseIds();
-    const staleIds = await getStaleReleaseIds(200);
-    // Deduplicate, alerted first
-    const seen = new Set<number>();
-    const allIds: number[] = [];
-    for (const id of [...alertedIds, ...staleIds]) {
-      if (!seen.has(id)) { seen.add(id); allIds.push(id); }
-    }
+    const allIds = await getStaleReleaseIds(200);
     if (!allIds.length) { console.log("[price-update] No releases to update"); return; }
-    console.log(`[price-update] Updating ${allIds.length} releases (${alertedIds.length} alerted)`);
+    console.log(`[price-update] Updating ${allIds.length} releases`);
 
     let updated = 0;
     for (const releaseId of allIds) {
@@ -1381,7 +1279,6 @@ async function runPriceUpdate() {
           const numForSale = data.num_for_sale ?? 0;
           await upsertPriceCache(releaseId, lowest, median, highest, numForSale);
           await appendPriceHistory(releaseId, lowest, median, highest, numForSale);
-          await checkAndTriggerAlerts(releaseId, lowest, median);
           updated++;
         } else if (r.status === 429) {
           console.log("[price-update] Rate limited, pausing 60s");

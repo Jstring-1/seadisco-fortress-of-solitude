@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SeaDisco — Music Discovery Platform | Search, News, Concerts, Gear &amp; Collection</title>
-  <meta name="description" content="SeaDisco — music discovery powered by Discogs. Search, manage your collection and wantlist, rate releases, track vinyl prices, get price alerts, estimate collection value, and connect via OAuth." />
-  <meta name="keywords" content="discogs search, vinyl search, music discovery, new music releases, music news, concert finder, vintage audio gear, turntable, vinyl collection, wantlist, record search, jazz, blues, world music, audiophile, price tracking, price alerts, collection value, vinyl value, record prices, OAuth, Discogs OAuth" />
+  <meta name="description" content="SeaDisco — music discovery powered by Discogs. Search, manage your collection and wantlist, rate releases, track vinyl prices, and connect via OAuth." />
+  <meta name="keywords" content="discogs search, vinyl search, music discovery, new music releases, music news, concert finder, vintage audio gear, turntable, vinyl collection, wantlist, record search, jazz, blues, world music, audiophile, price tracking, vinyl value, record prices, OAuth, Discogs OAuth" />
   <meta name="robots" content="index, follow" />
   <link rel="canonical" href="https://seadisco.com/" />
 
@@ -13,13 +13,13 @@
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://seadisco.com/" />
   <meta property="og:title" content="SeaDisco — Music Discovery Platform" />
-  <meta property="og:description" content="Discover music your way. Search Discogs, manage your collection and wantlist, rate releases, track vinyl prices, get price alerts, and estimate your collection value." />
+  <meta property="og:description" content="Discover music your way. Search Discogs, manage your collection and wantlist, rate releases, and track vinyl prices." />
   <meta property="og:image" content="https://seadisco.com/seadisco-logo.png" />
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="SeaDisco — Music Discovery Platform" />
-  <meta name="twitter:description" content="Discover music your way. Search Discogs, manage your collection and wantlist, rate releases, track vinyl prices, get price alerts, and estimate your collection value." />
+  <meta name="twitter:description" content="Discover music your way. Search Discogs, manage your collection and wantlist, rate releases, and track vinyl prices." />
   <meta name="twitter:image" content="https://seadisco.com/seadisco-logo.png" />
 
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
@@ -46,11 +46,11 @@
     "@type": "WebApplication",
     "name": "SeaDisco",
     "url": "https://seadisco.com",
-    "description": "Music discovery platform powered by Discogs. Search artists, releases, and labels. Manage your collection and wantlist, rate releases, track vinyl prices, get price alerts, and estimate your collection value via OAuth.",
+    "description": "Music discovery platform powered by Discogs. Search artists, releases, and labels. Manage your collection and wantlist, rate releases, and track vinyl prices via OAuth.",
     "applicationCategory": "MusicApplication",
     "operatingSystem": "Any",
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-    "featureList": "Music Search, New Releases, Music News Feed, Concert Finder, Vintage Audio Gear Auctions, Collection Sync, Wantlist Management, Ratings, Price Tracking, Price Alerts, Collection Value Estimates, OAuth Connection",
+    "featureList": "Music Search, New Releases, Music News Feed, Concert Finder, Vintage Audio Gear Auctions, Collection Sync, Wantlist Management, Ratings, Price Tracking, OAuth Connection",
     "potentialAction": {
       "@type": "SearchAction",
       "target": "https://seadisco.com/?q={search_term_string}",
@@ -207,9 +207,6 @@
         <option value="added">Sort: Added (Newest)</option>
         <option value="added_asc">Sort: Added (Oldest)</option>
         <option value="rating">Sort: Rating</option>
-        <option value="value_desc">Sort: Value (High)</option>
-        <option value="value_asc">Sort: Value (Low)</option>
-        <option value="gaining">Sort: Gaining Value</option>
       </select>
       <button type="button" id="cw-export-btn" onclick="_cwTab==='collection'?exportCollection():exportWantlist()" title="Download as CSV" style="background:none;border:none;padding:0;font-size:0.78rem;color:#555;cursor:pointer;white-space:nowrap;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">⬇ CSV</button>
     </div>
@@ -442,9 +439,8 @@
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Collection Actions</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">From any release detail popup, you can add or remove items from your collection and wantlist with one click. Rate releases 1–5 stars — ratings sync to your Discogs account. All actions update instantly with optimistic UI and revert gracefully if anything goes wrong.</p>
 
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Price Intelligence</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">SeaDisco tracks marketplace pricing for releases in your collection. A <strong style="color:#ccc">value summary card</strong> at the top of your collection shows estimated total value (low, median, high). Sort your collection by <strong style="color:#ccc">Value</strong> or <strong style="color:#ccc">Gaining Value</strong> to see what your records are worth and which ones are appreciating.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">Each release detail popup shows a <strong style="color:#ccc">90-day price sparkline</strong> with trend indicators. Set <strong style="color:#ccc">price alerts</strong> to be notified when a release drops below or rises above your target price — alerts appear as on-screen toasts.</p>
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Price Tracking</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco tracks marketplace pricing for releases. Each release detail popup shows a <strong style="color:#ccc">90-day price sparkline</strong> with trend indicators, plus current marketplace stats.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Account &amp; Limits</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">Anonymous users are capped at <strong style="color:#ccc">5 searches/day</strong> on a shared token. Sign up free and connect your Discogs account — either via <strong style="color:#ccc">OAuth</strong> or by adding your own token (<strong style="color:#ccc">discogs.com → Settings → Developers</strong>) — for unlimited searches and full features.</p>
@@ -457,8 +453,7 @@
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">What We Collect</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you create an account, we store your email address (provided by our authentication provider, Clerk) and any Discogs credentials you choose to connect — either a Personal Access Token or OAuth access credentials.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you sync your collection, we store a local copy of your Discogs collection, wantlist, inventory, and list metadata so you can browse and search them on SeaDisco. We also cache your Discogs profile information (username, avatar, and account stats) for display on the Account page.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you browse releases, we cache marketplace pricing data (lowest, median, and highest prices) to power price sparklines and collection value estimates. This pricing data is shared across all users — it reflects public Discogs marketplace data, not individual purchase history.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">If you set price alerts, we store your alert thresholds and notify you on-screen when prices cross them. Triggered alerts are stored until you dismiss them.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you browse releases, we cache marketplace pricing data (lowest, median, and highest prices) to power price sparklines. This pricing data is shared across all users — it reflects public Discogs marketplace data, not individual purchase history.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0">We log API usage for operational monitoring. This data is used solely for debugging and improving the service. We do not store your search queries, location data, or taste profiles.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Third-Party Services</h3>
@@ -478,16 +473,16 @@
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">How We Use Your Data</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Your Discogs credentials (token or OAuth) are used solely to make API requests to Discogs on your behalf — searching, syncing your collection, managing your collection/wantlist, and fetching marketplace data. We never share your credentials with any other service or third party. Your collection data is used only to display your records within SeaDisco.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Marketplace pricing data is cached to provide collection value estimates, price sparklines, and price alert notifications. This data is refreshed periodically in the background and is not linked to any individual user's purchase history.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Marketplace pricing data is cached to provide price sparklines. This data is refreshed periodically in the background and is not linked to any individual user's purchase history.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0">We do not sell, rent, or share your personal data with anyone.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Data Storage &amp; Security</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">All data is stored in a secured PostgreSQL database hosted on Railway. Your Discogs credentials are stored encrypted at rest by the database provider. OAuth secrets are stored server-side only and are never exposed to the browser. Access to the database is restricted to the application server only.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Data Retention &amp; Deletion</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">User data (collection, wantlist, inventory, lists, and orders) is automatically purged after 30 days or deleted by the user. Your authentication tokens are retained for as long as your account exists. Price alerts and triggered alert history are retained until you delete them or your account.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">User data (collection, wantlist, inventory, lists, and orders) is automatically purged after 30 days or deleted by the user. Your authentication tokens are retained for as long as your account exists.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Temporary operational data is also pruned automatically: expired gear listings, past live events, API logs, feed article caches, and price history older than one year.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">You can delete your account at any time from the Account tab. Deleting your account <strong style="color:#ccc">permanently removes all of your data</strong> from our database, including your email, Discogs credentials, collection, wantlist, inventory, lists, orders, price alerts, and profile data. Your Clerk authentication account is also deleted. This action is immediate and irreversible — there is no way to recover your data after deletion.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">You can delete your account at any time from the Account tab. Deleting your account <strong style="color:#ccc">permanently removes all of your data</strong> from our database, including your email, Discogs credentials, collection, wantlist, inventory, lists, orders, and profile data. Your Clerk authentication account is also deleted. This action is immediate and irreversible — there is no way to recover your data after deletion.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Cookies</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco uses cookies only for authentication (via Clerk) and anonymous analytics (via Google Analytics). We do not use advertising or tracking cookies, and we do not sell any data.</p>

@@ -178,7 +178,6 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
             addNavTab("collection");
             addNavTab("wantlist");
             await loadDiscogsIds();
-            if (typeof startAlertPolling === "function") startAlertPolling();
           }
         }
       } catch { /* collection tabs optional */ }

@@ -411,15 +411,13 @@ export async function getAllUsersSyncStatus(): Promise<Array<{
   syncTotal: number;
   syncError: string | null;
   authMethod: string;
-  alertCount: number;
 }>> {
   const r = await getPool().query(
     `SELECT ut.discogs_username, ut.collection_synced_at, ut.wantlist_synced_at,
             ut.sync_status, ut.sync_progress, ut.sync_total, ut.sync_error,
             CASE WHEN ut.discogs_token = '__oauth__' THEN 'oauth'
                  WHEN ut.discogs_token IS NOT NULL THEN 'pat'
-                 ELSE 'none' END AS auth_method,
-            (SELECT COUNT(*) FROM price_alerts WHERE clerk_user_id = ut.clerk_user_id) AS alert_count
+                 ELSE 'none' END AS auth_method
      FROM user_tokens ut
      WHERE ut.discogs_username IS NOT NULL
      ORDER BY ut.discogs_username`
@@ -433,29 +431,22 @@ export async function getAllUsersSyncStatus(): Promise<Array<{
     syncTotal:          row.sync_total           ?? 0,
     syncError:          row.sync_error           ?? null,
     authMethod:         row.auth_method          ?? "none",
-    alertCount:         parseInt(row.alert_count) || 0,
   }));
 }
 
 export async function getPriceStats(): Promise<{
   cacheCount: number;
   historyRows: number;
-  activeAlerts: number;
-  triggeredAlerts24h: number;
 }> {
   const r = await getPool().query(`
     SELECT
       (SELECT COUNT(*) FROM price_cache) AS cache_count,
-      (SELECT COUNT(*) FROM price_history) AS history_rows,
-      (SELECT COUNT(*) FROM price_alerts) AS active_alerts,
-      (SELECT COUNT(*) FROM triggered_alerts WHERE triggered_at > NOW() - INTERVAL '24 hours') AS triggered_24h
+      (SELECT COUNT(*) FROM price_history) AS history_rows
   `);
   const row = r.rows[0];
   return {
     cacheCount:        parseInt(row.cache_count) || 0,
     historyRows:       parseInt(row.history_rows) || 0,
-    activeAlerts:      parseInt(row.active_alerts) || 0,
-    triggeredAlerts24h: parseInt(row.triggered_24h) || 0,
   };
 }
 
@@ -853,85 +844,6 @@ export async function getPriceHistory(releaseId: number, currency: string = "USD
   return r.rows.map(row => ({ median: row.median_price, lowest: row.lowest_price, highest: row.highest_price, recordedAt: row.recorded_at }));
 }
 
-export async function getCollectionValue(clerkUserId: string): Promise<{ totalMin: number; totalMedian: number; totalMax: number; pricedCount: number; totalCount: number }> {
-  const r = await getPool().query(
-    `SELECT
-      COALESCE(SUM(pc.lowest_price), 0) as total_min,
-      COALESCE(SUM(pc.median_price), 0) as total_median,
-      COALESCE(SUM(pc.highest_price), 0) as total_max,
-      COUNT(pc.discogs_release_id) as priced_count,
-      (SELECT COUNT(*) FROM user_collection WHERE clerk_user_id = $1) as total_count
-    FROM user_collection uc
-    JOIN price_cache pc ON pc.discogs_release_id = uc.discogs_release_id
-    WHERE uc.clerk_user_id = $1`,
-    [clerkUserId]
-  );
-  const row = r.rows[0];
-  return {
-    totalMin: parseFloat(row.total_min) || 0,
-    totalMedian: parseFloat(row.total_median) || 0,
-    totalMax: parseFloat(row.total_max) || 0,
-    pricedCount: parseInt(row.priced_count) || 0,
-    totalCount: parseInt(row.total_count) || 0,
-  };
-}
-
-export async function getCollectionWithPrices(clerkUserId: string, sort: string = "value_desc", limit: number = 96, offset: number = 0): Promise<{ items: any[]; total: number }> {
-  const orderBy = {
-    value_desc: "pc.median_price DESC NULLS LAST",
-    value_asc:  "pc.median_price ASC NULLS LAST",
-    gaining:    "price_change DESC NULLS LAST",
-  }[sort] || "pc.median_price DESC NULLS LAST";
-
-  const r = await getPool().query(
-    `SELECT uc.discogs_release_id, uc.data, uc.rating, uc.folder_id,
-            pc.lowest_price, pc.median_price, pc.highest_price, pc.num_for_sale, pc.fetched_at,
-            (SELECT ph.median_price FROM price_history ph
-             WHERE ph.discogs_release_id = uc.discogs_release_id AND ph.recorded_at < NOW() - INTERVAL '30 days'
-             ORDER BY ph.recorded_at DESC LIMIT 1) as old_median,
-            CASE WHEN (SELECT ph2.median_price FROM price_history ph2
-                       WHERE ph2.discogs_release_id = uc.discogs_release_id AND ph2.recorded_at < NOW() - INTERVAL '30 days'
-                       ORDER BY ph2.recorded_at DESC LIMIT 1) > 0
-                 THEN ((pc.median_price - (SELECT ph3.median_price FROM price_history ph3
-                       WHERE ph3.discogs_release_id = uc.discogs_release_id AND ph3.recorded_at < NOW() - INTERVAL '30 days'
-                       ORDER BY ph3.recorded_at DESC LIMIT 1)) /
-                       (SELECT ph4.median_price FROM price_history ph4
-                       WHERE ph4.discogs_release_id = uc.discogs_release_id AND ph4.recorded_at < NOW() - INTERVAL '30 days'
-                       ORDER BY ph4.recorded_at DESC LIMIT 1) * 100)
-                 ELSE 0 END as price_change
-     FROM user_collection uc
-     LEFT JOIN price_cache pc ON pc.discogs_release_id = uc.discogs_release_id
-     WHERE uc.clerk_user_id = $1
-     ORDER BY ${orderBy}
-     LIMIT $2 OFFSET $3`,
-    [clerkUserId, limit, offset]
-  );
-
-  const countR = await getPool().query(
-    `SELECT COUNT(*) FROM user_collection WHERE clerk_user_id = $1`,
-    [clerkUserId]
-  );
-
-  return {
-    total: parseInt(countR.rows[0].count) || 0,
-    items: r.rows.map(row => ({
-      releaseId: row.discogs_release_id,
-      data: row.data,
-      rating: row.rating,
-      folderId: row.folder_id,
-      price: row.median_price ? {
-        lowest: parseFloat(row.lowest_price),
-        median: parseFloat(row.median_price),
-        highest: parseFloat(row.highest_price),
-        numForSale: row.num_for_sale,
-        fetchedAt: row.fetched_at,
-        oldMedian: row.old_median ? parseFloat(row.old_median) : null,
-        priceChange: row.price_change ? parseFloat(row.price_change) : 0,
-      } : null,
-    })),
-  };
-}
-
 export async function getStaleReleaseIds(limit: number = 100): Promise<number[]> {
   // Get unique release IDs from all collections where price is stale (>24h) or missing
   const r = await getPool().query(
@@ -946,95 +858,10 @@ export async function getStaleReleaseIds(limit: number = 100): Promise<number[]>
   return r.rows.map(row => row.discogs_release_id);
 }
 
-export async function getAlertedReleaseIds(): Promise<number[]> {
-  const r = await getPool().query(
-    `SELECT DISTINCT discogs_release_id FROM price_alerts WHERE triggered = false`
-  );
-  return r.rows.map(row => row.discogs_release_id);
-}
-
-// ── Price alerts ─────────────────────────────────────────────────────────
-
-export async function createPriceAlert(clerkUserId: string, releaseId: number, alertType: string, threshold: number, currency: string = "USD"): Promise<number> {
-  const r = await getPool().query(
-    `INSERT INTO price_alerts (clerk_user_id, discogs_release_id, alert_type, threshold_price, currency)
-     VALUES ($1, $2, $3, $4, $5)
-     ON CONFLICT (clerk_user_id, discogs_release_id, alert_type)
-     DO UPDATE SET threshold_price = $4, triggered = false, triggered_at = NULL
-     RETURNING id`,
-    [clerkUserId, releaseId, alertType, threshold, currency]
-  );
-  return r.rows[0].id;
-}
-
-export async function getUserAlerts(clerkUserId: string): Promise<any[]> {
-  const r = await getPool().query(
-    `SELECT pa.id, pa.discogs_release_id as "releaseId", pa.alert_type as "type",
-            pa.threshold_price as "threshold", pa.currency, pa.created_at as "createdAt",
-            pc.median_price as "currentPrice", pc.lowest_price as "lowestPrice"
-     FROM price_alerts pa
-     LEFT JOIN price_cache pc ON pc.discogs_release_id = pa.discogs_release_id
-     WHERE pa.clerk_user_id = $1
-     ORDER BY pa.created_at DESC`,
-    [clerkUserId]
-  );
-  return r.rows;
-}
-
-export async function deletePriceAlert(clerkUserId: string, alertId: number): Promise<void> {
-  await getPool().query(`DELETE FROM price_alerts WHERE id = $1 AND clerk_user_id = $2`, [alertId, clerkUserId]);
-}
-
-export async function checkAndTriggerAlerts(releaseId: number, lowestPrice: number | null, medianPrice: number | null): Promise<void> {
-  if (lowestPrice == null && medianPrice == null) return;
-  const alerts = await getPool().query(
-    `SELECT * FROM price_alerts WHERE discogs_release_id = $1 AND triggered = false`,
-    [releaseId]
-  );
-  for (const alert of alerts.rows) {
-    const threshold = parseFloat(alert.threshold_price);
-    const shouldTrigger =
-      (alert.alert_type === "below" && lowestPrice != null && lowestPrice <= threshold) ||
-      (alert.alert_type === "above" && medianPrice != null && medianPrice >= threshold);
-    const priceUsed = alert.alert_type === "below" ? lowestPrice : medianPrice;
-    if (shouldTrigger && priceUsed != null) {
-      await getPool().query(`UPDATE price_alerts SET triggered = true, triggered_at = NOW() WHERE id = $1`, [alert.id]);
-      await getPool().query(
-        `INSERT INTO triggered_alerts (clerk_user_id, alert_id, discogs_release_id, alert_type, message, current_price)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [alert.clerk_user_id, alert.id, releaseId, alert.alert_type,
-         `Price ${alert.alert_type === "below" ? "dropped to" : "rose to"} $${priceUsed.toFixed(2)}`,
-         priceUsed]
-      );
-    }
-  }
-}
-
-export async function getTriggeredAlerts(clerkUserId: string): Promise<any[]> {
-  const r = await getPool().query(
-    `SELECT ta.id as "alertId", ta.discogs_release_id as "releaseId", ta.alert_type as "type",
-            ta.threshold_price as "threshold", ta.current_price as "currentPrice", ta.triggered_at as "triggeredAt",
-            COALESCE(uc.data->>'title', uw.data->>'title', 'Release #' || ta.discogs_release_id::text) as "releaseTitle"
-     FROM triggered_alerts ta
-     LEFT JOIN user_collection uc ON uc.discogs_release_id = ta.discogs_release_id AND uc.clerk_user_id = ta.clerk_user_id
-     LEFT JOIN user_wantlist uw ON uw.discogs_release_id = ta.discogs_release_id AND uw.clerk_user_id = ta.clerk_user_id
-     WHERE ta.clerk_user_id = $1 AND ta.dismissed = false
-     ORDER BY ta.triggered_at DESC
-     LIMIT 20`,
-    [clerkUserId]
-  );
-  return r.rows;
-}
-
-export async function dismissTriggeredAlert(clerkUserId: string, alertId: number): Promise<void> {
-  await getPool().query(`UPDATE triggered_alerts SET dismissed = true WHERE id = $1 AND clerk_user_id = $2`, [alertId, clerkUserId]);
-}
 
 export async function prunePriceHistory(): Promise<void> {
   // Keep max 1 year of history
   await getPool().query(`DELETE FROM price_history WHERE recorded_at < NOW() - INTERVAL '365 days'`);
-  // Prune dismissed alerts older than 30 days
-  await getPool().query(`DELETE FROM triggered_alerts WHERE dismissed = true AND created_at < NOW() - INTERVAL '30 days'`);
 }
 
 export interface CwSearchFilters {

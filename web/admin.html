@@ -198,11 +198,8 @@ async function loadAdminSyncStatus() {
         : u.authMethod === 'pat'
           ? '<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:3px;background:#1a3a1a;color:#6bcf8e;font-weight:600;margin-left:0.4rem">PAT</span>'
           : '<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:3px;background:#2a2a2a;color:#666;font-weight:600;margin-left:0.4rem">\u2014</span>';
-      const alertBadge = (u.alertCount > 0)
-        ? `<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:3px;background:#3a2a10;color:#e8d44d;font-weight:600;margin-left:0.3rem">${u.alertCount} alert${u.alertCount !== 1 ? 's' : ''}</span>`
-        : '';
       return `<div style="padding:0.45rem 0;border-bottom:1px solid #1a1a1a;display:grid;grid-template-columns:140px 1fr 1fr auto;gap:0.5rem 1rem;align-items:baseline;font-size:0.8rem">
-        <span style="color:var(--fg);font-weight:600">@${u.username}${authBadge}${alertBadge}</span>
+        <span style="color:var(--fg);font-weight:600">@${u.username}${authBadge}</span>
         <span style="color:${statusColor}">${statusText}</span>
         <span style="color:#555">Coll: ${fmtTime(u.collectionSyncedAt)} \u00b7 Want: ${fmtTime(u.wantlistSyncedAt)}</span>
         <span>${syncBtn}</span>
@@ -399,8 +396,6 @@ async function loadPriceStats() {
     el.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:0.8rem 2rem;font-size:0.82rem">
       <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(data.cacheCount ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">price cache entries</span></div>
       <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(data.historyRows ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">price history rows</span></div>
-      <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(data.activeAlerts ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">active alerts</span></div>
-      <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(data.triggeredAlerts24h ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">triggered alerts (24h)</span></div>
       <div><span style="color:var(--text);font-weight:600">${lastUpdate}</span> <span style="color:#8a7d6b">last price update</span></div>
     </div>`;
   } catch { el.textContent = "Could not load price stats."; }
