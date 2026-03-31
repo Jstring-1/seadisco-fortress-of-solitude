@@ -323,9 +323,9 @@ authReadyPromise.then(() => {
     );
   }
 
-  // Collection/Wantlist search
-  const cwControls = document.getElementById("cw-controls-row");
-  if (cwControls) {
+  // Collection/Wantlist search — attach to the search-row (same position as main search)
+  const cwSearchRow = document.getElementById("cw-query")?.closest(".search-row");
+  if (cwSearchRow) {
     buildSavedSearchUI("records",
       () => {
         const params = {};
