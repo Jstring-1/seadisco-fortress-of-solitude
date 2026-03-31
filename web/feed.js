@@ -76,6 +76,7 @@ function openVideoPlayer(videoId, title) {
   const titleEl = document.getElementById("mini-player-title");
   if (titleEl) titleEl.textContent = title || "Playing";
   mp.classList.add("open", "expanded");
+  document.body.classList.add("player-open");
   document.getElementById("video-prev")?.setAttribute("disabled", "true");
   document.getElementById("video-next")?.setAttribute("disabled", "true");
   document.getElementById("mini-prev")?.setAttribute("disabled", "true");

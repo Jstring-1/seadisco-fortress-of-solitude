@@ -36,7 +36,7 @@ html { overflow-x: hidden; }
 
 /* ── Mobile (≤ 640px) ── */
 @media (max-width: 640px) {
-  #site-header { padding: 0.4rem 0.75rem; }
+  #site-header { padding: 0.4rem 0.75rem; margin-bottom: 12px; }
   #site-header img { height: 32px; }
   .text-logo { font-size: 1.15rem; }
 
@@ -62,7 +62,7 @@ html { overflow-x: hidden; }
     flex: 0 0 auto;
   }
 
-  /* Type/sort row — radios on top, Advanced+Sort+Clear on bottom */
+  /* Type/sort row — radios on top, Advanced+Sort+Clear+Hide on bottom */
   .type-sort-row {
     flex-wrap: wrap;
     gap: 0.4rem;
@@ -70,9 +70,10 @@ html { overflow-x: hidden; }
     padding: 0 0.2rem;
   }
   .type-sort-row > span { display: none; }
-  .type-radios   { order: 1; }
+  .type-radios     { order: 1; }
   #advanced-toggle { order: 10; }
   .sort-label      { order: 10; }
+  #hide-owned-label { order: 10; font-size: 0.72rem; }
   #clear-btn       { order: 10; }
 
   .type-radios {
@@ -89,12 +90,18 @@ html { overflow-x: hidden; }
   }
   .filters label { min-width: 80px; }
 
-
   /* Card grids — tighter on mobile */
   .card-grid {
     grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
     gap: 0.65rem;
   }
+
+  /* Card body — tighter padding on small cards */
+  .card-body { padding: 0.5rem 0.6rem 0.6rem; }
+  .card-title { font-size: 0.8rem; }
+
+  /* Collection controls row — allow wrapping */
+  #cw-controls-row { flex-wrap: wrap !important; row-gap: 0.3rem !important; }
 
   /* Collection tabs */
   .result-tab {
@@ -147,10 +154,17 @@ html { overflow-x: hidden; }
   #pagination { gap: 0.5rem; }
   #pagination button { padding: 0.45rem 0.9rem; font-size: 0.85rem; }
 
-  /* Phase 1/2 — modal actions, sparklines */
-  .modal-actions { gap: 0.3rem; }
-  .modal-act-btn { font-size: 0.68rem; padding: 0.2rem 0.4rem; }
+  /* Modal actions — larger touch targets on mobile (not smaller) */
+  .modal-actions { gap: 0.35rem; flex-wrap: wrap; }
+  .modal-act-btn { font-size: 0.75rem; padding: 0.4rem 0.65rem; min-height: 36px; }
   .price-sparkline-row { flex-wrap: wrap; }
+
+  /* Mini-player — larger touch targets */
+  .mini-player-controls button { padding: 0.4rem 0.55rem; font-size: 1rem; min-width: 40px; min-height: 40px; }
+  .mini-player #video-nav button { padding: 0.45rem 0.8rem; min-height: 40px; font-size: 0.9rem; }
+
+  /* Account page — tighter padding */
+  .account-box { padding: 1rem; margin: 1rem auto; }
 }
 
 /* ── Small phone (≤ 400px) ── */
@@ -1397,6 +1411,7 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   font-family: inherit;
 }
 .mini-player.open { display: block; }
+body.player-open { padding-bottom: 56px; }
 
 .mini-player-bar {
   display: flex;
