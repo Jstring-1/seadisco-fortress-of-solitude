@@ -29,7 +29,7 @@
   <link rel="preconnect" href="https://api.discogs.com" />
   <link rel="preconnect" href="https://i.discogs.com" />
   <link rel="preconnect" href="https://i.ebayimg.com" />
-  <link rel="stylesheet" href="/style.css?v=20260331b" />
+  <link rel="stylesheet" href="/style.css?v=20260331c" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -62,7 +62,7 @@
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260331b"></script>
+<script src="/shared.js?v=20260331c"></script>
 <script>renderSharedHeader({ spa: true, active: "search" });</script>
 <div id="search-view">
 
@@ -568,19 +568,26 @@
   </div>
 </div>
 
-<div id="video-overlay">
-  <div id="video-wrap">
+<div id="mini-player" class="mini-player">
+  <div id="mini-player-bar" class="mini-player-bar">
+    <div id="mini-player-info" class="mini-player-info" onclick="toggleMiniPlayer()">
+      <span id="mini-player-title" class="mini-player-title">Not playing</span>
+    </div>
+    <div class="mini-player-controls">
+      <button id="mini-prev" onclick="videoPrev()" disabled title="Previous track">&#9664;&#9664;</button>
+      <button id="mini-next" onclick="playNextVideo()" disabled title="Next track">&#9654;&#9654;</button>
+      <button id="mini-expand" onclick="toggleMiniPlayer()" title="Expand player">&#9650;</button>
+      <button id="mini-close" onclick="closeVideo()" title="Close player">&times;</button>
+    </div>
+  </div>
+  <div id="mini-player-expanded" class="mini-player-expanded">
     <div id="video-box">
-      <button id="video-close" onclick="closeVideo()">×</button>
       <div id="video-player"></div>
     </div>
-    <div id="video-footer">
-      <div id="video-title"></div>
-      <div id="video-nav">
-        <button id="video-prev" onclick="videoPrev()" disabled>&#8592; prev</button>
-        <button id="video-share" class="video-nav-btn" onclick="sharePopup(this)">share</button>
-        <button id="video-next" onclick="playNextVideo()" disabled>next &#8594;</button>
-      </div>
+    <div id="video-nav">
+      <button id="video-prev" onclick="videoPrev()" disabled>&#8592; prev</button>
+      <button id="video-share" class="video-nav-btn" onclick="sharePopup(this)">share</button>
+      <button id="video-next" onclick="playNextVideo()" disabled>next &#8594;</button>
     </div>
   </div>
 </div>
@@ -593,16 +600,16 @@
   <div id="lightbox-counter"></div>
 </div>
 
-<script src="/utils.js?v=20260331b"></script>
-<script src="/search.js?v=20260331b"></script>
-<script src="/collection.js?v=20260331b"></script>
-<script src="/modal.js?v=20260331b"></script>
-<script src="/drops.js?v=20260331b"></script>
-<script src="/live.js?v=20260331b"></script>
-<script src="/buy.js?v=20260331b"></script>
-<script src="/gear.js?v=20260331b"></script>
-<script src="/feed.js?v=20260331b"></script>
-<script src="/app.js?v=20260331b"></script>
+<script src="/utils.js?v=20260331c"></script>
+<script src="/search.js?v=20260331c"></script>
+<script src="/collection.js?v=20260331c"></script>
+<script src="/modal.js?v=20260331c"></script>
+<script src="/drops.js?v=20260331c"></script>
+<script src="/live.js?v=20260331c"></script>
+<script src="/buy.js?v=20260331c"></script>
+<script src="/gear.js?v=20260331c"></script>
+<script src="/feed.js?v=20260331c"></script>
+<script src="/app.js?v=20260331c"></script>
 
 </body>
 </html>

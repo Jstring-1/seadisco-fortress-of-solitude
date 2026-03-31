@@ -62,18 +62,24 @@ function playFeedVideo(videoId, title) {
 }
 
 function openVideoPlayer(videoId, title) {
-  const overlay = document.getElementById("video-overlay");
+  const mp = document.getElementById("mini-player");
   const player = document.getElementById("video-player");
-  const titleEl = document.getElementById("video-title");
-  if (!overlay || !player) {
+  if (!mp || !player) {
     window.open(`https://www.youtube.com/watch?v=${videoId}`, "_blank");
     return;
   }
+  // Clear any album queue — feed videos are standalone
+  window._videoQueue = [];
+  window._videoQueueMeta = [];
+  window._videoQueueIndex = 0;
   player.innerHTML = `<iframe width="100%" height="100%" src="https://www.youtube.com/embed/${videoId}?autoplay=1" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
-  if (titleEl) titleEl.textContent = title || "";
-  overlay.classList.add("visible");
+  const titleEl = document.getElementById("mini-player-title");
+  if (titleEl) titleEl.textContent = title || "Playing";
+  mp.classList.add("open", "expanded");
   document.getElementById("video-prev")?.setAttribute("disabled", "true");
   document.getElementById("video-next")?.setAttribute("disabled", "true");
+  document.getElementById("mini-prev")?.setAttribute("disabled", "true");
+  document.getElementById("mini-next")?.setAttribute("disabled", "true");
 }
 
 function renderFeedGrid() {

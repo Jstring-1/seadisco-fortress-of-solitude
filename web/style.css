@@ -1383,101 +1383,121 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 }
 
 /* ── Video popup ── */
-#video-overlay {
+/* ── Persistent mini-player (bottom-docked) ── */
+.mini-player {
   display: none;
   position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.85);
-  z-index: 200;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 300;
+  background: #111;
+  border-top: 1px solid #2a2a2a;
+  box-shadow: 0 -4px 20px rgba(0,0,0,0.6);
+  font-family: inherit;
 }
+.mini-player.open { display: block; }
 
-#video-overlay.open { display: flex; }
-
-#video-wrap {
+.mini-player-bar {
   display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  width: 100%;
-  max-width: 720px;
-  background: var(--surface);
-  border-radius: var(--radius);
-  padding: 0.75rem;
-  box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+  align-items: center;
+  padding: 0.35rem 0.6rem;
+  gap: 0.4rem;
+  min-height: 40px;
 }
+.mini-player-info {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+.mini-player-title {
+  font-size: 0.78rem;
+  color: #ccc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+.mini-player-title .vt-track { font-weight: 600; color: #fff; }
+.mini-player-title .vt-sep   { color: #555; margin: 0 0.25em; }
 
-#video-box {
+.mini-player-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex-shrink: 0;
+}
+.mini-player-controls button {
+  background: none;
+  border: none;
+  color: #aaa;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.45rem;
+  cursor: pointer;
+  border-radius: 4px;
+  line-height: 1;
+}
+.mini-player-controls button:hover:not(:disabled) { color: #fff; background: rgba(255,255,255,0.1); }
+.mini-player-controls button:disabled { opacity: 0.3; cursor: default; }
+#mini-close { font-size: 1.1rem; }
+#mini-expand { transition: transform 0.2s; }
+.mini-player.expanded #mini-expand { transform: rotate(180deg); }
+
+.mini-player-expanded {
+  display: none;
+  padding: 0 0.6rem 0.5rem;
+}
+.mini-player.expanded .mini-player-expanded { display: block; }
+
+.mini-player #video-box {
   position: relative;
   width: 100%;
-  padding-bottom: calc(56.25% + 48px);
+  max-width: 640px;
+  margin: 0 auto;
+  padding-bottom: min(56.25%, 360px);
   height: 0;
   background: #000;
-  border-radius: var(--radius);
+  border-radius: 6px;
   overflow: hidden;
 }
-
-#video-box iframe, #video-player {
+.mini-player #video-box iframe,
+.mini-player #video-player {
   position: absolute;
-  top: 0;
-  left: 0;
+  top: 0; left: 0;
   width: 100%;
   height: 100%;
   border: none;
 }
 
-#video-close {
-  position: absolute;
-  top: -2rem;
-  right: 0;
-  background: none;
-  border: none;
-  color: #fff;
-  font-size: 1.6rem;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0.1rem 0.4rem;
-}
-
-#video-footer {
-  padding: 0.5rem 0.25rem 0.1rem;
-}
-
-#video-title {
-  text-align: center;
-  padding: 0.1rem 0.25rem 0.1rem;
-  color: #e0e0e0;
-  font-size: 0.82rem;
-  line-height: 1.4;
-  min-height: 1.2em;
-}
-
-#video-title .vt-track { font-weight: 600; color: #fff; }
-#video-title .vt-sep   { color: #7a6d58; margin: 0 0.3em; }
-
-#video-nav {
+.mini-player #video-nav {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   margin-top: 0.4rem;
   gap: 0.5rem;
+  max-width: 640px;
+  margin-left: auto;
+  margin-right: auto;
 }
-
-#video-nav button {
-  background: rgba(255,255,255,0.1);
-  border: 1px solid rgba(255,255,255,0.2);
-  color: #fff;
-  font-size: 1.2rem;
-  padding: 0.3rem 1rem;
-  border-radius: var(--radius);
+.mini-player #video-nav button {
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: #ccc;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.8rem;
+  border-radius: 4px;
   cursor: pointer;
   transition: background 0.15s;
   flex: 1;
+  max-width: 140px;
 }
+.mini-player #video-nav button:hover:not(:disabled) { background: rgba(255,255,255,0.15); color: #fff; }
+.mini-player #video-nav button:disabled { opacity: 0.3; cursor: default; }
 
-#video-nav button:hover:not(:disabled) { background: rgba(255,255,255,0.2); }
-#video-nav button:disabled { opacity: 0.3; cursor: default; }
+@media (max-width: 640px) {
+  .mini-player #video-box { padding-bottom: 56.25%; }
+  .mini-player-expanded { padding: 0 0.4rem 0.4rem; }
+}
 
 /* ── Modal ── */
 #modal-overlay {

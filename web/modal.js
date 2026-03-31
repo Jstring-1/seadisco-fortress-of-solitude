@@ -273,11 +273,16 @@ function loadYTVideo(id) {
 function updateVideoNavButtons() {
   const queue = window._videoQueue ?? [];
   const idx   = window._videoQueueIndex ?? 0;
+  // Update both expanded nav and mini bar buttons
   const prevBtn  = document.getElementById("video-prev");
   const nextBtn  = document.getElementById("video-next");
-  const titleEl  = document.getElementById("video-title");
-  if (prevBtn) prevBtn.disabled = idx <= 0;
-  if (nextBtn) nextBtn.disabled = idx >= queue.length - 1;
+  const miniPrev = document.getElementById("mini-prev");
+  const miniNext = document.getElementById("mini-next");
+  const titleEl  = document.getElementById("mini-player-title");
+  if (prevBtn)  prevBtn.disabled  = idx <= 0;
+  if (nextBtn)  nextBtn.disabled  = idx >= queue.length - 1;
+  if (miniPrev) miniPrev.disabled = idx <= 0;
+  if (miniNext) miniNext.disabled = idx >= queue.length - 1;
   if (titleEl) {
     const meta = (window._videoQueueMeta ?? [])[idx];
     if (meta) {
@@ -287,9 +292,14 @@ function updateVideoNavButtons() {
       if (meta.artist) parts.push(`<span>${escHtml(meta.artist)}</span>`);
       titleEl.innerHTML = parts.join(`<span class="vt-sep">·</span>`);
     } else {
-      titleEl.innerHTML = "";
+      titleEl.innerHTML = "Playing";
     }
   }
+}
+
+function toggleMiniPlayer() {
+  const mp = document.getElementById("mini-player");
+  if (mp) mp.classList.toggle("expanded");
 }
 
 function openVideo(event, url) {
@@ -307,7 +317,9 @@ function openVideo(event, url) {
   window._videoQueueIndex = window._videoQueue.indexOf(url);
   if (window._videoQueueIndex === -1) window._videoQueueIndex = 0;
   setVideoUrl(id);
-  document.getElementById("video-overlay").classList.add("open");
+  const mp = document.getElementById("mini-player");
+  mp.classList.add("open");
+  mp.classList.add("expanded");
   loadYTVideo(id);
   updateVideoNavButtons();
 }
@@ -345,13 +357,16 @@ function playNextVideo() {
 }
 
 function closeVideo() {
-  document.getElementById("video-overlay").classList.remove("open");
+  const mp = document.getElementById("mini-player");
+  mp.classList.remove("open", "expanded");
   if (ytPlayer && typeof ytPlayer.stopVideo === "function") {
     ytPlayer.stopVideo();
     ytPlayer.destroy();
     ytPlayer = null;
   }
   document.getElementById("video-player").innerHTML = "";
+  const titleEl = document.getElementById("mini-player-title");
+  if (titleEl) titleEl.textContent = "Not playing";
   const u = new URL(window.location.href);
   u.searchParams.delete("vd");
   history.replaceState({}, "", u.toString());
