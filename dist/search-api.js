@@ -4,7 +4,7 @@ import crypto from "crypto";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, updateCollectionNotes, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, updateCollectionNotes, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch } from "./db.js";
 import { startFreshSyncSchedule, runFreshSync } from "./sync-fresh-releases.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sharedToken = process.env.DISCOGS_TOKEN ?? "";
@@ -1397,6 +1397,58 @@ app.get("/api/price/:releaseId", async (req, res) => {
     try {
         const price = await getPriceCache(releaseId);
         res.json(price ?? { lowest: null, median: null, highest: null, numForSale: 0, fetchedAt: null });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e) });
+    }
+});
+// ── Saved searches ──────────────────────────────────────────────────────
+// GET /api/user/saved-searches?view=search — list saved searches
+app.get("/api/user/saved-searches", async (req, res) => {
+    const userId = getClerkUserId(req);
+    if (!userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        const view = req.query.view || undefined;
+        const searches = await getSavedSearches(userId, view);
+        res.json({ searches });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e) });
+    }
+});
+// POST /api/user/saved-searches — save a search
+app.post("/api/user/saved-searches", express.json(), async (req, res) => {
+    const userId = getClerkUserId(req);
+    if (!userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const { view, label, params } = req.body ?? {};
+    if (!view || !label) {
+        res.status(400).json({ error: "view and label required" });
+        return;
+    }
+    try {
+        const id = await saveSavedSearch(userId, view, label.slice(0, 200), params ?? {});
+        res.json({ ok: true, id });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e) });
+    }
+});
+// DELETE /api/user/saved-searches/:id — delete a saved search
+app.delete("/api/user/saved-searches/:id", async (req, res) => {
+    const userId = getClerkUserId(req);
+    if (!userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        await deleteSavedSearch(userId, parseInt(req.params.id));
+        res.json({ ok: true });
     }
     catch (e) {
         res.status(500).json({ error: String(e) });

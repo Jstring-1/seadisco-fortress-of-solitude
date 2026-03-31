@@ -389,6 +389,32 @@ export async function initDb() {
       created_at          TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS saved_searches (
+      id                  SERIAL PRIMARY KEY,
+      clerk_user_id       TEXT NOT NULL,
+      view                TEXT NOT NULL,
+      label               TEXT NOT NULL,
+      params              JSONB NOT NULL DEFAULT '{}',
+      created_at          TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS saved_searches_user_idx ON saved_searches (clerk_user_id, view)`);
+}
+// ── Saved searches ──────────────────────────────────────────────────────
+export async function getSavedSearches(clerkUserId, view) {
+    const sql = view
+        ? `SELECT id, view, label, params, created_at as "createdAt" FROM saved_searches WHERE clerk_user_id = $1 AND view = $2 ORDER BY created_at DESC`
+        : `SELECT id, view, label, params, created_at as "createdAt" FROM saved_searches WHERE clerk_user_id = $1 ORDER BY created_at DESC`;
+    const r = await getPool().query(sql, view ? [clerkUserId, view] : [clerkUserId]);
+    return r.rows;
+}
+export async function saveSavedSearch(clerkUserId, view, label, params) {
+    const r = await getPool().query(`INSERT INTO saved_searches (clerk_user_id, view, label, params) VALUES ($1, $2, $3, $4) RETURNING id`, [clerkUserId, view, label, JSON.stringify(params)]);
+    return r.rows[0].id;
+}
+export async function deleteSavedSearch(clerkUserId, id) {
+    await getPool().query(`DELETE FROM saved_searches WHERE id = $1 AND clerk_user_id = $2`, [id, clerkUserId]);
 }
 export async function getAllUsersSyncStatus() {
     const r = await getPool().query(`SELECT ut.discogs_username, ut.collection_synced_at, ut.wantlist_synced_at,

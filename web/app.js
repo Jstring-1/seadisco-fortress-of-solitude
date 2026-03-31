@@ -190,3 +190,175 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});
 }
+
+// ── Saved search UI init (after auth ready) ─────────────────────────────
+authReadyPromise.then(() => {
+  if (!window._clerk?.user) return;
+
+  // Main search — next to search button
+  const searchRow = document.querySelector(".search-row");
+  if (searchRow) {
+    buildSavedSearchUI("search",
+      () => {
+        const params = {};
+        const q = document.getElementById("query")?.value?.trim();
+        if (q) params.q = q;
+        const type = document.querySelector('input[name="result-type"]:checked')?.value;
+        if (type) params.type = type;
+        const sort = document.getElementById("f-sort")?.value;
+        if (sort) params.sort = sort;
+        for (const f of ["artist","release","label","year","genre","style","format"]) {
+          const v = document.getElementById(`f-${f}`)?.value?.trim();
+          if (v) params[f] = v;
+        }
+        return params;
+      },
+      (p) => {
+        const q = document.getElementById("query");
+        if (q) q.value = p.q || "";
+        if (p.type) {
+          const radio = document.querySelector(`input[name="result-type"][value="${p.type}"]`);
+          if (radio) radio.checked = true;
+        }
+        const sort = document.getElementById("f-sort");
+        if (sort && p.sort) sort.value = p.sort;
+        for (const f of ["artist","release","label","year","genre","style","format"]) {
+          const el = document.getElementById(`f-${f}`);
+          if (el) el.value = p[f] || "";
+        }
+        doSearch(1);
+      },
+      searchRow
+    );
+  }
+
+  // Drops search
+  const dropsBar = document.querySelector(".fresh-tag-footer");
+  if (dropsBar) {
+    buildSavedSearchUI("drops",
+      () => {
+        const q = document.getElementById("fresh-tag-input")?.value?.trim();
+        return q ? { q } : {};
+      },
+      (p) => {
+        const el = document.getElementById("fresh-tag-input");
+        if (el) { el.value = p.q || ""; el.dispatchEvent(new Event("input")); }
+      },
+      dropsBar
+    );
+  }
+
+  // Live search
+  const liveForm = document.querySelector(".live-search-row");
+  if (liveForm) {
+    buildSavedSearchUI("live",
+      () => {
+        const params = {};
+        const a = document.getElementById("live-artist")?.value?.trim();
+        const c = document.getElementById("live-city")?.value?.trim();
+        const g = document.getElementById("live-genre")?.value;
+        if (a) params.artist = a;
+        if (c) params.city = c;
+        if (g) params.genre = g;
+        return params;
+      },
+      (p) => {
+        const a = document.getElementById("live-artist");
+        const c = document.getElementById("live-city");
+        const g = document.getElementById("live-genre");
+        if (a) a.value = p.artist || "";
+        if (c) c.value = p.city || "";
+        if (g) g.value = p.genre || "";
+        doLiveSearch();
+      },
+      liveForm
+    );
+  }
+
+  // Buy (Vinyl) filter
+  const buyBar = document.querySelector(".buy-right-controls");
+  if (buyBar) {
+    buildSavedSearchUI("buy",
+      () => {
+        const q = document.querySelector(".buy-search-field")?.value?.trim();
+        return q ? { q } : {};
+      },
+      (p) => {
+        const el = document.querySelector(".buy-search-field");
+        if (el) { el.value = p.q || ""; el.dispatchEvent(new Event("input")); }
+      },
+      buyBar
+    );
+  }
+
+  // Gear filter
+  const gearBar = document.querySelector(".gear-right-controls");
+  if (gearBar) {
+    buildSavedSearchUI("gear",
+      () => {
+        const q = document.querySelector(".gear-search-field")?.value?.trim();
+        return q ? { q } : {};
+      },
+      (p) => {
+        const el = document.querySelector(".gear-search-field");
+        if (el) { el.value = p.q || ""; el.dispatchEvent(new Event("input")); }
+      },
+      gearBar
+    );
+  }
+
+  // Feed filter
+  const feedBar = document.querySelector(".feed-right-controls");
+  if (feedBar) {
+    buildSavedSearchUI("feed",
+      () => {
+        const q = document.querySelector(".feed-search-field")?.value?.trim();
+        return q ? { q } : {};
+      },
+      (p) => {
+        const el = document.querySelector(".feed-search-field");
+        if (el) { el.value = p.q || ""; el.dispatchEvent(new Event("input")); }
+      },
+      feedBar
+    );
+  }
+
+  // Collection/Wantlist search
+  const cwControls = document.getElementById("cw-controls-row");
+  if (cwControls) {
+    buildSavedSearchUI("records",
+      () => {
+        const params = {};
+        const q = document.getElementById("cw-query")?.value?.trim();
+        if (q) params.q = q;
+        for (const f of ["artist","release","label","year","format","notes"]) {
+          const v = document.getElementById(`cw-${f}`)?.value?.trim();
+          if (v) params[f] = v;
+        }
+        const genre = document.getElementById("cw-genre")?.value;
+        if (genre) params.genre = genre;
+        const style = document.getElementById("cw-style")?.value;
+        if (style) params.style = style;
+        const rating = document.getElementById("cw-rating")?.value;
+        if (rating) params.rating = rating;
+        return params;
+      },
+      (p) => {
+        const q = document.getElementById("cw-query");
+        if (q) q.value = p.q || "";
+        for (const f of ["artist","release","label","year","format","notes"]) {
+          const el = document.getElementById(`cw-${f}`);
+          if (el) el.value = p[f] || "";
+        }
+        const genre = document.getElementById("cw-genre");
+        if (genre && p.genre) genre.value = p.genre;
+        const style = document.getElementById("cw-style");
+        if (style && p.style) style.value = p.style;
+        const rating = document.getElementById("cw-rating");
+        if (rating && p.rating) rating.value = p.rating;
+        if (typeof doCwSearch === "function") doCwSearch(1);
+      },
+      cwControls
+    );
+  }
+});

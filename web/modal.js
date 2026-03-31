@@ -481,7 +481,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     (!isMaster && formats) ? `<span class="detail-label">Format</span><span>${escHtml(formats)}</span>` : "",
     country ? `<span class="detail-label">Country</span><span>${escHtml(country)}</span>` : "",
     genres  ? `<span class="detail-label">Genre</span><span>${escHtml(genres)}</span>`   : "",
-    (!isMaster && catno) ? `<span class="detail-label">Cat#</span><span>${escHtml(catno)}</span>` : "",
+    (!isMaster && catno) ? `<span class="detail-label">Cat#</span><span style="color:#7ec87e">${escHtml(catno)}</span>` : "",
     year    ? `<span class="detail-label">Year</span><span>${escHtml(String(year))}</span>` : "",
     seriesText ? `<span class="detail-label">Series</span><span>${escHtml(seriesText)}</span>` : "",
     companyRows,
@@ -893,7 +893,7 @@ function renderMasterVersions(filter) {
       <span style="color:#888">${escHtml(!v.year || v.year === "0" ? "?" : String(v.year))}</span>
       <span style="color:#aaa">${escHtml(v.country || "?")}</span>
       <span style="color:#888">${escHtml(getDisplayFormat(v))}</span>
-      <span style="color:#aaa">${escHtml(v.catno ?? "—")}</span>
+      <span style="color:#7ec87e">${escHtml(v.catno ?? "—")}</span>
       <span><a href="#" onclick="openVersionPopup(event,${v.id})" style="color:var(--accent);text-decoration:none">${escHtml(v.label ?? v.title ?? "—")}</a>${badge}</span>`;
   }).join("");
 }
