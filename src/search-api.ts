@@ -3,14 +3,17 @@ import compression from "compression";
 import crypto from "crypto";
 import { fileURLToPath } from "url";
 import path from "path";
-import { DiscogsClient } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease } from "./db.js";
+import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, updateCollectionNotes, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getCollectionValue, getCollectionWithPrices, getStaleReleaseIds, getAlertedReleaseIds, createPriceAlert, getUserAlerts, deletePriceAlert, checkAndTriggerAlerts, getTriggeredAlerts, dismissTriggeredAlert, prunePriceHistory, getPriceStats } from "./db.js";
 import { startFreshSyncSchedule, runFreshSync } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const sharedToken     = process.env.DISCOGS_TOKEN ?? "";
 const anthropicKey    = process.env.ANTHROPIC_API_KEY    ?? "";
+// Discogs OAuth 1.0a consumer credentials (register at discogs.com/settings/developers)
+const discogsConsumerKey    = process.env.DISCOGS_CONSUMER_KEY    ?? "";
+const discogsConsumerSecret = process.env.DISCOGS_CONSUMER_SECRET ?? "";
 // Publishable key sent to frontend via /api/config
 const authPk      = process.env.AUTH_PK ?? "";
 // Set REQUIRE_AUTH=true to require users to sign in and provide their own Discogs token
@@ -27,6 +30,7 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 // ── Global API kill switch ──────────────────────────────────────────────
 let _apiKillSwitch = false;
+let _lastPriceUpdate: Date | null = null;
 
 // ── Logged fetch: wraps fetch() and logs the request to api_request_log ──
 async function loggedFetch(service: string, url: string, init?: RequestInit & { context?: string }): Promise<Response> {
@@ -104,7 +108,7 @@ function getClerkUserId(req: express.Request): string | null {
   } catch { return null; }
 }
 
-// Resolve Discogs token: user token → (if auth not required) shared token → null
+// Resolve Discogs token: check OAuth first → PAT → shared token → null
 async function getTokenForRequest(req: express.Request, allowFallback = false): Promise<string | null> {
   const userId = getClerkUserId(req);
   if (userId) {
@@ -117,10 +121,43 @@ async function getTokenForRequest(req: express.Request, allowFallback = false): 
 }
 
 async function getDiscogsForRequest(req: express.Request, allowFallback = false): Promise<DiscogsClient | null> {
+  const userId = getClerkUserId(req);
+  // Check if user has OAuth credentials first
+  if (userId && discogsConsumerKey) {
+    const oauth = await getOAuthCredentials(userId);
+    if (oauth) {
+      return new DiscogsClient({
+        consumerKey: discogsConsumerKey,
+        consumerSecret: discogsConsumerSecret,
+        accessToken: oauth.accessToken,
+        accessSecret: oauth.accessSecret,
+      });
+    }
+  }
+  // Fall back to PAT flow
   const t = await getTokenForRequest(req, allowFallback);
   if (!t) return null;
   if (t === sharedToken && discogs) return discogs;
   return new DiscogsClient(t);
+}
+
+/** Build a DiscogsClient for a userId (outside of an HTTP request context).
+ *  Checks OAuth first, then PAT. Returns null if user has no valid auth. */
+async function getDiscogsClientForUser(userId: string): Promise<DiscogsClient | null> {
+  if (discogsConsumerKey) {
+    const oauth = await getOAuthCredentials(userId);
+    if (oauth) {
+      return new DiscogsClient({
+        consumerKey: discogsConsumerKey,
+        consumerSecret: discogsConsumerSecret,
+        accessToken: oauth.accessToken,
+        accessSecret: oauth.accessSecret,
+      });
+    }
+  }
+  const token = await getUserToken(userId);
+  if (token && token !== "__oauth__") return new DiscogsClient(token);
+  return null;
 }
 
 // Boot DB if a connection string is configured
@@ -163,12 +200,22 @@ app.get("/api/config", (_req, res) => {
   res.json({ clerkPublishableKey: authPk, authEnabled: requireAuth });
 });
 
-// GET /api/user/token — returns whether the user has a token saved
+// GET /api/user/token — returns whether the user has a token saved + auth method
 app.get("/api/user/token", async (req, res) => {
   const userId = getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-  const t = await getUserToken(userId);
-  res.json({ hasToken: !!t, masked: t ? `****${t.slice(-4)}` : null });
+  const [t, oauthCreds] = await Promise.all([
+    getUserToken(userId),
+    getOAuthCredentials(userId),
+  ]);
+  const hasPat = !!t && t !== "__oauth__";
+  const hasOAuth = !!oauthCreds;
+  res.json({
+    hasToken: hasPat || hasOAuth,
+    masked: hasPat ? `****${t!.slice(-4)}` : null,
+    authMethod: hasOAuth ? "oauth" : (hasPat ? "pat" : null),
+    oauthEnabled: !!discogsConsumerKey,
+  });
 });
 
 // POST /api/user/token — save user's Discogs personal access token
@@ -180,15 +227,41 @@ app.post("/api/user/token", express.json(), async (req, res) => {
     res.status(400).json({ error: "Invalid token" }); return;
   }
   await setUserToken(userId, token.trim());
-  // Fetch Discogs username from /oauth/identity using the user's token
+  // Fetch Discogs username and profile using the user's token
   try {
     const identRes = await loggedFetch("discogs", "https://api.discogs.com/oauth/identity", {
       headers: { "Authorization": `Discogs token=${token.trim()}`, "User-Agent": "SeaDisco/1.0" },
       context: "save-token identity check",
     });
     if (identRes.ok) {
-      const ident = await identRes.json() as { username?: string };
-      if (ident.username) await setDiscogsUsername(userId, ident.username);
+      const ident = await identRes.json() as { username?: string; id?: number };
+      if (ident.username) {
+        await setDiscogsUsername(userId, ident.username);
+        // Also fetch and cache the full profile
+        try {
+          const profileRes = await loggedFetch("discogs", `https://api.discogs.com/users/${ident.username}`, {
+            headers: { "Authorization": `Discogs token=${token.trim()}`, "User-Agent": "SeaDisco/1.0" },
+            context: "save-token profile fetch",
+          });
+          if (profileRes.ok) {
+            const profile = await profileRes.json() as any;
+            await setDiscogsProfile(userId, profile.id ?? ident.id ?? 0, profile.avatar_url ?? "", {
+              username: profile.username,
+              name: profile.name,
+              registered: profile.registered,
+              num_collection: profile.num_collection,
+              num_wantlist: profile.num_wantlist,
+              num_lists: profile.num_lists,
+              num_for_sale: profile.num_for_sale,
+              releases_rated: profile.releases_rated,
+              rating_avg: profile.rating_avg,
+              seller_rating: profile.seller_rating,
+              buyer_rating: profile.buyer_rating,
+              location: profile.location,
+            });
+          }
+        } catch {}
+      }
     }
   } catch {}
   res.json({ ok: true });
@@ -210,14 +283,221 @@ app.delete("/api/user/account", async (req, res) => {
   res.json({ ok: true });
 });
 
+// ── OAuth 1.0a endpoints ─────────────────────────────────────────────────
+
+// GET /api/auth/discogs/start — initiate OAuth flow (requires Clerk auth + clerk_user_id in query)
+app.get("/api/auth/discogs/start", async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  if (!discogsConsumerKey || !discogsConsumerSecret) {
+    res.status(500).json({ error: "OAuth not configured" }); return;
+  }
+  try {
+    // Step 1: Get request token from Discogs
+    const requestTokenUrl = "https://api.discogs.com/oauth/request_token";
+    const callbackUrl = `${req.protocol}://${req.get("host")}/api/auth/discogs/callback`;
+    const authHeader = signOAuthRequest("POST", requestTokenUrl, discogsConsumerKey, discogsConsumerSecret);
+    const rtRes = await loggedFetch("discogs", requestTokenUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": authHeader,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "SeaDisco/1.0",
+      },
+      body: `oauth_callback=${encodeURIComponent(callbackUrl)}`,
+      context: "oauth-request-token",
+    });
+    if (!rtRes.ok) {
+      const text = await rtRes.text();
+      console.error("OAuth request token failed:", rtRes.status, text);
+      res.status(500).json({ error: "Failed to start OAuth flow" }); return;
+    }
+    const body = await rtRes.text();
+    const params = new URLSearchParams(body);
+    const oauthToken = params.get("oauth_token") ?? "";
+    const oauthTokenSecret = params.get("oauth_token_secret") ?? "";
+    if (!oauthToken || !oauthTokenSecret) {
+      res.status(500).json({ error: "Invalid response from Discogs" }); return;
+    }
+    // Store request token so we can retrieve the secret in the callback
+    await storeOAuthRequestToken(oauthToken, oauthTokenSecret, userId);
+    // Return the authorize URL for the frontend to redirect to
+    res.json({ authorizeUrl: `https://www.discogs.com/oauth/authorize?oauth_token=${oauthToken}` });
+  } catch (e) {
+    console.error("OAuth start error:", e);
+    res.status(500).json({ error: "OAuth flow failed" });
+  }
+});
+
+// GET /api/auth/discogs/callback — Discogs redirects here after user authorizes
+app.get("/api/auth/discogs/callback", async (req, res) => {
+  const oauthToken = req.query.oauth_token as string;
+  const oauthVerifier = req.query.oauth_verifier as string;
+  if (!oauthToken || !oauthVerifier) {
+    res.status(400).send("Missing OAuth parameters. <a href='/account'>Return to account</a>"); return;
+  }
+  try {
+    // Look up the request token secret and clerk user ID
+    const stored = await getOAuthRequestToken(oauthToken);
+    if (!stored) {
+      res.status(400).send("OAuth session expired. <a href='/account'>Try again</a>"); return;
+    }
+    // Step 3: Exchange for access token
+    const accessTokenUrl = "https://api.discogs.com/oauth/access_token";
+    const authHeader = signOAuthRequest("POST", accessTokenUrl, discogsConsumerKey, discogsConsumerSecret, oauthToken, stored.tokenSecret, oauthVerifier);
+    const atRes = await loggedFetch("discogs", accessTokenUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": authHeader,
+        "Content-Type": "application/x-www-form-urlencoded",
+        "User-Agent": "SeaDisco/1.0",
+      },
+      context: "oauth-access-token",
+    });
+    if (!atRes.ok) {
+      const text = await atRes.text();
+      console.error("OAuth access token failed:", atRes.status, text);
+      res.status(500).send("Failed to complete OAuth. <a href='/account'>Try again</a>"); return;
+    }
+    const body = await atRes.text();
+    const params = new URLSearchParams(body);
+    const accessToken = params.get("oauth_token") ?? "";
+    const accessSecret = params.get("oauth_token_secret") ?? "";
+    if (!accessToken || !accessSecret) {
+      res.status(500).send("Invalid access token response. <a href='/account'>Try again</a>"); return;
+    }
+    // Clean up request token
+    await deleteOAuthRequestToken(oauthToken);
+
+    // Ensure the user has a row in user_tokens (they might not have saved a PAT yet)
+    const existingToken = await getUserToken(stored.clerkUserId);
+    if (!existingToken) {
+      // Create a placeholder row so OAuth columns have somewhere to live
+      await setUserToken(stored.clerkUserId, "__oauth__");
+    }
+
+    // Store OAuth credentials
+    await setOAuthCredentials(stored.clerkUserId, accessToken, accessSecret);
+
+    // Fetch identity and profile using the new OAuth credentials
+    const oauthClient = new DiscogsClient({
+      consumerKey: discogsConsumerKey,
+      consumerSecret: discogsConsumerSecret,
+      accessToken,
+      accessSecret,
+    });
+    try {
+      const identUrl = "https://api.discogs.com/oauth/identity";
+      const identRes = await loggedFetch("discogs", identUrl, {
+        headers: oauthClient.buildHeaders("GET", identUrl),
+        context: "oauth-identity",
+      });
+      if (identRes.ok) {
+        const ident = await identRes.json() as { username?: string; id?: number };
+        if (ident.username) {
+          await setDiscogsUsername(stored.clerkUserId, ident.username);
+          // Fetch full profile
+          const profileUrl = `https://api.discogs.com/users/${ident.username}`;
+          const profileRes = await loggedFetch("discogs", profileUrl, {
+            headers: oauthClient.buildHeaders("GET", profileUrl),
+            context: "oauth-profile",
+          });
+          if (profileRes.ok) {
+            const profile = await profileRes.json() as any;
+            await setDiscogsProfile(stored.clerkUserId, profile.id ?? ident.id ?? 0, profile.avatar_url ?? "", {
+              username: profile.username,
+              name: profile.name,
+              registered: profile.registered,
+              num_collection: profile.num_collection,
+              num_wantlist: profile.num_wantlist,
+              num_lists: profile.num_lists,
+              num_for_sale: profile.num_for_sale,
+              releases_rated: profile.releases_rated,
+              rating_avg: profile.rating_avg,
+              seller_rating: profile.seller_rating,
+              buyer_rating: profile.buyer_rating,
+              location: profile.location,
+            });
+          }
+        }
+      }
+    } catch (e) {
+      console.error("OAuth profile fetch error:", e);
+    }
+
+    // Redirect back to account page
+    res.redirect("/account?oauth=success");
+  } catch (e) {
+    console.error("OAuth callback error:", e);
+    res.status(500).send("OAuth error. <a href='/account'>Try again</a>");
+  }
+});
+
+// DELETE /api/auth/discogs/disconnect — remove OAuth credentials (keep PAT if present)
+app.delete("/api/auth/discogs/disconnect", async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  await clearOAuthCredentials(userId);
+  res.json({ ok: true });
+});
+
+// GET /api/user/profile — returns cached Discogs profile
+app.get("/api/user/profile", async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const profile = await getDiscogsProfile(userId);
+  res.json(profile);
+});
+
+// POST /api/user/profile/refresh — re-fetch profile from Discogs
+app.post("/api/user/profile/refresh", express.json(), async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const username = await getDiscogsUsername(userId);
+  if (!username) { res.status(400).json({ error: "No Discogs username" }); return; }
+  try {
+    const profileUrl = `https://api.discogs.com/users/${username}`;
+    const profileClient = await getDiscogsForRequest(req);
+    if (!profileClient) { res.status(400).json({ error: "No Discogs credentials" }); return; }
+    const profileRes = await loggedFetch("discogs", profileUrl, {
+      headers: profileClient.buildHeaders("GET", profileUrl),
+      context: "profile-refresh",
+    });
+    if (!profileRes.ok) { res.status(500).json({ error: "Failed to fetch profile" }); return; }
+    const profile = await profileRes.json() as any;
+    await setDiscogsProfile(userId, profile.id ?? 0, profile.avatar_url ?? "", {
+      username: profile.username,
+      name: profile.name,
+      registered: profile.registered,
+      num_collection: profile.num_collection,
+      num_wantlist: profile.num_wantlist,
+      num_lists: profile.num_lists,
+      num_for_sale: profile.num_for_sale,
+      releases_rated: profile.releases_rated,
+      rating_avg: profile.rating_avg,
+      seller_rating: profile.seller_rating,
+      buyer_rating: profile.buyer_rating,
+      location: profile.location,
+    });
+    const updated = await getDiscogsProfile(userId);
+    res.json(updated);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// Prune expired OAuth request tokens every 10 minutes
+setInterval(() => { pruneOAuthRequestTokens().catch(() => {}); }, 10 * 60 * 1000);
+
 // Abort flag for stopping all syncs
 let _syncAbort = false;
 const SYNC_STALL_TIMEOUT = 5 * 60 * 1000; // 5 minutes with no progress = stalled
 
 // Background sync worker — runs detached from the HTTP request
-async function runBackgroundSync(userId: string, token: string, username: string, syncCollection: boolean, syncWantlist: boolean) {
+async function runBackgroundSync(userId: string, client: DiscogsClient, username: string, syncCollection: boolean, syncWantlist: boolean) {
   console.log(`Sync ${username}: starting full sync (collection=${syncCollection}, wantlist=${syncWantlist})`);
-  const headers = { "Authorization": `Discogs token=${token}`, "User-Agent": "SeaDisco/1.0" };
+  // Build headers per-request via the client (handles both PAT and OAuth signing)
+  const getHeaders = (url: string) => client.buildHeaders("GET", url);
   const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
   let totalSynced = 0;
   let lastProgressAt = Date.now(); // tracks last time progress was made
@@ -243,7 +523,7 @@ async function runBackgroundSync(userId: string, token: string, username: string
     const backoffs = [15000, 30000, 60000, 90000, 120000];
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
-        const r = await loggedFetch("discogs", url, { headers, signal: AbortSignal.timeout(30000), context: `sync ${username}` });
+        const r = await loggedFetch("discogs", url, { headers: getHeaders(url), signal: AbortSignal.timeout(30000), context: `sync ${username}` });
         if (r.ok) {
           // Check remaining rate limit — if low, pause proactively
           const remaining = parseInt(r.headers.get("x-discogs-ratelimit-remaining") ?? "10");
@@ -402,14 +682,15 @@ app.post("/api/user/sync", express.json(), async (req, res) => {
     return;
   }
 
-  const token = await getUserToken(userId);
-  if (!token) { res.status(400).json({ error: "No Discogs token found" }); return; }
+  const discogsClient = await getDiscogsForRequest(req);
+  if (!discogsClient) { res.status(400).json({ error: "No Discogs credentials found" }); return; }
 
   let username = await getDiscogsUsername(userId);
   if (!username) {
     try {
-      const identRes = await loggedFetch("discogs", "https://api.discogs.com/oauth/identity", {
-        headers: { "Authorization": `Discogs token=${token}`, "User-Agent": "SeaDisco/1.0" },
+      const identUrl = "https://api.discogs.com/oauth/identity";
+      const identRes = await loggedFetch("discogs", identUrl, {
+        headers: discogsClient.buildHeaders("GET", identUrl),
         context: "sync identity check",
       });
       if (identRes.ok) {
@@ -429,9 +710,9 @@ app.post("/api/user/sync", express.json(), async (req, res) => {
   // Fire and forget — runs in background (full sync for user-initiated)
   (async () => {
     try {
-      await runBackgroundSync(userId, token, username, syncCollection && !collectionRecent, syncWantlist && !wantlistRecent);
+      await runBackgroundSync(userId, discogsClient, username, syncCollection && !collectionRecent, syncWantlist && !wantlistRecent);
       // Also sync inventory & lists after collection/wantlist
-      await syncUserExtras(userId, username, token);
+      await syncUserExtras(userId, username, discogsClient);
       console.log(`[user-sync] ${username}: extras sync complete`);
     } catch (err) {
       console.error("Background sync uncaught error:", err);
@@ -708,42 +989,477 @@ function buildCsv(rows: any[], folderMap: Map<number, string> | null): string {
   return lines.join("\n");
 }
 
+// ── Phase 2: Collection / Wantlist actions ───────────────────────────────
+
+// Helper: get Discogs username + authenticated client for the current user.
+// Supports both OAuth and PAT auth by delegating to getDiscogsClientForUser.
+async function requireUsernameAndToken(req: express.Request, res: express.Response): Promise<{ userId: string; username: string; client: DiscogsClient } | null> {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return null; }
+  const username = await getDiscogsUsername(userId);
+  if (!username) { res.status(400).json({ error: "No Discogs username — connect your account first" }); return null; }
+  const client = await getDiscogsClientForUser(userId);
+  if (!client) { res.status(400).json({ error: "No Discogs credentials — connect your account first" }); return null; }
+  return { userId, username, client };
+}
+
+// POST /api/user/collection/add — add release to collection
+app.post("/api/user/collection/add", express.json(), async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  const { releaseId, folderId = 1 } = req.body ?? {};
+  if (!releaseId) { res.status(400).json({ error: "releaseId required" }); return; }
+  try {
+    const url = `https://api.discogs.com/users/${ctx.username}/collection/folders/${folderId}/releases/${releaseId}`;
+    const r = await loggedFetch("discogs", url, { method: "POST", headers: { ...ctx.client.buildHeaders("POST", url), "Content-Type": "application/json" }, context: "collection-add" });
+    if (!r.ok) {
+      const text = await r.text();
+      res.status(r.status).json({ error: `Discogs error: ${text}` }); return;
+    }
+    const data = await r.json() as any;
+    // Update local DB
+    await upsertCollectionItems(ctx.userId, [{
+      id: releaseId,
+      data: data.basic_information ?? {},
+      addedAt: new Date(),
+      folderId,
+      rating: 0,
+      instanceId: data.instance_id ?? null,
+      notes: [],
+    }]);
+    res.json({ ok: true, instanceId: data.instance_id ?? null });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/user/collection/remove — remove release from collection
+app.post("/api/user/collection/remove", express.json(), async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  const { releaseId, instanceId, folderId = 1 } = req.body ?? {};
+  if (!releaseId || !instanceId) { res.status(400).json({ error: "releaseId and instanceId required" }); return; }
+  try {
+    const url = `https://api.discogs.com/users/${ctx.username}/collection/folders/${folderId}/releases/${releaseId}/instances/${instanceId}`;
+    const r = await loggedFetch("discogs", url, { method: "DELETE", headers: ctx.client.buildHeaders("DELETE", url), context: "collection-remove" });
+    if (!r.ok && r.status !== 204) {
+      const text = await r.text();
+      res.status(r.status).json({ error: `Discogs error: ${text}` }); return;
+    }
+    // Remove from local DB
+    await deleteCollectionItem(ctx.userId, releaseId);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/user/wantlist/add — add release to wantlist
+app.post("/api/user/wantlist/add", express.json(), async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  const { releaseId, notes = "" } = req.body ?? {};
+  if (!releaseId) { res.status(400).json({ error: "releaseId required" }); return; }
+  try {
+    const url = `https://api.discogs.com/users/${ctx.username}/wants/${releaseId}`;
+    const r = await loggedFetch("discogs", url, { method: "PUT", headers: { ...ctx.client.buildHeaders("PUT", url), "Content-Type": "application/json" }, body: notes ? JSON.stringify({ notes }) : undefined, context: "wantlist-add" });
+    if (!r.ok) {
+      const text = await r.text();
+      res.status(r.status).json({ error: `Discogs error: ${text}` }); return;
+    }
+    const data = await r.json() as any;
+    // Update local DB
+    await upsertWantlistItems(ctx.userId, [{
+      id: releaseId,
+      data: data.basic_information ?? {},
+      addedAt: new Date(),
+      rating: data.rating ?? 0,
+      notes: data.notes ? [{ field_id: 0, value: data.notes }] : [],
+    }]);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/user/wantlist/remove — remove release from wantlist
+app.post("/api/user/wantlist/remove", express.json(), async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  const { releaseId } = req.body ?? {};
+  if (!releaseId) { res.status(400).json({ error: "releaseId required" }); return; }
+  try {
+    const url = `https://api.discogs.com/users/${ctx.username}/wants/${releaseId}`;
+    const r = await loggedFetch("discogs", url, { method: "DELETE", headers: ctx.client.buildHeaders("DELETE", url), context: "wantlist-remove" });
+    if (!r.ok && r.status !== 204) {
+      const text = await r.text();
+      res.status(r.status).json({ error: `Discogs error: ${text}` }); return;
+    }
+    await deleteWantlistItem(ctx.userId, releaseId);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/user/collection/rating — set rating on a collection item
+app.post("/api/user/collection/rating", express.json(), async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  const { releaseId, instanceId, folderId = 1, rating } = req.body ?? {};
+  if (!releaseId || !instanceId || rating == null) { res.status(400).json({ error: "releaseId, instanceId, and rating required" }); return; }
+  if (rating < 0 || rating > 5) { res.status(400).json({ error: "Rating must be 0-5" }); return; }
+  try {
+    const url = `https://api.discogs.com/users/${ctx.username}/collection/folders/${folderId}/releases/${releaseId}/instances/${instanceId}`;
+    const r = await loggedFetch("discogs", url, { method: "POST", headers: { ...ctx.client.buildHeaders("POST", url), "Content-Type": "application/json" }, body: JSON.stringify({ rating }), context: "collection-rating" });
+    if (!r.ok && r.status !== 204) {
+      const text = await r.text();
+      res.status(r.status).json({ error: `Discogs error: ${text}` }); return;
+    }
+    // Update local DB
+    await updateCollectionRating(ctx.userId, releaseId, rating);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/user/folders/create — create a new collection folder
+app.post("/api/user/folders/create", express.json(), async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  const { name } = req.body ?? {};
+  if (!name?.trim()) { res.status(400).json({ error: "Folder name required" }); return; }
+  try {
+    const url = `https://api.discogs.com/users/${ctx.username}/collection/folders`;
+    const r = await loggedFetch("discogs", url, { method: "POST", headers: { ...ctx.client.buildHeaders("POST", url), "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim() }), context: "folder-create" });
+    if (!r.ok) {
+      const text = await r.text();
+      res.status(r.status).json({ error: `Discogs error: ${text}` }); return;
+    }
+    const data = await r.json() as any;
+    // Update local folder list
+    await upsertCollectionFolders(ctx.userId, [{ id: data.id, name: data.name, count: 0 }]);
+    res.json({ ok: true, folderId: data.id, name: data.name });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/user/collection/move — move item to different folder
+app.post("/api/user/collection/move", express.json(), async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  const { releaseId, instanceId, fromFolderId, toFolderId } = req.body ?? {};
+  if (!releaseId || !instanceId || fromFolderId == null || toFolderId == null) {
+    res.status(400).json({ error: "releaseId, instanceId, fromFolderId, toFolderId required" }); return;
+  }
+  try {
+    const url = `https://api.discogs.com/users/${ctx.username}/collection/folders/${fromFolderId}/releases/${releaseId}/instances/${instanceId}`;
+    const r = await loggedFetch("discogs", url, { method: "POST", headers: { ...ctx.client.buildHeaders("POST", url), "Content-Type": "application/json" }, body: JSON.stringify({ folder_id: toFolderId }), context: "collection-move" });
+    if (!r.ok && r.status !== 204) {
+      const text = await r.text();
+      res.status(r.status).json({ error: `Discogs error: ${text}` }); return;
+    }
+    await updateCollectionFolder(ctx.userId, releaseId, toFolderId);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/user/collection/notes — update notes on a collection item
+app.post("/api/user/collection/notes", express.json(), async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  const { releaseId, instanceId, folderId = 1, fieldId, value } = req.body ?? {};
+  if (!releaseId || !instanceId || fieldId == null) { res.status(400).json({ error: "releaseId, instanceId, fieldId required" }); return; }
+  try {
+    const url = `https://api.discogs.com/users/${ctx.username}/collection/folders/${folderId}/releases/${releaseId}/instances/${instanceId}/fields/${fieldId}`;
+    const r = await loggedFetch("discogs", url, { method: "POST", headers: { ...ctx.client.buildHeaders("POST", url), "Content-Type": "application/json" }, body: JSON.stringify({ value: value ?? "" }), context: "collection-notes" });
+    if (!r.ok && r.status !== 204) {
+      const text = await r.text();
+      res.status(r.status).json({ error: `Discogs error: ${text}` }); return;
+    }
+    // Update local DB notes — merge into existing JSONB notes array
+    const instance = await getCollectionInstance(ctx.userId, releaseId);
+    const currentNotes = instance?.notes ?? [];
+    const noteIdx = currentNotes.findIndex((n: any) => n.field_id === fieldId);
+    if (noteIdx >= 0) {
+      currentNotes[noteIdx].value = value ?? "";
+    } else {
+      currentNotes.push({ field_id: fieldId, value: value ?? "" });
+    }
+    await updateCollectionNotes(ctx.userId, releaseId, currentNotes);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/user/collection/fields — get user's custom field definitions
+app.get("/api/user/collection/fields", async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  try {
+    const url = `https://api.discogs.com/users/${ctx.username}/collection/fields`;
+    const r = await loggedFetch("discogs", url, { headers: ctx.client.buildHeaders("GET", url), context: "collection-fields" });
+    if (!r.ok) { res.status(r.status).json({ error: "Failed to fetch fields" }); return; }
+    const data = await r.json();
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/user/collection/instance — get instance info for a release in the user's collection
+app.get("/api/user/collection/instance", async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const releaseId = Number(req.query.releaseId);
+  if (!releaseId) { res.status(400).json({ error: "releaseId required" }); return; }
+  try {
+    const instance = await getCollectionInstance(userId, releaseId);
+    if (!instance) { res.json({ found: false }); return; }
+    res.json({ found: true, instance_id: instance.instanceId, folder_id: instance.folderId, rating: instance.rating, notes: instance.notes });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// ── Phase 4: Price Intelligence & Alerts ─────────────────────────────────
+
+// GET /api/user/collection/value — collection value summary
+app.get("/api/user/collection/value", async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const value = await getCollectionValue(userId);
+    res.json(value);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/user/collection/prices — per-item prices, sortable
+app.get("/api/user/collection/prices", async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const sort = (req.query.sort as string) ?? "value_desc";
+  const page = Math.max(1, parseInt(req.query.page as string) || 1);
+  const perPage = Math.min(200, parseInt(req.query.per_page as string) || 96);
+  try {
+    const data = await getCollectionWithPrices(userId, sort, perPage, (page - 1) * perPage);
+    res.json({ ...data, page, pages: Math.ceil(data.total / perPage) });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/price-history/:releaseId — price history for sparklines
+app.get("/api/price-history/:releaseId", async (req, res) => {
+  const releaseId = parseInt(req.params.releaseId);
+  if (!releaseId) { res.status(400).json({ error: "Invalid releaseId" }); return; }
+  const days = Math.min(365, parseInt(req.query.days as string) || 90);
+  try {
+    const history = await getPriceHistory(releaseId, "USD", days);
+    res.json({ history });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/price/:releaseId — current price from cache
+app.get("/api/price/:releaseId", async (req, res) => {
+  const releaseId = parseInt(req.params.releaseId);
+  if (!releaseId) { res.status(400).json({ error: "Invalid releaseId" }); return; }
+  try {
+    const price = await getPriceCache(releaseId);
+    res.json(price ?? { lowest: null, median: null, highest: null, numForSale: 0, fetchedAt: null });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/user/alerts — create a price alert
+app.post("/api/user/alerts", express.json(), async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { releaseId, type = "below", threshold, currency = "USD" } = req.body ?? {};
+  if (!releaseId || !threshold) { res.status(400).json({ error: "releaseId and threshold required" }); return; }
+  if (type !== "below" && type !== "above") { res.status(400).json({ error: "type must be 'below' or 'above'" }); return; }
+  if (typeof threshold !== "number" || threshold <= 0) { res.status(400).json({ error: "threshold must be a positive number" }); return; }
+  if (threshold >= 100000) { res.status(400).json({ error: "threshold must be less than 100000" }); return; }
+  try {
+    const id = await createPriceAlert(userId, releaseId, type, threshold, currency);
+    res.json({ ok: true, id });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/user/alerts — list user's alerts
+app.get("/api/user/alerts", async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const alerts = await getUserAlerts(userId);
+    res.json({ alerts });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// DELETE /api/user/alerts/:id — delete an alert
+app.delete("/api/user/alerts/:id", async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    await deletePriceAlert(userId, parseInt(req.params.id));
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/user/alerts/triggered — un-dismissed triggered alerts
+app.get("/api/user/alerts/triggered", async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const alerts = await getTriggeredAlerts(userId);
+    res.json({ alerts });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/user/alerts/dismiss — dismiss a triggered alert
+app.post("/api/user/alerts/dismiss", express.json(), async (req, res) => {
+  const userId = getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { alertId } = req.body ?? {};
+  if (!alertId) { res.status(400).json({ error: "alertId required" }); return; }
+  try {
+    await dismissTriggeredAlert(userId, alertId);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// ── Background price updater ─────────────────────────────────────────────
+async function runPriceUpdate() {
+  if (_apiKillSwitch) return;
+  _lastPriceUpdate = new Date();
+  console.log("[price-update] Starting background price update…");
+  try {
+    // Priority: alerted releases first, then stale ones
+    const alertedIds = await getAlertedReleaseIds();
+    const staleIds = await getStaleReleaseIds(200);
+    // Deduplicate, alerted first
+    const seen = new Set<number>();
+    const allIds: number[] = [];
+    for (const id of [...alertedIds, ...staleIds]) {
+      if (!seen.has(id)) { seen.add(id); allIds.push(id); }
+    }
+    if (!allIds.length) { console.log("[price-update] No releases to update"); return; }
+    console.log(`[price-update] Updating ${allIds.length} releases (${alertedIds.length} alerted)`);
+
+    let updated = 0;
+    for (const releaseId of allIds) {
+      if (_apiKillSwitch) break;
+      try {
+        const url = `https://api.discogs.com/marketplace/stats/${releaseId}?curr_abbr=USD`;
+        const headers: Record<string, string> = { "User-Agent": "SeaDisco/1.0" };
+        if (sharedToken) headers["Authorization"] = `Discogs token=${sharedToken}`;
+        const r = await loggedFetch("discogs", url, { headers, context: "price-update" });
+        if (r.ok) {
+          const data = await r.json() as any;
+          const lowest = data.lowest_price?.value ?? null;
+          const median = data.median_price?.value ?? null;
+          const highest = data.highest_price?.value ?? null;
+          const numForSale = data.num_for_sale ?? 0;
+          await upsertPriceCache(releaseId, lowest, median, highest, numForSale);
+          await appendPriceHistory(releaseId, lowest, median, highest, numForSale);
+          await checkAndTriggerAlerts(releaseId, lowest, median);
+          updated++;
+        } else if (r.status === 429) {
+          console.log("[price-update] Rate limited, pausing 60s");
+          await sleep(60000);
+        }
+        // Pace at ~1 req/sec to stay well within rate limits
+        await sleep(1100);
+      } catch (e) {
+        console.error(`[price-update] Error for ${releaseId}:`, e);
+      }
+    }
+    console.log(`[price-update] Done, updated ${updated}/${allIds.length} releases`);
+  } catch (e) {
+    console.error("[price-update] Error:", e);
+  }
+}
+
+function startPriceUpdateSchedule() {
+  // Run every 6 hours, starting 30 min after boot
+  const SIX_HOURS = 6 * 60 * 60 * 1000;
+  setTimeout(() => {
+    runPriceUpdate();
+    setInterval(runPriceUpdate, SIX_HOURS);
+  }, 30 * 60 * 1000);
+  // Also prune old price history daily
+  setInterval(() => { prunePriceHistory().catch(() => {}); }, 24 * 60 * 60 * 1000);
+}
+
 // GET /api/user/facets — distinct genres and styles from collection or wantlist
 app.get("/api/user/facets", async (req, res) => {
   const userId = getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-  const type = (req.query.type as string) ?? "collection";
-  const genre = (req.query.genre as string) || undefined;
-  const facets = type === "wantlist" ? await getWantlistFacets(userId, genre) : await getCollectionFacets(userId, genre);
-  res.json(facets);
+  try {
+    const type = (req.query.type as string) ?? "collection";
+    const genre = (req.query.genre as string) || undefined;
+    const facets = type === "wantlist" ? await getWantlistFacets(userId, genre) : await getCollectionFacets(userId, genre);
+    res.json(facets);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
 });
 
 // GET /api/user/folders — collection folder list
 app.get("/api/user/folders", async (req, res) => {
   const userId = getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-  const folders = await getCollectionFolderList(userId);
-  res.json({ folders });
+  try {
+    const folders = await getCollectionFolderList(userId);
+    res.json({ folders });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
 });
 
 // GET /api/user/discogs-ids — collection and wantlist IDs for badge rendering
 app.get("/api/user/discogs-ids", async (req, res) => {
   const userId = getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-  const [collectionIds, wantlistIds] = await Promise.all([
-    getCollectionIds(userId),
-    getWantlistIds(userId),
-  ]);
-  res.json({ collectionIds, wantlistIds });
+  try {
+    const [collectionIds, wantlistIds] = await Promise.all([
+      getCollectionIds(userId),
+      getWantlistIds(userId),
+    ]);
+    res.json({ collectionIds, wantlistIds });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
 });
 
-// GET /api/user/sync-status — last sync timestamps + Discogs username
+// GET /api/user/sync-status — last sync timestamps + Discogs username + profile
 app.get("/api/user/sync-status", async (req, res) => {
   const userId = getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-  const [syncStatus, username] = await Promise.all([
+  const [syncStatus, username, profile] = await Promise.all([
     getSyncStatus(userId),
     getDiscogsUsername(userId),
+    getDiscogsProfile(userId),
   ]);
   res.json({
     collectionSyncedAt: syncStatus.collectionSyncedAt,
@@ -753,6 +1469,9 @@ app.get("/api/user/sync-status", async (req, res) => {
     syncProgress:        syncStatus.syncProgress,
     syncTotal:           syncStatus.syncTotal,
     syncError:           syncStatus.syncError,
+    authMethod:          profile.authMethod,
+    avatarUrl:           profile.avatarUrl,
+    profileData:         profile.profileData,
   });
 });
 
@@ -810,7 +1529,9 @@ app.post("/api/admin/sync-all", express.json(), async (req, res) => {
     for (const user of users) {
       if (_syncAbort) { console.log("Sync-all: aborted, skipping remaining users"); break; }
       try {
-        await runBackgroundSync(user.clerkUserId, user.token, user.username, true, true);
+        const userClient = await getDiscogsClientForUser(user.clerkUserId);
+        if (!userClient) { console.warn(`Sync-all: no auth for ${user.username}, skipping`); continue; }
+        await runBackgroundSync(user.clerkUserId, userClient, user.username, true, true);
       } catch (err) {
         console.error(`Sync-all error for ${user.username}:`, err);
       }
@@ -829,10 +1550,12 @@ app.post("/api/admin/sync-user", express.json(), async (req, res) => {
   const user = users.find(u => u.username === username);
   if (!user) { res.status(404).json({ error: "User not found" }); return; }
   _syncAbort = false;
+  const userClient = await getDiscogsClientForUser(user.clerkUserId);
+  if (!userClient) { res.status(400).json({ error: "No valid auth for user" }); return; }
   res.json({ ok: true, username, mode: "full" });
   (async () => {
     try {
-      await runBackgroundSync(user.clerkUserId, user.token, user.username, true, true);
+      await runBackgroundSync(user.clerkUserId, userClient, user.username, true, true);
     } catch (err) {
       console.error(`Sync-user error for ${user.username}:`, err);
     }
@@ -1345,9 +2068,20 @@ app.get("/marketplace-stats/:id", async (req, res) => {
       { headers: { "Authorization": `Discogs token=${reqToken}`, "User-Agent": MB_UA }, context: "marketplace stats" } as any
     );
     const stats = await statsRes.json() as any;
+    // Cache price data opportunistically
+    const lowest = stats?.lowest_price?.value ?? null;
+    const median = stats?.median_price?.value ?? null;
+    const highest = stats?.highest_price?.value ?? null;
+    const numForSale = stats?.num_for_sale ?? 0;
+    if (lowest != null || median != null) {
+      upsertPriceCache(parseInt(String(releaseId), 10), lowest, median, highest, numForSale).catch(() => {});
+      appendPriceHistory(parseInt(String(releaseId), 10), lowest, median, highest, numForSale).catch(() => {});
+    }
     res.json({
-      numForSale:  stats?.num_for_sale ?? 0,
-      lowestPrice: stats?.lowest_price?.value ?? null,
+      numForSale,
+      lowestPrice: lowest,
+      medianPrice: median,
+      highestPrice: highest,
       currency:    stats?.lowest_price?.currency ?? "USD",
       releaseId,
     });
@@ -2343,7 +3077,9 @@ app.post("/api/admin/extras/fetch", express.json(), async (req, res) => {
     const users = await getAllUsersForSync();
     for (const user of users) {
       try {
-        const result = await syncUserExtras(user.clerkUserId, user.username, user.token);
+        const userClient = await getDiscogsClientForUser(user.clerkUserId);
+        if (!userClient) { console.warn(`[admin-extras] no auth for ${user.username}, skipping`); continue; }
+        const result = await syncUserExtras(user.clerkUserId, user.username, userClient);
         console.log(`[admin-extras] ${user.username}: ${result.inventory} inventory, ${result.lists} lists`);
         await sleep(30000); // 30s between users
       } catch (err) {
@@ -2376,6 +3112,29 @@ app.get("/api/admin/api-stats", async (req, res) => {
   res.json({ stats });
 });
 
+// GET /api/admin/price-stats — price tracking stats, admin only
+app.get("/api/admin/price-stats", async (req, res) => {
+  const userId = getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  try {
+    const stats = await getPriceStats();
+    res.json({ ...stats, lastPriceUpdate: _lastPriceUpdate });
+  } catch (err) {
+    console.error("[admin] price-stats error:", err);
+    res.status(500).json({ error: "Failed to get price stats" });
+  }
+});
+
+// POST /api/admin/price-update — trigger manual price update, admin only
+app.post("/api/admin/price-update", express.json(), async (req, res) => {
+  const userId = getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  res.json({ ok: true, message: "Price update started" });
+  runPriceUpdate();
+});
+
 // Helper: ms until the next occurrence of HH:MM Pacific, repeating every intervalH hours
 function msUntilPacific(hour: number, minute: number, intervalH: number): number {
   const now = new Date();
@@ -2401,8 +3160,10 @@ function startDailySyncSchedule() {
     for (const user of users) {
       if (_syncAbort) { console.log("[sync-schedule] Aborted"); break; }
       try {
+        const userClient = await getDiscogsClientForUser(user.clerkUserId);
+        if (!userClient) { console.warn(`[sync-schedule] no auth for ${user.username}, skipping`); continue; }
         console.log(`[sync-schedule] Full syncing ${user.username}...`);
-        await runBackgroundSync(user.clerkUserId, user.token, user.username, true, true);
+        await runBackgroundSync(user.clerkUserId, userClient, user.username, true, true);
         // 30s pause between users to let rate limits settle
         await new Promise(r => setTimeout(r, 30000));
       } catch (err) {
@@ -2426,14 +3187,14 @@ function startDailySyncSchedule() {
 }
 
 // ── Inventory / Lists / Orders sync (5 AM Pacific daily) ──────────────────
-async function syncUserExtras(userId: string, username: string, token: string): Promise<{ inventory: number; lists: number }> {
-  const headers = { Authorization: `Discogs token=${token}`, "User-Agent": "SeaDisco/1.0" };
+async function syncUserExtras(userId: string, username: string, client: DiscogsClient): Promise<{ inventory: number; lists: number }> {
+  const getHeaders = (url: string) => client.buildHeaders("GET", url);
 
   // Simple fetch with retry for extras sync
   async function extrasFetch(url: string, retries = 3): Promise<Response> {
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
-        const r = await loggedFetch("discogs", url, { headers, signal: AbortSignal.timeout(15000), context: `extras: ${username}` });
+        const r = await loggedFetch("discogs", url, { headers: getHeaders(url), signal: AbortSignal.timeout(15000), context: `extras: ${username}` });
         if (r.ok || r.status === 401 || r.status === 403) return r;
         if (r.status === 429 || r.status >= 500) {
           if (attempt < retries) { await sleep(15000 * attempt); continue; }
@@ -2521,7 +3282,9 @@ function startExtrasSyncSchedule() {
       const users = await getAllUsersForSync();
       for (const user of users) {
         try {
-          await syncUserExtras(user.clerkUserId, user.username, user.token);
+          const userClient = await getDiscogsClientForUser(user.clerkUserId);
+          if (!userClient) { console.warn(`[extras-sync] no auth for ${user.username}, skipping`); continue; }
+          await syncUserExtras(user.clerkUserId, user.username, userClient);
           await sleep(30000); // 30s between users
         } catch (err) {
           console.error(`[extras-sync] Error syncing ${user.username}:`, err);
@@ -2544,5 +3307,6 @@ app.listen(PORT, "0.0.0.0", () => {
     startDailySyncSchedule();
     startExtrasSyncSchedule();
     startLiveEventsSchedule();
+    startPriceUpdateSchedule();
   }
 });

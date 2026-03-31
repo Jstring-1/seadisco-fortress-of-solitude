@@ -455,13 +455,28 @@ function renderCard(item, index) {
     if (window._wantlistIds?.has(releaseId))   badges += `<span class="wantlist-badge" title="In your wantlist">♡</span>`;
   }
 
-  const thumbWrap = `<div class="card-thumb-wrap">${thumb}${badges ? `<div class="card-thumb-badges">${badges}</div>` : ""}</div>`;
+  const thumbWrap = `<div class="card-thumb-wrap">${thumb}<div class="card-thumb-badges">${badges}</div></div>`;
 
   // Rating stars (only for collection/wantlist cards)
   const rating = item._rating ?? 0;
   const ratingHtml = rating > 0
     ? `<div class="card-rating">${"★".repeat(rating)}${"☆".repeat(5 - rating)}</div>`
     : "";
+
+  // Price badge (for price-sorted collection views)
+  const priceData = item._price ?? null;
+  let priceHtml = "";
+  if (priceData && priceData.median) {
+    const median = parseFloat(priceData.median).toFixed(0);
+    let changeHtml = "";
+    if (priceData.priceChange && Math.abs(priceData.priceChange) >= 1) {
+      const pct = parseFloat(priceData.priceChange).toFixed(0);
+      const cls = priceData.priceChange > 0 ? "price-up" : "price-down";
+      const arrow = priceData.priceChange > 0 ? "↑" : "↓";
+      changeHtml = ` <span class="price-change ${cls}">${arrow}${Math.abs(pct)}%</span>`;
+    }
+    priceHtml = `<div class="price-badge">~$${median}${changeHtml}</div>`;
+  }
 
   // Notes indicator (only for collection/wantlist cards with notes)
   const notes = item._notes ?? [];
@@ -485,6 +500,7 @@ function renderCard(item, index) {
         ${genre   ? `<div class="card-format">${escHtml(genre)}</div>`   : ""}
         ${catno   ? `<div class="card-catno-line">${escHtml(catno)}</div>` : ""}
         ${ratingHtml}
+        ${priceHtml}
         <div class="card-meta">${metaParts.map(escHtml).join(" · ")}</div>
         ${notesHtml}
       </div>

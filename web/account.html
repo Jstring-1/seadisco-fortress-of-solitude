@@ -4,18 +4,18 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SeaDisco — Account</title>
-  <meta name="description" content="Manage your SeaDisco account. Connect your Discogs token to sync your vinyl collection and wantlist, unlock unlimited searches, and personalize your music discovery experience." />
+  <meta name="description" content="Manage your SeaDisco account. Connect via Discogs OAuth to sync your collection and wantlist, rate releases, track prices, set price alerts, and view collection value." />
   <meta name="robots" content="noindex, nofollow" />
   <link rel="canonical" href="https://seadisco.com/account" />
   <meta property="og:title" content="SeaDisco — Account" />
-  <meta property="og:description" content="Manage your SeaDisco account. Connect your Discogs token for unlimited searches and collection syncing." />
+  <meta property="og:description" content="Manage your SeaDisco account. Connect via Discogs OAuth for collection sync, ratings, price tracking, alerts, and collection value estimates." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://seadisco.com/account" />
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎹</text></svg>">
   <link rel="manifest" href="/site.webmanifest">
   <meta name="theme-color" content="#080706">
-  <link rel="stylesheet" href="/style.css?v=20260330c" />
+  <link rel="stylesheet" href="/style.css?v=20260330e" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -29,7 +29,7 @@
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260330c"></script>
+<script src="/shared.js?v=20260330e"></script>
 <script>renderSharedHeader();</script>
 
 <main>
@@ -65,25 +65,61 @@
       <div id="auth-section">
         <div class="user-email" id="user-email"></div>
 
-        <h2 style="margin-top:0">Your Discogs Token</h2>
-        <p>
-          A Discogs Personal Access Token lets SeaDisco search Discogs on your behalf using your own rate limits.
-          Without one, searches are limited to 5 per day.
-        </p>
-        <p style="margin-top:0.75rem">
-          <strong style="color:var(--fg)">How to get your token:</strong><br />
-          1. Go to <a href="https://www.discogs.com/settings/developers" target="_blank" rel="noopener">discogs.com/settings/developers</a><br />
-          2. Click <strong style="color:var(--fg)">Generate new token</strong><br />
-          3. Copy and paste it below
-        </p>
+        <!-- Discogs profile card (shown when connected) -->
+        <div id="discogs-profile" style="display:none;margin-bottom:1.5rem">
+          <div style="display:flex;align-items:center;gap:1rem;padding:1rem;background:#0f0f0f;border:1px solid var(--border);border-radius:8px">
+            <img id="profile-avatar" src="" alt="" style="width:56px;height:56px;border-radius:50%;object-fit:cover;background:#1a1a1a;display:none" />
+            <div style="flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
+                <strong id="profile-username" style="color:var(--fg);font-size:0.95rem"></strong>
+                <span id="profile-auth-badge" style="font-size:0.65rem;padding:0.1rem 0.4rem;border-radius:3px;font-weight:600;text-transform:uppercase"></span>
+              </div>
+              <div id="profile-stats" style="font-size:0.78rem;color:var(--muted);margin-top:0.3rem"></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:0.3rem;align-items:center">
+              <button onclick="refreshProfile()" title="Refresh profile" style="background:none;border:none;color:#555;cursor:pointer;font-size:0.9rem;padding:0.2rem" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">↻</button>
+              <button id="oauth-disconnect-btn" onclick="disconnectOAuth()" title="Disconnect your Discogs connection" style="display:none;background:none;border:1px solid #333;border-radius:4px;color:#888;cursor:pointer;font-size:0.7rem;padding:0.2rem 0.5rem" onmouseover="this.style.borderColor='#e05050';this.style.color='#e05050'" onmouseout="this.style.borderColor='#333';this.style.color='#888'">Disconnect</button>
+            </div>
+          </div>
+        </div>
 
-        <div id="token-status" class="token-status"></div>
+        <!-- OAuth connect button -->
+        <div id="oauth-section" style="display:none;margin-bottom:1.5rem">
+          <h2 style="margin-top:0;margin-bottom:0.5rem">Connect with Discogs</h2>
+          <p style="font-size:0.85rem;color:var(--muted);margin-bottom:0.8rem">
+            One click to connect your Discogs account — unlocks unlimited searches, collection syncing, collection/wantlist management, ratings, price tracking, and price alerts.
+          </p>
+          <button id="oauth-connect-btn" onclick="startOAuth()" style="font-size:0.88rem;padding:0.5rem 1.2rem;background:#333;color:#fff;border:1px solid #555;border-radius:6px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:0.5rem">
+            <span style="font-size:1.1rem">🔗</span> Connect with Discogs
+          </button>
+          <div id="oauth-status" style="font-size:0.82rem;color:var(--muted);margin-top:0.5rem;display:none"></div>
+        </div>
 
-        <div class="token-form">
-          <input type="text" id="token-input" placeholder="Paste your Discogs token here" autocomplete="off" spellcheck="false" />
-          <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
-            <button id="save-btn" onclick="saveToken()">Save token</button>
-            <button id="remove-btn" class="danger-btn" onclick="removeToken()" style="display:none">Remove saved token</button>
+        <!-- PAT section (collapsible when OAuth is connected) -->
+        <div id="pat-section">
+          <h2 style="margin-top:0">Your Discogs Token</h2>
+          <p id="pat-oauth-hint" style="font-size:0.82rem;color:#888;margin-bottom:0.6rem;display:none">
+            The easiest way to connect is the <strong style="color:#ccc">Connect with Discogs</strong> button above — no token needed. A Personal Access Token is an alternative if you prefer.
+          </p>
+          <p>
+            A Discogs Personal Access Token lets SeaDisco search Discogs on your behalf using your own rate limits.
+            Without one, searches are limited to 5 per day.
+          </p>
+          <p style="margin-top:0.75rem">
+            <strong style="color:var(--fg)">How to get your token:</strong><br />
+            1. Go to <a href="https://www.discogs.com/settings/developers" target="_blank" rel="noopener">discogs.com/settings/developers</a><br />
+            2. Click <strong style="color:var(--fg)">Generate new token</strong><br />
+            3. Copy and paste it below
+          </p>
+
+          <div id="token-status" class="token-status"></div>
+
+          <div class="token-form">
+            <input type="text" id="token-input" placeholder="Paste your Discogs token here" autocomplete="off" spellcheck="false" />
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
+              <button id="save-btn" onclick="saveToken()">Save token</button>
+              <button id="remove-btn" class="danger-btn" onclick="removeToken()" style="display:none">Remove saved token</button>
+            </div>
           </div>
         </div>
 
@@ -201,17 +237,151 @@ async function showAuthSection() {
 
   const statusEl = document.getElementById("token-status");
   const removeBtn = document.getElementById("remove-btn");
+  const oauthSection = document.getElementById("oauth-section");
+  const patSection = document.getElementById("pat-section");
 
-  if (data?.hasToken) {
+  // Show OAuth connect option if server has it configured
+  const patHint = document.getElementById("pat-oauth-hint");
+  if (data?.oauthEnabled) {
+    oauthSection.style.display = "";
+    if (patHint) patHint.style.display = "";
+  }
+
+  if (data?.authMethod === "oauth") {
+    // OAuth connected — show profile, collapse PAT section
+    oauthSection.style.display = "none";
+    if (patHint) patHint.style.display = "none";
+    patSection.querySelector("h2").textContent = "Personal Access Token (optional)";
+    loadProfile();
+  } else if (data?.hasToken) {
     statusEl.textContent = `Saved token: ${data.masked}`;
     statusEl.className = "token-status ok";
     removeBtn.style.display = "block";
+    loadProfile(); // also load profile for PAT users
   } else {
-    statusEl.textContent = "No token saved — searches won't work until you add one.";
+    statusEl.textContent = "No token saved — connect with Discogs or paste a token below.";
     statusEl.className = "token-status";
   }
 
   if (data?.hasToken) loadSyncStatus();
+
+  // Check for OAuth success redirect
+  const urlParams = new URLSearchParams(location.search);
+  if (urlParams.get("oauth") === "success") {
+    history.replaceState({}, "", "/account");
+    loadProfile();
+    loadSyncStatus();
+  }
+}
+
+async function loadProfile() {
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const data = await fetch("/api/user/profile", {
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
+    }).then(r => r.json());
+    if (!data?.username) return;
+    renderProfile(data);
+  } catch {}
+}
+
+function renderProfile(data) {
+  const profileEl = document.getElementById("discogs-profile");
+  const avatarEl = document.getElementById("profile-avatar");
+  const usernameEl = document.getElementById("profile-username");
+  const badgeEl = document.getElementById("profile-auth-badge");
+  const statsEl = document.getElementById("profile-stats");
+
+  usernameEl.textContent = "@" + data.username;
+
+  if (data.avatarUrl) {
+    avatarEl.src = data.avatarUrl;
+    avatarEl.style.display = "";
+  }
+
+  // Auth method badge
+  const disconnectBtn = document.getElementById("oauth-disconnect-btn");
+  if (data.authMethod === "oauth") {
+    badgeEl.textContent = "OAuth";
+    badgeEl.style.background = "#1a3a1a";
+    badgeEl.style.color = "#4caf50";
+    if (disconnectBtn) disconnectBtn.style.display = "";
+  } else {
+    badgeEl.textContent = "Token";
+    badgeEl.style.background = "#2a2a1a";
+    badgeEl.style.color = "#e8a020";
+    if (disconnectBtn) disconnectBtn.style.display = "none";
+  }
+
+  // Stats line
+  const p = data.profileData;
+  if (p) {
+    const parts = [];
+    if (p.num_collection) parts.push(`${p.num_collection.toLocaleString()} collected`);
+    if (p.num_wantlist) parts.push(`${p.num_wantlist.toLocaleString()} wanted`);
+    if (p.num_for_sale) parts.push(`${p.num_for_sale.toLocaleString()} for sale`);
+    if (p.releases_rated) parts.push(`${p.releases_rated} rated`);
+    if (p.location) parts.push(p.location);
+    statsEl.textContent = parts.join(" · ");
+  }
+
+  profileEl.style.display = "";
+}
+
+async function refreshProfile() {
+  const btn = event.target;
+  btn.style.opacity = "0.3";
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const data = await fetch("/api/user/profile/refresh", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {})
+      }
+    }).then(r => r.json());
+    if (data?.username) renderProfile(data);
+  } catch {}
+  btn.style.opacity = "1";
+}
+
+async function startOAuth() {
+  const btn = document.getElementById("oauth-connect-btn");
+  const statusEl = document.getElementById("oauth-status");
+  btn.disabled = true;
+  btn.style.opacity = "0.5";
+  statusEl.style.display = "";
+  statusEl.textContent = "Connecting to Discogs…";
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const data = await fetch("/api/auth/discogs/start", {
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
+    }).then(r => r.json());
+    if (data?.authorizeUrl) {
+      statusEl.textContent = "Redirecting to Discogs…";
+      window.location.href = data.authorizeUrl;
+    } else {
+      statusEl.textContent = data?.error || "Failed to start OAuth";
+      btn.disabled = false;
+      btn.style.opacity = "1";
+    }
+  } catch (e) {
+    statusEl.textContent = "Connection failed. Please try again.";
+    btn.disabled = false;
+    btn.style.opacity = "1";
+  }
+}
+
+async function disconnectOAuth() {
+  if (!confirm("Disconnect your Discogs OAuth connection? You can reconnect anytime.")) return;
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    await fetch("/api/auth/discogs/disconnect", {
+      method: "DELETE",
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
+    });
+    showAuthSection();
+  } catch {}
 }
 
 let _syncPollTimer = null;

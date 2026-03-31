@@ -56,6 +56,24 @@ export async function initDb() {
     await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS sync_progress INTEGER DEFAULT 0`);
     await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS sync_total INTEGER DEFAULT 0`);
     await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS sync_error TEXT`);
+    // OAuth 1.0a credential storage
+    await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS auth_method TEXT DEFAULT 'pat'`);
+    await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS oauth_access_token TEXT`);
+    await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS oauth_access_secret TEXT`);
+    await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS oauth_connected_at TIMESTAMPTZ`);
+    // Discogs profile cache
+    await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS discogs_user_id INTEGER`);
+    await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS discogs_avatar_url TEXT`);
+    await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS discogs_profile_data JSONB`);
+    // Temporary table for OAuth request tokens (handshake flow)
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS oauth_request_tokens (
+      token           TEXT PRIMARY KEY,
+      token_secret    TEXT NOT NULL,
+      clerk_user_id   TEXT NOT NULL,
+      created_at      TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
     await getPool().query(`
     CREATE TABLE IF NOT EXISTS user_collection (
       id                 SERIAL PRIMARY KEY,
@@ -316,13 +334,72 @@ export async function initDb() {
     )
   `);
     await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_id_type_idx ON release_cache (discogs_id, type)`);
+    // ── Phase 4: Price intelligence tables ──────────────────────────────────
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS price_cache (
+      discogs_release_id  INTEGER NOT NULL,
+      lowest_price        NUMERIC(10,2),
+      median_price        NUMERIC(10,2),
+      highest_price       NUMERIC(10,2),
+      num_for_sale        INTEGER DEFAULT 0,
+      currency            TEXT DEFAULT 'USD',
+      fetched_at          TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(discogs_release_id, currency)
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS price_cache_release_idx ON price_cache (discogs_release_id)`);
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS price_history (
+      id                  SERIAL PRIMARY KEY,
+      discogs_release_id  INTEGER NOT NULL,
+      lowest_price        NUMERIC(10,2),
+      median_price        NUMERIC(10,2),
+      highest_price       NUMERIC(10,2),
+      num_for_sale        INTEGER DEFAULT 0,
+      currency            TEXT DEFAULT 'USD',
+      recorded_at         TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS price_history_release_date_idx ON price_history (discogs_release_id, recorded_at DESC)`);
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS price_alerts (
+      id                  SERIAL PRIMARY KEY,
+      clerk_user_id       TEXT NOT NULL,
+      discogs_release_id  INTEGER NOT NULL,
+      alert_type          TEXT NOT NULL DEFAULT 'below',
+      threshold_price     NUMERIC(10,2) NOT NULL,
+      currency            TEXT DEFAULT 'USD',
+      triggered           BOOLEAN DEFAULT false,
+      triggered_at        TIMESTAMPTZ,
+      created_at          TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(clerk_user_id, discogs_release_id, alert_type)
+    )
+  `);
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS triggered_alerts (
+      id                  SERIAL PRIMARY KEY,
+      clerk_user_id       TEXT NOT NULL,
+      alert_id            INTEGER REFERENCES price_alerts(id) ON DELETE CASCADE,
+      discogs_release_id  INTEGER NOT NULL,
+      alert_type          TEXT DEFAULT 'below',
+      message             TEXT NOT NULL,
+      current_price       NUMERIC(10,2),
+      dismissed           BOOLEAN DEFAULT false,
+      triggered_at        TIMESTAMPTZ DEFAULT NOW(),
+      created_at          TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
 }
 export async function getAllUsersSyncStatus() {
-    const r = await getPool().query(`SELECT discogs_username, collection_synced_at, wantlist_synced_at,
-            sync_status, sync_progress, sync_total, sync_error
-     FROM user_tokens
-     WHERE discogs_username IS NOT NULL
-     ORDER BY discogs_username`);
+    const r = await getPool().query(`SELECT ut.discogs_username, ut.collection_synced_at, ut.wantlist_synced_at,
+            ut.sync_status, ut.sync_progress, ut.sync_total, ut.sync_error,
+            CASE WHEN ut.discogs_token = '__oauth__' THEN 'oauth'
+                 WHEN ut.discogs_token IS NOT NULL THEN 'pat'
+                 ELSE 'none' END AS auth_method,
+            (SELECT COUNT(*) FROM price_alerts WHERE clerk_user_id = ut.clerk_user_id) AS alert_count
+     FROM user_tokens ut
+     WHERE ut.discogs_username IS NOT NULL
+     ORDER BY ut.discogs_username`);
     return r.rows.map(row => ({
         username: row.discogs_username,
         collectionSyncedAt: row.collection_synced_at ?? null,
@@ -331,7 +408,25 @@ export async function getAllUsersSyncStatus() {
         syncProgress: row.sync_progress ?? 0,
         syncTotal: row.sync_total ?? 0,
         syncError: row.sync_error ?? null,
+        authMethod: row.auth_method ?? "none",
+        alertCount: parseInt(row.alert_count) || 0,
     }));
+}
+export async function getPriceStats() {
+    const r = await getPool().query(`
+    SELECT
+      (SELECT COUNT(*) FROM price_cache) AS cache_count,
+      (SELECT COUNT(*) FROM price_history) AS history_rows,
+      (SELECT COUNT(*) FROM price_alerts) AS active_alerts,
+      (SELECT COUNT(*) FROM triggered_alerts WHERE triggered_at > NOW() - INTERVAL '24 hours') AS triggered_24h
+  `);
+    const row = r.rows[0];
+    return {
+        cacheCount: parseInt(row.cache_count) || 0,
+        historyRows: parseInt(row.history_rows) || 0,
+        activeAlerts: parseInt(row.active_alerts) || 0,
+        triggeredAlerts24h: parseInt(row.triggered_24h) || 0,
+    };
 }
 export async function getAllUsersForSync() {
     const r = await getPool().query(`SELECT clerk_user_id, discogs_token, discogs_username, collection_synced_at, wantlist_synced_at
@@ -376,6 +471,7 @@ export async function deleteUserData(clerkUserId) {
         "user_collection_folders",
         "user_collection",
         "user_wantlist",
+        "oauth_request_tokens",
         "user_tokens", // last — other tables may reference it
     ];
     for (const table of tables) {
@@ -388,6 +484,61 @@ export async function getDiscogsUsername(clerkUserId) {
 }
 export async function setDiscogsUsername(clerkUserId, username) {
     await getPool().query(`UPDATE user_tokens SET discogs_username = $2 WHERE clerk_user_id = $1`, [clerkUserId, username]);
+}
+// ── OAuth request token helpers (temporary during handshake) ──────────────
+export async function storeOAuthRequestToken(token, tokenSecret, clerkUserId) {
+    await getPool().query(`INSERT INTO oauth_request_tokens (token, token_secret, clerk_user_id) VALUES ($1, $2, $3)
+     ON CONFLICT (token) DO UPDATE SET token_secret = $2, clerk_user_id = $3, created_at = NOW()`, [token, tokenSecret, clerkUserId]);
+}
+export async function getOAuthRequestToken(token) {
+    const r = await getPool().query(`SELECT token_secret, clerk_user_id FROM oauth_request_tokens WHERE token = $1`, [token]);
+    if (!r.rows[0])
+        return null;
+    return { tokenSecret: r.rows[0].token_secret, clerkUserId: r.rows[0].clerk_user_id };
+}
+export async function deleteOAuthRequestToken(token) {
+    await getPool().query(`DELETE FROM oauth_request_tokens WHERE token = $1`, [token]);
+}
+export async function pruneOAuthRequestTokens() {
+    await getPool().query(`DELETE FROM oauth_request_tokens WHERE created_at < NOW() - INTERVAL '15 minutes'`);
+}
+// ── OAuth credential storage ─────────────────────────────────────────────
+export async function setOAuthCredentials(clerkUserId, accessToken, accessSecret) {
+    await getPool().query(`UPDATE user_tokens SET oauth_access_token = $2, oauth_access_secret = $3, auth_method = 'oauth', oauth_connected_at = NOW() WHERE clerk_user_id = $1`, [clerkUserId, accessToken, accessSecret]);
+}
+export async function getOAuthCredentials(clerkUserId) {
+    const r = await getPool().query(`SELECT oauth_access_token, oauth_access_secret FROM user_tokens WHERE clerk_user_id = $1 AND auth_method = 'oauth'`, [clerkUserId]);
+    if (!r.rows[0]?.oauth_access_token)
+        return null;
+    return { accessToken: r.rows[0].oauth_access_token, accessSecret: r.rows[0].oauth_access_secret };
+}
+export async function clearOAuthCredentials(clerkUserId) {
+    // Clear OAuth columns and also null out the __oauth__ placeholder token
+    await getPool().query(`UPDATE user_tokens
+     SET oauth_access_token = NULL, oauth_access_secret = NULL, auth_method = 'pat', oauth_connected_at = NULL,
+         discogs_token = CASE WHEN discogs_token = '__oauth__' THEN NULL ELSE discogs_token END
+     WHERE clerk_user_id = $1`, [clerkUserId]);
+}
+export async function getAuthMethod(clerkUserId) {
+    const r = await getPool().query(`SELECT auth_method FROM user_tokens WHERE clerk_user_id = $1`, [clerkUserId]);
+    return r.rows[0]?.auth_method ?? "pat";
+}
+// ── Discogs profile cache ────────────────────────────────────────────────
+export async function setDiscogsProfile(clerkUserId, userId, avatarUrl, profileData) {
+    await getPool().query(`UPDATE user_tokens SET discogs_user_id = $2, discogs_avatar_url = $3, discogs_profile_data = $4 WHERE clerk_user_id = $1`, [clerkUserId, userId, avatarUrl, JSON.stringify(profileData)]);
+}
+export async function getDiscogsProfile(clerkUserId) {
+    const r = await getPool().query(`SELECT discogs_username, discogs_user_id, discogs_avatar_url, discogs_profile_data, auth_method, oauth_connected_at FROM user_tokens WHERE clerk_user_id = $1`, [clerkUserId]);
+    const row = r.rows[0];
+    if (!row)
+        return { username: null, userId: null, avatarUrl: null, profileData: null, authMethod: "pat" };
+    return {
+        username: row.discogs_username,
+        userId: row.discogs_user_id,
+        avatarUrl: row.discogs_avatar_url,
+        profileData: row.discogs_profile_data,
+        authMethod: row.auth_method ?? "pat",
+    };
 }
 export async function updateSyncProgress(clerkUserId, status, progress, total, error) {
     await getPool().query(`UPDATE user_tokens SET sync_status = $2, sync_progress = $3, sync_total = $4, sync_error = $5 WHERE clerk_user_id = $1`, [clerkUserId, status, progress, total, error ?? null]);
@@ -486,6 +637,195 @@ export async function upsertWantlistItems(clerkUserId, items) {
      ON CONFLICT (clerk_user_id, discogs_release_id)
      DO UPDATE SET data = EXCLUDED.data, added_at = EXCLUDED.added_at, synced_at = NOW(),
                    rating = EXCLUDED.rating, notes = EXCLUDED.notes`, [clerkUserId, ids, dataArr, addedArr, ratingArr, notesArr]);
+}
+// ── Phase 2: Collection/Wantlist action helpers ──────────────────────────
+export async function deleteCollectionItem(clerkUserId, releaseId) {
+    await getPool().query(`DELETE FROM user_collection WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId]);
+}
+export async function deleteWantlistItem(clerkUserId, releaseId) {
+    await getPool().query(`DELETE FROM user_wantlist WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId]);
+}
+export async function updateCollectionRating(clerkUserId, releaseId, rating) {
+    await getPool().query(`UPDATE user_collection SET rating = $3 WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId, rating]);
+}
+export async function updateCollectionFolder(clerkUserId, releaseId, folderId) {
+    await getPool().query(`UPDATE user_collection SET folder_id = $3 WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId, folderId]);
+}
+export async function getCollectionInstance(clerkUserId, releaseId) {
+    const r = await getPool().query(`SELECT instance_id, folder_id, rating, notes FROM user_collection WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId]);
+    if (!r.rows[0])
+        return null;
+    return { instanceId: r.rows[0].instance_id, folderId: r.rows[0].folder_id ?? 0, rating: r.rows[0].rating ?? 0, notes: r.rows[0].notes ?? [] };
+}
+export async function updateCollectionNotes(clerkUserId, releaseId, notes) {
+    await getPool().query(`UPDATE user_collection SET notes = $3 WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId, JSON.stringify(notes)]);
+}
+// ── Phase 4: Price intelligence DB functions ─────────────────────────────
+export async function upsertPriceCache(releaseId, lowest, median, highest, numForSale, currency = "USD") {
+    await getPool().query(`INSERT INTO price_cache (discogs_release_id, lowest_price, median_price, highest_price, num_for_sale, currency, fetched_at)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW())
+     ON CONFLICT (discogs_release_id, currency)
+     DO UPDATE SET lowest_price = $2, median_price = $3, highest_price = $4, num_for_sale = $5, fetched_at = NOW()`, [releaseId, lowest, median, highest, numForSale, currency]);
+}
+export async function appendPriceHistory(releaseId, lowest, median, highest, numForSale, currency = "USD") {
+    // Only one entry per release per day
+    const existing = await getPool().query(`SELECT id FROM price_history WHERE discogs_release_id = $1 AND currency = $2 AND recorded_at > NOW() - INTERVAL '20 hours'`, [releaseId, currency]);
+    if (existing.rows.length > 0)
+        return;
+    await getPool().query(`INSERT INTO price_history (discogs_release_id, lowest_price, median_price, highest_price, num_for_sale, currency)
+     VALUES ($1, $2, $3, $4, $5, $6)`, [releaseId, lowest, median, highest, numForSale, currency]);
+}
+export async function getPriceCache(releaseId, currency = "USD") {
+    const r = await getPool().query(`SELECT lowest_price, median_price, highest_price, num_for_sale, fetched_at FROM price_cache WHERE discogs_release_id = $1 AND currency = $2`, [releaseId, currency]);
+    if (!r.rows[0])
+        return null;
+    return { lowest: r.rows[0].lowest_price, median: r.rows[0].median_price, highest: r.rows[0].highest_price, numForSale: r.rows[0].num_for_sale, fetchedAt: r.rows[0].fetched_at };
+}
+export async function getPriceHistory(releaseId, currency = "USD", days = 90) {
+    const r = await getPool().query(`SELECT median_price, lowest_price, highest_price, recorded_at FROM price_history
+     WHERE discogs_release_id = $1 AND currency = $2 AND recorded_at > NOW() - make_interval(days => $3)
+     ORDER BY recorded_at ASC`, [releaseId, currency, days]);
+    return r.rows.map(row => ({ median: row.median_price, lowest: row.lowest_price, highest: row.highest_price, recordedAt: row.recorded_at }));
+}
+export async function getCollectionValue(clerkUserId) {
+    const r = await getPool().query(`SELECT
+      COALESCE(SUM(pc.lowest_price), 0) as total_min,
+      COALESCE(SUM(pc.median_price), 0) as total_median,
+      COALESCE(SUM(pc.highest_price), 0) as total_max,
+      COUNT(pc.discogs_release_id) as priced_count,
+      (SELECT COUNT(*) FROM user_collection WHERE clerk_user_id = $1) as total_count
+    FROM user_collection uc
+    JOIN price_cache pc ON pc.discogs_release_id = uc.discogs_release_id
+    WHERE uc.clerk_user_id = $1`, [clerkUserId]);
+    const row = r.rows[0];
+    return {
+        totalMin: parseFloat(row.total_min) || 0,
+        totalMedian: parseFloat(row.total_median) || 0,
+        totalMax: parseFloat(row.total_max) || 0,
+        pricedCount: parseInt(row.priced_count) || 0,
+        totalCount: parseInt(row.total_count) || 0,
+    };
+}
+export async function getCollectionWithPrices(clerkUserId, sort = "value_desc", limit = 96, offset = 0) {
+    const orderBy = {
+        value_desc: "pc.median_price DESC NULLS LAST",
+        value_asc: "pc.median_price ASC NULLS LAST",
+        gaining: "price_change DESC NULLS LAST",
+    }[sort] || "pc.median_price DESC NULLS LAST";
+    const r = await getPool().query(`SELECT uc.discogs_release_id, uc.data, uc.rating, uc.folder_id,
+            pc.lowest_price, pc.median_price, pc.highest_price, pc.num_for_sale, pc.fetched_at,
+            (SELECT ph.median_price FROM price_history ph
+             WHERE ph.discogs_release_id = uc.discogs_release_id AND ph.recorded_at < NOW() - INTERVAL '30 days'
+             ORDER BY ph.recorded_at DESC LIMIT 1) as old_median,
+            CASE WHEN (SELECT ph2.median_price FROM price_history ph2
+                       WHERE ph2.discogs_release_id = uc.discogs_release_id AND ph2.recorded_at < NOW() - INTERVAL '30 days'
+                       ORDER BY ph2.recorded_at DESC LIMIT 1) > 0
+                 THEN ((pc.median_price - (SELECT ph3.median_price FROM price_history ph3
+                       WHERE ph3.discogs_release_id = uc.discogs_release_id AND ph3.recorded_at < NOW() - INTERVAL '30 days'
+                       ORDER BY ph3.recorded_at DESC LIMIT 1)) /
+                       (SELECT ph4.median_price FROM price_history ph4
+                       WHERE ph4.discogs_release_id = uc.discogs_release_id AND ph4.recorded_at < NOW() - INTERVAL '30 days'
+                       ORDER BY ph4.recorded_at DESC LIMIT 1) * 100)
+                 ELSE 0 END as price_change
+     FROM user_collection uc
+     LEFT JOIN price_cache pc ON pc.discogs_release_id = uc.discogs_release_id
+     WHERE uc.clerk_user_id = $1
+     ORDER BY ${orderBy}
+     LIMIT $2 OFFSET $3`, [clerkUserId, limit, offset]);
+    const countR = await getPool().query(`SELECT COUNT(*) FROM user_collection WHERE clerk_user_id = $1`, [clerkUserId]);
+    return {
+        total: parseInt(countR.rows[0].count) || 0,
+        items: r.rows.map(row => ({
+            releaseId: row.discogs_release_id,
+            data: row.data,
+            rating: row.rating,
+            folderId: row.folder_id,
+            price: row.median_price ? {
+                lowest: parseFloat(row.lowest_price),
+                median: parseFloat(row.median_price),
+                highest: parseFloat(row.highest_price),
+                numForSale: row.num_for_sale,
+                fetchedAt: row.fetched_at,
+                oldMedian: row.old_median ? parseFloat(row.old_median) : null,
+                priceChange: row.price_change ? parseFloat(row.price_change) : 0,
+            } : null,
+        })),
+    };
+}
+export async function getStaleReleaseIds(limit = 100) {
+    // Get unique release IDs from all collections where price is stale (>24h) or missing
+    const r = await getPool().query(`SELECT DISTINCT uc.discogs_release_id
+     FROM user_collection uc
+     LEFT JOIN price_cache pc ON pc.discogs_release_id = uc.discogs_release_id
+     WHERE pc.fetched_at IS NULL OR pc.fetched_at < NOW() - INTERVAL '24 hours'
+     ORDER BY pc.fetched_at ASC NULLS FIRST
+     LIMIT $1`, [limit]);
+    return r.rows.map(row => row.discogs_release_id);
+}
+export async function getAlertedReleaseIds() {
+    const r = await getPool().query(`SELECT DISTINCT discogs_release_id FROM price_alerts WHERE triggered = false`);
+    return r.rows.map(row => row.discogs_release_id);
+}
+// ── Price alerts ─────────────────────────────────────────────────────────
+export async function createPriceAlert(clerkUserId, releaseId, alertType, threshold, currency = "USD") {
+    const r = await getPool().query(`INSERT INTO price_alerts (clerk_user_id, discogs_release_id, alert_type, threshold_price, currency)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (clerk_user_id, discogs_release_id, alert_type)
+     DO UPDATE SET threshold_price = $4, triggered = false, triggered_at = NULL
+     RETURNING id`, [clerkUserId, releaseId, alertType, threshold, currency]);
+    return r.rows[0].id;
+}
+export async function getUserAlerts(clerkUserId) {
+    const r = await getPool().query(`SELECT pa.id, pa.discogs_release_id as "releaseId", pa.alert_type as "type",
+            pa.threshold_price as "threshold", pa.currency, pa.created_at as "createdAt",
+            pc.median_price as "currentPrice", pc.lowest_price as "lowestPrice"
+     FROM price_alerts pa
+     LEFT JOIN price_cache pc ON pc.discogs_release_id = pa.discogs_release_id
+     WHERE pa.clerk_user_id = $1
+     ORDER BY pa.created_at DESC`, [clerkUserId]);
+    return r.rows;
+}
+export async function deletePriceAlert(clerkUserId, alertId) {
+    await getPool().query(`DELETE FROM price_alerts WHERE id = $1 AND clerk_user_id = $2`, [alertId, clerkUserId]);
+}
+export async function checkAndTriggerAlerts(releaseId, lowestPrice, medianPrice) {
+    if (lowestPrice == null && medianPrice == null)
+        return;
+    const alerts = await getPool().query(`SELECT * FROM price_alerts WHERE discogs_release_id = $1 AND triggered = false`, [releaseId]);
+    for (const alert of alerts.rows) {
+        const threshold = parseFloat(alert.threshold_price);
+        const shouldTrigger = (alert.alert_type === "below" && lowestPrice != null && lowestPrice <= threshold) ||
+            (alert.alert_type === "above" && medianPrice != null && medianPrice >= threshold);
+        const priceUsed = alert.alert_type === "below" ? lowestPrice : medianPrice;
+        if (shouldTrigger && priceUsed != null) {
+            await getPool().query(`UPDATE price_alerts SET triggered = true, triggered_at = NOW() WHERE id = $1`, [alert.id]);
+            await getPool().query(`INSERT INTO triggered_alerts (clerk_user_id, alert_id, discogs_release_id, alert_type, message, current_price)
+         VALUES ($1, $2, $3, $4, $5, $6)`, [alert.clerk_user_id, alert.id, releaseId, alert.alert_type,
+                `Price ${alert.alert_type === "below" ? "dropped to" : "rose to"} $${priceUsed.toFixed(2)}`,
+                priceUsed]);
+        }
+    }
+}
+export async function getTriggeredAlerts(clerkUserId) {
+    const r = await getPool().query(`SELECT ta.id as "alertId", ta.discogs_release_id as "releaseId", ta.alert_type as "type",
+            ta.threshold_price as "threshold", ta.current_price as "currentPrice", ta.triggered_at as "triggeredAt",
+            COALESCE(uc.data->>'title', uw.data->>'title', 'Release #' || ta.discogs_release_id::text) as "releaseTitle"
+     FROM triggered_alerts ta
+     LEFT JOIN user_collection uc ON uc.discogs_release_id = ta.discogs_release_id AND uc.clerk_user_id = ta.clerk_user_id
+     LEFT JOIN user_wantlist uw ON uw.discogs_release_id = ta.discogs_release_id AND uw.clerk_user_id = ta.clerk_user_id
+     WHERE ta.clerk_user_id = $1 AND ta.dismissed = false
+     ORDER BY ta.triggered_at DESC
+     LIMIT 20`, [clerkUserId]);
+    return r.rows;
+}
+export async function dismissTriggeredAlert(clerkUserId, alertId) {
+    await getPool().query(`UPDATE triggered_alerts SET dismissed = true WHERE id = $1 AND clerk_user_id = $2`, [alertId, clerkUserId]);
+}
+export async function prunePriceHistory() {
+    // Keep max 1 year of history
+    await getPool().query(`DELETE FROM price_history WHERE recorded_at < NOW() - INTERVAL '365 days'`);
+    // Prune dismissed alerts older than 30 days
+    await getPool().query(`DELETE FROM triggered_alerts WHERE dismissed = true AND created_at < NOW() - INTERVAL '30 days'`);
 }
 function cwOrderBy(sort) {
     switch (sort) {

@@ -34,6 +34,8 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
     if (mappedView === "records") {
       const tab = p.get("tab") || (view === "wantlist" ? "wantlist" : "collection");
       _cwTab = tab;
+      const sort = p.get("sort");
+      if (sort) { const el = document.getElementById("cw-sort"); if (el) el.value = sort; }
     }
     switchView(mappedView, true);
   } else if (p.get("q") || p.get("ar") || p.get("re") || p.get("yr") || p.get("lb") || p.get("gn")) {
@@ -76,10 +78,16 @@ window.addEventListener("popstate", () => {
   // Map old collection/wantlist URLs to records, restore sub-tab
   if (view === "collection" || view === "wantlist") {
     _cwTab = view === "wantlist" ? "wantlist" : "collection";
+    const sort = p.get("sort");
+    if (sort) { const el = document.getElementById("cw-sort"); if (el) el.value = sort; }
     switchView("records", true); return;
   }
   if (view === "drops" || view === "live" || view === "buy" || view === "gear" || view === "feed" || view === "records" || view === "info" || view === "privacy" || view === "terms" || view === "wanted") {
-    if (view === "records") _cwTab = p.get("tab") || "collection";
+    if (view === "records") {
+      _cwTab = p.get("tab") || "collection";
+      const sort = p.get("sort");
+      if (sort) { const el = document.getElementById("cw-sort"); if (el) el.value = sort; }
+    }
     switchView(view, true);
   } else {
     switchView("search", true);
@@ -170,6 +178,7 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
             addNavTab("collection");
             addNavTab("wantlist");
             await loadDiscogsIds();
+            if (typeof startAlertPolling === "function") startAlertPolling();
           }
         }
       } catch { /* collection tabs optional */ }

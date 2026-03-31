@@ -524,9 +524,15 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         })()}
         ${discogsUrl ? `<a href="${discogsUrl}" target="_blank" rel="noopener" style="font-size:0.75rem;color:var(--accent);text-decoration:none;margin-top:0.4rem;display:inline-block">View on Discogs ↗</a>` : ""}
         ${stats?.numForSale > 0 && stats?.lowestPrice != null
-          ? `<a href="https://www.discogs.com/sell/list?release_id=${escHtml(String(stats.releaseId))}" target="_blank" rel="noopener" style="font-size:0.75rem;color:#888;text-decoration:none;margin-top:0.2rem;display:block">${escHtml(String(stats.numForSale))} available from $${parseFloat(stats.lowestPrice).toFixed(2)}</a>`
+          ? `<div style="font-size:0.75rem;margin-top:0.2rem">
+              <a href="https://www.discogs.com/sell/list?release_id=${escHtml(String(stats.releaseId))}" target="_blank" rel="noopener" style="color:#888;text-decoration:none">${escHtml(String(stats.numForSale))} available from $${parseFloat(stats.lowestPrice).toFixed(2)}</a>
+              ${stats.medianPrice ? `<span style="color:#555;margin-left:0.4rem">median $${parseFloat(stats.medianPrice).toFixed(2)}</span>` : ""}
+              ${stats.highestPrice ? `<span style="color:#555;margin-left:0.4rem">high $${parseFloat(stats.highestPrice).toFixed(2)}</span>` : ""}
+            </div>`
           : (stats?.numForSale === 0 ? `<div style="font-size:0.75rem;color:#555;margin-top:0.2rem">Not currently available on Discogs marketplace</div>` : "")
         }
+        ${stats?.releaseId ? `<div id="modal-price-extras" data-release-id="${escHtml(String(stats.releaseId))}" style="margin-top:0.3rem"></div>` : ""}
+        ${!isMaster && releaseId ? `<div id="modal-actions" class="modal-actions" data-release-id="${escHtml(String(releaseId))}" style="display:none"></div>` : ""}
       </div>
     </div>
     ${trackHTML}
@@ -534,6 +540,359 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     ${isMaster ? `<div id="master-versions-list" style="padding:0.75rem 1rem 0.5rem;font-size:0.78rem;color:var(--muted)">Loading pressings…</div>` : ""}`;
 
   if (isMaster) loadMasterVersions(null, searchResult.id);
+  if (!isMaster && releaseId) loadModalActions(releaseId);
+  if (stats?.releaseId) loadPriceExtras(stats.releaseId);
+}
+
+// ── Modal action buttons (collection/wantlist/rating) ────────────────────
+async function loadModalActions(releaseId) {
+  const el = document.getElementById("modal-actions");
+  if (!el) return;
+  const rid = Number(releaseId);
+  const inCol = window._collectionIds?.has(rid);
+  const inWant = window._wantlistIds?.has(rid);
+
+  // Fetch instance info for items in collection (to get instanceId for rating/remove)
+  let instanceId = null, folderId = 1, currentRating = 0;
+  if (inCol) {
+    try {
+      const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
+      if (sessionToken) {
+        const data = await fetch(`/api/user/collection/instance?releaseId=${rid}`, {
+          headers: { Authorization: `Bearer ${sessionToken}` }
+        }).then(r => r.json());
+        if (data?.found) {
+          instanceId = data.instance_id;
+          folderId = data.folder_id ?? 1;
+          currentRating = data.rating ?? 0;
+        }
+      }
+    } catch {}
+  }
+
+  el.dataset.instanceId = instanceId ?? "";
+  el.dataset.folderId = folderId;
+
+  el.innerHTML = `
+    <button class="modal-act-btn ${inCol ? 'active' : ''}" id="modal-col-btn" onclick="toggleCollection(${rid})" title="${inCol ? 'Remove from collection' : 'Add to collection'}">
+      ${inCol ? '<span style="color:#4caf50">✓</span> Collected' : '+ Collection'}
+    </button>
+    <button class="modal-act-btn ${inWant ? 'active' : ''}" id="modal-want-btn" onclick="toggleWantlist(${rid})" title="${inWant ? 'Remove from wantlist' : 'Add to wantlist'}">
+      ${inWant ? '<span style="color:#e05050">♡</span> Wanted' : '♡ Want'}
+    </button>
+    ${inCol ? `<span class="modal-rating" id="modal-rating">${renderStars(currentRating, rid)}</span>` : ''}
+  `;
+  if (inCol) {
+    const ratingEl = document.getElementById("modal-rating");
+    if (ratingEl) ratingEl.dataset.rating = currentRating;
+  }
+  el.style.display = "";
+}
+
+function renderStars(rating, releaseId) {
+  let html = '';
+  for (let i = 1; i <= 5; i++) {
+    const active = i <= rating;
+    html += `<span class="modal-star ${active ? 'active' : ''}" onclick="setRating(event,${releaseId},${i})" onmouseover="previewStars(this,${i})" onmouseout="resetStars(this)">${active ? '★' : '☆'}</span>`;
+  }
+  return html;
+}
+
+function previewStars(el, n) {
+  const container = el.parentElement;
+  container.querySelectorAll('.modal-star').forEach((s, i) => {
+    s.textContent = i < n ? '★' : '☆';
+    s.classList.toggle('preview', i < n);
+  });
+}
+
+function resetStars(el) {
+  const container = el.parentElement;
+  const current = Number(container.dataset.rating ?? 0);
+  container.querySelectorAll('.modal-star').forEach((s, i) => {
+    s.textContent = i < current ? '★' : '☆';
+    s.classList.remove('preview');
+    s.classList.toggle('active', i < current);
+  });
+}
+
+async function toggleCollection(releaseId) {
+  const btn = document.getElementById("modal-col-btn");
+  if (btn) btn.disabled = true;
+  const inCol = window._collectionIds?.has(releaseId);
+  try {
+    const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
+    if (!sessionToken) { showToast("Sign in to manage your collection", "error"); return; }
+
+    // Optimistic update
+    if (inCol) {
+      btn.innerHTML = '+ Collection';
+      btn.classList.remove('active');
+      window._collectionIds?.delete(releaseId);
+    } else {
+      btn.innerHTML = '<span style="color:#4caf50">✓</span> Collected';
+      btn.classList.add('active');
+      window._collectionIds?.add(releaseId);
+    }
+
+    const actionsEl = document.getElementById("modal-actions");
+    const endpoint = inCol ? "/api/user/collection/remove" : "/api/user/collection/add";
+    const body = inCol
+      ? { releaseId, instanceId: Number(actionsEl?.dataset.instanceId) || null, folderId: Number(actionsEl?.dataset.folderId) || 1 }
+      : { releaseId };
+
+    const r = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+      body: JSON.stringify(body)
+    }).then(r => r.json());
+
+    if (!r.ok && r.error) {
+      // Revert
+      if (inCol) { window._collectionIds?.add(releaseId); } else { window._collectionIds?.delete(releaseId); }
+      showToast(r.error, "error");
+      loadModalActions(releaseId);
+      return;
+    }
+
+    showToast(inCol ? "Removed from collection" : "Added to collection");
+    // Refresh action row to update rating stars, instance info
+    loadModalActions(releaseId);
+    // Update badges on cards in the background
+    refreshCardBadges(releaseId);
+  } catch (e) {
+    if (inCol) { window._collectionIds?.add(releaseId); } else { window._collectionIds?.delete(releaseId); }
+    showToast("Action failed — try again", "error");
+    loadModalActions(releaseId);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function toggleWantlist(releaseId) {
+  const btn = document.getElementById("modal-want-btn");
+  if (btn) btn.disabled = true;
+  const inWant = window._wantlistIds?.has(releaseId);
+  try {
+    const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
+    if (!sessionToken) { showToast("Sign in to manage your wantlist", "error"); return; }
+
+    // Optimistic update
+    if (inWant) {
+      btn.innerHTML = '♡ Want';
+      btn.classList.remove('active');
+      window._wantlistIds?.delete(releaseId);
+    } else {
+      btn.innerHTML = '<span style="color:#e05050">♡</span> Wanted';
+      btn.classList.add('active');
+      window._wantlistIds?.add(releaseId);
+    }
+
+    const endpoint = inWant ? "/api/user/wantlist/remove" : "/api/user/wantlist/add";
+    const r = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+      body: JSON.stringify({ releaseId })
+    }).then(r => r.json());
+
+    if (!r.ok && r.error) {
+      if (inWant) { window._wantlistIds?.add(releaseId); } else { window._wantlistIds?.delete(releaseId); }
+      showToast(r.error, "error");
+      loadModalActions(releaseId);
+      return;
+    }
+
+    showToast(inWant ? "Removed from wantlist" : "Added to wantlist");
+    refreshCardBadges(releaseId);
+    loadModalActions(releaseId);
+  } catch (e) {
+    if (inWant) { window._wantlistIds?.add(releaseId); } else { window._wantlistIds?.delete(releaseId); }
+    showToast("Action failed — try again", "error");
+    loadModalActions(releaseId);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+let _ratingDebounce = null;
+async function setRating(event, releaseId, rating) {
+  event.stopPropagation();
+  const container = document.getElementById("modal-rating");
+  if (!container) return;
+  // Update stars immediately
+  container.dataset.rating = rating;
+  container.querySelectorAll('.modal-star').forEach((s, i) => {
+    s.textContent = i < rating ? '★' : '☆';
+    s.classList.toggle('active', i < rating);
+  });
+
+  // Debounce the API call
+  clearTimeout(_ratingDebounce);
+  _ratingDebounce = setTimeout(async () => {
+    try {
+      const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
+      if (!sessionToken) return;
+      const actionsEl = document.getElementById("modal-actions");
+      const r = await fetch("/api/user/collection/rating", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+        body: JSON.stringify({
+          releaseId,
+          instanceId: Number(actionsEl?.dataset.instanceId) || null,
+          folderId: Number(actionsEl?.dataset.folderId) || 1,
+          rating
+        })
+      }).then(r => r.json());
+      if (r.ok) showToast(`Rated ${rating}/5`);
+    } catch { showToast("Failed to save rating", "error"); }
+  }, 500);
+}
+
+// ── Price sparkline + alert UI in modal ─────────────────────────────────
+async function loadPriceExtras(releaseId) {
+  const el = document.getElementById("modal-price-extras");
+  if (!el) return;
+  const rid = Number(releaseId);
+
+  // Fetch price history for sparkline
+  try {
+    const [histRes, alertsRes] = await Promise.all([
+      apiFetch(`/api/price-history/${rid}?days=90`).then(r => r.json()).catch(() => ({ history: [] })),
+      (async () => {
+        const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
+        if (!sessionToken) return { alerts: [] };
+        return fetch("/api/user/alerts", { headers: { Authorization: `Bearer ${sessionToken}` } }).then(r => r.json()).catch(() => ({ alerts: [] }));
+      })()
+    ]);
+
+    const points = histRes.history ?? [];
+    const userAlerts = (alertsRes.alerts ?? []).filter(a => a.release_id === rid || a.releaseId === rid);
+    let html = "";
+
+    // Sparkline SVG
+    if (points.length >= 2) {
+      html += renderSparkline(points);
+    }
+
+    // Existing alert for this release
+    if (userAlerts.length > 0) {
+      for (const a of userAlerts) {
+        const th = parseFloat(a.threshold ?? a.price_threshold).toFixed(2);
+        const typ = a.type ?? a.alert_type ?? "below";
+        const aid = a.id ?? a.alert_id;
+        html += `<div class="price-alert-row" id="pa-${aid}">
+          <span style="font-size:0.72rem;color:#aaa">🔔 Alert when ${typ === "below" ? "below" : "above"} $${th}</span>
+          <button onclick="deleteAlert(${aid},${rid})" style="background:none;border:none;color:#666;cursor:pointer;font-size:0.72rem;padding:0 0.3rem" title="Remove alert">✕</button>
+        </div>`;
+      }
+    }
+
+    // Add alert button/form
+    const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
+    if (sessionToken) {
+      html += `<div id="price-alert-form" style="margin-top:0.25rem">
+        <button onclick="toggleAlertForm()" class="modal-act-btn" style="font-size:0.68rem;padding:0.15rem 0.5rem" id="alert-toggle-btn">🔔 Set Price Alert</button>
+        <div id="alert-form-fields" style="display:none;margin-top:0.3rem;align-items:center;gap:0.3rem;flex-wrap:wrap">
+          <select id="alert-type" style="font-size:0.68rem;background:#1a1a1a;border:1px solid #333;color:#aaa;border-radius:4px;padding:0.15rem 0.3rem;font-family:inherit">
+            <option value="below">Drops below</option>
+            <option value="above">Rises above</option>
+          </select>
+          <span style="color:#666;font-size:0.72rem">$</span>
+          <input type="number" id="alert-threshold" step="0.01" min="0" placeholder="0.00" style="width:5rem;font-size:0.68rem;background:#1a1a1a;border:1px solid #333;color:#ccc;border-radius:4px;padding:0.15rem 0.3rem;font-family:inherit" />
+          <button onclick="createAlert(${rid})" class="modal-act-btn" style="font-size:0.68rem;padding:0.15rem 0.5rem;border-color:#4caf50;color:#4caf50">Save</button>
+        </div>
+      </div>`;
+    }
+
+    el.innerHTML = html;
+  } catch {}
+}
+
+function renderSparkline(points) {
+  const W = 160, H = 32, PAD = 2;
+  const medians = points.map(p => p.median ?? p.lowest ?? 0);
+  const min = Math.min(...medians);
+  const max = Math.max(...medians);
+  const range = max - min || 1;
+
+  const coords = medians.map((v, i) => {
+    const x = PAD + (i / (medians.length - 1)) * (W - 2 * PAD);
+    const y = PAD + (1 - (v - min) / range) * (H - 2 * PAD);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+
+  const first = medians[0], last = medians[medians.length - 1];
+  const pctChange = first > 0 ? ((last - first) / first * 100).toFixed(1) : "0.0";
+  const color = last >= first ? "#4caf50" : "#e05050";
+  const arrow = last > first ? "↑" : last < first ? "↓" : "→";
+
+  const firstDate = new Date(points[0].recordedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const lastDate = new Date(points[points.length - 1].recordedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+  return `<div class="price-sparkline-row">
+    <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block">
+      <polyline points="${coords.join(" ")}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" />
+      <circle cx="${coords[coords.length - 1].split(",")[0]}" cy="${coords[coords.length - 1].split(",")[1]}" r="2" fill="${color}" />
+    </svg>
+    <span class="price-sparkline-label" style="color:${color}">${arrow} ${pctChange}%</span>
+    <span class="price-sparkline-dates">${firstDate} – ${lastDate}</span>
+  </div>`;
+}
+
+function toggleAlertForm() {
+  const fields = document.getElementById("alert-form-fields");
+  if (!fields) return;
+  fields.style.display = fields.style.display === "flex" ? "none" : "flex";
+}
+
+async function createAlert(releaseId) {
+  const type = document.getElementById("alert-type")?.value || "below";
+  const threshold = parseFloat(document.getElementById("alert-threshold")?.value);
+  if (!threshold || threshold <= 0) { showToast("Enter a valid price", "error"); return; }
+  try {
+    const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
+    if (!sessionToken) return;
+    const r = await fetch("/api/user/alerts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+      body: JSON.stringify({ releaseId, type, threshold })
+    }).then(r => r.json());
+    if (r.ok) {
+      showToast(`Alert set: ${type === "below" ? "drops below" : "rises above"} $${threshold.toFixed(2)}`);
+      loadPriceExtras(releaseId);
+    } else {
+      showToast(r.error || "Failed to create alert", "error");
+    }
+  } catch { showToast("Failed to create alert", "error"); }
+}
+
+async function deleteAlert(alertId, releaseId) {
+  try {
+    const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
+    if (!sessionToken) return;
+    await fetch(`/api/user/alerts/${alertId}`, {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${sessionToken}` }
+    });
+    const row = document.getElementById(`pa-${alertId}`);
+    if (row) row.remove();
+    showToast("Alert removed");
+  } catch { showToast("Failed to remove alert", "error"); }
+}
+
+function refreshCardBadges(releaseId) {
+  // Re-render badges on any visible card with this release ID
+  document.querySelectorAll(`.card-thumb-badges`).forEach(el => {
+    const card = el.closest('a[onclick]');
+    if (!card) return;
+    const match = card.getAttribute('onclick')?.match(/openModal\(event,['"]?(\d+)['"]?/);
+    if (match && Number(match[1]) === releaseId) {
+      let badges = "";
+      if (window._collectionIds?.has(releaseId)) badges += `<span class="collection-badge" title="In your collection">✓</span>`;
+      if (window._wantlistIds?.has(releaseId))   badges += `<span class="wantlist-badge" title="In your wantlist">♡</span>`;
+      el.innerHTML = badges;
+    }
+  });
 }
 
 let _masterVersions = [];
