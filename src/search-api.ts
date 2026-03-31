@@ -1988,8 +1988,7 @@ app.get("/marketplace-stats/:id", async (req, res) => {
   const { id } = req.params;
   const type = (req.query.type as string) ?? "release";
   const dc = await getDiscogsForRequest(req, true);
-  const reqToken = await getTokenForRequest(req);
-  if (!dc || !reqToken) { res.json({ numForSale: 0, lowestPrice: null }); return; }
+  if (!dc) { res.json({ numForSale: 0, lowestPrice: null }); return; }
 
   try {
     let releaseId = id;
@@ -2001,11 +2000,7 @@ app.get("/marketplace-stats/:id", async (req, res) => {
       releaseId = String(master?.main_release ?? id);
     }
 
-    const statsRes = await loggedFetch("discogs",
-      `https://api.discogs.com/marketplace/stats/${releaseId}?curr_abbr=USD`,
-      { headers: { "Authorization": `Discogs token=${reqToken}`, "User-Agent": MB_UA }, context: "marketplace stats" } as any
-    );
-    const stats = await statsRes.json() as any;
+    const stats = await dc.getMarketplaceStats(releaseId, "USD") as any;
     // Cache price data opportunistically
     const lowest = stats?.lowest_price?.value ?? null;
     const median = stats?.median_price?.value ?? null;
@@ -2032,14 +2027,10 @@ app.get("/marketplace-stats/:id", async (req, res) => {
 // GET /master-versions/:id — all pressings/versions of a master release
 app.get("/master-versions/:id", async (req, res) => {
   const { id } = req.params;
-  const reqToken = await getTokenForRequest(req);
-  if (!reqToken) { res.json({ versions: [] }); return; }
+  const dc = await getDiscogsForRequest(req, true);
+  if (!dc) { res.json({ versions: [] }); return; }
   try {
-    const r = await loggedFetch("discogs",
-      `https://api.discogs.com/masters/${id}/versions?per_page=100&sort=released&sort_order=asc`,
-      { headers: { "Authorization": `Discogs token=${reqToken}`, "User-Agent": MB_UA }, context: "master versions" } as any
-    );
-    const data = await r.json() as any;
+    const data = await dc.getMasterVersions(id, { perPage: 100, sort: "released", sortOrder: "asc" }) as any;
     const versions = (data.versions ?? []).map((v: any) => ({
       id:           v.id,
       title:        v.title,
