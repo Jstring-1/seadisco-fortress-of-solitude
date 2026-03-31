@@ -348,6 +348,8 @@ authReadyPromise.then(() => {
       (p) => {
         const q = document.getElementById("cw-query");
         if (q) q.value = p.q || "";
+        const hasAdvanced = ["artist","release","label","year","format","notes"].some(f => p[f]) || p.genre || p.style || p.rating;
+        if (hasAdvanced && typeof toggleCwAdvanced === "function") toggleCwAdvanced(true);
         for (const f of ["artist","release","label","year","format","notes"]) {
           const el = document.getElementById(`cw-${f}`);
           if (el) el.value = p[f] || "";
