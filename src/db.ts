@@ -447,9 +447,7 @@ export async function getAllUsersSyncStatus(): Promise<Array<{
   const r = await getPool().query(
     `SELECT ut.discogs_username, ut.collection_synced_at, ut.wantlist_synced_at,
             ut.sync_status, ut.sync_progress, ut.sync_total, ut.sync_error,
-            CASE WHEN ut.discogs_token = '__oauth__' THEN 'oauth'
-                 WHEN ut.discogs_token IS NOT NULL THEN 'pat'
-                 ELSE 'none' END AS auth_method
+            COALESCE(ut.auth_method, 'none') AS auth_method
      FROM user_tokens ut
      WHERE ut.discogs_username IS NOT NULL
      ORDER BY ut.discogs_username`

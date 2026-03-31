@@ -88,8 +88,9 @@ function openBuyPopup(idx) {
     ? `<div class="buy-popup-gallery">${allImages.map(u => `<img src="${escHtml(u)}" loading="lazy" onclick="this.parentElement.previousElementSibling.src='${escHtml(u)}'" onerror="this.style.display='none'">`).join("")}</div>`
     : "";
 
+  // Detail text (strip eBay HTML formatting)
   const detailHtml = item.detail_html
-    ? `<div class="buy-popup-description">${item.detail_html}</div>`
+    ? `<div class="buy-popup-description">${escHtml(stripHtml(item.detail_html))}</div>`
     : "";
 
   const overlay = document.createElement("div");

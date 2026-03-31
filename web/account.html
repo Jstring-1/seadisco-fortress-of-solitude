@@ -15,7 +15,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎹</text></svg>">
   <link rel="manifest" href="/site.webmanifest">
   <meta name="theme-color" content="#080706">
-  <link rel="stylesheet" href="/style.css?v=20260331a" />
+  <link rel="stylesheet" href="/style.css?v=20260331g" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -29,7 +29,7 @@
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260331a"></script>
+<script src="/shared.js?v=20260331g"></script>
 <script>renderSharedHeader({ hideRecords: true });</script>
 
 <main>
@@ -252,6 +252,15 @@ async function showAuthSection() {
     oauthSection.style.display = "none";
     if (patHint) patHint.style.display = "none";
     patSection.querySelector("h2").textContent = "Personal Access Token (optional)";
+    // If user also has a PAT saved, show it
+    if (data.masked) {
+      statusEl.textContent = `Saved token: ${data.masked}`;
+      statusEl.className = "token-status ok";
+      removeBtn.style.display = "block";
+    } else {
+      statusEl.textContent = "Connected via OAuth — PAT is optional.";
+      statusEl.className = "token-status ok";
+    }
     loadProfile();
   } else if (data?.hasToken) {
     statusEl.textContent = `Saved token: ${data.masked}`;
@@ -265,12 +274,12 @@ async function showAuthSection() {
 
   if (data?.hasToken) loadSyncStatus();
 
-  // Check for OAuth success redirect
+  // Check for OAuth success redirect — re-fetch auth state to update UI
   const urlParams = new URLSearchParams(location.search);
   if (urlParams.get("oauth") === "success") {
     history.replaceState({}, "", "/account");
-    loadProfile();
-    loadSyncStatus();
+    showAuthSection();
+    return;
   }
 }
 
