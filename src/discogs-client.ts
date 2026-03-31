@@ -82,6 +82,7 @@ export class DiscogsClient {
     year?: string;
     genre?: string;
     style?: string;
+    format?: string;
     sort?: string;
     sortOrder?: "asc" | "desc";
     page?: number;
@@ -96,6 +97,7 @@ export class DiscogsClient {
     if (options.year) params.year = options.year;
     if (options.genre) params.genre = options.genre;
     if (options.style) params.style = options.style;
+    if (options.format) params.format = options.format;
     if (options.sort) params.sort = options.sort;
     if (options.sortOrder) params.sort_order = options.sortOrder;
     params.page = String(options.page ?? 1);
