@@ -324,7 +324,7 @@ authReadyPromise.then(() => {
   }
 
   // Collection/Wantlist search — attach to the search-row (same position as main search)
-  const cwSearchRow = document.getElementById("cw-query")?.closest(".search-row");
+  const cwSearchRow = document.getElementById("records-wrap")?.querySelector(".search-row");
   if (cwSearchRow) {
     buildSavedSearchUI("records",
       () => {
