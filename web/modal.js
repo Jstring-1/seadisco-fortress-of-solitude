@@ -241,12 +241,12 @@ let _ytRepeat = "off";
 
 function toggleRepeat() {
   _ytRepeat = _ytRepeat === "off" ? "album" : _ytRepeat === "album" ? "one" : "off";
-  const labels = { off: "Repeat: off", album: "Repeat: album", one: "Repeat: one" };
-  const icons  = { off: "\u{1F501}", album: "\u{1F501}", one: "1\u{20E3}" };
+  const labels  = { off: "Repeat: off", album: "Repeat: album", one: "Repeat: one" };
+  const icons   = { off: "\u{1F501}", album: "\u{1F501}", one: "1\u{20E3}" };
+  const colors  = { off: "", album: "#4caf50", one: "var(--accent)" };
   document.querySelectorAll(".repeat-btn").forEach(btn => {
-    btn.style.color = _ytRepeat === "off" ? "" : "var(--accent)";
+    btn.style.color = colors[_ytRepeat];
     btn.title = labels[_ytRepeat];
-    // Update text — mini bar has no label, expanded has label
     if (btn.closest("#video-nav")) btn.innerHTML = `${icons[_ytRepeat]} ${labels[_ytRepeat].split(": ")[1]}`;
     else btn.innerHTML = icons[_ytRepeat];
   });
