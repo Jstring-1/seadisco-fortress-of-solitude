@@ -532,7 +532,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
           : (stats?.numForSale === 0 ? `<div style="font-size:0.75rem;color:#555;margin-top:0.2rem">Not currently available on Discogs marketplace</div>` : "")
         }
         ${stats?.releaseId ? `<div id="modal-price-extras" data-release-id="${escHtml(String(stats.releaseId))}" style="margin-top:0.3rem"></div>` : ""}
-        ${!isMaster && releaseId ? `<div id="modal-actions" class="modal-actions" data-release-id="${escHtml(String(releaseId))}" style="display:none"></div>` : ""}
+        ${!isMaster && releaseId && window._collectionIds ? renderActionsImmediate(Number(releaseId)) : ""}
       </div>
     </div>
     ${trackHTML}
@@ -540,38 +540,65 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     ${isMaster ? `<div id="master-versions-list" style="padding:0.75rem 1rem 0.5rem;font-size:0.78rem;color:var(--muted)">Loading pressings…</div>` : ""}`;
 
   if (isMaster) loadMasterVersions(null, searchResult.id);
-  if (!isMaster && releaseId) loadModalActions(releaseId);
+  // Fetch instance data in background (for rating stars + instanceId)
+  if (!isMaster && releaseId && window._collectionIds?.has(Number(releaseId))) loadModalInstanceData(Number(releaseId));
   if (stats?.releaseId) loadPriceExtras(stats.releaseId);
 }
 
 // ── Modal action buttons (collection/wantlist/rating) ────────────────────
-async function loadModalActions(releaseId) {
+
+// Render buttons immediately from local Sets (no network call)
+function renderActionsImmediate(rid) {
+  const inCol = window._collectionIds?.has(rid);
+  const inWant = window._wantlistIds?.has(rid);
+  return `<div id="modal-actions" class="modal-actions" data-release-id="${rid}">
+    <button class="modal-act-btn ${inCol ? 'active' : ''}" id="modal-col-btn" onclick="toggleCollection(${rid})" title="${inCol ? 'Remove from collection' : 'Add to collection'}">
+      ${inCol ? '<span style="color:#4caf50">✓</span> Collected' : '+ Collection'}
+    </button>
+    <button class="modal-act-btn ${inWant ? 'active' : ''}" id="modal-want-btn" onclick="toggleWantlist(${rid})" title="${inWant ? 'Remove from wantlist' : 'Add to wantlist'}">
+      ${inWant ? '<span style="color:#e05050">♡</span> Wanted' : '♡ Want'}
+    </button>
+    ${inCol ? '<span class="modal-rating" id="modal-rating" style="opacity:0.4">☆☆☆☆☆</span>' : ''}
+  </div>`;
+}
+
+// Fetch instance data in background and upgrade the rating stars
+async function loadModalInstanceData(releaseId) {
+  const el = document.getElementById("modal-actions");
+  if (!el) return;
+  const rid = Number(releaseId);
+  let instanceId = null, folderId = 1, currentRating = 0;
+  try {
+    const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
+    if (sessionToken) {
+      const data = await fetch(`/api/user/collection/instance?releaseId=${rid}`, {
+        headers: { Authorization: `Bearer ${sessionToken}` }
+      }).then(r => r.json());
+      if (data?.found) {
+        instanceId = data.instance_id;
+        folderId = data.folder_id ?? 1;
+        currentRating = data.rating ?? 0;
+      }
+    }
+  } catch {}
+  el.dataset.instanceId = instanceId ?? "";
+  el.dataset.folderId = folderId;
+  // Upgrade rating stars with actual data
+  const ratingEl = document.getElementById("modal-rating");
+  if (ratingEl) {
+    ratingEl.innerHTML = renderStars(currentRating, rid);
+    ratingEl.dataset.rating = currentRating;
+    ratingEl.style.opacity = "";
+  }
+}
+
+// Full re-render of action buttons (used after toggle actions)
+function loadModalActions(releaseId) {
   const el = document.getElementById("modal-actions");
   if (!el) return;
   const rid = Number(releaseId);
   const inCol = window._collectionIds?.has(rid);
   const inWant = window._wantlistIds?.has(rid);
-
-  // Fetch instance info for items in collection (to get instanceId for rating/remove)
-  let instanceId = null, folderId = 1, currentRating = 0;
-  if (inCol) {
-    try {
-      const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
-      if (sessionToken) {
-        const data = await fetch(`/api/user/collection/instance?releaseId=${rid}`, {
-          headers: { Authorization: `Bearer ${sessionToken}` }
-        }).then(r => r.json());
-        if (data?.found) {
-          instanceId = data.instance_id;
-          folderId = data.folder_id ?? 1;
-          currentRating = data.rating ?? 0;
-        }
-      }
-    } catch {}
-  }
-
-  el.dataset.instanceId = instanceId ?? "";
-  el.dataset.folderId = folderId;
 
   el.innerHTML = `
     <button class="modal-act-btn ${inCol ? 'active' : ''}" id="modal-col-btn" onclick="toggleCollection(${rid})" title="${inCol ? 'Remove from collection' : 'Add to collection'}">
@@ -580,13 +607,11 @@ async function loadModalActions(releaseId) {
     <button class="modal-act-btn ${inWant ? 'active' : ''}" id="modal-want-btn" onclick="toggleWantlist(${rid})" title="${inWant ? 'Remove from wantlist' : 'Add to wantlist'}">
       ${inWant ? '<span style="color:#e05050">♡</span> Wanted' : '♡ Want'}
     </button>
-    ${inCol ? `<span class="modal-rating" id="modal-rating">${renderStars(currentRating, rid)}</span>` : ''}
+    ${inCol ? '<span class="modal-rating" id="modal-rating" style="opacity:0.4">☆☆☆☆☆</span>' : ''}
   `;
-  if (inCol) {
-    const ratingEl = document.getElementById("modal-rating");
-    if (ratingEl) ratingEl.dataset.rating = currentRating;
-  }
   el.style.display = "";
+  // If in collection, fetch instance data for rating
+  if (inCol) loadModalInstanceData(rid);
 }
 
 function renderStars(rating, releaseId) {
