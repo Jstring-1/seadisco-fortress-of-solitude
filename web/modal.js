@@ -236,13 +236,19 @@ document.getElementById("bio-full-overlay").addEventListener("click", e => {
 // ── Video popup ────────────────────────────────────────────────────────────
 let ytPlayer = null;
 let _ytLoading = false;
-let _ytRepeat = false;
+// Repeat modes: "off" → "album" → "one" → "off"
+let _ytRepeat = "off";
 
 function toggleRepeat() {
-  _ytRepeat = !_ytRepeat;
+  _ytRepeat = _ytRepeat === "off" ? "album" : _ytRepeat === "album" ? "one" : "off";
+  const labels = { off: "Repeat: off", album: "Repeat: album", one: "Repeat: one" };
+  const icons  = { off: "\u{1F501}", album: "\u{1F501}", one: "1\u{20E3}" };
   document.querySelectorAll(".repeat-btn").forEach(btn => {
-    btn.style.color = _ytRepeat ? "var(--accent)" : "";
-    btn.title = _ytRepeat ? "Repeat: on" : "Repeat: off";
+    btn.style.color = _ytRepeat === "off" ? "" : "var(--accent)";
+    btn.title = labels[_ytRepeat];
+    // Update text — mini bar has no label, expanded has label
+    if (btn.closest("#video-nav")) btn.innerHTML = `${icons[_ytRepeat]} ${labels[_ytRepeat].split(": ")[1]}`;
+    else btn.innerHTML = icons[_ytRepeat];
   });
 }
 window.onYouTubeIframeAPIReady = function() { window._ytAPIReady = true; };
@@ -271,7 +277,7 @@ function loadYTVideo(id) {
     ytPlayer = new YT.Player("video-player", {
       height: "100%", width: "100%", videoId: id,
       playerVars: { autoplay: 1, rel: 0 },
-      events: { onStateChange: function(e) { if (e.data === 0) { if (_ytRepeat && ytPlayer) ytPlayer.seekTo(0); else playNextVideo(); } } }
+      events: { onStateChange: function(e) { if (e.data === 0) onVideoEnded(); } }
     });
   } else {
     document.getElementById("video-player").innerHTML =
@@ -363,6 +369,30 @@ function playNextVideo() {
     }
     next++;
   }
+}
+
+function onVideoEnded() {
+  if (_ytRepeat === "one" && ytPlayer) {
+    ytPlayer.seekTo(0);
+    return;
+  }
+  if (_ytRepeat === "album") {
+    const queue = window._videoQueue ?? [];
+    let next = (window._videoQueueIndex ?? -1) + 1;
+    // Try next track; if at end, loop back to first
+    while (next < queue.length) {
+      const id = extractYouTubeId(queue[next]);
+      if (id) { window._videoQueueIndex = next; setVideoUrl(id); loadYTVideo(id); updateVideoNavButtons(); return; }
+      next++;
+    }
+    // Wrap to beginning
+    for (let i = 0; i < queue.length; i++) {
+      const id = extractYouTubeId(queue[i]);
+      if (id) { window._videoQueueIndex = i; setVideoUrl(id); loadYTVideo(id); updateVideoNavButtons(); return; }
+    }
+    return;
+  }
+  playNextVideo();
 }
 
 function closeVideo() {
