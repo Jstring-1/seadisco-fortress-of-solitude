@@ -444,9 +444,7 @@ function extractYouTubeId(url) {
   } catch { return null; }
 }
 
-document.getElementById("video-overlay").addEventListener("click", e => {
-  if (e.target === document.getElementById("video-overlay")) closeVideo();
-});
+// video-overlay was replaced by mini-player — no click-to-close needed
 
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") {
