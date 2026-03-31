@@ -120,6 +120,7 @@ async function doSearch(page = 1, skipPushState = false) {
     closeAltsPopup();
     setStatus("");
     document.getElementById("results").innerHTML = renderSkeletonGrid(16);
+    document.getElementById("pagination").style.display = "none";
   } else {
     // Show loading indicator for "load more"
     const lmBtn = document.getElementById("search-load-more-btn");
