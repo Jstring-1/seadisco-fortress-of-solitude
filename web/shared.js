@@ -95,7 +95,9 @@ async function loadClerkInstance() {
 function renderSharedHeader(opts) {
   const isSPA = opts?.spa;
   const active = opts?.active || "";
+  const hideRecords = opts?.hideRecords;
   const tab = (label, view) => {
+    if (hideRecords && view === "records") return "";
     if (isSPA) {
       const cls = view === active ? ' active' : '';
       if (view === 'records') {
