@@ -113,7 +113,7 @@ async function getTokenForRequest(req: express.Request, allowFallback = false): 
   const userId = getClerkUserId(req);
   if (userId) {
     const userToken = await getUserToken(userId);
-    if (userToken) return userToken;
+    if (userToken && userToken !== "__oauth__") return userToken;
   }
   // Fall back to shared token when auth is disabled OR when explicitly allowed (bio endpoints)
   if (!requireAuth || allowFallback) return sharedToken || null;

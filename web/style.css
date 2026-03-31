@@ -70,7 +70,7 @@ html { overflow-x: hidden; }
     padding: 0 0.2rem;
   }
   .type-sort-row > span { display: none; }
-  .type-radios     { order: 1; }
+  .type-radios     { order: 1; flex-basis: 100%; justify-content: center; }
   #advanced-toggle { order: 10; }
   .sort-label      { order: 10; }
   #hide-owned-label { order: 10; font-size: 0.72rem; }
