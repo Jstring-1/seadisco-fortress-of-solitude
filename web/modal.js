@@ -756,52 +756,14 @@ async function loadPriceExtras(releaseId) {
 
   // Fetch price history for sparkline
   try {
-    const [histRes, alertsRes] = await Promise.all([
-      apiFetch(`/api/price-history/${rid}?days=90`).then(r => r.json()).catch(() => ({ history: [] })),
-      (async () => {
-        const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
-        if (!sessionToken) return { alerts: [] };
-        return fetch("/api/user/alerts", { headers: { Authorization: `Bearer ${sessionToken}` } }).then(r => r.json()).catch(() => ({ alerts: [] }));
-      })()
-    ]);
+    const histRes = await apiFetch(`/api/price-history/${rid}?days=90`).then(r => r.json()).catch(() => ({ history: [] }));
 
     const points = histRes.history ?? [];
-    const userAlerts = (alertsRes.alerts ?? []).filter(a => a.release_id === rid || a.releaseId === rid);
     let html = "";
 
     // Sparkline SVG
     if (points.length >= 2) {
       html += renderSparkline(points);
-    }
-
-    // Existing alert for this release
-    if (userAlerts.length > 0) {
-      for (const a of userAlerts) {
-        const th = parseFloat(a.threshold ?? a.price_threshold).toFixed(2);
-        const typ = a.type ?? a.alert_type ?? "below";
-        const aid = a.id ?? a.alert_id;
-        html += `<div class="price-alert-row" id="pa-${aid}">
-          <span style="font-size:0.72rem;color:#aaa">🔔 Alert when ${typ === "below" ? "below" : "above"} $${th}</span>
-          <button onclick="deleteAlert(${aid},${rid})" style="background:none;border:none;color:#666;cursor:pointer;font-size:0.72rem;padding:0 0.3rem" title="Remove alert">✕</button>
-        </div>`;
-      }
-    }
-
-    // Add alert button/form
-    const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
-    if (sessionToken) {
-      html += `<div id="price-alert-form" style="margin-top:0.25rem">
-        <button onclick="toggleAlertForm()" class="modal-act-btn" style="font-size:0.68rem;padding:0.15rem 0.5rem" id="alert-toggle-btn">🔔 Set Price Alert</button>
-        <div id="alert-form-fields" style="display:none;margin-top:0.3rem;align-items:center;gap:0.3rem;flex-wrap:wrap">
-          <select id="alert-type" style="font-size:0.68rem;background:#1a1a1a;border:1px solid #333;color:#aaa;border-radius:4px;padding:0.15rem 0.3rem;font-family:inherit">
-            <option value="below">Drops below</option>
-            <option value="above">Rises above</option>
-          </select>
-          <span style="color:#666;font-size:0.72rem">$</span>
-          <input type="number" id="alert-threshold" step="0.01" min="0" placeholder="0.00" style="width:5rem;font-size:0.68rem;background:#1a1a1a;border:1px solid #333;color:#ccc;border-radius:4px;padding:0.15rem 0.3rem;font-family:inherit" />
-          <button onclick="createAlert(${rid})" class="modal-act-btn" style="font-size:0.68rem;padding:0.15rem 0.5rem;border-color:#4caf50;color:#4caf50">Save</button>
-        </div>
-      </div>`;
     }
 
     el.innerHTML = html;
@@ -839,46 +801,6 @@ function renderSparkline(points) {
   </div>`;
 }
 
-function toggleAlertForm() {
-  const fields = document.getElementById("alert-form-fields");
-  if (!fields) return;
-  fields.style.display = fields.style.display === "flex" ? "none" : "flex";
-}
-
-async function createAlert(releaseId) {
-  const type = document.getElementById("alert-type")?.value || "below";
-  const threshold = parseFloat(document.getElementById("alert-threshold")?.value);
-  if (!threshold || threshold <= 0) { showToast("Enter a valid price", "error"); return; }
-  try {
-    const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
-    if (!sessionToken) return;
-    const r = await fetch("/api/user/alerts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
-      body: JSON.stringify({ releaseId, type, threshold })
-    }).then(r => r.json());
-    if (r.ok) {
-      showToast(`Alert set: ${type === "below" ? "drops below" : "rises above"} $${threshold.toFixed(2)}`);
-      loadPriceExtras(releaseId);
-    } else {
-      showToast(r.error || "Failed to create alert", "error");
-    }
-  } catch { showToast("Failed to create alert", "error"); }
-}
-
-async function deleteAlert(alertId, releaseId) {
-  try {
-    const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
-    if (!sessionToken) return;
-    await fetch(`/api/user/alerts/${alertId}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${sessionToken}` }
-    });
-    const row = document.getElementById(`pa-${alertId}`);
-    if (row) row.remove();
-    showToast("Alert removed");
-  } catch { showToast("Failed to remove alert", "error"); }
-}
 
 function refreshCardBadges(releaseId) {
   // Re-render badges on any visible card with this release ID

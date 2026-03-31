@@ -67,8 +67,6 @@ function addNavTab(view) {
 
 function switchView(view, skipPushState = false) {
   document.getElementById("main-nav-tabs")?.classList.remove("mobile-open");
-  const cvWrap = document.getElementById("collection-value-wrap");
-  if (cvWrap && view !== "records") cvWrap.style.display = "none";
   const tabBtn = document.querySelector(`#main-nav-tabs [data-view="${view}"]`);
   if (tabBtn?.classList.contains("nav-disabled")) return;
 
@@ -293,9 +291,6 @@ function switchRecordsTab(tab, skipPush) {
 
   clearCwFilters();
 
-  // Hide collection value card when not on collection tab
-  const cvWrap = document.getElementById("collection-value-wrap");
-
   if (tab === "collection") {
     if (cwInput) { cwInput.placeholder = "Search your collection\u2026"; cwInput.value = ""; }
     if (controlsRow) controlsRow.style.display = "";
@@ -304,7 +299,6 @@ function switchRecordsTab(tab, skipPush) {
     loadCollectionFolders();
     loadCollectionTab(1);
   } else if (tab === "wantlist") {
-    if (cvWrap) cvWrap.style.display = "none";
     if (cwInput) { cwInput.placeholder = "Search your wantlist\u2026"; cwInput.value = ""; }
     if (controlsRow) controlsRow.style.display = "";
     if (exportBtn) exportBtn.style.display = "";
@@ -312,14 +306,12 @@ function switchRecordsTab(tab, skipPush) {
     loadCwFacets("wantlist");
     loadWantlistTab(1);
   } else if (tab === "inventory") {
-    if (cvWrap) cvWrap.style.display = "none";
     if (cwInput) { cwInput.placeholder = "Search your inventory\u2026"; cwInput.value = ""; }
     if (controlsRow) controlsRow.style.display = "none";
     if (advPanel) advPanel.style.display = "none";
     if (folderCloud) folderCloud.style.display = "none";
     loadInventoryTab(1);
   } else if (tab === "lists") {
-    if (cvWrap) cvWrap.style.display = "none";
     if (cwInput) { cwInput.placeholder = "Search your lists\u2026"; cwInput.value = ""; }
     if (controlsRow) controlsRow.style.display = "none";
     if (advPanel) advPanel.style.display = "none";
@@ -535,19 +527,11 @@ async function loadCollectionTab(page = 1, filters) {
   const f = filters || getCwFilters();
   const cwSort = document.getElementById("cw-sort")?.value || "";
 
-  // Price-based sorts use a different endpoint
-  const priceSorts = ["value_desc", "value_asc", "gaining"];
-  if (priceSorts.includes(cwSort) && !Object.keys(f).length) {
-    return loadCollectionPriceView(page, cwSort);
-  }
-
   setActiveTab("collection");
   document.getElementById("blurb").style.display = "none";
   document.getElementById("results").innerHTML = renderSkeletonGrid(16);
   document.getElementById("pagination").style.display = "none";
   setStatus("");
-  // Load collection value summary in background
-  loadCollectionValueCard();
   try {
     let url = `/api/user/collection?page=${page}&per_page=96`;
     if (f.q)       url += `&q=${encodeURIComponent(f.q)}`;
@@ -586,95 +570,6 @@ async function loadCollectionTab(page = 1, filters) {
     setStatus("Failed to load collection: " + e.message, true);
     showToast("Failed to load collection — please try again", "error");
   }
-}
-
-// Price-based collection view (Sort by Value / Gaining Value)
-async function loadCollectionPriceView(page, sort) {
-  setActiveTab("collection");
-  document.getElementById("blurb").style.display = "none";
-  document.getElementById("results").innerHTML = renderSkeletonGrid(16);
-  document.getElementById("pagination").style.display = "none";
-  setStatus("");
-  loadCollectionValueCard();
-  try {
-    const url = `/api/user/collection/prices?sort=${sort}&page=${page}&per_page=96`;
-    const r = await apiFetch(url);
-    const data = await r.json();
-    const items = data.items ?? [];
-    if (!items.length) {
-      setStatus("");
-      document.getElementById("results").innerHTML = renderEmptyState("📀", "No price data yet", "Browse some releases to start building price history");
-      return;
-    }
-    const sortLabel = { value_desc: "Value (High)", value_asc: "Value (Low)", gaining: "Gaining Value" }[sort] || sort;
-    setStatus(`${data.total} items — sorted by ${sortLabel} — page ${page} of ${data.pages}`);
-    document.getElementById("results").innerHTML = items.map((item, i) => renderPriceCard(item, i)).join("");
-    totalPages = data.pages;
-    currentPage = page;
-    renderCollectionPagination("collection");
-  } catch (e) {
-    setStatus("Failed to load prices: " + e.message, true);
-  }
-}
-
-function renderPriceCard(item, index) {
-  const basicInfo = item.data || {};
-  const artistName = (basicInfo.artists ?? []).map(a => a.name).join(", ");
-  const catno = (basicInfo.labels ?? []).map(l => l.catno).filter(Boolean)[0] ?? "";
-  const syntheticItem = {
-    id:           item.releaseId,
-    type:         "release",
-    title:        artistName ? `${artistName} - ${basicInfo.title}` : (basicInfo.title || "Unknown"),
-    cover_image:  basicInfo.cover_image || basicInfo.thumb || "",
-    label:        (basicInfo.labels ?? []).map(l => l.name),
-    format:       (basicInfo.formats ?? []).map(f => f.name),
-    genre:        basicInfo.genres ?? [],
-    year:         String(basicInfo.year ?? ""),
-    country:      "",
-    catno:        catno,
-    uri:          item.releaseId ? `/release/${item.releaseId}` : "",
-    _rating:      item.rating ?? 0,
-    _price:       item.price ? item.price : null,
-  };
-  return renderCard(syntheticItem, index);
-}
-
-// Collection value summary card
-async function loadCollectionValueCard() {
-  let wrap = document.getElementById("collection-value-wrap");
-  if (!wrap) {
-    // Create the wrapper above results
-    const results = document.getElementById("results");
-    if (!results) return;
-    wrap = document.createElement("div");
-    wrap.id = "collection-value-wrap";
-    results.parentNode.insertBefore(wrap, results);
-  }
-  wrap.innerHTML = "";
-  try {
-    const data = await apiFetch("/api/user/collection/value").then(r => r.json());
-    if (!data || data.pricedCount === 0) { wrap.style.display = "none"; return; }
-    const fmt = (n) => "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
-    wrap.style.display = "";
-    wrap.innerHTML = `<div class="collection-value-card">
-      <div class="cv-stat">
-        <span class="cv-label">Median Value</span>
-        <span class="cv-amount">${fmt(data.totalMedian)}</span>
-      </div>
-      <div class="cv-stat">
-        <span class="cv-label">Low Est.</span>
-        <span class="cv-amount-sm">${fmt(data.totalMin)}</span>
-      </div>
-      <div class="cv-stat">
-        <span class="cv-label">High Est.</span>
-        <span class="cv-amount-sm">${fmt(data.totalMax)}</span>
-      </div>
-      <div class="cv-stat">
-        <span class="cv-label">Priced</span>
-        <span class="cv-amount-sm">${data.pricedCount} / ${data.totalCount}</span>
-      </div>
-    </div>`;
-  } catch { wrap.style.display = "none"; }
 }
 
 async function loadWantlistTab(page = 1, filters) {
@@ -863,73 +758,3 @@ async function loadDiscogsIds() {
   } catch { /* ignore */ }
 }
 
-// ── Price alert toast polling ─────────────────────────────────────────────
-let _alertPollInterval = null;
-
-function startAlertPolling() {
-  if (_alertPollInterval) return;
-  // Ensure container exists
-  if (!document.getElementById("alert-toast-container")) {
-    const c = document.createElement("div");
-    c.id = "alert-toast-container";
-    c.className = "alert-toast-container";
-    document.body.appendChild(c);
-  }
-  pollTriggeredAlerts();
-  _alertPollInterval = setInterval(pollTriggeredAlerts, 60000);
-}
-
-function stopAlertPolling() {
-  if (_alertPollInterval) { clearInterval(_alertPollInterval); _alertPollInterval = null; }
-}
-
-let _alertPollFailures = 0;
-async function pollTriggeredAlerts() {
-  try {
-    const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
-    if (!sessionToken) return;
-    const data = await fetch("/api/user/alerts/triggered", {
-      headers: { Authorization: `Bearer ${sessionToken}` }
-    }).then(r => r.json());
-    _alertPollFailures = 0; // reset on success
-    const alerts = data.alerts ?? [];
-    const container = document.getElementById("alert-toast-container");
-    if (!container || !alerts.length) return;
-    for (const a of alerts) {
-      const aid = a.id ?? a.alert_id;
-      if (document.getElementById(`alert-toast-${aid}`)) continue;
-      const price = parseFloat(a.current_price ?? a.currentPrice ?? 0).toFixed(2);
-      const threshold = parseFloat(a.threshold ?? a.price_threshold ?? 0).toFixed(2);
-      const type = a.alert_type ?? a.type ?? "below";
-      const title = a.release_title ?? a.releaseTitle ?? `Release #${a.release_id ?? a.releaseId}`;
-      const toast = document.createElement("div");
-      toast.className = "alert-toast";
-      toast.id = `alert-toast-${aid}`;
-      toast.innerHTML = `
-        <span>🔔</span>
-        <span><strong>${escHtml(title)}</strong> ${type === "below" ? "dropped to" : "rose to"} $${price} (alert: $${threshold})</span>
-        <button class="alert-dismiss" onclick="dismissAlertToast(${aid})" title="Dismiss">✕</button>
-      `;
-      container.appendChild(toast);
-      // Auto-dismiss after 15 seconds
-      setTimeout(() => { const el = document.getElementById(`alert-toast-${aid}`); if (el) el.remove(); }, 15000);
-    }
-  } catch {
-    _alertPollFailures++;
-    if (_alertPollFailures >= 3) { stopAlertPolling(); }
-  }
-}
-
-async function dismissAlertToast(alertId) {
-  const el = document.getElementById(`alert-toast-${alertId}`);
-  if (el) el.remove();
-  try {
-    const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
-    if (!sessionToken) return;
-    await fetch("/api/user/alerts/dismiss", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
-      body: JSON.stringify({ alertId })
-    });
-  } catch {}
-}
