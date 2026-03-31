@@ -272,17 +272,34 @@ function loadYTVideo(id) {
     ytPlayer.loadVideoById(id);
     return;
   }
+  // Wait for YT API so we always get onStateChange events (needed for repeat/auto-advance)
   if (window._ytAPIReady && typeof YT !== "undefined") {
-    document.getElementById("video-player").innerHTML = "";
-    ytPlayer = new YT.Player("video-player", {
-      height: "100%", width: "100%", videoId: id,
-      playerVars: { autoplay: 1, rel: 0 },
-      events: { onStateChange: function(e) { if (e.data === 0) onVideoEnded(); } }
-    });
+    _createYTPlayer(id);
   } else {
-    document.getElementById("video-player").innerHTML =
-      `<iframe src="https://www.youtube.com/embed/${id}?autoplay=1&enablejsapi=1" style="width:100%;height:100%;border:none" allow="autoplay;encrypted-media" allowfullscreen></iframe>`;
+    // Poll briefly for API readiness, then create player
+    let attempts = 0;
+    const poll = setInterval(() => {
+      attempts++;
+      if (window._ytAPIReady && typeof YT !== "undefined") {
+        clearInterval(poll);
+        _createYTPlayer(id);
+      } else if (attempts > 40) {
+        // Fallback after ~4s if API never loads
+        clearInterval(poll);
+        document.getElementById("video-player").innerHTML =
+          `<iframe src="https://www.youtube.com/embed/${id}?autoplay=1" style="width:100%;height:100%;border:none" allow="autoplay;encrypted-media" allowfullscreen></iframe>`;
+      }
+    }, 100);
   }
+}
+
+function _createYTPlayer(id) {
+  document.getElementById("video-player").innerHTML = "";
+  ytPlayer = new YT.Player("video-player", {
+    height: "100%", width: "100%", videoId: id,
+    playerVars: { autoplay: 1, rel: 0 },
+    events: { onStateChange: function(e) { if (e.data === 0) onVideoEnded(); } }
+  });
 }
 
 function updateVideoNavButtons() {
@@ -374,6 +391,7 @@ function playNextVideo() {
 function onVideoEnded() {
   if (_ytRepeat === "one" && ytPlayer) {
     ytPlayer.seekTo(0);
+    ytPlayer.playVideo();
     return;
   }
   if (_ytRepeat === "album") {
