@@ -4,8 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SeaDisco — Music Discovery Platform | Search, News, Concerts, Gear &amp; Collection</title>
-  <meta name="description" content="SeaDisco — music discovery powered by Discogs. Search, manage your collection and wantlist, rate releases, track vinyl prices, and connect via OAuth." />
-  <meta name="keywords" content="discogs search, vinyl search, music discovery, new music releases, music news, concert finder, vintage audio gear, turntable, vinyl collection, wantlist, record search, jazz, blues, world music, audiophile, price tracking, vinyl value, record prices, OAuth, Discogs OAuth" />
+  <meta name="description" content="SeaDisco — music discovery powered by Discogs. Search, manage your collection and wantlist, rate releases, and connect via OAuth." />
+  <meta name="keywords" content="discogs search, vinyl search, music discovery, new music releases, music news, concert finder, vintage audio gear, turntable, vinyl collection, wantlist, record search, jazz, blues, world music, audiophile, OAuth, Discogs OAuth" />
   <meta name="robots" content="index, follow" />
   <link rel="canonical" href="https://seadisco.com/" />
 
@@ -13,13 +13,13 @@
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://seadisco.com/" />
   <meta property="og:title" content="SeaDisco — Music Discovery Platform" />
-  <meta property="og:description" content="Discover music your way. Search Discogs, manage your collection and wantlist, rate releases, and track vinyl prices." />
+  <meta property="og:description" content="Discover music your way. Search Discogs, manage your collection and wantlist, rate releases, browse auctions, and discover new music." />
   <meta property="og:image" content="https://seadisco.com/seadisco-logo.png" />
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="SeaDisco — Music Discovery Platform" />
-  <meta name="twitter:description" content="Discover music your way. Search Discogs, manage your collection and wantlist, rate releases, and track vinyl prices." />
+  <meta name="twitter:description" content="Discover music your way. Search Discogs, manage your collection and wantlist, rate releases, browse auctions, and discover new music." />
   <meta name="twitter:image" content="https://seadisco.com/seadisco-logo.png" />
 
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
@@ -29,7 +29,7 @@
   <link rel="preconnect" href="https://api.discogs.com" />
   <link rel="preconnect" href="https://i.discogs.com" />
   <link rel="preconnect" href="https://i.ebayimg.com" />
-  <link rel="stylesheet" href="/style.css?v=20260331m" />
+  <link rel="stylesheet" href="/style.css?v=20260331n" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -46,11 +46,11 @@
     "@type": "WebApplication",
     "name": "SeaDisco",
     "url": "https://seadisco.com",
-    "description": "Music discovery platform powered by Discogs. Search artists, releases, and labels. Manage your collection and wantlist, rate releases, and track vinyl prices via OAuth.",
+    "description": "Music discovery platform powered by Discogs. Search artists, releases, and labels. Manage your collection and wantlist, rate releases, and connect via OAuth.",
     "applicationCategory": "MusicApplication",
     "operatingSystem": "Any",
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-    "featureList": "Music Search, New Releases, Music News Feed, Concert Finder, Vintage Audio Gear Auctions, Collection Sync, Wantlist Management, Ratings, Price Tracking, OAuth Connection",
+    "featureList": "Music Search, New Releases, Music News Feed, Concert Finder, Vintage Audio Gear Auctions, Collection Sync, Wantlist Management, Ratings, OAuth Connection",
     "potentialAction": {
       "@type": "SearchAction",
       "target": "https://seadisco.com/?q={search_term_string}",
@@ -62,7 +62,7 @@
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260331m"></script>
+<script src="/shared.js?v=20260331n"></script>
 <script>renderSharedHeader({ spa: true, active: "search" });</script>
 <div id="search-view">
 
@@ -442,7 +442,7 @@
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Searching</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Search the entire Discogs database by artist, album, label, or any combination. Click <strong style="color:#ccc">Advanced</strong> for targeted fields (Artist, Release, Label, Year, Genre/Style, Format). Narrow by type — <strong style="color:#ccc">Masters</strong> (every pressing grouped) or <strong style="color:#ccc">Releases</strong> (individual pressings). Sort by relevance, year, title, or label.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Click any card for full details: tracklist with YouTube previews, version finder, pressing info, credits, marketplace pricing, and photos. From the detail popup you can <strong style="color:#ccc">add/remove items from your collection or wantlist</strong>, <strong style="color:#ccc">rate releases</strong> 1–5 stars, view a <strong style="color:#ccc">90-day price sparkline</strong>, and <strong style="color:#ccc">set price alerts</strong>. <strong style="color:#ccc">Hide owned</strong> removes synced collection items from results. Select <strong style="color:#ccc">✦ AI</strong> to describe what you want in plain language — Claude returns 12 curated picks with Discogs links.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Click any card for full details: tracklist with YouTube previews, version finder, pressing info, credits, and photos. From the detail popup you can <strong style="color:#ccc">add/remove items from your collection or wantlist</strong> and <strong style="color:#ccc">rate releases</strong> 1–5 stars. <strong style="color:#ccc">Hide owned</strong> removes synced collection items from results. Select <strong style="color:#ccc">✦ AI</strong> to describe what you want in plain language — Claude returns 12 curated picks with Discogs links.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Latest Drops</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">150 random picks from a rolling 3-month database of 20,000+ releases via <a href="https://listenbrainz.org" target="_blank" rel="noopener" style="color:#5a9aaa">ListenBrainz</a>/<a href="https://musicbrainz.org" target="_blank" rel="noopener" style="color:#5a9aaa">MusicBrainz</a>, refreshed every 6 hours. Filter by the tag cloud or genre dropdown, or search the full database by artist, title, or tag.</p>
@@ -468,9 +468,6 @@
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Collection Actions</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">From any release detail popup, you can add or remove items from your collection and wantlist with one click. Rate releases 1–5 stars — ratings sync to your Discogs account. All actions update instantly with optimistic UI and revert gracefully if anything goes wrong.</p>
 
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Price Tracking</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco tracks marketplace pricing for releases. Each release detail popup shows a <strong style="color:#ccc">90-day price sparkline</strong> with trend indicators, plus current marketplace stats.</p>
-
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Account &amp; Limits</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">Anonymous users are capped at <strong style="color:#ccc">5 searches/day</strong> on a shared token. Sign up free and connect your Discogs account — either via <strong style="color:#ccc">OAuth</strong> or by adding your own token (<strong style="color:#ccc">discogs.com → Settings → Developers</strong>) — for unlimited searches and full features.</p>
 </div>
@@ -482,13 +479,12 @@
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">What We Collect</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you create an account, we store your email address (provided by our authentication provider, Clerk) and any Discogs credentials you choose to connect — either a Personal Access Token or OAuth access credentials.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you sync your collection, we store a local copy of your Discogs collection, wantlist, inventory, and list metadata so you can browse and search them on SeaDisco. We also cache your Discogs profile information (username, avatar, and account stats) for display on the Account page.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you browse releases, we cache marketplace pricing data (lowest, median, and highest prices) to power price sparklines. This pricing data is shared across all users — it reflects public Discogs marketplace data, not individual purchase history.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0">We log API usage for operational monitoring. This data is used solely for debugging and improving the service. We do not store your search queries, location data, or taste profiles.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Third-Party Services</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">SeaDisco integrates with the following third-party services:</p>
   <ul style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem;padding-left:1.2rem">
-    <li><strong style="color:#ccc">Discogs</strong> — music database searches, collection syncing, marketplace pricing, and collection actions, using your personal API token or OAuth authorization</li>
+    <li><strong style="color:#ccc">Discogs</strong> — music database searches, collection syncing, and collection actions, using your personal API token or OAuth authorization</li>
     <li><strong style="color:#ccc">Clerk</strong> — authentication and account management</li>
     <li><strong style="color:#ccc">Ticketmaster &amp; Bandsintown</strong> — live event data (no personal data is shared)</li>
     <li><strong style="color:#ccc">eBay</strong> — vintage audio gear and vinyl record listings (no personal data is shared)</li>
@@ -501,8 +497,7 @@
   <p style="font-size:0.84rem;color:#aaa;margin:0">If you connect via OAuth, SeaDisco receives limited access to your Discogs account through the standard OAuth 1.0a flow. We store the resulting access token and secret to make API requests on your behalf. We do not receive or store your Discogs password. You can disconnect OAuth at any time from the Account page, which immediately revokes our access.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">How We Use Your Data</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Your Discogs credentials (token or OAuth) are used solely to make API requests to Discogs on your behalf — searching, syncing your collection, managing your collection/wantlist, and fetching marketplace data. We never share your credentials with any other service or third party. Your collection data is used only to display your records within SeaDisco.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Marketplace pricing data is cached to provide price sparklines. This data is refreshed periodically in the background and is not linked to any individual user's purchase history.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Your Discogs credentials (token or OAuth) are used solely to make API requests to Discogs on your behalf — searching, syncing your collection, and managing your collection/wantlist. We never share your credentials with any other service or third party. Your collection data is used only to display your records within SeaDisco.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0">We do not sell, rent, or share your personal data with anyone.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Data Storage &amp; Security</h3>
@@ -510,7 +505,7 @@
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Data Retention &amp; Deletion</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">User data (collection, wantlist, inventory, lists, and orders) is automatically purged after 30 days or deleted by the user. Your authentication tokens are retained for as long as your account exists.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Temporary operational data is also pruned automatically: expired gear listings, past live events, API logs, feed article caches, and price history older than one year.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Temporary operational data is also pruned automatically: expired gear listings, past live events, API logs, and feed article caches.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0">You can delete your account at any time from the Account tab. Deleting your account <strong style="color:#ccc">permanently removes all of your data</strong> from our database, including your email, Discogs credentials, collection, wantlist, inventory, lists, orders, and profile data. Your Clerk authentication account is also deleted. This action is immediate and irreversible — there is no way to recover your data after deletion.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Cookies</h3>
@@ -631,16 +626,16 @@
   <div id="lightbox-counter"></div>
 </div>
 
-<script src="/utils.js?v=20260331m"></script>
-<script src="/search.js?v=20260331m"></script>
-<script src="/collection.js?v=20260331m"></script>
-<script src="/modal.js?v=20260331m"></script>
-<script src="/drops.js?v=20260331m"></script>
-<script src="/live.js?v=20260331m"></script>
-<script src="/buy.js?v=20260331m"></script>
-<script src="/gear.js?v=20260331m"></script>
-<script src="/feed.js?v=20260331m"></script>
-<script src="/app.js?v=20260331m"></script>
+<script src="/utils.js?v=20260331n"></script>
+<script src="/search.js?v=20260331n"></script>
+<script src="/collection.js?v=20260331n"></script>
+<script src="/modal.js?v=20260331n"></script>
+<script src="/drops.js?v=20260331n"></script>
+<script src="/live.js?v=20260331n"></script>
+<script src="/buy.js?v=20260331n"></script>
+<script src="/gear.js?v=20260331n"></script>
+<script src="/feed.js?v=20260331n"></script>
+<script src="/app.js?v=20260331n"></script>
 
 </body>
 </html>
