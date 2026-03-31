@@ -75,7 +75,7 @@ function openVideoPlayer(videoId, title) {
   player.innerHTML = `<iframe width="100%" height="100%" src="https://www.youtube.com/embed/${videoId}?autoplay=1" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>`;
   const titleEl = document.getElementById("mini-player-title");
   if (titleEl) titleEl.textContent = title || "Playing";
-  mp.classList.add("open", "expanded");
+  mp.classList.add("open");
   document.body.classList.add("player-open");
   document.getElementById("video-prev")?.setAttribute("disabled", "true");
   document.getElementById("video-next")?.setAttribute("disabled", "true");
