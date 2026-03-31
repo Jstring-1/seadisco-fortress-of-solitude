@@ -319,7 +319,6 @@ function openVideo(event, url) {
   setVideoUrl(id);
   const mp = document.getElementById("mini-player");
   mp.classList.add("open");
-  mp.classList.add("expanded");
   document.body.classList.add("player-open");
   loadYTVideo(id);
   updateVideoNavButtons();
