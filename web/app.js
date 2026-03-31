@@ -222,6 +222,8 @@ authReadyPromise.then(() => {
         }
         const sort = document.getElementById("f-sort");
         if (sort && p.sort) sort.value = p.sort;
+        const hasAdvanced = ["artist","release","label","year","genre","style","format"].some(f => p[f]);
+        if (hasAdvanced) toggleAdvanced(true);
         for (const f of ["artist","release","label","year","genre","style","format"]) {
           const el = document.getElementById(`f-${f}`);
           if (el) el.value = p[f] || "";
