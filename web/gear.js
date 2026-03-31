@@ -91,9 +91,9 @@ function openGearPopup(idx) {
     ? `<div class="gear-popup-gallery">${allImages.map(u => `<img src="${escHtml(u)}" loading="lazy" onclick="this.parentElement.previousElementSibling.src='${escHtml(u)}'" onerror="this.style.display='none'">`).join("")}</div>`
     : "";
 
-  // Detail HTML (from getItem)
+  // Detail text (strip eBay HTML formatting)
   const detailHtml = item.detail_html
-    ? `<div class="gear-popup-description">${item.detail_html}</div>`
+    ? `<div class="gear-popup-description">${escHtml(stripHtml(item.detail_html))}</div>`
     : "";
 
   const overlay = document.createElement("div");

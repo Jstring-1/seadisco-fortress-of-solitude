@@ -818,8 +818,8 @@ a.fresh-card-search-link:hover {
 .buy-popup-description {
   margin-top: 0.6rem; border-top: 1px solid var(--border); padding-top: 0.5rem;
   font-size: 0.78rem; color: #bbb; max-height: 200px; overflow-y: auto; line-height: 1.4;
+  white-space: pre-line; word-break: break-word;
 }
-.buy-popup-description img { max-width: 100%; height: auto; }
 .buy-popup-ebay-link {
   display: inline-block; margin-top: 0.75rem; padding: 0.4rem 1rem;
   background: #4a9eda; color: #000; border-radius: 6px; text-decoration: none;
@@ -958,8 +958,8 @@ a.fresh-card-search-link:hover {
 .gear-popup-description {
   margin-top: 0.6rem; border-top: 1px solid var(--border); padding-top: 0.5rem;
   font-size: 0.78rem; color: #bbb; max-height: 200px; overflow-y: auto; line-height: 1.4;
+  white-space: pre-line; word-break: break-word;
 }
-.gear-popup-description img { max-width: 100%; height: auto; }
 .gear-popup-ebay-link {
   display: inline-block; margin-top: 0.75rem; padding: 0.4rem 1rem;
   background: #daa520; color: #000; border-radius: 6px; text-decoration: none;

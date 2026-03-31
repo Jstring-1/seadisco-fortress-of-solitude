@@ -1,6 +1,23 @@
 // ── Config ─────────────────────────────────────────────────────────────────
 const API = "";
 
+// ── HTML strip helper (for eBay descriptions) ───────────────────────────
+function stripHtml(html) {
+  const div = document.createElement("div");
+  div.innerHTML = html;
+  // Convert <br>, <p>, <div>, <li> to newlines for readability
+  div.querySelectorAll("br").forEach(el => el.replaceWith("\n"));
+  div.querySelectorAll("p, div, li, tr, h1, h2, h3, h4, h5, h6").forEach(el => {
+    el.prepend(document.createTextNode("\n"));
+    el.append(document.createTextNode("\n"));
+  });
+  // Get text, collapse excessive whitespace
+  let text = div.textContent || "";
+  text = text.replace(/[ \t]+/g, " ");           // collapse horizontal space
+  text = text.replace(/\n{3,}/g, "\n\n");         // max 2 consecutive newlines
+  return text.trim();
+}
+
 // ── Auth helpers ─────────────────────────────────────────────────────────
 async function apiFetch(url, options = {}) {
   const headers = { ...(options.headers ?? {}) };
