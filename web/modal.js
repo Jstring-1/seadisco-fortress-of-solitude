@@ -298,7 +298,10 @@ function _createYTPlayer(id) {
   ytPlayer = new YT.Player("video-player", {
     height: "100%", width: "100%", videoId: id,
     playerVars: { autoplay: 1, rel: 0 },
-    events: { onStateChange: function(e) { if (e.data === 0) onVideoEnded(); } }
+    events: {
+      onStateChange: function(e) { if (e.data === 0) onVideoEnded(); },
+      onError: function() { playNextVideo(); }
+    }
   });
 }
 
