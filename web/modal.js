@@ -236,6 +236,15 @@ document.getElementById("bio-full-overlay").addEventListener("click", e => {
 // ── Video popup ────────────────────────────────────────────────────────────
 let ytPlayer = null;
 let _ytLoading = false;
+let _ytRepeat = false;
+
+function toggleRepeat() {
+  _ytRepeat = !_ytRepeat;
+  document.querySelectorAll(".repeat-btn").forEach(btn => {
+    btn.style.color = _ytRepeat ? "var(--accent)" : "";
+    btn.title = _ytRepeat ? "Repeat: on" : "Repeat: off";
+  });
+}
 window.onYouTubeIframeAPIReady = function() { window._ytAPIReady = true; };
 
 function ensureYTAPI() {
@@ -262,7 +271,7 @@ function loadYTVideo(id) {
     ytPlayer = new YT.Player("video-player", {
       height: "100%", width: "100%", videoId: id,
       playerVars: { autoplay: 1, rel: 0 },
-      events: { onStateChange: function(e) { if (e.data === 0) playNextVideo(); } }
+      events: { onStateChange: function(e) { if (e.data === 0) { if (_ytRepeat && ytPlayer) ytPlayer.seekTo(0); else playNextVideo(); } } }
     });
   } else {
     document.getElementById("video-player").innerHTML =
