@@ -309,40 +309,13 @@ async function loadLiveUpcoming() {
   const list = document.getElementById("live-upcoming-list");
   if (!wrap || !list) return;
 
-  // Try nearby events first (geo-targeted)
-  try {
-    let cached = JSON.parse(localStorage.getItem("seadisco_location") || "null");
-    // Default to San Francisco if no cached location
-    if (!cached || Date.now() - cached.ts > 86400000) {
-      cached = { lat: 37.7749, lon: -122.4194, city: "San Francisco", region: "CA", ts: Date.now() };
-      localStorage.setItem("seadisco_location", JSON.stringify(cached));
-    }
-    if (cached && cached.lat && cached.lon) {
-      const params = new URLSearchParams();
-      params.set("lat", String(cached.lat));
-      params.set("lon", String(cached.lon));
-      if (cached.city) params.set("city", cached.city);
-      if (cached.region) params.set("region", cached.region);
-      const data = await apiFetch(`/api/live/nearby?${params}`).then(r => r.json());
-      if (data.location) {
-        localStorage.setItem("seadisco_location", JSON.stringify({ ...data.location, ts: Date.now() }));
-      }
-      if (data.events?.length) {
-        _liveUpcomingAll = data.events;
-        const label = wrap.querySelector(".feed-label");
-        if (label) label.style.display = "none";
-        _renderUpcomingSlice(LIVE_UPCOMING_PAGE);
-        wrap.style.display = "";
-        return;
-      }
-    }
-  } catch {}
-
-  // Fall back to generic upcoming events
+  // Load upcoming events from DB (pre-fetched from CA metros)
   try {
     const data = await fetch("/api/live/upcoming").then(r => r.json());
     _liveUpcomingAll = data.events ?? [];
     if (!_liveUpcomingAll.length) { wrap.style.display = "none"; return; }
+    const label = wrap.querySelector(".feed-label");
+    if (label) label.style.display = "none";
     _renderUpcomingSlice(LIVE_UPCOMING_PAGE);
     wrap.style.display = "";
   } catch {
