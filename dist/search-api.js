@@ -111,7 +111,7 @@ async function getClerkUserId(req) {
         return null;
     if (JWKS) {
         try {
-            const { payload } = await jwtVerify(auth.slice(7), JWKS, { issuer: clerkIssuer });
+            const { payload } = await jwtVerify(auth.slice(7), JWKS);
             return payload.sub ?? null;
         }
         catch {
