@@ -1,4 +1,4 @@
-const CACHE_NAME = "seadisco-v5";
+const CACHE_NAME = "seadisco-v6";
 const SHELL_FILES = [
   "/",
   "/style.css",
@@ -39,10 +39,11 @@ self.addEventListener("activate", (event) => {
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
+  // Only cache GET requests; POST/PUT/etc are unsupported by Cache API
+  if (event.request.method !== "GET") return;
+
   // API calls: network only (never cache)
-  if (url.pathname.startsWith("/api/")) {
-    return;
-  }
+  if (url.pathname.startsWith("/api/")) return;
 
   // Static assets: network-first with cache fallback
   event.respondWith(

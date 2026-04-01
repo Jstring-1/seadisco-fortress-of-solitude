@@ -120,8 +120,8 @@ async function loadClerkInstance() {
       if (c.user && c.session) {
         const t = await c.session.getToken();
         if (t) break; // fully ready
-      } else if (c.user === null && i >= 5) {
-        break; // confirmed not signed in (after 1s grace)
+      } else if (c.user === null && i >= 15) {
+        break; // confirmed not signed in (after 3s grace)
       }
     } catch { /* ignore */ }
     await new Promise(r => setTimeout(r, 200));
