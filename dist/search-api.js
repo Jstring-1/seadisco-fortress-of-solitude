@@ -3541,16 +3541,86 @@ function msUntilPacific(hour, minute, intervalH) {
     return base.getTime() - pacific.getTime();
 }
 const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
-// Scheduled sync: collection/wantlist every 6 hours starting at midnight Pacific
+// Scheduled sync: collection/wantlist — frequency based on user activity
+// Active (< 7 days): every 6 hours (every sync run)
+// Inactive 7–14 days: once daily (every 4th run)
+// Inactive 14–30 days: every 3 days (every 12th run)
+// Inactive 30+ days: weekly (every 28th run)
+let _syncRunCount = 0;
 function startDailySyncSchedule() {
     async function runScheduledSync() {
-        console.log(`[sync-schedule] Starting full sync for all users`);
+        _syncRunCount++;
+        console.log(`[sync-schedule] Starting sync run #${_syncRunCount}`);
         _syncAbort = false;
         const users = await getAllUsersForSync();
+        // Fetch Clerk user activity data to determine sync tiers
+        const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
+        const lastActiveMap = new Map(); // clerkUserId → timestamp ms
+        if (clerkSecret) {
+            try {
+                let offset = 0;
+                while (true) {
+                    const resp = await fetch(`https://api.clerk.com/v1/users?limit=100&offset=${offset}`, {
+                        headers: { Authorization: `Bearer ${clerkSecret}` },
+                    });
+                    if (!resp.ok)
+                        break;
+                    const clerkUsers = await resp.json();
+                    if (!clerkUsers.length)
+                        break;
+                    for (const u of clerkUsers) {
+                        if (u.last_active_at) {
+                            const ts = u.last_active_at > 1e12 ? u.last_active_at : u.last_active_at * 1000;
+                            lastActiveMap.set(u.id, ts);
+                        }
+                    }
+                    if (clerkUsers.length < 100)
+                        break;
+                    offset += 100;
+                }
+            }
+            catch { /* proceed without activity data — sync everyone */ }
+        }
+        const now = Date.now();
+        const DAY = 86400000;
+        let synced = 0, skipped = 0;
         for (const user of users) {
             if (_syncAbort) {
                 console.log("[sync-schedule] Aborted");
                 break;
+            }
+            // Determine sync frequency based on last activity
+            const lastActive = lastActiveMap.get(user.clerkUserId);
+            const daysInactive = lastActive ? (now - lastActive) / DAY : 0;
+            let shouldSync = true;
+            if (daysInactive > 90) {
+                // 3+ months inactive: revoke sessions and skip sync entirely
+                if (clerkSecret) {
+                    try {
+                        await fetch(`https://api.clerk.com/v1/users/${user.clerkUserId}/sessions/revoke`, {
+                            method: "POST",
+                            headers: { Authorization: `Bearer ${clerkSecret}` },
+                        });
+                        console.log(`[sync-schedule] ${user.username} inactive ${Math.round(daysInactive)}d — sessions revoked, sync skipped`);
+                    }
+                    catch { /* ignore revoke errors */ }
+                }
+                skipped++;
+                continue;
+            }
+            else if (daysInactive > 30) {
+                shouldSync = _syncRunCount % 28 === 0; // weekly
+            }
+            else if (daysInactive > 14) {
+                shouldSync = _syncRunCount % 12 === 0; // every 3 days
+            }
+            else if (daysInactive > 7) {
+                shouldSync = _syncRunCount % 4 === 0; // daily
+            }
+            // else: active users sync every run (every 6h)
+            if (!shouldSync) {
+                skipped++;
+                continue;
             }
             try {
                 const userClient = await getDiscogsClientForUser(user.clerkUserId);
@@ -3558,16 +3628,17 @@ function startDailySyncSchedule() {
                     console.warn(`[sync-schedule] no auth for ${user.username}, skipping`);
                     continue;
                 }
-                console.log(`[sync-schedule] Full syncing ${user.username}...`);
+                const tier = daysInactive > 30 ? "weekly" : daysInactive > 14 ? "3-day" : daysInactive > 7 ? "daily" : "active";
+                console.log(`[sync-schedule] Syncing ${user.username} (${tier}, ${Math.round(daysInactive)}d inactive)`);
                 await runBackgroundSync(user.clerkUserId, userClient, user.username, true, true);
-                // 30s pause between users to let rate limits settle
+                synced++;
                 await new Promise(r => setTimeout(r, 30000));
             }
             catch (err) {
                 console.error(`[sync-schedule] Error syncing ${user.username}:`, err);
             }
         }
-        console.log(`[sync-schedule] Full sync complete`);
+        console.log(`[sync-schedule] Run #${_syncRunCount} complete: ${synced} synced, ${skipped} skipped`);
     }
     function schedule() {
         const ms = msUntilPacific(0, 0, 6);
