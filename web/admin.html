@@ -232,16 +232,20 @@ async function loadAdminSyncStatus() {
           : '<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:3px;background:#2a2a2a;color:#666;font-weight:600;margin-left:0.4rem">\u2014</span>';
       const lastActiveStr = u.lastActiveAt ? fmtRelativeTime(u.lastActiveAt) : "\u2014";
       const lastActiveColor = u.online ? "#4caf50" : "#777";
-      return `<div style="padding:0.45rem 0;border-bottom:1px solid #1a1a1a;display:grid;grid-template-columns:140px 1fr 110px 1fr auto;gap:0.5rem 1rem;align-items:baseline;font-size:0.8rem">
-        <span style="color:var(--fg);font-weight:600"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${u.online ? '#4caf50' : '#444'};margin-right:0.4rem;vertical-align:middle" title="${u.online ? 'Active in last 24h' : 'Inactive 24h+'}"></span>@${u.username}${authBadge}</span>
-        <span style="color:${statusColor}">${statusText}</span>
-        <span style="color:${lastActiveColor};font-size:0.75rem">${lastActiveStr}</span>
-        <span style="color:#555">Coll: ${fmtTime(u.collectionSyncedAt)} \u00b7 Want: ${fmtTime(u.wantlistSyncedAt)}</span>
-        <span style="display:flex;gap:0.3rem;align-items:center">
-          <a href="#" onclick="event.preventDefault();openAdminItems('${u.username}','collection')" style="font-size:0.68rem;color:var(--accent);text-decoration:none" title="View collection">C</a>
-          <a href="#" onclick="event.preventDefault();openAdminItems('${u.username}','wantlist')" style="font-size:0.68rem;color:var(--accent);text-decoration:none" title="View wantlist">W</a>
-          ${syncBtn}
-        </span>
+      return `<div class="sync-row" style="padding:0.45rem 0;border-bottom:1px solid #1a1a1a;display:grid;grid-template-columns:140px 1fr 110px 1fr auto;gap:0.5rem 1rem;align-items:baseline;font-size:0.8rem">
+        <div class="sync-row-header">
+          <span style="color:var(--fg);font-weight:600;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${u.online ? '#4caf50' : '#444'};margin-right:0.4rem;vertical-align:middle" title="${u.online ? 'Active in last 24h' : 'Inactive 24h+'}"></span>@${u.username}${authBadge}</span>
+          <span style="display:flex;gap:0.3rem;align-items:center;flex-shrink:0">
+            <a href="#" onclick="event.preventDefault();openAdminItems('${u.username}','collection')" style="font-size:0.68rem;color:var(--accent);text-decoration:none" title="View collection">C</a>
+            <a href="#" onclick="event.preventDefault();openAdminItems('${u.username}','wantlist')" style="font-size:0.68rem;color:var(--accent);text-decoration:none" title="View wantlist">W</a>
+            ${syncBtn}
+          </span>
+        </div>
+        <span class="sync-row-status" style="color:${statusColor}">${statusText}</span>
+        <div class="sync-row-meta">
+          <span style="color:${lastActiveColor};font-size:0.75rem">${lastActiveStr}</span>
+          <span style="color:#555">Coll: ${fmtTime(u.collectionSyncedAt)} \u00b7 Want: ${fmtTime(u.wantlistSyncedAt)}</span>
+        </div>
       </div>`;
     }).join("");
 
@@ -816,6 +820,80 @@ async function loadAdminItems() {
 .api-td-ctx { color: #8a7d6b; font-size: 0.72rem; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .api-td-ep { color: #7a6d58; font-size: 0.7rem; word-break: break-all; max-width: 300px; }
 .api-td-err { color: #cc5544; font-size: 0.7rem; margin-top: 0.15rem; padding: 0.15rem 0.3rem; background: rgba(204,85,68,0.08); border-radius: 3px; }
+
+/* ── Mobile responsive ── */
+@media (max-width: 700px) {
+  .account-box {
+    padding: 0.8rem !important;
+    margin: 0.5rem !important;
+  }
+  .admin-section {
+    padding: 0.7rem 0.6rem;
+    margin: 0 -0.6rem;
+  }
+
+  /* Action buttons: wrap into a tight grid */
+  .admin-section-a > div[style*="display:flex"] {
+    gap: 0.4rem !important;
+  }
+  .admin-btn {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.6rem;
+  }
+
+  /* Sync status rows: stack vertically */
+  .sync-row {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 0.2rem !important;
+    padding: 0.5rem 0 !important;
+    font-size: 0.76rem !important;
+  }
+  .sync-row-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.3rem;
+  }
+  .sync-row-status {
+    font-size: 0.73rem;
+  }
+  .sync-row-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem 0.6rem;
+    font-size: 0.7rem;
+  }
+
+  /* API log table: horizontal scroll */
+  .api-log-table {
+    font-size: 0.68rem;
+  }
+  #api-log-list {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+  .api-td-ep { max-width: 150px; }
+  .api-td-ctx { max-width: 80px; }
+
+  /* Collection stats table: horizontal scroll */
+  #collection-stats {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Feedback items */
+  #feedback-list {
+    font-size: 0.78rem;
+  }
+
+  /* Items popup: full width on mobile */
+  #admin-items-overlay > div {
+    width: 96% !important;
+    max-height: 90vh !important;
+    border-radius: 8px !important;
+  }
+}
 </style>
 
 </body>
