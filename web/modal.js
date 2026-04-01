@@ -604,6 +604,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
           return parts.length ? `<div style="font-size:0.72rem;color:#888;margin-top:0.35rem">${parts.join('<span style="color:#444;margin:0 0.35em">·</span>')}</div>` : "";
         })()}
         ${discogsUrl ? `<a href="${discogsUrl}" target="_blank" rel="noopener" style="font-size:0.75rem;color:var(--accent);text-decoration:none;margin-top:0.4rem;display:inline-block">View on Discogs ↗</a>` : ""}
+        ${(!isMaster && d.master_id) ? `<a href="#" onclick="event.preventDefault();closeModal();setTimeout(()=>openModal(null,${d.master_id},'master','https://www.discogs.com/master/${d.master_id}'),100)" style="font-size:0.75rem;color:#7eb8da;text-decoration:none;margin-left:0.8rem">All versions (Master) ↗</a>` : ""}
         ${stats?.numForSale > 0 && stats?.lowestPrice != null
           ? `<div style="font-size:0.75rem;margin-top:0.2rem">
               <a href="https://www.discogs.com/sell/list?release_id=${escHtml(String(stats.releaseId))}" target="_blank" rel="noopener" style="color:#888;text-decoration:none">${escHtml(String(stats.numForSale))} available from $${parseFloat(stats.lowestPrice).toFixed(2)}</a>
