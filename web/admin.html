@@ -182,11 +182,18 @@ async function verifyAdmin(c) {
 // ── User Sync Status ──────────────────────────────────────────────────
 let _adminSyncPoll = null;
 
+let _syncStatusLoaded = false; // true after first successful load
+
 async function loadAdminSyncStatus() {
   const el = document.getElementById("admin-sync-status-list");
   try {
     const r = await apiFetch("/api/admin/sync-status");
-    if (!r.ok) { el.textContent = "Could not load sync status."; return; }
+    if (!r.ok) {
+      // On polling refresh, silently skip failed fetches — keep existing data visible
+      if (_syncStatusLoaded) return;
+      el.textContent = "Could not load sync status.";
+      return;
+    }
     const { users, freshStats } = await r.json();
 
     const freshEl = document.getElementById("admin-fresh-stats");
@@ -194,6 +201,7 @@ async function loadAdminSyncStatus() {
       const fmt = d => d ? new Date(d).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "\u2014";
       freshEl.textContent = `Drops DB: ${(freshStats.count ?? 0).toLocaleString()} releases \u00b7 ${(freshStats.tagCount ?? 0).toLocaleString()} tags \u00b7 ${fmt(freshStats.oldest)} \u2013 ${fmt(freshStats.newest)}`;
     }
+    _syncStatusLoaded = true;
     if (!users?.length) { el.textContent = "No users with Discogs tokens."; return; }
 
     el.innerHTML = users.map(u => {
@@ -248,7 +256,10 @@ async function loadAdminSyncStatus() {
     const interval = anyRunning ? 5000 : 15000;
     if (_adminSyncPoll) clearInterval(_adminSyncPoll);
     _adminSyncPoll = setInterval(loadAdminSyncStatus, interval);
-  } catch { el.textContent = "Could not load sync status."; }
+  } catch {
+    if (!_syncStatusLoaded) el.textContent = "Could not load sync status.";
+    // On polling refresh, silently ignore — keep existing data
+  }
 }
 
 // ── Admin actions ─────────────────────────────────────────────────────
