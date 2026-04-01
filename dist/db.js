@@ -504,6 +504,10 @@ export async function deleteUserData(clerkUserId) {
         await getPool().query(`DELETE FROM ${table} WHERE clerk_user_id = $1`, [clerkUserId]);
     }
 }
+export async function getClerkUserIdByUsername(discogsUsername) {
+    const r = await getPool().query("SELECT clerk_user_id FROM user_tokens WHERE discogs_username = $1", [discogsUsername]);
+    return r.rows[0]?.clerk_user_id ?? null;
+}
 export async function getDiscogsUsername(clerkUserId) {
     const r = await getPool().query("SELECT discogs_username FROM user_tokens WHERE clerk_user_id = $1", [clerkUserId]);
     return r.rows[0]?.discogs_username ?? null;
