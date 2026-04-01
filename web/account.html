@@ -232,7 +232,7 @@ async function showAuthSection() {
   document.getElementById("user-email").textContent = email;
 
   // Check if they already have a token saved
-  const sessionToken = await clerk.session?.getToken();
+  const sessionToken = await getSessionToken();
   const data = await fetch("/api/user/token", {
     headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
   }).then(r => r.json()).catch(() => null);
@@ -285,7 +285,7 @@ async function showAuthSection() {
 
 async function loadProfile() {
   try {
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     const data = await fetch("/api/user/profile", {
       headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
@@ -340,7 +340,7 @@ function renderProfile(data) {
 async function refreshProfile(btn) {
   btn.style.opacity = "0.3";
   try {
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     const data = await fetch("/api/user/profile/refresh", {
       method: "POST",
       headers: {
@@ -361,7 +361,7 @@ async function startOAuth() {
   statusEl.style.display = "";
   statusEl.textContent = "Connecting to Discogs…";
   try {
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     const data = await fetch("/api/auth/discogs/start", {
       headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
@@ -383,7 +383,7 @@ async function startOAuth() {
 async function disconnectOAuth() {
   if (!confirm("Disconnect your Discogs OAuth connection? You can reconnect anytime.")) return;
   try {
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     await fetch("/api/auth/discogs/disconnect", {
       method: "DELETE",
       headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
@@ -400,7 +400,7 @@ async function loadSyncStatus() {
   const btn = document.getElementById("account-sync-btn");
   syncSection.style.display = "block";
   try {
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     const d = await fetch("/api/user/sync-status", {
       headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
@@ -479,7 +479,7 @@ async function accountSync(silent = false) {
     statusEl.textContent = "Starting sync…";
   }
   try {
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     const r = await fetch("/api/user/sync", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
@@ -510,7 +510,7 @@ async function saveToken() {
   const token = document.getElementById("token-input").value.trim();
   if (!token) { alert("Please paste your Discogs token first."); return; }
 
-  const sessionToken = await clerk.session?.getToken();
+  const sessionToken = await getSessionToken();
   const r = await fetch("/api/user/token", {
     method: "POST",
     headers: {
@@ -531,7 +531,7 @@ async function saveToken() {
 
 async function removeToken() {
   if (!confirm("Remove your saved Discogs token?")) return;
-  const sessionToken = await clerk.session?.getToken();
+  const sessionToken = await getSessionToken();
   await fetch("/api/user/token", {
     method: "DELETE",
     headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
@@ -557,7 +557,7 @@ async function submitFeedback() {
   const btn = document.getElementById("feedback-submit-btn");
   btn.disabled = true; btn.textContent = "Sending…";
   try {
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     const userEmail = clerk.user?.primaryEmailAddress?.emailAddress ?? "";
     const r = await fetch("/api/feedback", {
       method: "POST",
@@ -587,7 +587,7 @@ async function deleteAccount() {
   if (!confirm("Permanently delete your account and all saved data? This cannot be undone.")) return;
   try {
     // Delete our DB records first
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     await fetch("/api/user/account", {
       method: "DELETE",
       headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},

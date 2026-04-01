@@ -22,10 +22,8 @@ function stripHtml(html) {
 async function apiFetch(url, options = {}) {
   const headers = { ...(options.headers ?? {}) };
   try {
-    if (window._clerk?.session) {
-      const t = await window._clerk.session.getToken();
-      if (t) headers["Authorization"] = `Bearer ${t}`;
-    }
+    const t = await getSessionToken();
+    if (t) headers["Authorization"] = `Bearer ${t}`;
   } catch { /* not signed in */ }
   return fetch(url, { ...options, headers });
 }
