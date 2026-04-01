@@ -191,6 +191,8 @@ async function initClerk() {
   } else {
     document.getElementById("signed-out-section").style.display = "block";
     clerk.mountSignIn(document.getElementById("clerk-sign-in"), {
+      afterSignInUrl: "/account",
+      afterSignUpUrl: "/account",
       appearance: {
         baseTheme: undefined,
         variables: {

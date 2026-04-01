@@ -1,6 +1,8 @@
 import express from "express";
 import compression from "compression";
+import cookieParser from "cookie-parser";
 import crypto from "crypto";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
@@ -63,8 +65,7 @@ const IP_WHITELIST = new Set([
     "172.59.131.156",
 ]);
 function clientIp(req) {
-    const fwd = req.headers["x-forwarded-for"];
-    return (fwd ? fwd.split(",")[0] : req.ip ?? "unknown").replace(/^::ffff:/, "").trim();
+    return (req.ip ?? "unknown").replace(/^::ffff:/, "").trim();
 }
 function checkRateLimit(ip) {
     if (IP_WHITELIST.has(ip))
@@ -87,11 +88,37 @@ setInterval(() => {
         if (now > entry.resetAt)
             ipCounts.delete(ip);
 }, 60 * 60 * 1000);
-// Decode Clerk session JWT from Authorization header (payload only — no pkg needed)
-function getClerkUserId(req) {
+// ── Clerk JWT verification via JWKS ──────────────────────────────────────
+// Derive Clerk issuer URL from AUTH_PK (publishable key) so no extra env var is needed
+const clerkIssuer = (() => {
+    const pk = process.env.AUTH_PK ?? "";
+    if (!pk)
+        return "";
+    try {
+        const domain = Buffer.from(pk.replace(/^pk_(test|live)_/, ""), "base64").toString().replace(/\$$/, "");
+        return `https://${domain}`;
+    }
+    catch {
+        return "";
+    }
+})();
+const JWKS = clerkIssuer
+    ? createRemoteJWKSet(new URL(`${clerkIssuer}/.well-known/jwks.json`))
+    : null;
+async function getClerkUserId(req) {
     const auth = req.headers.authorization;
     if (!auth?.startsWith("Bearer "))
         return null;
+    if (JWKS) {
+        try {
+            const { payload } = await jwtVerify(auth.slice(7), JWKS, { issuer: clerkIssuer });
+            return payload.sub ?? null;
+        }
+        catch {
+            return null;
+        }
+    }
+    // Fallback: decode without verification (only when CLERK_ISSUER_URL not set)
     try {
         const b64 = auth.slice(7).split(".")[1];
         const { sub } = JSON.parse(Buffer.from(b64, "base64").toString());
@@ -103,7 +130,7 @@ function getClerkUserId(req) {
 }
 // Resolve Discogs token: check OAuth first → PAT → shared token → null
 async function getTokenForRequest(req, allowFallback = false) {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (userId) {
         const userToken = await getUserToken(userId);
         if (userToken && userToken !== "__oauth__")
@@ -115,7 +142,7 @@ async function getTokenForRequest(req, allowFallback = false) {
     return null;
 }
 async function getDiscogsForRequest(req, allowFallback = false) {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     // Check if user has OAuth credentials first
     if (userId && discogsConsumerKey) {
         const oauth = await getOAuthCredentials(userId);
@@ -160,7 +187,7 @@ if (process.env.APP_DB_URL) {
     initDb().catch(err => console.error("DB init failed:", err));
 }
 const app = express();
-app.set("trust proxy", true); // respect X-Forwarded-For from Railway's proxy
+app.set("trust proxy", 1); // trust exactly 1 hop (Railway's reverse proxy)
 // Gzip/brotli compression for all responses
 app.use(compression());
 // Cache headers for static assets (versioned files get long cache, HTML short)
@@ -175,15 +202,38 @@ app.use(express.static(path.join(__dirname, "../web"), {
         }
     },
 }));
-// Allow any webpage to call this API
-app.use((_req, res, next) => {
-    res.setHeader("Access-Control-Allow-Origin", "*");
+// Cookie parser (for OAuth CSRF state)
+app.use(cookieParser());
+// CORS — restrict to known origins
+const ALLOWED_ORIGINS = new Set([
+    "https://seadisco.com",
+    "https://www.seadisco.com",
+]);
+if (process.env.NODE_ENV !== "production") {
+    ALLOWED_ORIGINS.add("http://localhost:3000");
+    ALLOWED_ORIGINS.add("http://localhost:5173");
+}
+app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    if (origin && ALLOWED_ORIGINS.has(origin)) {
+        res.setHeader("Access-Control-Allow-Origin", origin);
+        res.setHeader("Vary", "Origin");
+    }
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
     res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    if (_req.method === "OPTIONS") {
+    if (req.method === "OPTIONS") {
         res.sendStatus(204);
         return;
     }
+    next();
+});
+// Security headers
+app.use((_req, res, next) => {
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
     next();
 });
 // ── Auth / account endpoints ──────────────────────────────────────────────
@@ -194,7 +244,7 @@ app.get("/api/config", (_req, res) => {
 });
 // GET /api/user/token — returns whether the user has a token saved + auth method
 app.get("/api/user/token", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -214,7 +264,7 @@ app.get("/api/user/token", async (req, res) => {
 });
 // POST /api/user/token — save user's Discogs personal access token
 app.post("/api/user/token", express.json(), async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -237,7 +287,7 @@ app.post("/api/user/token", express.json(), async (req, res) => {
                 await setDiscogsUsername(userId, ident.username);
                 // Also fetch and cache the full profile
                 try {
-                    const profileRes = await loggedFetch("discogs", `https://api.discogs.com/users/${ident.username}`, {
+                    const profileRes = await loggedFetch("discogs", `https://api.discogs.com/users/${encodeURIComponent(ident.username)}`, {
                         headers: { "Authorization": `Discogs token=${token.trim()}`, "User-Agent": "SeaDisco/1.0" },
                         context: "save-token profile fetch",
                     });
@@ -268,7 +318,7 @@ app.post("/api/user/token", express.json(), async (req, res) => {
 });
 // DELETE /api/user/token — remove user's saved token
 app.delete("/api/user/token", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -278,7 +328,7 @@ app.delete("/api/user/token", async (req, res) => {
 });
 // DELETE /api/user/account — wipe all user data from our DB (Clerk deletion handled client-side)
 app.delete("/api/user/account", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -289,7 +339,7 @@ app.delete("/api/user/account", async (req, res) => {
 // ── OAuth 1.0a endpoints ─────────────────────────────────────────────────
 // GET /api/auth/discogs/start — initiate OAuth flow (requires Clerk auth + clerk_user_id in query)
 app.get("/api/auth/discogs/start", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -313,8 +363,7 @@ app.get("/api/auth/discogs/start", async (req, res) => {
             context: "oauth-request-token",
         });
         if (!rtRes.ok) {
-            const text = await rtRes.text();
-            console.error("OAuth request token failed:", rtRes.status, text);
+            console.error("OAuth request token failed:", rtRes.status);
             res.status(500).json({ error: "Failed to start OAuth flow" });
             return;
         }
@@ -326,13 +375,15 @@ app.get("/api/auth/discogs/start", async (req, res) => {
             res.status(500).json({ error: "Invalid response from Discogs" });
             return;
         }
-        // Store request token so we can retrieve the secret in the callback
-        await storeOAuthRequestToken(oauthToken, oauthTokenSecret, userId);
+        // Store request token with CSRF state
+        const csrfState = crypto.randomBytes(24).toString("hex");
+        await storeOAuthRequestToken(oauthToken, oauthTokenSecret, userId, csrfState);
+        res.cookie("oauth_state", csrfState, { httpOnly: true, secure: true, sameSite: "lax", maxAge: 600_000 });
         // Return the authorize URL for the frontend to redirect to
         res.json({ authorizeUrl: `https://www.discogs.com/oauth/authorize?oauth_token=${oauthToken}` });
     }
     catch (e) {
-        console.error("OAuth start error:", e);
+        console.error("OAuth start error:", e?.message);
         res.status(500).json({ error: "OAuth flow failed" });
     }
 });
@@ -351,6 +402,13 @@ app.get("/api/auth/discogs/callback", async (req, res) => {
             res.status(400).send("OAuth session expired. <a href='/account'>Try again</a>");
             return;
         }
+        // Validate CSRF state cookie
+        const cookieState = req.cookies?.oauth_state;
+        if (stored.csrfState && (!cookieState || cookieState !== stored.csrfState)) {
+            res.status(403).send("State mismatch — possible CSRF. <a href='/account'>Try again</a>");
+            return;
+        }
+        res.clearCookie("oauth_state");
         // Step 3: Exchange for access token
         const accessTokenUrl = "https://api.discogs.com/oauth/access_token";
         const authHeader = signOAuthRequest("POST", accessTokenUrl, discogsConsumerKey, discogsConsumerSecret, oauthToken, stored.tokenSecret, oauthVerifier);
@@ -364,8 +422,7 @@ app.get("/api/auth/discogs/callback", async (req, res) => {
             context: "oauth-access-token",
         });
         if (!atRes.ok) {
-            const text = await atRes.text();
-            console.error("OAuth access token failed:", atRes.status, text);
+            console.error("OAuth access token failed:", atRes.status);
             res.status(500).send("Failed to complete OAuth. <a href='/account'>Try again</a>");
             return;
         }
@@ -405,7 +462,7 @@ app.get("/api/auth/discogs/callback", async (req, res) => {
                 if (ident.username) {
                     await setDiscogsUsername(stored.clerkUserId, ident.username);
                     // Fetch full profile
-                    const profileUrl = `https://api.discogs.com/users/${ident.username}`;
+                    const profileUrl = `https://api.discogs.com/users/${encodeURIComponent(ident.username)}`;
                     const profileRes = await loggedFetch("discogs", profileUrl, {
                         headers: oauthClient.buildHeaders("GET", profileUrl),
                         context: "oauth-profile",
@@ -431,19 +488,19 @@ app.get("/api/auth/discogs/callback", async (req, res) => {
             }
         }
         catch (e) {
-            console.error("OAuth profile fetch error:", e);
+            console.error("OAuth profile fetch error:", e?.message);
         }
         // Redirect back to account page
         res.redirect("/account?oauth=success");
     }
     catch (e) {
-        console.error("OAuth callback error:", e);
+        console.error("OAuth callback error:", e?.message);
         res.status(500).send("OAuth error. <a href='/account'>Try again</a>");
     }
 });
 // DELETE /api/auth/discogs/disconnect — remove OAuth credentials (keep PAT if present)
 app.delete("/api/auth/discogs/disconnect", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -453,7 +510,7 @@ app.delete("/api/auth/discogs/disconnect", async (req, res) => {
 });
 // GET /api/user/profile — returns cached Discogs profile
 app.get("/api/user/profile", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -463,7 +520,7 @@ app.get("/api/user/profile", async (req, res) => {
 });
 // POST /api/user/profile/refresh — re-fetch profile from Discogs
 app.post("/api/user/profile/refresh", express.json(), async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -474,7 +531,7 @@ app.post("/api/user/profile/refresh", express.json(), async (req, res) => {
         return;
     }
     try {
-        const profileUrl = `https://api.discogs.com/users/${username}`;
+        const profileUrl = `https://api.discogs.com/users/${encodeURIComponent(username)}`;
         const profileClient = await getDiscogsForRequest(req);
         if (!profileClient) {
             res.status(400).json({ error: "No Discogs credentials" });
@@ -698,7 +755,7 @@ async function runBackgroundSync(userId, client, username, syncCollection, syncW
 }
 // POST /api/user/sync — kick off background sync of collection, wantlist, inventory & lists
 app.post("/api/user/sync", express.json(), async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -764,7 +821,7 @@ app.post("/api/user/sync", express.json(), async (req, res) => {
 });
 // GET /api/user/collection — paginated cached collection (with optional filters)
 app.get("/api/user/collection", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -799,7 +856,7 @@ app.get("/api/user/collection", async (req, res) => {
 });
 // GET /api/user/wantlist — paginated cached wantlist (with optional filters)
 app.get("/api/user/wantlist", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -831,7 +888,7 @@ app.get("/api/user/wantlist", async (req, res) => {
 });
 // GET /api/user/inventory — paginated inventory listings
 app.get("/api/user/inventory", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -847,7 +904,7 @@ app.get("/api/user/inventory", async (req, res) => {
 });
 // GET /api/user/lists — user's Discogs lists
 app.get("/api/user/lists", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -984,7 +1041,7 @@ app.get("/api/wanted-sample", async (req, res) => {
 });
 // GET /api/wanted — all community wantlist items, deduped and shuffled (requires login)
 app.get("/api/wanted", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -1000,7 +1057,7 @@ app.get("/api/wanted", async (req, res) => {
 });
 // GET /api/user/collection/export — download collection as CSV
 app.get("/api/user/collection/export", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -1022,7 +1079,7 @@ app.get("/api/user/collection/export", async (req, res) => {
 });
 // GET /api/user/wantlist/export — download wantlist as CSV
 app.get("/api/user/wantlist/export", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -1074,7 +1131,7 @@ function buildCsv(rows, folderMap) {
 // Helper: get Discogs username + authenticated client for the current user.
 // Supports both OAuth and PAT auth by delegating to getDiscogsClientForUser.
 async function requireUsernameAndToken(req, res) {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return null;
@@ -1102,7 +1159,7 @@ app.post("/api/user/collection/add", express.json(), async (req, res) => {
         return;
     }
     try {
-        const url = `https://api.discogs.com/users/${ctx.username}/collection/folders/${folderId}/releases/${releaseId}`;
+        const url = `https://api.discogs.com/users/${encodeURIComponent(ctx.username)}/collection/folders/${folderId}/releases/${releaseId}`;
         const r = await loggedFetch("discogs", url, { method: "POST", headers: { ...ctx.client.buildHeaders("POST", url), "Content-Type": "application/json" }, context: "collection-add" });
         if (!r.ok) {
             const text = await r.text();
@@ -1137,7 +1194,7 @@ app.post("/api/user/collection/remove", express.json(), async (req, res) => {
         return;
     }
     try {
-        const url = `https://api.discogs.com/users/${ctx.username}/collection/folders/${folderId}/releases/${releaseId}/instances/${instanceId}`;
+        const url = `https://api.discogs.com/users/${encodeURIComponent(ctx.username)}/collection/folders/${folderId}/releases/${releaseId}/instances/${instanceId}`;
         const r = await loggedFetch("discogs", url, { method: "DELETE", headers: ctx.client.buildHeaders("DELETE", url), context: "collection-remove" });
         if (!r.ok && r.status !== 204) {
             const text = await r.text();
@@ -1163,7 +1220,7 @@ app.post("/api/user/wantlist/add", express.json(), async (req, res) => {
         return;
     }
     try {
-        const url = `https://api.discogs.com/users/${ctx.username}/wants/${releaseId}`;
+        const url = `https://api.discogs.com/users/${encodeURIComponent(ctx.username)}/wants/${releaseId}`;
         const r = await loggedFetch("discogs", url, { method: "PUT", headers: { ...ctx.client.buildHeaders("PUT", url), "Content-Type": "application/json" }, body: notes ? JSON.stringify({ notes }) : undefined, context: "wantlist-add" });
         if (!r.ok) {
             const text = await r.text();
@@ -1196,7 +1253,7 @@ app.post("/api/user/wantlist/remove", express.json(), async (req, res) => {
         return;
     }
     try {
-        const url = `https://api.discogs.com/users/${ctx.username}/wants/${releaseId}`;
+        const url = `https://api.discogs.com/users/${encodeURIComponent(ctx.username)}/wants/${releaseId}`;
         const r = await loggedFetch("discogs", url, { method: "DELETE", headers: ctx.client.buildHeaders("DELETE", url), context: "wantlist-remove" });
         if (!r.ok && r.status !== 204) {
             const text = await r.text();
@@ -1225,7 +1282,7 @@ app.post("/api/user/collection/rating", express.json(), async (req, res) => {
         return;
     }
     try {
-        const url = `https://api.discogs.com/users/${ctx.username}/collection/folders/${folderId}/releases/${releaseId}/instances/${instanceId}`;
+        const url = `https://api.discogs.com/users/${encodeURIComponent(ctx.username)}/collection/folders/${folderId}/releases/${releaseId}/instances/${instanceId}`;
         const r = await loggedFetch("discogs", url, { method: "POST", headers: { ...ctx.client.buildHeaders("POST", url), "Content-Type": "application/json" }, body: JSON.stringify({ rating }), context: "collection-rating" });
         if (!r.ok && r.status !== 204) {
             const text = await r.text();
@@ -1251,7 +1308,7 @@ app.post("/api/user/folders/create", express.json(), async (req, res) => {
         return;
     }
     try {
-        const url = `https://api.discogs.com/users/${ctx.username}/collection/folders`;
+        const url = `https://api.discogs.com/users/${encodeURIComponent(ctx.username)}/collection/folders`;
         const r = await loggedFetch("discogs", url, { method: "POST", headers: { ...ctx.client.buildHeaders("POST", url), "Content-Type": "application/json" }, body: JSON.stringify({ name: name.trim() }), context: "folder-create" });
         if (!r.ok) {
             const text = await r.text();
@@ -1278,7 +1335,7 @@ app.post("/api/user/collection/move", express.json(), async (req, res) => {
         return;
     }
     try {
-        const url = `https://api.discogs.com/users/${ctx.username}/collection/folders/${fromFolderId}/releases/${releaseId}/instances/${instanceId}`;
+        const url = `https://api.discogs.com/users/${encodeURIComponent(ctx.username)}/collection/folders/${fromFolderId}/releases/${releaseId}/instances/${instanceId}`;
         const r = await loggedFetch("discogs", url, { method: "POST", headers: { ...ctx.client.buildHeaders("POST", url), "Content-Type": "application/json" }, body: JSON.stringify({ folder_id: toFolderId }), context: "collection-move" });
         if (!r.ok && r.status !== 204) {
             const text = await r.text();
@@ -1303,7 +1360,7 @@ app.post("/api/user/collection/notes", express.json(), async (req, res) => {
         return;
     }
     try {
-        const url = `https://api.discogs.com/users/${ctx.username}/collection/folders/${folderId}/releases/${releaseId}/instances/${instanceId}/fields/${fieldId}`;
+        const url = `https://api.discogs.com/users/${encodeURIComponent(ctx.username)}/collection/folders/${folderId}/releases/${releaseId}/instances/${instanceId}/fields/${fieldId}`;
         const r = await loggedFetch("discogs", url, { method: "POST", headers: { ...ctx.client.buildHeaders("POST", url), "Content-Type": "application/json" }, body: JSON.stringify({ value: value ?? "" }), context: "collection-notes" });
         if (!r.ok && r.status !== 204) {
             const text = await r.text();
@@ -1333,7 +1390,7 @@ app.get("/api/user/collection/fields", async (req, res) => {
     if (!ctx)
         return;
     try {
-        const url = `https://api.discogs.com/users/${ctx.username}/collection/fields`;
+        const url = `https://api.discogs.com/users/${encodeURIComponent(ctx.username)}/collection/fields`;
         const r = await loggedFetch("discogs", url, { headers: ctx.client.buildHeaders("GET", url), context: "collection-fields" });
         if (!r.ok) {
             res.status(r.status).json({ error: "Failed to fetch fields" });
@@ -1348,7 +1405,7 @@ app.get("/api/user/collection/fields", async (req, res) => {
 });
 // GET /api/user/collection/instance — get instance info for a release in the user's collection
 app.get("/api/user/collection/instance", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -1405,7 +1462,7 @@ app.get("/api/price/:releaseId", async (req, res) => {
 // ── Saved searches ──────────────────────────────────────────────────────
 // GET /api/user/saved-searches?view=search — list saved searches
 app.get("/api/user/saved-searches", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -1421,7 +1478,7 @@ app.get("/api/user/saved-searches", async (req, res) => {
 });
 // POST /api/user/saved-searches — save a search
 app.post("/api/user/saved-searches", express.json(), async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -1441,7 +1498,7 @@ app.post("/api/user/saved-searches", express.json(), async (req, res) => {
 });
 // DELETE /api/user/saved-searches/:id — delete a saved search
 app.delete("/api/user/saved-searches/:id", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -1516,7 +1573,7 @@ function startPriceUpdateSchedule() {
 }
 // GET /api/user/facets — distinct genres and styles from collection or wantlist
 app.get("/api/user/facets", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -1533,7 +1590,7 @@ app.get("/api/user/facets", async (req, res) => {
 });
 // GET /api/user/folders — collection folder list
 app.get("/api/user/folders", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -1548,7 +1605,7 @@ app.get("/api/user/folders", async (req, res) => {
 });
 // GET /api/user/discogs-ids — collection and wantlist IDs for badge rendering
 app.get("/api/user/discogs-ids", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -1566,7 +1623,7 @@ app.get("/api/user/discogs-ids", async (req, res) => {
 });
 // GET /api/user/sync-status — last sync timestamps + Discogs username + profile
 app.get("/api/user/sync-status", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -1594,7 +1651,7 @@ function stripArtistSuffix(name) {
 }
 // POST /api/feedback — save feedback from signed-in user
 app.post("/api/feedback", express.json(), async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
@@ -1607,9 +1664,26 @@ app.post("/api/feedback", express.json(), async (req, res) => {
     await saveFeedback(userId, userEmail ?? "", message.trim());
     res.json({ ok: true });
 });
+// ── Admin rate limiter ──────────────────────────────────────────────────
+const adminRateCounts = new Map();
+app.use("/api/admin", (req, res, next) => {
+    const ip = clientIp(req);
+    const now = Date.now();
+    const entry = adminRateCounts.get(ip);
+    if (!entry || now > entry.resetAt) {
+        adminRateCounts.set(ip, { count: 1, resetAt: now + 60_000 });
+        return next();
+    }
+    if (entry.count >= 30) {
+        res.status(429).json({ error: "Rate limited" });
+        return;
+    }
+    entry.count++;
+    next();
+});
 // GET /api/admin/feedback — inbox, only for admin user
 app.get("/api/admin/feedback", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
@@ -1620,7 +1694,7 @@ app.get("/api/admin/feedback", async (req, res) => {
 });
 // DELETE /api/admin/feedback/:id — delete a feedback item, admin only
 app.delete("/api/admin/feedback/:id", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
@@ -1631,7 +1705,7 @@ app.delete("/api/admin/feedback/:id", async (req, res) => {
 });
 // GET /api/admin/sync-status — per-user sync status + fresh releases stats, admin only
 app.get("/api/admin/sync-status", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
@@ -1659,7 +1733,7 @@ app.get("/api/admin/sync-status", async (req, res) => {
 });
 // POST /api/admin/sync-all — trigger FULL background sync for all users, admin only
 app.post("/api/admin/sync-all", express.json(), async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
@@ -1691,7 +1765,7 @@ app.post("/api/admin/sync-all", express.json(), async (req, res) => {
 });
 // POST /api/admin/sync-user — trigger background sync for a single user, admin only
 app.post("/api/admin/sync-user", express.json(), async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
@@ -1726,7 +1800,7 @@ app.post("/api/admin/sync-user", express.json(), async (req, res) => {
 });
 // POST /api/admin/sync-stop — abort all running syncs and reset statuses
 app.post("/api/admin/sync-stop", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
@@ -1739,7 +1813,7 @@ app.post("/api/admin/sync-stop", async (req, res) => {
 });
 // POST /api/admin/api-kill — toggle global API kill switch
 app.post("/api/admin/api-kill", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
@@ -1752,7 +1826,7 @@ app.post("/api/admin/api-kill", async (req, res) => {
 });
 // GET /api/admin/api-kill — check kill switch status
 app.get("/api/admin/api-kill", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
@@ -1762,7 +1836,7 @@ app.get("/api/admin/api-kill", async (req, res) => {
 });
 // POST /api/admin/revoke-sessions — log out all Clerk users except admin
 app.post("/api/admin/revoke-sessions", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
@@ -1812,7 +1886,7 @@ app.post("/api/admin/revoke-sessions", async (req, res) => {
 });
 // GET /api/admin/collection-stats — per-user and global collection/wantlist stats
 app.get("/api/admin/collection-stats", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
@@ -1828,7 +1902,7 @@ app.get("/api/admin/collection-stats", async (req, res) => {
 });
 // POST /api/ai-search — Claude music recommendations
 app.post("/api/ai-search", express.json(), async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "no_token" });
         return;
@@ -1952,7 +2026,7 @@ app.get("/search", async (req, res) => {
     const searchRelease = rawRelease || undefined;
     const ip = clientIp(req);
     const whitelisted = IP_WHITELIST.has(ip);
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const userToken = userId ? await getUserToken(userId) : null;
     const usingSharedToken = !userToken;
     // Rate-limit unauthenticated users — allow 5 free searches/day via shared token
@@ -2836,7 +2910,7 @@ app.get("/api/gear", async (_req, res) => {
 });
 // GET /api/gear/stats — admin stats
 app.get("/api/gear/stats", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
@@ -2852,7 +2926,7 @@ app.get("/api/gear/stats", async (req, res) => {
 });
 // POST /api/admin/gear/fetch — manual trigger for admin
 app.post("/api/admin/gear/fetch", express.json(), async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
@@ -2969,7 +3043,7 @@ app.get("/api/vinyl", async (_req, res) => {
 });
 // GET /api/vinyl/stats — admin stats
 app.get("/api/vinyl/stats", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
@@ -2985,7 +3059,7 @@ app.get("/api/vinyl/stats", async (req, res) => {
 });
 // POST /api/admin/vinyl/fetch — manual trigger for admin
 app.post("/api/admin/vinyl/fetch", express.json(), async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
@@ -3283,7 +3357,7 @@ app.get("/api/feed", async (req, res) => {
 });
 // POST /api/admin/drops/fetch — manual trigger for admin
 app.post("/api/admin/drops/fetch", express.json(), async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
@@ -3294,7 +3368,7 @@ app.post("/api/admin/drops/fetch", express.json(), async (req, res) => {
 });
 // POST /api/admin/feed/fetch — manual trigger for admin
 app.post("/api/admin/feed/fetch", express.json(), async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
@@ -3305,7 +3379,7 @@ app.post("/api/admin/feed/fetch", express.json(), async (req, res) => {
 });
 // POST /api/admin/live/fetch — manual trigger for admin
 app.post("/api/admin/live/fetch", express.json(), async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
@@ -3316,7 +3390,7 @@ app.post("/api/admin/live/fetch", express.json(), async (req, res) => {
 });
 // POST /api/admin/extras/fetch — manual trigger for inventory/lists sync
 app.post("/api/admin/extras/fetch", express.json(), async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
@@ -3345,7 +3419,7 @@ app.post("/api/admin/extras/fetch", express.json(), async (req, res) => {
 });
 // GET /api/admin/api-log — view API request log (last 24h by default)
 app.get("/api/admin/api-log", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
@@ -3359,7 +3433,7 @@ app.get("/api/admin/api-log", async (req, res) => {
 });
 // GET /api/admin/api-stats — 24h summary by service
 app.get("/api/admin/api-stats", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
@@ -3371,7 +3445,7 @@ app.get("/api/admin/api-stats", async (req, res) => {
 });
 // GET /api/admin/price-stats — price tracking stats, admin only
 app.get("/api/admin/price-stats", async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
@@ -3388,7 +3462,7 @@ app.get("/api/admin/price-stats", async (req, res) => {
 });
 // POST /api/admin/price-update — trigger manual price update, admin only
 app.post("/api/admin/price-update", express.json(), async (req, res) => {
-    const userId = getClerkUserId(req);
+    const userId = await getClerkUserId(req);
     const adminId = process.env.ADMIN_CLERK_ID ?? "";
     if (!userId || !adminId || userId !== adminId) {
         res.status(403).json({ error: "Forbidden" });
