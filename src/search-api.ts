@@ -1518,17 +1518,23 @@ app.get("/api/admin/sync-status", async (req, res) => {
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   const [users, freshStats] = await Promise.all([getAllUsersSyncStatus(), getFreshStats()]);
 
-  // Check active Clerk sessions for each user
+  // Check active Clerk sessions — only count users active in the last 5 minutes
   const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
   const activeSet = new Set<string>();
   if (clerkSecret) {
     try {
-      const sessResp = await fetch("https://api.clerk.com/v1/sessions?status=active&limit=100", {
+      const fiveMinAgo = Date.now() - 5 * 60 * 1000;
+      const sessResp = await fetch("https://api.clerk.com/v1/sessions?status=active&limit=500", {
         headers: { Authorization: `Bearer ${clerkSecret}` },
       });
       if (sessResp.ok) {
-        const sessions = await sessResp.json() as Array<{ user_id: string }>;
-        for (const s of sessions) activeSet.add(s.user_id);
+        const sessions = await sessResp.json() as Array<{ user_id: string; last_active_at: number }>;
+        for (const s of sessions) {
+          // last_active_at is Unix timestamp in ms
+          if (s.last_active_at && s.last_active_at > fiveMinAgo) {
+            activeSet.add(s.user_id);
+          }
+        }
       }
     } catch { /* ignore — online status is best-effort */ }
   }
