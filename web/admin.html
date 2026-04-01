@@ -115,19 +115,23 @@ async function initClerk() {
     return;
   }
 
-  // Verify admin access by calling an admin endpoint
+  // Verify admin access by calling an admin endpoint (retry once if token not ready)
   try {
-    const sessionToken = await clerk.session?.getToken();
-    const r = await fetch("/api/admin/feedback", {
-      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
-      signal: AbortSignal.timeout(10000),
-    });
+    let r, items;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const sessionToken = await clerk.session?.getToken();
+      r = await fetch("/api/admin/feedback", {
+        headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
+        signal: AbortSignal.timeout(10000),
+      });
+      if (r.ok) { items = (await r.json()).items; break; }
+      if (attempt === 0) await new Promise(res => setTimeout(res, 1000));
+    }
     if (!r.ok) {
       document.getElementById("loading-section").style.display = "none";
       document.getElementById("denied-section").style.display = "block";
       return;
     }
-    const { items } = await r.json();
 
     document.getElementById("loading-section").style.display = "none";
     document.getElementById("admin-content").style.display = "block";
