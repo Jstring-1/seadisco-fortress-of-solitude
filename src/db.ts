@@ -435,6 +435,7 @@ export async function deleteSavedSearch(clerkUserId: string, id: number): Promis
 }
 
 export async function getAllUsersSyncStatus(): Promise<Array<{
+  clerkUserId: string;
   username: string;
   collectionSyncedAt: Date | null;
   wantlistSyncedAt: Date | null;
@@ -445,7 +446,7 @@ export async function getAllUsersSyncStatus(): Promise<Array<{
   authMethod: string;
 }>> {
   const r = await getPool().query(
-    `SELECT ut.discogs_username, ut.collection_synced_at, ut.wantlist_synced_at,
+    `SELECT ut.clerk_user_id, ut.discogs_username, ut.collection_synced_at, ut.wantlist_synced_at,
             ut.sync_status, ut.sync_progress, ut.sync_total, ut.sync_error,
             COALESCE(ut.auth_method, 'none') AS auth_method
      FROM user_tokens ut
@@ -453,6 +454,7 @@ export async function getAllUsersSyncStatus(): Promise<Array<{
      ORDER BY ut.discogs_username`
   );
   return r.rows.map(row => ({
+    clerkUserId:        row.clerk_user_id,
     username:           row.discogs_username,
     collectionSyncedAt: row.collection_synced_at ?? null,
     wantlistSyncedAt:   row.wantlist_synced_at   ?? null,
