@@ -99,8 +99,16 @@ async function loadClerkInstance() {
     document.head.appendChild(s);
   });
 
-  await new Promise(r => setTimeout(r, 50));
-  const c = window.Clerk;
+  // Poll for window.Clerk to be defined (script may take time to initialize)
+  const c = await new Promise((resolve) => {
+    if (window.Clerk) { resolve(window.Clerk); return; }
+    let tries = 0;
+    const iv = setInterval(() => {
+      tries++;
+      if (window.Clerk) { clearInterval(iv); resolve(window.Clerk); }
+      else if (tries > 100) { clearInterval(iv); resolve(null); } // 5s timeout
+    }, 50);
+  });
   if (!c) return null;
   await c.load();
   return c;
