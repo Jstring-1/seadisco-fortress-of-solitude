@@ -657,11 +657,12 @@ async function loadAdminItems() {
       const labels = (item.labels || item.basic_information?.labels || []).map(l => l.name).slice(0, 2).join(", ");
       const formats = (item.formats || item.basic_information?.formats || []).map(f => f.name).slice(0, 2).join(", ");
       const stars = rating > 0 ? " " + "\u2605".repeat(rating) + "\u2606".repeat(5 - rating) : "";
-      return `<a href="https://www.discogs.com/release/${id}" target="_blank" rel="noopener" style="display:flex;gap:0.6rem;padding:0.4rem 0;border-bottom:1px solid #1a1a1a;align-items:center;text-decoration:none">
-        ${thumb ? `<img src="${thumb}" style="width:40px;height:40px;border-radius:4px;object-fit:cover;flex-shrink:0;background:#1a1a1a" loading="lazy" />` : `<div style="width:40px;height:40px;border-radius:4px;background:#1a1a1a;flex-shrink:0"></div>`}
+      const meta = [artist, year, labels, formats].filter(Boolean).map(s => escHtml(String(s))).join(' <span style="color:#444">\u00b7</span> ');
+      return `<a href="https://www.discogs.com/release/${id}" target="_blank" rel="noopener" class="admin-item-row">
+        ${thumb ? `<img src="${thumb}" class="admin-item-thumb" loading="lazy" />` : `<div class="admin-item-thumb"></div>`}
         <div style="flex:1;min-width:0;overflow:hidden">
-          <div style="color:var(--fg);font-size:0.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(title)}</div>
-          <div style="font-size:0.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(artist)}${year ? ` \u00b7 ${year}` : ""}${labels ? ` \u00b7 ${escHtml(labels)}` : ""}${formats ? ` \u00b7 ${escHtml(formats)}` : ""}${stars ? `<span style="color:#e8a020;margin-left:0.3rem">${stars}</span>` : ""}</div>
+          <div class="admin-item-title">${escHtml(title)}</div>
+          <div class="admin-item-sub">${meta}${stars ? `<span class="admin-item-rating">${stars}</span>` : ""}</div>
         </div>
       </a>`;
     }).join("");
@@ -715,6 +716,50 @@ async function loadAdminItems() {
 .admin-btn-extras:hover { background: #1f3a4a; }
 .admin-btn-taste { background: #3a1a2a; border-color: #5a2a3a; color: #d88aaf; }
 .admin-btn-taste:hover { background: #4a2a3a; }
+
+/* Admin items popup rows */
+.admin-item-row {
+  display: flex;
+  gap: 0.7rem;
+  padding: 0.5rem 0.4rem;
+  border-bottom: 1px solid #1e1c18;
+  align-items: center;
+  text-decoration: none;
+  border-radius: 6px;
+  transition: background 0.15s;
+}
+.admin-item-row:hover {
+  background: #1e1c18;
+}
+.admin-item-thumb {
+  width: 44px;
+  height: 44px;
+  border-radius: 5px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #1a1a1a;
+}
+.admin-item-title {
+  color: var(--fg);
+  font-size: 0.82rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.admin-item-sub {
+  font-size: 0.73rem;
+  color: #8a7d6b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 0.1rem;
+}
+.admin-item-rating {
+  color: #e8a020;
+  margin-left: 0.3rem;
+  letter-spacing: 0.05em;
+}
 
 /* Alternating section backgrounds */
 .admin-section {
