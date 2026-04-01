@@ -75,6 +75,8 @@ export class DiscogsClient {
             params.genre = options.genre;
         if (options.style)
             params.style = options.style;
+        if (options.format)
+            params.format = options.format;
         if (options.sort)
             params.sort = options.sort;
         if (options.sortOrder)

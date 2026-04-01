@@ -1529,6 +1529,44 @@ app.get("/api/admin/api-kill", async (req, res) => {
   res.json({ killSwitch: _apiKillSwitch });
 });
 
+// POST /api/admin/revoke-sessions — log out all Clerk users except admin
+app.post("/api/admin/revoke-sessions", async (req, res) => {
+  const userId = getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
+  if (!clerkSecret) { res.status(500).json({ error: "CLERK_SECRET_KEY not configured" }); return; }
+  try {
+    // Fetch all Clerk users (paginated, up to 500)
+    let revoked = 0;
+    let offset = 0;
+    const limit = 100;
+    while (true) {
+      const usersResp = await fetch(`https://api.clerk.com/v1/users?limit=${limit}&offset=${offset}`, {
+        headers: { Authorization: `Bearer ${clerkSecret}` },
+      });
+      if (!usersResp.ok) { res.status(502).json({ error: `Clerk API error: ${usersResp.status}` }); return; }
+      const users = await usersResp.json() as Array<{ id: string }>;
+      if (users.length === 0) break;
+      for (const u of users) {
+        if (u.id === adminId) continue;
+        await fetch(`https://api.clerk.com/v1/users/${u.id}/sessions/revoke`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${clerkSecret}` },
+        });
+        revoked++;
+      }
+      if (users.length < limit) break;
+      offset += limit;
+    }
+    console.log(`Admin: revoked sessions for ${revoked} user(s)`);
+    res.json({ ok: true, revokedUsers: revoked });
+  } catch (err) {
+    console.error("revoke-sessions error:", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // GET /api/admin/collection-stats — per-user and global collection/wantlist stats
 app.get("/api/admin/collection-stats", async (req, res) => {
   const userId = getClerkUserId(req);
