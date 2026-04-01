@@ -117,7 +117,7 @@ async function getClerkUserId(req: express.Request): Promise<string | null> {
   if (!auth?.startsWith("Bearer ")) return null;
   if (JWKS) {
     try {
-      const { payload } = await jwtVerify(auth.slice(7), JWKS, { issuer: clerkIssuer });
+      const { payload } = await jwtVerify(auth.slice(7), JWKS);
       return (payload.sub as string) ?? null;
     } catch { return null; }
   }
