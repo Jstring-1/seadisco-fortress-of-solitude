@@ -111,6 +111,18 @@ async function loadClerkInstance() {
   });
   if (!c) return null;
   await c.load();
+
+  // Wait for session to be fully ready (token available) if user is signed in
+  if (c.user && c.session) {
+    for (let i = 0; i < 20; i++) {
+      try {
+        const t = await c.session.getToken();
+        if (t) break;
+      } catch { /* ignore */ }
+      await new Promise(r => setTimeout(r, 150));
+    }
+  }
+
   return c;
 }
 
