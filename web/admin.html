@@ -41,6 +41,7 @@
           <button onclick="adminSyncAll()" id="admin-sync-all-btn" class="admin-btn admin-btn-sync">Sync All</button>
           <button onclick="adminSyncStop()" id="admin-sync-stop-btn" class="admin-btn admin-btn-stop">Stop All</button>
           <button onclick="toggleApiKill()" id="admin-api-kill-btn" class="admin-btn admin-btn-danger">Kill All</button>
+          <button onclick="adminRevokeSessions()" id="admin-revoke-btn" class="admin-btn admin-btn-danger">Logout All</button>
         </div>
         <div id="admin-action-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.35rem"></div>
       </div>
@@ -273,6 +274,22 @@ async function toggleApiKill() {
       : "API requests resumed \u2014 all services flowing.";
   } catch { statusEl.textContent = "Kill switch toggle failed."; }
   finally { btn.disabled = false; }
+}
+
+async function adminRevokeSessions() {
+  const btn = document.getElementById("admin-revoke-btn");
+  const statusEl = document.getElementById("admin-action-status");
+  if (!confirm("Log out ALL users except you?")) return;
+  btn.disabled = true; btn.textContent = "Revoking…";
+  try {
+    const sessionToken = await clerk.session?.getToken();
+    const r = await fetch("/api/admin/revoke-sessions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${sessionToken}` },
+    }).then(r => r.json());
+    statusEl.textContent = r.ok ? `Revoked sessions for ${r.revokedUsers} user(s).` : (r.error || "Failed.");
+  } catch { statusEl.textContent = "Revoke request failed."; }
+  finally { btn.disabled = false; btn.textContent = "Logout All"; }
 }
 
 function updateKillButton(active) {

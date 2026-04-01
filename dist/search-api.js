@@ -106,7 +106,7 @@ async function getTokenForRequest(req, allowFallback = false) {
     const userId = getClerkUserId(req);
     if (userId) {
         const userToken = await getUserToken(userId);
-        if (userToken)
+        if (userToken && userToken !== "__oauth__")
             return userToken;
     }
     // Fall back to shared token when auth is disabled OR when explicitly allowed (bio endpoints)
@@ -1743,6 +1743,56 @@ app.get("/api/admin/api-kill", async (req, res) => {
     }
     res.json({ killSwitch: _apiKillSwitch });
 });
+// POST /api/admin/revoke-sessions — log out all Clerk users except admin
+app.post("/api/admin/revoke-sessions", async (req, res) => {
+    const userId = getClerkUserId(req);
+    const adminId = process.env.ADMIN_CLERK_ID ?? "";
+    if (!userId || !adminId || userId !== adminId) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+    }
+    const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
+    if (!clerkSecret) {
+        res.status(500).json({ error: "CLERK_SECRET_KEY not configured" });
+        return;
+    }
+    try {
+        // Fetch all Clerk users (paginated, up to 500)
+        let revoked = 0;
+        let offset = 0;
+        const limit = 100;
+        while (true) {
+            const usersResp = await fetch(`https://api.clerk.com/v1/users?limit=${limit}&offset=${offset}`, {
+                headers: { Authorization: `Bearer ${clerkSecret}` },
+            });
+            if (!usersResp.ok) {
+                res.status(502).json({ error: `Clerk API error: ${usersResp.status}` });
+                return;
+            }
+            const users = await usersResp.json();
+            if (users.length === 0)
+                break;
+            for (const u of users) {
+                if (u.id === adminId)
+                    continue;
+                await fetch(`https://api.clerk.com/v1/users/${u.id}/sessions/revoke`, {
+                    method: "POST",
+                    headers: { Authorization: `Bearer ${clerkSecret}` },
+                });
+                revoked++;
+            }
+            if (users.length < limit)
+                break;
+            offset += limit;
+        }
+        console.log(`Admin: revoked sessions for ${revoked} user(s)`);
+        res.json({ ok: true, revokedUsers: revoked });
+    }
+    catch (err) {
+        console.error("revoke-sessions error:", err);
+        res.status(500).json({ error: String(err) });
+    }
+});
 // GET /api/admin/collection-stats — per-user and global collection/wantlist stats
 app.get("/api/admin/collection-stats", async (req, res) => {
     const userId = getClerkUserId(req);
@@ -1919,6 +1969,7 @@ app.get("/search", async (req, res) => {
             year: req.query.year,
             genre: req.query.genre,
             style: req.query.style,
+            format: req.query.format,
             sort: req.query.sort,
             sortOrder: req.query.sort_order,
             page: req.query.page ? parseInt(req.query.page) : 1,
@@ -2215,8 +2266,7 @@ app.get("/marketplace-stats/:id", async (req, res) => {
     const { id } = req.params;
     const type = req.query.type ?? "release";
     const dc = await getDiscogsForRequest(req, true);
-    const reqToken = await getTokenForRequest(req);
-    if (!dc || !reqToken) {
+    if (!dc) {
         res.json({ numForSale: 0, lowestPrice: null });
         return;
     }
@@ -2230,8 +2280,7 @@ app.get("/marketplace-stats/:id", async (req, res) => {
                 cacheRelease(parseInt(id, 10), "master", master).catch(() => { });
             releaseId = String(master?.main_release ?? id);
         }
-        const statsRes = await loggedFetch("discogs", `https://api.discogs.com/marketplace/stats/${releaseId}?curr_abbr=USD`, { headers: { "Authorization": `Discogs token=${reqToken}`, "User-Agent": MB_UA }, context: "marketplace stats" });
-        const stats = await statsRes.json();
+        const stats = await dc.getMarketplaceStats(releaseId, "USD");
         // Cache price data opportunistically
         const lowest = stats?.lowest_price?.value ?? null;
         const median = stats?.median_price?.value ?? null;
@@ -2258,14 +2307,13 @@ app.get("/marketplace-stats/:id", async (req, res) => {
 // GET /master-versions/:id — all pressings/versions of a master release
 app.get("/master-versions/:id", async (req, res) => {
     const { id } = req.params;
-    const reqToken = await getTokenForRequest(req);
-    if (!reqToken) {
+    const dc = await getDiscogsForRequest(req, true);
+    if (!dc) {
         res.json({ versions: [] });
         return;
     }
     try {
-        const r = await loggedFetch("discogs", `https://api.discogs.com/masters/${id}/versions?per_page=100&sort=released&sort_order=asc`, { headers: { "Authorization": `Discogs token=${reqToken}`, "User-Agent": MB_UA }, context: "master versions" });
-        const data = await r.json();
+        const data = await dc.getMasterVersions(id, { perPage: 100, sort: "released", sortOrder: "asc" });
         const versions = (data.versions ?? []).map((v) => ({
             id: v.id,
             title: v.title,
@@ -2280,8 +2328,8 @@ app.get("/master-versions/:id", async (req, res) => {
         res.json({ versions });
     }
     catch (err) {
-        console.error(err);
-        res.json({ versions: [] });
+        console.error(`[master-versions/${id}] Error:`, err?.message ?? err);
+        res.status(500).json({ error: err?.message ?? "Failed to load versions", versions: [] });
     }
 });
 // GET /api/fresh-releases — 150 random releases from last 3 months
