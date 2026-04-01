@@ -185,7 +185,9 @@ let _adminSyncPoll = null;
 async function loadAdminSyncStatus() {
   const el = document.getElementById("admin-sync-status-list");
   try {
-    const { users, freshStats } = await apiFetch("/api/admin/sync-status").then(r => r.json());
+    const r = await apiFetch("/api/admin/sync-status");
+    if (!r.ok) { el.textContent = "Could not load sync status."; return; }
+    const { users, freshStats } = await r.json();
 
     const freshEl = document.getElementById("admin-fresh-stats");
     if (freshEl && freshStats) {
