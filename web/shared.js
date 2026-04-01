@@ -206,16 +206,26 @@ async function initAuth({ onSignedIn, onSignedOut, onError, onReady } = {}) {
     }
     window._clerk = clerk;
 
+    let _wasSignedIn = !!clerk.user;
+
     if (clerk.user) {
       await onSignedIn?.(clerk);
     } else {
       await onSignedOut?.(clerk);
     }
 
-    // Listen for auth state changes (e.g. user signs in via embedded widget)
+    // Listen for GENUINE auth state changes only.
+    // Clerk's addListener fires transiently with null user during hydration,
+    // which would flash "access denied" on already-authenticated pages.
+    // Only fire callbacks when the state actually changes.
     clerk.addListener(({ user }) => {
-      if (user) onSignedIn?.(clerk);
-      else onSignedOut?.(clerk);
+      if (user && !_wasSignedIn) {
+        _wasSignedIn = true;
+        onSignedIn?.(clerk);
+      } else if (!user && _wasSignedIn) {
+        _wasSignedIn = false;
+        onSignedOut?.(clerk);
+      }
     });
 
     onReady?.(clerk);
