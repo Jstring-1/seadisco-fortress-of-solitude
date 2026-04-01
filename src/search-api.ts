@@ -3495,9 +3495,15 @@ function startExtrasSyncSchedule() {
   schedule();
 }
 
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, "0.0.0.0", async () => {
   console.log(`Discogs search API listening on port ${PORT}`);
   if (process.env.APP_DB_URL) {
+    // Reset any syncs orphaned by a server restart
+    try {
+      const stuck = await resetAllSyncingStatuses();
+      if (stuck > 0) console.log(`Startup: reset ${stuck} orphaned syncing status(es)`);
+    } catch (e) { console.error("Startup: failed to reset stuck syncs:", e); }
+
     startFreshSyncSchedule();
     startGearSchedule();
     startVinylSchedule();
