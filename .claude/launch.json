@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "SeaDisco Web Server",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["dist/search-api.js"],
+      "port": 3001
+    },
+    {
+      "name": "TypeScript Watch (Build)",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["tsc", "--watch"],
+      "port": 0
+    }
+  ]
+}
