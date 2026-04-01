@@ -6,7 +6,12 @@ function getPool() {
         const connStr = process.env.APP_DB_URL;
         if (!connStr)
             throw new Error("APP_DB_URL not set");
-        pool = new Pool({ connectionString: connStr, ssl: { rejectUnauthorized: false } });
+        pool = new Pool({
+            connectionString: connStr,
+            ssl: process.env.DB_CA_CERT
+                ? { rejectUnauthorized: true, ca: process.env.DB_CA_CERT }
+                : { rejectUnauthorized: true },
+        });
     }
     return pool;
 }
@@ -71,9 +76,11 @@ export async function initDb() {
       token           TEXT PRIMARY KEY,
       token_secret    TEXT NOT NULL,
       clerk_user_id   TEXT NOT NULL,
+      csrf_state      TEXT,
       created_at      TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+    await getPool().query(`ALTER TABLE oauth_request_tokens ADD COLUMN IF NOT EXISTS csrf_state TEXT`);
     await getPool().query(`
     CREATE TABLE IF NOT EXISTS user_collection (
       id                 SERIAL PRIMARY KEY,
@@ -505,15 +512,15 @@ export async function setDiscogsUsername(clerkUserId, username) {
     await getPool().query(`UPDATE user_tokens SET discogs_username = $2 WHERE clerk_user_id = $1`, [clerkUserId, username]);
 }
 // ── OAuth request token helpers (temporary during handshake) ──────────────
-export async function storeOAuthRequestToken(token, tokenSecret, clerkUserId) {
-    await getPool().query(`INSERT INTO oauth_request_tokens (token, token_secret, clerk_user_id) VALUES ($1, $2, $3)
-     ON CONFLICT (token) DO UPDATE SET token_secret = $2, clerk_user_id = $3, created_at = NOW()`, [token, tokenSecret, clerkUserId]);
+export async function storeOAuthRequestToken(token, tokenSecret, clerkUserId, csrfState) {
+    await getPool().query(`INSERT INTO oauth_request_tokens (token, token_secret, clerk_user_id, csrf_state) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (token) DO UPDATE SET token_secret = $2, clerk_user_id = $3, csrf_state = $4, created_at = NOW()`, [token, tokenSecret, clerkUserId, csrfState ?? null]);
 }
 export async function getOAuthRequestToken(token) {
-    const r = await getPool().query(`SELECT token_secret, clerk_user_id FROM oauth_request_tokens WHERE token = $1`, [token]);
+    const r = await getPool().query(`SELECT token_secret, clerk_user_id, csrf_state FROM oauth_request_tokens WHERE token = $1`, [token]);
     if (!r.rows[0])
         return null;
-    return { tokenSecret: r.rows[0].token_secret, clerkUserId: r.rows[0].clerk_user_id };
+    return { tokenSecret: r.rows[0].token_secret, clerkUserId: r.rows[0].clerk_user_id, csrfState: r.rows[0].csrf_state ?? null };
 }
 export async function deleteOAuthRequestToken(token) {
     await getPool().query(`DELETE FROM oauth_request_tokens WHERE token = $1`, [token]);
