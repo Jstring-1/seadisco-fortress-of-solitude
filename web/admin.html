@@ -6,12 +6,12 @@
   <title>SeaDisco — Admin</title>
   <meta name="robots" content="noindex, nofollow" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎹</text></svg>">
-  <link rel="stylesheet" href="/style.css?v=20260401a" />
+  <link rel="stylesheet" href="/style.css?v=20260401b" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260401a"></script>
+<script src="/shared.js?v=20260401b"></script>
 <script>renderSharedHeader({ hideRecords: true });</script>
 
 <main>
@@ -115,55 +115,65 @@
   </div>
 </div>
 
+<!-- Album popup (shared modal.js) -->
+<div id="modal-overlay">
+  <div id="modal-box">
+    <button id="modal-close" onclick="closeModal()">×</button>
+    <button class="popup-share" onclick="sharePopup(this)">share</button>
+    <div id="modal-loading">Loading…</div>
+    <div id="album-info"></div>
+  </div>
+</div>
+<div id="concert-overlay">
+  <div id="concert-box">
+    <button id="concert-close" onclick="closeConcertPopup()">×</button>
+    <div id="concert-loading" style="padding:2rem;text-align:center;color:var(--muted)">Loading concerts…</div>
+    <div id="concert-info"></div>
+  </div>
+</div>
+<div id="bio-full-overlay">
+  <div id="bio-full-box">
+    <button id="bio-full-close" onclick="closeBioFull()">×</button>
+    <div id="bio-full-name"></div>
+    <div id="bio-full-text"></div>
+  </div>
+</div>
+<div id="lightbox-overlay" onclick="closeLightbox()">
+  <button id="lightbox-close" onclick="closeLightbox()">×</button>
+  <button id="lightbox-prev" onclick="lightboxStep(event,-1)">&#8592;</button>
+  <img id="lightbox-img" src="" alt="" />
+  <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
+  <div id="lightbox-counter"></div>
+</div>
+<script src="/modal.js?v=20260401b"></script>
+
 <footer></footer>
 <script>renderSharedFooter();</script>
 
 <script>
-function escHtml(s) { return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;"); }
 let clerk = null;
 
-async function initClerk() {
-  clerk = await loadClerkInstance();
-  if (!clerk) {
-    document.getElementById("loading-section").innerHTML = '<p style="color:#e88">Auth not configured.</p>';
-    return;
-  }
+function showDenied() {
+  document.getElementById("loading-section").style.display = "none";
+  document.getElementById("denied-section").style.display = "block";
+}
 
-  // loadClerkInstance() already polled and cached a valid token.
-  // getSessionToken() returns it with retry + cache fallback.
-  const sessionToken = await getSessionToken();
-  if (!sessionToken) {
-    document.getElementById("loading-section").style.display = "none";
-    document.getElementById("denied-section").style.display = "block";
-    return;
-  }
-
-  // Verify admin access with a known-good token
+async function verifyAdmin(c) {
+  clerk = c;
   try {
-    const r = await fetch("/api/admin/feedback", {
-      headers: { Authorization: `Bearer ${sessionToken}` },
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!r.ok) {
-      document.getElementById("loading-section").style.display = "none";
-      document.getElementById("denied-section").style.display = "block";
-      return;
-    }
+    const r = await apiFetch("/api/admin/feedback", { signal: AbortSignal.timeout(10000) });
+    if (!r.ok) { showDenied(); return; }
     const { items } = await r.json();
 
     document.getElementById("loading-section").style.display = "none";
     document.getElementById("admin-content").style.display = "block";
 
-    // Load all admin sections
     renderFeedback(items);
     loadAdminSyncStatus();
     loadApiLog();
     loadCollectionStats();
     checkKillStatus();
-  } catch {
-    document.getElementById("loading-section").style.display = "none";
-    document.getElementById("denied-section").style.display = "block";
-  }
+  } catch { showDenied(); }
 }
 
 
@@ -174,10 +184,7 @@ let _adminSyncPoll = null;
 async function loadAdminSyncStatus() {
   const el = document.getElementById("admin-sync-status-list");
   try {
-    const sessionToken = await getSessionToken();
-    const { users, freshStats } = await fetch("/api/admin/sync-status", {
-      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
-    }).then(r => r.json());
+    const { users, freshStats } = await apiFetch("/api/admin/sync-status").then(r => r.json());
 
     const freshEl = document.getElementById("admin-fresh-stats");
     if (freshEl && freshStats) {
@@ -247,10 +254,9 @@ async function adminSyncAll() {
   const statusEl = document.getElementById("admin-action-status");
   btn.disabled = true; btn.textContent = "Starting\u2026";
   try {
-    const sessionToken = await getSessionToken();
-    const r = await fetch("/api/admin/sync-all", {
+    const r = await apiFetch("/api/admin/sync-all", {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
+      headers: { "Content-Type": "application/json" },
     }).then(r => r.json());
     statusEl.textContent = `Full sync kicked off for ${r.queued} user${r.queued !== 1 ? "s" : ""}.`;
     loadAdminSyncStatus();
@@ -260,10 +266,9 @@ async function adminSyncAll() {
 
 async function adminSyncUser(username) {
   try {
-    const sessionToken = await getSessionToken();
-    await fetch("/api/admin/sync-user", {
+    await apiFetch("/api/admin/sync-user", {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username })
     });
     loadAdminSyncStatus();
@@ -275,11 +280,7 @@ async function adminSyncStop() {
   const statusEl = document.getElementById("admin-action-status");
   btn.disabled = true; btn.textContent = "Stopping\u2026";
   try {
-    const sessionToken = await getSessionToken();
-    const r = await fetch("/api/admin/sync-stop", {
-      method: "POST",
-      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
-    }).then(r => r.json());
+    const r = await apiFetch("/api/admin/sync-stop", { method: "POST" }).then(r => r.json());
     statusEl.textContent = r.message || "Stop signal sent.";
   } catch { statusEl.textContent = "Stop request failed."; }
   finally { btn.disabled = false; btn.textContent = "Stop All"; }
@@ -290,10 +291,9 @@ async function toggleApiKill() {
   const statusEl = document.getElementById("admin-action-status");
   btn.disabled = true;
   try {
-    const sessionToken = await getSessionToken();
-    const r = await fetch("/api/admin/api-kill", {
+    const r = await apiFetch("/api/admin/api-kill", {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
+      headers: { "Content-Type": "application/json" },
     }).then(r => r.json());
     updateKillButton(r.killSwitch);
     statusEl.textContent = r.killSwitch
@@ -309,11 +309,7 @@ async function adminRevokeSessions() {
   if (!confirm("Log out ALL users except you?")) return;
   btn.disabled = true; btn.textContent = "Revoking…";
   try {
-    const sessionToken = await getSessionToken();
-    const r = await fetch("/api/admin/revoke-sessions", {
-      method: "POST",
-      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
-    }).then(r => r.json());
+    const r = await apiFetch("/api/admin/revoke-sessions", { method: "POST" }).then(r => r.json());
     statusEl.textContent = r.ok ? `Revoked sessions for ${r.revokedUsers} user(s).` : (r.error || "Failed.");
   } catch { statusEl.textContent = "Revoke request failed."; }
   finally { btn.disabled = false; btn.textContent = "Logout All"; }
@@ -334,10 +330,7 @@ function updateKillButton(active) {
 
 async function checkKillStatus() {
   try {
-    const sessionToken = await getSessionToken();
-    const r = await fetch("/api/admin/api-kill", {
-      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
-    }).then(r => r.json());
+    const r = await apiFetch("/api/admin/api-kill").then(r => r.json());
     updateKillButton(r.killSwitch);
   } catch {}
 }
@@ -347,10 +340,7 @@ async function adminVinylFetch() {
   const statusEl = document.getElementById("admin-action-status");
   btn.disabled = true; btn.textContent = "Fetching\u2026";
   try {
-    const sessionToken = await getSessionToken();
-    await fetch("/api/admin/vinyl/fetch", {
-      method: "POST", headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
-    }).then(r => r.json());
+    await apiFetch("/api/admin/vinyl/fetch", { method: "POST" }).then(r => r.json());
     statusEl.textContent = "Vinyl fetch started — running in background.";
   } catch { statusEl.textContent = "Vinyl fetch failed."; }
   finally { btn.disabled = false; btn.textContent = "Fetch Vinyl"; }
@@ -361,10 +351,7 @@ async function adminGearFetch() {
   const statusEl = document.getElementById("admin-action-status");
   btn.disabled = true; btn.textContent = "Fetching\u2026";
   try {
-    const sessionToken = await getSessionToken();
-    const r = await fetch("/api/admin/gear/fetch", {
-      method: "POST", headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
-    }).then(r => r.json());
+    const r = await apiFetch("/api/admin/gear/fetch", { method: "POST" }).then(r => r.json());
     statusEl.textContent = r.message || "Gear fetch triggered.";
   } catch { statusEl.textContent = "Gear fetch failed."; }
   finally { btn.disabled = false; btn.textContent = "Fetch Gear"; }
@@ -375,10 +362,7 @@ async function adminFeedFetch() {
   const statusEl = document.getElementById("admin-action-status");
   btn.disabled = true; btn.textContent = "Fetching\u2026";
   try {
-    const sessionToken = await getSessionToken();
-    const r = await fetch("/api/admin/feed/fetch", {
-      method: "POST", headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
-    }).then(r => r.json());
+    const r = await apiFetch("/api/admin/feed/fetch", { method: "POST" }).then(r => r.json());
     statusEl.textContent = r.message || "Feed fetch triggered.";
   } catch { statusEl.textContent = "Feed fetch failed."; }
   finally { btn.disabled = false; btn.textContent = "Fetch Feed"; }
@@ -389,10 +373,7 @@ async function adminLiveFetch() {
   const statusEl = document.getElementById("admin-action-status");
   btn.disabled = true; btn.textContent = "Fetching\u2026";
   try {
-    const sessionToken = await getSessionToken();
-    const r = await fetch("/api/admin/live/fetch", {
-      method: "POST", headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
-    }).then(r => r.json());
+    const r = await apiFetch("/api/admin/live/fetch", { method: "POST" }).then(r => r.json());
     statusEl.textContent = r.count != null ? `Fetched ${r.count} live events.` : "Live events fetch triggered.";
   } catch { statusEl.textContent = "Live events fetch failed."; }
   finally { btn.disabled = false; btn.textContent = "Fetch Live"; }
@@ -403,10 +384,7 @@ async function adminDropsFetch() {
   const statusEl = document.getElementById("admin-action-status");
   btn.disabled = true; btn.textContent = "Fetching\u2026";
   try {
-    const sessionToken = await getSessionToken();
-    await fetch("/api/admin/drops/fetch", {
-      method: "POST", headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
-    }).then(r => r.json());
+    await apiFetch("/api/admin/drops/fetch", { method: "POST" }).then(r => r.json());
     statusEl.textContent = "Drops fetch started — running in background.";
   } catch { statusEl.textContent = "Drops fetch failed."; }
   finally { btn.disabled = false; btn.textContent = "Fetch Drops"; }
@@ -415,7 +393,6 @@ async function adminDropsFetch() {
 // ── API Request Log ───────────────────────────────────────────────────
 async function loadApiLog() {
   try {
-    const sessionToken = await getSessionToken();
     const service = document.getElementById("api-log-filter").value;
     const errorsOnly = document.getElementById("api-log-errors-only").checked;
     const hours = document.getElementById("api-log-hours").value || "24";
@@ -427,7 +404,7 @@ async function loadApiLog() {
     const rangeLabel = document.getElementById("api-log-range-label");
     if (rangeLabel) rangeLabel.textContent = hours === "168" ? "(7 days)" : "(24h)";
 
-    const logRes = await fetch(`/api/admin/api-log?${params}`, { headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {} });
+    const logRes = await apiFetch(`/api/admin/api-log?${params}`);
     if (!logRes.ok) return;
     const { items, total } = await logRes.json();
 
@@ -531,11 +508,7 @@ function renderFeedback(items) {
 }
 
 async function deleteFeedbackItem(id) {
-  const sessionToken = await getSessionToken();
-  const r = await fetch(`/api/admin/feedback/${id}`, {
-    method: "DELETE",
-    headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
-  });
+  const r = await apiFetch(`/api/admin/feedback/${id}`, { method: "DELETE" });
   if (r.ok) document.getElementById(`fb-${id}`)?.remove();
 }
 
@@ -543,10 +516,7 @@ async function deleteFeedbackItem(id) {
 async function loadCollectionStats() {
   const el = document.getElementById("collection-stats");
   try {
-    const sessionToken = await getSessionToken();
-    const data = await fetch("/api/admin/collection-stats", {
-      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
-    }).then(r => r.json());
+    const data = await apiFetch("/api/admin/collection-stats").then(r => r.json());
     if (data.error) { el.textContent = "Could not load."; return; }
 
     const g = data.global;
@@ -586,10 +556,13 @@ async function loadCollectionStats() {
   } catch { el.textContent = "Could not load collection stats."; }
 }
 
-initClerk().catch(err => {
-  console.error("initClerk failed:", err);
-  document.getElementById("loading-section").innerHTML =
-    `<p style="color:#e88">Failed to load auth: ${err.message ?? err}</p>`;
+initAuth({
+  onSignedIn: verifyAdmin,
+  onSignedOut: showDenied,
+  onError: (msg) => {
+    document.getElementById("loading-section").innerHTML =
+      `<p style="color:#e88">Failed to load auth: ${escHtml(msg)}</p>`;
+  },
 });
 
 // ── User items popup (collection/wantlist viewer) ────────────────────
@@ -640,11 +613,8 @@ async function loadAdminItems() {
   list.innerHTML = '<div style="color:var(--muted);padding:1rem;text-align:center">Loading\u2026</div>';
   pag.style.display = "none";
   try {
-    const sessionToken = await getSessionToken();
     const params = new URLSearchParams({ username: _adminItemsUser, tab: _adminItemsTab, page: _adminItemsPage, per_page: 50 });
-    const r = await fetch(`/api/admin/user-items?${params}`, {
-      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
-    });
+    const r = await apiFetch(`/api/admin/user-items?${params}`);
     if (!r.ok) { list.innerHTML = '<div style="color:#e88;padding:1rem">Failed to load.</div>'; return; }
     const data = await r.json();
     countEl.textContent = `${data.total.toLocaleString()} items`;
