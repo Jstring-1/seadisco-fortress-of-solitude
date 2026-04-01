@@ -916,7 +916,7 @@ app.get("/api/user/lists", async (req, res) => {
 app.get("/api/live/upcoming", async (_req, res) => {
     try {
         res.setHeader("Cache-Control", "no-store");
-        const events = await getLiveEvents(50);
+        const events = await getLiveEvents(200);
         res.json({ events });
     }
     catch {
@@ -996,26 +996,64 @@ app.get("/api/live/nearby", async (req, res) => {
         res.json({ events: [], location: { lat, lon, city, region } });
     }
 });
-// Background: fetch upcoming events from Ticketmaster and store in DB
+// California metro areas to fetch concerts for
+const LIVE_METROS = [
+    { name: "San Francisco", lat: 37.7749, lon: -122.4194 },
+    { name: "Los Angeles", lat: 34.0522, lon: -118.2437 },
+    { name: "Sacramento", lat: 38.5816, lon: -121.4944 },
+    { name: "San Diego", lat: 32.7157, lon: -117.1611 },
+    { name: "Ventura", lat: 34.2746, lon: -119.2290 },
+];
+// Background: fetch upcoming events from Ticketmaster for all metros and store in DB
 async function fetchUpcomingEvents() {
     if (!ticketmasterKey)
         return 0;
-    try {
-        const url = `https://app.ticketmaster.com/discovery/v2/events.json?apikey=${ticketmasterKey}&classificationName=music&size=50&sort=date,asc&countryCode=US`;
-        const r = await loggedFetch("ticketmaster", url, { signal: AbortSignal.timeout(30000), context: "scheduled fetch" });
-        if (!r.ok)
-            return 0;
-        const data = await r.json();
-        const events = (data._embedded?.events ?? []).map(mapTmEvent).filter(isMusicEvent);
-        const count = await upsertLiveEvents(events);
-        await pruneLiveEvents();
-        console.log(`[live-events] Fetched ${count} upcoming events, pruned past events`);
-        return count;
+    let totalCount = 0;
+    for (const metro of LIVE_METROS) {
+        try {
+            // Ticketmaster allows up to 200 per page; fetch multiple pages to get broad coverage
+            let page = 0;
+            let fetched = 0;
+            while (page < 3) { // up to 3 pages (600 events) per metro
+                const params = new URLSearchParams({
+                    apikey: ticketmasterKey,
+                    classificationName: "music",
+                    latlong: `${metro.lat},${metro.lon}`,
+                    radius: "100",
+                    unit: "miles",
+                    size: "200",
+                    page: String(page),
+                    sort: "date,asc",
+                });
+                const r = await loggedFetch("ticketmaster", `https://app.ticketmaster.com/discovery/v2/events.json?${params}`, {
+                    signal: AbortSignal.timeout(30000),
+                    context: `scheduled fetch ${metro.name}`,
+                });
+                if (!r.ok)
+                    break;
+                const data = await r.json();
+                const events = (data._embedded?.events ?? []).map(mapTmEvent).filter(isMusicEvent);
+                if (!events.length)
+                    break;
+                const count = await upsertLiveEvents(events);
+                fetched += count;
+                const totalPages = data.page?.totalPages ?? 1;
+                page++;
+                if (page >= totalPages)
+                    break;
+                await sleep(250); // rate-limit courtesy
+            }
+            totalCount += fetched;
+            console.log(`[live-events] ${metro.name}: ${fetched} events`);
+            await sleep(500); // pause between metros
+        }
+        catch (e) {
+            console.error(`[live-events] ${metro.name} fetch error:`, e?.message);
+        }
     }
-    catch (e) {
-        console.error("[live-events] Fetch error:", e);
-        return 0;
-    }
+    await pruneLiveEvents();
+    console.log(`[live-events] Total: ${totalCount} events upserted, past events pruned`);
+    return totalCount;
 }
 function startLiveEventsSchedule() {
     // Every 6 hours starting at 3:40 AM Pacific
