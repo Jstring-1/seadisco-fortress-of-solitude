@@ -491,6 +491,10 @@ export async function deleteFeedback(id) {
 }
 export async function deleteUserData(clerkUserId) {
     const tables = [
+        "saved_searches",
+        "price_alerts",
+        "triggered_alerts",
+        "feedback",
         "user_orders",
         "user_lists",
         "user_inventory",
