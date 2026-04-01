@@ -791,6 +791,14 @@ a.fresh-card-search-link:hover {
 .buy-time-left {
   color: #cc6644;
 }
+.ending-soon {
+  color: #e05050 !important;
+  animation: pulse-red 1.2s ease-in-out infinite;
+}
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
 
 /* Buy popup */
 .buy-popup-overlay {
