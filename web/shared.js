@@ -112,31 +112,20 @@ async function loadClerkInstance() {
   if (!c) return null;
   await c.load();
 
-  // Clerk.load() can resolve before session hydration completes.
-  // Always wait for auth to settle via addListener — this fires once Clerk
-  // has definitively determined the user's sign-in state.
-  await new Promise((resolve) => {
-    let settled = false;
-    const done = () => { if (!settled) { settled = true; unsub?.(); resolve(); } };
-
-    // Check if already ready right now
-    if (c.user && c.session) {
-      c.session.getToken().then(t => { if (t) done(); }).catch(() => {});
-    }
-
-    // Listen for state changes — Clerk fires this when hydration completes
-    const unsub = c.addListener(({ user, session }) => {
-      if (user && session) {
-        session.getToken().then(t => { if (t) done(); }).catch(() => {});
-      } else if (user === null || user === undefined) {
-        // Give Clerk a brief moment — it may fire with null before hydrating
-        setTimeout(() => { if (!c.user) done(); }, 500);
+  // Clerk.load() resolves before session hydration on many page loads.
+  // Poll for a valid token (proof that auth is fully ready) for up to 5s.
+  // If no token materializes, the user is either not signed in or Clerk is slow.
+  for (let i = 0; i < 25; i++) {
+    try {
+      if (c.user && c.session) {
+        const t = await c.session.getToken();
+        if (t) break; // fully ready
+      } else if (c.user === null && i >= 5) {
+        break; // confirmed not signed in (after 1s grace)
       }
-    });
-
-    // Safety timeout — never block page load for more than 4s
-    setTimeout(done, 4000);
-  });
+    } catch { /* ignore */ }
+    await new Promise(r => setTimeout(r, 200));
+  }
 
   return c;
 }
