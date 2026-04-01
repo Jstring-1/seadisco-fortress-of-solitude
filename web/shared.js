@@ -112,34 +112,30 @@ async function loadClerkInstance() {
   if (!c) return null;
   await c.load();
 
-  // Clerk.load() can resolve before the session is fully hydrated.
-  // Wait for the auth state to settle: either user+token ready, or confirmed no user.
+  // Clerk.load() can resolve before session hydration completes.
+  // Always wait for auth to settle via addListener — this fires once Clerk
+  // has definitively determined the user's sign-in state.
   await new Promise((resolve) => {
-    // If user and token are already available, done immediately
+    let settled = false;
+    const done = () => { if (!settled) { settled = true; unsub?.(); resolve(); } };
+
+    // Check if already ready right now
     if (c.user && c.session) {
-      c.session.getToken().then(t => { if (t) { resolve(); return; } waitForReady(); }).catch(waitForReady);
-      return;
+      c.session.getToken().then(t => { if (t) done(); }).catch(() => {});
     }
-    // If clearly no user (no cookies), resolve quickly after a short grace period
-    if (c.user === null && !document.cookie.includes("__session") && !document.cookie.includes("__clerk")) {
-      resolve();
-      return;
-    }
-    waitForReady();
-    function waitForReady() {
-      let settled = false;
-      const done = () => { if (!settled) { settled = true; resolve(); } };
-      // Listen for Clerk's auth state change
-      const unsub = c.addListener(({ user, session }) => {
-        if (user && session) {
-          session.getToken().then(t => { if (t) done(); }).catch(() => {});
-        } else if (user === null) {
-          done(); // confirmed not signed in
-        }
-      });
-      // Safety timeout — don't block forever
-      setTimeout(() => { done(); }, 3000);
-    }
+
+    // Listen for state changes — Clerk fires this when hydration completes
+    const unsub = c.addListener(({ user, session }) => {
+      if (user && session) {
+        session.getToken().then(t => { if (t) done(); }).catch(() => {});
+      } else if (user === null || user === undefined) {
+        // Give Clerk a brief moment — it may fire with null before hydrating
+        setTimeout(() => { if (!c.user) done(); }, 500);
+      }
+    });
+
+    // Safety timeout — never block page load for more than 4s
+    setTimeout(done, 4000);
   });
 
   return c;
