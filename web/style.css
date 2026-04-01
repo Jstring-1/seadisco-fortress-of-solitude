@@ -151,8 +151,9 @@ html { overflow-x: hidden; }
   #video-wrap { padding: 0.4rem; }
 
   /* Pagination */
-  #pagination { gap: 0.5rem; }
-  #pagination button { padding: 0.45rem 0.9rem; font-size: 0.85rem; }
+  #pagination { gap: 0.3rem; }
+  #pagination .pag-arrow { padding: 0.4rem 0.7rem; font-size: 0.8rem; }
+  #pagination .pag-num { padding: 0.35rem 0.55rem; min-width: 2rem; font-size: 0.8rem; }
 
   /* Modal actions — larger touch targets on mobile (not smaller) */
   .modal-actions { gap: 0.35rem; flex-wrap: wrap; }
@@ -2214,28 +2215,62 @@ body.player-open { padding-bottom: 56px; }
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 1rem;
+  gap: 0.35rem;
   margin-top: 2.5rem;
   margin-bottom: 2.5rem;
+  flex-wrap: wrap;
 }
 
-#pagination button {
+#pagination .pag-arrow {
   background: var(--surface);
   border: 1px solid var(--border);
   color: var(--text);
   font-weight: 500;
-  padding: 0.5rem 1.2rem;
+  padding: 0.45rem 1rem;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 0.85rem;
 }
 
-#pagination button:hover:not(:disabled) {
+#pagination .pag-arrow:hover:not(:disabled) {
   border-color: var(--accent);
-  background: var(--surface);
   color: var(--accent);
 }
 
-#page-info {
-  font-size: 0.85rem;
+#pagination .pag-arrow:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+#pagination .pag-num {
+  background: var(--surface);
+  border: 1px solid var(--border);
   color: var(--muted);
+  font-weight: 500;
+  padding: 0.4rem 0.7rem;
+  min-width: 2.2rem;
+  text-align: center;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 0.85rem;
+}
+
+#pagination .pag-num:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+#pagination .pag-num.pag-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  cursor: default;
+}
+
+#pagination .pag-ellipsis {
+  color: var(--muted);
+  font-size: 0.85rem;
+  padding: 0 0.2rem;
 }
 
 /* ── Bio full popup ── */
