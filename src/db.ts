@@ -551,6 +551,10 @@ export async function deleteFeedback(id: number): Promise<void> {
 
 export async function deleteUserData(clerkUserId: string): Promise<void> {
   const tables = [
+    "saved_searches",
+    "price_alerts",
+    "triggered_alerts",
+    "feedback",
     "user_orders",
     "user_lists",
     "user_inventory",
