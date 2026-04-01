@@ -166,6 +166,7 @@ async function verifyAdmin(c) {
     const { items } = await r.json();
 
     document.getElementById("loading-section").style.display = "none";
+    document.getElementById("denied-section").style.display = "none";
     document.getElementById("admin-content").style.display = "block";
 
     renderFeedback(items);
