@@ -129,42 +129,39 @@ async function initClerk() {
     return;
   }
 
-  // Wait for user if not yet hydrated
-  if (!clerk.user) {
-    await new Promise(resolve => {
-      const unsub = clerk.addListener(({ user }) => {
-        if (user) { unsub?.(); resolve(); }
-      });
-      setTimeout(() => { unsub?.(); resolve(); }, 3000);
-    });
+  // Ensure we have a valid token before making any admin request
+  let sessionToken = null;
+  if (clerk.user) {
+    sessionToken = await clerk.session?.getToken();
   }
-  if (!clerk.user) {
+  // If no token yet, poll — Clerk may still be hydrating even after load()
+  if (!sessionToken) {
+    for (let i = 0; i < 25; i++) {
+      await new Promise(r => setTimeout(r, 200));
+      if (clerk.user && clerk.session) {
+        sessionToken = await clerk.session.getToken().catch(() => null);
+        if (sessionToken) break;
+      }
+    }
+  }
+  if (!sessionToken) {
     document.getElementById("loading-section").style.display = "none";
     document.getElementById("denied-section").style.display = "block";
     return;
   }
 
-  // Verify admin access (retry up to 3 times with backoff for token readiness)
+  // Verify admin access with a known-good token
   try {
-    let r, items;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      const sessionToken = await clerk.session?.getToken();
-      if (!sessionToken && attempt < 2) {
-        await new Promise(res => setTimeout(res, 1000));
-        continue;
-      }
-      r = await fetch("/api/admin/feedback", {
-        headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
-        signal: AbortSignal.timeout(10000),
-      });
-      if (r.ok) { items = (await r.json()).items; break; }
-      if (attempt < 2) await new Promise(res => setTimeout(res, 1000));
-    }
-    if (!r || !r.ok) {
+    const r = await fetch("/api/admin/feedback", {
+      headers: { Authorization: `Bearer ${sessionToken}` },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!r.ok) {
       document.getElementById("loading-section").style.display = "none";
       document.getElementById("denied-section").style.display = "block";
       return;
     }
+    const { items } = await r.json();
 
     document.getElementById("loading-section").style.display = "none";
     document.getElementById("admin-content").style.display = "block";
