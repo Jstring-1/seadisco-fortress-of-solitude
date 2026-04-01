@@ -711,9 +711,11 @@ async function loadAdminItems() {
   border-bottom: 1px solid #1e1c18;
   align-items: center;
   text-decoration: none;
+  color: inherit;
   border-radius: 6px;
   transition: background 0.15s;
 }
+.admin-item-row:visited { color: inherit; }
 .admin-item-row:hover {
   background: #1e1c18;
 }
@@ -726,7 +728,7 @@ async function loadAdminItems() {
   background: #1a1a1a;
 }
 .admin-item-title {
-  color: var(--fg);
+  color: var(--accent);
   font-size: 0.82rem;
   font-weight: 500;
   white-space: nowrap;
