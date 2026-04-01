@@ -112,16 +112,35 @@ async function loadClerkInstance() {
   if (!c) return null;
   await c.load();
 
-  // Wait for session to be fully ready (token available) if user is signed in
-  if (c.user && c.session) {
-    for (let i = 0; i < 20; i++) {
-      try {
-        const t = await c.session.getToken();
-        if (t) break;
-      } catch { /* ignore */ }
-      await new Promise(r => setTimeout(r, 150));
+  // Clerk.load() can resolve before the session is fully hydrated.
+  // Wait for the auth state to settle: either user+token ready, or confirmed no user.
+  await new Promise((resolve) => {
+    // If user and token are already available, done immediately
+    if (c.user && c.session) {
+      c.session.getToken().then(t => { if (t) { resolve(); return; } waitForReady(); }).catch(waitForReady);
+      return;
     }
-  }
+    // If clearly no user (no cookies), resolve quickly after a short grace period
+    if (c.user === null && !document.cookie.includes("__session") && !document.cookie.includes("__clerk")) {
+      resolve();
+      return;
+    }
+    waitForReady();
+    function waitForReady() {
+      let settled = false;
+      const done = () => { if (!settled) { settled = true; resolve(); } };
+      // Listen for Clerk's auth state change
+      const unsub = c.addListener(({ user, session }) => {
+        if (user && session) {
+          session.getToken().then(t => { if (t) done(); }).catch(() => {});
+        } else if (user === null) {
+          done(); // confirmed not signed in
+        }
+      });
+      // Safety timeout — don't block forever
+      setTimeout(() => { done(); }, 3000);
+    }
+  });
 
   return c;
 }
