@@ -417,13 +417,14 @@ export async function deleteSavedSearch(clerkUserId, id) {
     await getPool().query(`DELETE FROM saved_searches WHERE id = $1 AND clerk_user_id = $2`, [id, clerkUserId]);
 }
 export async function getAllUsersSyncStatus() {
-    const r = await getPool().query(`SELECT ut.discogs_username, ut.collection_synced_at, ut.wantlist_synced_at,
+    const r = await getPool().query(`SELECT ut.clerk_user_id, ut.discogs_username, ut.collection_synced_at, ut.wantlist_synced_at,
             ut.sync_status, ut.sync_progress, ut.sync_total, ut.sync_error,
             COALESCE(ut.auth_method, 'none') AS auth_method
      FROM user_tokens ut
      WHERE ut.discogs_username IS NOT NULL
      ORDER BY ut.discogs_username`);
     return r.rows.map(row => ({
+        clerkUserId: row.clerk_user_id,
         username: row.discogs_username,
         collectionSyncedAt: row.collection_synced_at ?? null,
         wantlistSyncedAt: row.wantlist_synced_at ?? null,

@@ -1450,7 +1450,24 @@ app.get("/api/admin/sync-status", async (req, res) => {
   const adminId = process.env.ADMIN_CLERK_ID ?? "";
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   const [users, freshStats] = await Promise.all([getAllUsersSyncStatus(), getFreshStats()]);
-  res.json({ users, freshStats });
+
+  // Check active Clerk sessions for each user
+  const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
+  const activeSet = new Set<string>();
+  if (clerkSecret) {
+    try {
+      const sessResp = await fetch("https://api.clerk.com/v1/sessions?status=active&limit=100", {
+        headers: { Authorization: `Bearer ${clerkSecret}` },
+      });
+      if (sessResp.ok) {
+        const sessions = await sessResp.json() as Array<{ user_id: string }>;
+        for (const s of sessions) activeSet.add(s.user_id);
+      }
+    } catch { /* ignore — online status is best-effort */ }
+  }
+
+  const enriched = users.map(u => ({ ...u, online: activeSet.has(u.clerkUserId) }));
+  res.json({ users: enriched, freshStats });
 });
 
 // POST /api/admin/sync-all — trigger FULL background sync for all users, admin only
