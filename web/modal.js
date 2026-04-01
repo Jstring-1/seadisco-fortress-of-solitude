@@ -613,7 +613,6 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
             </div>`
           : (stats?.numForSale === 0 ? `<div style="font-size:0.75rem;color:#555;margin-top:0.2rem">Not currently available on Discogs marketplace</div>` : "")
         }
-        ${stats?.releaseId ? `<div id="modal-price-extras" data-release-id="${escHtml(String(stats.releaseId))}" style="margin-top:0.3rem"></div>` : ""}
         ${!isMaster && releaseId && window._collectionIds ? renderActionsImmediate(Number(releaseId)) : ""}
       </div>
     </div>
@@ -624,7 +623,6 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   if (isMaster) loadMasterVersions(null, searchResult.id);
   // Fetch instance data in background (for rating stars + instanceId)
   if (!isMaster && releaseId && window._collectionIds?.has(Number(releaseId))) loadModalInstanceData(Number(releaseId));
-  if (stats?.releaseId) loadPriceExtras(stats.releaseId);
 }
 
 // ── Modal action buttons (collection/wantlist/rating) ────────────────────
@@ -856,57 +854,6 @@ async function setRating(event, releaseId, rating) {
 }
 
 // ── Price sparkline + alert UI in modal ─────────────────────────────────
-async function loadPriceExtras(releaseId) {
-  const el = document.getElementById("modal-price-extras");
-  if (!el) return;
-  const rid = Number(releaseId);
-
-  // Fetch price history for sparkline
-  try {
-    const histRes = await apiFetch(`/api/price-history/${rid}?days=90`).then(r => r.json()).catch(() => ({ history: [] }));
-
-    const points = histRes.history ?? [];
-    let html = "";
-
-    // Sparkline SVG
-    if (points.length >= 2) {
-      html += renderSparkline(points);
-    }
-
-    el.innerHTML = html;
-  } catch {}
-}
-
-function renderSparkline(points) {
-  const W = 160, H = 32, PAD = 2;
-  const medians = points.map(p => p.median ?? p.lowest ?? 0);
-  const min = Math.min(...medians);
-  const max = Math.max(...medians);
-  const range = max - min || 1;
-
-  const coords = medians.map((v, i) => {
-    const x = PAD + (i / (medians.length - 1)) * (W - 2 * PAD);
-    const y = PAD + (1 - (v - min) / range) * (H - 2 * PAD);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  });
-
-  const first = medians[0], last = medians[medians.length - 1];
-  const pctChange = first > 0 ? ((last - first) / first * 100).toFixed(1) : "0.0";
-  const color = last >= first ? "#4caf50" : "#e05050";
-  const arrow = last > first ? "↑" : last < first ? "↓" : "→";
-
-  const firstDate = new Date(points[0].recordedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  const lastDate = new Date(points[points.length - 1].recordedAt).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-
-  return `<div class="price-sparkline-row">
-    <svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" style="display:block">
-      <polyline points="${coords.join(" ")}" fill="none" stroke="${color}" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" />
-      <circle cx="${coords[coords.length - 1].split(",")[0]}" cy="${coords[coords.length - 1].split(",")[1]}" r="2" fill="${color}" />
-    </svg>
-    <span class="price-sparkline-label" style="color:${color}">${arrow} ${pctChange}%</span>
-    <span class="price-sparkline-dates">${firstDate} – ${lastDate}</span>
-  </div>`;
-}
 
 
 function refreshCardBadges(releaseId) {
