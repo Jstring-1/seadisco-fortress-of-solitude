@@ -200,7 +200,7 @@ async function loadAdminSyncStatus() {
           ? '<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:3px;background:#1a3a1a;color:#6bcf8e;font-weight:600;margin-left:0.4rem">PAT</span>'
           : '<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:3px;background:#2a2a2a;color:#666;font-weight:600;margin-left:0.4rem">\u2014</span>';
       return `<div style="padding:0.45rem 0;border-bottom:1px solid #1a1a1a;display:grid;grid-template-columns:140px 1fr 1fr auto;gap:0.5rem 1rem;align-items:baseline;font-size:0.8rem">
-        <span style="color:var(--fg);font-weight:600"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${u.online ? '#4caf50' : '#444'};margin-right:0.4rem;vertical-align:middle" title="${u.online ? 'Online' : 'Offline'}"></span>@${u.username}${authBadge}</span>
+        <span style="color:var(--fg);font-weight:600"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${u.online ? '#4caf50' : '#444'};margin-right:0.4rem;vertical-align:middle" title="${u.online ? 'Active in last 24h' : 'Inactive 24h+'}"></span>@${u.username}${authBadge}</span>
         <span style="color:${statusColor}">${statusText}</span>
         <span style="color:#555">Coll: ${fmtTime(u.collectionSyncedAt)} \u00b7 Want: ${fmtTime(u.wantlistSyncedAt)}</span>
         <span>${syncBtn}</span>

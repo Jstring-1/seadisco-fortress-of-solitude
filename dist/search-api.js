@@ -1750,23 +1750,33 @@ app.get("/api/admin/sync-status", async (req, res) => {
         return;
     }
     const [users, freshStats] = await Promise.all([getAllUsersSyncStatus(), getFreshStats()]);
-    // Check active Clerk sessions — only count users active in the last 5 minutes
+    // Check Clerk users — mark active within the last 24 hours via user.last_active_at
     const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
     const activeSet = new Set();
     if (clerkSecret) {
         try {
-            const fiveMinAgo = Date.now() - 5 * 60 * 1000;
-            const sessResp = await fetch("https://api.clerk.com/v1/sessions?status=active&limit=500", {
-                headers: { Authorization: `Bearer ${clerkSecret}` },
-            });
-            if (sessResp.ok) {
-                const sessions = await sessResp.json();
-                for (const s of sessions) {
-                    // last_active_at is Unix timestamp in ms
-                    if (s.last_active_at && s.last_active_at > fiveMinAgo) {
-                        activeSet.add(s.user_id);
-                    }
+            const oneDayAgoMs = Date.now() - 24 * 60 * 60 * 1000;
+            let offset = 0;
+            while (true) {
+                const resp = await fetch(`https://api.clerk.com/v1/users?limit=100&offset=${offset}`, {
+                    headers: { Authorization: `Bearer ${clerkSecret}` },
+                });
+                if (!resp.ok)
+                    break;
+                const clerkUsers = await resp.json();
+                if (!clerkUsers.length)
+                    break;
+                for (const u of clerkUsers) {
+                    if (!u.last_active_at)
+                        continue;
+                    // Clerk returns last_active_at in ms
+                    const ts = u.last_active_at > 1e12 ? u.last_active_at : u.last_active_at * 1000;
+                    if (ts > oneDayAgoMs)
+                        activeSet.add(u.id);
                 }
+                if (clerkUsers.length < 100)
+                    break;
+                offset += 100;
             }
         }
         catch { /* ignore — online status is best-effort */ }
