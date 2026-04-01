@@ -9,7 +9,7 @@ function openModal(event, id, type, discogsUrl) {
   document.getElementById("modal-loading").style.display = "block";
   overlay.classList.add("open");
 
-  const cachedItem = itemCache.get(String(id)) ?? { type };
+  const cachedItem = itemCache.get(String(id)) ?? { type, id };
   const endpoint = type === "master" ? "master" : "release";
   Promise.all([
     apiFetch(`${API}/${endpoint}/${id}`).then(r => r.json()),
