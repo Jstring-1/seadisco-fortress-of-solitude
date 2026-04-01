@@ -1555,26 +1555,28 @@ app.get("/api/admin/sync-status", async (req, res) => {
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   const [users, freshStats] = await Promise.all([getAllUsersSyncStatus(), getFreshStats()]);
 
-  // Check Clerk users — mark active within the last 24 hours via user.last_active_at
+  // Check Clerk sessions for accurate last-activity timestamps
   const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
-  const lastActiveMap = new Map<string, number>();
+  const lastActiveMap = new Map<string, number>(); // clerkUserId → most recent session activity ms
   if (clerkSecret) {
     try {
-      let offset = 0;
-      while (true) {
-        const resp = await fetch(`https://api.clerk.com/v1/users?limit=100&offset=${offset}`, {
-          headers: { Authorization: `Bearer ${clerkSecret}` },
-        });
-        if (!resp.ok) break;
-        const clerkUsers = await resp.json() as Array<{ id: string; last_active_at: number | null }>;
-        if (!clerkUsers.length) break;
-        for (const u of clerkUsers) {
-          if (!u.last_active_at) continue;
-          const ts = u.last_active_at > 1e12 ? u.last_active_at : u.last_active_at * 1000;
-          lastActiveMap.set(u.id, ts);
-        }
-        if (clerkUsers.length < 100) break;
-        offset += 100;
+      // Query active sessions for each user (sessions API has fine-grained timestamps)
+      for (const u of users) {
+        if (!u.clerkUserId) continue;
+        try {
+          const resp = await fetch(
+            `https://api.clerk.com/v1/sessions?user_id=${u.clerkUserId}&status=active&limit=5`,
+            { headers: { Authorization: `Bearer ${clerkSecret}` } }
+          );
+          if (!resp.ok) continue;
+          const sessions = await resp.json() as Array<{ last_active_at: number; created_at: number }>;
+          let latest = 0;
+          for (const s of sessions) {
+            const ts = s.last_active_at > 1e12 ? s.last_active_at : s.last_active_at * 1000;
+            if (ts > latest) latest = ts;
+          }
+          if (latest > 0) lastActiveMap.set(u.clerkUserId, latest);
+        } catch { /* skip user */ }
       }
     } catch { /* ignore — activity data is best-effort */ }
   }
