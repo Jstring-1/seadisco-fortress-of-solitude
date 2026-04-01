@@ -15,7 +15,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎹</text></svg>">
   <link rel="manifest" href="/site.webmanifest">
   <meta name="theme-color" content="#080706">
-  <link rel="stylesheet" href="/style.css?v=20260401a" />
+  <link rel="stylesheet" href="/style.css?v=20260401b" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -29,7 +29,7 @@
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260401a"></script>
+<script src="/shared.js?v=20260401b"></script>
 <script>renderSharedHeader({ hideRecords: true });</script>
 
 <main>
@@ -148,6 +148,38 @@
 <footer></footer>
 <script>renderSharedFooter();</script>
 
+<!-- Album popup (shared modal.js) -->
+<div id="modal-overlay">
+  <div id="modal-box">
+    <button id="modal-close" onclick="closeModal()">×</button>
+    <button class="popup-share" onclick="sharePopup(this)">share</button>
+    <div id="modal-loading">Loading…</div>
+    <div id="album-info"></div>
+  </div>
+</div>
+<div id="concert-overlay">
+  <div id="concert-box">
+    <button id="concert-close" onclick="closeConcertPopup()">×</button>
+    <div id="concert-loading" style="padding:2rem;text-align:center;color:var(--muted)">Loading concerts…</div>
+    <div id="concert-info"></div>
+  </div>
+</div>
+<div id="bio-full-overlay">
+  <div id="bio-full-box">
+    <button id="bio-full-close" onclick="closeBioFull()">×</button>
+    <div id="bio-full-name"></div>
+    <div id="bio-full-text"></div>
+  </div>
+</div>
+<div id="lightbox-overlay" onclick="closeLightbox()">
+  <button id="lightbox-close" onclick="closeLightbox()">×</button>
+  <button id="lightbox-prev" onclick="lightboxStep(event,-1)">&#8592;</button>
+  <img id="lightbox-img" src="" alt="" />
+  <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
+  <div id="lightbox-counter"></div>
+</div>
+<script src="/modal.js?v=20260401b"></script>
+
 <!-- Feedback modal -->
 <div id="feedback-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;display:none;align-items:center;justify-content:center">
   <div style="background:#1a1a1a;border:1px solid #2e2e2e;border-radius:8px;padding:1.5rem;max-width:420px;width:90%;position:relative">
@@ -166,64 +198,49 @@
 <script>
 let clerk = null;
 
-
-// ── Auth ──
-async function initClerk() {
-  clerk = await loadClerkInstance();
-  if (!clerk) {
-    document.getElementById("loading-section").innerHTML =
-      '<p style="color:#e88">Auth is not configured on this server.</p>';
-    return;
-  }
-
+function showSignInWidget(c) {
   document.getElementById("loading-section").style.display = "none";
-
-  // Listen for auth state changes — handles sign-in completing inside the embedded widget
-  clerk.addListener(({ user }) => {
-    if (user && document.getElementById("auth-section").style.display !== "block") {
-      document.getElementById("signed-out-section").style.display = "none";
-      showAuthSection();
-    }
-  });
-
-  if (clerk.user) {
-    showAuthSection();
-  } else {
-    document.getElementById("signed-out-section").style.display = "block";
-    clerk.mountSignIn(document.getElementById("clerk-sign-in"), {
-      afterSignInUrl: "/account",
-      afterSignUpUrl: "/account",
-      appearance: {
-        baseTheme: undefined,
-        variables: {
-          colorBackground:        "#15120e",
-          colorInputBackground:   "#0e0c08",
-          colorInputText:         "#e8dcc8",
-          colorText:              "#e8dcc8",
-          colorTextSecondary:     "#a89880",
-          colorPrimary:           "#ff6b35",
-          colorDanger:            "#e05050",
-          colorNeutral:           "#a89880",
-          borderRadius:           "6px",
-          fontFamily:             "system-ui, -apple-system, sans-serif",
-        },
-        elements: {
-          card:               "background:#15120e; border:1px solid #2e2518; box-shadow:none;",
-          headerTitle:        "color:#e8dcc8;",
-          headerSubtitle:     "color:#8a7d6b;",
-          socialButtonsBlockButton: "background:#0e0c08; border:1px solid #2e2518; color:#e8dcc8;",
-          socialButtonsBlockButtonText: "color:#e8dcc8;",
-          dividerLine:        "background:#2e2518;",
-          dividerText:        "color:#8a7d6b;",
-          formFieldLabel:     "color:#8a7d6b;",
-          formFieldInput:     "background:#0e0c08; border:1px solid #2e2518; color:#e8dcc8;",
-          footerActionLink:   "color:#ff6b35;",
-          identityPreviewText: "color:#e8dcc8;",
-          identityPreviewEditButton: "color:#ff6b35;",
-        },
+  document.getElementById("signed-out-section").style.display = "block";
+  c.mountSignIn(document.getElementById("clerk-sign-in"), {
+    afterSignInUrl: "/account",
+    afterSignUpUrl: "/account",
+    appearance: {
+      baseTheme: undefined,
+      variables: {
+        colorBackground:        "#15120e",
+        colorInputBackground:   "#0e0c08",
+        colorInputText:         "#e8dcc8",
+        colorText:              "#e8dcc8",
+        colorTextSecondary:     "#a89880",
+        colorPrimary:           "#ff6b35",
+        colorDanger:            "#e05050",
+        colorNeutral:           "#a89880",
+        borderRadius:           "6px",
+        fontFamily:             "system-ui, -apple-system, sans-serif",
       },
-    });
-  }
+      elements: {
+        card:               "background:#15120e; border:1px solid #2e2518; box-shadow:none;",
+        headerTitle:        "color:#e8dcc8;",
+        headerSubtitle:     "color:#8a7d6b;",
+        socialButtonsBlockButton: "background:#0e0c08; border:1px solid #2e2518; color:#e8dcc8;",
+        socialButtonsBlockButtonText: "color:#e8dcc8;",
+        dividerLine:        "background:#2e2518;",
+        dividerText:        "color:#8a7d6b;",
+        formFieldLabel:     "color:#8a7d6b;",
+        formFieldInput:     "background:#0e0c08; border:1px solid #2e2518; color:#e8dcc8;",
+        footerActionLink:   "color:#ff6b35;",
+        identityPreviewText: "color:#e8dcc8;",
+        identityPreviewEditButton: "color:#ff6b35;",
+      },
+    },
+  });
+}
+
+function handleSignedIn(c) {
+  clerk = c;
+  document.getElementById("loading-section").style.display = "none";
+  document.getElementById("signed-out-section").style.display = "none";
+  showAuthSection();
 }
 
 async function showAuthSection() {
@@ -232,10 +249,7 @@ async function showAuthSection() {
   document.getElementById("user-email").textContent = email;
 
   // Check if they already have a token saved
-  const sessionToken = await getSessionToken();
-  const data = await fetch("/api/user/token", {
-    headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
-  }).then(r => r.json()).catch(() => null);
+  const data = await apiFetch("/api/user/token").then(r => r.json()).catch(() => null);
 
   const statusEl = document.getElementById("token-status");
   const removeBtn = document.getElementById("remove-btn");
@@ -285,10 +299,7 @@ async function showAuthSection() {
 
 async function loadProfile() {
   try {
-    const sessionToken = await getSessionToken();
-    const data = await fetch("/api/user/profile", {
-      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
-    }).then(r => r.json());
+    const data = await apiFetch("/api/user/profile").then(r => r.json());
     if (!data?.username) return;
     renderProfile(data);
   } catch {}
@@ -340,13 +351,9 @@ function renderProfile(data) {
 async function refreshProfile(btn) {
   btn.style.opacity = "0.3";
   try {
-    const sessionToken = await getSessionToken();
-    const data = await fetch("/api/user/profile/refresh", {
+    const data = await apiFetch("/api/user/profile/refresh", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {})
-      }
+      headers: { "Content-Type": "application/json" }
     }).then(r => r.json());
     if (data?.username) renderProfile(data);
   } catch {}
@@ -361,10 +368,7 @@ async function startOAuth() {
   statusEl.style.display = "";
   statusEl.textContent = "Connecting to Discogs…";
   try {
-    const sessionToken = await getSessionToken();
-    const data = await fetch("/api/auth/discogs/start", {
-      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
-    }).then(r => r.json());
+    const data = await apiFetch("/api/auth/discogs/start").then(r => r.json());
     if (data?.authorizeUrl) {
       statusEl.textContent = "Redirecting to Discogs…";
       window.location.href = data.authorizeUrl;
@@ -383,11 +387,7 @@ async function startOAuth() {
 async function disconnectOAuth() {
   if (!confirm("Disconnect your Discogs OAuth connection? You can reconnect anytime.")) return;
   try {
-    const sessionToken = await getSessionToken();
-    await fetch("/api/auth/discogs/disconnect", {
-      method: "DELETE",
-      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
-    });
+    await apiFetch("/api/auth/discogs/disconnect", { method: "DELETE" });
     showAuthSection();
   } catch {}
 }
@@ -400,10 +400,7 @@ async function loadSyncStatus() {
   const btn = document.getElementById("account-sync-btn");
   syncSection.style.display = "block";
   try {
-    const sessionToken = await getSessionToken();
-    const d = await fetch("/api/user/sync-status", {
-      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
-    }).then(r => r.json());
+    const d = await apiFetch("/api/user/sync-status").then(r => r.json());
 
     // If sync is currently running, show progress and start polling
     if (d.syncStatus === "syncing") {
@@ -479,10 +476,9 @@ async function accountSync(silent = false) {
     statusEl.textContent = "Starting sync…";
   }
   try {
-    const sessionToken = await getSessionToken();
-    const r = await fetch("/api/user/sync", {
+    const r = await apiFetch("/api/user/sync", {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type: "both" })
     }).then(r => r.json());
     if (r.skipped) {
@@ -510,13 +506,9 @@ async function saveToken() {
   const token = document.getElementById("token-input").value.trim();
   if (!token) { alert("Please paste your Discogs token first."); return; }
 
-  const sessionToken = await getSessionToken();
-  const r = await fetch("/api/user/token", {
+  const r = await apiFetch("/api/user/token", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
-    },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token }),
   });
 
@@ -531,11 +523,7 @@ async function saveToken() {
 
 async function removeToken() {
   if (!confirm("Remove your saved Discogs token?")) return;
-  const sessionToken = await getSessionToken();
-  await fetch("/api/user/token", {
-    method: "DELETE",
-    headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
-  });
+  await apiFetch("/api/user/token", { method: "DELETE" });
   await showAuthSection();
 }
 
@@ -557,11 +545,10 @@ async function submitFeedback() {
   const btn = document.getElementById("feedback-submit-btn");
   btn.disabled = true; btn.textContent = "Sending…";
   try {
-    const sessionToken = await getSessionToken();
     const userEmail = clerk.user?.primaryEmailAddress?.emailAddress ?? "";
-    const r = await fetch("/api/feedback", {
+    const r = await apiFetch("/api/feedback", {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ message, userEmail }),
     });
     if (r.ok) {
@@ -587,11 +574,7 @@ async function deleteAccount() {
   if (!confirm("Permanently delete your account and all saved data? This cannot be undone.")) return;
   try {
     // Delete our DB records first
-    const sessionToken = await getSessionToken();
-    await fetch("/api/user/account", {
-      method: "DELETE",
-      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
-    });
+    await apiFetch("/api/user/account", { method: "DELETE" });
     // Then delete the Clerk account
     await clerk.user.delete();
     window.location.href = "/";
@@ -600,10 +583,13 @@ async function deleteAccount() {
   }
 }
 
-initClerk().catch(err => {
-  console.error("initClerk failed:", err);
-  document.getElementById("loading-section").innerHTML =
-    `<p style="color:#e88">Failed to load auth: ${err.message ?? err}</p>`;
+initAuth({
+  onSignedIn: handleSignedIn,
+  onSignedOut: (c) => { clerk = c; showSignInWidget(c); },
+  onError: (msg) => {
+    document.getElementById("loading-section").innerHTML =
+      `<p style="color:#e88">Failed to load auth: ${escHtml(msg)}</p>`;
+  },
 });
 </script>
 

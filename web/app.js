@@ -138,52 +138,41 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
 });
 
 // ── Clerk auth init ──────────────────────────────────────────────────────
-(async function initAuth() {
-  try {
-    window._clerk = await loadClerkInstance();
-    if (!window._clerk) { _authReady(); return; }
+async function applyAuthState(clerk) {
+  const navBtn = document.getElementById("nav-auth-btn");
+  if (navBtn) {
+    if (clerk.user) {
+      navBtn.textContent = "Account";
+      navBtn.classList.remove("nav-signup-btn");
+      const popup = document.getElementById("nav-auth-popup");
+      if (popup) popup.remove();
+    } else {
+      navBtn.textContent = "Sign Up";
+      navBtn.classList.add("nav-signup-btn");
+    }
+  }
 
-    async function applyAuthState() {
-      const navBtn = document.getElementById("nav-auth-btn");
-      if (navBtn) {
-        if (window._clerk.user) {
-          navBtn.textContent = "Account";
-          navBtn.classList.remove("nav-signup-btn");
-          const popup = document.getElementById("nav-auth-popup");
-          if (popup) popup.remove();
-        } else {
-          navBtn.textContent = "Sign Up";
-          navBtn.classList.add("nav-signup-btn");
+  if (clerk.user) {
+    addNavTab("wanted");
+    try {
+      const tokenCheck = await apiFetch("/api/user/token");
+      if (tokenCheck.ok) {
+        const tokenData = await tokenCheck.json();
+        if (tokenData.hasToken) {
+          addNavTab("collection");
+          addNavTab("wantlist");
+          await loadDiscogsIds();
         }
       }
+    } catch { /* collection tabs optional */ }
+  }
+}
 
-      if (window._clerk.user) {
-        addNavTab("wanted");
-        try {
-          const tokenCheck = await apiFetch("/api/user/token");
-          if (tokenCheck.ok) {
-            const tokenData = await tokenCheck.json();
-            if (tokenData.hasToken) {
-              addNavTab("collection");
-              addNavTab("wantlist");
-              await loadDiscogsIds();
-            }
-          }
-        } catch { /* collection tabs optional */ }
-      }
-    }
-
-    await applyAuthState();
-
-    // If user wasn't ready yet, listen for late hydration
-    if (!window._clerk.user) {
-      window._clerk.addListener(({ user }) => {
-        if (user) applyAuthState();
-      });
-    }
-  } catch { /* auth unavailable — site works fine without it */ }
-  finally { _authReady(); }
-})();
+initAuth({
+  onSignedIn: applyAuthState,
+  onSignedOut: applyAuthState,
+  onReady: () => _authReady(),
+});
 
 // ── Service Worker registration ──────────────────────────────────────────
 if ("serviceWorker" in navigator) {

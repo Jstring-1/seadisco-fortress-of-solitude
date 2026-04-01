@@ -1,4 +1,9 @@
 // ── Modal ─────────────────────────────────────────────────────────────────
+// Guard SPA-only functions so modal.js works on account/admin pages too
+if (typeof selectAltArtist === "undefined") window.selectAltArtist = () => {};
+if (typeof searchArtistFromModal === "undefined") window.searchArtistFromModal = () => {};
+if (typeof toggleAdvanced === "undefined") window.toggleAdvanced = () => {};
+if (typeof doSearch === "undefined") window.doSearch = () => {};
 function openModal(event, id, type, discogsUrl) {
   if (event) event.preventDefault();
   const u = new URL(window.location.href);
@@ -9,7 +14,7 @@ function openModal(event, id, type, discogsUrl) {
   document.getElementById("modal-loading").style.display = "block";
   overlay.classList.add("open");
 
-  const cachedItem = itemCache.get(String(id)) ?? { type, id };
+  const cachedItem = (typeof itemCache !== 'undefined' ? itemCache.get(String(id)) : null) ?? { type, id };
   const endpoint = type === "master" ? "master" : "release";
   Promise.all([
     apiFetch(`${API}/${endpoint}/${id}`).then(r => r.json()),
@@ -71,7 +76,10 @@ async function openConcertPopup(event, artistName) {
     };
 
     const escArt = escHtml(artistName).replace(/'/g, "\\'");
-    let html = `<div class="concert-artist-name">${escHtml(artistName)} — Upcoming Shows <a href="#" onclick="event.preventDefault();closeConcertPopup();closeModal();document.getElementById('live-artist').value='${escArt}';switchView('live');doLiveSearch()" style="font-size:0.75rem;color:var(--accent);text-decoration:none;margin-left:0.5rem">Search on Live →</a></div>`;
+    const liveLink = typeof switchView === 'function'
+      ? ` <a href="#" onclick="event.preventDefault();closeConcertPopup();closeModal();document.getElementById('live-artist').value='${escArt}';switchView('live');doLiveSearch()" style="font-size:0.75rem;color:var(--accent);text-decoration:none;margin-left:0.5rem">Search on Live →</a>`
+      : '';
+    let html = `<div class="concert-artist-name">${escHtml(artistName)} — Upcoming Shows${liveLink}</div>`;
     html += `<div class="concert-list">`;
     for (const ev of events) {
       const googleQ = encodeURIComponent(`${artistName} ${ev.venue} ${ev.city} concert`);

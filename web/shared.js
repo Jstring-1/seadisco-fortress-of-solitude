@@ -82,6 +82,29 @@ function paramsToUrl(raw) {
   return "/?" + u.toString();
 }
 
+// ── API base URL (empty for same-origin) ────────────────────────────────
+const API = "";
+
+// ── Auth-aware fetch wrapper ────────────────────────────────────────────
+async function apiFetch(url, options = {}) {
+  const headers = { ...(options.headers ?? {}) };
+  try {
+    const t = await getSessionToken();
+    if (t) headers["Authorization"] = `Bearer ${t}`;
+  } catch { /* not signed in */ }
+  return fetch(url, { ...options, headers });
+}
+
+// ── HTML escape ─────────────────────────────────────────────────────────
+function escHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 // ── Shared Clerk bootstrap ───────────────────────────────────────────────
 // Loads Clerk JS and returns the Clerk instance. Pages handle post-auth UI.
 
@@ -165,6 +188,43 @@ async function loadClerkInstance() {
   }
 
   return c;
+}
+
+// ── Shared auth initializer ─────────────────────────────────────────────
+// One function for all pages. Callbacks:
+//   onSignedIn(clerk)  — user is authenticated, build page
+//   onSignedOut(clerk) — no user, show sign-in / public view
+//   onError(msg)       — Clerk failed to load
+//   onReady(clerk)     — always fires last (for resolving auth-ready promises)
+async function initAuth({ onSignedIn, onSignedOut, onError, onReady } = {}) {
+  try {
+    const clerk = await loadClerkInstance();
+    if (!clerk) {
+      onError?.("Auth not configured");
+      onReady?.(null);
+      return null;
+    }
+    window._clerk = clerk;
+
+    if (clerk.user) {
+      await onSignedIn?.(clerk);
+    } else {
+      await onSignedOut?.(clerk);
+    }
+
+    // Listen for auth state changes (e.g. user signs in via embedded widget)
+    clerk.addListener(({ user }) => {
+      if (user) onSignedIn?.(clerk);
+      else onSignedOut?.(clerk);
+    });
+
+    onReady?.(clerk);
+    return clerk;
+  } catch (err) {
+    onError?.(err.message ?? String(err));
+    onReady?.(null);
+    return null;
+  }
 }
 
 // ── Shared header injection ──────────────────────────────────────────────

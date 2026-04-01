@@ -1,5 +1,5 @@
 // ── Config ─────────────────────────────────────────────────────────────────
-const API = "";
+// API, apiFetch(), escHtml() are now in shared.js
 
 // ── HTML strip helper (for eBay descriptions) ───────────────────────────
 function stripHtml(html) {
@@ -16,16 +16,6 @@ function stripHtml(html) {
   text = text.replace(/[ \t]+/g, " ");           // collapse horizontal space
   text = text.replace(/\n{3,}/g, "\n\n");         // max 2 consecutive newlines
   return text.trim();
-}
-
-// ── Auth helpers ─────────────────────────────────────────────────────────
-async function apiFetch(url, options = {}) {
-  const headers = { ...(options.headers ?? {}) };
-  try {
-    const t = await getSessionToken();
-    if (t) headers["Authorization"] = `Bearer ${t}`;
-  } catch { /* not signed in */ }
-  return fetch(url, { ...options, headers });
 }
 
 // ── Shared state ─────────────────────────────────────────────────────────
@@ -65,14 +55,7 @@ function populateStyles() {
 }
 
 // ── Utility functions ────────────────────────────────────────────────────
-function escHtml(str) {
-  return String(str)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
+// escHtml() is now in shared.js
 
 function setStatus(msg, isError = false) {
   const el = document.getElementById("status");
