@@ -1557,10 +1557,9 @@ app.get("/api/admin/sync-status", async (req, res) => {
 
   // Check Clerk users — mark active within the last 24 hours via user.last_active_at
   const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
-  const activeSet = new Set<string>();
+  const lastActiveMap = new Map<string, number>();
   if (clerkSecret) {
     try {
-      const oneDayAgoMs = Date.now() - 24 * 60 * 60 * 1000;
       let offset = 0;
       while (true) {
         const resp = await fetch(`https://api.clerk.com/v1/users?limit=100&offset=${offset}`, {
@@ -1571,17 +1570,20 @@ app.get("/api/admin/sync-status", async (req, res) => {
         if (!clerkUsers.length) break;
         for (const u of clerkUsers) {
           if (!u.last_active_at) continue;
-          // Clerk returns last_active_at in ms
           const ts = u.last_active_at > 1e12 ? u.last_active_at : u.last_active_at * 1000;
-          if (ts > oneDayAgoMs) activeSet.add(u.id);
+          lastActiveMap.set(u.id, ts);
         }
         if (clerkUsers.length < 100) break;
         offset += 100;
       }
-    } catch { /* ignore — online status is best-effort */ }
+    } catch { /* ignore — activity data is best-effort */ }
   }
 
-  const enriched = users.map(u => ({ ...u, online: activeSet.has(u.clerkUserId) }));
+  const oneDayAgoMs = Date.now() - 24 * 60 * 60 * 1000;
+  const enriched = users.map(u => {
+    const lastActiveAt = lastActiveMap.get(u.clerkUserId) ?? null;
+    return { ...u, online: lastActiveAt ? lastActiveAt > oneDayAgoMs : false, lastActiveAt };
+  });
   res.json({ users: enriched, freshStats });
 });
 

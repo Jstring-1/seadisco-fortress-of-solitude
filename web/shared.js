@@ -11,6 +11,21 @@ function fmtTime(ts) {
   return `${Math.round(h / 24)}d ago`;
 }
 
+function fmtRelativeTime(ts) {
+  if (!ts) return "\u2014";
+  const ms = Date.now() - (typeof ts === "number" ? ts : new Date(ts).getTime());
+  const mins = Math.floor(ms / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
+}
+
 // ── Mobile nav toggle ────────────────────────────────────────────────────
 function toggleMobileNav() {
   document.getElementById("main-nav-tabs")?.classList.toggle("mobile-open");
