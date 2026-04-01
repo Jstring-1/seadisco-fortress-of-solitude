@@ -129,21 +129,11 @@ async function initClerk() {
     return;
   }
 
-  // Ensure we have a valid token before making any admin request
-  let sessionToken = null;
-  if (clerk.user) {
-    sessionToken = await clerk.session?.getToken();
-  }
-  // If no token yet, poll — Clerk may still be hydrating even after load()
-  if (!sessionToken) {
-    for (let i = 0; i < 25; i++) {
-      await new Promise(r => setTimeout(r, 200));
-      if (clerk.user && clerk.session) {
-        sessionToken = await clerk.session.getToken().catch(() => null);
-        if (sessionToken) break;
-      }
-    }
-  }
+  // loadClerkInstance() already polled for session hydration (up to 5s).
+  // If user/session are available, get a fresh token for the admin request.
+  const sessionToken = clerk.user && clerk.session
+    ? await clerk.session.getToken().catch(() => null)
+    : null;
   if (!sessionToken) {
     document.getElementById("loading-section").style.display = "none";
     document.getElementById("denied-section").style.display = "block";
