@@ -30,6 +30,7 @@ function renderGearCard(item, idx) {
 
   // Time remaining
   let timeLeft = "";
+  let endingSoon = false;
   if (item.item_end_date) {
     const ms = new Date(item.item_end_date).getTime() - Date.now();
     if (ms > 0) {
@@ -37,7 +38,9 @@ function renderGearCard(item, idx) {
       const mins = Math.floor((ms % 3600000) / 60000);
       if (hrs >= 24) { const d = Math.floor(hrs / 24); timeLeft = `${d}d ${hrs % 24}h left`; }
       else if (hrs > 0) timeLeft = `${hrs}h ${mins}m left`;
-      else timeLeft = `${mins}m left`;
+      else if (mins > 0) timeLeft = `${mins}m left`;
+      else timeLeft = `<1m left`;
+      if (ms <= 900000) endingSoon = true; // ≤ 15 minutes
     }
   }
 
@@ -53,7 +56,7 @@ function renderGearCard(item, idx) {
       <div class="card-sub gear-bids">${escHtml(bidStr)}</div>
       ${conditionShow ? `<div class="card-meta">${escHtml(conditionShow)}</div>` : ""}
       ${loc ? `<div class="card-meta">${escHtml(loc)}</div>` : ""}
-      ${timeLeft ? `<div class="card-meta gear-time-left">${timeLeft}</div>` : ""}
+      ${timeLeft ? `<div class="card-meta gear-time-left${endingSoon ? ' ending-soon' : ''}">${timeLeft}</div>` : ""}
     </div>
   </div>`;
 }
