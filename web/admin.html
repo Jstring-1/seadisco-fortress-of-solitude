@@ -129,11 +129,9 @@ async function initClerk() {
     return;
   }
 
-  // loadClerkInstance() already polled for session hydration (up to 5s).
-  // If user/session are available, get a fresh token for the admin request.
-  const sessionToken = clerk.user && clerk.session
-    ? await clerk.session.getToken().catch(() => null)
-    : null;
+  // loadClerkInstance() already polled and cached a valid token.
+  // getSessionToken() returns it with retry + cache fallback.
+  const sessionToken = await getSessionToken();
   if (!sessionToken) {
     document.getElementById("loading-section").style.display = "none";
     document.getElementById("denied-section").style.display = "block";
@@ -176,7 +174,7 @@ let _adminSyncPoll = null;
 async function loadAdminSyncStatus() {
   const el = document.getElementById("admin-sync-status-list");
   try {
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     const { users, freshStats } = await fetch("/api/admin/sync-status", {
       headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
@@ -249,7 +247,7 @@ async function adminSyncAll() {
   const statusEl = document.getElementById("admin-action-status");
   btn.disabled = true; btn.textContent = "Starting\u2026";
   try {
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     const r = await fetch("/api/admin/sync-all", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
@@ -262,7 +260,7 @@ async function adminSyncAll() {
 
 async function adminSyncUser(username) {
   try {
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     await fetch("/api/admin/sync-user", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
@@ -277,7 +275,7 @@ async function adminSyncStop() {
   const statusEl = document.getElementById("admin-action-status");
   btn.disabled = true; btn.textContent = "Stopping\u2026";
   try {
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     const r = await fetch("/api/admin/sync-stop", {
       method: "POST",
       headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
@@ -292,7 +290,7 @@ async function toggleApiKill() {
   const statusEl = document.getElementById("admin-action-status");
   btn.disabled = true;
   try {
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     const r = await fetch("/api/admin/api-kill", {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
@@ -311,7 +309,7 @@ async function adminRevokeSessions() {
   if (!confirm("Log out ALL users except you?")) return;
   btn.disabled = true; btn.textContent = "Revoking…";
   try {
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     const r = await fetch("/api/admin/revoke-sessions", {
       method: "POST",
       headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
@@ -336,7 +334,7 @@ function updateKillButton(active) {
 
 async function checkKillStatus() {
   try {
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     const r = await fetch("/api/admin/api-kill", {
       headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
@@ -349,7 +347,7 @@ async function adminVinylFetch() {
   const statusEl = document.getElementById("admin-action-status");
   btn.disabled = true; btn.textContent = "Fetching\u2026";
   try {
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     await fetch("/api/admin/vinyl/fetch", {
       method: "POST", headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
@@ -363,7 +361,7 @@ async function adminGearFetch() {
   const statusEl = document.getElementById("admin-action-status");
   btn.disabled = true; btn.textContent = "Fetching\u2026";
   try {
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     const r = await fetch("/api/admin/gear/fetch", {
       method: "POST", headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
@@ -377,7 +375,7 @@ async function adminFeedFetch() {
   const statusEl = document.getElementById("admin-action-status");
   btn.disabled = true; btn.textContent = "Fetching\u2026";
   try {
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     const r = await fetch("/api/admin/feed/fetch", {
       method: "POST", headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
@@ -391,7 +389,7 @@ async function adminLiveFetch() {
   const statusEl = document.getElementById("admin-action-status");
   btn.disabled = true; btn.textContent = "Fetching\u2026";
   try {
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     const r = await fetch("/api/admin/live/fetch", {
       method: "POST", headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
@@ -405,7 +403,7 @@ async function adminDropsFetch() {
   const statusEl = document.getElementById("admin-action-status");
   btn.disabled = true; btn.textContent = "Fetching\u2026";
   try {
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     await fetch("/api/admin/drops/fetch", {
       method: "POST", headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
@@ -417,7 +415,7 @@ async function adminDropsFetch() {
 // ── API Request Log ───────────────────────────────────────────────────
 async function loadApiLog() {
   try {
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     const service = document.getElementById("api-log-filter").value;
     const errorsOnly = document.getElementById("api-log-errors-only").checked;
     const hours = document.getElementById("api-log-hours").value || "24";
@@ -533,7 +531,7 @@ function renderFeedback(items) {
 }
 
 async function deleteFeedbackItem(id) {
-  const sessionToken = await clerk.session?.getToken();
+  const sessionToken = await getSessionToken();
   const r = await fetch(`/api/admin/feedback/${id}`, {
     method: "DELETE",
     headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
@@ -545,7 +543,7 @@ async function deleteFeedbackItem(id) {
 async function loadCollectionStats() {
   const el = document.getElementById("collection-stats");
   try {
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     const data = await fetch("/api/admin/collection-stats", {
       headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
@@ -642,7 +640,7 @@ async function loadAdminItems() {
   list.innerHTML = '<div style="color:var(--muted);padding:1rem;text-align:center">Loading\u2026</div>';
   pag.style.display = "none";
   try {
-    const sessionToken = await clerk.session?.getToken();
+    const sessionToken = await getSessionToken();
     const params = new URLSearchParams({ username: _adminItemsUser, tab: _adminItemsTab, page: _adminItemsPage, per_page: 50 });
     const r = await fetch(`/api/admin/user-items?${params}`, {
       headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}

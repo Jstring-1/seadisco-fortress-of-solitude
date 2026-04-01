@@ -84,6 +84,38 @@ function paramsToUrl(raw) {
 
 // ── Shared Clerk bootstrap ───────────────────────────────────────────────
 // Loads Clerk JS and returns the Clerk instance. Pages handle post-auth UI.
+
+// Cached token + timestamp for getSessionToken()
+let _cachedToken = null;
+let _cachedTokenAt = 0;
+
+// Reliable token getter — uses cache for <50s, otherwise refreshes.
+// All pages should call this instead of clerk.session?.getToken() directly.
+async function getSessionToken() {
+  const c = window._clerk || window.Clerk;
+  if (!c?.user || !c?.session) return null;
+
+  // Clerk JWTs expire after ~60s; refresh if cache is >50s old
+  if (_cachedToken && (Date.now() - _cachedTokenAt) < 50000) {
+    return _cachedToken;
+  }
+
+  // Try to get a fresh token, retry up to 3 times with 300ms gaps
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const t = await c.session.getToken();
+      if (t) {
+        _cachedToken = t;
+        _cachedTokenAt = Date.now();
+        return t;
+      }
+    } catch { /* ignore */ }
+    if (attempt < 2) await new Promise(r => setTimeout(r, 300));
+  }
+  // Return stale cache as last resort (server will reject if truly expired)
+  return _cachedToken;
+}
+
 async function loadClerkInstance() {
   const cfg = await fetch("/api/config").then(r => r.json()).catch(() => ({}));
   const pk = cfg.clerkPublishableKey;
@@ -119,7 +151,12 @@ async function loadClerkInstance() {
     try {
       if (c.user && c.session) {
         const t = await c.session.getToken();
-        if (t) break; // fully ready
+        if (t) {
+          // Cache the token so getSessionToken() has it immediately
+          _cachedToken = t;
+          _cachedTokenAt = Date.now();
+          break; // fully ready
+        }
       } else if (c.user === null && i >= 15) {
         break; // confirmed not signed in (after 3s grace)
       }
