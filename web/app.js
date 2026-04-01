@@ -140,24 +140,8 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
 // ── Clerk auth init ──────────────────────────────────────────────────────
 (async function initAuth() {
   try {
-    const cfg = await fetch("/api/config").then(r => r.json()).catch(() => ({}));
-    const pk = cfg.clerkPublishableKey;
-    if (!pk) { _authReady(); return; }
-
-    const frontendApi = atob(pk.replace(/^pk_(test|live)_/, "")).replace(/\$$/, "");
-    await new Promise((resolve, reject) => {
-      const s = document.createElement("script");
-      s.src = `https://${frontendApi}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js`;
-      s.setAttribute("data-clerk-publishable-key", pk);
-      s.setAttribute("crossorigin", "anonymous");
-      s.onload = resolve; s.onerror = reject;
-      document.head.appendChild(s);
-    });
-
-    await new Promise(r => setTimeout(r, 50));
-    window._clerk = window.Clerk;
+    window._clerk = await loadClerkInstance();
     if (!window._clerk) { _authReady(); return; }
-    await window._clerk.load();
 
     const navBtn = document.getElementById("nav-auth-btn");
     if (navBtn) {

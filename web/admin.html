@@ -6,12 +6,12 @@
   <title>SeaDisco — Admin</title>
   <meta name="robots" content="noindex, nofollow" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎹</text></svg>">
-  <link rel="stylesheet" href="/style.css?v=20260331x" />
+  <link rel="stylesheet" href="/style.css?v=20260401a" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260331x"></script>
+<script src="/shared.js?v=20260401a"></script>
 <script>renderSharedHeader({ hideRecords: true });</script>
 
 <main>
@@ -220,7 +220,7 @@ async function adminSyncAll() {
     const sessionToken = await clerk.session?.getToken();
     const r = await fetch("/api/admin/sync-all", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+      headers: { "Content-Type": "application/json", ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
     }).then(r => r.json());
     statusEl.textContent = `Full sync kicked off for ${r.queued} user${r.queued !== 1 ? "s" : ""}.`;
     loadAdminSyncStatus();
@@ -233,7 +233,7 @@ async function adminSyncUser(username) {
     const sessionToken = await clerk.session?.getToken();
     await fetch("/api/admin/sync-user", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+      headers: { "Content-Type": "application/json", ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
       body: JSON.stringify({ username })
     });
     loadAdminSyncStatus();
@@ -248,7 +248,7 @@ async function adminSyncStop() {
     const sessionToken = await clerk.session?.getToken();
     const r = await fetch("/api/admin/sync-stop", {
       method: "POST",
-      headers: { Authorization: `Bearer ${sessionToken}` }
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
     statusEl.textContent = r.message || "Stop signal sent.";
   } catch { statusEl.textContent = "Stop request failed."; }
@@ -263,7 +263,7 @@ async function toggleApiKill() {
     const sessionToken = await clerk.session?.getToken();
     const r = await fetch("/api/admin/api-kill", {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+      headers: { "Content-Type": "application/json", ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}) },
     }).then(r => r.json());
     updateKillButton(r.killSwitch);
     statusEl.textContent = r.killSwitch
@@ -282,7 +282,7 @@ async function adminRevokeSessions() {
     const sessionToken = await clerk.session?.getToken();
     const r = await fetch("/api/admin/revoke-sessions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${sessionToken}` },
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {},
     }).then(r => r.json());
     statusEl.textContent = r.ok ? `Revoked sessions for ${r.revokedUsers} user(s).` : (r.error || "Failed.");
   } catch { statusEl.textContent = "Revoke request failed."; }
@@ -306,7 +306,7 @@ async function checkKillStatus() {
   try {
     const sessionToken = await clerk.session?.getToken();
     const r = await fetch("/api/admin/api-kill", {
-      headers: { Authorization: `Bearer ${sessionToken}` }
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
     updateKillButton(r.killSwitch);
   } catch {}
@@ -319,7 +319,7 @@ async function adminVinylFetch() {
   try {
     const sessionToken = await clerk.session?.getToken();
     await fetch("/api/admin/vinyl/fetch", {
-      method: "POST", headers: { Authorization: `Bearer ${sessionToken}` }
+      method: "POST", headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
     statusEl.textContent = "Vinyl fetch started — running in background.";
   } catch { statusEl.textContent = "Vinyl fetch failed."; }
@@ -333,7 +333,7 @@ async function adminGearFetch() {
   try {
     const sessionToken = await clerk.session?.getToken();
     const r = await fetch("/api/admin/gear/fetch", {
-      method: "POST", headers: { Authorization: `Bearer ${sessionToken}` }
+      method: "POST", headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
     statusEl.textContent = r.message || "Gear fetch triggered.";
   } catch { statusEl.textContent = "Gear fetch failed."; }
@@ -347,7 +347,7 @@ async function adminFeedFetch() {
   try {
     const sessionToken = await clerk.session?.getToken();
     const r = await fetch("/api/admin/feed/fetch", {
-      method: "POST", headers: { Authorization: `Bearer ${sessionToken}` }
+      method: "POST", headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
     statusEl.textContent = r.message || "Feed fetch triggered.";
   } catch { statusEl.textContent = "Feed fetch failed."; }
@@ -361,7 +361,7 @@ async function adminLiveFetch() {
   try {
     const sessionToken = await clerk.session?.getToken();
     const r = await fetch("/api/admin/live/fetch", {
-      method: "POST", headers: { Authorization: `Bearer ${sessionToken}` }
+      method: "POST", headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
     statusEl.textContent = r.count != null ? `Fetched ${r.count} live events.` : "Live events fetch triggered.";
   } catch { statusEl.textContent = "Live events fetch failed."; }
@@ -375,7 +375,7 @@ async function adminDropsFetch() {
   try {
     const sessionToken = await clerk.session?.getToken();
     await fetch("/api/admin/drops/fetch", {
-      method: "POST", headers: { Authorization: `Bearer ${sessionToken}` }
+      method: "POST", headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
     statusEl.textContent = "Drops fetch started — running in background.";
   } catch { statusEl.textContent = "Drops fetch failed."; }
@@ -397,7 +397,7 @@ async function loadApiLog() {
     const rangeLabel = document.getElementById("api-log-range-label");
     if (rangeLabel) rangeLabel.textContent = hours === "168" ? "(7 days)" : "(24h)";
 
-    const logRes = await fetch(`/api/admin/api-log?${params}`, { headers: { Authorization: `Bearer ${sessionToken}` } });
+    const logRes = await fetch(`/api/admin/api-log?${params}`, { headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {} });
     if (!logRes.ok) return;
     const { items, total } = await logRes.json();
 
@@ -515,7 +515,7 @@ async function loadCollectionStats() {
   try {
     const sessionToken = await clerk.session?.getToken();
     const data = await fetch("/api/admin/collection-stats", {
-      headers: { Authorization: `Bearer ${sessionToken}` }
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}
     }).then(r => r.json());
     if (data.error) { el.textContent = "Could not load."; return; }
 
