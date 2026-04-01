@@ -387,18 +387,35 @@ function renderInventoryCard(item, index) {
 }
 
 function renderInventoryPagination() {
-  if (totalPages <= 1) return;
   const pag = document.getElementById("pagination");
+  if (totalPages <= 1) { pag.style.display = "none"; return; }
+  const goTo = (p) => { window.scrollTo({top:0,behavior:'smooth'}); loadInventoryTab(p); };
+
+  const pages = new Set();
+  pages.add(1);
+  pages.add(totalPages);
+  for (let i = currentPage - 2; i <= currentPage + 2; i++) {
+    if (i >= 1 && i <= totalPages) pages.add(i);
+  }
+  const sorted = [...pages].sort((a, b) => a - b);
+
+  let html = `<button class="pag-arrow" ${currentPage <= 1 ? "disabled" : ""} onclick="return false">← Prev</button>`;
+  let last = 0;
+  for (const p of sorted) {
+    if (last && p - last > 1) html += `<span class="pag-ellipsis">…</span>`;
+    html += `<button class="pag-num${p === currentPage ? " pag-active" : ""}" data-page="${p}">${p}</button>`;
+    last = p;
+  }
+  html += `<button class="pag-arrow" ${currentPage >= totalPages ? "disabled" : ""} onclick="return false">Next →</button>`;
+
+  pag.innerHTML = html;
   pag.style.display = "flex";
-  document.getElementById("page-info").textContent = `${currentPage} / ${totalPages}`;
-  document.getElementById("prev-btn").disabled = currentPage <= 1;
-  document.getElementById("next-btn").disabled = currentPage >= totalPages;
-  document.getElementById("prev-btn").onclick = currentPage > 1
-    ? () => { window.scrollTo({top:0,behavior:'smooth'}); loadInventoryTab(currentPage - 1); }
-    : null;
-  document.getElementById("next-btn").onclick = currentPage < totalPages
-    ? () => { window.scrollTo({top:0,behavior:'smooth'}); loadInventoryTab(currentPage + 1); }
-    : null;
+
+  pag.querySelector(".pag-arrow:first-child").onclick = currentPage > 1 ? () => goTo(currentPage - 1) : null;
+  pag.querySelector(".pag-arrow:last-child").onclick = currentPage < totalPages ? () => goTo(currentPage + 1) : null;
+  pag.querySelectorAll(".pag-num").forEach(btn => {
+    btn.onclick = () => goTo(parseInt(btn.dataset.page));
+  });
 }
 
 async function loadListsTab() {
@@ -669,18 +686,37 @@ function renderWantedItems(items) {
 }
 
 function renderCollectionPagination(tab) {
-  if (totalPages <= 1) return;
   const pag = document.getElementById("pagination");
+  if (totalPages <= 1) { pag.style.display = "none"; return; }
+  const goTo = (p) => { window.scrollTo({top:0,behavior:'smooth'}); tab === "collection" ? loadCollectionTab(p) : loadWantlistTab(p); };
+
+  // Build page number list: 1 ... [cur-2 cur-1 cur cur+1 cur+2] ... last
+  const pages = new Set();
+  pages.add(1);
+  pages.add(totalPages);
+  for (let i = currentPage - 2; i <= currentPage + 2; i++) {
+    if (i >= 1 && i <= totalPages) pages.add(i);
+  }
+  const sorted = [...pages].sort((a, b) => a - b);
+
+  let html = `<button class="pag-arrow" ${currentPage <= 1 ? "disabled" : ""} onclick="return false">← Prev</button>`;
+  let last = 0;
+  for (const p of sorted) {
+    if (last && p - last > 1) html += `<span class="pag-ellipsis">…</span>`;
+    html += `<button class="pag-num${p === currentPage ? " pag-active" : ""}" data-page="${p}">${p}</button>`;
+    last = p;
+  }
+  html += `<button class="pag-arrow" ${currentPage >= totalPages ? "disabled" : ""} onclick="return false">Next →</button>`;
+
+  pag.innerHTML = html;
   pag.style.display = "flex";
-  document.getElementById("page-info").textContent = `${currentPage} / ${totalPages}`;
-  document.getElementById("prev-btn").disabled = currentPage <= 1;
-  document.getElementById("next-btn").disabled = currentPage >= totalPages;
-  document.getElementById("prev-btn").onclick = currentPage > 1
-    ? () => { window.scrollTo({top:0,behavior:'smooth'}); tab === "collection" ? loadCollectionTab(currentPage - 1) : loadWantlistTab(currentPage - 1); }
-    : null;
-  document.getElementById("next-btn").onclick = currentPage < totalPages
-    ? () => { window.scrollTo({top:0,behavior:'smooth'}); tab === "collection" ? loadCollectionTab(currentPage + 1) : loadWantlistTab(currentPage + 1); }
-    : null;
+
+  // Attach click handlers
+  pag.querySelector(".pag-arrow:first-child").onclick = currentPage > 1 ? () => goTo(currentPage - 1) : null;
+  pag.querySelector(".pag-arrow:last-child").onclick = currentPage < totalPages ? () => goTo(currentPage + 1) : null;
+  pag.querySelectorAll(".pag-num").forEach(btn => {
+    btn.onclick = () => goTo(parseInt(btn.dataset.page));
+  });
 }
 
 async function showSyncStatus(type) {

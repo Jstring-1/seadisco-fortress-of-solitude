@@ -37,7 +37,7 @@
           <button onclick="adminLiveFetch()" id="admin-live-fetch-btn" class="admin-btn admin-btn-live">Fetch Live</button>
           <button onclick="adminVinylFetch()" id="admin-vinyl-fetch-btn" class="admin-btn admin-btn-vinyl">Fetch Vinyl</button>
           <button onclick="adminGearFetch()" id="admin-gear-fetch-btn" class="admin-btn admin-btn-gear">Fetch Gear</button>
-          <button onclick="adminPriceFetch()" id="admin-price-fetch-btn" class="admin-btn admin-btn-vinyl">Fetch Prices</button>
+
           <button onclick="adminSyncAll()" id="admin-sync-all-btn" class="admin-btn admin-btn-sync">Sync All</button>
           <button onclick="adminSyncStop()" id="admin-sync-stop-btn" class="admin-btn admin-btn-stop">Stop All</button>
           <button onclick="toggleApiKill()" id="admin-api-kill-btn" class="admin-btn admin-btn-danger">Kill All</button>
@@ -58,14 +58,8 @@
         <div id="collection-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
       </div>
 
-      <!-- Price Tracking -->
-      <div class="admin-section admin-section-b">
-        <h2 style="margin-bottom:0.5rem">Price Tracking</h2>
-        <div id="price-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
-      </div>
-
       <!-- User Sync Status -->
-      <div class="admin-section admin-section-a">
+      <div class="admin-section admin-section-b">
         <h2 style="margin-bottom:0.5rem">User Sync Status</h2>
         <div id="admin-fresh-stats" style="font-size:0.8rem;color:#555;margin-bottom:0.75rem"></div>
         <div id="admin-sync-status-list" style="font-size:0.83rem;color:var(--muted)">Loading...</div>
@@ -142,7 +136,6 @@ async function initClerk() {
     loadAdminSyncStatus();
     loadApiLog();
     loadCollectionStats();
-    loadPriceStats();
     checkKillStatus();
   } catch {
     document.getElementById("loading-section").style.display = "none";
@@ -385,37 +378,7 @@ async function adminDropsFetch() {
   finally { btn.disabled = false; btn.textContent = "Fetch Drops"; }
 }
 
-async function adminPriceFetch() {
-  const btn = document.getElementById("admin-price-fetch-btn");
-  const statusEl = document.getElementById("admin-action-status");
-  btn.disabled = true; btn.textContent = "Fetching\u2026";
-  try {
-    const sessionToken = await clerk.session?.getToken();
-    await fetch("/api/admin/price-update", {
-      method: "POST", headers: { Authorization: `Bearer ${sessionToken}` }
-    }).then(r => r.json());
-    statusEl.textContent = "Price update started \u2014 running in background.";
-    setTimeout(loadPriceStats, 5000);
-  } catch { statusEl.textContent = "Price fetch failed."; }
-  finally { btn.disabled = false; btn.textContent = "Fetch Prices"; }
-}
-
-// ── Price Tracking Stats ─────────────────────────────────────────────
-async function loadPriceStats() {
-  const el = document.getElementById("price-stats");
-  try {
-    const sessionToken = await clerk.session?.getToken();
-    const data = await fetch("/api/admin/price-stats", {
-      headers: { Authorization: `Bearer ${sessionToken}` }
-    }).then(r => r.json());
-    if (data.error) { el.textContent = "Could not load."; return; }
-    const lastUpdate = data.lastPriceUpdate ? fmtTime(data.lastPriceUpdate) : "\u2014";
-    el.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:0.8rem 2rem;font-size:0.82rem">
-      <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(data.cacheCount ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">price cache entries</span></div>
-      <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(data.historyRows ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">price history rows</span></div>
-      <div><span style="color:var(--text);font-weight:600">${lastUpdate}</span> <span style="color:#8a7d6b">last price update</span></div>
-    </div>`;
-  } catch { el.textContent = "Could not load price stats."; }
+// (price tracking removed)
 }
 
 // ── API Request Log ───────────────────────────────────────────────────
