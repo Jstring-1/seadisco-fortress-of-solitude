@@ -516,7 +516,11 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   }
   const identifierRows = identifierTypes
     .filter(t => identifierGroups[t])
-    .map(t => `<span class="detail-label">${escHtml(t)}</span><span>${escHtml(identifierGroups[t])}</span>`)
+    .map(t => {
+      const green = (t === "Matrix / Runout" || t === "Catalog Number");
+      const style = green ? ' style="color:#7ec87e"' : '';
+      return `<span class="detail-label">${escHtml(t)}</span><span${style}>${escHtml(identifierGroups[t])}</span>`;
+    })
     .join("");
 
   const companyTypes = ["Pressed By","Manufactured By","Mastered At","Recorded At","Mixed At","Distributed By","Licensed From","Phonographic Copyright (p)"];

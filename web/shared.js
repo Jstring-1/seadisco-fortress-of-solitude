@@ -97,7 +97,9 @@ function renderSharedHeader(opts) {
   const active = opts?.active || "";
   const hideRecords = opts?.hideRecords;
   const tab = (label, view) => {
-    if (hideRecords && view === "records") return "";
+    if (hideRecords && view === "records") {
+      return `<a class="main-nav-tab" href="/?view=records">My Records</a>`;
+    }
     if (isSPA) {
       const cls = view === active ? ' active' : '';
       if (view === 'records') {
