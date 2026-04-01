@@ -565,6 +565,14 @@ export async function deleteUserData(clerkUserId: string): Promise<void> {
   }
 }
 
+export async function getClerkUserIdByUsername(discogsUsername: string): Promise<string | null> {
+  const r = await getPool().query(
+    "SELECT clerk_user_id FROM user_tokens WHERE discogs_username = $1",
+    [discogsUsername]
+  );
+  return r.rows[0]?.clerk_user_id ?? null;
+}
+
 export async function getDiscogsUsername(clerkUserId: string): Promise<string | null> {
   const r = await getPool().query(
     "SELECT discogs_username FROM user_tokens WHERE clerk_user_id = $1",
