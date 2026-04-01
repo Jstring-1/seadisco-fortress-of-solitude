@@ -11,7 +11,7 @@ function getPool() {
       connectionString: connStr,
       ssl: process.env.DB_CA_CERT
         ? { rejectUnauthorized: true, ca: process.env.DB_CA_CERT }
-        : { rejectUnauthorized: true },
+        : { rejectUnauthorized: false },
     });
   }
   return pool;
