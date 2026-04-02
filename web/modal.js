@@ -587,6 +587,14 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     .map(t => {
       const green = (t === "Matrix / Runout" || t === "Catalog Number");
       const style = green ? ' style="color:#7ec87e"' : '';
+      if (t === "Catalog Number") {
+        const vals = identifierGroups[t].split(", ");
+        const linked = vals.map(v => {
+          const esc = escHtml(v.replace(/'/g, "\\'"));
+          return `<a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();document.getElementById('query').value='${esc}';toggleAdvanced(false);document.querySelector('input[name=\\'result-type\\'][value=\\'\\']').checked=true;doSearch(1)" title="Search for this catalog number">${escHtml(v)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-query','${esc}')" title="Search your collection for ${escHtml(v)}">⌕</a>`;
+        }).join(", ");
+        return `<span class="detail-label">${escHtml(t)}</span><span>${linked}</span>`;
+      }
       return `<span class="detail-label">${escHtml(t)}</span><span${style}>${escHtml(identifierGroups[t])}</span>`;
     })
     .join("");
@@ -615,7 +623,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     (!isMaster && formats) ? `<span class="detail-label">Format</span><span>${escHtml(formats)}</span>` : "",
     country ? `<span class="detail-label">Country</span><span>${escHtml(country)}</span>` : "",
     genres  ? `<span class="detail-label">Genre</span><span>${escHtml(genres)}</span>`   : "",
-    (!isMaster && catno) ? `<span class="detail-label">Cat#</span><span style="color:#7ec87e">${escHtml(catno)}</span>` : "",
+    (!isMaster && catno) ? `<span class="detail-label">Cat#</span><span><a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();document.getElementById('query').value='${escHtml(catno.replace(/'/g, "\\'"))}';toggleAdvanced(false);document.querySelector('input[name=\\'result-type\\'][value=\\'\\']').checked=true;doSearch(1)" title="Search for this catalog number">${escHtml(catno)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-query','${escHtml(catno.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(catno)}">⌕</a></span>` : "",
     year    ? `<span class="detail-label">Year</span><span>${escHtml(String(year))}</span>` : "",
     seriesText ? `<span class="detail-label">Series</span><span>${escHtml(seriesText)}</span>` : "",
     companyRows,
@@ -975,7 +983,7 @@ function renderMasterVersions(filter) {
       <span style="color:#888">${escHtml(!v.year || v.year === "0" ? "?" : String(v.year))}</span>
       <span style="color:#aaa">${escHtml(v.country || "?")}</span>
       <span style="color:#888">${escHtml(getDisplayFormat(v))}</span>
-      <span style="color:#7ec87e">${escHtml(v.catno ?? "—")}</span>
+      <span>${v.catno && v.catno !== "—" ? `<a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();document.getElementById('query').value='${escHtml((v.catno).replace(/'/g, "\\'"))}';toggleAdvanced(false);document.querySelector('input[name=\\'result-type\\'][value=\\'\\']').checked=true;doSearch(1)" title="Search for this catalog number">${escHtml(v.catno)}</a>` : `<span style="color:#7ec87e">—</span>`}</span>
       <span><a href="#" class="modal-internal-link" onclick="openVersionPopup(event,${v.id})" title="View this pressing" style="color:var(--accent)">${escHtml(v.label ?? v.title ?? "—")}</a>${badge}</span>`;
   }).join("");
 }
