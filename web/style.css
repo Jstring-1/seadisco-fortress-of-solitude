@@ -1839,6 +1839,20 @@ body.player-open { padding-bottom: 56px; }
 .modal-internal-link {
   text-decoration: none;
 }
+.catno-link,
+.catno-link:visited {
+  color: #7ec87e !important;
+}
+.catno-collection-search {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 1.1em;
+}
+.catno-collection-search:hover {
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--muted);
+}
 .track-search-icon {
   color: var(--muted);
   text-decoration: none;
