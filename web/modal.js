@@ -258,6 +258,8 @@ document.getElementById("bio-full-overlay").addEventListener("click", e => {
 // ── Video popup ────────────────────────────────────────────────────────────
 let ytPlayer = null;
 let _ytLoading = false;
+let _ytSession = 0;        // incremented on each openVideo, checked by async callbacks
+let _ytPollId  = null;     // polling interval for YT API readiness
 // Repeat modes: "off" → "album" → "one" → "off"
 let _ytRepeat = "off";
 
@@ -303,15 +305,18 @@ function loadYTVideo(id) {
     _createYTPlayer(id);
   } else {
     // Poll briefly for API readiness, then create player
+    const session = _ytSession;
     let attempts = 0;
-    const poll = setInterval(() => {
+    if (_ytPollId) clearInterval(_ytPollId);
+    _ytPollId = setInterval(() => {
       attempts++;
+      if (session !== _ytSession) { clearInterval(_ytPollId); _ytPollId = null; return; }
       if (window._ytAPIReady && typeof YT !== "undefined") {
-        clearInterval(poll);
+        clearInterval(_ytPollId); _ytPollId = null;
         _createYTPlayer(id);
       } else if (attempts > 40) {
         // Fallback after ~4s if API never loads
-        clearInterval(poll);
+        clearInterval(_ytPollId); _ytPollId = null;
         document.getElementById("video-player").innerHTML =
           `<iframe src="https://www.youtube.com/embed/${id}?autoplay=1" style="width:100%;height:100%;border:none" allow="autoplay;encrypted-media" allowfullscreen></iframe>`;
       }
@@ -337,12 +342,14 @@ function updatePlayerStatus(state, errorCode) {
 }
 
 function _createYTPlayer(id) {
+  const session = _ytSession;
   document.getElementById("video-player").innerHTML = "";
   ytPlayer = new YT.Player("video-player", {
     height: "100%", width: "100%", videoId: id,
     playerVars: { autoplay: 1, rel: 0 },
     events: {
       onStateChange: function(e) {
+        if (session !== _ytSession) return;   // stale player callback
         // YT.PlayerState: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
         if (e.data === 1) updatePlayerStatus("playing");
         else if (e.data === 2) updatePlayerStatus("paused");
@@ -351,17 +358,18 @@ function _createYTPlayer(id) {
         else if (e.data === 5) updatePlayerStatus("loading");
       },
       onError: function(e) {
+        if (session !== _ytSession) return;   // stale player callback
         // Error codes: 2=invalid id, 5=HTML5 error, 100=not found, 101/150=embedding disabled
         const code = e?.data;
         if (code === 100 || code === 101 || code === 150) {
           updatePlayerStatus("unavailable");
-          setTimeout(() => playNextVideo(), 1500);
+          setTimeout(() => { if (session === _ytSession) playNextVideo(); }, 1500);
         } else {
           updatePlayerStatus("error");
-          setTimeout(() => playNextVideo(), 1500);
+          setTimeout(() => { if (session === _ytSession) playNextVideo(); }, 1500);
         }
       },
-      onReady: function() { updatePlayerStatus("playing"); }
+      onReady: function() { if (session === _ytSession) updatePlayerStatus("playing"); }
     }
   });
 }
@@ -404,6 +412,7 @@ function toggleMiniPlayer() {
 function openVideo(event, url) {
   if (event) { event.preventDefault(); event.stopPropagation(); }
   ensureYTAPI();
+  _ytSession++;
   const id = extractYouTubeId(url);
   if (!id) { window.open(url, "_blank", "noopener"); return; }
   const trackLinks = [...document.querySelectorAll(".track-link[data-video]")];
@@ -498,6 +507,8 @@ function openPlayerRelease() {
 }
 
 function closeVideo() {
+  _ytSession++;                             // invalidate any pending callbacks
+  if (_ytPollId) { clearInterval(_ytPollId); _ytPollId = null; }
   const mp = document.getElementById("mini-player");
   mp.classList.remove("open", "expanded");
   document.body.classList.remove("player-open");
