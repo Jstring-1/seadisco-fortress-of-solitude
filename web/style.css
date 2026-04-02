@@ -1965,6 +1965,7 @@ body.player-open { padding-bottom: 56px; }
   flex-shrink: 0;
 }
 
+.credit-name { color: #d4815a; }
 #album-info .credit-role, #version-info .credit-role {
   color: var(--muted);
 }
