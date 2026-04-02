@@ -645,8 +645,8 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         const trackArtist = artists.length ? artists[0] : "";
         const ytQuery = encodeURIComponent(`${trackArtist} ${title} ${t.title || ""}`);
         const ytIcon = `<a class="yt-search" href="https://www.youtube.com/results?search_query=${ytQuery}" target="_blank" rel="noopener" title="Search on YouTube"><svg width="16" height="11" viewBox="0 0 16 11" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="11" rx="2.5" fill="#FF0000"/><path d="M6.5 3L11 5.5L6.5 8V3Z" fill="white"/></svg></a>`;
-        const trackSearchQ = ('"' + trackArtist + ' ' + (t.title || '').trim() + '"').replace(/'/g, "\\'");
-        const searchIcon = t.title ? ` <a class="track-search-icon" href="#" onclick="event.preventDefault();closeModal();document.getElementById('query').value='${escHtml(trackSearchQ)}';toggleAdvanced(false);document.querySelector('input[name=\\'result-type\\'][value=\\'\\']').checked=true;doSearch(1)" title="Search for other versions" style="text-decoration:none">⌕</a>` : "";
+        const trackSearchQ = ('"' + (t.title || '').trim() + '"').replace(/'/g, "\\'");
+        const searchIcon = t.title ? ` <a class="track-search-icon" href="#" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('query').value='${escHtml(trackSearchQ)}';doSearch(1)" title="Search for other versions of this track" style="text-decoration:none">⌕</a>` : "";
         const titleEl = url
           ? `<a class="track-link" href="#" data-video="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" onclick="openVideo(event,'${url.replace(/'/g, "\\'")}')" title="Play this track">${escHtml(t.title || "")} ▶</a>${searchIcon}`
           : `${escHtml(t.title || "")}${ytIcon}${searchIcon}`;
