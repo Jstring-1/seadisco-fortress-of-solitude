@@ -621,14 +621,14 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const detailRows = [
     labels  ? `<span class="detail-label">Label</span><span>${escHtml(labels)}</span>`   : "",
     (labels && labelCodeRow) ? labelCodeRow : "",
-    (!isMaster && formats) ? `<span class="detail-label">Format</span><span>${escHtml(formats)}</span>` : "",
     (!isMaster && catno) ? `<span class="detail-label">Cat#</span><span><a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();document.getElementById('query').value='${escHtml(catnoEsc)}';toggleAdvanced(false);document.querySelector('input[name=\\'result-type\\'][value=\\'\\']').checked=true;doSearch(1)" title="Search for this catalog number">${escHtml(catno)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-query','${escHtml(catnoEsc)}')" title="Search your collection for ${escHtml(catno)}">⌕</a></span>` : "",
+    (!isMaster && formats) ? `<span class="detail-label">Format</span><span>${escHtml(formats)}</span>` : "",
     year    ? `<span class="detail-label">Year</span><span>${escHtml(String(year))}</span>` : "",
+    country ? `<span class="detail-label">Country</span><span>${escHtml(country)}</span>` : "",
     seriesText ? `<span class="detail-label">Series</span><span>${escHtml(seriesText)}</span>` : "",
     companyRows,
     identifierRows,
     matrixRow,
-    country ? `<span class="detail-label">Country</span><span>${escHtml(country)}</span>` : "",
     genres  ? `<span class="detail-label">Genre</span><span>${escHtml(genres)}</span>`   : "",
   ].filter(Boolean).join("");
 
@@ -681,8 +681,8 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
           if (have || want) parts.push(`${(have ?? 0).toLocaleString()} have · ${(want ?? 0).toLocaleString()} want`);
           return parts.length ? `<div style="font-size:0.72rem;color:#888;margin-top:0.35rem">${parts.join('<span style="color:#444;margin:0 0.35em">·</span>')}</div>` : "";
         })()}
-        ${discogsUrl ? `<a href="${discogsUrl}" target="_blank" rel="noopener" title="Open this release on Discogs.com" style="font-size:0.75rem;color:#888;text-decoration:none;margin-top:0.4rem;display:inline-block">View on Discogs ↗</a>` : ""}
-        ${(!isMaster && d.master_id) ? `<div style="margin-top:0.25rem"><a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();setTimeout(()=>openModal(null,${d.master_id},'master','https://www.discogs.com/master/${d.master_id}'),100)" title="View all pressings of this release" style="font-size:0.75rem;color:#7eb8da;text-decoration:none">Master/Versions</a></div>` : ""}
+        ${(!isMaster && d.master_id) ? `<div style="margin-top:0.4rem"><a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();setTimeout(()=>openModal(null,${d.master_id},'master','https://www.discogs.com/master/${d.master_id}'),100)" title="View all pressings of this release" style="font-size:0.75rem;color:#7eb8da;text-decoration:none">Master/Versions</a></div>` : ""}
+        ${discogsUrl ? `<a href="${discogsUrl}" target="_blank" rel="noopener" title="Open this release on Discogs.com" style="font-size:0.75rem;color:#888;text-decoration:none;margin-top:0.25rem;display:inline-block">View on Discogs ↗</a>` : ""}
         ${stats?.numForSale > 0 && stats?.lowestPrice != null
           ? `<div style="font-size:0.75rem;margin-top:0.2rem">
               <a href="https://www.discogs.com/sell/list?release_id=${escHtml(String(stats.releaseId))}" target="_blank" rel="noopener" title="Browse listings on Discogs marketplace" style="color:#888;text-decoration:none">${escHtml(String(stats.numForSale))} available from $${parseFloat(stats.lowestPrice).toFixed(2)} ↗</a>
