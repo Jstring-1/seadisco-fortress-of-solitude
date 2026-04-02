@@ -2947,6 +2947,10 @@ async function fetchGearDetails() {
                 });
                 if (!r.ok) {
                     console.error(`eBay getItem ${item.itemId} failed: ${r.status}`);
+                    // Mark as detailed on permanent errors (404/410) to stop retrying
+                    if (r.status === 404 || r.status === 410) {
+                        await updateGearDetail(item.itemId, "", [], {});
+                    }
                     continue;
                 }
                 const d = await r.json();
