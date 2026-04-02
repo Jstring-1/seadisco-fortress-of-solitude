@@ -190,21 +190,34 @@ function switchView(view, skipPushState = false) {
     if (mainForm) mainForm.style.display = "";
     if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
-    // Restore search page to clean state — clear leftover records/collection cards
-    document.getElementById("results").innerHTML = "";
-    document.getElementById("pagination").style.display = "none";
-    document.getElementById("status").textContent = "";
     setCwStatus("");
-    const searchDesc = document.getElementById("search-desc");
-    if (searchDesc) searchDesc.textContent = "";
-    const searchReturned = document.getElementById("search-returned");
-    if (searchReturned) searchReturned.textContent = "";
-    const blurb = document.getElementById("blurb");
-    if (blurb) blurb.style.display = "";
-    const ws = document.getElementById("wanted-sample");
-    if (ws) ws.style.display = "";
-    const artistAlts = document.getElementById("artist-alts");
-    if (artistAlts) artistAlts.innerHTML = "";
+    // If we have previous search results, restore them instead of clearing
+    if (window._lastResults && window._lastResults.length > 0) {
+      // Re-render saved search results and keep search info visible
+      const grid = document.getElementById("results");
+      grid.innerHTML = window._lastResults.map((item, i) => renderCard(item, i)).join("");
+      document.getElementById("pagination").style.display = "none";
+      const ws = document.getElementById("wanted-sample"); if (ws) ws.style.display = "none";
+      const blurb = document.getElementById("blurb"); if (blurb) blurb.style.display = "none";
+      // Show load-more if there are more pages
+      const lmWrap = document.getElementById("search-load-more");
+      if (lmWrap) lmWrap.style.display = currentPage < totalPages ? "" : "none";
+    } else {
+      // No previous search — restore clean default state
+      document.getElementById("results").innerHTML = "";
+      document.getElementById("pagination").style.display = "none";
+      document.getElementById("status").textContent = "";
+      const searchDesc = document.getElementById("search-desc");
+      if (searchDesc) searchDesc.textContent = "";
+      const searchReturned = document.getElementById("search-returned");
+      if (searchReturned) searchReturned.textContent = "";
+      const blurb = document.getElementById("blurb");
+      if (blurb) blurb.style.display = "";
+      const ws = document.getElementById("wanted-sample");
+      if (ws) ws.style.display = "";
+      const artistAlts = document.getElementById("artist-alts");
+      if (artistAlts) artistAlts.innerHTML = "";
+    }
     if (!skipPushState) history.replaceState({}, "", location.pathname);
   }
 
