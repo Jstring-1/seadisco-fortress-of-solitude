@@ -194,26 +194,32 @@
         onkeydown="if(event.key==='Enter'){doCwSearch(1)}" />
       <button onclick="doCwSearch(1)" style="flex-shrink:0">Search</button>
     </div>
-    <div id="cw-controls-row" style="display:flex;align-items:center;gap:0.4rem;margin-top:0.3rem">
-      <button type="button" id="cw-advanced-toggle" onclick="toggleCwAdvanced()" style="background:none;border:none;padding:0;font-size:0.78rem;color:#666;cursor:pointer;display:inline-flex;align-items:center;gap:0.3rem;white-space:nowrap;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#666'">
+    <div id="cw-controls-row" class="type-sort-row" style="margin-top:0.3rem">
+      <button type="button" id="cw-advanced-toggle" onclick="toggleCwAdvanced()" style="background:none;border:none;padding:0;font-size:0.78rem;color:#666;cursor:pointer;display:flex;align-items:center;gap:0.3rem;white-space:nowrap" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#666'">
         <span id="cw-advanced-arrow">▶</span> Filters
       </button>
       <button type="button" onclick="clearCwSearch()" title="Clear all filters" style="background:none;border:none;padding:0 0.4rem;font-size:1.2rem;color:#555;cursor:pointer;line-height:1;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
-      <span style="color:#333;margin:0 0.15rem">|</span>
-      <div class="type-radios" style="font-size:0.72rem">
+      <span style="color:#333;margin:0 0.5rem">|</span>
+      <span style="text-transform:uppercase;letter-spacing:0.05em;color:#555;flex-shrink:0">Results:</span>
+      <div class="type-radios">
         <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="cw-result-type" value="" checked onchange="doCwSearch(1)"> All</label>
         <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="cw-result-type" value="master" onchange="doCwSearch(1)"> Masters</label>
         <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="cw-result-type" value="release" onchange="doCwSearch(1)"> Releases</label>
       </div>
-      <select id="cw-sort" onchange="saveCwSort();doCwSearch(1)" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;height:22px;padding:0 0.4rem;font-family:inherit;font-size:0.68rem;line-height:22px;color:#aaa;box-sizing:border-box;cursor:pointer;color-scheme:dark;flex-shrink:0;margin-left:auto">
-        <option value="">Sort: Artist</option>
-        <option value="title">Sort: Title</option>
-        <option value="year">Sort: Year (Newest)</option>
-        <option value="year_asc">Sort: Year (Oldest)</option>
-        <option value="added">Sort: Added (Newest)</option>
-        <option value="added_asc">Sort: Added (Oldest)</option>
-        <option value="rating">Sort: Rating</option>
-      </select>
+      <span style="color:#333;margin:0 0.25rem">|</span>
+      <label class="sort-label" style="flex-shrink:0">
+        Sort
+        <select id="cw-sort" onchange="saveCwSort();doCwSearch(1)" style="font-size:0.78rem;padding:0.3rem 0.4rem;color-scheme:dark">
+          <option value="">Artist</option>
+          <option value="title">Title</option>
+          <option value="year">Year (Newest)</option>
+          <option value="year_asc">Year (Oldest)</option>
+          <option value="added">Added (Newest)</option>
+          <option value="added_asc">Added (Oldest)</option>
+          <option value="rating">Rating</option>
+        </select>
+      </label>
+      <span style="color:#333;margin:0 0.25rem">|</span>
       <button type="button" id="cw-export-btn" onclick="_cwTab==='collection'?exportCollection():exportWantlist()" title="Download as CSV" style="background:none;border:none;padding:0;font-size:0.78rem;color:#555;cursor:pointer;white-space:nowrap;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">⬇ CSV</button>
     </div>
     <div id="cw-advanced-panel" style="display:none;margin-top:0.5rem">
