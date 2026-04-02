@@ -696,7 +696,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     </div>
     ${trackHTML}
     ${metaRows ? `<div class="album-extra">${metaRows}</div>` : ""}
-    ${isMaster ? `<div id="master-versions-list" style="padding:0.75rem 1rem 0.5rem;font-size:0.78rem;color:var(--muted)">Loading pressings…</div>` : ""}`;
+    ${isMaster ? `<div id="master-versions-list" style="padding:0.75rem;font-size:0.78rem;color:var(--muted)">Loading pressings…</div>` : ""}`;
 
   if (isMaster) loadMasterVersions(null, searchResult.id);
   // Fetch instance data in background (for rating stars + instanceId)

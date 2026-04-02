@@ -1695,7 +1695,7 @@ body.player-open { padding-bottom: 56px; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  max-width: 820px;
+  max-width: 620px;
   width: 100%;
   max-height: 88vh;
   overflow-y: auto;
@@ -1739,7 +1739,7 @@ body.player-open { padding-bottom: 56px; }
 #album-info .album-header, #version-info .album-header {
   display: flex;
   gap: 1rem;
-  padding: 1rem;
+  padding: 0.75rem;
   border-bottom: 1px solid var(--border);
 }
 
@@ -1914,7 +1914,7 @@ body.player-open { padding-bottom: 56px; }
 }
 
 #album-info .album-tracklist, #version-info .album-tracklist {
-  padding: 0.75rem 1rem;
+  padding: 0.75rem;
 }
 
 #album-info .tracklist-heading, #version-info .tracklist-heading {
@@ -1971,7 +1971,7 @@ body.player-open { padding-bottom: 56px; }
 
 #album-info .album-extra, #version-info .album-extra {
   border-top: 1px solid var(--border);
-  padding: 0.75rem 1rem;
+  padding: 0.75rem;
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
