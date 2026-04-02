@@ -595,6 +595,10 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         }).join(", ");
         return `<span class="detail-label">${escHtml(t)}</span><span>${linked}</span>`;
       }
+      if (t === "Matrix / Runout") {
+        const val = identifierGroups[t];
+        return `<span class="detail-label">${escHtml(t)}</span><span class="matrix-runout" style="color:#7ec87e;cursor:pointer" onclick="navigator.clipboard.writeText('${escHtml(val.replace(/'/g, "\\'"))}');this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy">${escHtml(val)}</span>`;
+      }
       return `<span class="detail-label">${escHtml(t)}</span><span${style}>${escHtml(identifierGroups[t])}</span>`;
     })
     .join("");
