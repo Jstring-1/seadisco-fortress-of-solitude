@@ -292,8 +292,17 @@ function switchRecordsTab(tab, skipPush) {
 
   clearCwFilters();
 
+  // Apply pending collection search from modal (searchCollectionFor sets this)
+  const pending = window._pendingCwSearch;
+  if (pending) {
+    delete window._pendingCwSearch;
+    const el = document.getElementById(pending.field);
+    if (el) el.value = pending.value;
+    if (pending.field !== "cw-query") toggleCwAdvanced(true);
+  }
+
   if (tab === "collection") {
-    if (cwInput) { cwInput.placeholder = "Search your collection\u2026"; cwInput.value = ""; }
+    if (cwInput) { cwInput.placeholder = "Search your collection\u2026"; if (!pending) cwInput.value = ""; }
     if (controlsRow) controlsRow.style.display = "";
     if (exportBtn) exportBtn.style.display = "";
     loadCwFacets("collection");
