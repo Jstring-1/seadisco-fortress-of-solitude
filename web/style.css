@@ -1801,12 +1801,20 @@ body.player-open { padding-bottom: 56px; }
 .album-title-search {
   color: var(--accent);
   text-decoration: none;
-  font-size: 0.85em;
+  font-size: 1.1em;
 }
 .album-title-search:hover {
   text-decoration: underline dotted;
   text-underline-offset: 3px;
   text-decoration-color: var(--muted);
+}
+.track-search-icon {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 1.1em;
+}
+.track-search-icon:hover {
+  color: var(--fg);
 }
 
 #album-info .album-meta .album-artist, #version-info .album-meta .album-artist {
