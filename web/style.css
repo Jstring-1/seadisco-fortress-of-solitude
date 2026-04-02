@@ -2254,15 +2254,38 @@ body.player-open { padding-bottom: 56px; }
   letter-spacing: 0.04em;
 }
 
-/* ── Card type border colours ── */
-.card-type-artist  { border-bottom: 3px solid #4b0082; }
-.card-type-label   { border-bottom: 3px solid #228b22; }
-.card-type-master  { border-bottom: 3px solid #cc2200; }
-.card-type-release { border-bottom: 3px solid #8b2020; }
-.card-type-artist:hover  { border-color: #4b0082; }
-.card-type-label:hover   { border-color: #228b22; }
-.card-type-master:hover  { border-color: #cc2200; }
-.card-type-release:hover { border-color: #8b2020; }
+/* ── Card type colours ── */
+:root {
+  --type-master:  #c49a3c;
+  --type-release: #a0725a;
+  --type-artist:  #5a9a8a;
+  --type-label:   #7a9a5a;
+}
+.card-type-artist  { border-bottom: 3px solid var(--type-artist); }
+.card-type-label   { border-bottom: 3px solid var(--type-label); }
+.card-type-master  { border-bottom: 3px solid var(--type-master); }
+.card-type-release { border-bottom: 3px solid var(--type-release); }
+.card-type-artist:hover  { border-color: var(--type-artist); }
+.card-type-label:hover   { border-color: var(--type-label); }
+.card-type-master:hover  { border-color: var(--type-master); }
+.card-type-release:hover { border-color: var(--type-release); }
+
+/* Radio label hover + checked colours per type */
+.type-radios label { transition: color 0.15s; cursor: pointer; }
+.type-radios label:hover:has(input[value="master"])  { color: var(--type-master); }
+.type-radios label:hover:has(input[value="release"]) { color: var(--type-release); }
+.type-radios label:hover:has(input[value="artist"])  { color: var(--type-artist); }
+.type-radios label:hover:has(input[value="label"])   { color: var(--type-label); }
+
+.type-radios label:has(input[value="master"]:checked)  { color: var(--type-master); }
+.type-radios label:has(input[value="release"]:checked) { color: var(--type-release); }
+.type-radios label:has(input[value="artist"]:checked)  { color: var(--type-artist); }
+.type-radios label:has(input[value="label"]:checked)   { color: var(--type-label); }
+
+.type-radios input[value="master"]  { accent-color: var(--type-master); }
+.type-radios input[value="release"] { accent-color: var(--type-release); }
+.type-radios input[value="artist"]  { accent-color: var(--type-artist); }
+.type-radios input[value="label"]   { accent-color: var(--type-label); }
 
 /* ── Pagination ── */
 #pagination {
