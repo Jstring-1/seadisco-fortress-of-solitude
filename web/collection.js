@@ -286,6 +286,9 @@ function getCwFilters() {
 function swapSearchToCollection() {
   // Gather current main search fields and store as pending swap
   // (switchView → switchRecordsTab → clearCwFilters runs before we can set fields)
+  // Map main sort → collection sort
+  const mainSort = document.getElementById("f-sort")?.value ?? "";
+  const sortMap = { "year:desc": "year", "year:asc": "year_asc", "title:asc": "title", "title:desc": "title" };
   window._pendingCwSwap = {
     q:       (document.getElementById("query")?.value ?? "").trim(),
     artist:  (document.getElementById("f-artist")?.value ?? "").trim(),
@@ -296,6 +299,7 @@ function swapSearchToCollection() {
     style:   (document.getElementById("f-style")?.value ?? "").trim(),
     format:  (document.getElementById("f-format")?.value ?? "").trim(),
     rtype:   document.querySelector('input[name="result-type"]:checked')?.value ?? "",
+    sort:    sortMap[mainSort] ?? "",
   };
   switchView("records");
 }
@@ -336,6 +340,13 @@ function swapSearchToMain() {
     const radio = document.querySelector(`input[name="result-type"][value="${rtype}"]`);
     if (radio) radio.checked = true;
   }
+
+  // Map collection sort → main sort
+  const cwSort = document.getElementById("cw-sort")?.value ?? "";
+  const revSortMap = { "year": "year:desc", "year_asc": "year:asc", "title": "title:asc" };
+  const mainSortEl = document.getElementById("f-sort");
+  if (mainSortEl && revSortMap[cwSort]) mainSortEl.value = revSortMap[cwSort];
+  else if (mainSortEl) mainSortEl.value = "";
 
   doSearch(1);
 }
@@ -405,6 +416,10 @@ function switchRecordsTab(tab, skipPush) {
     if (swap.rtype === "master" || swap.rtype === "release") {
       const radio = document.querySelector(`input[name="cw-result-type"][value="${swap.rtype}"]`);
       if (radio) radio.checked = true;
+    }
+    if (swap.sort !== undefined) {
+      const cwSortEl = document.getElementById("cw-sort");
+      if (cwSortEl) cwSortEl.value = swap.sort;
     }
   }
 
