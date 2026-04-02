@@ -189,7 +189,6 @@
       <button class="records-sub-tab" data-rtab="lists" onclick="switchRecordsTab('lists')">Lists</button>
       <button class="records-sub-tab" data-rtab="inventory" onclick="switchRecordsTab('inventory')">Inventory</button>
     </div>
-    <div id="cw-status" style="font-size:0.78rem;color:var(--muted);text-align:center;margin-top:0.35rem;display:none"></div>
     <div class="search-row" style="margin-top:0.5rem">
       <input type="text" id="cw-query" placeholder="Search your collection…" autocomplete="off"
         onkeydown="if(event.key==='Enter'){doCwSearch(1)}" />
@@ -289,6 +288,7 @@
       </div>
     </div>
     <div id="cw-folder-cloud" class="cw-folder-cloud" style="display:none"></div>
+    <div id="cw-status" style="font-size:0.78rem;color:var(--muted);text-align:center;margin-top:0.35rem;display:none"></div>
   </div>
 
   <div id="wanted-search-wrap" class="content-narrow" style="display:none">
