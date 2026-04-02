@@ -180,7 +180,20 @@ function switchView(view, skipPushState = false) {
     if (mainForm) mainForm.style.display = "";
     if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
+    // Restore search page to clean state — clear leftover records/collection cards
+    document.getElementById("results").innerHTML = "";
     document.getElementById("pagination").style.display = "none";
+    document.getElementById("status").textContent = "";
+    const searchDesc = document.getElementById("search-desc");
+    if (searchDesc) searchDesc.textContent = "";
+    const searchReturned = document.getElementById("search-returned");
+    if (searchReturned) searchReturned.textContent = "";
+    const blurb = document.getElementById("blurb");
+    if (blurb) blurb.style.display = "";
+    const ws = document.getElementById("wanted-sample");
+    if (ws) ws.style.display = "";
+    const artistAlts = document.getElementById("artist-alts");
+    if (artistAlts) artistAlts.innerHTML = "";
     if (!skipPushState) history.replaceState({}, "", location.pathname);
   }
 
