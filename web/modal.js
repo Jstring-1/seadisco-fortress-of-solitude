@@ -391,6 +391,9 @@ function updateVideoNavButtons() {
       titleEl.innerHTML = "Playing";
     }
   }
+  // Show/hide album button based on whether we have a release to reopen
+  const albumBtn = document.getElementById("mini-album");
+  if (albumBtn) albumBtn.style.display = window._playerReleaseId ? "" : "none";
 }
 
 function toggleMiniPlayer() {
@@ -412,6 +415,14 @@ function openVideo(event, url) {
   }));
   window._videoQueueIndex = window._videoQueue.indexOf(url);
   if (window._videoQueueIndex === -1) window._videoQueueIndex = 0;
+  // Save the currently open release so the player bar can reopen it
+  const opParam = new URLSearchParams(location.search).get("op");
+  if (opParam && opParam.includes(":")) {
+    const [pType, pId] = [opParam.slice(0, opParam.indexOf(":")), opParam.slice(opParam.indexOf(":") + 1)];
+    window._playerReleaseType = pType;
+    window._playerReleaseId   = pId;
+    window._playerReleaseUrl  = `https://www.discogs.com/${pType}/${pId}`;
+  }
   setVideoUrl(id);
   const mp = document.getElementById("mini-player");
   mp.classList.add("open");
@@ -477,6 +488,15 @@ function onVideoEnded() {
   playNextVideo();
 }
 
+function openPlayerRelease() {
+  const rType = window._playerReleaseType;
+  const rId   = window._playerReleaseId;
+  const rUrl  = window._playerReleaseUrl;
+  if (rType && rId) {
+    openModal(null, rId, rType, rUrl);
+  }
+}
+
 function closeVideo() {
   const mp = document.getElementById("mini-player");
   mp.classList.remove("open", "expanded");
@@ -493,6 +513,12 @@ function closeVideo() {
   const u = new URL(window.location.href);
   u.searchParams.delete("vd");
   history.replaceState({}, "", u.toString());
+  // Hide album button
+  const albumBtn = document.getElementById("mini-album");
+  if (albumBtn) albumBtn.style.display = "none";
+  window._playerReleaseType = null;
+  window._playerReleaseId = null;
+  window._playerReleaseUrl = null;
 }
 
 function extractYouTubeId(url) {
