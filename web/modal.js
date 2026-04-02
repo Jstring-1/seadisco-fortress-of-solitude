@@ -525,8 +525,9 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const artists  = artistNames.length ? artistNames
                    : ((searchResult.title ?? "").split(" - ")[0] ? [(searchResult.title ?? "").split(" - ")[0]] : []);
   const year     = d.year ?? searchResult.year ?? "";
-  const labels   = (d.labels ?? []).map(l => l.name).slice(0, 2).join(", ")
-                   || (searchResult.label ?? []).slice(0, 2).join(", ");
+  const labelNames = (d.labels ?? []).map(l => l.name).slice(0, 2);
+  if (!labelNames.length) labelNames.push(...(searchResult.label ?? []).slice(0, 2));
+  const labels   = labelNames.join(", ");
   const genres   = [...(d.genres ?? []), ...(d.styles ?? [])].slice(0, 4).join(" · ");
   const country  = d.country ?? searchResult.country ?? "";
   const allImages = (d.images ?? []).map(i => i.uri).filter(Boolean);
@@ -619,7 +620,10 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const isMaster = searchResult.type === "master";
   const catnoEsc = catno.replace(/'/g, "\\'");
   const detailRows = [
-    labels  ? `<span class="detail-label">Label</span><span>${escHtml(labels)}</span>`   : "",
+    labelNames.length ? `<span class="detail-label">Label</span><span>${labelNames.map(n => {
+      const esc = n.replace(/'/g, "\\'");
+      return `<a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();document.getElementById('query').value='';toggleAdvanced(true);document.getElementById('f-label').value='${escHtml(esc)}';document.querySelector('input[name=\\'result-type\\'][value=\\'\\']').checked=true;doSearch(1)" title="Search for ${escHtml(n)} releases">${escHtml(n)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-label','${escHtml(esc)}')" title="Search your collection for ${escHtml(n)}">⌕</a>`;
+    }).join(", ")}</span>` : "",
     (labels && labelCodeRow) ? labelCodeRow : "",
     (!isMaster && catno) ? `<span class="detail-label">Cat#</span><span><a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();document.getElementById('query').value='${escHtml(catnoEsc)}';toggleAdvanced(false);document.querySelector('input[name=\\'result-type\\'][value=\\'\\']').checked=true;doSearch(1)" title="Search for this catalog number">${escHtml(catno)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-query','${escHtml(catnoEsc)}')" title="Search your collection for ${escHtml(catno)}">⌕</a></span>` : "",
     (!isMaster && formats) ? `<span class="detail-label">Format</span><span>${escHtml(formats)}</span>` : "",
