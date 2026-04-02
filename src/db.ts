@@ -452,11 +452,15 @@ export async function getAllUsersSyncStatus(): Promise<Array<{
   syncTotal: number;
   syncError: string | null;
   authMethod: string;
+  hasPat: boolean;
+  hasOAuth: boolean;
 }>> {
   const r = await getPool().query(
     `SELECT ut.clerk_user_id, ut.discogs_username, ut.collection_synced_at, ut.wantlist_synced_at,
             ut.sync_status, ut.sync_progress, ut.sync_total, ut.sync_error,
-            COALESCE(ut.auth_method, 'none') AS auth_method
+            COALESCE(ut.auth_method, 'none') AS auth_method,
+            (ut.discogs_token IS NOT NULL AND ut.discogs_token != '' AND ut.discogs_token != '__oauth__') AS has_pat,
+            (ut.oauth_access_token IS NOT NULL AND ut.oauth_access_token != '') AS has_oauth
      FROM user_tokens ut
      WHERE ut.discogs_username IS NOT NULL
      ORDER BY ut.discogs_username`
@@ -471,6 +475,8 @@ export async function getAllUsersSyncStatus(): Promise<Array<{
     syncTotal:          row.sync_total           ?? 0,
     syncError:          row.sync_error           ?? null,
     authMethod:         row.auth_method          ?? "none",
+    hasPat:             row.has_pat              ?? false,
+    hasOAuth:           row.has_oauth            ?? false,
   }));
 }
 
