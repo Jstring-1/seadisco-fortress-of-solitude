@@ -836,6 +836,26 @@ export async function deleteWantlistItem(clerkUserId: string, releaseId: number)
   await getPool().query(`DELETE FROM user_wantlist WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId]);
 }
 
+/** Remove local wantlist items that no longer exist in Discogs after a full sync */
+export async function pruneWantlistItems(clerkUserId: string, keepIds: number[]): Promise<number> {
+  if (!keepIds.length) return 0;
+  const r = await getPool().query(
+    `DELETE FROM user_wantlist WHERE clerk_user_id = $1 AND discogs_release_id != ALL($2::int[]) RETURNING 1`,
+    [clerkUserId, keepIds]
+  );
+  return r.rowCount ?? 0;
+}
+
+/** Remove local collection items that no longer exist in Discogs after a full sync */
+export async function pruneCollectionItems(clerkUserId: string, keepIds: number[]): Promise<number> {
+  if (!keepIds.length) return 0;
+  const r = await getPool().query(
+    `DELETE FROM user_collection WHERE clerk_user_id = $1 AND discogs_release_id != ALL($2::int[]) RETURNING 1`,
+    [clerkUserId, keepIds]
+  );
+  return r.rowCount ?? 0;
+}
+
 export async function updateCollectionRating(clerkUserId: string, releaseId: number, rating: number): Promise<void> {
   await getPool().query(`UPDATE user_collection SET rating = $3 WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId, rating]);
 }

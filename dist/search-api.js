@@ -6,7 +6,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, updateCollectionNotes, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, getWantedSample, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, updateCollectionNotes, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems } from "./db.js";
 import { startFreshSyncSchedule, runFreshSync } from "./sync-fresh-releases.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sharedToken = process.env.DISCOGS_TOKEN ?? "";
@@ -665,6 +665,7 @@ async function runBackgroundSync(userId, client, username, syncCollection, syncW
         console.log(`Sync ${username}: estimated total = ${estimatedTotal}`);
         await updateSyncProgress(userId, "syncing", 0, estimatedTotal);
         if (syncCollection) {
+            const allCollectionIds = [];
             for (let page = 1;; page++) {
                 if (_syncAbort || _thisSyncAbort) {
                     console.log(`Sync ${username}: aborted`);
@@ -689,11 +690,18 @@ async function runBackgroundSync(userId, client, username, syncCollection, syncW
                     notes: item.notes ?? undefined,
                 })).filter(i => i.id);
                 await upsertCollectionItems(userId, items);
+                allCollectionIds.push(...items.map(i => i.id));
                 totalSynced += items.length;
                 lastProgressAt = Date.now();
                 await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
                 if (releases.length < 500)
                     break;
+            }
+            // Remove local items that are no longer in Discogs collection
+            if (allCollectionIds.length > 0) {
+                const pruned = await pruneCollectionItems(userId, allCollectionIds);
+                if (pruned > 0)
+                    console.log(`Sync ${username}: pruned ${pruned} stale collection items`);
             }
             await updateCollectionSyncedAt(userId);
             // Sync folder list
@@ -711,6 +719,7 @@ async function runBackgroundSync(userId, client, username, syncCollection, syncW
             catch { /* folder sync optional */ }
         }
         if (syncWantlist) {
+            const allWantlistIds = [];
             for (let page = 1;; page++) {
                 if (_syncAbort || _thisSyncAbort) {
                     console.log(`Sync ${username}: aborted`);
@@ -733,11 +742,18 @@ async function runBackgroundSync(userId, client, username, syncCollection, syncW
                     notes: item.notes ?? undefined,
                 })).filter(i => i.id);
                 await upsertWantlistItems(userId, items);
+                allWantlistIds.push(...items.map(i => i.id));
                 totalSynced += items.length;
                 lastProgressAt = Date.now();
                 await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
                 if (wants.length < 500)
                     break;
+            }
+            // Remove local items that are no longer in Discogs wantlist
+            if (allWantlistIds.length > 0) {
+                const pruned = await pruneWantlistItems(userId, allWantlistIds);
+                if (pruned > 0)
+                    console.log(`Sync ${username}: pruned ${pruned} stale wantlist items`);
             }
             await updateWantlistSyncedAt(userId);
         }
@@ -829,7 +845,7 @@ app.get("/api/user/collection", async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const perPage = parseInt(req.query.per_page) || 25;
     const filters = {};
-    for (const key of ["q", "artist", "release", "label", "year", "genre", "style", "format"]) {
+    for (const key of ["q", "artist", "release", "label", "year", "genre", "style", "format", "type"]) {
         const v = (req.query[key] ?? "").trim();
         if (v)
             filters[key] = v;
@@ -864,7 +880,7 @@ app.get("/api/user/wantlist", async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const perPage = parseInt(req.query.per_page) || 25;
     const filters = {};
-    for (const key of ["q", "artist", "release", "label", "year", "genre", "style", "format"]) {
+    for (const key of ["q", "artist", "release", "label", "year", "genre", "style", "format", "type"]) {
         const v = (req.query[key] ?? "").trim();
         if (v)
             filters[key] = v;
