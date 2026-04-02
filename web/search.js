@@ -672,20 +672,16 @@ async function loadMoreWantedSample() {
 function searchArtistFromModal(event, el) {
   event.preventDefault();
   closeModal();
-  document.getElementById("f-artist").value  = el.dataset.artist;
-  document.getElementById("query").value     = "";
-  document.getElementById("f-release").value = "";
-  document.getElementById("f-year").value    = "";
-  document.getElementById("f-label").value   = "";
-  document.getElementById("f-genre").value   = "";
+  clearForm();
+  document.getElementById("f-artist").value = el.dataset.artist;
   toggleAdvanced(true);
   doSearch(1);
 }
 
 function selectAltArtist(event, el) {
   event.preventDefault();
+  clearForm();
   document.getElementById("f-artist").value = el.dataset.altName;
-  document.getElementById("query").value = "";
   currentArtistId = el.dataset.altId || null;
   toggleAdvanced(true);
   doSearch(1);
