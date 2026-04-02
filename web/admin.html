@@ -228,11 +228,11 @@ async function loadAdminSyncStatus() {
         statusText = `Idle${countStr}`;
       }
       const syncBtn = isSyncing ? '' : `<button onclick="adminSyncUser('${u.username}')" class="admin-btn" style="font-size:0.72rem;padding:0.15rem 0.5rem">Sync</button>`;
-      const authBadge = u.authMethod === 'oauth'
-        ? '<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:3px;background:#1a3a5c;color:#7eb8da;font-weight:600;margin-left:0.4rem">OAuth</span>'
-        : u.authMethod === 'pat'
-          ? '<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:3px;background:#1a3a1a;color:#6bcf8e;font-weight:600;margin-left:0.4rem">PAT</span>'
-          : '<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:3px;background:#2a2a2a;color:#666;font-weight:600;margin-left:0.4rem">\u2014</span>';
+      const badges = [];
+      if (u.hasOAuth) badges.push('<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:3px;background:#1a3a5c;color:#7eb8da;font-weight:600;margin-left:0.4rem" title="OAuth connected">OAuth</span>');
+      if (u.hasPat) badges.push('<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:3px;background:#1a3a1a;color:#6bcf8e;font-weight:600;margin-left:0.4rem" title="Personal Access Token">PAT</span>');
+      if (!badges.length) badges.push('<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:3px;background:#2a2a2a;color:#666;font-weight:600;margin-left:0.4rem">\u2014</span>');
+      const authBadge = badges.join('');
       const lastActiveStr = u.lastActiveAt ? fmtRelativeTime(u.lastActiveAt) : "\u2014";
       const lastActiveColor = u.online ? "#4caf50" : "#777";
       return `<div class="sync-row" style="padding:0.45rem 0;border-bottom:1px solid #1a1a1a;display:grid;grid-template-columns:140px 1fr 110px 1fr auto;gap:0.5rem 1rem;align-items:baseline;font-size:0.8rem">
