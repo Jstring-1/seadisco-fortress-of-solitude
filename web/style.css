@@ -1300,6 +1300,28 @@ main, #drops-view, #buy-view, #gear-view {
   align-items: center;
 }
 
+.swap-search-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: #555;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 0 0.45rem;
+  height: var(--input-h);
+  line-height: var(--input-h);
+  flex-shrink: 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+.swap-search-btn:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.swap-search-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
 input[type="text"] {
   flex: 1;
   background: var(--surface);
