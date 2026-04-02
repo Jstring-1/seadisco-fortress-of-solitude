@@ -2,6 +2,13 @@
 let _activeTab = "search";
 let _colPage = 1, _wlPage = 1;
 
+function setCwStatus(msg) {
+  const el = document.getElementById("cw-status");
+  if (!el) return;
+  el.textContent = msg || "";
+  el.style.display = msg ? "block" : "none";
+}
+
 function saveCwSort() {
   const v = document.getElementById("cw-sort")?.value ?? "";
   try { localStorage.setItem("cw-sort", v); } catch {}
@@ -184,6 +191,7 @@ function switchView(view, skipPushState = false) {
     document.getElementById("results").innerHTML = "";
     document.getElementById("pagination").style.display = "none";
     document.getElementById("status").textContent = "";
+    setCwStatus("");
     const searchDesc = document.getElementById("search-desc");
     if (searchDesc) searchDesc.textContent = "";
     const searchReturned = document.getElementById("search-returned");
@@ -356,7 +364,7 @@ async function loadInventoryTab(page = 1, filters) {
   document.getElementById("blurb").style.display = "none";
   document.getElementById("results").innerHTML = renderSkeletonGrid(16);
   document.getElementById("pagination").style.display = "none";
-  setStatus("");
+  setCwStatus("");
   try {
     let url = `/api/user/inventory?page=${page}&per_page=96`;
     if (f.q) url += `&q=${encodeURIComponent(f.q)}`;
@@ -364,19 +372,19 @@ async function loadInventoryTab(page = 1, filters) {
     const data = await r.json();
     const items = data.items ?? [];
     if (!items.length) {
-      setStatus("");
+      setCwStatus("");
       document.getElementById("results").innerHTML = f.q
         ? renderEmptyState("\uD83D\uDD0D", `No inventory items matching "${f.q}"`, "Try a different search")
         : renderEmptyState("\uD83D\uDCE6", "No inventory items synced", "Your Discogs marketplace inventory will appear here after syncing");
       return;
     }
-    setStatus(`${data.total} inventory listings \u2014 page ${page} of ${data.pages}`);
+    setCwStatus(`${data.total} inventory listings \u2014 page ${page} of ${data.pages}`);
     document.getElementById("results").innerHTML = items.map((item, i) => renderInventoryCard(item, i)).join("");
     totalPages = data.pages;
     currentPage = page;
     renderInventoryPagination();
   } catch (e) {
-    setStatus("Failed to load inventory: " + e.message, true);
+    setCwStatus("Failed to load inventory: " + e.message);
   }
 }
 
@@ -448,7 +456,7 @@ async function loadListsTab() {
   document.getElementById("blurb").style.display = "none";
   document.getElementById("results").innerHTML = renderSkeletonGrid(16);
   document.getElementById("pagination").style.display = "none";
-  setStatus("");
+  setCwStatus("");
   try {
     const r = await apiFetch("/api/user/lists");
     const data = await r.json();
@@ -456,16 +464,16 @@ async function loadListsTab() {
     const q = (document.getElementById("cw-query")?.value ?? "").trim().toLowerCase();
     const filtered = q ? lists.filter(l => (l.name || "").toLowerCase().includes(q) || (l.description || "").toLowerCase().includes(q)) : lists;
     if (!filtered.length) {
-      setStatus("");
+      setCwStatus("");
       document.getElementById("results").innerHTML = lists.length
         ? renderEmptyState("\uD83D\uDD0D", `No lists matching "${q}"`, "Try a different search")
         : renderEmptyState("\uD83D\uDCCB", "No lists synced", "Your Discogs lists will appear here after syncing");
       return;
     }
-    setStatus(`${filtered.length} list${filtered.length !== 1 ? "s" : ""}`);
+    setCwStatus(`${filtered.length} list${filtered.length !== 1 ? "s" : ""}`);
     document.getElementById("results").innerHTML = `<div class="lists-grid">${filtered.map(renderListCard).join("")}</div>`;
   } catch (e) {
-    setStatus("Failed to load lists: " + e.message, true);
+    setCwStatus("Failed to load lists: " + e.message);
   }
 }
 
@@ -576,7 +584,7 @@ async function loadCollectionTab(page = 1, filters) {
   document.getElementById("blurb").style.display = "none";
   document.getElementById("results").innerHTML = renderSkeletonGrid(16);
   document.getElementById("pagination").style.display = "none";
-  setStatus("");
+  setCwStatus("");
   try {
     let url = `/api/user/collection?page=${page}&per_page=96`;
     if (f.q)       url += `&q=${encodeURIComponent(f.q)}`;
@@ -600,20 +608,20 @@ async function loadCollectionTab(page = 1, filters) {
     const hasFilter = Object.keys(f).length > 0 || cwRating || cwNotes;
     const filterDesc = Object.values(f).join(" + ");
     if (!items.length) {
-      setStatus("");
+      setCwStatus("");
       document.getElementById("results").innerHTML = hasFilter
         ? renderEmptyState("🔍", `No collection items matching "${filterDesc}"`, "Try adjusting your filters")
         : renderEmptyState("📀", "No collection items synced", "Connect your Discogs token in Account to sync your collection");
       return;
     }
     const prefix = hasFilter ? `${data.total} results for "${filterDesc}"` : `${data.total} items in collection`;
-    setStatus(`${prefix} — page ${page} of ${data.pages}`);
+    setCwStatus(`${prefix} — page ${page} of ${data.pages}`);
     document.getElementById("results").innerHTML = items.map(renderCardFromBasicInfo).join("");
     totalPages = data.pages;
     currentPage = page;
     renderCollectionPagination("collection");
   } catch (e) {
-    setStatus("Failed to load collection: " + e.message, true);
+    setCwStatus("Failed to load collection: " + e.message);
     showToast("Failed to load collection — please try again", "error");
   }
 }
@@ -625,7 +633,7 @@ async function loadWantlistTab(page = 1, filters) {
   document.getElementById("blurb").style.display = "none";
   document.getElementById("results").innerHTML = renderSkeletonGrid(16);
   document.getElementById("pagination").style.display = "none";
-  setStatus("");
+  setCwStatus("");
   try {
     let url = `/api/user/wantlist?page=${page}&per_page=96`;
     if (f.q)       url += `&q=${encodeURIComponent(f.q)}`;
@@ -649,20 +657,20 @@ async function loadWantlistTab(page = 1, filters) {
     const hasFilter = Object.keys(f).length > 0 || cwRating || cwNotes;
     const filterDesc = Object.values(f).join(" + ");
     if (!items.length) {
-      setStatus("");
+      setCwStatus("");
       document.getElementById("results").innerHTML = hasFilter
         ? renderEmptyState("🔍", `No wantlist items matching "${filterDesc}"`, "Try adjusting your filters")
         : renderEmptyState("💿", "No wantlist items synced", "Connect your Discogs token in Account to sync your wantlist");
       return;
     }
     const prefix = hasFilter ? `${data.total} results for "${filterDesc}"` : `${data.total} items in wantlist`;
-    setStatus(`${prefix} — page ${page} of ${data.pages}`);
+    setCwStatus(`${prefix} — page ${page} of ${data.pages}`);
     document.getElementById("results").innerHTML = items.map(renderCardFromBasicInfo).join("");
     totalPages = data.pages;
     currentPage = page;
     renderCollectionPagination("wantlist");
   } catch (e) {
-    setStatus("Failed to load wantlist: " + e.message, true);
+    setCwStatus("Failed to load wantlist: " + e.message);
     showToast("Failed to load wantlist — please try again", "error");
   }
 }
