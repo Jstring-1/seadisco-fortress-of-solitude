@@ -599,7 +599,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
              : `<div class="album-cover-placeholder">♪</div>`}
       <div class="album-meta">
         ${typeLabel ? `<div class="album-type-badge" style="cursor:pointer;user-select:none" onclick="navigator.clipboard.writeText('${escHtml(String(releaseId))}');this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy ID">${escHtml(typeLabel)}</div>` : ""}
-        <h2>${escHtml(title)} <a href="#" class="album-title-search" onclick="event.preventDefault();closeModal();document.getElementById('query').value='${escHtml(title.replace(/'/g, "\\'"))}';toggleAdvanced(false);document.querySelector('input[name=\\'result-type\\'][value=\\'\\']').checked=true;doSearch(1)" title="Search for other versions">⌕</a>${window._collectionIds?.has(Number(releaseId)) ? ` <span class="collection-badge" title="In your collection">✓</span>` : ""}${window._wantlistIds?.has(Number(releaseId)) ? ` <span class="wantlist-badge" title="In your wantlist">♡</span>` : ""}</h2>
+        <h2>${escHtml(title)} <a href="#" class="album-title-search" onclick="event.preventDefault();closeModal();document.getElementById('query').value='${escHtml(title.replace(/'/g, "\\'"))}';toggleAdvanced(false);document.querySelector('input[name=\\'result-type\\'][value=\\'\\']').checked=true;doSearch(1)" title="Search for other versions">⌕</a></h2>
         ${artists.length ? `<div class="album-artist">${artists.map(n => `<a href="#" class="modal-artist-link" data-artist="${escHtml(n)}" onclick="searchArtistFromModal(event,this)">${escHtml(n)}</a>`).join(", ")}</div>` : ""}
         ${detailRows ? `<div class="album-detail-grid">${detailRows}</div>` : ""}
         ${(() => {
@@ -640,11 +640,11 @@ function renderActionsImmediate(rid) {
   const inCol = window._collectionIds?.has(rid);
   const inWant = window._wantlistIds?.has(rid);
   return `<div id="modal-actions" class="modal-actions" data-release-id="${rid}">
-    <button class="modal-act-btn ${inCol ? 'active' : ''}" id="modal-col-btn" onclick="toggleCollection(${rid})" title="${inCol ? 'Remove from collection' : 'Add to collection'}">
-      ${inCol ? '<span style="color:#4caf50">✓</span> Collected' : '+ Collection'}
+    <button class="modal-act-btn ${inCol ? 'in-collection' : ''}" id="modal-col-btn" onclick="toggleCollection(${rid})" title="${inCol ? 'Remove from collection' : 'Add to collection'}">
+      ${inCol ? '✓ Collected' : '+ Collection'}
     </button>
-    <button class="modal-act-btn ${inWant ? 'active' : ''}" id="modal-want-btn" onclick="toggleWantlist(${rid})" title="${inWant ? 'Remove from wantlist' : 'Add to wantlist'}">
-      ${inWant ? '<span style="color:#e05050">♡</span> Wanted' : '♡ Want'}
+    <button class="modal-act-btn ${inWant ? 'in-wantlist' : ''}" id="modal-want-btn" onclick="toggleWantlist(${rid})" title="${inWant ? 'Remove from wantlist' : 'Add to wantlist'}">
+      ${inWant ? '♡ Wanted' : '♡ Want'}
     </button>
     ${inCol ? '<span class="modal-rating" id="modal-rating" style="opacity:0.4">☆☆☆☆☆</span>' : ''}
   </div>`;
@@ -689,11 +689,11 @@ function loadModalActions(releaseId) {
   const inWant = window._wantlistIds?.has(rid);
 
   el.innerHTML = `
-    <button class="modal-act-btn ${inCol ? 'active' : ''}" id="modal-col-btn" onclick="toggleCollection(${rid})" title="${inCol ? 'Remove from collection' : 'Add to collection'}">
-      ${inCol ? '<span style="color:#4caf50">✓</span> Collected' : '+ Collection'}
+    <button class="modal-act-btn ${inCol ? 'in-collection' : ''}" id="modal-col-btn" onclick="toggleCollection(${rid})" title="${inCol ? 'Remove from collection' : 'Add to collection'}">
+      ${inCol ? '✓ Collected' : '+ Collection'}
     </button>
-    <button class="modal-act-btn ${inWant ? 'active' : ''}" id="modal-want-btn" onclick="toggleWantlist(${rid})" title="${inWant ? 'Remove from wantlist' : 'Add to wantlist'}">
-      ${inWant ? '<span style="color:#e05050">♡</span> Wanted' : '♡ Want'}
+    <button class="modal-act-btn ${inWant ? 'in-wantlist' : ''}" id="modal-want-btn" onclick="toggleWantlist(${rid})" title="${inWant ? 'Remove from wantlist' : 'Add to wantlist'}">
+      ${inWant ? '♡ Wanted' : '♡ Want'}
     </button>
     ${inCol ? '<span class="modal-rating" id="modal-rating" style="opacity:0.4">☆☆☆☆☆</span>' : ''}
   `;
@@ -740,11 +740,11 @@ async function toggleCollection(releaseId) {
     // Optimistic update
     if (inCol) {
       btn.innerHTML = '+ Collection';
-      btn.classList.remove('active');
+      btn.classList.remove('in-collection');
       window._collectionIds?.delete(releaseId);
     } else {
-      btn.innerHTML = '<span style="color:#4caf50">✓</span> Collected';
-      btn.classList.add('active');
+      btn.innerHTML = '✓ Collected';
+      btn.classList.add('in-collection');
       window._collectionIds?.add(releaseId);
     }
 
@@ -793,11 +793,11 @@ async function toggleWantlist(releaseId) {
     // Optimistic update
     if (inWant) {
       btn.innerHTML = '♡ Want';
-      btn.classList.remove('active');
+      btn.classList.remove('in-wantlist');
       window._wantlistIds?.delete(releaseId);
     } else {
-      btn.innerHTML = '<span style="color:#e05050">♡</span> Wanted';
-      btn.classList.add('active');
+      btn.innerHTML = '♡ Wanted';
+      btn.classList.add('in-wantlist');
       window._wantlistIds?.add(releaseId);
     }
 
