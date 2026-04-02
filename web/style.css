@@ -1830,10 +1830,14 @@ body.player-open { padding-bottom: 56px; }
   text-decoration: none;
   font-size: 1.1em;
 }
-.album-title-search:hover {
+.album-title-search:hover,
+.modal-internal-link:hover {
   text-decoration: underline dotted;
   text-underline-offset: 3px;
   text-decoration-color: var(--muted);
+}
+.modal-internal-link {
+  text-decoration: none;
 }
 .track-search-icon {
   color: var(--muted);
@@ -1842,6 +1846,9 @@ body.player-open { padding-bottom: 56px; }
 }
 .track-search-icon:hover {
   color: var(--fg);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--muted);
 }
 
 #album-info .album-meta .album-artist, #version-info .album-meta .album-artist {
@@ -1850,7 +1857,7 @@ body.player-open { padding-bottom: 56px; }
   margin-bottom: 0.5rem;
 }
 .modal-artist-link { color: var(--accent); text-decoration: none; font-size: 0.75rem; }
-.modal-artist-link:hover { text-decoration: underline; }
+.modal-artist-link:hover { text-decoration: underline dotted; text-underline-offset: 3px; text-decoration-color: var(--muted); }
 
 #album-info .album-detail-grid, #version-info .album-detail-grid {
   display: grid;
