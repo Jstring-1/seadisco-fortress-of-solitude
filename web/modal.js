@@ -622,10 +622,10 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const detailRows = [
     labelNames.length ? `<span class="detail-label">Label</span><span>${labelNames.map(n => {
       const esc = n.replace(/'/g, "\\'");
-      return `<a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();document.getElementById('query').value='';toggleAdvanced(true);document.getElementById('f-label').value='${escHtml(esc)}';document.querySelector('input[name=\\'result-type\\'][value=\\'\\']').checked=true;doSearch(1)" title="Search for ${escHtml(n)} releases">${escHtml(n)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-label','${escHtml(esc)}')" title="Search your collection for ${escHtml(n)}">⌕</a>`;
+      return `<a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('f-label').value='${escHtml(esc)}';toggleAdvanced(true);doSearch(1)" title="Search for ${escHtml(n)} releases">${escHtml(n)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-label','${escHtml(esc)}')" title="Search your collection for ${escHtml(n)}">⌕</a>`;
     }).join(", ")}</span>` : "",
     (labels && labelCodeRow) ? labelCodeRow : "",
-    (!isMaster && catno) ? `<span class="detail-label">Cat#</span><span><a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();document.getElementById('query').value='${escHtml(catnoEsc)}';toggleAdvanced(false);document.querySelector('input[name=\\'result-type\\'][value=\\'\\']').checked=true;doSearch(1)" title="Search for this catalog number">${escHtml(catno)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-query','${escHtml(catnoEsc)}')" title="Search your collection for ${escHtml(catno)}">⌕</a></span>` : "",
+    (!isMaster && catno) ? `<span class="detail-label">Cat#</span><span><a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('query').value='${escHtml(catnoEsc)}';doSearch(1)" title="Search for this catalog number">${escHtml(catno)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-query','${escHtml(catnoEsc)}')" title="Search your collection for ${escHtml(catno)}">⌕</a></span>` : "",
     (!isMaster && formats) ? `<span class="detail-label">Format</span><span>${escHtml(formats)}</span>` : "",
     year    ? `<span class="detail-label">Year</span><span>${escHtml(String(year))}</span>` : "",
     country ? `<span class="detail-label">Country</span><span>${escHtml(country)}</span>` : "",
@@ -989,7 +989,7 @@ function renderMasterVersions(filter) {
       <span style="color:#888">${escHtml(!v.year || v.year === "0" ? "?" : String(v.year))}</span>
       <span style="color:#aaa">${escHtml(v.country || "?")}</span>
       <span style="color:#888">${escHtml(getDisplayFormat(v))}</span>
-      <span>${v.catno && v.catno !== "—" ? `<a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();document.getElementById('query').value='${escHtml((v.catno).replace(/'/g, "\\'"))}';toggleAdvanced(false);document.querySelector('input[name=\\'result-type\\'][value=\\'\\']').checked=true;doSearch(1)" title="Search for this catalog number">${escHtml(v.catno)}</a>` : `<span style="color:#7ec87e">—</span>`}</span>
+      <span>${v.catno && v.catno !== "—" ? `<a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('query').value='${escHtml((v.catno).replace(/'/g, "\\'"))}';doSearch(1)" title="Search for this catalog number">${escHtml(v.catno)}</a>` : `<span style="color:#7ec87e">—</span>`}</span>
       <span><a href="#" class="modal-internal-link" onclick="openVersionPopup(event,${v.id})" title="View this pressing" style="color:var(--accent)">${escHtml(v.label ?? v.title ?? "—")}</a>${badge}</span>`;
   }).join("");
 }
