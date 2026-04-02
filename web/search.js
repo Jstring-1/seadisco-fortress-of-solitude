@@ -76,6 +76,7 @@ function clearForm() {
   document.getElementById("search-returned").textContent = "";
   document.getElementById("search-ai-summary").textContent = "";
   document.getElementById("search-info-block").style.display = "none";
+  window._lastResults = null;
 }
 
 // ── Main search ──────────────────────────────────────────────────────────
@@ -362,26 +363,30 @@ async function doSearch(page = 1, skipPushState = false) {
       });
     }
 
-    const urlP = new URLSearchParams(location.search);
-    const openParam  = urlP.get("op");
-    const videoParam = urlP.get("vd");
-    if (openParam) {
-      const colon = openParam.indexOf(":");
-      const pType = openParam.slice(0, colon);
-      const pId   = openParam.slice(colon + 1);
-      const pUrl  = `https://www.discogs.com/${pType}/${pId}`;
-      openModal(null, pId, pType, pUrl);
-      const versionParam = urlP.get("vr");
-      if (versionParam) {
-        setTimeout(() => openVersionPopup(null, versionParam), 1200);
+    // Only auto-open modals/videos from URL params on first page load,
+    // not when appending via "load more" (which would restart the player)
+    if (!_append) {
+      const urlP = new URLSearchParams(location.search);
+      const openParam  = urlP.get("op");
+      const videoParam = urlP.get("vd");
+      if (openParam) {
+        const colon = openParam.indexOf(":");
+        const pType = openParam.slice(0, colon);
+        const pId   = openParam.slice(colon + 1);
+        const pUrl  = `https://www.discogs.com/${pType}/${pId}`;
+        openModal(null, pId, pType, pUrl);
+        const versionParam = urlP.get("vr");
+        if (versionParam) {
+          setTimeout(() => openVersionPopup(null, versionParam), 1200);
+        }
+        if (videoParam) {
+          setTimeout(() => openVideo(null, `https://www.youtube.com/watch?v=${videoParam}`), 1200);
+        }
+      } else if (urlP.get("bi") === "1") {
+        openBioFull(null);
+      } else if (videoParam) {
+        openVideo(null, `https://www.youtube.com/watch?v=${videoParam}`);
       }
-      if (videoParam) {
-        setTimeout(() => openVideo(null, `https://www.youtube.com/watch?v=${videoParam}`), 1200);
-      }
-    } else if (urlP.get("bi") === "1") {
-      openBioFull(null);
-    } else if (videoParam) {
-      openVideo(null, `https://www.youtube.com/watch?v=${videoParam}`);
     }
   } catch (e) {
     setStatus("Search failed: " + e.message, true);
