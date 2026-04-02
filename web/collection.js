@@ -223,9 +223,10 @@ async function loadCollectionFolders() {
     const folders = data.folders ?? [];
     if (!folders.length) { el.style.display = "none"; return; }
     el.style.display = "";
-    let html = `<span class="pill cw-folder-pill active" data-folder="0" onclick="filterByFolder(0)">All</span>`;
+    const totalCount = folders.reduce((sum, f) => sum + (f.count ?? 0), 0);
+    let html = `<span class="pill cw-folder-pill active" data-folder="0" onclick="filterByFolder(0)" title="All folders (${totalCount} items)">All</span>`;
     html += folders.map(f =>
-      `<span class="pill cw-folder-pill" data-folder="${f.folderId}" onclick="filterByFolder(${f.folderId})" title="${escHtml(f.name)} (${f.count})">${escHtml(f.name)}</span>`
+      `<span class="pill cw-folder-pill" data-folder="${f.folderId}" onclick="filterByFolder(${f.folderId})" title="Folder: ${escHtml(f.name)} (${f.count} items)">${escHtml(f.name)}</span>`
     ).join("");
     el.innerHTML = html;
   } catch { el.style.display = "none"; }
