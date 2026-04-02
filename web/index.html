@@ -198,9 +198,7 @@
       <button type="button" id="cw-advanced-toggle" onclick="toggleCwAdvanced()" style="background:none;border:none;padding:0;font-size:0.78rem;color:#666;cursor:pointer;display:flex;align-items:center;gap:0.3rem;white-space:nowrap" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#666'">
         <span id="cw-advanced-arrow">▶</span> Filters
       </button>
-      <button type="button" onclick="clearCwSearch()" title="Clear all filters" style="background:none;border:none;padding:0 0.4rem;font-size:1.2rem;color:#555;cursor:pointer;line-height:1;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
-      <span style="color:#333;margin:0 0.5rem">|</span>
-      <span style="text-transform:uppercase;letter-spacing:0.05em;color:#555;flex-shrink:0">Results:</span>
+      <span style="color:#333;margin:0 0.25rem">|</span>
       <div class="type-radios">
         <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="cw-result-type" value="" checked onchange="doCwSearch(1)"> All</label>
         <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="cw-result-type" value="master" onchange="doCwSearch(1)"> Masters</label>
@@ -219,6 +217,8 @@
           <option value="rating">Rating</option>
         </select>
       </label>
+      <span style="color:#333;margin:0 0.25rem">|</span>
+      <button type="button" onclick="clearCwSearch()" title="Clear all filters" style="background:none;border:none;padding:0 0.4rem;font-size:1.2rem;color:#555;cursor:pointer;line-height:1;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
       <span style="color:#333;margin:0 0.25rem">|</span>
       <button type="button" id="cw-export-btn" onclick="_cwTab==='collection'?exportCollection():exportWantlist()" title="Download as CSV" style="background:none;border:none;padding:0;font-size:0.78rem;color:#555;cursor:pointer;white-space:nowrap;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">⬇ CSV</button>
     </div>
