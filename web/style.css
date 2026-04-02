@@ -1695,7 +1695,7 @@ body.player-open { padding-bottom: 56px; }
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  max-width: 620px;
+  max-width: 820px;
   width: 100%;
   max-height: 88vh;
   overflow-y: auto;
