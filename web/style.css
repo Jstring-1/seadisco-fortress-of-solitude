@@ -160,7 +160,27 @@ html { overflow-x: hidden; }
   .modal-act-btn { font-size: 0.75rem; padding: 0.4rem 0.65rem; min-height: 36px; }
   .price-sparkline-row { flex-wrap: wrap; }
 
-  /* Mini-player — larger touch targets */
+  /* Mini-player — stack info + controls on mobile when collapsed */
+  body.player-open { padding-bottom: 80px; }
+  .mini-player-bar {
+    flex-wrap: wrap;
+    padding: 0.3rem 0.5rem;
+    gap: 0.15rem 0.4rem;
+  }
+  .mini-player-info {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+  .mini-player-title {
+    text-align: center;
+    white-space: normal;
+    font-size: 0.74rem;
+    line-height: 1.3;
+  }
+  .mini-player-controls {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
   .mini-player-controls button { padding: 0.4rem 0.55rem; font-size: 1rem; min-width: 40px; min-height: 40px; }
   .mini-player #video-nav button { padding: 0.45rem 0.8rem; min-height: 40px; font-size: 0.9rem; }
 
