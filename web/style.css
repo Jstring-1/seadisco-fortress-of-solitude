@@ -1862,6 +1862,7 @@ body.player-open { padding-bottom: 56px; }
 }
 .modal-internal-link {
   text-decoration: none;
+  color: var(--fg);
 }
 .catno-link,
 .catno-link:visited {
