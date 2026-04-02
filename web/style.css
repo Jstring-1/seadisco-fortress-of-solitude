@@ -2157,7 +2157,7 @@ body.player-open { padding-bottom: 56px; }
   font-size: 0.875rem;
   font-weight: 600;
   line-height: 1.35;
-  color: var(--muted);
+  color: var(--fg);
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -2272,7 +2272,7 @@ body.player-open { padding-bottom: 56px; }
 
 .card-format {
   font-size: 0.72rem;
-  color: var(--muted);
+  color: var(--fg);
   display: -webkit-box;
   -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
