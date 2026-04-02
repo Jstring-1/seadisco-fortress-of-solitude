@@ -257,6 +257,7 @@ function getCwFilters() {
   const genre   = (document.getElementById("cw-genre")?.value   ?? "").trim();
   const style   = (document.getElementById("cw-style")?.value   ?? "").trim();
   const format  = (document.getElementById("cw-format")?.value  ?? "").trim();
+  const rtype   = document.querySelector('input[name="cw-result-type"]:checked')?.value ?? "";
   if (q)       f.q       = q;
   if (artist)  f.artist  = artist;
   if (release) f.release = release;
@@ -265,6 +266,7 @@ function getCwFilters() {
   if (genre)   f.genre   = genre;
   if (style)   f.style   = style;
   if (format)  f.format  = format;
+  if (rtype)   f.type    = rtype;
   return f;
 }
 
@@ -550,6 +552,8 @@ function clearCwFilters() {
   restoreCwSort();
   const ratingEl = document.getElementById("cw-rating");
   if (ratingEl) ratingEl.value = "";
+  const allRadio = document.querySelector('input[name="cw-result-type"][value=""]');
+  if (allRadio) allRadio.checked = true;
   toggleCwAdvanced(false);
   // Reset folder filter
   _cwFolderId = 0;
@@ -582,6 +586,7 @@ async function loadCollectionTab(page = 1, filters) {
     if (f.genre)   url += `&genre=${encodeURIComponent(f.genre)}`;
     if (f.style)   url += `&style=${encodeURIComponent(f.style)}`;
     if (f.format)  url += `&format=${encodeURIComponent(f.format)}`;
+    if (f.type)    url += `&type=${encodeURIComponent(f.type)}`;
     if (_cwFolderId > 0) url += `&folderId=${_cwFolderId}`;
     const cwRating = document.getElementById("cw-rating")?.value || "";
     if (cwRating) url += `&rating=${encodeURIComponent(cwRating)}`;
@@ -630,6 +635,7 @@ async function loadWantlistTab(page = 1, filters) {
     if (f.genre)   url += `&genre=${encodeURIComponent(f.genre)}`;
     if (f.style)   url += `&style=${encodeURIComponent(f.style)}`;
     if (f.format)  url += `&format=${encodeURIComponent(f.format)}`;
+    if (f.type)    url += `&type=${encodeURIComponent(f.type)}`;
     const cwRating = document.getElementById("cw-rating")?.value || "";
     if (cwRating) url += `&rating=${encodeURIComponent(cwRating)}`;
     const cwNotes = (document.getElementById("cw-notes")?.value ?? "").trim();

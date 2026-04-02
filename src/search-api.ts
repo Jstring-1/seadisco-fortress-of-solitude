@@ -778,7 +778,7 @@ app.get("/api/user/collection", async (req, res) => {
   const page    = parseInt(req.query.page    as string) || 1;
   const perPage = parseInt(req.query.per_page as string) || 25;
   const filters: Record<string, any> = {};
-  for (const key of ["q", "artist", "release", "label", "year", "genre", "style", "format"]) {
+  for (const key of ["q", "artist", "release", "label", "year", "genre", "style", "format", "type"]) {
     const v = (req.query[key] as string ?? "").trim();
     if (v) filters[key] = v;
   }
@@ -802,7 +802,7 @@ app.get("/api/user/wantlist", async (req, res) => {
   const page    = parseInt(req.query.page    as string) || 1;
   const perPage = parseInt(req.query.per_page as string) || 25;
   const filters: Record<string, any> = {};
-  for (const key of ["q", "artist", "release", "label", "year", "genre", "style", "format"]) {
+  for (const key of ["q", "artist", "release", "label", "year", "genre", "style", "format", "type"]) {
     const v = (req.query[key] as string ?? "").trim();
     if (v) filters[key] = v;
   }
