@@ -426,7 +426,9 @@ export async function deleteSavedSearch(clerkUserId, id) {
 export async function getAllUsersSyncStatus() {
     const r = await getPool().query(`SELECT ut.clerk_user_id, ut.discogs_username, ut.collection_synced_at, ut.wantlist_synced_at,
             ut.sync_status, ut.sync_progress, ut.sync_total, ut.sync_error,
-            COALESCE(ut.auth_method, 'none') AS auth_method
+            COALESCE(ut.auth_method, 'none') AS auth_method,
+            (ut.discogs_token IS NOT NULL AND ut.discogs_token != '' AND ut.discogs_token != '__oauth__') AS has_pat,
+            (ut.oauth_access_token IS NOT NULL AND ut.oauth_access_token != '') AS has_oauth
      FROM user_tokens ut
      WHERE ut.discogs_username IS NOT NULL
      ORDER BY ut.discogs_username`);
@@ -440,6 +442,8 @@ export async function getAllUsersSyncStatus() {
         syncTotal: row.sync_total ?? 0,
         syncError: row.sync_error ?? null,
         authMethod: row.auth_method ?? "none",
+        hasPat: row.has_pat ?? false,
+        hasOAuth: row.has_oauth ?? false,
     }));
 }
 export async function getPriceStats() {
@@ -679,6 +683,20 @@ export async function deleteCollectionItem(clerkUserId, releaseId) {
 export async function deleteWantlistItem(clerkUserId, releaseId) {
     await getPool().query(`DELETE FROM user_wantlist WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId]);
 }
+/** Remove local wantlist items that no longer exist in Discogs after a full sync */
+export async function pruneWantlistItems(clerkUserId, keepIds) {
+    if (!keepIds.length)
+        return 0;
+    const r = await getPool().query(`DELETE FROM user_wantlist WHERE clerk_user_id = $1 AND discogs_release_id != ALL($2::int[]) RETURNING 1`, [clerkUserId, keepIds]);
+    return r.rowCount ?? 0;
+}
+/** Remove local collection items that no longer exist in Discogs after a full sync */
+export async function pruneCollectionItems(clerkUserId, keepIds) {
+    if (!keepIds.length)
+        return 0;
+    const r = await getPool().query(`DELETE FROM user_collection WHERE clerk_user_id = $1 AND discogs_release_id != ALL($2::int[]) RETURNING 1`, [clerkUserId, keepIds]);
+    return r.rowCount ?? 0;
+}
 export async function updateCollectionRating(clerkUserId, releaseId, rating) {
     await getPool().query(`UPDATE user_collection SET rating = $3 WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId, rating]);
 }
@@ -821,6 +839,13 @@ function buildCwWhere(filters, startIdx) {
         clauses.push(`rating >= $${idx}`);
         allParams.push(filters.ratingMin);
         idx++;
+    }
+    // Type filter: "master" = has master_id, "release" = no master_id (standalone release)
+    if (filters.type === "master") {
+        clauses.push(`(data->>'master_id') IS NOT NULL AND (data->>'master_id')::int > 0`);
+    }
+    else if (filters.type === "release") {
+        clauses.push(`((data->>'master_id') IS NULL OR (data->>'master_id')::int = 0)`);
     }
     // Notes text search
     if (filters.notes) {
