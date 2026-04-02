@@ -1901,6 +1901,8 @@ body.player-open { padding-bottom: 56px; }
 }
 .modal-artist-link { color: var(--fg); text-decoration: none; font-size: 0.75rem; }
 .modal-artist-link:hover { text-decoration: underline dotted; text-underline-offset: 3px; text-decoration-color: var(--muted); }
+.modal-title-link { color: var(--fg); text-decoration: none; }
+.modal-title-link:hover { text-decoration: underline dotted; text-underline-offset: 3px; text-decoration-color: var(--muted); }
 
 #album-info .album-detail-grid, #version-info .album-detail-grid {
   display: grid;
@@ -1956,7 +1958,9 @@ body.player-open { padding-bottom: 56px; }
 
 #album-info .track-link:hover, #version-info .track-link:hover {
   color: var(--accent);
-  text-decoration: underline;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--muted);
 }
 
 #album-info .yt-search, #version-info .yt-search {
