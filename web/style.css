@@ -1433,6 +1433,10 @@ body.player-open { padding-bottom: 56px; }
   flex: 1;
   min-width: 0;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow: hidden;
 }
 .mini-player-title {
   font-size: 0.78rem;
@@ -1440,10 +1444,33 @@ body.player-open { padding-bottom: 56px; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  display: block;
+  flex-shrink: 1;
+  min-width: 0;
 }
 .mini-player-title .vt-track { font-weight: 600; color: #fff; }
 .mini-player-title .vt-sep   { color: #555; margin: 0 0.25em; }
+
+.mini-player-status {
+  font-size: 0.68rem;
+  margin-left: 0.5em;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.mini-player-status.status-loading  { color: #b0a060; }
+.mini-player-status.status-playing  { color: #6bcf8e; }
+.mini-player-status.status-paused   { color: #a89880; }
+.mini-player-status.status-ended    { color: #666; }
+.mini-player-status.status-error    { color: #e88; }
+
+@keyframes pulse-status {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+.mini-player-status.status-loading,
+.mini-player-status.status-error {
+  animation: pulse-status 1.5s ease-in-out infinite;
+}
 
 .mini-player-controls {
   display: flex;

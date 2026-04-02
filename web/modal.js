@@ -301,6 +301,7 @@ function setVideoUrl(id) {
 }
 
 function loadYTVideo(id) {
+  updatePlayerStatus("loading");
   if (ytPlayer && typeof ytPlayer.loadVideoById === "function") {
     ytPlayer.loadVideoById(id);
     return;
@@ -326,14 +327,49 @@ function loadYTVideo(id) {
   }
 }
 
+function updatePlayerStatus(state, errorCode) {
+  const el = document.getElementById("mini-player-status");
+  if (!el) return;
+  const map = {
+    loading:     { text: "loading…",    cls: "status-loading" },
+    buffering:   { text: "buffering…",  cls: "status-loading" },
+    playing:     { text: "▶ playing",   cls: "status-playing" },
+    paused:      { text: "⏸ paused",   cls: "status-paused"  },
+    ended:       { text: "ended",       cls: "status-ended"   },
+    unavailable: { text: "⚠ unavailable", cls: "status-error" },
+    error:       { text: "⚠ error",     cls: "status-error"   },
+  };
+  const info = map[state] ?? { text: "", cls: "" };
+  el.textContent = info.text;
+  el.className = "mini-player-status " + info.cls;
+}
+
 function _createYTPlayer(id) {
   document.getElementById("video-player").innerHTML = "";
   ytPlayer = new YT.Player("video-player", {
     height: "100%", width: "100%", videoId: id,
     playerVars: { autoplay: 1, rel: 0 },
     events: {
-      onStateChange: function(e) { if (e.data === 0) onVideoEnded(); },
-      onError: function() { playNextVideo(); }
+      onStateChange: function(e) {
+        // YT.PlayerState: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
+        if (e.data === 1) updatePlayerStatus("playing");
+        else if (e.data === 2) updatePlayerStatus("paused");
+        else if (e.data === 3) updatePlayerStatus("buffering");
+        else if (e.data === 0) { updatePlayerStatus("ended"); onVideoEnded(); }
+        else if (e.data === 5) updatePlayerStatus("loading");
+      },
+      onError: function(e) {
+        // Error codes: 2=invalid id, 5=HTML5 error, 100=not found, 101/150=embedding disabled
+        const code = e?.data;
+        if (code === 100 || code === 101 || code === 150) {
+          updatePlayerStatus("unavailable");
+          setTimeout(() => playNextVideo(), 1500);
+        } else {
+          updatePlayerStatus("error");
+          setTimeout(() => playNextVideo(), 1500);
+        }
+      },
+      onReady: function() { updatePlayerStatus("playing"); }
     }
   });
 }
@@ -461,6 +497,7 @@ function closeVideo() {
   document.getElementById("video-player").innerHTML = "";
   const titleEl = document.getElementById("mini-player-title");
   if (titleEl) titleEl.textContent = "Not playing";
+  updatePlayerStatus("");
   const u = new URL(window.location.href);
   u.searchParams.delete("vd");
   history.replaceState({}, "", u.toString());
