@@ -9,22 +9,14 @@ if (typeof doCwSearch === "undefined") window.doCwSearch = () => {};
 if (typeof toggleCwAdvanced === "undefined") window.toggleCwAdvanced = () => {};
 
 // Search user's collection from modal — navigates to My Records with a filter
+// Uses a pending search mechanism because switchView("records") calls
+// switchRecordsTab which calls clearCwFilters, wiping any pre-set values.
 function searchCollectionFor(field, value) {
   closeModal();
-  // Clear existing filters
-  const fields = ["cw-query","cw-artist","cw-release","cw-label","cw-year"];
-  for (const f of fields) { const el = document.getElementById(f); if (el) el.value = ""; }
-  const genreEl = document.getElementById("cw-genre"); if (genreEl) genreEl.value = "";
-  const styleEl = document.getElementById("cw-style"); if (styleEl) styleEl.value = "";
-  const formatEl = document.getElementById("cw-format"); if (formatEl) formatEl.value = "";
-  // Set the target field
-  const el = document.getElementById(field);
-  if (el) el.value = value;
-  // Show advanced filters if using a specific field (not query)
-  if (field !== "cw-query" && typeof toggleCwAdvanced === "function") toggleCwAdvanced(true);
-  // Switch to records view and search
+  // Store pending search — switchRecordsTab will pick it up after clearing
+  window._pendingCwSearch = { field, value };
+  // Switch to records view (this clears filters then loads collection)
   if (typeof switchView === "function") switchView("records");
-  if (typeof doCwSearch === "function") setTimeout(() => doCwSearch(1), 150);
 }
 function openModal(event, id, type, discogsUrl) {
   if (event) event.preventDefault();
@@ -582,11 +574,18 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         : i.value;
     }
   }
-  const identifierRows = identifierTypes
+
+  // Extract special identifier rows for repositioning in the detail grid
+  const labelCodeRow = identifierGroups["Label Code"]
+    ? `<span class="detail-label">Label Code</span><span>${escHtml(identifierGroups["Label Code"])}</span>` : "";
+  const matrixRow = identifierGroups["Matrix / Runout"]
+    ? (() => { const val = identifierGroups["Matrix / Runout"]; return `<span class="detail-label">Matrix / Runout</span><span class="matrix-runout" style="color:#7ec87e;cursor:pointer" onclick="navigator.clipboard.writeText('${escHtml(val.replace(/'/g, "\\'"))}');this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy">${escHtml(val)}</span>`; })() : "";
+
+  // Remaining identifiers (exclude Label Code and Matrix / Runout — placed separately)
+  const otherIdentifierTypes = ["Barcode","ASIN","Catalog Number"];
+  const identifierRows = otherIdentifierTypes
     .filter(t => identifierGroups[t])
     .map(t => {
-      const green = (t === "Matrix / Runout" || t === "Catalog Number");
-      const style = green ? ' style="color:#7ec87e"' : '';
       if (t === "Catalog Number") {
         const vals = identifierGroups[t].split(", ");
         const linked = vals.map(v => {
@@ -595,11 +594,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         }).join(", ");
         return `<span class="detail-label">${escHtml(t)}</span><span>${linked}</span>`;
       }
-      if (t === "Matrix / Runout") {
-        const val = identifierGroups[t];
-        return `<span class="detail-label">${escHtml(t)}</span><span class="matrix-runout" style="color:#7ec87e;cursor:pointer" onclick="navigator.clipboard.writeText('${escHtml(val.replace(/'/g, "\\'"))}');this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy">${escHtml(val)}</span>`;
-      }
-      return `<span class="detail-label">${escHtml(t)}</span><span${style}>${escHtml(identifierGroups[t])}</span>`;
+      return `<span class="detail-label">${escHtml(t)}</span><span>${escHtml(identifierGroups[t])}</span>`;
     })
     .join("");
 
@@ -622,16 +617,19 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     .filter(Boolean).join(", ");
 
   const isMaster = searchResult.type === "master";
+  const catnoEsc = catno.replace(/'/g, "\\'");
   const detailRows = [
     labels  ? `<span class="detail-label">Label</span><span>${escHtml(labels)}</span>`   : "",
+    (labels && labelCodeRow) ? labelCodeRow : "",
     (!isMaster && formats) ? `<span class="detail-label">Format</span><span>${escHtml(formats)}</span>` : "",
-    country ? `<span class="detail-label">Country</span><span>${escHtml(country)}</span>` : "",
-    genres  ? `<span class="detail-label">Genre</span><span>${escHtml(genres)}</span>`   : "",
-    (!isMaster && catno) ? `<span class="detail-label">Cat#</span><span><a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();document.getElementById('query').value='${escHtml(catno.replace(/'/g, "\\'"))}';toggleAdvanced(false);document.querySelector('input[name=\\'result-type\\'][value=\\'\\']').checked=true;doSearch(1)" title="Search for this catalog number">${escHtml(catno)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-query','${escHtml(catno.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(catno)}">⌕</a></span>` : "",
+    (!isMaster && catno) ? `<span class="detail-label">Cat#</span><span><a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();document.getElementById('query').value='${escHtml(catnoEsc)}';toggleAdvanced(false);document.querySelector('input[name=\\'result-type\\'][value=\\'\\']').checked=true;doSearch(1)" title="Search for this catalog number">${escHtml(catno)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-query','${escHtml(catnoEsc)}')" title="Search your collection for ${escHtml(catno)}">⌕</a></span>` : "",
     year    ? `<span class="detail-label">Year</span><span>${escHtml(String(year))}</span>` : "",
     seriesText ? `<span class="detail-label">Series</span><span>${escHtml(seriesText)}</span>` : "",
     companyRows,
     identifierRows,
+    matrixRow,
+    country ? `<span class="detail-label">Country</span><span>${escHtml(country)}</span>` : "",
+    genres  ? `<span class="detail-label">Genre</span><span>${escHtml(genres)}</span>`   : "",
   ].filter(Boolean).join("");
 
   const tracks = (d.tracklist ?? []).filter(t => t.type_ !== "heading");
@@ -684,7 +682,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
           return parts.length ? `<div style="font-size:0.72rem;color:#888;margin-top:0.35rem">${parts.join('<span style="color:#444;margin:0 0.35em">·</span>')}</div>` : "";
         })()}
         ${discogsUrl ? `<a href="${discogsUrl}" target="_blank" rel="noopener" title="Open this release on Discogs.com" style="font-size:0.75rem;color:#888;text-decoration:none;margin-top:0.4rem;display:inline-block">View on Discogs ↗</a>` : ""}
-        ${(!isMaster && d.master_id) ? `<a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();setTimeout(()=>openModal(null,${d.master_id},'master','https://www.discogs.com/master/${d.master_id}'),100)" title="View all pressings of this release" style="font-size:0.75rem;color:#7eb8da;text-decoration:none;margin-left:0.8rem">Master/Versions</a>` : ""}
+        ${(!isMaster && d.master_id) ? `<div style="margin-top:0.25rem"><a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();setTimeout(()=>openModal(null,${d.master_id},'master','https://www.discogs.com/master/${d.master_id}'),100)" title="View all pressings of this release" style="font-size:0.75rem;color:#7eb8da;text-decoration:none">Master/Versions</a></div>` : ""}
         ${stats?.numForSale > 0 && stats?.lowestPrice != null
           ? `<div style="font-size:0.75rem;margin-top:0.2rem">
               <a href="https://www.discogs.com/sell/list?release_id=${escHtml(String(stats.releaseId))}" target="_blank" rel="noopener" title="Browse listings on Discogs marketplace" style="color:#888;text-decoration:none">${escHtml(String(stats.numForSale))} available from $${parseFloat(stats.lowestPrice).toFixed(2)} ↗</a>
