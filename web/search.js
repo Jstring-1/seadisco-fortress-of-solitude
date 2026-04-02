@@ -191,7 +191,7 @@ async function doSearch(page = 1, skipPushState = false) {
 
     let items, totalPages_new, totalItems_new = 0;
     const [res, bioRes] = await Promise.all([
-      apiFetch(`${API}/search?${buildParams(24)}`),
+      apiFetch(`${API}/search?${buildParams(48)}`),
       bioFetch ?? Promise.resolve(null),
     ]);
     bioFetch = bioRes ? { json: () => bioRes.json() } : null;
