@@ -4,6 +4,28 @@ if (typeof selectAltArtist === "undefined") window.selectAltArtist = () => {};
 if (typeof searchArtistFromModal === "undefined") window.searchArtistFromModal = () => {};
 if (typeof toggleAdvanced === "undefined") window.toggleAdvanced = () => {};
 if (typeof doSearch === "undefined") window.doSearch = () => {};
+if (typeof switchView === "undefined") window.switchView = () => {};
+if (typeof doCwSearch === "undefined") window.doCwSearch = () => {};
+if (typeof toggleCwAdvanced === "undefined") window.toggleCwAdvanced = () => {};
+
+// Search user's collection from modal — navigates to My Records with a filter
+function searchCollectionFor(field, value) {
+  closeModal();
+  // Clear existing filters
+  const fields = ["cw-query","cw-artist","cw-release","cw-label","cw-year"];
+  for (const f of fields) { const el = document.getElementById(f); if (el) el.value = ""; }
+  const genreEl = document.getElementById("cw-genre"); if (genreEl) genreEl.value = "";
+  const styleEl = document.getElementById("cw-style"); if (styleEl) styleEl.value = "";
+  const formatEl = document.getElementById("cw-format"); if (formatEl) formatEl.value = "";
+  // Set the target field
+  const el = document.getElementById(field);
+  if (el) el.value = value;
+  // Show advanced filters if using a specific field (not query)
+  if (field !== "cw-query" && typeof toggleCwAdvanced === "function") toggleCwAdvanced(true);
+  // Switch to records view and search
+  if (typeof switchView === "function") switchView("records");
+  if (typeof doCwSearch === "function") setTimeout(() => doCwSearch(1), 150);
+}
 function openModal(event, id, type, discogsUrl) {
   if (event) event.preventDefault();
   const u = new URL(window.location.href);
@@ -490,7 +512,8 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
       const nameEl = a.id
         ? `<a href="#" data-alt-name="${escHtml(a.name)}" data-alt-id="${a.id}" onclick="selectAltArtist(event,this);closeModal()" style="color:var(--accent);text-decoration:none">${escHtml(a.name)}</a>`
         : escHtml(a.name);
-      return `${nameEl}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}`;
+      const searchIcon = ` <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(a.name.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(a.name)}" style="font-size:0.8em">⌕</a>`;
+      return `${nameEl}${searchIcon}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}`;
     })
     .join(" · ");
   const notes       = d.notes ? stripDiscogsMarkup(d.notes) : "";
@@ -599,8 +622,8 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
              : `<div class="album-cover-placeholder">♪</div>`}
       <div class="album-meta">
         ${typeLabel ? `<div class="album-type-badge" style="cursor:pointer;user-select:none" onclick="navigator.clipboard.writeText('${escHtml(String(releaseId))}');this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy ID">${escHtml(typeLabel)}</div>` : ""}
-        <h2>${escHtml(title)} <a href="#" class="album-title-search" onclick="event.preventDefault();closeModal();document.getElementById('query').value='${escHtml(title.replace(/'/g, "\\'"))}';toggleAdvanced(false);document.querySelector('input[name=\\'result-type\\'][value=\\'\\']').checked=true;doSearch(1)" title="Search for other versions">⌕</a></h2>
-        ${artists.length ? `<div class="album-artist">${artists.map(n => `<a href="#" class="modal-artist-link" data-artist="${escHtml(n)}" onclick="searchArtistFromModal(event,this)">${escHtml(n)}</a>`).join(", ")}</div>` : ""}
+        <h2><a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release" style="color:var(--fg);text-decoration:none">${escHtml(title)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">⌕</a></h2>
+        ${artists.length ? `<div class="album-artist">${artists.map(n => `<a href="#" class="modal-artist-link" data-artist="${escHtml(n)}" onclick="searchArtistFromModal(event,this)">${escHtml(n)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(n.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(n)}">⌕</a>`).join(", ")}</div>` : ""}
         ${detailRows ? `<div class="album-detail-grid">${detailRows}</div>` : ""}
         ${(() => {
           const r = d.community?.rating;
