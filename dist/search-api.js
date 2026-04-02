@@ -1755,20 +1755,25 @@ app.get("/api/admin/sync-status", async (req, res) => {
     const lastActiveMap = new Map(); // clerkUserId → most recent session activity ms
     if (clerkSecret) {
         try {
-            // Query active sessions for each user (sessions API has fine-grained timestamps)
+            // Query sessions for each user — check active first, fall back to recent ended/expired
             for (const u of users) {
                 if (!u.clerkUserId)
                     continue;
                 try {
-                    const resp = await fetch(`https://api.clerk.com/v1/sessions?user_id=${u.clerkUserId}&status=active&limit=5`, { headers: { Authorization: `Bearer ${clerkSecret}` } });
-                    if (!resp.ok)
-                        continue;
-                    const sessions = await resp.json();
                     let latest = 0;
-                    for (const s of sessions) {
-                        const ts = s.last_active_at > 1e12 ? s.last_active_at : s.last_active_at * 1000;
-                        if (ts > latest)
-                            latest = ts;
+                    // Try active sessions first (most accurate for current users)
+                    for (const status of ["active", "ended", "expired"]) {
+                        const resp = await fetch(`https://api.clerk.com/v1/sessions?user_id=${u.clerkUserId}&status=${status}&limit=5`, { headers: { Authorization: `Bearer ${clerkSecret}` } });
+                        if (!resp.ok)
+                            continue;
+                        const sessions = await resp.json();
+                        for (const s of sessions) {
+                            const ts = s.last_active_at > 1e12 ? s.last_active_at : s.last_active_at * 1000;
+                            if (ts > latest)
+                                latest = ts;
+                        }
+                        if (latest > 0)
+                            break; // found activity, no need to check lower-priority statuses
                     }
                     if (latest > 0)
                         lastActiveMap.set(u.clerkUserId, latest);
@@ -3803,9 +3808,18 @@ function startExtrasSyncSchedule() {
     }
     schedule();
 }
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(PORT, "0.0.0.0", async () => {
     console.log(`Discogs search API listening on port ${PORT}`);
     if (process.env.APP_DB_URL) {
+        // Reset any syncs orphaned by a server restart
+        try {
+            const stuck = await resetAllSyncingStatuses();
+            if (stuck > 0)
+                console.log(`Startup: reset ${stuck} orphaned syncing status(es)`);
+        }
+        catch (e) {
+            console.error("Startup: failed to reset stuck syncs:", e);
+        }
         startFreshSyncSchedule();
         startGearSchedule();
         startVinylSchedule();
