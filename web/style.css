@@ -2291,16 +2291,19 @@ body.player-open { padding-bottom: 56px; }
 
 /* Radio label hover + checked colours per type */
 .type-radios label { transition: color 0.15s; cursor: pointer; }
+.type-radios label:hover:has(input[value=""])       { color: var(--accent); }
 .type-radios label:hover:has(input[value="master"])  { color: var(--type-master); }
 .type-radios label:hover:has(input[value="release"]) { color: var(--type-release); }
 .type-radios label:hover:has(input[value="artist"])  { color: var(--type-artist); }
 .type-radios label:hover:has(input[value="label"])   { color: var(--type-label); }
 
+.type-radios label:has(input[value=""]:checked)       { color: var(--accent); }
 .type-radios label:has(input[value="master"]:checked)  { color: var(--type-master); }
 .type-radios label:has(input[value="release"]:checked) { color: var(--type-release); }
 .type-radios label:has(input[value="artist"]:checked)  { color: var(--type-artist); }
 .type-radios label:has(input[value="label"]:checked)   { color: var(--type-label); }
 
+.type-radios input[value=""]       { accent-color: var(--accent); }
 .type-radios input[value="master"]  { accent-color: var(--type-master); }
 .type-radios input[value="release"] { accent-color: var(--type-release); }
 .type-radios input[value="artist"]  { accent-color: var(--type-artist); }

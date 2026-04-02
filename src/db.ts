@@ -925,6 +925,7 @@ export interface CwSearchFilters {
   genre?: string;
   style?: string;
   format?: string;
+  type?: string;       // "master" = has master_id, "release" = no master_id
   folderId?: number;
   ratingMin?: number;  // 1-5 for "N stars+", 0 for unrated only
   ratingUnrated?: boolean; // true = show only unrated
@@ -1022,6 +1023,13 @@ function buildCwWhere(filters: CwSearchFilters, startIdx: number): { clause: str
     clauses.push(`rating >= $${idx}`);
     allParams.push(filters.ratingMin);
     idx++;
+  }
+
+  // Type filter: "master" = has master_id, "release" = no master_id (standalone release)
+  if (filters.type === "master") {
+    clauses.push(`(data->>'master_id') IS NOT NULL AND (data->>'master_id')::int > 0`);
+  } else if (filters.type === "release") {
+    clauses.push(`((data->>'master_id') IS NULL OR (data->>'master_id')::int = 0)`);
   }
 
   // Notes text search
