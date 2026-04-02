@@ -64,6 +64,9 @@ function addNavTab(view) {
     btn.textContent = "My Records";
     btn.onclick = () => switchView(view);
     el.replaceWith(btn);
+    // Enable swap-to-collection button now that user has records access
+    const swapBtn = document.getElementById("swap-to-collection-btn");
+    if (swapBtn) { swapBtn.disabled = false; swapBtn.title = "Search your collection with these criteria"; }
   } else {
     el.classList.remove("nav-disabled");
     el.removeAttribute("title");
@@ -279,6 +282,64 @@ function getCwFilters() {
   return f;
 }
 
+// ── Swap search criteria between main ↔ collection ──────────────────────
+function swapSearchToCollection() {
+  // Gather current main search fields and store as pending swap
+  // (switchView → switchRecordsTab → clearCwFilters runs before we can set fields)
+  window._pendingCwSwap = {
+    q:       (document.getElementById("query")?.value ?? "").trim(),
+    artist:  (document.getElementById("f-artist")?.value ?? "").trim(),
+    release: (document.getElementById("f-release")?.value ?? "").trim(),
+    label:   (document.getElementById("f-label")?.value ?? "").trim(),
+    year:    (document.getElementById("f-year")?.value ?? "").trim(),
+    genre:   (document.getElementById("f-genre")?.value ?? "").trim(),
+    style:   (document.getElementById("f-style")?.value ?? "").trim(),
+    format:  (document.getElementById("f-format")?.value ?? "").trim(),
+    rtype:   document.querySelector('input[name="result-type"]:checked')?.value ?? "",
+  };
+  switchView("records");
+}
+
+function swapSearchToMain() {
+  // Gather current collection search fields
+  const q       = (document.getElementById("cw-query")?.value ?? "").trim();
+  const artist  = (document.getElementById("cw-artist")?.value ?? "").trim();
+  const release = (document.getElementById("cw-release")?.value ?? "").trim();
+  const label   = (document.getElementById("cw-label")?.value ?? "").trim();
+  const year    = (document.getElementById("cw-year")?.value ?? "").trim();
+  const genre   = (document.getElementById("cw-genre")?.value ?? "").trim();
+  const style   = (document.getElementById("cw-style")?.value ?? "").trim();
+  const format  = (document.getElementById("cw-format")?.value ?? "").trim();
+  const rtype   = document.querySelector('input[name="cw-result-type"]:checked')?.value ?? "";
+
+  // Switch to search view
+  switchView("search");
+
+  // Populate main search fields
+  const mainQ = document.getElementById("query");
+  if (mainQ) mainQ.value = q;
+
+  const hasAdvanced = artist || release || label || year || genre || style || format;
+  if (hasAdvanced) {
+    toggleAdvanced(true);
+    if (artist)  document.getElementById("f-artist").value  = artist;
+    if (release) document.getElementById("f-release").value = release;
+    if (label)   document.getElementById("f-label").value   = label;
+    if (year)    document.getElementById("f-year").value    = year;
+    if (genre)   document.getElementById("f-genre").value   = genre;
+    if (style)   document.getElementById("f-style").value   = style;
+    if (format)  document.getElementById("f-format").value  = format;
+  }
+
+  // Map result type (master/release)
+  if (rtype === "master" || rtype === "release") {
+    const radio = document.querySelector(`input[name="result-type"][value="${rtype}"]`);
+    if (radio) radio.checked = true;
+  }
+
+  doSearch(1);
+}
+
 function doCwSearch(page = 1) {
   const filters = getCwFilters();
   _cwQuery = filters.q || "";
@@ -325,8 +386,32 @@ function switchRecordsTab(tab, skipPush) {
     if (pending.field !== "cw-query") toggleCwAdvanced(true);
   }
 
+  // Apply pending swap from main search (swapSearchToCollection sets this)
+  const swap = window._pendingCwSwap;
+  if (swap) {
+    delete window._pendingCwSwap;
+    if (swap.q && cwInput) cwInput.value = swap.q;
+    const hasAdv = swap.artist || swap.release || swap.label || swap.year || swap.genre || swap.style || swap.format;
+    if (hasAdv) {
+      toggleCwAdvanced(true);
+      if (swap.artist)  document.getElementById("cw-artist").value  = swap.artist;
+      if (swap.release) document.getElementById("cw-release").value = swap.release;
+      if (swap.label)   document.getElementById("cw-label").value   = swap.label;
+      if (swap.year)    document.getElementById("cw-year").value    = swap.year;
+      if (swap.format)  document.getElementById("cw-format").value  = swap.format;
+      if (swap.genre)   { document.getElementById("cw-genre").value = swap.genre; onCwGenreChange(); }
+      if (swap.style)   document.getElementById("cw-style").value   = swap.style;
+    }
+    if (swap.rtype === "master" || swap.rtype === "release") {
+      const radio = document.querySelector(`input[name="cw-result-type"][value="${swap.rtype}"]`);
+      if (radio) radio.checked = true;
+    }
+  }
+
+  const hasPending = pending || swap;
+
   if (tab === "collection") {
-    if (cwInput) { cwInput.placeholder = "Search your collection\u2026"; if (!pending) cwInput.value = ""; }
+    if (cwInput) { cwInput.placeholder = "Search your collection\u2026"; if (!hasPending) cwInput.value = ""; }
     if (controlsRow) controlsRow.style.display = "";
     if (exportBtn) exportBtn.style.display = "";
     loadCwFacets("collection");

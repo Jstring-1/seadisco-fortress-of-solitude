@@ -72,6 +72,7 @@
   <div class="search-row">
     <input type="text" id="query" placeholder="Search Discogs" autocomplete="off" />
     <button id="search-btn" onclick="doSearch(1)" style="flex-shrink:0">Search</button>
+    <button type="button" id="swap-to-collection-btn" onclick="swapSearchToCollection()" title="Sign in to search your collection" class="swap-search-btn" disabled>⇄</button>
   </div>
 
   <div class="type-sort-row">
@@ -193,6 +194,7 @@
       <input type="text" id="cw-query" placeholder="Search your collection…" autocomplete="off"
         onkeydown="if(event.key==='Enter'){doCwSearch(1)}" />
       <button onclick="doCwSearch(1)" style="flex-shrink:0">Search</button>
+      <button type="button" onclick="swapSearchToMain()" title="Search Discogs with these criteria" class="swap-search-btn">⇄</button>
     </div>
     <div id="cw-controls-row" class="type-sort-row" style="margin-top:0.3rem">
       <button type="button" id="cw-advanced-toggle" onclick="toggleCwAdvanced()" style="background:none;border:none;padding:0;font-size:0.78rem;color:#666;cursor:pointer;display:flex;align-items:center;gap:0.3rem;white-space:nowrap" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#666'">
