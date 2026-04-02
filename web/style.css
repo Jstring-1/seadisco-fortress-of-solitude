@@ -1734,7 +1734,7 @@ body.player-open { padding-bottom: 56px; }
   font-size: 0.9rem;
 }
 
-#album-info, #version-info { overflow: hidden; }
+#album-info, #version-info { overflow: hidden; clear: both; }
 
 #album-info .album-header, #version-info .album-header {
   display: flex;
