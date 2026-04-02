@@ -239,7 +239,7 @@ function openBioFull(event) {
   let html = renderBioMarkup(text ?? "");
   if (alternatives.length > 0) {
     const altLinks = alternatives.map(a =>
-      `<a href="#" class="bio-artist-link" onclick="selectAltArtist(event,this);closeBioFull()" data-alt-name="${escHtml(a.name)}"${a.id ? ` data-alt-id="${a.id}"` : ""} title="Search for ${escHtml(a.name)}" style="color:var(--accent);text-decoration:none">${escHtml(a.name)}</a>`
+      `<a href="#" class="bio-artist-link modal-internal-link" onclick="selectAltArtist(event,this);closeBioFull()" data-alt-name="${escHtml(a.name)}"${a.id ? ` data-alt-id="${a.id}"` : ""} title="Search for ${escHtml(a.name)}" style="color:var(--accent)">${escHtml(a.name)}</a>`
     ).join('<span style="color:#555;margin:0 0.3em">·</span>');
     html += `<div style="font-size:0.78rem;margin-top:0.7rem;line-height:1.6"><span style="color:#777;margin-right:0.4em">Also:</span>${altLinks}</div>`;
   }
@@ -547,7 +547,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const credits     = (d.extraartists ?? [])
     .map(a => {
       const nameEl = a.id
-        ? `<a href="#" data-alt-name="${escHtml(a.name)}" data-alt-id="${a.id}" onclick="selectAltArtist(event,this);closeModal()" title="Search for ${escHtml(a.name)}" style="color:var(--accent);text-decoration:none">${escHtml(a.name)}</a>`
+        ? `<a href="#" class="modal-internal-link" data-alt-name="${escHtml(a.name)}" data-alt-id="${a.id}" onclick="selectAltArtist(event,this);closeModal()" title="Search for ${escHtml(a.name)}" style="color:var(--accent)">${escHtml(a.name)}</a>`
         : escHtml(a.name);
       const searchIcon = ` <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(a.name.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(a.name)}" style="font-size:1.1em">⌕</a>`;
       return `${nameEl}${searchIcon}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}`;
@@ -671,11 +671,11 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
           if (have || want) parts.push(`${(have ?? 0).toLocaleString()} have · ${(want ?? 0).toLocaleString()} want`);
           return parts.length ? `<div style="font-size:0.72rem;color:#888;margin-top:0.35rem">${parts.join('<span style="color:#444;margin:0 0.35em">·</span>')}</div>` : "";
         })()}
-        ${discogsUrl ? `<a href="${discogsUrl}" target="_blank" rel="noopener" title="Open this release on Discogs.com" style="font-size:0.75rem;color:var(--accent);text-decoration:none;margin-top:0.4rem;display:inline-block">View on Discogs ↗</a>` : ""}
-        ${(!isMaster && d.master_id) ? `<a href="#" onclick="event.preventDefault();closeModal();setTimeout(()=>openModal(null,${d.master_id},'master','https://www.discogs.com/master/${d.master_id}'),100)" title="View all pressings of this release" style="font-size:0.75rem;color:#7eb8da;text-decoration:none;margin-left:0.8rem">All versions (Master) ↗</a>` : ""}
+        ${discogsUrl ? `<a href="${discogsUrl}" target="_blank" rel="noopener" title="Open this release on Discogs.com" style="font-size:0.75rem;color:#888;text-decoration:none;margin-top:0.4rem;display:inline-block">View on Discogs ↗</a>` : ""}
+        ${(!isMaster && d.master_id) ? `<a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();setTimeout(()=>openModal(null,${d.master_id},'master','https://www.discogs.com/master/${d.master_id}'),100)" title="View all pressings of this release" style="font-size:0.75rem;color:#7eb8da;text-decoration:none;margin-left:0.8rem">Master/Versions</a>` : ""}
         ${stats?.numForSale > 0 && stats?.lowestPrice != null
           ? `<div style="font-size:0.75rem;margin-top:0.2rem">
-              <a href="https://www.discogs.com/sell/list?release_id=${escHtml(String(stats.releaseId))}" target="_blank" rel="noopener" title="Browse listings on Discogs marketplace" style="color:#888;text-decoration:none">${escHtml(String(stats.numForSale))} available from $${parseFloat(stats.lowestPrice).toFixed(2)}</a>
+              <a href="https://www.discogs.com/sell/list?release_id=${escHtml(String(stats.releaseId))}" target="_blank" rel="noopener" title="Browse listings on Discogs marketplace" style="color:#888;text-decoration:none">${escHtml(String(stats.numForSale))} available from $${parseFloat(stats.lowestPrice).toFixed(2)} ↗</a>
               ${stats.medianPrice ? `<span style="color:#555;margin-left:0.4rem">median $${parseFloat(stats.medianPrice).toFixed(2)}</span>` : ""}
               ${stats.highestPrice ? `<span style="color:#555;margin-left:0.4rem">high $${parseFloat(stats.highestPrice).toFixed(2)}</span>` : ""}
             </div>`
@@ -976,7 +976,7 @@ function renderMasterVersions(filter) {
       <span style="color:#aaa">${escHtml(v.country || "?")}</span>
       <span style="color:#888">${escHtml(getDisplayFormat(v))}</span>
       <span style="color:#7ec87e">${escHtml(v.catno ?? "—")}</span>
-      <span><a href="#" onclick="openVersionPopup(event,${v.id})" title="View this pressing" style="color:var(--accent);text-decoration:none">${escHtml(v.label ?? v.title ?? "—")}</a>${badge}</span>`;
+      <span><a href="#" class="modal-internal-link" onclick="openVersionPopup(event,${v.id})" title="View this pressing" style="color:var(--accent)">${escHtml(v.label ?? v.title ?? "—")}</a>${badge}</span>`;
   }).join("");
 }
 
