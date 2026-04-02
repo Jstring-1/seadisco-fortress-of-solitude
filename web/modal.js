@@ -512,7 +512,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
       const nameEl = a.id
         ? `<a href="#" data-alt-name="${escHtml(a.name)}" data-alt-id="${a.id}" onclick="selectAltArtist(event,this);closeModal()" style="color:var(--accent);text-decoration:none">${escHtml(a.name)}</a>`
         : escHtml(a.name);
-      const searchIcon = ` <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(a.name.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(a.name)}" style="font-size:0.8em">⌕</a>`;
+      const searchIcon = ` <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(a.name.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(a.name)}" style="font-size:1.1em">⌕</a>`;
       return `${nameEl}${searchIcon}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}`;
     })
     .join(" · ");
@@ -595,7 +595,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         const ytQuery = encodeURIComponent(`${trackArtist} ${title} ${t.title || ""}`);
         const ytIcon = `<a class="yt-search" href="https://www.youtube.com/results?search_query=${ytQuery}" target="_blank" rel="noopener" title="Search on YouTube"><svg width="16" height="11" viewBox="0 0 16 11" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="11" rx="2.5" fill="#FF0000"/><path d="M6.5 3L11 5.5L6.5 8V3Z" fill="white"/></svg></a>`;
         const trackSearchQ = ('"' + trackArtist + ' ' + (t.title || '').trim() + '"').replace(/'/g, "\\'");
-        const searchIcon = t.title ? ` <a class="track-search-icon" href="#" onclick="event.preventDefault();closeModal();document.getElementById('query').value='${escHtml(trackSearchQ)}';toggleAdvanced(false);document.querySelector('input[name=\\'result-type\\'][value=\\'\\']').checked=true;doSearch(1)" title="Search for other versions" style="text-decoration:none;color:var(--accent);font-size:0.85em">⌕</a>` : "";
+        const searchIcon = t.title ? ` <a class="track-search-icon" href="#" onclick="event.preventDefault();closeModal();document.getElementById('query').value='${escHtml(trackSearchQ)}';toggleAdvanced(false);document.querySelector('input[name=\\'result-type\\'][value=\\'\\']').checked=true;doSearch(1)" title="Search for other versions" style="text-decoration:none">⌕</a>` : "";
         const titleEl = url
           ? `<a class="track-link" href="#" data-video="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" onclick="openVideo(event,'${url.replace(/'/g, "\\'")}')">${escHtml(t.title || "")} ▶</a>${searchIcon}`
           : `${escHtml(t.title || "")}${ytIcon}${searchIcon}`;
