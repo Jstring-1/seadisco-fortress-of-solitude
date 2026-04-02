@@ -158,7 +158,8 @@ async function doSearch(page = 1, skipPushState = false) {
   const buildParams = (perPage) => {
     const effectiveArtist = artist || (page > 1 ? detectedArtist : null) || "";
     const p = new URLSearchParams({ page, per_page: perPage });
-    if (q) p.set("q", q);
+    const effectiveQ = q || (page > 1 && detectedArtist && !artist ? detectedArtist : "");
+    if (effectiveQ) p.set("q", effectiveQ);
     if (resultType) p.set("type", resultType);
     if (effectiveArtist) p.set("artist", effectiveArtist);
     if (release) p.set("release_title", release);
@@ -399,7 +400,11 @@ async function doSearch(page = 1, skipPushState = false) {
 // ── Render cards ──────────────────────────────────────────────────────────
 function renderResults(items, append = false) {
   if (!append) window._lastResults = items;
-  else window._lastResults = (window._lastResults || []).concat(items);
+  else {
+    const existingIds = new Set((window._lastResults || []).map(it => it.id));
+    items = items.filter(it => !existingIds.has(it.id));
+    window._lastResults = (window._lastResults || []).concat(items);
+  }
   const hideOwned = document.getElementById("hide-owned")?.checked;
   const filtered = hideOwned && window._collectionIds?.size
     ? items.filter(item => !window._collectionIds.has(Number(item.id)))
