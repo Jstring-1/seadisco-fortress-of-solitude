@@ -899,7 +899,8 @@ function toggleFavoriteFromCard(btn, discogsId, entityType) {
   apiFetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
     .then(r => {
       if (!r.ok) throw new Error();
-      showToast(wasFav ? "Removed from favorites" : "Added to favorites");
+      const n = window._favoriteKeys?.size ?? 0;
+      showToast(wasFav ? "Removed from favorites" : `Added to favorites (${n})`);
       // If un-favorited from the favorites grid, fade out and remove the card
       if (wasFav && card?.closest("#favorites-sample-grid")) {
         card.style.transition = "opacity 0.4s ease";
