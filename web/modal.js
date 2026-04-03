@@ -891,8 +891,10 @@ async function loadModalInstanceData(releaseId) {
 }
 
 // Full re-render of action buttons (used after toggle actions)
-function loadModalActions(releaseId) {
-  const el = document.getElementById("modal-actions");
+// context: "version-info" for version popup, otherwise main modal
+function loadModalActions(releaseId, context) {
+  const container = context ? document.getElementById(context) : null;
+  const el = container ? container.querySelector(".modal-actions") : document.getElementById("modal-actions");
   if (!el) return;
   const rid = Number(releaseId);
   const entityType = el.dataset.entityType || "release";
@@ -1122,16 +1124,20 @@ function toggleFavoriteFromModal(discogsId, entityType) {
   const wasFav = window._favoriteKeys?.has(key);
   if (!window._favoriteKeys) window._favoriteKeys = new Set();
 
+  // Detect which popup this came from (version overlay or main modal)
+  const inVersion = document.getElementById("version-overlay")?.classList.contains("open");
+  const context = inVersion ? "version-info" : null;
+
   // Optimistic toggle
   if (wasFav) window._favoriteKeys.delete(key); else window._favoriteKeys.add(key);
-  loadModalActions(discogsId);
+  loadModalActions(discogsId, context);
   refreshCardBadges(discogsId);
 
-  // Build card data from the modal content for storage
-  const modalTitle = document.querySelector("#album-info .album-meta h2, #version-info .album-meta h2");
-  const modalArtist = document.querySelector("#album-info .album-artist, #version-info .album-artist");
-  const modalImg = document.querySelector("#album-info .album-cover, #version-info .album-cover");
-  const el = document.getElementById("modal-actions");
+  // Build card data from the active popup
+  const prefix = inVersion ? "#version-info" : "#album-info";
+  const modalTitle = document.querySelector(`${prefix} .album-meta h2`);
+  const modalArtist = document.querySelector(`${prefix} .album-artist`);
+  const modalImg = document.querySelector(`${prefix} .album-cover`);
   const cardData = {
     id: discogsId,
     type: entityType,
@@ -1146,7 +1152,7 @@ function toggleFavoriteFromModal(discogsId, entityType) {
     .then(r => { if (!r.ok) throw new Error(); showToast(wasFav ? "Removed from favorites" : "Added to favorites"); })
     .catch(() => {
       if (wasFav) window._favoriteKeys.add(key); else window._favoriteKeys.delete(key);
-      loadModalActions(discogsId);
+      loadModalActions(discogsId, context);
       refreshCardBadges(discogsId);
       showToast("Failed to update favorite", "error");
     });
@@ -1195,8 +1201,12 @@ function renderMasterVersions() {
   grid.innerHTML = filtered.map(v => {
     const inCol  = window._collectionIds?.has(v.id);
     const inWant = window._wantlistIds?.has(v.id);
-    const badge  = inCol  ? `<span class="collection-badge">✓</span>` :
-                   inWant ? `<span class="wantlist-badge">🤞</span>` : `<span style="visibility:hidden">✓</span>`;
+    const isFav  = window._favoriteKeys?.has(`release:${v.id}`);
+    const badges = [];
+    if (inCol)  badges.push(`<span class="collection-badge">✓</span>`);
+    if (inWant) badges.push(`<span class="wantlist-badge">🤞</span>`);
+    if (isFav)  badges.push(`<span style="color:#f06292;font-size:0.65rem">❤</span>`);
+    const badge  = badges.length ? badges.join("") : `<span style="visibility:hidden">✓</span>`;
     return `
       <span style="color:#888">${escHtml(!v.year || v.year === "0" ? "?" : String(v.year))}</span>
       <span style="color:#aaa">${escHtml(v.country || "?")}</span>
