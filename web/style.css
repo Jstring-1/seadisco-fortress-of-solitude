@@ -2067,6 +2067,9 @@ body.player-open { padding-bottom: 56px; }
   text-decoration: none;
 }
 
+.track-link.now-playing {
+  color: var(--accent) !important;
+}
 #album-info .track-link:hover, #version-info .track-link:hover {
   color: var(--accent);
   text-decoration: underline dotted;
