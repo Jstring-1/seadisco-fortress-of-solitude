@@ -455,9 +455,11 @@ function updateVideoNavButtons() {
       titleEl.innerHTML = "Playing";
     }
   }
-  // Show/hide album button based on whether we have a release to reopen
+  // Show/hide album + share buttons based on whether we have a release to reopen
   const albumBtn = document.getElementById("mini-album");
   if (albumBtn) albumBtn.style.display = window._playerReleaseId ? "" : "none";
+  const shareBtn = document.getElementById("mini-share");
+  if (shareBtn) shareBtn.style.display = window._playerReleaseId ? "" : "none";
 }
 
 function toggleMiniPlayer() {
@@ -562,6 +564,17 @@ function openPlayerRelease() {
   }
 }
 
+function sharePlayerUrl() {
+  const u = new URL(window.location.origin);
+  const vd = new URLSearchParams(location.search).get("vd");
+  const vp = new URLSearchParams(location.search).get("vp");
+  if (vd) u.searchParams.set("vd", vd);
+  if (vp) u.searchParams.set("vp", vp);
+  navigator.clipboard.writeText(u.toString())
+    .then(() => showToast("Share link copied"))
+    .catch(() => showToast("Could not copy link", "error"));
+}
+
 function closeVideo() {
   _ytSession++;                             // invalidate any pending callbacks
   if (_ytPollId) { clearInterval(_ytPollId); _ytPollId = null; }
@@ -581,9 +594,11 @@ function closeVideo() {
   u.searchParams.delete("vd");
   u.searchParams.delete("vp");
   history.replaceState({}, "", u.toString());
-  // Hide album button
+  // Hide album + share buttons
   const albumBtn = document.getElementById("mini-album");
   if (albumBtn) albumBtn.style.display = "none";
+  const shareBtn = document.getElementById("mini-share");
+  if (shareBtn) shareBtn.style.display = "none";
   window._playerReleaseType = null;
   window._playerReleaseId = null;
   window._playerReleaseUrl = null;
