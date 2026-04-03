@@ -2131,8 +2131,8 @@ body.player-open { padding-bottom: 56px; }
 .modal-act-btn.active { border-color: var(--border); background: var(--surface); }
 .modal-act-btn.in-collection { background: #1a3a1a; border-color: #2a5a2a; color: #6bcf8e; }
 .modal-act-btn.in-collection:hover { background: #1f4a1f; border-color: #3a6a3a; }
-.modal-act-btn.in-wantlist { background: #3a1a1a; border-color: #5a2a2a; color: #e88; }
-.modal-act-btn.in-wantlist:hover { background: #4a1f1f; border-color: #6a3a3a; }
+.modal-act-btn.in-wantlist { background: #2a2510; border-color: #4a3f20; color: #d4a843; }
+.modal-act-btn.in-wantlist:hover { background: #3a3518; border-color: #5a4f2a; }
 .modal-rating {
   display: inline-flex;
   gap: 0.1rem;
@@ -2673,9 +2673,9 @@ body.player-open { padding-bottom: 56px; }
 }
 .wantlist-badge {
   font-size: 0.7rem;
-  background: rgba(58, 26, 26, 0.88);
-  color: #e57373;
-  border: 1px solid #e57373;
+  background: rgba(50, 40, 20, 0.88);
+  color: #d4a843;
+  border: 1px solid #d4a843;
   border-radius: 3px;
   padding: 1px 5px;
   line-height: 1.4;

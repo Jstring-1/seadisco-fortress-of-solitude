@@ -829,7 +829,7 @@ function renderActionsImmediate(rid, entityType = "release") {
       ${inCol ? '✓ Collected' : '+ Collection'}
     </button>
     <button class="modal-act-btn ${inWant ? 'in-wantlist' : ''}" id="modal-want-btn" onclick="toggleWantlist(${rid})" title="${inWant ? 'Remove from wantlist' : 'Add to wantlist'}">
-      ${inWant ? '♡ Wanted' : '♡ Want'}
+      ${inWant ? '🔖 Wanted' : '🔖 Want'}
     </button>
     ${favBtn}
     ${inCol ? '<span class="modal-rating" id="modal-rating" style="opacity:0.4">☆☆☆☆☆</span>' : ''}
@@ -888,7 +888,7 @@ function loadModalActions(releaseId) {
         ${inCol ? '✓ Collected' : '+ Collection'}
       </button>
       <button class="modal-act-btn ${inWant ? 'in-wantlist' : ''}" id="modal-want-btn" onclick="toggleWantlist(${rid})" title="${inWant ? 'Remove from wantlist' : 'Add to wantlist'}">
-        ${inWant ? '♡ Wanted' : '♡ Want'}
+        ${inWant ? '🔖 Wanted' : '🔖 Want'}
       </button>
       ${favBtn}
       ${inCol ? '<span class="modal-rating" id="modal-rating" style="opacity:0.4">☆☆☆☆☆</span>' : ''}
@@ -989,11 +989,11 @@ async function toggleWantlist(releaseId) {
 
     // Optimistic update
     if (inWant) {
-      btn.innerHTML = '♡ Want';
+      btn.innerHTML = '🔖 Want';
       btn.classList.remove('in-wantlist');
       window._wantlistIds?.delete(releaseId);
     } else {
-      btn.innerHTML = '♡ Wanted';
+      btn.innerHTML = '🔖 Wanted';
       btn.classList.add('in-wantlist');
       window._wantlistIds?.add(releaseId);
     }
@@ -1081,7 +1081,7 @@ function refreshCardBadges(releaseId) {
 
     let badges = "";
     if (type === "release" && window._collectionIds?.has(id)) badges += `<span class="collection-badge" title="In your collection">✓</span>`;
-    if (type === "release" && window._wantlistIds?.has(id))   badges += `<span class="wantlist-badge" title="In your wantlist">♡</span>`;
+    if (type === "release" && window._wantlistIds?.has(id))   badges += `<span class="wantlist-badge" title="In your wantlist">🔖</span>`;
     if (window._favoriteKeys?.has(`${type}:${id}`)) badges += `<span class="favorite-badge" title="Favorited">❤</span>`;
     el.innerHTML = badges;
     // Update card fav button too
@@ -1173,7 +1173,7 @@ function renderMasterVersions() {
     const inCol  = window._collectionIds?.has(v.id);
     const inWant = window._wantlistIds?.has(v.id);
     const badge  = inCol  ? `<span class="collection-badge">✓</span>` :
-                   inWant ? `<span class="wantlist-badge">♡</span>` : `<span style="visibility:hidden">✓</span>`;
+                   inWant ? `<span class="wantlist-badge">🔖</span>` : `<span style="visibility:hidden">✓</span>`;
     return `
       <span style="color:#888">${escHtml(!v.year || v.year === "0" ? "?" : String(v.year))}</span>
       <span style="color:#aaa">${escHtml(v.country || "?")}</span>

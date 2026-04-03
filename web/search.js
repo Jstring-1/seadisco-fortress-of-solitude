@@ -469,7 +469,7 @@ function renderCard(item, index) {
   // different namespace and could falsely match a release ID in the user's sets
   if (releaseId && type === "release") {
     if (window._collectionIds?.has(releaseId)) badges += `<span class="collection-badge" title="In your collection">✓</span>`;
-    if (window._wantlistIds?.has(releaseId))   badges += `<span class="wantlist-badge" title="In your wantlist">♡</span>`;
+    if (window._wantlistIds?.has(releaseId))   badges += `<span class="wantlist-badge" title="In your wantlist">🔖</span>`;
   }
   const favKey = `${type}:${item.id}`;
   const isFav = window._favoriteKeys?.has(favKey);
