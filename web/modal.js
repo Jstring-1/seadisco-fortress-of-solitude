@@ -46,8 +46,7 @@ function openModal(event, id, type, discogsUrl) {
 function closeModal() {
   document.getElementById("modal-overlay").classList.remove("open");
   const u = new URL(window.location.href);
-  // Keep op param if a video is playing so page reload reopens the popup
-  if (!u.searchParams.has("vd")) u.searchParams.delete("op");
+  u.searchParams.delete("op");
   history.replaceState({}, "", u.toString());
 }
 
@@ -345,6 +344,9 @@ function ensureYTAPI() {
 function setVideoUrl(id) {
   const u = new URL(window.location.href);
   u.searchParams.set("vd", id);
+  // Store the video's source release so page reload can reopen the right popup
+  const op = u.searchParams.get("op");
+  if (op) u.searchParams.set("vp", op);
   history.replaceState({}, "", u.toString());
 }
 
@@ -577,8 +579,7 @@ function closeVideo() {
   updatePlayerStatus("");
   const u = new URL(window.location.href);
   u.searchParams.delete("vd");
-  // Clean up op param if modal is not open (was kept for video context)
-  if (!document.getElementById("modal-overlay")?.classList.contains("open")) u.searchParams.delete("op");
+  u.searchParams.delete("vp");
   history.replaceState({}, "", u.toString());
   // Hide album button
   const albumBtn = document.getElementById("mini-album");
