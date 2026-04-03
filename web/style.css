@@ -1997,6 +1997,17 @@ body.player-open { padding-bottom: 56px; }
 .credit-sep { color: #444;
 }
 
+/* ── Master versions grid ── */
+.mv-grid {
+  overflow: hidden;
+}
+.mv-grid > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
 /* ── Master version filter pills ── */
 .mv-pill-row {
   display: flex;
