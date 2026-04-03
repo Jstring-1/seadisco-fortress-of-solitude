@@ -1978,7 +1978,23 @@ body.player-open { padding-bottom: 56px; }
   font-family: inherit;
 }
 .tracklist-filter:focus { border-color: var(--accent); }
-.tracklist-filter::placeholder { color: #555;
+.tracklist-filter::placeholder { color: #555; }
+
+.credits-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+}
+.credits-body {
+  font-size: 0.78rem;
+  line-height: 1.7;
+  color: var(--fg);
+}
+.album-credits {
+  padding: 0.75rem;
+}
+.credit-sep { color: #444;
 }
 
 #album-info .track, #version-info .track {

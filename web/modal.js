@@ -77,6 +77,32 @@ function filterTracks(input) {
   });
 }
 
+function filterCredits(input) {
+  const q = input.value.toLowerCase().trim();
+  const body = input.closest(".credits-header").nextElementSibling;
+  if (!body) return;
+  body.querySelectorAll(".credit-item").forEach(item => {
+    const text = item.textContent.toLowerCase();
+    const show = !q || text.includes(q);
+    item.style.display = show ? "" : "none";
+    // Hide the separator after hidden items
+    const sep = item.nextElementSibling;
+    if (sep?.classList.contains("credit-sep")) sep.style.display = show ? "" : "none";
+  });
+  // Clean up leading separators (first visible item shouldn't have a sep before it)
+  const items = body.querySelectorAll(".credit-item, .credit-sep");
+  let needSep = false;
+  items.forEach(el => {
+    if (el.classList.contains("credit-item")) {
+      if (el.style.display !== "none") needSep = true;
+    } else if (el.classList.contains("credit-sep")) {
+      // Show sep only between two visible items
+      const next = el.nextElementSibling;
+      el.style.display = (needSep && next?.classList.contains("credit-item") && next.style.display !== "none") ? "" : "none";
+    }
+  });
+}
+
 // ── Concert popup ─────────────────────────────────────────────────────────
 async function openConcertPopup(event, artistName) {
   if (event) event.preventDefault();
@@ -601,15 +627,14 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const formats     = (d.formats ?? []).map(f =>
     [f.name, ...(f.descriptions ?? [])].filter(Boolean).join(" · ")
   ).join("; ") || (searchResult.format ?? []).join(" · ");
-  const credits     = (d.extraartists ?? [])
+  const creditItems = (d.extraartists ?? [])
     .map(a => {
       const nameEl = a.id
         ? `<a href="#" class="modal-internal-link credit-name" data-alt-name="${escHtml(a.name)}" data-alt-id="${a.id}" onclick="selectAltArtist(event,this);closeModal()" title="Search for ${escHtml(a.name)}">${escHtml(a.name)}</a>`
         : `<span class="credit-name">${escHtml(a.name)}</span>`;
       const searchIcon = ` <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(a.name.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(a.name)}" style="font-size:1.1em">⌕</a>`;
-      return `${nameEl}${searchIcon}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}`;
-    })
-    .join(" · ");
+      return `<span class="credit-item">${nameEl}${searchIcon}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}</span>`;
+    });
   const notes       = d.notes ? stripDiscogsMarkup(d.notes) : "";
   const catno     = (d.labels ?? [])[0]?.catno ?? "";
   const releaseId = d.id ?? searchResult.id ?? "";
@@ -728,10 +753,17 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
       </div>
     </div>` : "";
 
+  const creditsHTML = creditItems.length ? `
+    <div class="album-credits">
+      <div class="credits-header">
+        <div class="tracklist-heading">Credits</div>
+        ${creditItems.length > 4 ? `<input type="text" class="tracklist-filter" placeholder="filter credits…" oninput="filterCredits(this)" />` : ""}
+      </div>
+      <div class="credits-body">${creditItems.join('<span class="credit-sep"> · </span>')}</div>
+    </div>` : "";
+
   const metaRows = [
-    released ? `<div class="album-meta-row"><span class="meta-label">Released</span><span>${escHtml(released)}</span></div>` : "",
-    (!isMaster && formats) ? `<div class="album-meta-row"><span class="meta-label">Format</span><span>${escHtml(formats)}</span></div>` : "",
-    credits  ? `<div class="album-meta-row"><span class="meta-label">Credits</span><span>${credits}</span></div>` : "",
+    creditsHTML,
     notes    ? `<div class="album-notes"><div class="tracklist-heading" style="margin-top:0.5rem">Notes</div>${escHtml(notes)}</div>` : "",
   ].filter(Boolean).join("");
 
