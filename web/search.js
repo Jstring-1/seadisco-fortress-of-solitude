@@ -105,6 +105,9 @@ async function doSearch(page = 1, skipPushState = false) {
   if (page === 1) {
     switchView("search", true);
     setActiveTab("search");
+    // switchView may re-show wanted-sample if _lastResults was cleared;
+    // hide it now since search results are incoming
+    const ws = document.getElementById("wanted-sample"); if (ws) ws.style.display = "none";
   }
 
   if (!skipPushState) pushSearchState(q, artistRaw, release, year, label, genre, sort, resultType, page);
