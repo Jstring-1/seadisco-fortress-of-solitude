@@ -468,11 +468,10 @@ function renderCard(item, index) {
   // different namespace and could falsely match a release ID in the user's sets
   if (releaseId && type === "release") {
     if (window._collectionIds?.has(releaseId)) badges += `<span class="collection-badge" title="In your collection">✓</span>`;
-    if (window._wantlistIds?.has(releaseId))   badges += `<span class="wantlist-badge" title="In your wantlist">🔖</span>`;
+    if (window._wantlistIds?.has(releaseId))   badges += `<span class="wantlist-badge" title="In your wantlist">🤞</span>`;
   }
   const favKey = `${type}:${item.id}`;
   const isFav = window._favoriteKeys?.has(favKey);
-  if (isFav) badges += `<span class="favorite-badge" title="Favorited">❤</span>`;
   const favBtn = (type && item.id) ? `<button class="card-fav-btn${isFav ? " is-favorite" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,${item.id},'${type}')" title="${isFav ? "Remove from favorites" : "Add to favorites"}">${isFav ? "❤" : "♡"}</button>` : "";
 
   const thumbWrap = `<div class="card-thumb-wrap">${thumb}<div class="card-thumb-badges">${badges}</div>${favBtn}</div>`;
@@ -692,16 +691,8 @@ function toggleFavoriteFromCard(btn, discogsId, entityType) {
     btn.title = "Remove from favorites";
   }
 
-  // Update badge on this card
-  const card = btn.closest("a");
-  const badgeEl = card?.querySelector(".card-thumb-badges");
-  if (badgeEl) {
-    const existingFav = badgeEl.querySelector(".favorite-badge");
-    if (wasFav && existingFav) existingFav.remove();
-    if (!wasFav && !existingFav) badgeEl.insertAdjacentHTML("beforeend", `<span class="favorite-badge" title="Favorited">❤</span>`);
-  }
-
   // Build card data for storage
+  const card = btn.closest("a");
   const cached = itemCache.get(String(discogsId));
   const cardImg = card?.querySelector("img")?.src || "";
   const cardArtist = card?.querySelector(".card-artist")?.textContent || "";
