@@ -1947,9 +1947,15 @@ body.player-open { padding-bottom: 56px; }
   color: var(--muted);
   margin-bottom: 0.5rem;
 }
+.tracklist-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
 .tracklist-toggle {
   cursor: pointer;
   user-select: none;
+  flex-shrink: 0;
 }
 .tracklist-toggle:hover { color: var(--fg); }
 .tracklist-arrow {
@@ -1958,6 +1964,21 @@ body.player-open { padding-bottom: 56px; }
   vertical-align: middle;
   margin-right: 0.15em;
   transition: color 0.15s;
+}
+.tracklist-filter {
+  flex: 1;
+  max-width: 160px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: var(--fg);
+  font-size: 0.68rem;
+  padding: 0.15rem 0.4rem;
+  outline: none;
+  font-family: inherit;
+}
+.tracklist-filter:focus { border-color: var(--accent); }
+.tracklist-filter::placeholder { color: #555;
 }
 
 #album-info .track, #version-info .track {
