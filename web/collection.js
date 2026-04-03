@@ -943,6 +943,11 @@ async function loadDiscogsIds() {
       lbl.style.color = "#aaa"; lbl.style.cursor = "pointer";
       lbl.title = window._collectionIds.size > 0 ? "Hide releases already in your collection" : "Sync your collection on the Account page to use this filter";
     }
+    // Now that we know auth + favorites state, update heading and swap to favorites grid if needed
+    if (typeof updateFavoritesHeading === "function") updateFavoritesHeading();
+    if (window._favoriteKeys.size > 0 && typeof loadFavoritesGrid === "function") {
+      loadFavoritesGrid();
+    }
   } catch { /* ignore */ }
 }
 
