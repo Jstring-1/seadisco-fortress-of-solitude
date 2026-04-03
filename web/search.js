@@ -683,12 +683,21 @@ function updateFavoritesHeading() {
 
 let _favoritesItems = [];  // cached for client-side sorting
 
-async function loadFavoritesGrid() {
+const _FAV_PAGE = 96;
+let _favOffset = 0;
+
+async function loadFavoritesGrid(append) {
   try {
-    const r = await apiFetch("/api/user/favorites");
+    const r = await apiFetch(`/api/user/favorites?limit=${_FAV_PAGE}&offset=${_favOffset}`);
     if (!r.ok) return;
     const data = await r.json();
-    _favoritesItems = (data.items ?? []).map(row => row.data);
+    const newItems = (data.items ?? []).map(row => row.data);
+    if (append) {
+      _favoritesItems = _favoritesItems.concat(newItems);
+    } else {
+      _favoritesItems = newItems;
+    }
+    _favOffset += newItems.length;
     const wrap = document.getElementById("favorites-sample");
     const grid = document.getElementById("favorites-sample-grid");
     const sortEl = document.getElementById("favorites-sort");
@@ -703,6 +712,16 @@ async function loadFavoritesGrid() {
       const sorted = sortFavoriteItems(_favoritesItems, sortBy);
       grid.innerHTML = sorted.map((item, i) => renderCard(item, i)).join("");
       if (sortEl) sortEl.style.display = "";
+      // Add load-more if we got a full page
+      if (newItems.length >= _FAV_PAGE) {
+        grid.insertAdjacentHTML("beforeend",
+          `<div class="fav-load-more" style="grid-column:1/-1;text-align:center;padding:0.75rem 0">` +
+          `<button onclick="loadFavoritesGrid(true)" style="background:none;border:1px solid var(--border);color:var(--muted);padding:0.4rem 1.2rem;border-radius:var(--radius);cursor:pointer;font-size:0.8rem" ` +
+          `onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" ` +
+          `onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'"` +
+          `>Load More</button></div>`
+        );
+      }
     }
     const view = new URLSearchParams(location.search).get("view") || "";
     const hasSearchResults = document.getElementById("results")?.children.length > 0;
@@ -712,27 +731,69 @@ async function loadFavoritesGrid() {
   } catch { /* silent */ }
 }
 
-async function loadFeaturedFavorites() {
+let _featuredAll = [];    // all featured items, shuffled once on load
+let _featuredShown = 0;   // how many are currently rendered
+const _FEATURED_PAGE = 48;
+
+function _shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+async function loadFeaturedFavorites(more) {
   window._featuredFavsLoaded = true;
-  try {
-    const r = await fetch("/api/public/featured-favorites");
-    if (!r.ok) return;
-    const data = await r.json();
-    const items = (data.items ?? []).map(row => row.data);
-    const grid = document.getElementById("favorites-sample-grid");
-    const wrap = document.getElementById("favorites-sample");
-    const sortEl = document.getElementById("favorites-sort");
-    if (!grid || !wrap || !items.length) return;
-    if (sortEl) sortEl.style.display = "none";  // no sort for logged-out
-    grid.innerHTML = items.map((item, i) => renderCard(item, i)).join("");
-    // Remove fav buttons from featured cards (logged-out can't favorite)
-    grid.querySelectorAll(".fav-btn").forEach(btn => btn.remove());
-    const view = new URLSearchParams(location.search).get("view") || "";
-    const hasSearchResults = document.getElementById("results")?.children.length > 0;
-    if ((!view || view === "search" || view === "find") && !hasSearchResults) {
-      wrap.style.display = "";
-    }
-  } catch { /* silent */ }
+  const grid = document.getElementById("favorites-sample-grid");
+  const wrap = document.getElementById("favorites-sample");
+  const sortEl = document.getElementById("favorites-sort");
+  if (!grid || !wrap) return;
+  if (sortEl) sortEl.style.display = "none";
+
+  // First call: fetch all and shuffle
+  if (!more) {
+    try {
+      const r = await fetch("/api/public/featured-favorites?limit=200");
+      if (!r.ok) return;
+      const data = await r.json();
+      _featuredAll = _shuffle((data.items ?? []).map(row => row.data));
+      _featuredShown = 0;
+    } catch { return; }
+    if (!_featuredAll.length) return;
+  }
+
+  // Render next page
+  const slice = _featuredAll.slice(_featuredShown, _featuredShown + _FEATURED_PAGE);
+  if (!slice.length) return;
+  const html = slice.map((item, i) => renderCard(item, _featuredShown + i)).join("");
+  grid.querySelector(".featured-load-more")?.remove();
+  if (more) {
+    grid.insertAdjacentHTML("beforeend", html);
+  } else {
+    grid.innerHTML = html;
+  }
+  _featuredShown += slice.length;
+
+  // Remove fav buttons (logged-out can't favorite)
+  grid.querySelectorAll(".fav-btn").forEach(btn => btn.remove());
+
+  // Add load-more if there are more to show
+  if (_featuredShown < _featuredAll.length) {
+    grid.insertAdjacentHTML("beforeend",
+      `<div class="featured-load-more" style="grid-column:1/-1;text-align:center;padding:0.75rem 0">` +
+      `<button onclick="loadFeaturedFavorites(true)" style="background:none;border:1px solid var(--border);color:var(--muted);padding:0.4rem 1.2rem;border-radius:var(--radius);cursor:pointer;font-size:0.8rem" ` +
+      `onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" ` +
+      `onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'"` +
+      `>Load More</button></div>`
+    );
+  }
+
+  const view = new URLSearchParams(location.search).get("view") || "";
+  const hasSearchResults = document.getElementById("results")?.children.length > 0;
+  if ((!view || view === "search" || view === "find") && !hasSearchResults) {
+    wrap.style.display = "";
+  }
 }
 
 function sortFavoriteItems(items, sortBy) {
@@ -777,6 +838,16 @@ function sortFavoritesGrid(sortBy) {
   if (!grid) return;
   const sorted = sortFavoriteItems(_favoritesItems, sortBy);
   grid.innerHTML = sorted.map((item, i) => renderCard(item, i)).join("");
+  // Re-add load-more if there might be more
+  if (_favoritesItems.length >= _favOffset && _favOffset % _FAV_PAGE === 0) {
+    grid.insertAdjacentHTML("beforeend",
+      `<div class="fav-load-more" style="grid-column:1/-1;text-align:center;padding:0.75rem 0">` +
+      `<button onclick="loadFavoritesGrid(true)" style="background:none;border:1px solid var(--border);color:var(--muted);padding:0.4rem 1.2rem;border-radius:var(--radius);cursor:pointer;font-size:0.8rem" ` +
+      `onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" ` +
+      `onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'"` +
+      `>Load More</button></div>`
+    );
+  }
 }
 
 function toggleFavoriteFromCard(btn, discogsId, entityType) {
