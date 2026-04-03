@@ -315,13 +315,13 @@
     <div style="display:flex;align-items:center;justify-content:center;gap:0.5rem;padding:0.3rem 0">
       <div id="favorites-sample-heading"></div>
       <select id="favorites-sort" style="display:none" onchange="sortFavoritesGrid(this.value)">
-        <option value="recent">Newest First</option>
-        <option value="oldest">Oldest First</option>
-        <option value="title">Title</option>
-        <option value="artist">Artist</option>
-        <option value="year-desc">Year ↓</option>
+        <option value="recent">Recently Added</option>
+        <option value="oldest">Oldest Added</option>
         <option value="year-asc">Year ↑</option>
-        <option value="type">Type</option>
+        <option value="year-desc">Year ↓</option>
+        <option value="title-asc">Title A→Z</option>
+        <option value="title-desc">Title Z→A</option>
+        <option value="label-asc">Label A→Z</option>
       </select>
     </div>
     <div id="favorites-sample-grid" class="card-grid"></div>
