@@ -105,9 +105,8 @@ async function doSearch(page = 1, skipPushState = false) {
   if (page === 1) {
     switchView("search", true);
     setActiveTab("search");
-    // switchView may re-show wanted-sample if _lastResults was cleared;
-    // hide it now since search results are incoming
-    const ws = document.getElementById("wanted-sample"); if (ws) ws.style.display = "none";
+    // Hide favorites section when search results are incoming
+    const ws = document.getElementById("favorites-sample"); if (ws) ws.style.display = "none";
   }
 
   if (!skipPushState) pushSearchState(q, artistRaw, release, year, label, genre, sort, resultType, page);
@@ -319,7 +318,7 @@ async function doSearch(page = 1, skipPushState = false) {
       document.getElementById("results").innerHTML = renderEmptyState("🔍", "No results found", "Try a different search term or broaden your filters");
       document.getElementById("search-ai-summary").innerHTML = "<i>Couldn't find any results at Discogs.</i>";
       document.getElementById("search-info-block").style.display = "";
-      const ws = document.getElementById("wanted-sample"); if (ws) ws.style.display = "none";
+      const ws = document.getElementById("favorites-sample"); if (ws) ws.style.display = "none";
       return;
     }
 
@@ -421,8 +420,8 @@ function renderResults(items, append = false) {
   } else {
     grid.innerHTML = html;
   }
-  // Hide wanted sample when showing search results
-  const ws = document.getElementById("wanted-sample"); if (ws) ws.style.display = "none";
+  // Hide favorites section when showing search results
+  const ws = document.getElementById("favorites-sample"); if (ws) ws.style.display = "none";
 }
 
 function renderCard(item, index) {
@@ -634,48 +633,23 @@ async function doAiSearch(q) {
 }
 
 
-// ── Wanted sample / favorites cards for Find page filler ────────────────
-let _wantedSampleIds = new Set();
-
-async function loadWantedSample() {
-  // If user has favorites, show those instead
-  if (window._favoriteKeys?.size > 0) {
-    await loadFavoritesGrid();
-    return;
-  }
-  const wrap = document.getElementById("wanted-sample");
-  const heading = document.getElementById("wanted-sample-heading");
-  // Heading is set later by updateFavoritesHeading() once auth state is known
-  try {
-    const r = await fetch("/api/wanted-sample");
-    if (!r.ok) return;
-    const data = await r.json();
-    const items = data.items ?? [];
-    if (!items.length) return;
-    _wantedSampleIds = new Set(items.map(i => i.id));
-    const grid = document.getElementById("wanted-sample-grid");
-    if (!wrap || !grid) return;
-    grid.innerHTML = items.map((item, i) => renderCardFromBasicInfo(item, i)).join("");
-    const moreBtn = document.getElementById("wanted-sample-more");
-    if (moreBtn) moreBtn.style.display = "";
-    const view = new URLSearchParams(location.search).get("view") || "";
-    const hasSearchResults = document.getElementById("results")?.children.length > 0;
-    if ((!view || view === "search" || view === "find") && !hasSearchResults) {
-      wrap.style.display = "";
-    }
-  } catch { /* silent fail */ }
-}
+// ── Favorites cards for Find page default ───────────────────────────────
 
 function updateFavoritesHeading() {
-  const heading = document.getElementById("wanted-sample-heading");
-  if (!heading) return;
+  const heading = document.getElementById("favorites-sample-heading");
+  const wrap = document.getElementById("favorites-sample");
+  if (!heading || !wrap) return;
+  const view = new URLSearchParams(location.search).get("view") || "";
+  const hasSearchResults = document.getElementById("results")?.children.length > 0;
+  const showWrap = (!view || view === "search" || view === "find") && !hasSearchResults;
   if (window._favoriteKeys?.size > 0) {
     heading.innerHTML = `<span style="color:var(--muted);font-size:0.75rem">Your Favorites</span>`;
   } else if (window._clerk?.user) {
     heading.innerHTML = `<span style="color:var(--muted);font-size:0.75rem">♡ Favorite albums, artists & labels to see them here</span>`;
   } else {
-    heading.innerHTML = `<a href="/account" style="color:var(--accent);text-decoration:none;font-size:0.8rem">Sign in to save favorites ♡</a>`;
+    heading.innerHTML = `<a href="/account" style="color:var(--accent);text-decoration:none;font-size:0.8rem">Sign in or create an account to save favorites ♡</a>`;
   }
+  if (showWrap) wrap.style.display = "";
 }
 
 async function loadFavoritesGrid() {
@@ -684,18 +658,14 @@ async function loadFavoritesGrid() {
     if (!r.ok) return;
     const data = await r.json();
     const items = (data.items ?? []).map(row => row.data);
-    const wrap = document.getElementById("wanted-sample");
-    const grid = document.getElementById("wanted-sample-grid");
-    const heading = document.getElementById("wanted-sample-heading");
+    const wrap = document.getElementById("favorites-sample");
+    const grid = document.getElementById("favorites-sample-grid");
     if (!wrap || !grid) return;
-    if (heading) heading.innerHTML = `<span style="color:var(--muted);font-size:0.75rem">Your Favorites</span>`;
     if (!items.length) {
       grid.innerHTML = `<div style="color:var(--muted);font-size:0.8rem;padding:1rem">♡ Favorite albums, artists & labels to see them here</div>`;
     } else {
       grid.innerHTML = items.map((item, i) => renderCard(item, i)).join("");
     }
-    const moreBtn = document.getElementById("wanted-sample-more");
-    if (moreBtn) moreBtn.style.display = "none";
     const view = new URLSearchParams(location.search).get("view") || "";
     const hasSearchResults = document.getElementById("results")?.children.length > 0;
     if ((!view || view === "search" || view === "find") && !hasSearchResults) {
@@ -751,29 +721,6 @@ function toggleFavoriteFromCard(btn, discogsId, entityType) {
       btn.textContent = wasFav ? "❤" : "♡";
       showToast("Failed to update favorite", "error");
     });
-}
-
-async function loadMoreWantedSample() {
-  const btn = document.querySelector("#wanted-sample-more button");
-  if (btn) { btn.disabled = true; btn.textContent = "Loading…"; }
-  try {
-    const exclude = Array.from(_wantedSampleIds).join(",");
-    const r = await fetch(`/api/wanted-sample?exclude=${encodeURIComponent(exclude)}`);
-    if (!r.ok) return;
-    const data = await r.json();
-    const items = (data.items ?? []).filter(i => !_wantedSampleIds.has(i.id));
-    if (!items.length) {
-      if (btn) { btn.textContent = "No more available"; btn.disabled = true; }
-      return;
-    }
-    items.forEach(i => _wantedSampleIds.add(i.id));
-    const grid = document.getElementById("wanted-sample-grid");
-    if (!grid) return;
-    const startIdx = grid.children.length;
-    grid.insertAdjacentHTML("beforeend", items.map((item, i) => renderCardFromBasicInfo(item, startIdx + i)).join(""));
-  } catch { /* silent */ } finally {
-    if (btn && btn.textContent === "Loading…") { btn.disabled = false; btn.textContent = "Load More"; }
-  }
 }
 
 // ── Artist / entity navigation ───────────────────────────────────────────

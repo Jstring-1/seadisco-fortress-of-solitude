@@ -70,7 +70,6 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
   const hasSearch = p.get("q") || p.get("ar") || p.get("re") || p.get("yr") || p.get("lb") || p.get("gn");
   if (!hasSearch) {
     const deferLoad = (fn) => typeof requestIdleCallback === "function" ? requestIdleCallback(fn) : setTimeout(fn, 200);
-    deferLoad(() => loadWantedSample());
     deferLoad(() => loadFreshReleases());
   }
 })();
