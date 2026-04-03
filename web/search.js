@@ -453,7 +453,7 @@ function renderCard(item, index) {
   const isRelease = type === "release" || type === "master";
   const isArtist  = type === "artist";
   const isLabel   = type === "label";
-  if (isRelease) itemCache.set(String(item.id), item);
+  if (isRelease || isArtist || isLabel) itemCache.set(String(item.id), item);
   const animClass = index != null ? " card-animate" : "";
   const animStyle = index != null ? ` style="--i:${Math.min(index, 20)}"` : "";
   const typeClass = `card card-type-${type}${animClass}`;
@@ -726,7 +726,11 @@ function toggleFavoriteFromCard(btn, discogsId, entityType) {
 
   // Build card data for storage
   const cached = itemCache.get(String(discogsId));
-  const cardData = cached || { id: discogsId, type: entityType, title: card?.querySelector(".card-title")?.textContent || "" };
+  const cardImg = card?.querySelector("img")?.src || "";
+  const cardArtist = card?.querySelector(".card-artist")?.textContent || "";
+  const cardTitle = card?.querySelector(".card-title")?.textContent || "";
+  const fullTitle = cardArtist ? `${cardArtist} - ${cardTitle}` : cardTitle;
+  const cardData = cached || { id: discogsId, type: entityType, title: fullTitle, cover_image: cardImg, uri: `/${entityType}/${discogsId}` };
 
   // API call
   const endpoint = wasFav ? "/api/user/favorites/remove" : "/api/user/favorites/add";
