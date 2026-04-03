@@ -691,14 +691,20 @@ function sortFavoriteItems(items, sortBy) {
     return { artist: "", title: t.toLowerCase() };
   };
   switch (sortBy) {
+    case "oldest":
+      arr.reverse();
+      break;
     case "title":
       arr.sort((a, b) => titleParts(a).title.localeCompare(titleParts(b).title));
       break;
     case "artist":
       arr.sort((a, b) => titleParts(a).artist.localeCompare(titleParts(b).artist));
       break;
-    case "year":
+    case "year-desc":
       arr.sort((a, b) => (parseInt(b.year) || 0) - (parseInt(a.year) || 0));
+      break;
+    case "year-asc":
+      arr.sort((a, b) => (parseInt(a.year) || 0) - (parseInt(b.year) || 0));
       break;
     case "type":
       arr.sort((a, b) => (a.type ?? "").localeCompare(b.type ?? ""));

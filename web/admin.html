@@ -107,6 +107,7 @@
       <div style="display:flex;align-items:center;gap:0.5rem">
         <button onclick="adminItemsTab('collection')" id="admin-items-tab-col" style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:12px;border:1px solid #444;background:#2a2a2a;color:var(--fg);cursor:pointer">Collection</button>
         <button onclick="adminItemsTab('wantlist')" id="admin-items-tab-want" style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:12px;border:1px solid #333;background:transparent;color:var(--muted);cursor:pointer">Wantlist</button>
+        <button onclick="adminItemsTab('favorites')" id="admin-items-tab-fav" style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:12px;border:1px solid #333;background:transparent;color:var(--muted);cursor:pointer">Favorites</button>
         <button onclick="closeAdminItems()" style="background:none;border:none;color:#666;cursor:pointer;font-size:1.2rem;padding:0 0.3rem">&times;</button>
       </div>
     </div>
@@ -241,6 +242,7 @@ async function loadAdminSyncStatus() {
           <span style="display:flex;gap:0.3rem;align-items:center;flex-shrink:0">
             <a href="#" onclick="event.preventDefault();openAdminItems('${u.username}','collection')" style="font-size:0.68rem;color:var(--accent);text-decoration:none" title="View collection">C</a>
             <a href="#" onclick="event.preventDefault();openAdminItems('${u.username}','wantlist')" style="font-size:0.68rem;color:var(--accent);text-decoration:none" title="View wantlist">W</a>
+            <a href="#" onclick="event.preventDefault();openAdminItems('${u.username}','favorites')" style="font-size:0.68rem;color:#e57;text-decoration:none" title="View favorites">♥</a>
             ${syncBtn}
           </span>
         </div>
@@ -606,14 +608,18 @@ function adminItemsTab(tab) {
 }
 
 function updateAdminItemsTabs() {
-  const colBtn = document.getElementById("admin-items-tab-col");
-  const wantBtn = document.getElementById("admin-items-tab-want");
-  if (_adminItemsTab === "collection") {
-    colBtn.style.background = "#2a2a2a"; colBtn.style.color = "var(--fg)"; colBtn.style.borderColor = "#444";
-    wantBtn.style.background = "transparent"; wantBtn.style.color = "var(--muted)"; wantBtn.style.borderColor = "#333";
-  } else {
-    wantBtn.style.background = "#2a2a2a"; wantBtn.style.color = "var(--fg)"; wantBtn.style.borderColor = "#444";
-    colBtn.style.background = "transparent"; colBtn.style.color = "var(--muted)"; colBtn.style.borderColor = "#333";
+  const tabs = {
+    collection: document.getElementById("admin-items-tab-col"),
+    wantlist: document.getElementById("admin-items-tab-want"),
+    favorites: document.getElementById("admin-items-tab-fav"),
+  };
+  for (const [key, btn] of Object.entries(tabs)) {
+    if (!btn) continue;
+    if (key === _adminItemsTab) {
+      btn.style.background = "#2a2a2a"; btn.style.color = "var(--fg)"; btn.style.borderColor = "#444";
+    } else {
+      btn.style.background = "transparent"; btn.style.color = "var(--muted)"; btn.style.borderColor = "#333";
+    }
   }
 }
 
@@ -622,11 +628,46 @@ async function loadAdminItems() {
   const pag = document.getElementById("admin-items-pag");
   const titleEl = document.getElementById("admin-items-title");
   const countEl = document.getElementById("admin-items-count");
-  titleEl.textContent = `@${_adminItemsUser} \u2014 ${_adminItemsTab === "collection" ? "Collection" : "Wantlist"}`;
+  const tabLabel = _adminItemsTab === "favorites" ? "Favorites" : _adminItemsTab === "wantlist" ? "Wantlist" : "Collection";
+  titleEl.textContent = `@${_adminItemsUser} \u2014 ${tabLabel}`;
   countEl.textContent = "";
   list.innerHTML = '<div style="color:var(--muted);padding:1rem;text-align:center">Loading\u2026</div>';
   pag.style.display = "none";
   try {
+    if (_adminItemsTab === "favorites") {
+      const params = new URLSearchParams({ username: _adminItemsUser });
+      const r = await apiFetch(`/api/admin/user-favorites?${params}`);
+      if (!r.ok) { list.innerHTML = '<div style="color:#e88;padding:1rem">Failed to load.</div>'; return; }
+      const data = await r.json();
+      countEl.textContent = `${data.total} items`;
+      if (!data.items?.length) { list.innerHTML = '<div style="color:var(--muted);padding:1rem;text-align:center">No favorites.</div>'; return; }
+      list.innerHTML = data.items.map(row => {
+        const d = row.data || {};
+        const title = d.title || "";
+        const thumb = d.cover_image || "";
+        const type = d.type || row.entity_type || "";
+        const year = d.year || "";
+        const genre = (d.genre || []).slice(0, 2).join(", ");
+        const label = (d.label || []).slice(0, 2).join(", ");
+        const format = (d.format || []).slice(0, 2).join(", ");
+        const country = d.country || "";
+        const added = row.created_at ? new Date(row.created_at).toLocaleDateString() : "";
+        const meta = [type, year, country, label, genre, format].filter(Boolean).map(s => escHtml(String(s))).join(' <span style="color:#444">\u00b7</span> ');
+        const addedTag = added ? ` <span style="color:#555;font-size:0.7rem">${added}</span>` : "";
+        const id = d.id || row.discogs_id || "";
+        const href = type === "artist" ? `https://www.discogs.com/artist/${id}`
+          : type === "label" ? `https://www.discogs.com/label/${id}`
+          : `https://www.discogs.com/release/${id}`;
+        return `<a href="${href}" target="_blank" rel="noopener" class="admin-item-row">
+          ${thumb ? `<img src="${thumb}" class="admin-item-thumb" loading="lazy" />` : `<div class="admin-item-thumb"></div>`}
+          <div style="flex:1;min-width:0;overflow:hidden">
+            <div class="admin-item-title">${escHtml(title)}${addedTag}</div>
+            <div class="admin-item-sub">${meta}</div>
+          </div>
+        </a>`;
+      }).join("");
+      return;
+    }
     const params = new URLSearchParams({ username: _adminItemsUser, tab: _adminItemsTab, page: _adminItemsPage, per_page: 50 });
     const r = await apiFetch(`/api/admin/user-items?${params}`);
     if (!r.ok) { list.innerHTML = '<div style="color:#e88;padding:1rem">Failed to load.</div>'; return; }
