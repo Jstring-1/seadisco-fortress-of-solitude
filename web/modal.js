@@ -338,8 +338,16 @@ function highlightPlayingTrack() {
   document.querySelectorAll(".track-link.now-playing").forEach(el => el.classList.remove("now-playing"));
   const currentUrl = (window._videoQueue ?? [])[window._videoQueueIndex ?? -1];
   if (!currentUrl) return;
+  // Highlight first match per popup container to avoid duplicates when
+  // multiple tracks share the same YouTube URL (e.g. full-album videos)
+  const seen = new Set();
   document.querySelectorAll(".track-link[data-video]").forEach(el => {
-    if (el.dataset.video === currentUrl) el.classList.add("now-playing");
+    if (el.dataset.video !== currentUrl) return;
+    const container = el.closest("#album-info, #version-info") || document;
+    const key = container.id || "_root";
+    if (seen.has(key)) return;
+    seen.add(key);
+    el.classList.add("now-playing");
   });
 }
 
