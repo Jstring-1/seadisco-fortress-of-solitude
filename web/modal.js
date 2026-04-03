@@ -1066,21 +1066,30 @@ function refreshCardBadges(releaseId) {
   document.querySelectorAll(`.card-thumb-badges`).forEach(el => {
     const card = el.closest('a[onclick]');
     if (!card) return;
-    const match = card.getAttribute('onclick')?.match(/openModal\(event,['"]?(\d+)['"]?,\s*'(\w+)'/);
-    if (match && Number(match[1]) === releaseId) {
-      const type = match[2] || "release";
-      let badges = "";
-      if (type === "release" && window._collectionIds?.has(releaseId)) badges += `<span class="collection-badge" title="In your collection">✓</span>`;
-      if (type === "release" && window._wantlistIds?.has(releaseId))   badges += `<span class="wantlist-badge" title="In your wantlist">♡</span>`;
-      if (window._favoriteKeys?.has(`${type}:${releaseId}`)) badges += `<span class="favorite-badge" title="Favorited">❤</span>`;
-      el.innerHTML = badges;
-      // Update card fav button too
-      const favBtn = card.querySelector(".card-fav-btn");
-      if (favBtn) {
-        const isFav = window._favoriteKeys?.has(`${type}:${releaseId}`);
-        favBtn.classList.toggle("is-favorite", isFav);
-        favBtn.textContent = isFav ? "❤" : "♡";
-      }
+    // Match openModal cards (releases/masters)
+    const modalMatch = card.getAttribute('onclick')?.match(/openModal\(event,['"]?(\d+)['"]?,\s*'(\w+)'/);
+    // Match searchByEntity cards (artists/labels)
+    const entityMatch = !modalMatch ? card.dataset.entityId : null;
+    const entityType = !modalMatch ? card.dataset.entityType : null;
+
+    let id, type;
+    if (modalMatch && Number(modalMatch[1]) === releaseId) {
+      id = releaseId; type = modalMatch[2] || "release";
+    } else if (entityMatch && Number(entityMatch) === releaseId) {
+      id = releaseId; type = entityType || "artist";
+    } else return;
+
+    let badges = "";
+    if (type === "release" && window._collectionIds?.has(id)) badges += `<span class="collection-badge" title="In your collection">✓</span>`;
+    if (type === "release" && window._wantlistIds?.has(id))   badges += `<span class="wantlist-badge" title="In your wantlist">♡</span>`;
+    if (window._favoriteKeys?.has(`${type}:${id}`)) badges += `<span class="favorite-badge" title="Favorited">❤</span>`;
+    el.innerHTML = badges;
+    // Update card fav button too
+    const favBtn = card.querySelector(".card-fav-btn");
+    if (favBtn) {
+      const isFav = window._favoriteKeys?.has(`${type}:${id}`);
+      favBtn.classList.toggle("is-favorite", isFav);
+      favBtn.textContent = isFav ? "❤" : "♡";
     }
   });
 }
