@@ -1103,10 +1103,10 @@ function renderMasterVersions() {
     return `
       <span style="color:#888">${escHtml(!v.year || v.year === "0" ? "?" : String(v.year))}</span>
       <span style="color:#aaa">${escHtml(v.country || "?")}</span>
-      <span style="color:#888">${escHtml(_mvGetDisplayFormat(v))}</span>
+      <span style="color:#888" title="${escHtml(_mvGetDisplayFormat(v))}">${escHtml(_mvGetDisplayFormat(v))}</span>
       ${badge}
-      <span>${v.catno && v.catno !== "—" ? `<a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('query').value='${escHtml((v.catno).replace(/'/g, "\\'"))}';doSearch(1)" title="Search for this catalog number">${escHtml(v.catno)}</a>` : `<span style="color:#7ec87e">—</span>`}</span>
-      <span><a href="#" class="modal-internal-link" onclick="openVersionPopup(event,${v.id})" title="View this pressing" style="color:var(--accent)">${escHtml(v.label ?? v.title ?? "—")}</a></span>`;
+      <span title="${escHtml(v.catno || "")}">${v.catno && v.catno !== "—" ? `<a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('query').value='${escHtml((v.catno).replace(/'/g, "\\'"))}';doSearch(1)" title="${escHtml(v.catno)}">${escHtml(v.catno)}</a>` : `<span style="color:#7ec87e">—</span>`}</span>
+      <span title="${escHtml(v.label ?? v.title ?? "")}"><a href="#" class="modal-internal-link" onclick="openVersionPopup(event,${v.id})" title="${escHtml(v.label ?? v.title ?? "")}" style="color:var(--accent)">${escHtml(v.label ?? v.title ?? "—")}</a></span>`;
   }).join("");
 }
 
