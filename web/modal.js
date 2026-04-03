@@ -1247,7 +1247,7 @@ async function loadMasterVersions(event, masterId) {
       <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.4rem">Pressings / Versions</div>
       ${formats.length > 1 ? `<div class="mv-pill-row">${formatPills}</div>` : ""}
       ${countries.length > 1 ? `<div class="mv-pill-row">${countryPills}</div>` : ""}
-      <div class="mv-grid" style="display:grid;grid-template-columns:auto auto minmax(0,10rem) auto minmax(0,8rem) minmax(0,1fr);gap:0.2rem 0.7rem;font-size:0.75rem"></div>`;
+      <div class="mv-grid-scroll"><div class="mv-grid" style="display:grid;grid-template-columns:auto auto minmax(0,10rem) auto minmax(0,8rem) minmax(8rem,1fr);gap:0.2rem 0.7rem;font-size:0.75rem;min-width:36rem"></div></div>`;
     renderMasterVersions();
   } catch(e) {
     console.error("loadMasterVersions error:", e);

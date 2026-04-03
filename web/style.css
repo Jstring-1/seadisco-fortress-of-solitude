@@ -1998,6 +1998,10 @@ body.player-open { padding-bottom: 56px; }
 }
 
 /* ── Master versions grid ── */
+.mv-grid-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 .mv-grid {
   overflow: hidden;
 }
