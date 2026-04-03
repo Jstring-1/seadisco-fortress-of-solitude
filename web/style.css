@@ -83,6 +83,10 @@ html { overflow-x: hidden; }
   }
   .type-radios label { font-size: 0.72rem; }
 
+  /* Collection controls: radios + sort on same line */
+  #cw-controls-row .type-radios { flex-basis: auto; }
+  #cw-controls-row .sort-label  { order: 1; }
+
   /* Advanced filters — 2 per row on mobile */
   .filters {
     row-gap: 0.75rem;
