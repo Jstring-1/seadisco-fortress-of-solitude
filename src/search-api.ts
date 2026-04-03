@@ -1485,7 +1485,7 @@ app.get("/api/user/favorites", async (req, res) => {
   const userId = await getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
-    const items = await getFavorites(userId);
+    const items = await getFavorites(userId, 48);
     res.json({ items });
   } catch (e) {
     res.status(500).json({ error: String(e) });
