@@ -792,7 +792,7 @@ app.get("/api/user/collection", async (req, res) => {
   const page    = parseInt(req.query.page    as string) || 1;
   const perPage = parseInt(req.query.per_page as string) || 25;
   const filters: Record<string, any> = {};
-  for (const key of ["q", "artist", "release", "label", "year", "genre", "style", "format", "type"]) {
+  for (const key of ["q", "artist", "release", "label", "year", "genre", "style", "format", "country", "type"]) {
     const v = (req.query[key] as string ?? "").trim();
     if (v) filters[key] = v;
   }
@@ -816,7 +816,7 @@ app.get("/api/user/wantlist", async (req, res) => {
   const page    = parseInt(req.query.page    as string) || 1;
   const perPage = parseInt(req.query.per_page as string) || 25;
   const filters: Record<string, any> = {};
-  for (const key of ["q", "artist", "release", "label", "year", "genre", "style", "format", "type"]) {
+  for (const key of ["q", "artist", "release", "label", "year", "genre", "style", "format", "country", "type"]) {
     const v = (req.query[key] as string ?? "").trim();
     if (v) filters[key] = v;
   }
@@ -1955,6 +1955,7 @@ app.get("/search", async (req, res) => {
       genre: req.query.genre as string | undefined,
       style: req.query.style as string | undefined,
       format: req.query.format as string | undefined,
+      country: req.query.country as string | undefined,
       sort: req.query.sort as string | undefined,
       sortOrder: req.query.sort_order as "asc" | "desc" | undefined,
       page: req.query.page ? parseInt(req.query.page as string) : 1,

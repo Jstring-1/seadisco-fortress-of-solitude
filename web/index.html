@@ -114,7 +114,7 @@
       <label>Release <input type="text" id="f-release" placeholder="e.g. Kind of Blue" /></label>
       <label>Label <input type="text" id="f-label" placeholder="e.g. Columbia" /></label>
     </div>
-    <!-- Row 2: Format · Year · Genre · Style -->
+    <!-- Row 2: Format · Year · Country -->
     <div class="filters filters-pair" style="margin-top:0.4rem">
       <label>Format
         <select id="f-format">
@@ -147,6 +147,10 @@
         </select>
       </label>
       <label>Year <input type="text" id="f-year" placeholder="e.g. 1959" /></label>
+      <label>Country <input type="text" id="f-country" placeholder="e.g. US" list="country-list" /></label>
+    </div>
+    <!-- Row 3: Genre · Style -->
+    <div class="filters filters-pair" style="margin-top:0.4rem">
       <label>Genre
         <select id="f-genre" onchange="populateStyles()">
           <option value="">Any</option>
@@ -174,6 +178,89 @@
       </label>
     </div>
   </div>
+  <datalist id="country-list">
+    <option value="US">
+    <option value="UK">
+    <option value="Europe">
+    <option value="Germany">
+    <option value="France">
+    <option value="Japan">
+    <option value="Italy">
+    <option value="Canada">
+    <option value="Australia">
+    <option value="Netherlands">
+    <option value="Spain">
+    <option value="Sweden">
+    <option value="Belgium">
+    <option value="Brazil">
+    <option value="Denmark">
+    <option value="Finland">
+    <option value="Norway">
+    <option value="Austria">
+    <option value="Switzerland">
+    <option value="Portugal">
+    <option value="Greece">
+    <option value="Ireland">
+    <option value="Poland">
+    <option value="Russia">
+    <option value="Czech Republic">
+    <option value="Hungary">
+    <option value="Turkey">
+    <option value="Mexico">
+    <option value="Argentina">
+    <option value="Chile">
+    <option value="Colombia">
+    <option value="Venezuela">
+    <option value="Peru">
+    <option value="Uruguay">
+    <option value="South Africa">
+    <option value="Nigeria">
+    <option value="Kenya">
+    <option value="Egypt">
+    <option value="Morocco">
+    <option value="Israel">
+    <option value="India">
+    <option value="China">
+    <option value="South Korea">
+    <option value="Taiwan">
+    <option value="Hong Kong">
+    <option value="Thailand">
+    <option value="Indonesia">
+    <option value="Philippines">
+    <option value="Malaysia">
+    <option value="Singapore">
+    <option value="Vietnam">
+    <option value="New Zealand">
+    <option value="Iceland">
+    <option value="Romania">
+    <option value="Bulgaria">
+    <option value="Serbia">
+    <option value="Croatia">
+    <option value="Slovenia">
+    <option value="Slovakia">
+    <option value="Lithuania">
+    <option value="Latvia">
+    <option value="Estonia">
+    <option value="Ukraine">
+    <option value="Cuba">
+    <option value="Jamaica">
+    <option value="Trinidad &amp; Tobago">
+    <option value="Puerto Rico">
+    <option value="Ecuador">
+    <option value="Bolivia">
+    <option value="Costa Rica">
+    <option value="Panama">
+    <option value="Dominican Republic">
+    <option value="Lebanon">
+    <option value="Iran">
+    <option value="Pakistan">
+    <option value="Bangladesh">
+    <option value="Sri Lanka">
+    <option value="Nepal">
+    <option value="Luxembourg">
+    <option value="Worldwide">
+    <option value="Unknown">
+  </datalist>
 
   <div id="search-info-block" class="content-narrow" style="margin-bottom:0.4rem;min-height:1em;display:none">
     <div id="search-desc" style="font-size:0.82rem;color:var(--muted);line-height:2.2"></div>
@@ -266,6 +353,11 @@
           </select>
         </label>
         <label>Year <input type="text" id="cw-year" placeholder="e.g. 1959" onkeydown="if(event.key==='Enter'){doCwSearch(1)}" /></label>
+        <label>Country
+          <select id="cw-country" onchange="doCwSearch(1)" style="color-scheme:dark">
+            <option value="">Any</option>
+          </select>
+        </label>
         <label>Genre
           <select id="cw-genre" onchange="onCwGenreChange()" style="color-scheme:dark">
             <option value="">Any</option>
