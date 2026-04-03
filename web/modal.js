@@ -797,7 +797,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
             </div>`
           : (stats?.numForSale === 0 ? `<div style="font-size:0.75rem;color:#555;margin-top:0.2rem">Not currently available on Discogs marketplace</div>` : "")
         }
-        ${!isMaster && releaseId ? renderActionsImmediate(Number(releaseId)) : ""}
+        ${releaseId ? renderActionsImmediate(Number(releaseId), isMaster ? "master" : "release") : ""}
       </div>
     </div>
     ${trackHTML}
@@ -812,16 +812,26 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
 // ── Modal action buttons (collection/wantlist/rating) ────────────────────
 
 // Render buttons immediately from local Sets (no network call)
-function renderActionsImmediate(rid) {
+function renderActionsImmediate(rid, entityType = "release") {
   const inCol = window._collectionIds?.has(rid);
   const inWant = window._wantlistIds?.has(rid);
-  return `<div id="modal-actions" class="modal-actions" data-release-id="${rid}">
+  const favKey = `${entityType}:${rid}`;
+  const isFav = window._favoriteKeys?.has(favKey);
+  const favBtn = `<button class="modal-act-btn ${isFav ? 'is-favorite' : ''}" id="modal-fav-btn" onclick="toggleFavoriteFromModal(${rid},'${entityType}')" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
+      ${isFav ? '❤ Favorited' : '♡ Favorite'}
+    </button>`;
+  if (entityType !== "release") {
+    // Master/artist/label — only show favorite button
+    return `<div id="modal-actions" class="modal-actions" data-release-id="${rid}" data-entity-type="${entityType}">${favBtn}</div>`;
+  }
+  return `<div id="modal-actions" class="modal-actions" data-release-id="${rid}" data-entity-type="${entityType}">
     <button class="modal-act-btn ${inCol ? 'in-collection' : ''}" id="modal-col-btn" onclick="toggleCollection(${rid})" title="${inCol ? 'Remove from collection' : 'Add to collection'}">
       ${inCol ? '✓ Collected' : '+ Collection'}
     </button>
     <button class="modal-act-btn ${inWant ? 'in-wantlist' : ''}" id="modal-want-btn" onclick="toggleWantlist(${rid})" title="${inWant ? 'Remove from wantlist' : 'Add to wantlist'}">
       ${inWant ? '♡ Wanted' : '♡ Want'}
     </button>
+    ${favBtn}
     ${inCol ? '<span class="modal-rating" id="modal-rating" style="opacity:0.4">☆☆☆☆☆</span>' : ''}
   </div>`;
 }
@@ -861,21 +871,32 @@ function loadModalActions(releaseId) {
   const el = document.getElementById("modal-actions");
   if (!el) return;
   const rid = Number(releaseId);
+  const entityType = el.dataset.entityType || "release";
   const inCol = window._collectionIds?.has(rid);
   const inWant = window._wantlistIds?.has(rid);
+  const favKey = `${entityType}:${rid}`;
+  const isFav = window._favoriteKeys?.has(favKey);
+  const favBtn = `<button class="modal-act-btn ${isFav ? 'is-favorite' : ''}" id="modal-fav-btn" onclick="toggleFavoriteFromModal(${rid},'${entityType}')" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
+      ${isFav ? '❤ Favorited' : '♡ Favorite'}
+    </button>`;
 
-  el.innerHTML = `
-    <button class="modal-act-btn ${inCol ? 'in-collection' : ''}" id="modal-col-btn" onclick="toggleCollection(${rid})" title="${inCol ? 'Remove from collection' : 'Add to collection'}">
-      ${inCol ? '✓ Collected' : '+ Collection'}
-    </button>
-    <button class="modal-act-btn ${inWant ? 'in-wantlist' : ''}" id="modal-want-btn" onclick="toggleWantlist(${rid})" title="${inWant ? 'Remove from wantlist' : 'Add to wantlist'}">
-      ${inWant ? '♡ Wanted' : '♡ Want'}
-    </button>
-    ${inCol ? '<span class="modal-rating" id="modal-rating" style="opacity:0.4">☆☆☆☆☆</span>' : ''}
-  `;
+  if (entityType !== "release") {
+    el.innerHTML = favBtn;
+  } else {
+    el.innerHTML = `
+      <button class="modal-act-btn ${inCol ? 'in-collection' : ''}" id="modal-col-btn" onclick="toggleCollection(${rid})" title="${inCol ? 'Remove from collection' : 'Add to collection'}">
+        ${inCol ? '✓ Collected' : '+ Collection'}
+      </button>
+      <button class="modal-act-btn ${inWant ? 'in-wantlist' : ''}" id="modal-want-btn" onclick="toggleWantlist(${rid})" title="${inWant ? 'Remove from wantlist' : 'Add to wantlist'}">
+        ${inWant ? '♡ Wanted' : '♡ Want'}
+      </button>
+      ${favBtn}
+      ${inCol ? '<span class="modal-rating" id="modal-rating" style="opacity:0.4">☆☆☆☆☆</span>' : ''}
+    `;
+  }
   el.style.display = "";
   // If in collection, fetch instance data for rating
-  if (inCol) loadModalInstanceData(rid);
+  if (entityType === "release" && inCol) loadModalInstanceData(rid);
 }
 
 function renderStars(rating, releaseId) {
@@ -1045,14 +1066,58 @@ function refreshCardBadges(releaseId) {
   document.querySelectorAll(`.card-thumb-badges`).forEach(el => {
     const card = el.closest('a[onclick]');
     if (!card) return;
-    const match = card.getAttribute('onclick')?.match(/openModal\(event,['"]?(\d+)['"]?/);
+    const match = card.getAttribute('onclick')?.match(/openModal\(event,['"]?(\d+)['"]?,\s*'(\w+)'/);
     if (match && Number(match[1]) === releaseId) {
+      const type = match[2] || "release";
       let badges = "";
-      if (window._collectionIds?.has(releaseId)) badges += `<span class="collection-badge" title="In your collection">✓</span>`;
-      if (window._wantlistIds?.has(releaseId))   badges += `<span class="wantlist-badge" title="In your wantlist">♡</span>`;
+      if (type === "release" && window._collectionIds?.has(releaseId)) badges += `<span class="collection-badge" title="In your collection">✓</span>`;
+      if (type === "release" && window._wantlistIds?.has(releaseId))   badges += `<span class="wantlist-badge" title="In your wantlist">♡</span>`;
+      if (window._favoriteKeys?.has(`${type}:${releaseId}`)) badges += `<span class="favorite-badge" title="Favorited">❤</span>`;
       el.innerHTML = badges;
+      // Update card fav button too
+      const favBtn = card.querySelector(".card-fav-btn");
+      if (favBtn) {
+        const isFav = window._favoriteKeys?.has(`${type}:${releaseId}`);
+        favBtn.classList.toggle("is-favorite", isFav);
+        favBtn.textContent = isFav ? "❤" : "♡";
+      }
     }
   });
+}
+
+function toggleFavoriteFromModal(discogsId, entityType) {
+  const key = `${entityType}:${discogsId}`;
+  const wasFav = window._favoriteKeys?.has(key);
+  if (!window._favoriteKeys) window._favoriteKeys = new Set();
+
+  // Optimistic toggle
+  if (wasFav) window._favoriteKeys.delete(key); else window._favoriteKeys.add(key);
+  loadModalActions(discogsId);
+  refreshCardBadges(discogsId);
+
+  // Build card data from the modal content for storage
+  const modalTitle = document.querySelector("#album-info .album-meta h2, #version-info .album-meta h2");
+  const modalArtist = document.querySelector("#album-info .album-artist, #version-info .album-artist");
+  const modalImg = document.querySelector("#album-info .album-cover, #version-info .album-cover");
+  const el = document.getElementById("modal-actions");
+  const cardData = {
+    id: discogsId,
+    type: entityType,
+    title: [modalArtist?.textContent?.replace(/⌕/g,"").trim(), modalTitle?.textContent?.replace(/⌕/g,"").trim()].filter(Boolean).join(" - "),
+    cover_image: modalImg?.src || "",
+    uri: `/${entityType}/${discogsId}`,
+  };
+
+  const endpoint = wasFav ? "/api/user/favorites/remove" : "/api/user/favorites/add";
+  const body = wasFav ? { discogsId, entityType } : { discogsId, entityType, data: cardData };
+  apiFetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+    .then(r => { if (!r.ok) throw new Error(); showToast(wasFav ? "Removed from favorites" : "Added to favorites"); })
+    .catch(() => {
+      if (wasFav) window._favoriteKeys.add(key); else window._favoriteKeys.delete(key);
+      loadModalActions(discogsId);
+      refreshCardBadges(discogsId);
+      showToast("Failed to update favorite", "error");
+    });
 }
 
 let _masterVersions = [];

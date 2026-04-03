@@ -418,6 +418,20 @@ export async function initDb() {
     )
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS saved_searches_user_idx ON saved_searches (clerk_user_id, view)`);
+
+  // ── Favorites ────────────────────────────────────────────────────────────
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_favorites (
+      id                 SERIAL PRIMARY KEY,
+      clerk_user_id      TEXT NOT NULL,
+      discogs_id         INTEGER NOT NULL,
+      entity_type        TEXT NOT NULL,
+      data               JSONB NOT NULL,
+      created_at         TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(clerk_user_id, discogs_id, entity_type)
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS user_favorites_user_idx ON user_favorites (clerk_user_id, created_at DESC)`);
 }
 
 // ── Saved searches ──────────────────────────────────────────────────────
@@ -440,6 +454,40 @@ export async function saveSavedSearch(clerkUserId: string, view: string, label: 
 
 export async function deleteSavedSearch(clerkUserId: string, id: number): Promise<void> {
   await getPool().query(`DELETE FROM saved_searches WHERE id = $1 AND clerk_user_id = $2`, [id, clerkUserId]);
+}
+
+// ── Favorites ──────────────────────────────────────────────────────────────
+
+export async function getFavoriteIds(clerkUserId: string): Promise<Array<{ discogs_id: number; entity_type: string }>> {
+  const r = await getPool().query(
+    "SELECT discogs_id, entity_type FROM user_favorites WHERE clerk_user_id = $1",
+    [clerkUserId]
+  );
+  return r.rows;
+}
+
+export async function getFavorites(clerkUserId: string, limit: number = 100, offset: number = 0): Promise<any[]> {
+  const r = await getPool().query(
+    "SELECT discogs_id, entity_type, data, created_at FROM user_favorites WHERE clerk_user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
+    [clerkUserId, limit, offset]
+  );
+  return r.rows;
+}
+
+export async function addFavorite(clerkUserId: string, discogsId: number, entityType: string, data: object): Promise<void> {
+  await getPool().query(
+    `INSERT INTO user_favorites (clerk_user_id, discogs_id, entity_type, data)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (clerk_user_id, discogs_id, entity_type) DO UPDATE SET data = $4`,
+    [clerkUserId, discogsId, entityType, JSON.stringify(data)]
+  );
+}
+
+export async function removeFavorite(clerkUserId: string, discogsId: number, entityType: string): Promise<void> {
+  await getPool().query(
+    "DELETE FROM user_favorites WHERE clerk_user_id = $1 AND discogs_id = $2 AND entity_type = $3",
+    [clerkUserId, discogsId, entityType]
+  );
 }
 
 export async function getAllUsersSyncStatus(): Promise<Array<{
@@ -557,6 +605,7 @@ export async function deleteFeedback(id: number): Promise<void> {
 
 export async function deleteUserData(clerkUserId: string): Promise<void> {
   const tables = [
+    "user_favorites",
     "saved_searches",
     "price_alerts",
     "triggered_alerts",

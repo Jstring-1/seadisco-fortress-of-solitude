@@ -932,6 +932,7 @@ async function loadDiscogsIds() {
     const data = await r.json();
     window._collectionIds = new Set(data.collectionIds ?? []);
     window._wantlistIds   = new Set(data.wantlistIds   ?? []);
+    window._favoriteKeys  = new Set((data.favoriteIds ?? []).map(f => `${f.entity_type}:${f.discogs_id}`));
     const cb = document.getElementById("hide-owned");
     const lbl = document.getElementById("hide-owned-label");
     if (cb && cb.disabled) {
