@@ -378,6 +378,8 @@ function doCwSearch(page = 1) {
     loadInventoryTab(page, filters);
   } else if (_cwTab === "lists") {
     loadListsTab();
+  } else if (_cwTab === "favorites") {
+    renderFavoritesTabGrid();
   }
 }
 
@@ -467,6 +469,12 @@ function switchRecordsTab(tab, skipPush) {
     if (advPanel) advPanel.style.display = "none";
     if (folderCloud) folderCloud.style.display = "none";
     loadListsTab();
+  } else if (tab === "favorites") {
+    if (cwInput) { cwInput.placeholder = "Search your favorites\u2026"; cwInput.value = ""; }
+    if (controlsRow) controlsRow.style.display = "none";
+    if (advPanel) advPanel.style.display = "none";
+    if (folderCloud) folderCloud.style.display = "none";
+    loadFavoritesTab();
   }
 }
 
@@ -565,6 +573,53 @@ function renderInventoryPagination() {
   pag.querySelectorAll(".pag-num").forEach(btn => {
     btn.onclick = () => goTo(parseInt(btn.dataset.page));
   });
+}
+
+let _favTabItems = [];
+let _favTabQuery = "";
+
+async function loadFavoritesTab() {
+  setActiveTab("favorites");
+  document.getElementById("blurb").style.display = "none";
+  document.getElementById("results").innerHTML = renderSkeletonGrid(16);
+  document.getElementById("pagination").style.display = "none";
+  setCwStatus("");
+  try {
+    const r = await apiFetch("/api/user/favorites?limit=200");
+    if (!r.ok) throw new Error("Failed to load favorites");
+    const data = await r.json();
+    _favTabItems = (data.items ?? []).map(row => row.data);
+    renderFavoritesTabGrid();
+  } catch (e) {
+    setCwStatus("Failed to load favorites: " + e.message);
+  }
+}
+
+function renderFavoritesTabGrid() {
+  const q = (document.getElementById("cw-query")?.value ?? "").trim().toLowerCase();
+  _favTabQuery = q;
+  let items = _favTabItems;
+  if (q) {
+    items = items.filter(it => {
+      const title = (it.title ?? "").toLowerCase();
+      const label = (it.label ?? []).join(" ").toLowerCase();
+      const genre = (it.genre ?? []).join(" ").toLowerCase();
+      const year = String(it.year ?? "");
+      return title.includes(q) || label.includes(q) || genre.includes(q) || year.includes(q);
+    });
+  }
+  const grid = document.getElementById("results");
+  if (!items.length) {
+    setCwStatus("");
+    grid.innerHTML = q
+      ? renderEmptyState("\uD83D\uDD0D", `No favorites matching "${q}"`, "Try a different search")
+      : renderEmptyState("♡", "No favorites yet", "Favorite albums, artists & labels from search results to see them here");
+    document.getElementById("pagination").style.display = "none";
+    return;
+  }
+  setCwStatus(`${items.length} favorite${items.length !== 1 ? "s" : ""}`);
+  grid.innerHTML = items.map((item, i) => renderCard(item, i)).join("");
+  document.getElementById("pagination").style.display = "none";
 }
 
 async function loadListsTab() {
