@@ -242,7 +242,7 @@ async function loadAdminSyncStatus() {
           <span style="display:flex;gap:0.3rem;align-items:center;flex-shrink:0">
             <a href="#" onclick="event.preventDefault();openAdminItems('${u.username}','collection')" style="font-size:0.68rem;color:var(--accent);text-decoration:none" title="View collection">C</a>
             <a href="#" onclick="event.preventDefault();openAdminItems('${u.username}','wantlist')" style="font-size:0.68rem;color:var(--accent);text-decoration:none" title="View wantlist">W</a>
-            <a href="#" onclick="event.preventDefault();openAdminItems('${u.username}','favorites')" style="font-size:0.68rem;color:#e57;text-decoration:none" title="View favorites">♥</a>
+            <a href="#" onclick="event.preventDefault();openAdminItems('${u.username}','favorites')" style="font-size:0.68rem;color:#e57;text-decoration:none" title="View favorites">♥${u.favoriteCount ? u.favoriteCount : ''}</a>
             ${syncBtn}
           </span>
         </div>
