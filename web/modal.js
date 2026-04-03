@@ -1266,7 +1266,7 @@ function toggleFavoriteFromModal(discogsId, entityType) {
   const endpoint = wasFav ? "/api/user/favorites/remove" : "/api/user/favorites/add";
   const body = wasFav ? { discogsId, entityType } : { discogsId, entityType, data: cardData };
   apiFetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
-    .then(r => { if (!r.ok) throw new Error(); showToast(wasFav ? "Removed from favorites" : "Added to favorites"); })
+    .then(r => { if (!r.ok) throw new Error(); const n = window._favoriteKeys?.size ?? 0; showToast(wasFav ? "Removed from favorites" : `Added to favorites (${n})`); })
     .catch(() => {
       if (wasFav) window._favoriteKeys.add(key); else window._favoriteKeys.delete(key);
       loadModalActions(discogsId, context);
