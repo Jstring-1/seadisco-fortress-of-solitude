@@ -643,14 +643,9 @@ async function loadWantedSample() {
     await loadFavoritesGrid();
     return;
   }
-  // Not logged in — show login prompt then fall through to community wantlist
   const wrap = document.getElementById("wanted-sample");
   const heading = document.getElementById("wanted-sample-heading");
-  if (!window._clerk?.user) {
-    if (heading) heading.innerHTML = `<a href="/account" style="color:var(--accent);text-decoration:none;font-size:0.8rem">Sign in to save favorites ♡</a>`;
-  } else if (window._favoriteKeys?.size === 0) {
-    if (heading) heading.innerHTML = `<span style="color:var(--muted);font-size:0.75rem">♡ Favorite albums, artists & labels to see them here</span>`;
-  }
+  // Heading is set later by updateFavoritesHeading() once auth state is known
   try {
     const r = await fetch("/api/wanted-sample");
     if (!r.ok) return;
@@ -669,6 +664,18 @@ async function loadWantedSample() {
       wrap.style.display = "";
     }
   } catch { /* silent fail */ }
+}
+
+function updateFavoritesHeading() {
+  const heading = document.getElementById("wanted-sample-heading");
+  if (!heading) return;
+  if (window._favoriteKeys?.size > 0) {
+    heading.innerHTML = `<span style="color:var(--muted);font-size:0.75rem">Your Favorites</span>`;
+  } else if (window._clerk?.user) {
+    heading.innerHTML = `<span style="color:var(--muted);font-size:0.75rem">♡ Favorite albums, artists & labels to see them here</span>`;
+  } else {
+    heading.innerHTML = `<a href="/account" style="color:var(--accent);text-decoration:none;font-size:0.8rem">Sign in to save favorites ♡</a>`;
+  }
 }
 
 async function loadFavoritesGrid() {
