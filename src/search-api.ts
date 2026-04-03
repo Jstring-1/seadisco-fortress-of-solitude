@@ -1492,6 +1492,18 @@ app.get("/api/user/favorites", async (req, res) => {
   }
 });
 
+// GET /api/public/featured-favorites — owner's favorites for logged-out landing page
+app.get("/api/public/featured-favorites", async (_req, res) => {
+  const ownerId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!ownerId) { res.json({ items: [] }); return; }
+  try {
+    const items = await getFavorites(ownerId, 48);
+    res.json({ items });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // POST /api/user/favorites/add
 app.post("/api/user/favorites/add", express.json(), async (req, res) => {
   const userId = await getClerkUserId(req);

@@ -92,7 +92,19 @@ async function apiFetch(url, options = {}) {
     const t = await getSessionToken();
     if (t) headers["Authorization"] = `Bearer ${t}`;
   } catch { /* not signed in */ }
-  return fetch(url, { ...options, headers });
+  const res = await fetch(url, { ...options, headers });
+  // On 401, force-refresh the token once and retry
+  if (res.status === 401 && window._clerk?.session) {
+    try {
+      _cachedToken = null; _cachedTokenAt = 0;
+      const t2 = await getSessionToken();
+      if (t2) {
+        headers["Authorization"] = `Bearer ${t2}`;
+        return fetch(url, { ...options, headers });
+      }
+    } catch { /* give up */ }
+  }
+  return res;
 }
 
 // ── HTML escape ─────────────────────────────────────────────────────────

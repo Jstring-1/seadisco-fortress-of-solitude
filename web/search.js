@@ -675,6 +675,8 @@ function updateFavoritesHeading() {
     heading.innerHTML = `<span style="color:var(--muted);font-size:0.75rem">♡ Favorite albums, artists & labels to see them here</span>`;
   } else {
     heading.innerHTML = `<a href="/account" style="color:var(--accent);text-decoration:none;font-size:0.8rem">Sign in or create an account to save favorites ♡</a>`;
+    // Load featured favorites for logged-out visitors
+    if (!window._featuredFavsLoaded) loadFeaturedFavorites();
   }
   if (showWrap) wrap.style.display = "";
 }
@@ -702,6 +704,29 @@ async function loadFavoritesGrid() {
       grid.innerHTML = sorted.map((item, i) => renderCard(item, i)).join("");
       if (sortEl) sortEl.style.display = "";
     }
+    const view = new URLSearchParams(location.search).get("view") || "";
+    const hasSearchResults = document.getElementById("results")?.children.length > 0;
+    if ((!view || view === "search" || view === "find") && !hasSearchResults) {
+      wrap.style.display = "";
+    }
+  } catch { /* silent */ }
+}
+
+async function loadFeaturedFavorites() {
+  window._featuredFavsLoaded = true;
+  try {
+    const r = await fetch("/api/public/featured-favorites");
+    if (!r.ok) return;
+    const data = await r.json();
+    const items = (data.items ?? []).map(row => row.data);
+    const grid = document.getElementById("favorites-sample-grid");
+    const wrap = document.getElementById("favorites-sample");
+    const sortEl = document.getElementById("favorites-sort");
+    if (!grid || !wrap || !items.length) return;
+    if (sortEl) sortEl.style.display = "none";  // no sort for logged-out
+    grid.innerHTML = items.map((item, i) => renderCard(item, i)).join("");
+    // Remove fav buttons from featured cards (logged-out can't favorite)
+    grid.querySelectorAll(".fav-btn").forEach(btn => btn.remove());
     const view = new URLSearchParams(location.search).get("view") || "";
     const hasSearchResults = document.getElementById("results")?.children.length > 0;
     if ((!view || view === "search" || view === "find") && !hasSearchResults) {
