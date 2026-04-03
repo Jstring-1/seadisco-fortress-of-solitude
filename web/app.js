@@ -62,11 +62,23 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
       if (versionParam) setTimeout(() => openVersionPopup(null, versionParam), 1400);
     }
   }
-  // Resume video from URL (works even if popup was closed)
+  // Resume video from URL — wait for tracklist if a popup is also opening
   const videoParam = p.get("vd");
   if (videoParam) {
-    const delay = openParam ? 1400 : 300;
-    setTimeout(() => openVideo(null, `https://www.youtube.com/watch?v=${videoParam}`), delay);
+    const playUrl = `https://www.youtube.com/watch?v=${videoParam}`;
+    if (openParam) {
+      // Poll for tracklist (popup still loading), up to 8s then play anyway
+      let waited = 0;
+      const poll = setInterval(() => {
+        waited += 200;
+        if (document.querySelector(".track-link[data-video]") || waited >= 8000) {
+          clearInterval(poll);
+          openVideo(null, playUrl);
+        }
+      }, 200);
+    } else {
+      setTimeout(() => openVideo(null, playUrl), 300);
+    }
   }
   const ctArtist = p.get("ct");
   if (ctArtist) openConcertPopup(null, ctArtist);
