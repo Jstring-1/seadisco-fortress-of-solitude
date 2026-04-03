@@ -704,7 +704,23 @@ function toggleFavoriteFromCard(btn, discogsId, entityType) {
   const endpoint = wasFav ? "/api/user/favorites/remove" : "/api/user/favorites/add";
   const body = wasFav ? { discogsId, entityType } : { discogsId, entityType, data: cardData };
   apiFetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
-    .then(r => { if (!r.ok) throw new Error(); showToast(wasFav ? "Removed from favorites" : "Added to favorites"); })
+    .then(r => {
+      if (!r.ok) throw new Error();
+      showToast(wasFav ? "Removed from favorites" : "Added to favorites");
+      // If un-favorited from the favorites grid, fade out and remove the card
+      if (wasFav && card?.closest("#favorites-sample-grid")) {
+        card.style.transition = "opacity 0.4s ease";
+        card.style.opacity = "0";
+        setTimeout(() => {
+          card.remove();
+          // If grid is now empty, show the empty prompt
+          const grid = document.getElementById("favorites-sample-grid");
+          if (grid && !grid.children.length) {
+            grid.innerHTML = `<div style="color:var(--muted);font-size:0.8rem;padding:1rem">♡ Favorite albums, artists & labels to see them here</div>`;
+          }
+        }, 500);
+      }
+    })
     .catch(() => {
       // Revert on error
       if (wasFav) window._favoriteKeys.add(key); else window._favoriteKeys.delete(key);
