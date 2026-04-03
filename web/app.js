@@ -59,9 +59,13 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
       }, 150);
       const versionParam = p.get("vr");
       if (versionParam) setTimeout(() => openVersionPopup(null, versionParam), 1400);
-      const videoParam = p.get("vd");
-      if (videoParam) setTimeout(() => openVideo(null, `https://www.youtube.com/watch?v=${videoParam}`), 1400);
     }
+  }
+  // Resume video from URL (works even if popup was closed)
+  const videoParam = p.get("vd");
+  if (videoParam) {
+    const delay = openParam ? 1400 : 300;
+    setTimeout(() => openVideo(null, `https://www.youtube.com/watch?v=${videoParam}`), delay);
   }
   const ctArtist = p.get("ct");
   if (ctArtist) openConcertPopup(null, ctArtist);

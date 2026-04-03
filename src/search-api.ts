@@ -1493,7 +1493,7 @@ app.get("/api/user/favorites", async (req, res) => {
 });
 
 // POST /api/user/favorites/add
-app.post("/api/user/favorites/add", async (req, res) => {
+app.post("/api/user/favorites/add", express.json(), async (req, res) => {
   const userId = await getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   const { discogsId, entityType, data } = req.body ?? {};
@@ -1507,7 +1507,7 @@ app.post("/api/user/favorites/add", async (req, res) => {
 });
 
 // POST /api/user/favorites/remove
-app.post("/api/user/favorites/remove", async (req, res) => {
+app.post("/api/user/favorites/remove", express.json(), async (req, res) => {
   const userId = await getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   const { discogsId, entityType } = req.body ?? {};
