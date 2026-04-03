@@ -152,8 +152,17 @@ async function getSessionToken() {
 }
 
 async function loadClerkInstance() {
-  const cfg = await fetch("/api/config").then(r => r.json()).catch(() => ({}));
-  const pk = cfg.clerkPublishableKey;
+  // Try cached config first, then fetch (saves a round-trip on repeat visits)
+  let pk = "";
+  try {
+    const cached = JSON.parse(localStorage.getItem("_clerkCfg") || "{}");
+    if (cached.pk && (Date.now() - (cached.ts || 0)) < 3600000) pk = cached.pk;
+  } catch {}
+  if (!pk) {
+    const cfg = await fetch("/api/config").then(r => r.json()).catch(() => ({}));
+    pk = cfg.clerkPublishableKey || "";
+    if (pk) try { localStorage.setItem("_clerkCfg", JSON.stringify({ pk, ts: Date.now() })); } catch {}
+  }
   if (!pk) return null;
 
   const frontendApi = atob(pk.replace(/^pk_(test|live)_/, "")).replace(/\$$/, "");
@@ -173,27 +182,25 @@ async function loadClerkInstance() {
     const iv = setInterval(() => {
       tries++;
       if (window.Clerk) { clearInterval(iv); resolve(window.Clerk); }
-      else if (tries > 100) { clearInterval(iv); resolve(null); } // 5s timeout
+      else if (tries > 60) { clearInterval(iv); resolve(null); } // 3s timeout
     }, 50);
   });
   if (!c) return null;
   await c.load();
 
   // Clerk.load() resolves before session hydration on many page loads.
-  // Poll for a valid token (proof that auth is fully ready) for up to 5s.
-  // If no token materializes, the user is either not signed in or Clerk is slow.
-  for (let i = 0; i < 25; i++) {
+  // Poll for a valid token (proof that auth is fully ready) for up to 3s.
+  for (let i = 0; i < 15; i++) {
     try {
       if (c.user && c.session) {
         const t = await c.session.getToken();
         if (t) {
-          // Cache the token so getSessionToken() has it immediately
           _cachedToken = t;
           _cachedTokenAt = Date.now();
           break; // fully ready
         }
-      } else if (c.user === null && i >= 15) {
-        break; // confirmed not signed in (after 3s grace)
+      } else if (c.user === null && i >= 8) {
+        break; // confirmed not signed in (after 1.6s grace)
       }
     } catch { /* ignore */ }
     await new Promise(r => setTimeout(r, 200));
