@@ -27,6 +27,7 @@ function openModal(event, id, type, discogsUrl) {
   document.getElementById("album-info").innerHTML = "";
   document.getElementById("modal-loading").style.display = "block";
   overlay.classList.add("open");
+  document.body.classList.add("modal-open");
 
   const cachedItem = (typeof itemCache !== 'undefined' ? itemCache.get(String(id)) : null) ?? { type, id };
   const endpoint = type === "master" ? "master" : "release";
@@ -45,6 +46,9 @@ function openModal(event, id, type, discogsUrl) {
 
 function closeModal() {
   document.getElementById("modal-overlay").classList.remove("open");
+  if (!document.getElementById("version-overlay")?.classList.contains("open")) {
+    document.body.classList.remove("modal-open");
+  }
   const u = new URL(window.location.href);
   u.searchParams.delete("op");
   history.replaceState({}, "", u.toString());
@@ -238,6 +242,7 @@ async function openVersionPopup(event, releaseId) {
   info.innerHTML = "";
   loading.style.display = "block";
   overlay.classList.add("open");
+  document.body.classList.add("modal-open");
   const u = new URL(window.location.href);
   u.searchParams.set("vr", releaseId);
   history.replaceState({}, "", u.toString());
@@ -258,6 +263,9 @@ async function openVersionPopup(event, releaseId) {
 
 function closeVersionPopup() {
   document.getElementById("version-overlay").classList.remove("open");
+  if (!document.getElementById("modal-overlay")?.classList.contains("open")) {
+    document.body.classList.remove("modal-open");
+  }
   const u = new URL(window.location.href);
   u.searchParams.delete("vr");
   history.replaceState({}, "", u.toString());
@@ -1192,17 +1200,32 @@ function toggleFavoriteFromModal(discogsId, entityType) {
   loadModalActions(discogsId, context);
   refreshCardBadges(discogsId);
 
-  // Build card data from the active popup
+  // Build card data from the active popup (rich data for favorites grid)
   const prefix = inVersion ? "#version-info" : "#album-info";
   const modalTitle = document.querySelector(`${prefix} .album-meta h2`);
   const modalArtist = document.querySelector(`${prefix} .album-artist`);
   const modalImg = document.querySelector(`${prefix} .album-cover`);
+  // Try to pull extra detail from the popup's detail-label spans
+  const detailEl = document.querySelector(`${prefix} .album-meta-detail, ${prefix} .album-detail-grid`);
+  const detailVal = (label) => {
+    if (!detailEl) return "";
+    for (const sp of detailEl.querySelectorAll(".detail-label")) {
+      if (sp.textContent.trim() === label) return sp.nextElementSibling?.textContent?.trim() || "";
+    }
+    return "";
+  };
   const cardData = {
     id: discogsId,
     type: entityType,
     title: [modalArtist?.textContent?.replace(/⌕/g,"").trim(), modalTitle?.textContent?.replace(/⌕/g,"").trim()].filter(Boolean).join(" - "),
     cover_image: modalImg?.src || "",
     uri: `/${entityType}/${discogsId}`,
+    year: detailVal("Year"),
+    country: detailVal("Country"),
+    genre: [detailVal("Genre")].filter(Boolean),
+    label: [detailVal("Label")].filter(Boolean),
+    format: [detailVal("Format")].filter(Boolean),
+    catno: detailVal("Cat#"),
   };
 
   const endpoint = wasFav ? "/api/user/favorites/remove" : "/api/user/favorites/add";

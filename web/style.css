@@ -420,6 +420,7 @@ body {
 }
 
 /* ── Recent Searches pills (inline under results) ───────────────────────── */
+#favorites-sort { height: 1.6rem; font-size: 0.7rem; padding: 0 0.3rem; }
 #favorites-sample-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
@@ -1465,6 +1466,7 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 }
 .mini-player.open { display: block; }
 body.player-open { padding-bottom: 72px; }
+body.modal-open  { overflow: hidden; }
 
 .mini-player-bar {
   display: flex;
