@@ -154,12 +154,17 @@ async function doSearch(page = 1, skipPushState = false) {
     const searchTerms = parts.join(", ") + (extras ? "  ·  " + extras : "");
     const descEl = document.getElementById("search-desc");
     if (parts.length) {
+      const fullText = `Searched :: ${searchTerms}`;
+      descEl.title = fullText;
       descEl.innerHTML = `Searched :: <span onclick="copySearchUrl(this)" title="Click to copy search link" style="cursor:pointer;border-bottom:1px dotted transparent;transition:border-color 0.2s" onmouseover="this.style.borderBottomColor='var(--accent)'" onmouseout="this.style.borderBottomColor='transparent'">${escHtml(searchTerms)}</span>`;
     } else {
       descEl.textContent = "";
+      descEl.title = "";
     }
-    document.getElementById("search-returned").textContent = "";
-    document.getElementById("search-ai-summary").textContent = "";
+    const retClr = document.getElementById("search-returned");
+    retClr.textContent = ""; retClr.title = "";
+    const aiClr = document.getElementById("search-ai-summary");
+    aiClr.textContent = ""; aiClr.title = "";
     if (parts.length) document.getElementById("search-info-block").style.display = "";
   }
 
@@ -329,7 +334,9 @@ async function doSearch(page = 1, skipPushState = false) {
     if (!items.length) {
       setStatus("");
       document.getElementById("results").innerHTML = renderEmptyState("🔍", "No results found", "Try a different search term or broaden your filters");
-      document.getElementById("search-ai-summary").innerHTML = "<i>Couldn't find any results at Discogs.</i>";
+      const noResAi = document.getElementById("search-ai-summary");
+      noResAi.innerHTML = "<i>Couldn't find any results at Discogs.</i>";
+      noResAi.title = "Couldn't find any results at Discogs.";
       document.getElementById("search-info-block").style.display = "";
       const ws = document.getElementById("favorites-sample"); if (ws) ws.style.display = "none";
       return;
@@ -338,7 +345,9 @@ async function doSearch(page = 1, skipPushState = false) {
     setStatus("");
     const shown = _append ? document.getElementById("results").querySelectorAll(".card, .card-animate").length + items.length : items.length;
     const returnedMsg = `Returned :: ${totalItems_new.toLocaleString()} results — showing ${shown}`;
-    document.getElementById("search-returned").textContent = returnedMsg;
+    const retEl = document.getElementById("search-returned");
+    retEl.textContent = returnedMsg;
+    retEl.title = returnedMsg;
     document.getElementById("search-info-block").style.display = "";
     renderResults(items, _append);
     renderPagination();
@@ -362,9 +371,9 @@ async function doSearch(page = 1, skipPushState = false) {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query: qualityQuery, titles: qualityTitles }),
         }).then(r => r.json()).then(d => {
-          if (aiEl) aiEl.textContent = d.phrase || "";
+          if (aiEl) { aiEl.textContent = d.phrase || ""; aiEl.title = d.phrase || ""; }
         }).catch(() => {
-          if (aiEl) aiEl.textContent = "";
+          if (aiEl) { aiEl.textContent = ""; aiEl.title = ""; }
         });
       }
     }
