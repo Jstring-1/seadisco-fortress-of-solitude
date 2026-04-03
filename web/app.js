@@ -44,7 +44,8 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
     doSearch(parseInt(p.get("pg") ?? "1"), true);
   }
   // Open album popup from URL (works even without a search query)
-  const openParam = p.get("op");
+  // vp = video's source popup (fallback if op was cleared when modal closed during playback)
+  const openParam = p.get("op") || p.get("vp");
   if (openParam && !document.getElementById("modal-overlay")?.classList.contains("open")) {
     const colon = openParam.indexOf(":");
     if (colon > 0) {
