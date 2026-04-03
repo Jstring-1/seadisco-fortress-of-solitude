@@ -316,6 +316,7 @@ async function doSearch(page = 1, skipPushState = false) {
       document.getElementById("results").innerHTML = renderEmptyState("🔍", "No results found", "Try a different search term or broaden your filters");
       document.getElementById("search-ai-summary").innerHTML = "<i>Couldn't find any results at Discogs.</i>";
       document.getElementById("search-info-block").style.display = "";
+      const ws = document.getElementById("wanted-sample"); if (ws) ws.style.display = "none";
       return;
     }
 
@@ -644,7 +645,8 @@ async function loadWantedSample() {
     const moreBtn = document.getElementById("wanted-sample-more");
     if (moreBtn) moreBtn.style.display = "";
     const view = new URLSearchParams(location.search).get("view") || "";
-    if (!view || view === "search" || view === "find") {
+    const hasSearchResults = document.getElementById("results")?.children.length > 0;
+    if ((!view || view === "search" || view === "find") && !hasSearchResults) {
       wrap.style.display = "";
     }
   } catch { /* silent fail */ }
