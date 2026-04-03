@@ -983,11 +983,12 @@ export async function getPriceHistory(releaseId: number, currency: string = "USD
 export async function getStaleReleaseIds(limit: number = 100): Promise<number[]> {
   // Get unique release IDs from all collections where price is stale (>24h) or missing
   const r = await getPool().query(
-    `SELECT DISTINCT uc.discogs_release_id
+    `SELECT uc.discogs_release_id, MIN(pc.fetched_at) AS oldest
      FROM user_collection uc
      LEFT JOIN price_cache pc ON pc.discogs_release_id = uc.discogs_release_id
      WHERE pc.fetched_at IS NULL OR pc.fetched_at < NOW() - INTERVAL '24 hours'
-     ORDER BY pc.fetched_at ASC NULLS FIRST
+     GROUP BY uc.discogs_release_id
+     ORDER BY oldest ASC NULLS FIRST
      LIMIT $1`,
     [limit]
   );
