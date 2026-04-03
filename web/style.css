@@ -2680,6 +2680,51 @@ body.player-open { padding-bottom: 56px; }
   padding: 1px 5px;
   line-height: 1.4;
 }
+.favorite-badge {
+  font-size: 0.7rem;
+  background: rgba(58, 26, 40, 0.88);
+  color: #f06292;
+  border: 1px solid #f06292;
+  border-radius: 3px;
+  padding: 1px 5px;
+  line-height: 1.4;
+}
+
+/* Heart overlay on cards */
+.card-fav-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  background: rgba(0,0,0,0.55);
+  border: none;
+  border-radius: 50%;
+  width: 26px;
+  height: 26px;
+  cursor: pointer;
+  color: #888;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s, opacity 0.15s;
+  opacity: 0;
+  z-index: 2;
+}
+.card:hover .card-fav-btn,
+.card-fav-btn.is-favorite { opacity: 1; }
+.card-fav-btn:hover { color: #f06292; }
+.card-fav-btn.is-favorite { color: #f06292; opacity: 1; }
+
+/* Favorite button in modal */
+.modal-act-btn.is-favorite {
+  background: #3a1a2a;
+  border-color: #5a2a3a;
+  color: #f06292;
+}
+.modal-act-btn.is-favorite:hover {
+  background: #4a1f2f;
+  border-color: #6a3a4a;
+}
 
 /* ── Mobile: force Format/Year on line 1, Genre/Style on line 2 ── */
 @media (max-width: 640px) {

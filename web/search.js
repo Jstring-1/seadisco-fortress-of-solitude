@@ -471,8 +471,12 @@ function renderCard(item, index) {
     if (window._collectionIds?.has(releaseId)) badges += `<span class="collection-badge" title="In your collection">✓</span>`;
     if (window._wantlistIds?.has(releaseId))   badges += `<span class="wantlist-badge" title="In your wantlist">♡</span>`;
   }
+  const favKey = `${type}:${item.id}`;
+  const isFav = window._favoriteKeys?.has(favKey);
+  if (isFav) badges += `<span class="favorite-badge" title="Favorited">❤</span>`;
+  const favBtn = (type && item.id) ? `<button class="card-fav-btn${isFav ? " is-favorite" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,${item.id},'${type}')" title="${isFav ? "Remove from favorites" : "Add to favorites"}">${isFav ? "❤" : "♡"}</button>` : "";
 
-  const thumbWrap = `<div class="card-thumb-wrap">${thumb}<div class="card-thumb-badges">${badges}</div></div>`;
+  const thumbWrap = `<div class="card-thumb-wrap">${thumb}<div class="card-thumb-badges">${badges}</div>${favBtn}</div>`;
 
   // Rating stars (only for collection/wantlist cards)
   const rating = item._rating ?? 0;
@@ -630,10 +634,23 @@ async function doAiSearch(q) {
 }
 
 
-// ── Wanted sample cards for Find page filler ─────────────────────────────
+// ── Wanted sample / favorites cards for Find page filler ────────────────
 let _wantedSampleIds = new Set();
 
 async function loadWantedSample() {
+  // If user has favorites, show those instead
+  if (window._favoriteKeys?.size > 0) {
+    await loadFavoritesGrid();
+    return;
+  }
+  // Not logged in — show login prompt then fall through to community wantlist
+  const wrap = document.getElementById("wanted-sample");
+  const heading = document.getElementById("wanted-sample-heading");
+  if (!window._clerk?.user) {
+    if (heading) heading.innerHTML = `<a href="/account" style="color:var(--accent);text-decoration:none;font-size:0.8rem">Sign in to save favorites ♡</a>`;
+  } else if (window._favoriteKeys?.size === 0) {
+    if (heading) heading.innerHTML = `<span style="color:var(--muted);font-size:0.75rem">♡ Favorite albums, artists & labels to see them here</span>`;
+  }
   try {
     const r = await fetch("/api/wanted-sample");
     if (!r.ok) return;
@@ -641,7 +658,6 @@ async function loadWantedSample() {
     const items = data.items ?? [];
     if (!items.length) return;
     _wantedSampleIds = new Set(items.map(i => i.id));
-    const wrap = document.getElementById("wanted-sample");
     const grid = document.getElementById("wanted-sample-grid");
     if (!wrap || !grid) return;
     grid.innerHTML = items.map((item, i) => renderCardFromBasicInfo(item, i)).join("");
@@ -653,6 +669,77 @@ async function loadWantedSample() {
       wrap.style.display = "";
     }
   } catch { /* silent fail */ }
+}
+
+async function loadFavoritesGrid() {
+  try {
+    const r = await apiFetch("/api/user/favorites");
+    if (!r.ok) return;
+    const data = await r.json();
+    const items = (data.items ?? []).map(row => row.data);
+    const wrap = document.getElementById("wanted-sample");
+    const grid = document.getElementById("wanted-sample-grid");
+    const heading = document.getElementById("wanted-sample-heading");
+    if (!wrap || !grid) return;
+    if (heading) heading.innerHTML = `<span style="color:var(--muted);font-size:0.75rem">Your Favorites</span>`;
+    if (!items.length) {
+      grid.innerHTML = `<div style="color:var(--muted);font-size:0.8rem;padding:1rem">♡ Favorite albums, artists & labels to see them here</div>`;
+    } else {
+      grid.innerHTML = items.map((item, i) => renderCard(item, i)).join("");
+    }
+    const moreBtn = document.getElementById("wanted-sample-more");
+    if (moreBtn) moreBtn.style.display = "none";
+    const view = new URLSearchParams(location.search).get("view") || "";
+    const hasSearchResults = document.getElementById("results")?.children.length > 0;
+    if ((!view || view === "search" || view === "find") && !hasSearchResults) {
+      wrap.style.display = "";
+    }
+  } catch { /* silent */ }
+}
+
+function toggleFavoriteFromCard(btn, discogsId, entityType) {
+  const key = `${entityType}:${discogsId}`;
+  const wasFav = window._favoriteKeys?.has(key);
+  if (!window._favoriteKeys) window._favoriteKeys = new Set();
+
+  // Optimistic update
+  if (wasFav) {
+    window._favoriteKeys.delete(key);
+    btn.classList.remove("is-favorite");
+    btn.textContent = "♡";
+    btn.title = "Add to favorites";
+  } else {
+    window._favoriteKeys.add(key);
+    btn.classList.add("is-favorite");
+    btn.textContent = "❤";
+    btn.title = "Remove from favorites";
+  }
+
+  // Update badge on this card
+  const card = btn.closest("a");
+  const badgeEl = card?.querySelector(".card-thumb-badges");
+  if (badgeEl) {
+    const existingFav = badgeEl.querySelector(".favorite-badge");
+    if (wasFav && existingFav) existingFav.remove();
+    if (!wasFav && !existingFav) badgeEl.insertAdjacentHTML("beforeend", `<span class="favorite-badge" title="Favorited">❤</span>`);
+  }
+
+  // Build card data for storage
+  const cached = itemCache.get(String(discogsId));
+  const cardData = cached || { id: discogsId, type: entityType, title: card?.querySelector(".card-title")?.textContent || "" };
+
+  // API call
+  const endpoint = wasFav ? "/api/user/favorites/remove" : "/api/user/favorites/add";
+  const body = wasFav ? { discogsId, entityType } : { discogsId, entityType, data: cardData };
+  apiFetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+    .then(r => { if (!r.ok) throw new Error(); showToast(wasFav ? "Removed from favorites" : "Added to favorites"); })
+    .catch(() => {
+      // Revert on error
+      if (wasFav) window._favoriteKeys.add(key); else window._favoriteKeys.delete(key);
+      btn.classList.toggle("is-favorite", wasFav);
+      btn.textContent = wasFav ? "❤" : "♡";
+      showToast("Failed to update favorite", "error");
+    });
 }
 
 async function loadMoreWantedSample() {
