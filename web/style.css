@@ -1888,6 +1888,10 @@ body.player-open { padding-bottom: 56px; }
 .catno-link:visited {
   color: #7ec87e !important;
 }
+.mv-grid a:hover {
+  text-decoration: underline !important;
+  text-underline-offset: 3px;
+}
 .matrix-runout[data-copied="true"]::after {
   content: " ✓ copied";
   color: var(--muted);
