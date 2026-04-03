@@ -360,8 +360,20 @@ function setVideoUrl(id) {
   history.replaceState({}, "", u.toString());
 }
 
+let _ytLoadTimer = null;
 function loadYTVideo(id) {
   updatePlayerStatus("loading");
+  // Timeout: if still "loading" after 8s, mark unavailable and skip
+  if (_ytLoadTimer) clearTimeout(_ytLoadTimer);
+  const session = _ytSession;
+  _ytLoadTimer = setTimeout(() => {
+    if (session !== _ytSession) return;
+    const statusEl = document.getElementById("mini-player-status");
+    if (statusEl && (statusEl.textContent === "loading…" || statusEl.textContent === "buffering…")) {
+      updatePlayerStatus("unavailable");
+      setTimeout(() => { if (session === _ytSession) playNextVideo(); }, 1500);
+    }
+  }, 8000);
   if (ytPlayer && typeof ytPlayer.loadVideoById === "function") {
     ytPlayer.loadVideoById(id);
     return;
@@ -391,6 +403,8 @@ function loadYTVideo(id) {
 }
 
 function updatePlayerStatus(state, errorCode) {
+  // Clear load timeout once we get a definitive state
+  if (state !== "loading" && state !== "buffering" && _ytLoadTimer) { clearTimeout(_ytLoadTimer); _ytLoadTimer = null; }
   const el = document.getElementById("mini-player-status");
   if (!el) return;
   const map = {
@@ -539,6 +553,9 @@ function playNextVideo() {
     }
     next++;
   }
+  // No more tracks in queue
+  updatePlayerStatus("ended");
+  updateVideoNavButtons();
 }
 
 function onVideoEnded() {
@@ -593,6 +610,7 @@ function sharePlayerUrl() {
 function closeVideo() {
   _ytSession++;                             // invalidate any pending callbacks
   if (_ytPollId) { clearInterval(_ytPollId); _ytPollId = null; }
+  if (_ytLoadTimer) { clearTimeout(_ytLoadTimer); _ytLoadTimer = null; }
   const mp = document.getElementById("mini-player");
   mp.classList.remove("open", "expanded");
   document.body.classList.remove("player-open");
