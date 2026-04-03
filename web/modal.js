@@ -508,7 +508,6 @@ function toggleMiniPlayer() {
 function openVideo(event, url) {
   if (event) { event.preventDefault(); event.stopPropagation(); }
   ensureYTAPI();
-  _ytSession++;
   const id = extractYouTubeId(url);
   if (!id) { window.open(url, "_blank", "noopener"); return; }
   const trackLinks = [...document.querySelectorAll(".track-link[data-video]")];
