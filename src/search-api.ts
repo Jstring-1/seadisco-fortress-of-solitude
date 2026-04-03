@@ -1485,7 +1485,9 @@ app.get("/api/user/favorites", async (req, res) => {
   const userId = await getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
-    const items = await getFavorites(userId, 48);
+    const limit = Math.min(parseInt(req.query.limit as string) || 96, 200);
+    const offset = parseInt(req.query.offset as string) || 0;
+    const items = await getFavorites(userId, limit, offset);
     res.json({ items });
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -1493,11 +1495,13 @@ app.get("/api/user/favorites", async (req, res) => {
 });
 
 // GET /api/public/featured-favorites — owner's favorites for logged-out landing page
-app.get("/api/public/featured-favorites", async (_req, res) => {
+app.get("/api/public/featured-favorites", async (req, res) => {
   const ownerId = process.env.ADMIN_CLERK_ID ?? "";
   if (!ownerId) { res.json({ items: [] }); return; }
   try {
-    const items = await getFavorites(ownerId, 48);
+    const limit = Math.min(parseInt(req.query.limit as string) || 48, 200);
+    const offset = parseInt(req.query.offset as string) || 0;
+    const items = await getFavorites(ownerId, limit, offset);
     res.json({ items });
   } catch (e) {
     res.status(500).json({ error: String(e) });
