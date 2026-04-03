@@ -35,6 +35,8 @@ function pushSearchState(q, artistRaw, release, year, label, genre, sort, result
   const format = document.getElementById("f-format")?.value ?? "";
   if (style)      p.set("st", style);
   if (format) p.set("fm", format);
+  const country = document.getElementById("f-country")?.value ?? "";
+  if (country) p.set("co", country);
   if (sort)       p.set("sr", sort);
   if (resultType) p.set("rt", resultType);
   if (page > 1)   p.set("pg", String(page));
@@ -52,17 +54,19 @@ function restoreFromParams(p) {
   sortEl.value = p.get("sr") ?? "";
   if (!sortEl.value) sortEl.selectedIndex = 0;
   document.getElementById("f-format").value  = p.get("fm") || "";
+  const fCountry = document.getElementById("f-country");
+  if (fCountry) fCountry.value = p.get("co") ?? "";
   populateStyles();
   document.getElementById("f-style").value   = p.get("st") ?? "";
   const rtype = p.get("rt") ?? "";
   const radio = document.querySelector(`input[name="result-type"][value="${rtype}"]`);
   if (radio) radio.checked = true;
-  const hasAdvanced = p.get("ar") || p.get("re") || p.get("yr") || p.get("lb") || p.get("gn") || p.get("st") || p.get("fm");
+  const hasAdvanced = p.get("ar") || p.get("re") || p.get("yr") || p.get("lb") || p.get("gn") || p.get("st") || p.get("fm") || p.get("co");
   if (hasAdvanced) toggleAdvanced(true);
 }
 
 function clearForm() {
-  ["query","f-artist","f-release","f-year","f-label","f-genre","f-style"].forEach(id => {
+  ["query","f-artist","f-release","f-year","f-label","f-genre","f-style","f-country"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = "";
   });
@@ -91,12 +95,13 @@ async function doSearch(page = 1, skipPushState = false) {
   const genre     = advOpen ? document.getElementById("f-genre").value.trim() : "";
   const style     = advOpen ? (document.getElementById("f-style")?.value.trim() ?? "") : "";
   const format    = advOpen ? document.getElementById("f-format").value : "";
+  const country   = advOpen ? (document.getElementById("f-country")?.value.trim() ?? "") : "";
   const sort      = document.getElementById("f-sort").value;
   const resultType = document.querySelector('input[name="result-type"]:checked')?.value ?? "";
 
   if (resultType === "ai") { doAiSearch(q); return; }
 
-  if (!q && !artist && !release && !year && !label && !genre) {
+  if (!q && !artist && !release && !year && !label && !genre && !country) {
     setStatus("Enter a search term or fill in at least one filter.", false);
     return;
   }
@@ -140,6 +145,7 @@ async function doSearch(page = 1, skipPushState = false) {
     if (genre)   parts.push(`Genre: ${genre}`);
     if (style)   parts.push(`Style: ${style}`);
     if (format)  parts.push(`Format: ${format}`);
+    if (country) parts.push(`Country: ${country}`);
     const typeLabels = { "master":"Masters", "release":"Releases", "artist":"Artists", "label":"Labels" };
     const typeLabel = typeLabels[resultType] ?? "";
     const sortLabels = { "year:asc":"Year ↑", "year:desc":"Year ↓", "title:asc":"Title A→Z", "title:desc":"Title Z→A", "label:asc":"Label A→Z" };
@@ -176,6 +182,7 @@ async function doSearch(page = 1, skipPushState = false) {
     if (genre)   p.set("genre",         genre);
     if (style)   p.set("style",         style);
     if (format)  p.set("format",        format);
+    if (country) p.set("country",      country);
     if (sort) {
       const [sortField, sortOrder] = sort.split(":");
       p.set("sort",       sortField);
