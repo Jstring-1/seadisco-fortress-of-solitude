@@ -1997,6 +1997,28 @@ body.player-open { padding-bottom: 56px; }
 .credit-sep { color: #444;
 }
 
+/* ── Master version filter pills ── */
+.mv-pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-bottom: 0.4rem;
+}
+.mv-pill {
+  cursor: pointer;
+  border: none;
+  border-radius: 14px;
+  padding: 0.1rem 0.45rem;
+  font-size: 0.62rem;
+  font-weight: 600;
+  font-family: inherit;
+  transition: background 0.15s;
+  background: #2a2a2a;
+  color: var(--fg);
+}
+.mv-pill:hover { background: #3a3a3a; }
+.mv-pill[data-filter=""] { background: var(--accent); color: #000; }
+
 #album-info .track, #version-info .track {
   display: flex;
   gap: 0.6rem;
