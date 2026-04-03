@@ -566,8 +566,12 @@ function openPlayerRelease() {
 
 function sharePlayerUrl() {
   const u = new URL(window.location.origin);
-  const vd = new URLSearchParams(location.search).get("vd");
-  const vp = new URLSearchParams(location.search).get("vp");
+  const cur = new URLSearchParams(location.search);
+  // Include open popup if one is showing
+  const op = cur.get("op");
+  if (op) u.searchParams.set("op", op);
+  const vd = cur.get("vd");
+  const vp = cur.get("vp");
   if (vd) u.searchParams.set("vd", vd);
   if (vp) u.searchParams.set("vp", vp);
   navigator.clipboard.writeText(u.toString())
