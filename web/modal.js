@@ -333,6 +333,16 @@ function toggleRepeat() {
 }
 window.onYouTubeIframeAPIReady = function() { window._ytAPIReady = true; };
 
+// Highlight the currently playing track in any open popup tracklist
+function highlightPlayingTrack() {
+  document.querySelectorAll(".track-link.now-playing").forEach(el => el.classList.remove("now-playing"));
+  const currentUrl = (window._videoQueue ?? [])[window._videoQueueIndex ?? -1];
+  if (!currentUrl) return;
+  document.querySelectorAll(".track-link[data-video]").forEach(el => {
+    if (el.dataset.video === currentUrl) el.classList.add("now-playing");
+  });
+}
+
 function ensureYTAPI() {
   if (window._ytAPIReady || _ytLoading) return;
   _ytLoading = true;
@@ -460,6 +470,7 @@ function updateVideoNavButtons() {
   if (albumBtn) albumBtn.style.display = window._playerReleaseId ? "" : "none";
   const shareBtn = document.getElementById("mini-share");
   if (shareBtn) shareBtn.style.display = window._playerReleaseId ? "" : "none";
+  highlightPlayingTrack();
 }
 
 function toggleMiniPlayer() {
@@ -603,6 +614,8 @@ function closeVideo() {
   if (albumBtn) albumBtn.style.display = "none";
   const shareBtn = document.getElementById("mini-share");
   if (shareBtn) shareBtn.style.display = "none";
+  // Clear playing track highlights
+  document.querySelectorAll(".track-link.now-playing").forEach(el => el.classList.remove("now-playing"));
   window._playerReleaseType = null;
   window._playerReleaseId = null;
   window._playerReleaseUrl = null;
@@ -831,6 +844,8 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   if (isMaster) loadMasterVersions(null, searchResult.id);
   // Fetch instance data in background (for rating stars + instanceId)
   if (!isMaster && releaseId && window._collectionIds?.has(Number(releaseId))) loadModalInstanceData(Number(releaseId));
+  // Highlight currently playing track if a video is active
+  highlightPlayingTrack();
 }
 
 // ── Modal action buttons (collection/wantlist/rating) ────────────────────
