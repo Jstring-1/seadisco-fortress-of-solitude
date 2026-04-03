@@ -427,7 +427,11 @@ async function doSearch(page = 1, skipPushState = false) {
       }
     }
   } catch (e) {
-    setStatus("Search failed: " + e.message, true);
+    setStatus("");
+    document.getElementById("results").innerHTML =
+      `<div class="empty-state"><div class="empty-state-icon">⚠️</div>` +
+      `<div class="empty-state-title">Search failed</div>` +
+      `<div class="empty-state-subtitle">${escHtml(e.message)} — please try again</div></div>`;
     showToast("Search failed — please try again", "error");
   } finally {
     document.getElementById("search-btn").disabled = false;
