@@ -431,7 +431,7 @@ function _createYTPlayer(id) {
       onStateChange: function(e) {
         if (session !== _ytSession) return;   // stale player callback
         // YT.PlayerState: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
-        if (e.data === 1) updatePlayerStatus("playing");
+        if (e.data === 1) { updatePlayerStatus("playing"); window._ytRetried = false; }
         else if (e.data === 2) updatePlayerStatus("paused");
         else if (e.data === 3) updatePlayerStatus("buffering");
         else if (e.data === 0) { updatePlayerStatus("ended"); onVideoEnded(); }
@@ -443,10 +443,19 @@ function _createYTPlayer(id) {
         const code = e?.data;
         if (code === 100 || code === 101 || code === 150) {
           updatePlayerStatus("unavailable");
-          setTimeout(() => { if (session === _ytSession) playNextVideo(); }, 1500);
+          setTimeout(() => { if (session === _ytSession) playNextVideo(); }, 2000);
+        } else if (code === 5 && !window._ytRetried) {
+          // HTML5 error can be transient — retry once
+          window._ytRetried = true;
+          updatePlayerStatus("buffering");
+          setTimeout(() => {
+            if (session !== _ytSession) return;
+            if (ytPlayer && typeof ytPlayer.loadVideoById === "function") ytPlayer.loadVideoById(id);
+          }, 1000);
         } else {
+          window._ytRetried = false;
           updatePlayerStatus("error");
-          setTimeout(() => { if (session === _ytSession) playNextVideo(); }, 1500);
+          setTimeout(() => { if (session === _ytSession) playNextVideo(); }, 2000);
         }
       },
       onReady: function() { if (session === _ytSession) updatePlayerStatus("playing"); }

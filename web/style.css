@@ -2043,8 +2043,12 @@ body.player-open { padding-bottom: 56px; }
   display: flex;
   gap: 0.6rem;
   font-size: 0.82rem;
-  padding: 0.2rem 0;
+  padding: 0.25rem 0;
   border-bottom: 1px solid var(--border);
+  align-items: baseline;
+}
+#album-info .track-title a, #version-info .track-title a {
+  display: inline;
 }
 
 #album-info .track:last-child, #version-info .track:last-child { border-bottom: none; }
