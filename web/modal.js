@@ -729,6 +729,23 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     : searchResult.type === "master" ? "Master" : searchResult.type === "release" ? "Release" : "";
   const typeLabel = typeName && releaseId ? `${typeName}: ${releaseId}` : typeName;
 
+  // Store rich card-shaped data for favorites (popup may not have itemCache entry)
+  const entityType = targetId === "version-info" ? "release" : (searchResult.type || "release");
+  if (!window._popupCardData) window._popupCardData = {};
+  window._popupCardData[String(releaseId)] = {
+    id: releaseId,
+    type: entityType,
+    title: artists.length ? `${artists.join(", ")} - ${title}` : title,
+    cover_image: img,
+    uri: searchResult.uri || `/${entityType}/${releaseId}`,
+    year: String(year),
+    country: country,
+    genre: [...(d.genres ?? [])].slice(0, 2),
+    label: labelNames.slice(0, 2),
+    format: (d.formats ?? []).map(f => f.name).slice(0, 3),
+    catno: catno,
+  };
+
   const videoMap = new Map();
   for (const v of (d.videos ?? [])) {
     if (v.title && v.uri) videoMap.set(v.title.toLowerCase(), v.uri);
@@ -1200,25 +1217,23 @@ function toggleFavoriteFromModal(discogsId, entityType) {
   loadModalActions(discogsId, context);
   refreshCardBadges(discogsId);
 
-  // Build card data — prefer itemCache (has full Discogs search result fields)
+  // Build card data — use _popupCardData (built in renderAlbumInfo with full API data)
+  const popupData = window._popupCardData?.[String(discogsId)];
   const cached = (typeof itemCache !== "undefined") ? itemCache.get(String(discogsId)) : null;
-  let cardData;
-  if (cached) {
-    cardData = cached;
-  } else {
-    // Fallback: scrape from the active popup DOM
-    const prefix = inVersion ? "#version-info" : "#album-info";
-    const modalTitle = document.querySelector(`${prefix} .album-meta h2`);
-    const modalArtist = document.querySelector(`${prefix} .album-artist`);
-    const modalImg = document.querySelector(`${prefix} .album-cover`);
-    cardData = {
-      id: discogsId,
-      type: entityType,
-      title: [modalArtist?.textContent?.replace(/⌕/g,"").trim(), modalTitle?.textContent?.replace(/⌕/g,"").trim()].filter(Boolean).join(" - "),
-      cover_image: modalImg?.src || "",
-      uri: `/${entityType}/${discogsId}`,
-    };
-  }
+  // Prefer popupCardData (always rich), then itemCache if it has detail fields
+  const cardData = popupData
+    || (cached && (cached.label?.length || cached.format?.length) ? cached : null)
+    || (() => {
+      const prefix = inVersion ? "#version-info" : "#album-info";
+      const modalTitle = document.querySelector(`${prefix} .album-meta h2`);
+      const modalArtist = document.querySelector(`${prefix} .album-artist`);
+      const modalImg = document.querySelector(`${prefix} .album-cover`);
+      return {
+        id: discogsId, type: entityType,
+        title: [modalArtist?.textContent?.replace(/⌕/g,"").trim(), modalTitle?.textContent?.replace(/⌕/g,"").trim()].filter(Boolean).join(" - "),
+        cover_image: modalImg?.src || "", uri: `/${entityType}/${discogsId}`,
+      };
+    })();
 
   const endpoint = wasFav ? "/api/user/favorites/remove" : "/api/user/favorites/add";
   const body = wasFav ? { discogsId, entityType } : { discogsId, entityType, data: cardData };

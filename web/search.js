@@ -452,7 +452,13 @@ function renderCard(item, index) {
   const isRelease = type === "release" || type === "master";
   const isArtist  = type === "artist";
   const isLabel   = type === "label";
-  if (isRelease || isArtist || isLabel) itemCache.set(String(item.id), item);
+  if (isRelease || isArtist || isLabel) {
+    const existing = itemCache.get(String(item.id));
+    // Don't overwrite rich cached data with sparse favorite data
+    if (!existing || (item.label?.length || item.format?.length || item.genre?.length)) {
+      itemCache.set(String(item.id), item);
+    }
+  }
   const animClass = index != null ? " card-animate" : "";
   const animStyle = index != null ? ` style="--i:${Math.min(index, 20)}"` : "";
   const typeClass = `card card-type-${type}${animClass}`;
