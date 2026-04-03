@@ -797,7 +797,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
             </div>`
           : (stats?.numForSale === 0 ? `<div style="font-size:0.75rem;color:#555;margin-top:0.2rem">Not currently available on Discogs marketplace</div>` : "")
         }
-        ${!isMaster && releaseId && window._collectionIds ? renderActionsImmediate(Number(releaseId)) : ""}
+        ${!isMaster && releaseId ? renderActionsImmediate(Number(releaseId)) : ""}
       </div>
     </div>
     ${trackHTML}
