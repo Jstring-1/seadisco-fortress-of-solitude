@@ -1072,8 +1072,8 @@ function _mvGetDisplayFormat(v) {
   return `${medium}, ${fmt}`;
 }
 
-function setMvFormatFilter(f) { _mvFormatFilter = f; renderMasterVersions(); }
-function setMvCountryFilter(c) { _mvCountryFilter = c; renderMasterVersions(); }
+function setMvFormatFilter(f) { _mvFormatFilter = f; localStorage.setItem("mv-format-filter", f); renderMasterVersions(); }
+function setMvCountryFilter(c) { _mvCountryFilter = c; localStorage.setItem("mv-country-filter", c); renderMasterVersions(); }
 
 function renderMasterVersions() {
   const list = document.getElementById("master-versions-list");
@@ -1099,13 +1099,14 @@ function renderMasterVersions() {
     const inCol  = window._collectionIds?.has(v.id);
     const inWant = window._wantlistIds?.has(v.id);
     const badge  = inCol  ? `<span class="collection-badge">✓</span>` :
-                   inWant ? `<span class="wantlist-badge">♡</span>` : "";
+                   inWant ? `<span class="wantlist-badge">♡</span>` : `<span style="visibility:hidden">✓</span>`;
     return `
       <span style="color:#888">${escHtml(!v.year || v.year === "0" ? "?" : String(v.year))}</span>
       <span style="color:#aaa">${escHtml(v.country || "?")}</span>
       <span style="color:#888">${escHtml(_mvGetDisplayFormat(v))}</span>
+      ${badge}
       <span>${v.catno && v.catno !== "—" ? `<a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('query').value='${escHtml((v.catno).replace(/'/g, "\\'"))}';doSearch(1)" title="Search for this catalog number">${escHtml(v.catno)}</a>` : `<span style="color:#7ec87e">—</span>`}</span>
-      <span><a href="#" class="modal-internal-link" onclick="openVersionPopup(event,${v.id})" title="View this pressing" style="color:var(--accent)">${escHtml(v.label ?? v.title ?? "—")}</a>${badge}</span>`;
+      <span><a href="#" class="modal-internal-link" onclick="openVersionPopup(event,${v.id})" title="View this pressing" style="color:var(--accent)">${escHtml(v.label ?? v.title ?? "—")}</a></span>`;
   }).join("");
 }
 
@@ -1120,9 +1121,6 @@ async function loadMasterVersions(event, masterId) {
     _masterVersions = data.versions ?? [];
     if (!_masterVersions.length) { list.textContent = "No pressings found."; return; }
 
-    _mvFormatFilter = "";
-    _mvCountryFilter = "";
-
     const formatSet = new Set();
     const countrySet = new Set();
     _masterVersions.forEach(v => {
@@ -1132,6 +1130,12 @@ async function loadMasterVersions(event, masterId) {
     });
     const formats = [...formatSet].sort();
     const countries = [...countrySet].sort();
+
+    // Restore saved filters if they exist in this master's options
+    const savedFormat = localStorage.getItem("mv-format-filter") || "";
+    const savedCountry = localStorage.getItem("mv-country-filter") || "";
+    _mvFormatFilter = formatSet.has(savedFormat) ? savedFormat : "";
+    _mvCountryFilter = countrySet.has(savedCountry) ? savedCountry : "";
 
     const formatPills = [
       `<button class="mv-format-pill mv-pill" data-filter="" onclick="setMvFormatFilter('')">All</button>`,
@@ -1146,7 +1150,7 @@ async function loadMasterVersions(event, masterId) {
       <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.4rem">Pressings / Versions</div>
       ${formats.length > 1 ? `<div class="mv-pill-row">${formatPills}</div>` : ""}
       ${countries.length > 1 ? `<div class="mv-pill-row">${countryPills}</div>` : ""}
-      <div class="mv-grid" style="display:grid;grid-template-columns:auto auto auto auto 1fr;gap:0.2rem 0.7rem;font-size:0.75rem"></div>`;
+      <div class="mv-grid" style="display:grid;grid-template-columns:auto auto auto auto auto 1fr;gap:0.2rem 0.7rem;font-size:0.75rem"></div>`;
     renderMasterVersions();
   } catch(e) {
     console.error("loadMasterVersions error:", e);
