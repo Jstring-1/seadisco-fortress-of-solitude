@@ -71,7 +71,6 @@ const ipCounts = new Map<string, { count: number; resetAt: number }>();
 
 // IPs that bypass the rate limit and auth requirement entirely
 const IP_WHITELIST = new Set<string>([
-  "172.59.131.156",
 ]);
 
 function clientIp(req: express.Request): string {
