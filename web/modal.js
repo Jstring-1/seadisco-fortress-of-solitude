@@ -1016,6 +1016,7 @@ async function toggleCollection(releaseId) {
       btn.classList.add('in-collection');
       window._collectionIds?.add(releaseId);
     }
+    refreshCardBadges(releaseId);
 
     const actionsEl = document.getElementById("modal-actions");
     const endpoint = inCol ? "/api/user/collection/remove" : "/api/user/collection/add";
@@ -1069,6 +1070,7 @@ async function toggleWantlist(releaseId) {
       btn.classList.add('in-wantlist');
       window._wantlistIds?.add(releaseId);
     }
+    refreshCardBadges(releaseId);
 
     const endpoint = inWant ? "/api/user/wantlist/remove" : "/api/user/wantlist/add";
     const r = await fetch(endpoint, {
