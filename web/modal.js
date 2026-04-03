@@ -52,13 +52,29 @@ function closeModal() {
 
 // ── Tracklist collapse/expand ──────────────────────────────────────────────
 function toggleTracklist(headingEl) {
-  const body = headingEl.nextElementSibling;
+  const body = headingEl.closest(".tracklist-header").nextElementSibling;
   if (!body) return;
   const isOpen = body.style.display !== "none";
   body.style.display = isOpen ? "none" : "";
   const arrow = headingEl.querySelector(".tracklist-arrow");
   if (arrow) arrow.textContent = isOpen ? "▶" : "▼";
   localStorage.setItem("tracklist-open", isOpen ? "false" : "true");
+}
+
+function filterTracks(input) {
+  const q = input.value.toLowerCase().trim();
+  const body = input.closest(".tracklist-header").nextElementSibling;
+  if (!body) return;
+  // Ensure tracklist is expanded when filtering
+  if (q && body.style.display === "none") {
+    body.style.display = "";
+    const arrow = input.closest(".tracklist-header").querySelector(".tracklist-arrow");
+    if (arrow) arrow.textContent = "▼";
+  }
+  body.querySelectorAll(".track").forEach(row => {
+    const title = row.querySelector(".track-title")?.textContent.toLowerCase() ?? "";
+    row.style.display = !q || title.includes(q) ? "" : "none";
+  });
 }
 
 // ── Concert popup ─────────────────────────────────────────────────────────
@@ -688,7 +704,10 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const tracklistOpen = localStorage.getItem("tracklist-open") !== "false";
   const trackHTML = tracks.length ? `
     <div class="album-tracklist">
-      <div class="tracklist-heading tracklist-toggle" onclick="toggleTracklist(this)" title="Click to collapse/expand tracklist"><span class="tracklist-arrow">${tracklistOpen ? "▼" : "▶"}</span> Tracklist</div>
+      <div class="tracklist-header">
+        <div class="tracklist-heading tracklist-toggle" onclick="toggleTracklist(this)" title="Click to collapse/expand tracklist"><span class="tracklist-arrow">${tracklistOpen ? "▼" : "▶"}</span> Tracklist</div>
+        <input type="text" class="tracklist-filter" placeholder="filter tracks…" oninput="filterTracks(this)" />
+      </div>
       <div class="tracklist-body"${tracklistOpen ? "" : ' style="display:none"'}>
       ${tracks.map(t => {
         const url = findVideo(t.title || "");
