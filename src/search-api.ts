@@ -74,7 +74,10 @@ const IP_WHITELIST = new Set<string>([
 ]);
 
 function clientIp(req: express.Request): string {
-  return (req.ip ?? "unknown").replace(/^::ffff:/, "").trim();
+  // Railway sets X-Forwarded-For with the real client IP as the first entry
+  const xff = (req.headers["x-forwarded-for"] as string ?? "").split(",")[0].trim();
+  const ip = xff || (req.ip ?? "unknown").replace(/^::ffff:/, "").trim();
+  return ip;
 }
 
 
