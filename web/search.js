@@ -686,6 +686,8 @@ async function loadFavoritesGrid() {
       grid.innerHTML = `<div style="color:var(--muted);font-size:0.8rem;padding:1rem">♡ Favorite albums, artists & labels to see them here</div>`;
       if (sortEl) sortEl.style.display = "none";
     } else {
+      const saved = localStorage.getItem("fav-sort");
+      if (saved && sortEl) sortEl.value = saved;
       const sortBy = sortEl?.value || "recent";
       const sorted = sortFavoriteItems(_favoritesItems, sortBy);
       grid.innerHTML = sorted.map((item, i) => renderCard(item, i)).join("");
@@ -735,6 +737,7 @@ function sortFavoriteItems(items, sortBy) {
 }
 
 function sortFavoritesGrid(sortBy) {
+  localStorage.setItem("fav-sort", sortBy);
   if (!_favoritesItems.length) return;
   const grid = document.getElementById("favorites-sample-grid");
   if (!grid) return;
