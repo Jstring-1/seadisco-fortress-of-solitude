@@ -1009,7 +1009,6 @@ export interface CwSearchFilters {
   genre?: string;
   style?: string;
   format?: string;
-  country?: string;
   type?: string;       // "master" = has master_id, "release" = no master_id
   folderId?: number;
   ratingMin?: number;  // 1-5 for "N stars+", 0 for unrated only
@@ -1082,7 +1081,6 @@ function buildCwWhere(filters: CwSearchFilters, startIdx: number): { clause: str
     [filters.genre,   "(data->'genres')::text"],
     [filters.style,   "(data->'styles')::text"],
     [filters.format,  "(data->'formats')::text"],
-    [filters.country, "data->>'country'"],
   ];
 
   for (const [value, column] of fields) {
@@ -1196,42 +1194,34 @@ export async function getWantlistPage(
   return { items: dataR.rows.map(r => ({ ...r.data, _rating: r.rating ?? 0, _notes: r.notes ?? [] })), total: countR.rows[0]?.total ?? 0 };
 }
 
-export async function getCollectionFacets(clerkUserId: string, genre?: string): Promise<{ genres: string[]; styles: string[]; countries: string[] }> {
+export async function getCollectionFacets(clerkUserId: string, genre?: string): Promise<{ genres: string[]; styles: string[] }> {
   const stylesQuery = genre
     ? `SELECT DISTINCT s AS name FROM user_collection, jsonb_array_elements_text(data->'styles') AS s WHERE clerk_user_id = $1 AND (data->'genres')::text ILIKE $2 ORDER BY s`
     : `SELECT DISTINCT s AS name FROM user_collection, jsonb_array_elements_text(data->'styles') AS s WHERE clerk_user_id = $1 ORDER BY s`;
   const stylesParams = genre ? [clerkUserId, `%${genre}%`] : [clerkUserId];
-  const [genresR, stylesR, countriesR] = await Promise.all([
+  const [genresR, stylesR] = await Promise.all([
     getPool().query(
       `SELECT DISTINCT g AS name FROM user_collection, jsonb_array_elements_text(data->'genres') AS g WHERE clerk_user_id = $1 ORDER BY g`,
       [clerkUserId]
     ),
     getPool().query(stylesQuery, stylesParams),
-    getPool().query(
-      `SELECT DISTINCT data->>'country' AS name FROM user_collection WHERE clerk_user_id = $1 AND data->>'country' IS NOT NULL AND data->>'country' != '' ORDER BY name`,
-      [clerkUserId]
-    ),
   ]);
-  return { genres: genresR.rows.map(r => r.name), styles: stylesR.rows.map(r => r.name), countries: countriesR.rows.map(r => r.name) };
+  return { genres: genresR.rows.map(r => r.name), styles: stylesR.rows.map(r => r.name) };
 }
 
-export async function getWantlistFacets(clerkUserId: string, genre?: string): Promise<{ genres: string[]; styles: string[]; countries: string[] }> {
+export async function getWantlistFacets(clerkUserId: string, genre?: string): Promise<{ genres: string[]; styles: string[] }> {
   const stylesQuery = genre
     ? `SELECT DISTINCT s AS name FROM user_wantlist, jsonb_array_elements_text(data->'styles') AS s WHERE clerk_user_id = $1 AND (data->'genres')::text ILIKE $2 ORDER BY s`
     : `SELECT DISTINCT s AS name FROM user_wantlist, jsonb_array_elements_text(data->'styles') AS s WHERE clerk_user_id = $1 ORDER BY s`;
   const stylesParams = genre ? [clerkUserId, `%${genre}%`] : [clerkUserId];
-  const [genresR, stylesR, countriesR] = await Promise.all([
+  const [genresR, stylesR] = await Promise.all([
     getPool().query(
       `SELECT DISTINCT g AS name FROM user_wantlist, jsonb_array_elements_text(data->'genres') AS g WHERE clerk_user_id = $1 ORDER BY g`,
       [clerkUserId]
     ),
     getPool().query(stylesQuery, stylesParams),
-    getPool().query(
-      `SELECT DISTINCT data->>'country' AS name FROM user_wantlist WHERE clerk_user_id = $1 AND data->>'country' IS NOT NULL AND data->>'country' != '' ORDER BY name`,
-      [clerkUserId]
-    ),
   ]);
-  return { genres: genresR.rows.map(r => r.name), styles: stylesR.rows.map(r => r.name), countries: countriesR.rows.map(r => r.name) };
+  return { genres: genresR.rows.map(r => r.name), styles: stylesR.rows.map(r => r.name) };
 }
 
 export async function getCollectionIds(clerkUserId: string): Promise<number[]> {

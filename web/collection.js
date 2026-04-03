@@ -285,7 +285,6 @@ function getCwFilters() {
   const genre   = (document.getElementById("cw-genre")?.value   ?? "").trim();
   const style   = (document.getElementById("cw-style")?.value   ?? "").trim();
   const format  = (document.getElementById("cw-format")?.value  ?? "").trim();
-  const country = (document.getElementById("cw-country")?.value ?? "").trim();
   const rtype   = document.querySelector('input[name="cw-result-type"]:checked')?.value ?? "";
   if (q)       f.q       = q;
   if (artist)  f.artist  = artist;
@@ -295,7 +294,6 @@ function getCwFilters() {
   if (genre)   f.genre   = genre;
   if (style)   f.style   = style;
   if (format)  f.format  = format;
-  if (country) f.country = country;
   if (rtype)   f.type    = rtype;
   return f;
 }
@@ -616,8 +614,6 @@ function clearCwSearch() {
   document.getElementById("cw-genre").value   = "";
   document.getElementById("cw-style").value   = "";
   document.getElementById("cw-format").value  = "";
-  const cwCountryEl = document.getElementById("cw-country");
-  if (cwCountryEl) cwCountryEl.value = "";
   _cwQuery = "";
   doCwSearch(1);
 }
@@ -639,13 +635,6 @@ async function loadCwFacets(type, genre) {
       styleEl.innerHTML = '<option value="">Any</option>' +
         (data.styles ?? []).map(s => `<option value="${s}">${s}</option>`).join("");
       if (prev && [...styleEl.options].some(o => o.value === prev)) styleEl.value = prev;
-    }
-    const countryEl = document.getElementById("cw-country");
-    if (!genre && countryEl) {
-      const prevC = countryEl.value;
-      countryEl.innerHTML = '<option value="">Any</option>' +
-        (data.countries ?? []).map(c => `<option value="${escHtml(c)}">${escHtml(c)}</option>`).join("");
-      if (prevC && [...countryEl.options].some(o => o.value === prevC)) countryEl.value = prevC;
     }
   } catch {}
 }
@@ -722,7 +711,6 @@ async function loadCollectionTab(page = 1, filters) {
     if (f.genre)   url += `&genre=${encodeURIComponent(f.genre)}`;
     if (f.style)   url += `&style=${encodeURIComponent(f.style)}`;
     if (f.format)  url += `&format=${encodeURIComponent(f.format)}`;
-    if (f.country) url += `&country=${encodeURIComponent(f.country)}`;
     if (f.type)    url += `&type=${encodeURIComponent(f.type)}`;
     if (_cwFolderId > 0) url += `&folderId=${_cwFolderId}`;
     const cwRating = document.getElementById("cw-rating")?.value || "";
@@ -772,7 +760,6 @@ async function loadWantlistTab(page = 1, filters) {
     if (f.genre)   url += `&genre=${encodeURIComponent(f.genre)}`;
     if (f.style)   url += `&style=${encodeURIComponent(f.style)}`;
     if (f.format)  url += `&format=${encodeURIComponent(f.format)}`;
-    if (f.country) url += `&country=${encodeURIComponent(f.country)}`;
     if (f.type)    url += `&type=${encodeURIComponent(f.type)}`;
     const cwRating = document.getElementById("cw-rating")?.value || "";
     if (cwRating) url += `&rating=${encodeURIComponent(cwRating)}`;
