@@ -2151,6 +2151,8 @@ body.modal-open  { overflow: hidden; }
 .modal-act-btn.in-collection:hover { background: #1f4a1f; border-color: #3a6a3a; }
 .modal-act-btn.in-wantlist { background: #2a2510; border-color: #4a3f20; color: #d4a843; }
 .modal-act-btn.in-wantlist:hover { background: #3a3518; border-color: #5a4f2a; }
+.want-icon { filter: grayscale(1) opacity(0.5); }
+.want-icon.active { filter: none; }
 .modal-rating {
   display: inline-flex;
   gap: 0.1rem;

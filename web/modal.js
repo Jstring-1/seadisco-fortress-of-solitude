@@ -935,7 +935,7 @@ function renderActionsImmediate(rid, entityType = "release") {
       ${inCol ? '✓ Collected' : '+ Collection'}
     </button>
     <button class="modal-act-btn ${inWant ? 'in-wantlist' : ''}" id="modal-want-btn" onclick="toggleWantlist(${rid})" title="${inWant ? 'Remove from wantlist' : 'Add to wantlist'}">
-      ${inWant ? '🤞 Wanted' : '🤞 Want'}
+      ${inWant ? '<span class="want-icon active">🤞</span> Wanted' : '<span class="want-icon">🤞</span> Want'}
     </button>
     ${favBtn}
     ${inCol ? '<span class="modal-rating" id="modal-rating" style="opacity:0.4">☆☆☆☆☆</span>' : ''}
@@ -996,7 +996,7 @@ function loadModalActions(releaseId, context) {
         ${inCol ? '✓ Collected' : '+ Collection'}
       </button>
       <button class="modal-act-btn ${inWant ? 'in-wantlist' : ''}" id="modal-want-btn" onclick="toggleWantlist(${rid})" title="${inWant ? 'Remove from wantlist' : 'Add to wantlist'}">
-        ${inWant ? '🤞 Wanted' : '🤞 Want'}
+        ${inWant ? '<span class="want-icon active">🤞</span> Wanted' : '<span class="want-icon">🤞</span> Want'}
       </button>
       ${favBtn}
       ${inCol ? '<span class="modal-rating" id="modal-rating" style="opacity:0.4">☆☆☆☆☆</span>' : ''}
@@ -1098,11 +1098,11 @@ async function toggleWantlist(releaseId) {
 
     // Optimistic update
     if (inWant) {
-      btn.innerHTML = '🤞 Want';
+      btn.innerHTML = '<span class="want-icon">🤞</span> Want';
       btn.classList.remove('in-wantlist');
       window._wantlistIds?.delete(releaseId);
     } else {
-      btn.innerHTML = '🤞 Wanted';
+      btn.innerHTML = '<span class="want-icon active">🤞</span> Wanted';
       btn.classList.add('in-wantlist');
       window._wantlistIds?.add(releaseId);
     }
