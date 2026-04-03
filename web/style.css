@@ -1947,6 +1947,18 @@ body.player-open { padding-bottom: 56px; }
   color: var(--muted);
   margin-bottom: 0.5rem;
 }
+.tracklist-toggle {
+  cursor: pointer;
+  user-select: none;
+}
+.tracklist-toggle:hover { color: var(--fg); }
+.tracklist-arrow {
+  display: inline-block;
+  font-size: 0.6rem;
+  vertical-align: middle;
+  margin-right: 0.15em;
+  transition: color 0.15s;
+}
 
 #album-info .track, #version-info .track {
   display: flex;

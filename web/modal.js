@@ -50,6 +50,17 @@ function closeModal() {
   history.replaceState({}, "", u.toString());
 }
 
+// ── Tracklist collapse/expand ──────────────────────────────────────────────
+function toggleTracklist(headingEl) {
+  const body = headingEl.nextElementSibling;
+  if (!body) return;
+  const isOpen = body.style.display !== "none";
+  body.style.display = isOpen ? "none" : "";
+  const arrow = headingEl.querySelector(".tracklist-arrow");
+  if (arrow) arrow.textContent = isOpen ? "▶" : "▼";
+  localStorage.setItem("tracklist-open", isOpen ? "false" : "true");
+}
+
 // ── Concert popup ─────────────────────────────────────────────────────────
 async function openConcertPopup(event, artistName) {
   if (event) event.preventDefault();
@@ -674,9 +685,11 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   ].filter(Boolean).join("");
 
   const tracks = (d.tracklist ?? []).filter(t => t.type_ !== "heading");
+  const tracklistOpen = localStorage.getItem("tracklist-open") !== "false";
   const trackHTML = tracks.length ? `
     <div class="album-tracklist">
-      <div class="tracklist-heading">Tracklist</div>
+      <div class="tracklist-heading tracklist-toggle" onclick="toggleTracklist(this)" title="Click to collapse/expand tracklist"><span class="tracklist-arrow">${tracklistOpen ? "▼" : "▶"}</span> Tracklist</div>
+      <div class="tracklist-body"${tracklistOpen ? "" : ' style="display:none"'}>
       ${tracks.map(t => {
         const url = findVideo(t.title || "");
         const trackArtist = artists.length ? artists[0] : "";
@@ -693,6 +706,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
           ${t.duration ? `<span class="track-dur">${escHtml(t.duration)}</span>` : ""}
         </div>`;
       }).join("")}
+      </div>
     </div>` : "";
 
   const metaRows = [
