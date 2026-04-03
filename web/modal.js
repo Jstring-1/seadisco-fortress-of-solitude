@@ -797,6 +797,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
             </div>`
           : (stats?.numForSale === 0 ? `<div style="font-size:0.75rem;color:#555;margin-top:0.2rem">Not currently available on Discogs marketplace</div>` : "")
         }
+        ${(!isMaster && releaseId) ? `<a href="https://www.discogs.com/sell/post/${escHtml(String(releaseId))}" target="_blank" rel="noopener" title="Sell a copy of this release on Discogs" style="font-size:0.75rem;color:#888;text-decoration:none;margin-top:0.2rem;display:inline-block">Sell a copy ↗</a>` : ""}
         ${releaseId ? renderActionsImmediate(Number(releaseId), isMaster ? "master" : "release") : ""}
       </div>
     </div>
