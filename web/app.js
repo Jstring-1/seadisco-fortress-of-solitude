@@ -160,16 +160,13 @@ async function applyAuthState(clerk) {
         if (tokenData.hasToken) {
           addNavTab("collection");
           addNavTab("wantlist");
-          await loadDiscogsIds();          // calls updateFavoritesHeading inside
-        } else {
-          updateFavoritesHeading();         // signed in but no Discogs token
         }
-      } else {
-        updateFavoritesHeading();
       }
-    } catch { updateFavoritesHeading(); }
+    } catch { /* token check optional */ }
+    // Load favorite IDs + collection/wantlist IDs for all signed-in users
+    await loadDiscogsIds();                   // calls updateFavoritesHeading inside
   } else {
-    updateFavoritesHeading();               // signed out
+    updateFavoritesHeading();                 // signed out
   }
 }
 

@@ -2680,16 +2680,6 @@ body.player-open { padding-bottom: 56px; }
   padding: 1px 5px;
   line-height: 1.4;
 }
-.favorite-badge {
-  font-size: 0.7rem;
-  background: rgba(58, 26, 40, 0.88);
-  color: #f06292;
-  border: 1px solid #f06292;
-  border-radius: 3px;
-  padding: 1px 5px;
-  line-height: 1.4;
-}
-
 /* Heart overlay on cards */
 .card-fav-btn {
   position: absolute;
