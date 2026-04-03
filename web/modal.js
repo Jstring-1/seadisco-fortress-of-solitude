@@ -361,7 +361,9 @@ function setVideoUrl(id) {
 }
 
 let _ytLoadTimer = null;
+let _ytHasPlayed = false;  // true once the current video reaches "playing" state
 function loadYTVideo(id) {
+  _ytHasPlayed = false;
   updatePlayerStatus("loading");
   // Timeout: if still "loading" after 8s, mark unavailable and skip
   if (_ytLoadTimer) clearTimeout(_ytLoadTimer);
@@ -431,7 +433,7 @@ function _createYTPlayer(id) {
       onStateChange: function(e) {
         if (session !== _ytSession) return;   // stale player callback
         // YT.PlayerState: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
-        if (e.data === 1) { updatePlayerStatus("playing"); window._ytRetried = false; }
+        if (e.data === 1) { _ytHasPlayed = true; updatePlayerStatus("playing"); window._ytRetried = false; }
         else if (e.data === 2) updatePlayerStatus("paused");
         else if (e.data === 3) updatePlayerStatus("buffering");
         else if (e.data === 0) { updatePlayerStatus("ended"); onVideoEnded(); }
@@ -439,6 +441,8 @@ function _createYTPlayer(id) {
       },
       onError: function(e) {
         if (session !== _ytSession) return;   // stale player callback
+        // Ignore errors if the video was already playing (late rights checks, transient issues)
+        if (_ytHasPlayed) return;
         // Error codes: 2=invalid id, 5=HTML5 error, 100=not found, 101/150=embedding disabled
         const code = e?.data;
         if (code === 100 || code === 101 || code === 150) {
