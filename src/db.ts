@@ -490,6 +490,15 @@ export async function removeFavorite(clerkUserId: string, discogsId: number, ent
   );
 }
 
+export async function getAllFavoriteCounts(): Promise<Map<string, number>> {
+  const r = await getPool().query(
+    "SELECT clerk_user_id, COUNT(*)::int AS count FROM user_favorites GROUP BY clerk_user_id"
+  );
+  const map = new Map<string, number>();
+  for (const row of r.rows) map.set(row.clerk_user_id, row.count);
+  return map;
+}
+
 export async function getAllUsersSyncStatus(): Promise<Array<{
   clerkUserId: string;
   username: string;

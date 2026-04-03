@@ -160,13 +160,19 @@ async function doSearch(page = 1, skipPushState = false) {
   const buildParams = (perPage) => {
     const effectiveArtist = artist || (page > 1 ? detectedArtist : null) || "";
     const p = new URLSearchParams({ page, per_page: perPage });
-    const effectiveQ = q || (page > 1 && detectedArtist && !artist ? detectedArtist : "");
+    let effectiveQ = q || (page > 1 && detectedArtist && !artist ? detectedArtist : "");
+    // When searching for label/artist entities, Discogs needs the name in `q`, not the field filter
+    // (the `artist`/`label` params filter releases BY that artist/label, not search for entities)
+    let useArtist = effectiveArtist;
+    let useLabel = label;
+    if (resultType === "label" && !effectiveQ && label) { effectiveQ = label; useLabel = ""; }
+    if (resultType === "artist" && !effectiveQ && effectiveArtist) { effectiveQ = effectiveArtist; useArtist = ""; }
     if (effectiveQ) p.set("q", effectiveQ);
     if (resultType) p.set("type", resultType);
-    if (effectiveArtist) p.set("artist", effectiveArtist);
+    if (useArtist) p.set("artist", useArtist);
     if (release) p.set("release_title", release);
     if (year)    p.set("year",          year);
-    if (label)   p.set("label",         label);
+    if (useLabel) p.set("label",        useLabel);
     if (genre)   p.set("genre",         genre);
     if (style)   p.set("style",         style);
     if (format)  p.set("format",        format);

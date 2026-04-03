@@ -453,6 +453,13 @@ export async function addFavorite(clerkUserId, discogsId, entityType, data) {
 export async function removeFavorite(clerkUserId, discogsId, entityType) {
     await getPool().query("DELETE FROM user_favorites WHERE clerk_user_id = $1 AND discogs_id = $2 AND entity_type = $3", [clerkUserId, discogsId, entityType]);
 }
+export async function getAllFavoriteCounts() {
+    const r = await getPool().query("SELECT clerk_user_id, COUNT(*)::int AS count FROM user_favorites GROUP BY clerk_user_id");
+    const map = new Map();
+    for (const row of r.rows)
+        map.set(row.clerk_user_id, row.count);
+    return map;
+}
 export async function getAllUsersSyncStatus() {
     const r = await getPool().query(`SELECT ut.clerk_user_id, ut.discogs_username, ut.collection_synced_at, ut.wantlist_synced_at,
             ut.sync_status, ut.sync_progress, ut.sync_total, ut.sync_error,

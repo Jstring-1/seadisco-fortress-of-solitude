@@ -378,18 +378,21 @@ function setVideoUrl(id) {
 
 let _ytLoadTimer = null;
 let _ytHasPlayed = false;  // true once the current video reaches "playing" state
+let _ytVideoToken = 0;     // increments per video load — guards against stale per-video callbacks
 function loadYTVideo(id) {
   _ytHasPlayed = false;
+  window._ytRetried = false;  // reset retry flag for new video
+  _ytVideoToken++;
+  const vtoken = _ytVideoToken;
   updatePlayerStatus("loading");
   // Timeout: if still "loading" after 8s, mark unavailable and skip
   if (_ytLoadTimer) clearTimeout(_ytLoadTimer);
-  const session = _ytSession;
   _ytLoadTimer = setTimeout(() => {
-    if (session !== _ytSession) return;
+    if (vtoken !== _ytVideoToken) return;  // a different video was loaded since
     const statusEl = document.getElementById("mini-player-status");
     if (statusEl && (statusEl.textContent === "loading…" || statusEl.textContent === "buffering…")) {
       updatePlayerStatus("unavailable");
-      setTimeout(() => { if (session === _ytSession) playNextVideo(); }, 1500);
+      setTimeout(() => { if (vtoken === _ytVideoToken) playNextVideo(); }, 1500);
     }
   }, 8000);
   if (ytPlayer && typeof ytPlayer.loadVideoById === "function") {
@@ -401,12 +404,12 @@ function loadYTVideo(id) {
     _createYTPlayer(id);
   } else {
     // Poll briefly for API readiness, then create player
-    const session = _ytSession;
+    const pollSession = _ytSession;
     let attempts = 0;
     if (_ytPollId) clearInterval(_ytPollId);
     _ytPollId = setInterval(() => {
       attempts++;
-      if (session !== _ytSession) { clearInterval(_ytPollId); _ytPollId = null; return; }
+      if (pollSession !== _ytSession) { clearInterval(_ytPollId); _ytPollId = null; return; }
       if (window._ytAPIReady && typeof YT !== "undefined") {
         clearInterval(_ytPollId); _ytPollId = null;
         _createYTPlayer(id);
@@ -441,44 +444,58 @@ function updatePlayerStatus(state, errorCode) {
 
 function _createYTPlayer(id) {
   const session = _ytSession;
+  let vtoken = _ytVideoToken;
   document.getElementById("video-player").innerHTML = "";
   ytPlayer = new YT.Player("video-player", {
     height: "100%", width: "100%", videoId: id,
     playerVars: { autoplay: 1, rel: 0 },
     events: {
       onStateChange: function(e) {
-        if (session !== _ytSession) return;   // stale player callback
+        if (session !== _ytSession) return;   // player was destroyed/recreated
         // YT.PlayerState: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
         if (e.data === 1) { _ytHasPlayed = true; updatePlayerStatus("playing"); window._ytRetried = false; }
         else if (e.data === 2) updatePlayerStatus("paused");
         else if (e.data === 3) updatePlayerStatus("buffering");
-        else if (e.data === 0) { updatePlayerStatus("ended"); onVideoEnded(); }
+        else if (e.data === 0) {
+          // Guard against late "ended" events from a previous video on a reused player
+          if (vtoken !== _ytVideoToken) return;
+          updatePlayerStatus("ended"); onVideoEnded();
+        }
         else if (e.data === 5) updatePlayerStatus("loading");
+        // Keep vtoken in sync when a new video loads on same player
+        if (e.data === -1 || e.data === 5) vtoken = _ytVideoToken;
       },
       onError: function(e) {
-        if (session !== _ytSession) return;   // stale player callback
+        if (session !== _ytSession) return;   // player was destroyed/recreated
+        // Guard against errors from a previous video on a reused player
+        if (vtoken !== _ytVideoToken) return;
         // Ignore errors if the video was already playing (late rights checks, transient issues)
         if (_ytHasPlayed) return;
         // Error codes: 2=invalid id, 5=HTML5 error, 100=not found, 101/150=embedding disabled
         const code = e?.data;
         if (code === 100 || code === 101 || code === 150) {
           updatePlayerStatus("unavailable");
-          setTimeout(() => { if (session === _ytSession) playNextVideo(); }, 2000);
+          setTimeout(() => { if (vtoken === _ytVideoToken) playNextVideo(); }, 2000);
         } else if (code === 5 && !window._ytRetried) {
           // HTML5 error can be transient — retry once
           window._ytRetried = true;
+          const retryId = id;  // capture current video id for retry
+          const retryToken = vtoken;
           updatePlayerStatus("buffering");
           setTimeout(() => {
-            if (session !== _ytSession) return;
-            if (ytPlayer && typeof ytPlayer.loadVideoById === "function") ytPlayer.loadVideoById(id);
+            if (retryToken !== _ytVideoToken) return;  // user moved on
+            if (ytPlayer && typeof ytPlayer.loadVideoById === "function") ytPlayer.loadVideoById(retryId);
           }, 1000);
         } else {
           window._ytRetried = false;
           updatePlayerStatus("error");
-          setTimeout(() => { if (session === _ytSession) playNextVideo(); }, 2000);
+          setTimeout(() => { if (vtoken === _ytVideoToken) playNextVideo(); }, 2000);
         }
       },
-      onReady: function() { if (session === _ytSession) updatePlayerStatus("playing"); }
+      onReady: function() {
+        // onReady fires when iframe is ready, not when video plays — don't set "playing" yet
+        if (session === _ytSession) updatePlayerStatus("loading");
+      }
     }
   });
 }
@@ -529,7 +546,12 @@ function openVideo(event, url) {
   // Scope queue to the popup container the clicked track belongs to,
   // so we don't mix tracks from different albums
   const clickedEl = event?.target?.closest?.(".track-link") || event?.target;
-  const container = clickedEl?.closest?.("#album-info, #version-info") || document;
+  // Scope to the popup the track was clicked in; if called programmatically (no event),
+  // prefer the version popup if open, then main modal, then fall back to document
+  const container = clickedEl?.closest?.("#album-info, #version-info")
+    || (document.getElementById("version-overlay")?.classList.contains("open") ? document.getElementById("version-info") : null)
+    || (document.getElementById("modal-overlay")?.classList.contains("open") ? document.getElementById("album-info") : null)
+    || document;
   const trackLinks = [...container.querySelectorAll(".track-link[data-video]")];
   window._videoQueue      = trackLinks.map(a => a.dataset.video);
   window._videoQueueMeta  = trackLinks.map(a => ({
@@ -537,7 +559,10 @@ function openVideo(event, url) {
     album:  a.dataset.album  || "",
     artist: a.dataset.artist || "",
   }));
-  window._videoQueueIndex = window._videoQueue.indexOf(url);
+  // Use the clicked element's position in the list (not indexOf, which fails with duplicate URLs)
+  const clickedTrack = event?.target?.closest?.(".track-link");
+  const clickedIdx = clickedTrack ? trackLinks.indexOf(clickedTrack) : -1;
+  window._videoQueueIndex = clickedIdx >= 0 ? clickedIdx : window._videoQueue.indexOf(url);
   if (window._videoQueueIndex === -1) window._videoQueueIndex = 0;
   // Save the currently open release so the player bar can reopen it
   const opParam = new URLSearchParams(location.search).get("op");
@@ -669,6 +694,9 @@ function closeVideo() {
   window._playerReleaseType = null;
   window._playerReleaseId = null;
   window._playerReleaseUrl = null;
+  window._videoQueue = [];
+  window._videoQueueMeta = [];
+  window._videoQueueIndex = -1;
 }
 
 function extractYouTubeId(url) {
