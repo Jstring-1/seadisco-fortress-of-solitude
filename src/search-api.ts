@@ -3592,6 +3592,6 @@ app.listen(PORT, "0.0.0.0", async () => {
     startDailySyncSchedule();
     startExtrasSyncSchedule();
     startLiveEventsSchedule();
-    startPriceUpdateSchedule();
+    // startPriceUpdateSchedule(); // disabled — not using pricing
   }
 });
