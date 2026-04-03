@@ -29,7 +29,7 @@
   <link rel="preconnect" href="https://api.discogs.com" />
   <link rel="preconnect" href="https://i.discogs.com" />
   <link rel="preconnect" href="https://i.ebayimg.com" />
-  <link rel="stylesheet" href="/style.css?v=20260402" />
+  <link rel="stylesheet" href="/style.css?v=20260403" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -62,7 +62,7 @@
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260402"></script>
+<script src="/shared.js?v=20260403"></script>
 <script>renderSharedHeader({ spa: true, active: "search" });</script>
 <div id="search-view">
 
@@ -312,7 +312,16 @@
   </div>
   <div id="pagination" style="display:none"></div>
   <div id="favorites-sample" class="content-area" style="margin-top:0.5rem;display:none">
-    <div id="favorites-sample-heading" style="text-align:center;padding:0.3rem 0"></div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:0.5rem;padding:0.3rem 0">
+      <div id="favorites-sample-heading"></div>
+      <select id="favorites-sort" style="display:none" onchange="sortFavoritesGrid(this.value)">
+        <option value="recent">Recent</option>
+        <option value="title">Title</option>
+        <option value="artist">Artist</option>
+        <option value="year">Year</option>
+        <option value="type">Type</option>
+      </select>
+    </div>
     <div id="favorites-sample-grid" class="card-grid"></div>
   </div>
 </main>
@@ -647,16 +656,16 @@
   <div id="lightbox-counter"></div>
 </div>
 
-<script src="/utils.js?v=20260402"></script>
-<script src="/search.js?v=20260402"></script>
-<script src="/collection.js?v=20260402"></script>
-<script src="/modal.js?v=20260402"></script>
-<script src="/drops.js?v=20260402"></script>
-<script src="/live.js?v=20260402"></script>
-<script src="/buy.js?v=20260402"></script>
-<script src="/gear.js?v=20260402"></script>
-<script src="/feed.js?v=20260402"></script>
-<script src="/app.js?v=20260402"></script>
+<script src="/utils.js?v=20260403"></script>
+<script src="/search.js?v=20260403"></script>
+<script src="/collection.js?v=20260403"></script>
+<script src="/modal.js?v=20260403"></script>
+<script src="/drops.js?v=20260403"></script>
+<script src="/live.js?v=20260403"></script>
+<script src="/buy.js?v=20260403"></script>
+<script src="/gear.js?v=20260403"></script>
+<script src="/feed.js?v=20260403"></script>
+<script src="/app.js?v=20260403"></script>
 
 </body>
 </html>

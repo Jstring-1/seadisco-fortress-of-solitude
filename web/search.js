@@ -651,19 +651,26 @@ function updateFavoritesHeading() {
   if (showWrap) wrap.style.display = "";
 }
 
+let _favoritesItems = [];  // cached for client-side sorting
+
 async function loadFavoritesGrid() {
   try {
     const r = await apiFetch("/api/user/favorites");
     if (!r.ok) return;
     const data = await r.json();
-    const items = (data.items ?? []).map(row => row.data);
+    _favoritesItems = (data.items ?? []).map(row => row.data);
     const wrap = document.getElementById("favorites-sample");
     const grid = document.getElementById("favorites-sample-grid");
+    const sortEl = document.getElementById("favorites-sort");
     if (!wrap || !grid) return;
-    if (!items.length) {
+    if (!_favoritesItems.length) {
       grid.innerHTML = `<div style="color:var(--muted);font-size:0.8rem;padding:1rem">♡ Favorite albums, artists & labels to see them here</div>`;
+      if (sortEl) sortEl.style.display = "none";
     } else {
-      grid.innerHTML = items.map((item, i) => renderCard(item, i)).join("");
+      const sortBy = sortEl?.value || "recent";
+      const sorted = sortFavoriteItems(_favoritesItems, sortBy);
+      grid.innerHTML = sorted.map((item, i) => renderCard(item, i)).join("");
+      if (sortEl) sortEl.style.display = "";
     }
     const view = new URLSearchParams(location.search).get("view") || "";
     const hasSearchResults = document.getElementById("results")?.children.length > 0;
@@ -671,6 +678,43 @@ async function loadFavoritesGrid() {
       wrap.style.display = "";
     }
   } catch { /* silent */ }
+}
+
+function sortFavoriteItems(items, sortBy) {
+  const arr = [...items];
+  const titleParts = (item) => {
+    const t = item.title ?? "";
+    if (t.includes(" - ")) {
+      const idx = t.indexOf(" - ");
+      return { artist: t.slice(0, idx).toLowerCase(), title: t.slice(idx + 3).toLowerCase() };
+    }
+    return { artist: "", title: t.toLowerCase() };
+  };
+  switch (sortBy) {
+    case "title":
+      arr.sort((a, b) => titleParts(a).title.localeCompare(titleParts(b).title));
+      break;
+    case "artist":
+      arr.sort((a, b) => titleParts(a).artist.localeCompare(titleParts(b).artist));
+      break;
+    case "year":
+      arr.sort((a, b) => (parseInt(b.year) || 0) - (parseInt(a.year) || 0));
+      break;
+    case "type":
+      arr.sort((a, b) => (a.type ?? "").localeCompare(b.type ?? ""));
+      break;
+    default: // "recent" — original API order (created_at DESC)
+      break;
+  }
+  return arr;
+}
+
+function sortFavoritesGrid(sortBy) {
+  if (!_favoritesItems.length) return;
+  const grid = document.getElementById("favorites-sample-grid");
+  if (!grid) return;
+  const sorted = sortFavoriteItems(_favoritesItems, sortBy);
+  grid.innerHTML = sorted.map((item, i) => renderCard(item, i)).join("");
 }
 
 function toggleFavoriteFromCard(btn, discogsId, entityType) {
