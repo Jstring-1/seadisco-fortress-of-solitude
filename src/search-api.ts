@@ -1782,6 +1782,21 @@ app.get("/api/admin/user-items", async (req, res) => {
   } catch (err) { res.status(500).json({ error: String(err) }); }
 });
 
+// GET /api/admin/user-favorites — view any user's favorites, admin only
+app.get("/api/admin/user-favorites", async (req, res) => {
+  const userId = await getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  const username = (req.query.username as string ?? "").trim();
+  if (!username) { res.status(400).json({ error: "username required" }); return; }
+  try {
+    const clerkUserId = await getClerkUserIdByUsername(username);
+    if (!clerkUserId) { res.status(404).json({ error: "User not found" }); return; }
+    const items = await getFavorites(clerkUserId, 100);
+    res.json({ items, total: items.length });
+  } catch (err) { res.status(500).json({ error: String(err) }); }
+});
+
 // POST /api/ai-search — Claude music recommendations
 app.post("/api/ai-search", express.json(), async (req, res) => {
   const userId = await getClerkUserId(req);
