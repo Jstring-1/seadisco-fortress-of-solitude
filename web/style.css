@@ -3028,7 +3028,8 @@ footer {
 .search-info-row {
   display: flex;
   align-items: baseline;
-  gap: 1.2rem;
+  justify-content: space-between;
+  gap: 1.5rem;
   margin-bottom: 0.4rem;
   min-height: 1em;
   font-size: 0.82rem;
@@ -3040,15 +3041,17 @@ footer {
   overflow: hidden;
   text-overflow: ellipsis;
   min-width: 0;
-  flex-shrink: 1;
+  flex: 1 1 0;
 }
 .search-info-cell:first-child {
   flex-shrink: 0;
 }
+.search-info-cell:nth-child(2) {
+  text-align: center;
+}
 .search-info-ai {
   font-style: italic;
-  flex-shrink: 1;
-  margin-left: auto;
+  text-align: right;
 }
 @media (max-width: 640px) {
   .search-info-row {
@@ -3058,8 +3061,6 @@ footer {
   }
   .search-info-cell {
     white-space: normal;
-  }
-  .search-info-ai {
-    margin-left: 0;
+    text-align: left;
   }
 }
