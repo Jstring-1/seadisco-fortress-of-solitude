@@ -183,7 +183,7 @@ function switchView(view, skipPushState = false) {
     if (recordsWrap) recordsWrap.style.display = "";
     if (wantedWrap) wantedWrap.style.display = "none";
     document.getElementById("artist-alts").innerHTML = "";
-    const ws1 = document.getElementById("wanted-sample"); if (ws1) ws1.style.display = "none";
+    const ws1 = document.getElementById("favorites-sample"); if (ws1) ws1.style.display = "none";
     switchRecordsTab(_cwTab || "collection", true);
   } else {
     if (searchView) searchView.style.display = "";
@@ -197,7 +197,7 @@ function switchView(view, skipPushState = false) {
       const grid = document.getElementById("results");
       grid.innerHTML = window._lastResults.map((item, i) => renderCard(item, i)).join("");
       document.getElementById("pagination").style.display = "none";
-      const ws = document.getElementById("wanted-sample"); if (ws) ws.style.display = "none";
+      const ws = document.getElementById("favorites-sample"); if (ws) ws.style.display = "none";
       const blurb = document.getElementById("blurb"); if (blurb) blurb.style.display = "none";
       // Show load-more if there are more pages
       const lmWrap = document.getElementById("search-load-more");
@@ -213,7 +213,7 @@ function switchView(view, skipPushState = false) {
       if (searchReturned) searchReturned.textContent = "";
       const blurb = document.getElementById("blurb");
       if (blurb) blurb.style.display = "";
-      const ws = document.getElementById("wanted-sample");
+      const ws = document.getElementById("favorites-sample");
       if (ws) ws.style.display = "";
       const artistAlts = document.getElementById("artist-alts");
       if (artistAlts) artistAlts.innerHTML = "";
