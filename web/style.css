@@ -3023,3 +3023,43 @@ footer {
 @media (max-width: 640px) {
   .footer-grid { gap: 1.5rem; flex-wrap: wrap; }
 }
+
+/* Search info row — single line on desktop, stacked on mobile */
+.search-info-row {
+  display: flex;
+  align-items: baseline;
+  gap: 1.2rem;
+  margin-bottom: 0.4rem;
+  min-height: 1em;
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 2.2;
+}
+.search-info-cell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex-shrink: 1;
+}
+.search-info-cell:first-child {
+  flex-shrink: 0;
+}
+.search-info-ai {
+  font-style: italic;
+  flex-shrink: 1;
+  margin-left: auto;
+}
+@media (max-width: 640px) {
+  .search-info-row {
+    flex-direction: column;
+    gap: 0;
+    line-height: 1.8;
+  }
+  .search-info-cell {
+    white-space: normal;
+  }
+  .search-info-ai {
+    margin-left: 0;
+  }
+}
