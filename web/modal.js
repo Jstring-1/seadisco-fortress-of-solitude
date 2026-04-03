@@ -518,7 +518,11 @@ function openVideo(event, url) {
   ensureYTAPI();
   const id = extractYouTubeId(url);
   if (!id) { window.open(url, "_blank", "noopener"); return; }
-  const trackLinks = [...document.querySelectorAll(".track-link[data-video]")];
+  // Scope queue to the popup container the clicked track belongs to,
+  // so we don't mix tracks from different albums
+  const clickedEl = event?.target?.closest?.(".track-link") || event?.target;
+  const container = clickedEl?.closest?.("#album-info, #version-info") || document;
+  const trackLinks = [...container.querySelectorAll(".track-link[data-video]")];
   window._videoQueue      = trackLinks.map(a => a.dataset.video);
   window._videoQueueMeta  = trackLinks.map(a => ({
     track:  a.dataset.track  || "",
