@@ -219,17 +219,29 @@ async function doSearch(page = 1, skipPushState = false) {
     if (res.status === 401 || res.status === 429) {
       const errData = await res.json().catch(() => ({}));
       if (errData.error === "no_token") {
-        document.getElementById("status").innerHTML =
-          `<a href="/account" style="color:var(--accent)">Sign in and add your Discogs token</a> to start searching.`;
+        setStatus("");
+        document.getElementById("results").innerHTML =
+          `<div class="empty-state"><div class="empty-state-icon">🔑</div>` +
+          `<div class="empty-state-title">Sign in to search</div>` +
+          `<div class="empty-state-subtitle"><a href="/account" style="color:var(--accent)">Create a free account</a> and add your Discogs token to start discovering music.</div></div>`;
         return;
       }
       if (errData.error === "rate_limited") {
-        document.getElementById("status").innerHTML =
-          `You've used your 5 free searches for today. <a href="/account" style="color:var(--accent)">Add your Discogs token</a> for unlimited searches.`;
+        setStatus("");
+        document.getElementById("results").innerHTML =
+          `<div class="empty-state"><div class="empty-state-icon">✨</div>` +
+          `<div class="empty-state-title">You've used your free searches for today</div>` +
+          `<div class="empty-state-subtitle"><a href="/account" style="color:var(--accent)">Sign in with a free account</a> and connect your Discogs token for unlimited searches, collection sync, favorites, and more.</div></div>`;
         return;
       }
     }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    // Show remaining searches hint for unauthenticated users
+    const rlRemaining = parseInt(res.headers.get("X-RateLimit-Remaining") ?? "");
+    if (!isNaN(rlRemaining) && rlRemaining <= 3) {
+      const plural = rlRemaining === 1 ? "search" : "searches";
+      showToast(`${rlRemaining} free ${plural} remaining today — sign in for unlimited`, "info", 5000);
+    }
     const data = await res.json();
     items = data.results ?? [];
     totalPages_new = data.pagination?.pages ?? 1;
