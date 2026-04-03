@@ -1936,6 +1936,8 @@ app.get("/search", async (req, res) => {
   const userToken = userId ? await getUserToken(userId) : null;
   const usingSharedToken = !userToken;
 
+  console.log(`[search] ip=${ip} userId=${userId ?? "none"} hasToken=${!!userToken} usingShared=${usingSharedToken} whitelisted=${whitelisted}`);
+
   // Rate-limit unauthenticated users — allow 5 free searches/day via shared token
   if (usingSharedToken && !whitelisted) {
     if (!sharedToken) {
