@@ -215,6 +215,9 @@ function switchView(view, skipPushState = false) {
       if (blurb) blurb.style.display = "";
       const ws = document.getElementById("favorites-sample");
       if (ws) ws.style.display = "";
+      // Refresh favorites in case user favorited items from another tab
+      if (typeof updateFavoritesHeading === "function") updateFavoritesHeading();
+      if (window._favoriteKeys?.size > 0 && typeof loadFavoritesGrid === "function") loadFavoritesGrid();
       const artistAlts = document.getElementById("artist-alts");
       if (artistAlts) artistAlts.innerHTML = "";
     }
