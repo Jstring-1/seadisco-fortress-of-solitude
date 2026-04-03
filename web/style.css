@@ -2736,9 +2736,60 @@ body.modal-open  { overflow: hidden; }
   border-color: #6a3a4a;
 }
 
-/* ── Mobile: force Format/Year on line 1, Genre/Style on line 2 ── */
+/* ── Filters grid (main search + collection) ── */
+.filters-grid {
+  display: grid;
+  gap: 0.5rem;
+  row-gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+.filters-grid label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.filters-grid input[type="text"],
+.filters-grid select {
+  flex: 1;
+  min-width: 0;
+  color-scheme: dark;
+}
+
+/* Main search: 3 columns desktop */
+.main-filters { grid-template-columns: repeat(3, 1fr); }
+/* Collection: auto-fill for flexible wrapping on desktop */
+.cw-filters { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+
+/* ── Mobile: 2-col grid layouts for filter forms ── */
 @media (max-width: 640px) {
-  .filters-pair label { flex: 1 1 45%; min-width: 0; }
+  /* Main search: 2 cols — natural flow gives Artist/Release, Label/Format, Year/Country, Genre/Style */
+  .main-filters { grid-template-columns: repeat(2, 1fr); }
+
+  /* Collection: 6-col grid for flexible row sizing */
+  .cw-filters {
+    grid-template-columns: repeat(6, 1fr);
+  }
+  /* Default: 2 per row (span 3 of 6) */
+  .cw-filters label { grid-column: span 3; }
+  /* Year/Notes/Rating row: 3 per row (span 2 of 6) */
+  .cw-filters .cw-year-field,
+  .cw-filters .cw-notes-field,
+  .cw-filters .cw-rating-field { grid-column: span 2; }
+  /* Reorder for mobile: Artist Release / Label Format / Year Notes Rating / Genre Style */
+  .cw-filters label:nth-child(1) { order: 1; } /* Artist */
+  .cw-filters label:nth-child(2) { order: 2; } /* Release */
+  .cw-filters label:nth-child(3) { order: 3; } /* Label */
+  .cw-filters .cw-notes-field    { order: 6; } /* Notes — moved after Year */
+  .cw-filters label:nth-child(5) { order: 4; } /* Format */
+  .cw-filters .cw-year-field     { order: 5; } /* Year */
+  .cw-filters label:nth-child(7) { order: 8; } /* Genre */
+  .cw-filters label:nth-child(8) { order: 9; } /* Style */
+  .cw-filters .cw-rating-field   { order: 7; } /* Rating — after Notes */
+}
+
+@media (max-width: 640px) {
   #drops-view  { padding-left: 0.4rem !important; padding-right: 0.4rem !important; }
   #info-view   { padding-left: 0.4rem !important; padding-right: 0.4rem !important; }
   footer       { padding-left: 0.4rem; padding-right: 0.4rem; }
