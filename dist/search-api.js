@@ -1671,7 +1671,7 @@ app.get("/api/user/favorites", async (req, res) => {
         return;
     }
     try {
-        const items = await getFavorites(userId);
+        const items = await getFavorites(userId, 48);
         res.json({ items });
     }
     catch (e) {
