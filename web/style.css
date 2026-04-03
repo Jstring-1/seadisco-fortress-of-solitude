@@ -1464,14 +1464,14 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   font-family: inherit;
 }
 .mini-player.open { display: block; }
-body.player-open { padding-bottom: 56px; }
+body.player-open { padding-bottom: 72px; }
 
 .mini-player-bar {
   display: flex;
   align-items: center;
-  padding: 0.35rem 0.6rem;
+  padding: 0.5rem 0.6rem 0.65rem;
   gap: 0.4rem;
-  min-height: 40px;
+  min-height: 48px;
 }
 .mini-player-info {
   flex: 1;
