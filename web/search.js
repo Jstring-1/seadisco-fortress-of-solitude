@@ -700,20 +700,20 @@ function sortFavoriteItems(items, sortBy) {
     case "oldest":
       arr.reverse();
       break;
-    case "title":
-      arr.sort((a, b) => titleParts(a).title.localeCompare(titleParts(b).title));
-      break;
-    case "artist":
-      arr.sort((a, b) => titleParts(a).artist.localeCompare(titleParts(b).artist));
+    case "year-asc":
+      arr.sort((a, b) => (parseInt(a.year) || 0) - (parseInt(b.year) || 0));
       break;
     case "year-desc":
       arr.sort((a, b) => (parseInt(b.year) || 0) - (parseInt(a.year) || 0));
       break;
-    case "year-asc":
-      arr.sort((a, b) => (parseInt(a.year) || 0) - (parseInt(b.year) || 0));
+    case "title-asc":
+      arr.sort((a, b) => titleParts(a).title.localeCompare(titleParts(b).title));
       break;
-    case "type":
-      arr.sort((a, b) => (a.type ?? "").localeCompare(b.type ?? ""));
+    case "title-desc":
+      arr.sort((a, b) => titleParts(b).title.localeCompare(titleParts(a).title));
+      break;
+    case "label-asc":
+      arr.sort((a, b) => ((a.label ?? [])[0] ?? "").toLowerCase().localeCompare(((b.label ?? [])[0] ?? "").toLowerCase()));
       break;
     default: // "recent" — original API order (created_at DESC)
       break;
