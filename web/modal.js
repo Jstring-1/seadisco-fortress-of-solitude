@@ -1056,27 +1056,40 @@ function refreshCardBadges(releaseId) {
 }
 
 let _masterVersions = [];
+let _mvFormatFilter = "";
+let _mvCountryFilter = "";
 
-function renderMasterVersions(filter) {
+const _MV_MEDIA = new Set(["Vinyl","CD","Cassette","DVD","Blu-ray","File","Box Set","Lathe Cut","Flexi-disc","Shellac","8-Track Cartridge","Reel-To-Reel","MiniDisc","SACD","Betamax","VHS"]);
+function _mvGetMedium(v) {
+  const parts = (v.format ?? "").split(",").map(s => s.trim());
+  return parts.find(p => _MV_MEDIA.has(p)) || (v.majorFormats ?? []).find(f => _MV_MEDIA.has(f)) || parts[0] || "";
+}
+function _mvGetDisplayFormat(v) {
+  const fmt = (v.format ?? "").trim();
+  const medium = (v.majorFormats ?? []).find(f => _MV_MEDIA.has(f));
+  if (!fmt) return medium || "—";
+  if (!medium || fmt.split(",").map(s => s.trim()).includes(medium)) return fmt;
+  return `${medium}, ${fmt}`;
+}
+
+function setMvFormatFilter(f) { _mvFormatFilter = f; renderMasterVersions(); }
+function setMvCountryFilter(c) { _mvCountryFilter = c; renderMasterVersions(); }
+
+function renderMasterVersions() {
   const list = document.getElementById("master-versions-list");
   if (!list) return;
-  const MEDIA = new Set(["Vinyl","CD","Cassette","DVD","Blu-ray","File","Box Set","Lathe Cut","Flexi-disc","Shellac","8-Track Cartridge","Reel-To-Reel","MiniDisc","SACD","Betamax","VHS"]);
-  const getMedium = v => {
-    const parts = (v.format ?? "").split(",").map(s => s.trim());
-    return parts.find(p => MEDIA.has(p)) || (v.majorFormats ?? []).find(f => MEDIA.has(f)) || parts[0] || "";
-  };
-  const getDisplayFormat = v => {
-    const fmt = (v.format ?? "").trim();
-    const medium = (v.majorFormats ?? []).find(f => MEDIA.has(f));
-    if (!fmt) return medium || "—";
-    if (!medium || fmt.split(",").map(s => s.trim()).includes(medium)) return fmt;
-    return `${medium}, ${fmt}`;
-  };
-  const filtered = filter ? _masterVersions.filter(v => getMedium(v) === filter) : _masterVersions;
 
-  list.querySelectorAll(".mv-filter-pill").forEach(p => {
-    p.style.background = p.dataset.filter === (filter ?? "") ? "var(--accent)" : "#2a2a2a";
-    p.style.color      = p.dataset.filter === (filter ?? "") ? "#000" : "var(--fg)";
+  let filtered = _masterVersions;
+  if (_mvFormatFilter) filtered = filtered.filter(v => _mvGetMedium(v) === _mvFormatFilter);
+  if (_mvCountryFilter) filtered = filtered.filter(v => (v.country || "") === _mvCountryFilter);
+
+  list.querySelectorAll(".mv-format-pill").forEach(p => {
+    p.style.background = p.dataset.filter === (_mvFormatFilter ?? "") ? "var(--accent)" : "#2a2a2a";
+    p.style.color      = p.dataset.filter === (_mvFormatFilter ?? "") ? "#000" : "var(--fg)";
+  });
+  list.querySelectorAll(".mv-country-pill").forEach(p => {
+    p.style.background = p.dataset.filter === (_mvCountryFilter ?? "") ? "var(--accent)" : "#2a2a2a";
+    p.style.color      = p.dataset.filter === (_mvCountryFilter ?? "") ? "#000" : "var(--fg)";
   });
 
   const grid = list.querySelector(".mv-grid");
@@ -1090,7 +1103,7 @@ function renderMasterVersions(filter) {
     return `
       <span style="color:#888">${escHtml(!v.year || v.year === "0" ? "?" : String(v.year))}</span>
       <span style="color:#aaa">${escHtml(v.country || "?")}</span>
-      <span style="color:#888">${escHtml(getDisplayFormat(v))}</span>
+      <span style="color:#888">${escHtml(_mvGetDisplayFormat(v))}</span>
       <span>${v.catno && v.catno !== "—" ? `<a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('query').value='${escHtml((v.catno).replace(/'/g, "\\'"))}';doSearch(1)" title="Search for this catalog number">${escHtml(v.catno)}</a>` : `<span style="color:#7ec87e">—</span>`}</span>
       <span><a href="#" class="modal-internal-link" onclick="openVersionPopup(event,${v.id})" title="View this pressing" style="color:var(--accent)">${escHtml(v.label ?? v.title ?? "—")}</a>${badge}</span>`;
   }).join("");
@@ -1107,25 +1120,34 @@ async function loadMasterVersions(event, masterId) {
     _masterVersions = data.versions ?? [];
     if (!_masterVersions.length) { list.textContent = "No pressings found."; return; }
 
-    const MEDIA2 = new Set(["Vinyl","CD","Cassette","DVD","Blu-ray","File","Box Set","Lathe Cut","Flexi-disc","Shellac","8-Track Cartridge","Reel-To-Reel","MiniDisc","SACD","Betamax","VHS"]);
-    const getMedium2 = v => { const parts = (v.format ?? "").split(",").map(s => s.trim()); return parts.find(p => MEDIA2.has(p)) || (v.majorFormats ?? []).find(f => MEDIA2.has(f)) || parts[0] || ""; };
+    _mvFormatFilter = "";
+    _mvCountryFilter = "";
+
     const formatSet = new Set();
+    const countrySet = new Set();
     _masterVersions.forEach(v => {
-      const medium = getMedium2(v);
+      const medium = _mvGetMedium(v);
       if (medium) formatSet.add(medium);
+      if (v.country) countrySet.add(v.country);
     });
     const formats = [...formatSet].sort();
-    const pillStyle = `cursor:pointer;border:none;border-radius:20px;padding:0.15rem 0.6rem;font-size:0.72rem;font-weight:600;transition:background 0.15s`;
-    const pills = [
-      `<button class="mv-filter-pill" data-filter="" onclick="renderMasterVersions('')" style="${pillStyle};background:var(--accent);color:#000">All</button>`,
-      ...formats.map(f => `<button class="mv-filter-pill" data-filter="${escHtml(f)}" onclick="renderMasterVersions('${f.replace(/'/g,"\\'")}')\" style="${pillStyle};background:#2a2a2a;color:var(--fg)">${escHtml(f)}</button>`)
+    const countries = [...countrySet].sort();
+
+    const formatPills = [
+      `<button class="mv-format-pill mv-pill" data-filter="" onclick="setMvFormatFilter('')">All</button>`,
+      ...formats.map(f => `<button class="mv-format-pill mv-pill" data-filter="${escHtml(f)}" onclick="setMvFormatFilter('${f.replace(/'/g,"\\'")}')">${escHtml(f)}</button>`)
+    ].join("");
+    const countryPills = [
+      `<button class="mv-country-pill mv-pill" data-filter="" onclick="setMvCountryFilter('')">All</button>`,
+      ...countries.map(c => `<button class="mv-country-pill mv-pill" data-filter="${escHtml(c)}" onclick="setMvCountryFilter('${c.replace(/'/g,"\\'")}')">${escHtml(c)}</button>`)
     ].join("");
 
     list.innerHTML = `
       <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.4rem">Pressings / Versions</div>
-      ${formats.length > 1 ? `<div style="display:flex;flex-wrap:wrap;gap:0.35rem;margin-bottom:0.6rem">${pills}</div>` : ""}
+      ${formats.length > 1 ? `<div class="mv-pill-row">${formatPills}</div>` : ""}
+      ${countries.length > 1 ? `<div class="mv-pill-row">${countryPills}</div>` : ""}
       <div class="mv-grid" style="display:grid;grid-template-columns:auto auto auto auto 1fr;gap:0.2rem 0.7rem;font-size:0.75rem"></div>`;
-    renderMasterVersions("");
+    renderMasterVersions();
   } catch(e) {
     console.error("loadMasterVersions error:", e);
     list.textContent = "Failed to load pressings.";
