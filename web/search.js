@@ -703,6 +703,7 @@ const _FAV_PAGE = 96;
 let _favOffset = 0;
 
 async function loadFavoritesGrid(append) {
+  if (!append) _favOffset = 0;
   try {
     const r = await apiFetch(`/api/user/favorites?limit=${_FAV_PAGE}&offset=${_favOffset}`);
     if (!r.ok) return;
