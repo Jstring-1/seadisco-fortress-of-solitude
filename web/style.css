@@ -2768,8 +2768,8 @@ body.modal-open  { overflow: hidden; }
 }
 /* Fixed slot positions — each badge always lands in the same spot */
 /* Inactive state — dimmed, show on card hover */
-.badge-collection { top: 4px;   color: #6ddf70; border-color: #6ddf7066; opacity: 0; transition: opacity 0.15s; }
-.badge-wantlist   { top: 29px;  color: #f0c95c; border-color: #f0c95c66; opacity: 0; transition: opacity 0.15s; }
+.badge-collection { top: 4px;   color: #6ddf70; border-color: #6ddf7066; opacity: 0; transition: opacity 0.15s; cursor: pointer; }
+.badge-wantlist   { top: 29px;  color: #f0c95c; border-color: #f0c95c66; opacity: 0; transition: opacity 0.15s; cursor: pointer; }
 .badge-list       { top: 54px;  color: #a0ccf0; border-color: #a0ccf066; }
 .badge-inventory  { top: 79px;  color: #cda0f5; border-color: #cda0f566; }
 .badge-favorite   { top: 104px; color: #ff80ab; border-color: #ff80ab66; cursor: pointer; opacity: 0; transition: opacity 0.15s; }

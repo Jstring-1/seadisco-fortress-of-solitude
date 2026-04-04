@@ -574,11 +574,12 @@ function renderCard(item, index) {
   const animClass = index != null ? " card-animate" : "";
   const animStyle = index != null ? ` style="--i:${Math.min(index, 20)}"` : "";
   const typeClass = `card card-type-${type}${animClass}`;
+  const fullTitle = artist ? `${artist} - ${title}` : title;
   const cardAttrs = isRelease
-    ? `class="${typeClass}" href="#" onclick="openModal(event,'${item.id}','${type}','${url.replace(/'/g, "\\'")}')" `
+    ? `class="${typeClass}" href="#" title="${escHtml(fullTitle)}" onclick="openModal(event,'${item.id}','${type}','${url.replace(/'/g, "\\'")}')" `
     : (isArtist || isLabel)
-      ? `class="${typeClass}" href="#" data-entity-type="${escHtml(type)}" data-entity-name="${escHtml(title)}" data-entity-id="${item.id}" onclick="searchByEntity(event,this)"`
-      : `class="${typeClass}" href="${url}" target="_blank" rel="noopener"`;
+      ? `class="${typeClass}" href="#" title="${escHtml(fullTitle)}" data-entity-type="${escHtml(type)}" data-entity-name="${escHtml(title)}" data-entity-id="${item.id}" onclick="searchByEntity(event,this)"`
+      : `class="${typeClass}" href="${url}" title="${escHtml(fullTitle)}" target="_blank" rel="noopener"`;
 
   // ── Badge strip: fixed order — collection, wantlist, list, inventory, favorite
   // C/W/♥ always shown (dimmed when inactive); L/I only when active
@@ -587,8 +588,8 @@ function renderCard(item, index) {
   const inCol = releaseId && type === "release" && window._collectionIds?.has(releaseId);
   const inWant = releaseId && type === "release" && window._wantlistIds?.has(releaseId);
   if (releaseId && type === "release") {
-    badges += `<span class="card-badge badge-collection${inCol ? " is-active" : ""}" title="${inCol ? "In your collection" : "Not in collection"}">C</span>`;
-    badges += `<span class="card-badge badge-wantlist${inWant ? " is-active" : ""}" title="${inWant ? "In your wantlist" : "Not in wantlist"}">W</span>`;
+    badges += `<span class="card-badge badge-collection${inCol ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleCollectionFromCard(this,${releaseId})" title="${inCol ? "Remove from collection" : "Add to collection"}">C</span>`;
+    badges += `<span class="card-badge badge-wantlist${inWant ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleWantlistFromCard(this,${releaseId})" title="${inWant ? "Remove from wantlist" : "Add to wantlist"}">W</span>`;
     const lists = window._listMembership?.[releaseId];
     if (lists?.length) {
       const names = lists.map(l => l.listName).join(", ");
@@ -919,6 +920,73 @@ function toggleFavoriteFromCard(btn, discogsId, entityType) {
       btn.textContent = wasFav ? "❤" : "♡";
       showToast("Failed to update favorite", "error");
     });
+}
+
+async function toggleCollectionFromCard(btn, releaseId) {
+  const inCol = window._collectionIds?.has(releaseId);
+  if (!window._collectionIds) window._collectionIds = new Set();
+  const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
+  if (!sessionToken) { showToast("Sign in to manage your collection", "error"); return; }
+
+  // Optimistic update
+  if (inCol) { window._collectionIds.delete(releaseId); } else { window._collectionIds.add(releaseId); }
+  refreshCardBadges?.(releaseId);
+
+  const endpoint = inCol ? "/api/user/collection/remove" : "/api/user/collection/add";
+  const body = inCol ? { releaseId, instanceId: null, folderId: 1 } : { releaseId };
+  try {
+    const r = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+      body: JSON.stringify(body),
+    }).then(r => r.json());
+    if (!r.ok && r.error) throw new Error(r.error);
+    showToast(inCol ? "Removed from collection" : "Added to collection");
+    // Update modal buttons if open
+    const modalBtn = document.getElementById("modal-col-btn");
+    if (modalBtn) {
+      modalBtn.classList.toggle("in-collection", !inCol);
+      modalBtn.innerHTML = inCol ? "Collection" : "Collected";
+    }
+  } catch (e) {
+    // Revert
+    if (inCol) { window._collectionIds.add(releaseId); } else { window._collectionIds.delete(releaseId); }
+    refreshCardBadges?.(releaseId);
+    showToast(e.message || "Failed to update collection", "error");
+  }
+}
+
+async function toggleWantlistFromCard(btn, releaseId) {
+  const inWant = window._wantlistIds?.has(releaseId);
+  if (!window._wantlistIds) window._wantlistIds = new Set();
+  const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
+  if (!sessionToken) { showToast("Sign in to manage your wantlist", "error"); return; }
+
+  // Optimistic update
+  if (inWant) { window._wantlistIds.delete(releaseId); } else { window._wantlistIds.add(releaseId); }
+  refreshCardBadges?.(releaseId);
+
+  const endpoint = inWant ? "/api/user/wantlist/remove" : "/api/user/wantlist/add";
+  try {
+    const r = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+      body: JSON.stringify({ releaseId }),
+    }).then(r => r.json());
+    if (!r.ok && r.error) throw new Error(r.error);
+    showToast(inWant ? "Removed from wantlist" : "Added to wantlist");
+    // Update modal buttons if open
+    const modalBtn = document.getElementById("modal-want-btn");
+    if (modalBtn) {
+      modalBtn.classList.toggle("in-wantlist", !inWant);
+      modalBtn.innerHTML = inWant ? "Want" : "Wanted";
+    }
+  } catch (e) {
+    // Revert
+    if (inWant) { window._wantlistIds.add(releaseId); } else { window._wantlistIds.delete(releaseId); }
+    refreshCardBadges?.(releaseId);
+    showToast(e.message || "Failed to update wantlist", "error");
+  }
 }
 
 // ── Artist / entity navigation ───────────────────────────────────────────
