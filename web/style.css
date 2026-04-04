@@ -51,10 +51,9 @@ html { overflow-x: hidden; }
 
   #collection-tabs { padding: 0 0.4rem 1.25rem; }
 
-  main { padding: 0.4rem 0.4rem 1rem; }
+  main { padding: 0.4rem 0.4rem 1rem; overflow-x: hidden; }
 
   /* Search row — allow button to flex so it never clips in narrow viewports */
-  main { overflow-x: hidden; }
   .search-row { width: 100%; }
   #search-btn {
     width: auto;
@@ -70,17 +69,11 @@ html { overflow-x: hidden; }
     padding: 0 0.2rem;
   }
   .type-sort-row > span { display: none; }
-  .type-radios     { order: 1; flex-basis: 100%; justify-content: center; }
+  .type-radios     { order: 1; flex-basis: 100%; justify-content: center; gap: 0.3rem; flex-wrap: wrap; }
   #advanced-toggle { order: 10; }
   .sort-label      { order: 10; }
   #hide-owned-label { order: 10; font-size: 0.72rem; }
   #clear-btn       { order: 10; }
-
-  .type-radios {
-    gap: 0.3rem;
-    flex-wrap: wrap;
-    justify-content: center;
-  }
   .type-radios label { font-size: 0.72rem; }
 
   /* Collection controls: radios + sort on same line */
@@ -133,29 +126,28 @@ html { overflow-x: hidden; }
   #modal-box,
   #bio-full-box,
   #version-box,
-  #series-box {
+  #series-box,
+  #concert-box {
     max-width: 100%;
     margin: 0;
-    border-radius: var(--radius);
+    max-height: 92vh;
+    border-radius: var(--radius) var(--radius) 0 0;
   }
   #modal-overlay,
   #bio-full-overlay,
   #version-overlay,
-  #series-overlay {
+  #series-overlay,
+  #concert-overlay {
     padding: 0.5rem;
     align-items: flex-end;  /* slide up from bottom on mobile */
-  }
-  #modal-box,
-  #bio-full-box,
-  #version-box,
-  #series-box {
-    max-height: 92vh;
-    border-radius: var(--radius) var(--radius) 0 0;
   }
 
   /* Video overlay */
   #video-overlay { padding: 0.5rem; }
   #video-wrap { padding: 0.4rem; }
+
+  /* Lightbox overlay */
+  #lightbox-overlay { padding: 0.5rem; }
 
   /* Pagination */
   #pagination { gap: 0.3rem; }

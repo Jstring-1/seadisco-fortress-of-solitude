@@ -31,7 +31,7 @@
   <link rel="preconnect" href="https://i.ebayimg.com" />
   <link rel="dns-prefetch" href="https://clerk.seadisco.com" />
   <link rel="dns-prefetch" href="https://api.anthropic.com" />
-  <link rel="stylesheet" href="/style.css?v=20260403n" />
+  <link rel="stylesheet" href="/style.css?v=20260404a" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -64,7 +64,7 @@
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260403n"></script>
+<script src="/shared.js?v=20260404a"></script>
 <script>renderSharedHeader({ spa: true, active: "search" });</script>
 <div id="search-view">
 
@@ -525,8 +525,9 @@
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Searching</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Search the entire Discogs database by artist, album, label, or any combination. Click <strong style="color:#ccc">Advanced</strong> for targeted fields (Artist, Release, Label, Year, Genre/Style, Format). Narrow by type — <strong style="color:#ccc">Masters</strong> (every pressing grouped), <strong style="color:#ccc">Releases</strong> (individual pressings), or <strong style="color:#ccc">Masters+</strong> (masters plus standalone releases that have no master grouping — useful for finding obscure pressings alongside grouped editions). Sort by relevance, year, title, or label.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Click any card for full details: tracklist with YouTube previews, version finder, pressing info, credits, and photos. From the detail popup you can <strong style="color:#ccc">add/remove items from your collection or wantlist</strong> and <strong style="color:#ccc">rate releases</strong> 1–5 stars. <strong style="color:#ccc">Hide owned</strong> removes synced collection items from results. Select <strong style="color:#ccc">✦ AI</strong> to describe what you want in plain language — Claude returns 12 curated picks with Discogs links.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">The tracklist is collapsible (setting saved across sessions) with an inline track filter. Credits are filterable too — useful for releases with long personnel lists. Master release popups show all pressings with format and country filter pills (selections persist across popups).</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Every album card shows badge indicators on hover: <strong style="color:#6ddf70">C</strong> (collection), <strong style="color:#f0c95c">W</strong> (wantlist), and <strong style="color:#ff80ab">♥</strong> (favorite). Active badges are bright; inactive ones appear dimmed. Click the heart to favorite directly from any card. If an item is in your lists or inventory, <strong style="color:#a0ccf0">L</strong> and <strong style="color:#cda0f5">I</strong> badges appear too.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">The tracklist is collapsible (setting saved across sessions) with an inline track filter. Credits are filterable too — useful for releases with long personnel lists. Master release popups show all pressings with format and country filter pills (selections persist across popups). If a release belongs to a <strong style="color:#ccc">series</strong>, the series name is clickable — browse all releases in the series with collection/wantlist badges so you can see what you own and what's missing.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Marketplace stats show lowest price, number for sale, and community want/have counts. Click <strong style="color:#ccc">(est)</strong> to see condition-based price estimates from Good through Mint, color-coded by grade.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Every album card shows badge indicators on hover: <strong style="color:#6ddf70">C</strong> (collection), <strong style="color:#f0c95c">W</strong> (wantlist), and <strong style="color:#ff80ab">♥</strong> (favorite). Active badges are bright; inactive ones appear dimmed. Click <strong style="color:#6ddf70">C</strong>, <strong style="color:#f0c95c">W</strong>, or <strong style="color:#ff80ab">♥</strong> to add/remove directly from any card — no need to open the popup. If an item is in your lists or inventory, <strong style="color:#a0ccf0">L</strong> and <strong style="color:#cda0f5">I</strong> badges appear too.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Your Records at a Glance</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When signed in, the main search page displays a shuffled grid of album covers drawn from all your data — collection, wantlist, lists, inventory, and favorites. 48 cards are shown at a time with a load-more button for up to 192 total. This gives you a quick visual snapshot of your library every time you visit.</p>
@@ -568,11 +569,11 @@
 
 <div id="privacy-view" class="content-narrow" style="display:none">
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">Privacy Policy</h2>
-  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: April 3, 2026</p>
+  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: April 4, 2026</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">What We Collect</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you create an account, we store your email address (provided by our authentication provider, Clerk) and any Discogs credentials you choose to connect — either a Personal Access Token or OAuth access credentials.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you sync your collection, we store a local copy of your Discogs collection, wantlist, inventory, list metadata, and list items so you can browse and search them on SeaDisco. We also cache your Discogs profile information (username, avatar, and account stats) for display on the Account page.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you sync your collection, we store a local copy of your Discogs collection, wantlist, inventory, list metadata, list items, and marketplace order history so you can browse and search them on SeaDisco. We also cache your Discogs profile information (username, avatar, and account stats) for display on the Account page.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">If you favorite albums, artists, or labels, those selections and their display data (title, artwork URL, type) are stored with your account. If you save searches, those search parameters are stored with your account. If you submit feedback, your email and message are stored.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0">We log API usage for operational monitoring. Your IP address is used for rate limiting anonymous users but is not persisted to the database. Google Analytics receives search terms you enter along with standard page view data. When you use the AI search feature, your search query is sent to Anthropic (Claude) to generate recommendations.</p>
 
@@ -613,7 +614,7 @@
 
 <div id="terms-view" class="content-narrow" style="display:none">
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">Terms of Service</h2>
-  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: April 3, 2026</p>
+  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: April 4, 2026</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Acceptance</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">By using SeaDisco, you agree to these terms. If you don't agree, please don't use the site.</p>
@@ -734,17 +735,17 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script src="/utils.js?v=20260403n"></script>
-<script src="/search.js?v=20260403n"></script>
-<script src="/collection.js?v=20260403n"></script>
-<script src="/app.js?v=20260403n"></script>
+<script src="/utils.js?v=20260404a"></script>
+<script src="/search.js?v=20260404a"></script>
+<script src="/collection.js?v=20260404a"></script>
+<script src="/app.js?v=20260404a"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/modal.js?v=20260403n"></script>
-<script defer src="/drops.js?v=20260403n"></script>
-<script defer src="/live.js?v=20260403n"></script>
-<script defer src="/buy.js?v=20260403n"></script>
-<script defer src="/gear.js?v=20260403n"></script>
-<script defer src="/feed.js?v=20260403n"></script>
+<script defer src="/modal.js?v=20260404a"></script>
+<script defer src="/drops.js?v=20260404a"></script>
+<script defer src="/live.js?v=20260404a"></script>
+<script defer src="/buy.js?v=20260404a"></script>
+<script defer src="/gear.js?v=20260404a"></script>
+<script defer src="/feed.js?v=20260404a"></script>
 
 </body>
 </html>
