@@ -318,7 +318,6 @@ function renderSharedHeader(opts) {
             ${recTab("Favorites", "favorites")}
           </div>
         </div>
-        ${isSPA ? '<div id="nav-auth-popup">Sign up and add your Discogs API token for unlimited searches</div>' : ''}
       </div>
     </nav>`;
 }

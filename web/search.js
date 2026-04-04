@@ -146,7 +146,7 @@ async function doSearch(page = 1, skipPushState = false) {
     if (style)   parts.push(`Style: ${style}`);
     if (format)  parts.push(`Format: ${format}`);
     if (country) parts.push(`Country: ${country}`);
-    const typeLabels = { "master":"Masters", "release":"Releases", "artist":"Artists", "label":"Labels" };
+    const typeLabels = { "master":"Masters", "master+":"Masters+", "release":"Releases", "artist":"Artists", "label":"Labels" };
     const typeLabel = typeLabels[resultType] ?? "";
     const sortLabels = { "year:asc":"Year ↑", "year:desc":"Year ↓", "title:asc":"Title A→Z", "title:desc":"Title Z→A", "label:asc":"Label A→Z" };
     const sortLabel = sortLabels[sort] ?? "";
@@ -179,7 +179,7 @@ async function doSearch(page = 1, skipPushState = false) {
     if (resultType === "label" && !effectiveQ && label) { effectiveQ = label; useLabel = ""; }
     if (resultType === "artist" && !effectiveQ && effectiveArtist) { effectiveQ = effectiveArtist; useArtist = ""; }
     if (effectiveQ) p.set("q", effectiveQ);
-    if (resultType) p.set("type", resultType);
+    if (resultType && resultType !== "master+") p.set("type", resultType);
     if (useArtist) p.set("artist", useArtist);
     if (release) p.set("release_title", release);
     if (year)    p.set("year",          year);
@@ -211,8 +211,50 @@ async function doSearch(page = 1, skipPushState = false) {
     }
 
     let items, totalPages_new, totalItems_new = 0;
+
+    // Masters+ mode: run master + release searches in parallel, merge
+    const isMasterPlus = resultType === "master+";
+    let searchPromise;
+    if (isMasterPlus) {
+      const masterParams = buildParams(48); masterParams.set("type", "master");
+      const releaseParams = buildParams(48); releaseParams.set("type", "release");
+      searchPromise = Promise.all([
+        apiFetch(`${API}/search?${masterParams}`),
+        apiFetch(`${API}/search?${releaseParams}`),
+      ]).then(async ([mRes, rRes]) => {
+        // Return the master response for error handling, attach merged data
+        mRes._masterPlus = true;
+        if (mRes.ok && rRes.ok) {
+          const [mData, rData] = await Promise.all([mRes.json(), rRes.json()]);
+          const masters = mData.results ?? [];
+          const releases = rData.results ?? [];
+          // Keep releases that have no master_id (orphans)
+          const masterIds = new Set(masters.map(m => m.id));
+          const orphans = releases.filter(r => !r.master_id || !masterIds.has(r.master_id));
+          // Dedupe orphans against masters by master_id
+          const seen = new Set(masters.map(m => m.id));
+          const uniqueOrphans = orphans.filter(r => {
+            if (seen.has(r.id)) return false;
+            seen.add(r.id);
+            return true;
+          });
+          const merged = [...masters, ...uniqueOrphans];
+          mRes._mergedData = {
+            results: merged,
+            pagination: {
+              pages: Math.max(mData.pagination?.pages ?? 1, rData.pagination?.pages ?? 1),
+              items: (mData.pagination?.items ?? 0) + uniqueOrphans.length,
+            }
+          };
+        }
+        return mRes;
+      });
+    } else {
+      searchPromise = apiFetch(`${API}/search?${buildParams(48)}`);
+    }
+
     const [res, bioRes] = await Promise.all([
-      apiFetch(`${API}/search?${buildParams(48)}`),
+      searchPromise,
       bioFetch ?? Promise.resolve(null),
     ]);
     bioFetch = bioRes ? { json: () => bioRes.json() } : null;
@@ -242,7 +284,7 @@ async function doSearch(page = 1, skipPushState = false) {
       const plural = rlRemaining === 1 ? "search" : "searches";
       showToast(`${rlRemaining} free ${plural} remaining today — sign in for unlimited`, "info", 5000);
     }
-    const data = await res.json();
+    const data = res._mergedData ?? await res.json();
     items = data.results ?? [];
     totalPages_new = data.pagination?.pages ?? 1;
     totalItems_new = data.pagination?.items ?? items.length;
@@ -282,19 +324,51 @@ async function doSearch(page = 1, skipPushState = false) {
         const constrainedArtist = bioData.name.replace(/\s*\(\d+\)$/, "").trim();
         detectedArtist = constrainedArtist;
         try {
-          const cp = new URLSearchParams({ q: q || constrainedArtist, page, per_page: 48, artist: constrainedArtist });
-          if (resultType) cp.set("type", resultType);
-          if (release)    cp.set("release_title", release);
-          if (year)       cp.set("year", year);
-          if (format)     cp.set("format", format);
-          if (sort) { const [sf, so] = sort.split(":"); cp.set("sort", sf); cp.set("sort_order", so); }
-          const cr = await apiFetch(`${API}/search?${cp}`);
-          if (cr.ok) {
-            const cd = await cr.json();
-            if ((cd.results ?? []).length > 0) {
-              items = cd.results;
-              totalPages = cd.pagination?.pages ?? totalPages;
-              totalItems_new = cd.pagination?.items ?? totalItems_new;
+          if (isMasterPlus) {
+            // Masters+ constrained: parallel master+release with artist constraint
+            const base = { q: q || constrainedArtist, page, per_page: 48, artist: constrainedArtist };
+            const mp = new URLSearchParams(base); mp.set("type", "master");
+            const rp = new URLSearchParams(base); rp.set("type", "release");
+            [mp, rp].forEach(p => {
+              if (release) p.set("release_title", release);
+              if (year)    p.set("year", year);
+              if (format)  p.set("format", format);
+              if (sort) { const [sf, so] = sort.split(":"); p.set("sort", sf); p.set("sort_order", so); }
+            });
+            const [mR, rR] = await Promise.all([
+              apiFetch(`${API}/search?${mp}`),
+              apiFetch(`${API}/search?${rp}`),
+            ]);
+            if (mR.ok && rR.ok) {
+              const [mD, rD] = await Promise.all([mR.json(), rR.json()]);
+              const masters = mD.results ?? [];
+              const releases = rD.results ?? [];
+              const masterIds = new Set(masters.map(m => m.id));
+              const orphans = releases.filter(r => !r.master_id || !masterIds.has(r.master_id));
+              const seen = new Set(masters.map(m => m.id));
+              const uniqueOrphans = orphans.filter(r => { if (seen.has(r.id)) return false; seen.add(r.id); return true; });
+              const merged = [...masters, ...uniqueOrphans];
+              if (merged.length > 0) {
+                items = merged;
+                totalPages = Math.max(mD.pagination?.pages ?? 1, rD.pagination?.pages ?? 1);
+                totalItems_new = (mD.pagination?.items ?? 0) + uniqueOrphans.length;
+              }
+            }
+          } else {
+            const cp = new URLSearchParams({ q: q || constrainedArtist, page, per_page: 48, artist: constrainedArtist });
+            if (resultType) cp.set("type", resultType);
+            if (release)    cp.set("release_title", release);
+            if (year)       cp.set("year", year);
+            if (format)     cp.set("format", format);
+            if (sort) { const [sf, so] = sort.split(":"); cp.set("sort", sf); cp.set("sort_order", so); }
+            const cr = await apiFetch(`${API}/search?${cp}`);
+            if (cr.ok) {
+              const cd = await cr.json();
+              if ((cd.results ?? []).length > 0) {
+                items = cd.results;
+                totalPages = cd.pagination?.pages ?? totalPages;
+                totalItems_new = cd.pagination?.items ?? totalItems_new;
+              }
             }
           }
         } catch { /* keep original results */ }
@@ -752,7 +826,8 @@ async function loadRandomRecords(more) {
       const r = isLoggedIn ? await apiFetch(url) : await fetch(url);
       if (!r.ok) return;
       const data = await r.json();
-      _randomAll = _shuffle((data.items ?? []).map(_parseRandomRow));
+      _randomAll = _shuffle((data.items ?? []).map(_parseRandomRow)
+        .filter(r => r.type === "release" && r.cover_image));
       _randomShown = 0;
     } catch { return; }
     if (!_randomAll.length) return;

@@ -73,6 +73,7 @@ function addNavTab(view) {
     if (authTab) {
       authTab.textContent = "Account";
       authTab.href = "/account";
+      authTab.title = "";
       authTab.onclick = null;
     }
   }

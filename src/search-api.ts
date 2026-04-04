@@ -2381,6 +2381,36 @@ app.get("/master-versions/:id", async (req, res) => {
   }
 });
 
+// GET /series-releases/:id — all releases in a Discogs series (series are label-type entities)
+app.get("/series-releases/:id", async (req, res) => {
+  const { id } = req.params;
+  const dc = await getDiscogsForRequest(req, true);
+  if (!dc) { res.json({ releases: [], name: "" }); return; }
+  try {
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    // Fetch series info + first page of releases in parallel
+    const [labelData, relData] = await Promise.all([
+      dc.getLabel(id) as Promise<any>,
+      dc.getLabelReleases(id, { perPage: 100 }) as Promise<any>,
+    ]);
+    const seriesName = labelData?.name ?? `Series ${id}`;
+    const releases = (relData?.releases ?? []).map((r: any) => ({
+      id:      r.id,
+      title:   r.title ?? "",
+      artist:  r.artist ?? "",
+      catno:   r.catno ?? "",
+      year:    r.year ?? 0,
+      format:  r.format ?? "",
+      thumb:   r.thumb ?? "",
+      country: r.country ?? "",
+    }));
+    res.json({ name: seriesName, releases, total: relData?.pagination?.items ?? releases.length });
+  } catch (err: any) {
+    console.error(`[series-releases/${id}] Error:`, err?.message ?? err);
+    res.status(500).json({ error: err?.message ?? "Failed to load series", releases: [], name: "" });
+  }
+});
+
 // GET /api/fresh-releases — 150 random releases from last 3 months
 app.get("/api/fresh-releases", async (_req, res) => {
   try {
