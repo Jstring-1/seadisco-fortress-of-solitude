@@ -299,51 +299,78 @@ body {
   align-items: center;
   position: relative;
 }
-/* Wrapper is the positioning context for the auth popup */
 #nav-tabs-wrap {
   position: relative;
   display: inline-flex;
 }
-/* Outer container: rounded pill group with overflow:hidden to clip button backgrounds */
 #main-nav-tabs {
   display: flex;
+  flex-direction: column;
   border: 1px solid var(--border);
   border-radius: 7px;
   overflow: hidden;
 }
-/* ─ Tab buttons ─────────────────────────────────────────────────────────── */
-.main-nav-tab {
+/* ─ Nav rows ───────────────────────────────────────────────────────────── */
+.nav-row {
+  display: flex;
+}
+.nav-row-top {
+  border-bottom: 1px solid var(--border);
+}
+/* ─ Top row tabs (discover + auth) ─────────────────────────────────────── */
+.nav-tab-top {
   background: none;
   border: none;
-  border-radius: 0;          /* MUST override global button{border-radius:8px} */
-  box-shadow: inset -1px 0 0 var(--border);  /* right separator */
+  border-radius: 0;
+  box-shadow: inset -1px 0 0 var(--border);
   color: var(--muted);
   height: auto;
-  padding: 0.45rem 1.2rem;
+  padding: 0.3rem 1rem;
   cursor: pointer;
-  font-size: 0.78rem;
+  font-size: 0.68rem;
   font-weight: normal;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
-  text-decoration: none;     /* for <a> tags (Account) */
-  display: inline-flex;      /* for <a> tags (Account) */
-  align-items: center;       /* for <a> tags (Account) */
-  align-self: stretch;       /* fill container height */
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  align-self: stretch;
 }
-.main-nav-tab:hover         { color: var(--muted); background: none; } /* suppress browser <a> hover */
-#main-nav-tabs > .main-nav-tab:first-child { border-radius: 6px 0 0 6px; }
-.main-nav-tab.active        { color: var(--accent); font-weight: 600; background: rgba(255,107,53,0.08); }
-.main-nav-tab.nav-disabled  { color: var(--muted); cursor: pointer; text-decoration: none; font-size: 0.7rem; letter-spacing: 0.04em; }
-/* ─ Auth wrap + Account button ─────────────────────────────────────────── */
-#nav-auth-wrap {
-  display: flex;
-  align-items: stretch;
-  box-shadow: inset 1px 0 0 var(--border); /* left separator before Account */
+.nav-tab-top:hover           { color: var(--text); background: none; }
+.nav-tab-top.active          { color: var(--accent); font-weight: 600; background: rgba(255,107,53,0.08); }
+.nav-tab-top:last-child      { box-shadow: none; }
+.nav-auth-tab                { font-size: 0.62rem; color: #777; letter-spacing: 0.04em; }
+.nav-auth-tab:hover          { color: var(--accent); }
+/* ─ Bottom row tabs (records) ──────────────────────────────────────────── */
+.nav-tab-bot {
+  background: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: inset -1px 0 0 var(--border);
+  color: var(--muted);
+  height: auto;
+  padding: 0.35rem 0.9rem;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: normal;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  align-self: stretch;
+  gap: 0.2rem;
 }
-.nav-auth-btn {
-  border-radius: 0 6px 6px 0;
-  box-shadow: none;          /* override .main-nav-tab right separator */
+.nav-tab-bot:hover           { color: var(--text); background: none; }
+.nav-tab-bot.active          { color: var(--accent); font-weight: 600; background: rgba(255,107,53,0.08); }
+.nav-tab-bot:last-child      { box-shadow: none; }
+.nav-tab-bot.nav-rec-disabled { color: #555; cursor: pointer; }
+.nav-tab-bot.nav-rec-disabled:hover { color: var(--accent); }
+.rtab-icon {
+  font-weight: 700;
+  font-size: 0.72rem;
 }
 /* ─ Auth popup ──────────────────────────────────────────────────────────── */
 #nav-auth-popup {
@@ -362,11 +389,11 @@ body {
   box-shadow: 0 4px 16px rgba(0,0,0,0.4);
   z-index: 300;
 }
-#nav-tabs-wrap:has(#nav-auth-wrap:hover) #nav-auth-popup { display: block; }
+#nav-tabs-wrap:has(.nav-auth-tab:hover) #nav-auth-popup { display: block; }
 
-/* ─ Hamburger (desktop: hidden; defined BEFORE mobile override) ─────────── */
+/* ─ Hamburger (desktop: hidden) ────────────────────────────────────────── */
 #nav-hamburger {
-  display: none;                /* hidden on desktop */
+  display: none;
   flex-direction: column;
   justify-content: space-between;
   width: 36px;
@@ -380,13 +407,12 @@ body {
 #nav-hamburger span {
   display: block;
   height: 2px;
-  background: var(--accent);   /* teal lines — clearly visible */
+  background: var(--accent);
   border-radius: 2px;
 }
-/* ─ Mobile nav (AFTER hamburger default so display:flex wins) ──────────── */
+/* ─ Mobile nav ─────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
   #main-nav { padding: 0; }
-  /* Hamburger: fixed top-right of viewport */
   #nav-hamburger {
     display: flex !important;
     position: fixed;
@@ -396,7 +422,6 @@ body {
     background: var(--surface);
     border-color: var(--accent);
   }
-  /* Dropdown: fixed just below the hamburger, right-aligned */
   #nav-tabs-wrap { position: fixed; top: 3.5rem; right: 1rem; z-index: 500; min-width: 200px; }
   #main-nav-tabs {
     display: none !important;
@@ -406,7 +431,9 @@ body {
     background: var(--surface);
   }
   #main-nav-tabs.mobile-open { display: flex !important; }
-  .main-nav-tab {
+  .nav-row { flex-direction: column; }
+  .nav-row-top { border-bottom: none; }
+  .nav-tab-top, .nav-tab-bot {
     box-shadow: none;
     border-radius: 0 !important;
     border-bottom: 1px solid var(--border);
@@ -417,9 +444,8 @@ body {
     text-align: left;
     width: 100%;
   }
-  #main-nav-tabs > .main-nav-tab:first-child { border-radius: 0 !important; }
-  #nav-auth-wrap { box-shadow: none; border-top: 1px solid var(--border); background: var(--surface); }
-  .nav-auth-btn { border-radius: 0 !important; }
+  .nav-tab-bot { padding-left: 1.5rem; font-size: 0.78rem; }
+  .nav-auth-tab { font-size: 0.76rem; }
   #nav-auth-popup { display: none !important; }
 }
 
@@ -512,7 +538,7 @@ body {
 .fresh-all-btn {
   font-weight: normal;
 }
-.fresh-all-btn:hover:not(.main-nav-tab) { background: var(--surface); }
+.fresh-all-btn:hover:not(.nav-tab-top):not(.nav-tab-bot) { background: var(--surface); }
 #fresh-active-label {
   font-size: 0.72rem;
   color: #6a5d4a;
@@ -541,32 +567,7 @@ body {
 /* .fresh-tag-pill extends .pill — no overrides needed */
 
 /* My Records sub-tabs */
-.records-sub-tabs {
-  display: flex;
-  gap: 0;
-  margin-bottom: 0.25rem;
-}
-.records-sub-tab {
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  padding: 0.45rem 0.9rem;
-  font-family: inherit;
-  font-size: 0.78rem;
-  color: var(--muted);
-  cursor: pointer;
-  transition: color 0.15s, border-color 0.15s;
-}
-.records-sub-tab:hover { color: var(--text); }
-.records-sub-tab.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
-}
-.rtab-icon {
-  font-weight: 700;
-  font-size: 0.72rem;
-  margin-right: 0.15rem;
-}
+/* records-sub-tabs removed — now in header nav row 2 */
 
 /* Lists grid */
 .lists-grid {
@@ -1404,7 +1405,7 @@ button {
   transition: background 0.15s;
 }
 
-button:hover:not(.main-nav-tab) { background: var(--accent2); }
+button:hover:not(.nav-tab-top):not(.nav-tab-bot) { background: var(--accent2); }
 button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 
 #search-btn { width: 120px; flex-shrink: 0; }
