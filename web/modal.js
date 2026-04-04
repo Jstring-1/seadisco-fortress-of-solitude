@@ -977,12 +977,12 @@ async function loadPriceEstimates(releaseId, targetId) {
     const data = await r.json();
     // Conditions from best → worst, with short labels and gradient colors (orange → blue)
     const grades = [
-      { key: "Mint (M)",                 label: "M",   color: "#e08a3a" },
-      { key: "Near Mint (NM or M-)",     label: "NM",  color: "#c4893f" },
-      { key: "Very Good Plus (VG+)",     label: "VG+", color: "#a08850" },
-      { key: "Very Good (VG)",           label: "VG",  color: "#7c8766" },
-      { key: "Good Plus (G+)",           label: "G+",  color: "#58867c" },
       { key: "Good (G)",                 label: "G",   color: "#3a8596" },
+      { key: "Good Plus (G+)",           label: "G+",  color: "#58867c" },
+      { key: "Very Good (VG)",           label: "VG",  color: "#7c8766" },
+      { key: "Very Good Plus (VG+)",     label: "VG+", color: "#a08850" },
+      { key: "Near Mint (NM or M-)",     label: "NM",  color: "#c4893f" },
+      { key: "Mint (M)",                 label: "M",   color: "#e08a3a" },
     ];
     const rows = grades
       .filter(g => data[g.key]?.value != null)
