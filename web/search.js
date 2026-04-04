@@ -462,13 +462,26 @@ async function doSearch(page = 1, skipPushState = false) {
     }
 
     setStatus("");
-    const shown = _append ? document.getElementById("results").querySelectorAll(".card, .card-animate").length + items.length : items.length;
+    // Masters+ with sort on load more: merge new items with existing and re-sort
+    // the entire list, then re-render from scratch so chronological order is
+    // preserved across pages (individual page fetches can return items older
+    // than the previous page's max).
+    let _appendMode = _append;
+    if (_append && isMasterPlus && sort && window._lastResults?.length) {
+      const existingIds = new Set(window._lastResults.map(it => it.id));
+      const newItems = items.filter(it => !existingIds.has(it.id));
+      const combined = [...window._lastResults, ...newItems];
+      _sortMerged(combined, sort);
+      items = combined;
+      _appendMode = false; // full re-render
+    }
+    const shown = _appendMode ? document.getElementById("results").querySelectorAll(".card, .card-animate").length + items.length : items.length;
     const returnedMsg = `Returned :: ${totalItems_new.toLocaleString()} results — showing ${shown}`;
     const retEl = document.getElementById("search-returned");
     retEl.textContent = returnedMsg;
     retEl.title = returnedMsg;
     document.getElementById("search-info-block").style.display = "";
-    renderResults(items, _append);
+    renderResults(items, _appendMode);
     renderPagination();
 
     {
