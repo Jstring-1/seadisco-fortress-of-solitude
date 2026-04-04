@@ -46,7 +46,8 @@ function openModal(event, id, type, discogsUrl) {
 
 function closeModal() {
   document.getElementById("modal-overlay").classList.remove("open");
-  if (!document.getElementById("version-overlay")?.classList.contains("open")) {
+  if (!document.getElementById("version-overlay")?.classList.contains("open") &&
+      !document.getElementById("series-overlay")?.classList.contains("open")) {
     document.body.classList.remove("modal-open");
   }
   const u = new URL(window.location.href);
@@ -263,7 +264,8 @@ async function openVersionPopup(event, releaseId) {
 
 function closeVersionPopup() {
   document.getElementById("version-overlay").classList.remove("open");
-  if (!document.getElementById("modal-overlay")?.classList.contains("open")) {
+  if (!document.getElementById("modal-overlay")?.classList.contains("open") &&
+      !document.getElementById("series-overlay")?.classList.contains("open")) {
     document.body.classList.remove("modal-open");
   }
   const u = new URL(window.location.href);
@@ -833,9 +835,12 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     .map(t => `<span class="detail-label">${escHtml(t)}</span><span>${escHtml(companyGroups[t].join(", "))}</span>`)
     .join("");
 
-  const seriesText = (d.series ?? [])
-    .map(s => s.catno ? `${s.name} (${s.catno})` : s.name)
-    .filter(Boolean).join(", ");
+  const seriesLinks = (d.series ?? [])
+    .filter(s => s.name)
+    .map(s => {
+      const label = s.catno ? `${s.name} (${s.catno})` : s.name;
+      return `<a href="#" class="modal-internal-link" onclick="event.preventDefault();openSeriesBrowser(${s.id},'${escHtml(s.name.replace(/'/g, "\\'"))}')" title="Browse series: ${escHtml(s.name)}">${escHtml(label)}</a>`;
+    }).join(", ");
 
   const isMaster = searchResult.type === "master";
   const catnoEsc = catno.replace(/'/g, "\\'");
@@ -849,7 +854,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     (!isMaster && formats) ? `<span class="detail-label">Format</span><span>${escHtml(formats)}</span>` : "",
     year    ? `<span class="detail-label">Year</span><span>${escHtml(String(year))}</span>` : "",
     country ? `<span class="detail-label">Country</span><span>${escHtml(country)}</span>` : "",
-    seriesText ? `<span class="detail-label">Series</span><span>${escHtml(seriesText)}</span>` : "",
+    seriesLinks ? `<span class="detail-label">Series</span><span>${seriesLinks}</span>` : "",
     companyRows,
     identifierRows,
     matrixRow,
@@ -1373,11 +1378,11 @@ function renderMasterVersions() {
     const inCol  = window._collectionIds?.has(v.id);
     const inWant = window._wantlistIds?.has(v.id);
     const isFav  = window._favoriteKeys?.has(`release:${v.id}`);
-    const badges = [];
-    if (inCol)  badges.push(`<span class="collection-badge">✓</span>`);
-    if (inWant) badges.push(`<span class="wantlist-badge">🤞</span>`);
-    if (isFav)  badges.push(`<span style="color:#f06292;font-size:0.65rem">❤</span>`);
-    const badge  = badges.length ? badges.join("") : `<span style="visibility:hidden">✓</span>`;
+    const badgeParts = [];
+    if (inCol)  badgeParts.push(`<span style="color:#6ddf70;font-weight:700">C</span>`);
+    if (inWant) badgeParts.push(`<span style="color:#f0c95c;font-weight:700">W</span>`);
+    if (isFav)  badgeParts.push(`<span style="color:#ff80ab">♥</span>`);
+    const badge  = `<span>${badgeParts.length ? badgeParts.join("") : "&nbsp;"}</span>`;
     return `
       <span style="color:#888">${escHtml(!v.year || v.year === "0" ? "?" : String(v.year))}</span>
       <span style="color:#aaa">${escHtml(v.country || "?")}</span>
@@ -1385,6 +1390,126 @@ function renderMasterVersions() {
       ${badge}
       <span title="${escHtml(v.catno || "")}">${v.catno && v.catno !== "—" ? `<a href="#" class="modal-internal-link catno-link" onclick="openVersionPopup(event,${v.id})" title="Open this release">${escHtml(v.catno)}</a>` : `<span style="color:#7ec87e">—</span>`}</span>
       <span title="${escHtml(v.label ?? v.title ?? "")}">${(v.label) ? `<a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('f-label').value='${escHtml((v.label).replace(/'/g, "\\'"))}';toggleAdvanced(true);doSearch(1)" title="Search for ${escHtml(v.label)}" style="color:var(--fg)">${escHtml(v.label)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-label','${escHtml((v.label).replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(v.label)}" style="font-size:0.85em">⌕</a>` : `<span style="color:#888">${escHtml(v.title ?? "—")}</span>`}</span>`;
+  }).join("");
+}
+
+// ── Series browser ────────────────────────────────────────────────────────
+let _seriesReleases = [];
+let _srFormatFilter = "";
+
+function _srGetMedium(r) {
+  const parts = (r.format ?? "").split(",").map(s => s.trim());
+  return parts.find(p => _MV_MEDIA.has(p)) || parts[0] || "";
+}
+
+async function openSeriesBrowser(seriesId, seriesName) {
+  const overlay = document.getElementById("series-overlay");
+  const info    = document.getElementById("series-info");
+  const loading = document.getElementById("series-loading");
+  info.innerHTML = "";
+  loading.style.display = "block";
+  overlay.classList.add("open");
+  document.body.classList.add("modal-open");
+
+  try {
+    const resp = await apiFetch(`${API}/series-releases/${seriesId}`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    _seriesReleases = data.releases ?? [];
+    loading.style.display = "none";
+
+    if (!_seriesReleases.length) {
+      info.innerHTML = `<div style="color:var(--muted);padding:1rem">No releases found in this series.</div>`;
+      return;
+    }
+
+    // Build format filter pills
+    const formatSet = new Set();
+    _seriesReleases.forEach(r => {
+      const m = _srGetMedium(r);
+      if (m) formatSet.add(m);
+    });
+    const formats = [...formatSet].sort();
+    _srFormatFilter = "";
+
+    const formatPills = formats.length > 1
+      ? `<div class="sr-pill-row">${[
+          `<button class="sr-pill sr-format-pill" data-filter="" onclick="setSrFormatFilter('')">All</button>`,
+          ...formats.map(f => `<button class="sr-pill sr-format-pill" data-filter="${escHtml(f)}" onclick="setSrFormatFilter('${f.replace(/'/g,"\\'")}')">${escHtml(f)}</button>`)
+        ].join("")}</div>`
+      : "";
+
+    info.innerHTML = `
+      <div style="font-size:0.9rem;color:var(--fg);font-weight:600;margin-bottom:0.15rem">${escHtml(data.name || seriesName)}</div>
+      <div style="font-size:0.72rem;color:var(--muted);margin-bottom:0.6rem">${_seriesReleases.length} release${_seriesReleases.length !== 1 ? "s" : ""} in series${data.total > _seriesReleases.length ? ` (showing first ${_seriesReleases.length} of ${data.total})` : ""}</div>
+      ${formatPills}
+      <div class="sr-grid-scroll" style="overflow-x:auto"><div class="sr-grid"></div></div>`;
+    renderSeriesReleases();
+  } catch(e) {
+    loading.style.display = "none";
+    info.innerHTML = `<div style="color:var(--muted);padding:1rem">Failed to load series releases.</div>`;
+    console.error("openSeriesBrowser error:", e);
+  }
+}
+
+function closeSeriesBrowser() {
+  document.getElementById("series-overlay").classList.remove("open");
+  if (!document.getElementById("modal-overlay")?.classList.contains("open") &&
+      !document.getElementById("version-overlay")?.classList.contains("open")) {
+    document.body.classList.remove("modal-open");
+  }
+}
+
+document.getElementById("series-overlay")?.addEventListener("click", e => {
+  if (e.target === document.getElementById("series-overlay")) closeSeriesBrowser();
+});
+
+function setSrFormatFilter(f) {
+  _srFormatFilter = f;
+  renderSeriesReleases();
+}
+
+function renderSeriesReleases() {
+  const grid = document.querySelector("#series-info .sr-grid");
+  if (!grid) return;
+
+  let filtered = _seriesReleases;
+  if (_srFormatFilter) filtered = filtered.filter(r => _srGetMedium(r) === _srFormatFilter);
+
+  // Update pill styles
+  document.querySelectorAll(".sr-format-pill").forEach(p => {
+    p.style.background = p.dataset.filter === _srFormatFilter ? "var(--accent)" : "#2a2a2a";
+    p.style.color      = p.dataset.filter === _srFormatFilter ? "#000" : "var(--fg)";
+  });
+
+  if (!filtered.length) {
+    grid.innerHTML = `<span style="color:var(--muted);grid-column:1/-1">No releases match this filter.</span>`;
+    return;
+  }
+
+  grid.innerHTML = filtered.map(r => {
+    const inCol  = window._collectionIds?.has(r.id);
+    const inWant = window._wantlistIds?.has(r.id);
+    const isFav  = window._favoriteKeys?.has(`release:${r.id}`);
+    const badges = [];
+    if (inCol)  badges.push(`<span style="color:#6ddf70;font-size:0.65rem;font-weight:700">C</span>`);
+    if (inWant) badges.push(`<span style="color:#f0c95c;font-size:0.65rem;font-weight:700">W</span>`);
+    if (isFav)  badges.push(`<span style="color:#ff80ab;font-size:0.65rem">♥</span>`);
+    const badge = badges.length ? badges.join(" ") : `<span style="visibility:hidden">C</span>`;
+
+    const thumbHtml = r.thumb
+      ? `<img src="${r.thumb}" alt="" loading="lazy" />`
+      : `<span style="display:inline-block;width:40px;height:40px;background:#1a1a1a;border-radius:3px"></span>`;
+
+    const yearStr = r.year && r.year !== 0 ? String(r.year) : "?";
+    const titleArtist = r.artist ? `${r.artist} — ${r.title}` : r.title;
+
+    return `
+      ${thumbHtml}
+      <a href="#" class="sr-title" onclick="event.preventDefault();openVersionPopup(event,${r.id})" title="${escHtml(titleArtist)}">${escHtml(titleArtist)}</a>
+      ${badge}
+      <span style="color:#888">${escHtml(yearStr)}</span>
+      <span style="color:#666" title="${escHtml(r.format)}">${escHtml(r.catno || r.format || "—")}</span>`;
   }).join("");
 }
 
@@ -1428,7 +1553,7 @@ async function loadMasterVersions(event, masterId) {
       <div style="font-size:0.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.4rem">Pressings / Versions</div>
       ${formats.length > 1 ? `<div class="mv-pill-row">${formatPills}</div>` : ""}
       ${countries.length > 1 ? `<div class="mv-pill-row">${countryPills}</div>` : ""}
-      <div class="mv-grid-scroll"><div class="mv-grid" style="display:grid;grid-template-columns:auto auto minmax(0,10rem) auto minmax(0,8rem) minmax(8rem,1fr);gap:0.2rem 0.7rem;font-size:0.75rem;min-width:36rem"></div></div>`;
+      <div class="mv-grid-scroll"><div class="mv-grid" style="display:grid;grid-template-columns:auto auto minmax(0,7rem) 2.5rem minmax(0,8rem) minmax(8rem,1fr);gap:0.2rem 0.7rem;font-size:0.75rem;min-width:36rem"></div></div>`;
     renderMasterVersions();
   } catch(e) {
     console.error("loadMasterVersions error:", e);

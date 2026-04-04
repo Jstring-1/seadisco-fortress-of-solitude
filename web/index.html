@@ -31,7 +31,7 @@
   <link rel="preconnect" href="https://i.ebayimg.com" />
   <link rel="dns-prefetch" href="https://clerk.seadisco.com" />
   <link rel="dns-prefetch" href="https://api.anthropic.com" />
-  <link rel="stylesheet" href="/style.css?v=20260403k" />
+  <link rel="stylesheet" href="/style.css?v=20260403n" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -64,7 +64,7 @@
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260403k"></script>
+<script src="/shared.js?v=20260403n"></script>
 <script>renderSharedHeader({ spa: true, active: "search" });</script>
 <div id="search-view">
 
@@ -82,10 +82,10 @@
       <span id="advanced-arrow">▶</span> Advanced
     </button>
     <span style="color:#333;margin:0 0.5rem">|</span>
-    <span style="text-transform:uppercase;letter-spacing:0.05em;color:#555;flex-shrink:0">Results:</span>
     <div class="type-radios">
       <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="" checked> All</label>
       <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="master"> Masters</label>
+      <label style="display:flex;align-items:center;gap:0.25rem" title="Masters + standalone releases that have no master grouping"><input type="radio" name="result-type" value="master+"> Masters+</label>
       <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="release"> Releases</label>
       <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="artist"> Artists</label>
       <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="result-type" value="label"> Labels</label>
@@ -281,6 +281,7 @@
       <div class="type-radios">
         <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="cw-result-type" value="" checked onchange="doCwSearch(1)"> All</label>
         <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="cw-result-type" value="master" onchange="doCwSearch(1)"> Masters</label>
+        <label style="display:flex;align-items:center;gap:0.25rem" title="Masters + standalone releases that have no master grouping"><input type="radio" name="cw-result-type" value="master+" onchange="doCwSearch(1)"> Masters+</label>
         <label style="display:flex;align-items:center;gap:0.25rem"><input type="radio" name="cw-result-type" value="release" onchange="doCwSearch(1)"> Releases</label>
       </div>
       <span style="color:#333;margin:0 0.25rem">|</span>
@@ -522,12 +523,16 @@
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">How SeaDisco Works</h2>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Searching</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Search the entire Discogs database by artist, album, label, or any combination. Click <strong style="color:#ccc">Advanced</strong> for targeted fields (Artist, Release, Label, Year, Genre/Style, Format). Narrow by type — <strong style="color:#ccc">Masters</strong> (every pressing grouped) or <strong style="color:#ccc">Releases</strong> (individual pressings). Sort by relevance, year, title, or label.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Search the entire Discogs database by artist, album, label, or any combination. Click <strong style="color:#ccc">Advanced</strong> for targeted fields (Artist, Release, Label, Year, Genre/Style, Format). Narrow by type — <strong style="color:#ccc">Masters</strong> (every pressing grouped), <strong style="color:#ccc">Releases</strong> (individual pressings), or <strong style="color:#ccc">Masters+</strong> (masters plus standalone releases that have no master grouping — useful for finding obscure pressings alongside grouped editions). Sort by relevance, year, title, or label.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Click any card for full details: tracklist with YouTube previews, version finder, pressing info, credits, and photos. From the detail popup you can <strong style="color:#ccc">add/remove items from your collection or wantlist</strong> and <strong style="color:#ccc">rate releases</strong> 1–5 stars. <strong style="color:#ccc">Hide owned</strong> removes synced collection items from results. Select <strong style="color:#ccc">✦ AI</strong> to describe what you want in plain language — Claude returns 12 curated picks with Discogs links.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">The tracklist is collapsible (setting saved across sessions) with an inline track filter. Credits are filterable too — useful for releases with long personnel lists. Master release popups show all pressings with format and country filter pills (selections persist across popups).</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Every album card shows badge indicators on hover: <strong style="color:#6ddf70">C</strong> (collection), <strong style="color:#f0c95c">W</strong> (wantlist), and <strong style="color:#ff80ab">♥</strong> (favorite). Active badges are bright; inactive ones appear dimmed. Click the heart to favorite directly from any card. If an item is in your lists or inventory, <strong style="color:#a0ccf0">L</strong> and <strong style="color:#cda0f5">I</strong> badges appear too.</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Your Records at a Glance</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When signed in, the main search page displays a shuffled grid of album covers drawn from all your data — collection, wantlist, lists, inventory, and favorites. 48 cards are shown at a time with a load-more button for up to 192 total. This gives you a quick visual snapshot of your library every time you visit.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Favorites</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Heart any album, artist, or label to add it to your favorites — from the card thumbnail (hover to reveal) or from the detail popup. Favorited items appear as your personal default cards on the main search page. Favorites are stored in your account and persist across sessions.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Heart any album, artist, or label to add it to your favorites — from the card thumbnail (hover to reveal) or from the detail popup. Favorites are stored in your account and persist across sessions. View all your favorites in the Favorites tab under My Records.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Latest Drops</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">150 random picks from a rolling 3-month database of 20,000+ releases via <a href="https://listenbrainz.org" target="_blank" rel="noopener" style="color:#5a9aaa">ListenBrainz</a>/<a href="https://musicbrainz.org" target="_blank" rel="noopener" style="color:#5a9aaa">MusicBrainz</a>, refreshed every 6 hours. Filter by the tag cloud or genre dropdown, or search the full database by artist, title, or tag.</p>
@@ -547,11 +552,12 @@
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">My Records</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Connect your Discogs account to sync your full collection, wantlist, inventory, and lists — any size. You can connect via <strong style="color:#ccc">OAuth</strong> (one-click authorization) or by pasting a <strong style="color:#ccc">Personal Access Token</strong>. Sync runs in the background and refreshes automatically each night.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">The Collection and Wantlist tabs have dedicated filters (artist, release, label, year, genre, style, format) with <strong style="color:#ccc">+</strong> (AND), <strong style="color:#ccc">|</strong> (OR), and <strong style="color:#ccc">-</strong> (exclude) operators. Green <strong style="color:#4caf50">✓</strong> and gold <strong style="color:#d4a843">🤞</strong> badges mark owned and wanted items across all results.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">The <strong style="color:#ccc">Inventory</strong> tab shows your marketplace listings, and <strong style="color:#ccc">Lists</strong> displays your curated Discogs lists.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">The Collection and Wantlist tabs have dedicated filters (artist, release, label, year, genre, style, format) with <strong style="color:#ccc">+</strong> (AND), <strong style="color:#ccc">|</strong> (OR), and <strong style="color:#ccc">-</strong> (exclude) operators. <strong style="color:#6ddf70">C</strong> and <strong style="color:#f0c95c">W</strong> badges on every card show which items are in your collection and wantlist.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">The <strong style="color:#ccc">Inventory</strong> tab shows your marketplace listings. <strong style="color:#ccc">Lists</strong> displays your curated Discogs lists — click any list to browse its items as album cards. List items are synced every 6 hours alongside your other data.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">The <strong style="color:#ccc">Favorites</strong> tab shows all items you've hearted. The bottom navigation row (<strong style="color:#6ddf70">C</strong>ollection, <strong style="color:#f0c95c">W</strong>antlist, <strong style="color:#a0ccf0">L</strong>ists, <strong style="color:#cda0f5">I</strong>nventory, <strong style="color:#ff80ab">♥</strong> Favorites) provides quick access to each tab.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Collection Actions</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">From any release detail popup, you can add or remove items from your collection, wantlist, and favorites with one click. Rate releases 1–5 stars — ratings sync to your Discogs account. Favorites are SeaDisco-only (not synced to Discogs) and work for releases, masters, artists, and labels. All actions update instantly with optimistic UI and revert gracefully if anything goes wrong.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">From any release detail popup, you can add or remove items from your collection, wantlist, and favorites with one click. Rate releases 1–5 stars — ratings sync to your Discogs account. Favorites are SeaDisco-only (not synced to Discogs) and work for releases, masters, artists, and labels. All actions update instantly with optimistic UI and revert gracefully if anything goes wrong. Card badges update in real time to reflect changes.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Account &amp; Limits</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Anonymous users are capped at <strong style="color:#ccc">5 searches/day</strong> on a shared token. Sign up free and connect your Discogs account — either via <strong style="color:#ccc">OAuth</strong> or by adding your own token (<strong style="color:#ccc">discogs.com → Settings → Developers</strong>) — for unlimited searches and full features.</p>
@@ -562,11 +568,11 @@
 
 <div id="privacy-view" class="content-narrow" style="display:none">
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">Privacy Policy</h2>
-  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: April 2, 2026</p>
+  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: April 3, 2026</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">What We Collect</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you create an account, we store your email address (provided by our authentication provider, Clerk) and any Discogs credentials you choose to connect — either a Personal Access Token or OAuth access credentials.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you sync your collection, we store a local copy of your Discogs collection, wantlist, inventory, and list metadata so you can browse and search them on SeaDisco. We also cache your Discogs profile information (username, avatar, and account stats) for display on the Account page.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you sync your collection, we store a local copy of your Discogs collection, wantlist, inventory, list metadata, and list items so you can browse and search them on SeaDisco. We also cache your Discogs profile information (username, avatar, and account stats) for display on the Account page.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">If you favorite albums, artists, or labels, those selections and their display data (title, artwork URL, type) are stored with your account. If you save searches, those search parameters are stored with your account. If you submit feedback, your email and message are stored.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0">We log API usage for operational monitoring. Your IP address is used for rate limiting anonymous users but is not persisted to the database. Google Analytics receives search terms you enter along with standard page view data. When you use the AI search feature, your search query is sent to Anthropic (Claude) to generate recommendations.</p>
 
@@ -594,9 +600,9 @@
   <p style="font-size:0.84rem;color:#aaa;margin:0">All data is stored in a secured PostgreSQL database hosted on Railway. Your Discogs credentials are stored encrypted at rest by the database provider. OAuth secrets are stored server-side only and are never exposed to the browser. Access to the database is restricted to the application server only.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Data Retention &amp; Deletion</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">User data (collection, wantlist, inventory, lists, and orders) is automatically purged after 30 days or deleted by the user. Your authentication tokens are retained for as long as your account exists.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">User data (collection, wantlist, inventory, lists, list items, and orders) is automatically purged after 30 days or deleted by the user. Your authentication tokens are retained for as long as your account exists.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Temporary operational data is also pruned automatically: expired gear listings, past live events, API logs, and feed article caches.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">You can delete your account at any time from the Account tab. Deleting your account <strong style="color:#ccc">permanently removes all of your data</strong> from our database, including your email, Discogs credentials, collection, wantlist, inventory, lists, orders, favorites, saved searches, feedback, and profile data. Your Clerk authentication account is also deleted. This action is immediate and irreversible — there is no way to recover your data after deletion.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">You can delete your account at any time from the Account tab. Deleting your account <strong style="color:#ccc">permanently removes all of your data</strong> from our database, including your email, Discogs credentials, collection, wantlist, inventory, lists, list items, orders, favorites, saved searches, feedback, and profile data. Your Clerk authentication account is also deleted. This action is immediate and irreversible — there is no way to recover your data after deletion.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Cookies</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco uses cookies for authentication (via Clerk), analytics (via Google Analytics), and a temporary CSRF protection cookie during the Discogs OAuth flow. We do not use advertising or tracking cookies, and we do not sell any data.</p>
@@ -607,13 +613,13 @@
 
 <div id="terms-view" class="content-narrow" style="display:none">
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">Terms of Service</h2>
-  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: April 2, 2026</p>
+  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: April 3, 2026</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Acceptance</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">By using SeaDisco, you agree to these terms. If you don't agree, please don't use the site.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">What SeaDisco Is</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco is a music discovery tool that searches the Discogs database, provides AI-powered recommendations (via Anthropic's Claude), aggregates live event listings, curates a music news feed, surfaces eBay vinyl and gear auctions, and helps you browse your vinyl collection. It is a personal project provided as-is.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco is a music discovery tool that searches the Discogs database (including Masters+ mode for finding orphan releases), provides AI-powered recommendations (via Anthropic's Claude), aggregates live event listings, curates a music news feed, surfaces eBay vinyl and gear auctions, and helps you browse and manage your vinyl collection, wantlist, inventory, lists, and favorites. It is a personal project provided as-is.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Your Account</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">You are responsible for keeping your Discogs API token secure. Do not share your token with others. SeaDisco uses your token only to interact with the Discogs API on your behalf.</p>
@@ -661,6 +667,14 @@
     <button class="popup-share" onclick="sharePopup(this)">share</button>
     <div id="version-loading" style="padding:2rem;text-align:center;color:var(--muted)">Loading…</div>
     <div id="version-info"></div>
+  </div>
+</div>
+
+<div id="series-overlay">
+  <div id="series-box">
+    <button id="series-close" onclick="closeSeriesBrowser()">×</button>
+    <div id="series-loading" style="padding:2rem;text-align:center;color:var(--muted)">Loading series…</div>
+    <div id="series-info"></div>
   </div>
 </div>
 
@@ -720,17 +734,17 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script src="/utils.js?v=20260403k"></script>
-<script src="/search.js?v=20260403k"></script>
-<script src="/collection.js?v=20260403k"></script>
-<script src="/app.js?v=20260403k"></script>
+<script src="/utils.js?v=20260403n"></script>
+<script src="/search.js?v=20260403n"></script>
+<script src="/collection.js?v=20260403n"></script>
+<script src="/app.js?v=20260403n"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/modal.js?v=20260403k"></script>
-<script defer src="/drops.js?v=20260403k"></script>
-<script defer src="/live.js?v=20260403k"></script>
-<script defer src="/buy.js?v=20260403k"></script>
-<script defer src="/gear.js?v=20260403k"></script>
-<script defer src="/feed.js?v=20260403k"></script>
+<script defer src="/modal.js?v=20260403n"></script>
+<script defer src="/drops.js?v=20260403n"></script>
+<script defer src="/live.js?v=20260403n"></script>
+<script defer src="/buy.js?v=20260403n"></script>
+<script defer src="/gear.js?v=20260403n"></script>
+<script defer src="/feed.js?v=20260403n"></script>
 
 </body>
 </html>
