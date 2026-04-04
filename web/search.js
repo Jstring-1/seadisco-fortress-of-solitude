@@ -507,13 +507,14 @@ function renderCard(item, index) {
       : `class="${typeClass}" href="${url}" target="_blank" rel="noopener"`;
 
   // ── Badge strip: fixed order — collection, wantlist, list, inventory, favorite
+  // C/W/♥ always shown (dimmed when inactive); L/I only when active
   let badges = "";
   const releaseId = item.id;
+  const inCol = releaseId && type === "release" && window._collectionIds?.has(releaseId);
+  const inWant = releaseId && type === "release" && window._wantlistIds?.has(releaseId);
   if (releaseId && type === "release") {
-    if (window._collectionIds?.has(releaseId))
-      badges += `<span class="card-badge badge-collection" title="In your collection">C</span>`;
-    if (window._wantlistIds?.has(releaseId))
-      badges += `<span class="card-badge badge-wantlist" title="In your wantlist">W</span>`;
+    badges += `<span class="card-badge badge-collection${inCol ? " is-active" : ""}" title="${inCol ? "In your collection" : "Not in collection"}">C</span>`;
+    badges += `<span class="card-badge badge-wantlist${inWant ? " is-active" : ""}" title="${inWant ? "In your wantlist" : "Not in wantlist"}">W</span>`;
     const lists = window._listMembership?.[releaseId];
     if (lists?.length) {
       const names = lists.map(l => l.listName).join(", ");

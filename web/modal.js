@@ -1000,7 +1000,7 @@ function renderActionsImmediate(rid, entityType = "release") {
   const favKey = `${entityType}:${rid}`;
   const isFav = window._favoriteKeys?.has(favKey);
   const favBtn = `<button class="modal-act-btn ${isFav ? 'is-favorite' : ''}" id="modal-fav-btn" onclick="toggleFavoriteFromModal(${rid},'${entityType}')" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
-      ${isFav ? '❤ Favorited' : '♡ Favorite'}
+      ${isFav ? 'Favorited' : 'Favorite'}
     </button>`;
   if (entityType !== "release") {
     // Master/artist/label — only show favorite button
@@ -1008,10 +1008,10 @@ function renderActionsImmediate(rid, entityType = "release") {
   }
   return `<div id="modal-actions" class="modal-actions" data-release-id="${rid}" data-entity-type="${entityType}">
     <button class="modal-act-btn ${inCol ? 'in-collection' : ''}" id="modal-col-btn" onclick="toggleCollection(${rid})" title="${inCol ? 'Remove from collection' : 'Add to collection'}">
-      ${inCol ? '✓ Collected' : '+ Collection'}
+      ${inCol ? 'Collected' : 'Collection'}
     </button>
     <button class="modal-act-btn ${inWant ? 'in-wantlist' : ''}" id="modal-want-btn" onclick="toggleWantlist(${rid})" title="${inWant ? 'Remove from wantlist' : 'Add to wantlist'}">
-      ${inWant ? '<span class="want-icon active">🤞</span> Wanted' : '<span class="want-icon">🤞</span> Want'}
+      ${inWant ? 'Wanted' : 'Want'}
     </button>
     ${favBtn}
     ${inCol ? '<span class="modal-rating" id="modal-rating" style="opacity:0.4">☆☆☆☆☆</span>' : ''}
@@ -1061,7 +1061,7 @@ function loadModalActions(releaseId, context) {
   const favKey = `${entityType}:${rid}`;
   const isFav = window._favoriteKeys?.has(favKey);
   const favBtn = `<button class="modal-act-btn ${isFav ? 'is-favorite' : ''}" id="modal-fav-btn" onclick="toggleFavoriteFromModal(${rid},'${entityType}')" title="${isFav ? 'Remove from favorites' : 'Add to favorites'}">
-      ${isFav ? '❤ Favorited' : '♡ Favorite'}
+      ${isFav ? 'Favorited' : 'Favorite'}
     </button>`;
 
   if (entityType !== "release") {
@@ -1069,10 +1069,10 @@ function loadModalActions(releaseId, context) {
   } else {
     el.innerHTML = `
       <button class="modal-act-btn ${inCol ? 'in-collection' : ''}" id="modal-col-btn" onclick="toggleCollection(${rid})" title="${inCol ? 'Remove from collection' : 'Add to collection'}">
-        ${inCol ? '✓ Collected' : '+ Collection'}
+        ${inCol ? 'Collected' : 'Collection'}
       </button>
       <button class="modal-act-btn ${inWant ? 'in-wantlist' : ''}" id="modal-want-btn" onclick="toggleWantlist(${rid})" title="${inWant ? 'Remove from wantlist' : 'Add to wantlist'}">
-        ${inWant ? '<span class="want-icon active">🤞</span> Wanted' : '<span class="want-icon">🤞</span> Want'}
+        ${inWant ? 'Wanted' : 'Want'}
       </button>
       ${favBtn}
       ${inCol ? '<span class="modal-rating" id="modal-rating" style="opacity:0.4">☆☆☆☆☆</span>' : ''}
@@ -1266,9 +1266,11 @@ function refreshCardBadges(releaseId) {
     } else return;
 
     let badges = "";
+    const inCol = type === "release" && window._collectionIds?.has(id);
+    const inWant = type === "release" && window._wantlistIds?.has(id);
     if (type === "release") {
-      if (window._collectionIds?.has(id)) badges += `<span class="card-badge badge-collection" title="In your collection">C</span>`;
-      if (window._wantlistIds?.has(id))   badges += `<span class="card-badge badge-wantlist" title="In your wantlist">W</span>`;
+      badges += `<span class="card-badge badge-collection${inCol ? " is-active" : ""}" title="${inCol ? "In your collection" : "Not in collection"}">C</span>`;
+      badges += `<span class="card-badge badge-wantlist${inWant ? " is-active" : ""}" title="${inWant ? "In your wantlist" : "Not in wantlist"}">W</span>`;
       const lists = window._listMembership?.[id];
       if (lists?.length) {
         const names = lists.map(l => l.listName).join(", ");
