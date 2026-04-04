@@ -37,6 +37,7 @@
           <button onclick="adminLiveFetch()" id="admin-live-fetch-btn" class="admin-btn admin-btn-live">Fetch Live</button>
           <button onclick="adminVinylFetch()" id="admin-vinyl-fetch-btn" class="admin-btn admin-btn-vinyl">Fetch Vinyl</button>
           <button onclick="adminGearFetch()" id="admin-gear-fetch-btn" class="admin-btn admin-btn-gear">Fetch Gear</button>
+          <button onclick="adminExtrasFetch()" id="admin-extras-fetch-btn" class="admin-btn admin-btn-extras">Fetch Extras</button>
 
           <button onclick="adminSyncAll()" id="admin-sync-all-btn" class="admin-btn admin-btn-sync">Sync All</button>
           <button onclick="adminSyncStop()" id="admin-sync-stop-btn" class="admin-btn admin-btn-stop">Stop All</button>
@@ -404,6 +405,17 @@ async function adminDropsFetch() {
     statusEl.textContent = "Drops fetch started — running in background.";
   } catch { statusEl.textContent = "Drops fetch failed."; }
   finally { btn.disabled = false; btn.textContent = "Fetch Drops"; }
+}
+
+async function adminExtrasFetch() {
+  const btn = document.getElementById("admin-extras-fetch-btn");
+  const statusEl = document.getElementById("admin-action-status");
+  btn.disabled = true; btn.textContent = "Fetching\u2026";
+  try {
+    await apiFetch("/api/admin/extras/fetch", { method: "POST" }).then(r => r.json());
+    statusEl.textContent = "Extras sync started (inventory + lists + list items) — running in background.";
+  } catch { statusEl.textContent = "Extras fetch failed."; }
+  finally { btn.disabled = false; btn.textContent = "Fetch Extras"; }
 }
 
 // ── API Request Log ───────────────────────────────────────────────────
