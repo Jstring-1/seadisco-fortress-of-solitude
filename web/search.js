@@ -111,7 +111,7 @@ async function doSearch(page = 1, skipPushState = false) {
     switchView("search", true);
     setActiveTab("search");
     // Hide favorites section when search results are incoming
-    const ws = document.getElementById("favorites-sample"); if (ws) ws.style.display = "none";
+    const ws = document.getElementById("random-records"); if (ws) ws.style.display = "none";
   }
 
   if (!skipPushState) pushSearchState(q, artistRaw, release, year, label, genre, sort, resultType, page);
@@ -350,7 +350,7 @@ async function doSearch(page = 1, skipPushState = false) {
       noResAi.innerHTML = "<i>Couldn't find any results at Discogs.</i>";
       noResAi.title = "Couldn't find any results at Discogs.";
       document.getElementById("search-info-block").style.display = "";
-      const ws = document.getElementById("favorites-sample"); if (ws) ws.style.display = "none";
+      const ws = document.getElementById("random-records"); if (ws) ws.style.display = "none";
       return;
     }
 
@@ -459,7 +459,7 @@ function renderResults(items, append = false) {
     grid.innerHTML = html;
   }
   // Hide favorites section when showing search results
-  const ws = document.getElementById("favorites-sample"); if (ws) ws.style.display = "none";
+  const ws = document.getElementById("random-records"); if (ws) ws.style.display = "none";
 }
 
 function renderCard(item, index) {
@@ -685,81 +685,11 @@ async function doAiSearch(q) {
 }
 
 
-// ── Favorites cards for Find page default ───────────────────────────────
+// ── Random records for search page default ──────────────────────────────
 
-function updateFavoritesHeading() {
-  const heading = document.getElementById("favorites-sample-heading");
-  const wrap = document.getElementById("favorites-sample");
-  if (!heading || !wrap) return;
-  const view = new URLSearchParams(location.search).get("view") || "";
-  const hasSearchResults = document.getElementById("results")?.children.length > 0;
-  const showWrap = (!view || view === "search" || view === "find") && !hasSearchResults;
-  if (window._favoriteKeys?.size > 0) {
-    heading.innerHTML = `<span style="color:var(--muted);font-size:0.75rem">Your Favorites</span>`;
-  } else if (window._clerk?.user) {
-    heading.innerHTML = `<span style="color:var(--muted);font-size:0.75rem">♡ Favorite albums, artists & labels to see them here</span>`;
-  } else {
-    heading.innerHTML = `<a href="/account" style="color:var(--accent);text-decoration:none;font-size:0.8rem">Sign in or create an account to save favorites ♡</a>`;
-    // Load featured favorites for logged-out visitors
-    if (!window._featuredFavsLoaded) loadFeaturedFavorites();
-  }
-  if (showWrap) wrap.style.display = "";
-}
-
-let _favoritesItems = [];  // cached for client-side sorting
-
-const _FAV_PAGE = 96;
-let _favOffset = 0;
-
-async function loadFavoritesGrid(append) {
-  if (!append) _favOffset = 0;
-  try {
-    const r = await apiFetch(`/api/user/favorites?limit=${_FAV_PAGE}&offset=${_favOffset}`);
-    if (!r.ok) return;
-    const data = await r.json();
-    const newItems = (data.items ?? []).map(row => row.data);
-    if (append) {
-      _favoritesItems = _favoritesItems.concat(newItems);
-    } else {
-      _favoritesItems = newItems;
-    }
-    _favOffset += newItems.length;
-    const wrap = document.getElementById("favorites-sample");
-    const grid = document.getElementById("favorites-sample-grid");
-    const sortEl = document.getElementById("favorites-sort");
-    if (!wrap || !grid) return;
-    if (!_favoritesItems.length) {
-      grid.innerHTML = `<div style="color:var(--muted);font-size:0.8rem;padding:1rem">♡ Favorite albums, artists & labels to see them here</div>`;
-      if (sortEl) sortEl.style.display = "none";
-    } else {
-      const saved = localStorage.getItem("fav-sort");
-      if (saved && sortEl) sortEl.value = saved;
-      const sortBy = sortEl?.value || "recent";
-      const sorted = sortFavoriteItems(_favoritesItems, sortBy);
-      grid.innerHTML = sorted.map((item, i) => renderCard(item, i)).join("");
-      if (sortEl) sortEl.style.display = "";
-      // Add load-more if we got a full page
-      if (newItems.length >= _FAV_PAGE) {
-        grid.insertAdjacentHTML("beforeend",
-          `<div class="fav-load-more" style="grid-column:1/-1;text-align:center;padding:0.75rem 0">` +
-          `<button onclick="loadFavoritesGrid(true)" style="background:none;border:1px solid var(--border);color:var(--muted);padding:0.4rem 1.2rem;border-radius:var(--radius);cursor:pointer;font-size:0.8rem" ` +
-          `onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" ` +
-          `onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'"` +
-          `>Load More</button></div>`
-        );
-      }
-    }
-    const view = new URLSearchParams(location.search).get("view") || "";
-    const hasSearchResults = document.getElementById("results")?.children.length > 0;
-    if ((!view || view === "search" || view === "find") && !hasSearchResults) {
-      wrap.style.display = "";
-    }
-  } catch { /* silent */ }
-}
-
-let _featuredAll = [];    // all featured items, shuffled once on load
-let _featuredShown = 0;   // how many are currently rendered
-const _FEATURED_PAGE = 48;
+let _randomAll = [];     // all fetched items (up to 192)
+let _randomShown = 0;    // how many currently rendered
+const _RANDOM_PAGE = 48;
 
 function _shuffle(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
@@ -769,52 +699,88 @@ function _shuffle(arr) {
   return arr;
 }
 
-async function loadFeaturedFavorites(more) {
-  window._featuredFavsLoaded = true;
-  const grid = document.getElementById("favorites-sample-grid");
-  const wrap = document.getElementById("favorites-sample");
-  const sortEl = document.getElementById("favorites-sort");
+// Parse a row from the random-records API into a card-compatible item
+function _parseRandomRow(row) {
+  const d = row.data ?? {};
+  const basic = d.basic_information ?? d;
+  // Collection/wantlist items have basic_information; favorites have card data directly
+  if (d.basic_information) {
+    const labels = (basic.labels ?? []).map(l => l.name);
+    const formats = (basic.formats ?? []).map(f => f.name);
+    const title = basic.artists?.length
+      ? `${basic.artists.map(a => a.name).join(", ")} - ${basic.title}`
+      : basic.title || "Unknown";
+    return {
+      id: basic.id ?? row.rid,
+      type: "release",
+      title,
+      cover_image: basic.cover_image || basic.thumb || "",
+      uri: `/release/${basic.id ?? row.rid}`,
+      label: labels,
+      format: formats,
+      genre: basic.genres ?? [],
+      year: String(basic.year ?? ""),
+      country: basic.country ?? "",
+    };
+  }
+  // Favorites / list items store card-format data
+  return {
+    id: d.id ?? row.rid,
+    type: d.type ?? "release",
+    title: d.title || `Release ${row.rid}`,
+    cover_image: d.cover_image || d.thumb || "",
+    uri: d.uri || `/release/${row.rid}`,
+    label: d.label ?? [],
+    format: d.format ?? [],
+    genre: d.genre ?? [],
+    year: String(d.year ?? ""),
+    country: d.country ?? "",
+  };
+}
+
+async function loadRandomRecords(more) {
+  const grid = document.getElementById("random-records-grid");
+  const wrap = document.getElementById("random-records");
   if (!grid || !wrap) return;
-  if (sortEl) sortEl.style.display = "none";
 
   // First call: fetch all and shuffle
   if (!more) {
     try {
-      const r = await fetch("/api/public/featured-favorites?limit=200");
+      const isLoggedIn = !!window._clerk?.user;
+      const url = isLoggedIn ? "/api/user/random-records?limit=192" : "/api/public/featured-records?limit=192";
+      const r = isLoggedIn ? await apiFetch(url) : await fetch(url);
       if (!r.ok) return;
       const data = await r.json();
-      _featuredAll = _shuffle((data.items ?? []).map(row => row.data));
-      _featuredShown = 0;
+      _randomAll = _shuffle((data.items ?? []).map(_parseRandomRow));
+      _randomShown = 0;
     } catch { return; }
-    if (!_featuredAll.length) return;
+    if (!_randomAll.length) return;
   }
 
-  // Render next page
-  const slice = _featuredAll.slice(_featuredShown, _featuredShown + _FEATURED_PAGE);
+  // Render next page of 48
+  const slice = _randomAll.slice(_randomShown, _randomShown + _RANDOM_PAGE);
   if (!slice.length) return;
-  const html = slice.map((item, i) => renderCard(item, _featuredShown + i)).join("");
-  grid.querySelector(".featured-load-more")?.remove();
+  const html = slice.map((item, i) => renderCard(item, _randomShown + i)).join("");
+  grid.querySelector(".random-load-more")?.remove();
   if (more) {
     grid.insertAdjacentHTML("beforeend", html);
   } else {
     grid.innerHTML = html;
   }
-  _featuredShown += slice.length;
-
-  // Remove fav buttons (logged-out can't favorite)
-  grid.querySelectorAll(".fav-btn").forEach(btn => btn.remove());
+  _randomShown += slice.length;
 
   // Add load-more if there are more to show
-  if (_featuredShown < _featuredAll.length) {
+  if (_randomShown < _randomAll.length) {
     grid.insertAdjacentHTML("beforeend",
-      `<div class="featured-load-more" style="grid-column:1/-1;text-align:center;padding:0.75rem 0">` +
-      `<button onclick="loadFeaturedFavorites(true)" style="background:none;border:1px solid var(--border);color:var(--muted);padding:0.4rem 1.2rem;border-radius:var(--radius);cursor:pointer;font-size:0.8rem" ` +
+      `<div class="random-load-more" style="grid-column:1/-1;text-align:center;padding:0.75rem 0">` +
+      `<button onclick="loadRandomRecords(true)" style="background:none;border:1px solid var(--border);color:var(--muted);padding:0.4rem 1.2rem;border-radius:var(--radius);cursor:pointer;font-size:0.8rem" ` +
       `onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" ` +
       `onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'"` +
       `>Load More</button></div>`
     );
   }
 
+  // Show the wrap if on search view with no search results
   const view = new URLSearchParams(location.search).get("view") || "";
   const hasSearchResults = document.getElementById("results")?.children.length > 0;
   if ((!view || view === "search" || view === "find") && !hasSearchResults) {
@@ -822,57 +788,13 @@ async function loadFeaturedFavorites(more) {
   }
 }
 
-function sortFavoriteItems(items, sortBy) {
-  const arr = [...items];
-  const titleParts = (item) => {
-    const t = item.title ?? "";
-    if (t.includes(" - ")) {
-      const idx = t.indexOf(" - ");
-      return { artist: t.slice(0, idx).toLowerCase(), title: t.slice(idx + 3).toLowerCase() };
-    }
-    return { artist: "", title: t.toLowerCase() };
-  };
-  switch (sortBy) {
-    case "oldest":
-      arr.reverse();
-      break;
-    case "year-asc":
-      arr.sort((a, b) => (parseInt(a.year) || 0) - (parseInt(b.year) || 0));
-      break;
-    case "year-desc":
-      arr.sort((a, b) => (parseInt(b.year) || 0) - (parseInt(a.year) || 0));
-      break;
-    case "title-asc":
-      arr.sort((a, b) => titleParts(a).title.localeCompare(titleParts(b).title));
-      break;
-    case "title-desc":
-      arr.sort((a, b) => titleParts(b).title.localeCompare(titleParts(a).title));
-      break;
-    case "label-asc":
-      arr.sort((a, b) => ((a.label ?? [])[0] ?? "").toLowerCase().localeCompare(((b.label ?? [])[0] ?? "").toLowerCase()));
-      break;
-    default: // "recent" — original API order (created_at DESC)
-      break;
-  }
-  return arr;
-}
-
-function sortFavoritesGrid(sortBy) {
-  localStorage.setItem("fav-sort", sortBy);
-  if (!_favoritesItems.length) return;
-  const grid = document.getElementById("favorites-sample-grid");
-  if (!grid) return;
-  const sorted = sortFavoriteItems(_favoritesItems, sortBy);
-  grid.innerHTML = sorted.map((item, i) => renderCard(item, i)).join("");
-  // Re-add load-more if there might be more
-  if (_favoritesItems.length >= _favOffset && _favOffset % _FAV_PAGE === 0) {
-    grid.insertAdjacentHTML("beforeend",
-      `<div class="fav-load-more" style="grid-column:1/-1;text-align:center;padding:0.75rem 0">` +
-      `<button onclick="loadFavoritesGrid(true)" style="background:none;border:1px solid var(--border);color:var(--muted);padding:0.4rem 1.2rem;border-radius:var(--radius);cursor:pointer;font-size:0.8rem" ` +
-      `onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'" ` +
-      `onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--muted)'"` +
-      `>Load More</button></div>`
-    );
+function showRandomRecords() {
+  const wrap = document.getElementById("random-records");
+  if (!wrap) return;
+  if (!_randomAll.length) {
+    loadRandomRecords();
+  } else {
+    wrap.style.display = "";
   }
 }
 
@@ -911,19 +833,8 @@ function toggleFavoriteFromCard(btn, discogsId, entityType) {
       if (!r.ok) throw new Error();
       const n = window._favoriteKeys?.size ?? 0;
       showToast(wasFav ? "Removed from favorites" : `Added to favorites (${n})`);
-      // If un-favorited from the favorites grid, fade out and remove the card
-      if (wasFav && card?.closest("#favorites-sample-grid")) {
-        card.style.transition = "opacity 0.4s ease";
-        card.style.opacity = "0";
-        setTimeout(() => {
-          card.remove();
-          // If grid is now empty, show the empty prompt
-          const grid = document.getElementById("favorites-sample-grid");
-          if (grid && !grid.children.length) {
-            grid.innerHTML = `<div style="color:var(--muted);font-size:0.8rem;padding:1rem">♡ Favorite albums, artists & labels to see them here</div>`;
-          }
-        }, 500);
-      }
+      // Update badge on the card
+      refreshCardBadges?.(discogsId);
     })
     .catch(() => {
       // Revert on error

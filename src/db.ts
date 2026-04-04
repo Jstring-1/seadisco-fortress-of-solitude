@@ -473,6 +473,31 @@ export async function deleteSavedSearch(clerkUserId: string, id: number): Promis
   await getPool().query(`DELETE FROM saved_searches WHERE id = $1 AND clerk_user_id = $2`, [id, clerkUserId]);
 }
 
+// ── Random records (all sources combined) ─────────────────────────────────
+
+export async function getRandomRecords(clerkUserId: string, limit: number = 192): Promise<any[]> {
+  // Union all sources, deduplicate by release ID, randomize
+  const r = await getPool().query(
+    `WITH all_records AS (
+      SELECT DISTINCT ON (rid) rid, src, data FROM (
+        SELECT discogs_release_id AS rid, 'collection' AS src, data FROM user_collection WHERE clerk_user_id = $1
+        UNION ALL
+        SELECT discogs_release_id AS rid, 'wantlist' AS src, data FROM user_wantlist WHERE clerk_user_id = $1
+        UNION ALL
+        SELECT discogs_id AS rid, 'favorites' AS src, data FROM user_favorites WHERE clerk_user_id = $1 AND entity_type = 'release'
+        UNION ALL
+        SELECT discogs_release_id AS rid, 'inventory' AS src, data FROM user_inventory WHERE clerk_user_id = $1 AND discogs_release_id IS NOT NULL
+        UNION ALL
+        SELECT discogs_id AS rid, 'list' AS src, data FROM user_list_items WHERE clerk_user_id = $1 AND entity_type = 'release'
+      ) combined WHERE rid IS NOT NULL
+      ORDER BY rid, src  -- DISTINCT ON needs ORDER BY on the same column
+    )
+    SELECT rid, src, data FROM all_records ORDER BY RANDOM() LIMIT $2`,
+    [clerkUserId, limit]
+  );
+  return r.rows;
+}
+
 // ── Favorites ──────────────────────────────────────────────────────────────
 
 export async function getFavoriteIds(clerkUserId: string): Promise<Array<{ discogs_id: number; entity_type: string }>> {

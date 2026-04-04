@@ -181,9 +181,9 @@ async function applyAuthState(clerk) {
       }
     } catch { /* token check optional */ }
     // Load favorite IDs + collection/wantlist IDs for all signed-in users
-    await loadDiscogsIds();                   // calls updateFavoritesHeading inside
+    await loadDiscogsIds();                   // calls loadRandomRecords inside
   } else {
-    updateFavoritesHeading();                 // signed out
+    loadRandomRecords();                      // signed out — shows owner's records
   }
 }
 
