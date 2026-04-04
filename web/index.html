@@ -31,7 +31,7 @@
   <link rel="preconnect" href="https://i.ebayimg.com" />
   <link rel="dns-prefetch" href="https://clerk.seadisco.com" />
   <link rel="dns-prefetch" href="https://api.anthropic.com" />
-  <link rel="stylesheet" href="/style.css?v=20260404e" />
+  <link rel="stylesheet" href="/style.css?v=20260404f" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -64,7 +64,7 @@
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260404e"></script>
+<script src="/shared.js?v=20260404f"></script>
 <script>renderSharedHeader({ spa: true, active: "search" });</script>
 <div id="search-view">
 
@@ -386,6 +386,21 @@
   </div>
   <div id="pagination" style="display:none"></div>
   <div id="random-records" class="content-area" style="margin-top:0.5rem;display:none">
+    <div id="random-records-header" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin:0 0 0.5rem 0;padding:0 0.15rem">
+      <div id="random-records-title" style="font-size:0.78rem;color:var(--muted);letter-spacing:0.04em;text-transform:uppercase">Favorites</div>
+      <div style="display:flex;align-items:center;gap:0.4rem">
+        <label for="favorites-sort" style="font-size:0.72rem;color:var(--muted)">Sort:</label>
+        <select id="favorites-sort" onchange="sortFavoritesGrid()">
+          <option value="added:desc">Recently added</option>
+          <option value="added:asc">Oldest added</option>
+          <option value="year:desc">Year ↓</option>
+          <option value="year:asc">Year ↑</option>
+          <option value="title:asc">Title A→Z</option>
+          <option value="title:desc">Title Z→A</option>
+          <option value="artist:asc">Artist A→Z</option>
+        </select>
+      </div>
+    </div>
     <div id="random-records-grid" class="card-grid"></div>
   </div>
 </main>
@@ -735,17 +750,17 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script src="/utils.js?v=20260404e"></script>
-<script src="/search.js?v=20260404e"></script>
-<script src="/collection.js?v=20260404e"></script>
-<script src="/app.js?v=20260404e"></script>
+<script src="/utils.js?v=20260404f"></script>
+<script src="/search.js?v=20260404f"></script>
+<script src="/collection.js?v=20260404f"></script>
+<script src="/app.js?v=20260404f"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/modal.js?v=20260404e"></script>
-<script defer src="/drops.js?v=20260404e"></script>
-<script defer src="/live.js?v=20260404e"></script>
-<script defer src="/buy.js?v=20260404e"></script>
-<script defer src="/gear.js?v=20260404e"></script>
-<script defer src="/feed.js?v=20260404e"></script>
+<script defer src="/modal.js?v=20260404f"></script>
+<script defer src="/drops.js?v=20260404f"></script>
+<script defer src="/live.js?v=20260404f"></script>
+<script defer src="/buy.js?v=20260404f"></script>
+<script defer src="/gear.js?v=20260404f"></script>
+<script defer src="/feed.js?v=20260404f"></script>
 
 </body>
 </html>
