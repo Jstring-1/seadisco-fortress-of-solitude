@@ -674,14 +674,16 @@ function renderCard(item, index) {
       <div class="card-body">
         ${artist ? `<div class="card-artist">${escHtml(artist)}</div>` : ""}
         <div class="card-title">${escHtml(title)}</div>
-        ${label   ? `<div class="card-sub">${escHtml(label)}</div>` : ""}
-        ${formats ? `<div class="card-format">${escHtml(formats)}</div>` : ""}
-        ${genre   ? `<div class="card-format">${escHtml(genre)}</div>`   : ""}
-        ${catno   ? `<div class="card-catno-line">${escHtml(catno)}</div>` : ""}
-        ${ratingHtml}
-        ${priceHtml}
-        <div class="card-meta">${metaParts.map(escHtml).join(" · ")}</div>
-        ${notesHtml}
+        <div class="card-bottom">
+          ${label   ? `<div class="card-sub">${escHtml(label)}</div>` : ""}
+          ${formats ? `<div class="card-format">${escHtml(formats)}</div>` : ""}
+          ${genre   ? `<div class="card-format">${escHtml(genre)}</div>`   : ""}
+          ${catno   ? `<div class="card-catno-line">${escHtml(catno)}</div>` : ""}
+          ${ratingHtml}
+          ${priceHtml}
+          <div class="card-meta">${metaParts.map(escHtml).join(" · ")}</div>
+          ${notesHtml}
+        </div>
       </div>
     </a>`;
 }

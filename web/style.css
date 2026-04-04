@@ -2484,9 +2484,14 @@ body.modal-open  { overflow: hidden; }
   transition: opacity 0.15s;
 }
 .card-notes-btn:hover { opacity: 1; }
-.card-meta {
+.card-bottom {
   margin-top: auto;
-  padding-top: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.card-meta {
+  padding-top: 0.25rem;
   font-size: 0.7rem;
   color: #7a6d58;
   text-transform: uppercase;
