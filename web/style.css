@@ -339,8 +339,7 @@ body {
 .nav-tab-top:hover           { color: var(--text); background: none; }
 .nav-tab-top.active          { color: var(--accent); font-weight: 600; background: rgba(255,107,53,0.08); }
 .nav-tab-top:last-child      { box-shadow: none; }
-.nav-auth-tab                { font-size: 0.62rem; color: #777; letter-spacing: 0.04em; }
-.nav-auth-tab:hover          { color: var(--accent); }
+/* .nav-auth-tab inherits .nav-tab-top styles for consistency */
 /* ─ Bottom row tabs (records) ──────────────────────────────────────────── */
 .nav-tab-bot {
   background: none;
@@ -424,7 +423,6 @@ body {
     width: 100%;
   }
   .nav-tab-bot { padding-left: 1.5rem; font-size: 0.78rem; }
-  .nav-auth-tab { font-size: 0.76rem; }
 }
 
 /* ── Recent Searches pills (inline under results) ───────────────────────── */
