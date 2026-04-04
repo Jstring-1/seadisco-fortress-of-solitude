@@ -1,4 +1,9 @@
 // ── Masters+ merged sort ──────────────────────────────────────────────────
+function _catnoNum(item) {
+  // Extract trailing number from catno for secondary sort (e.g. "TOM-2-1305" → 1305)
+  const m = (item.catno ?? "").match(/(\d+)\s*$/);
+  return m ? parseInt(m[1]) : 0;
+}
 function _sortMerged(arr, sortStr) {
   const [sf, so] = sortStr.split(":");
   const dir = so === "desc" ? -1 : 1;
@@ -13,8 +18,12 @@ function _sortMerged(arr, sortStr) {
   };
   arr.sort((a, b) => {
     const va = getVal(a), vb = getVal(b);
-    if (sf === "year") return (va - vb) * dir;
-    return va < vb ? -1 * dir : va > vb ? 1 * dir : 0;
+    let cmp;
+    if (sf === "year") cmp = (va - vb) * dir;
+    else cmp = va < vb ? -1 * dir : va > vb ? 1 * dir : 0;
+    // Secondary sort by catalog number when primary values are equal
+    if (cmp === 0) return _catnoNum(a) - _catnoNum(b);
+    return cmp;
   });
 }
 
