@@ -309,10 +309,12 @@ async function doSearch(page = 1, skipPushState = false) {
     }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     // Show remaining searches hint for unauthenticated users
-    const rlRemaining = parseInt(res.headers.get("X-RateLimit-Remaining") ?? "");
-    if (!isNaN(rlRemaining) && rlRemaining <= 3) {
-      const plural = rlRemaining === 1 ? "search" : "searches";
-      showToast(`${rlRemaining} free ${plural} remaining today — sign in for unlimited`, "info", 5000);
+    if (!window._clerk?.user) {
+      const rlRemaining = parseInt(res.headers.get("X-RateLimit-Remaining") ?? "");
+      if (!isNaN(rlRemaining) && rlRemaining <= 3) {
+        const plural = rlRemaining === 1 ? "search" : "searches";
+        showToast(`${rlRemaining} free ${plural} remaining today — sign in for unlimited`, "info", 5000);
+      }
     }
     const data = res._mergedData ?? await res.json();
     items = data.results ?? [];
