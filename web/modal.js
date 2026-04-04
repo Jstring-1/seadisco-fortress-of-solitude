@@ -1377,10 +1377,14 @@ function renderMasterVersions() {
   grid.innerHTML = filtered.map(v => {
     const inCol  = window._collectionIds?.has(v.id);
     const inWant = window._wantlistIds?.has(v.id);
+    const inList = window._listMembership?.[v.id]?.length > 0;
+    const inInv  = window._inventoryIds?.has(v.id);
     const isFav  = window._favoriteKeys?.has(`release:${v.id}`);
     const badgeParts = [];
     if (inCol)  badgeParts.push(`<span style="color:#6ddf70;font-weight:700">C</span>`);
     if (inWant) badgeParts.push(`<span style="color:#f0c95c;font-weight:700">W</span>`);
+    if (inList) badgeParts.push(`<span style="color:#a0ccf0;font-weight:700">L</span>`);
+    if (inInv)  badgeParts.push(`<span style="color:#cda0f5;font-weight:700">I</span>`);
     if (isFav)  badgeParts.push(`<span style="color:#ff80ab">♥</span>`);
     const badge  = `<span>${badgeParts.length ? badgeParts.join("") : "&nbsp;"}</span>`;
     return `
@@ -1490,12 +1494,16 @@ function renderSeriesReleases() {
   grid.innerHTML = filtered.map(r => {
     const inCol  = window._collectionIds?.has(r.id);
     const inWant = window._wantlistIds?.has(r.id);
+    const inList = window._listMembership?.[r.id]?.length > 0;
+    const inInv  = window._inventoryIds?.has(r.id);
     const isFav  = window._favoriteKeys?.has(`release:${r.id}`);
     const badges = [];
-    if (inCol)  badges.push(`<span style="color:#6ddf70;font-size:0.65rem;font-weight:700">C</span>`);
-    if (inWant) badges.push(`<span style="color:#f0c95c;font-size:0.65rem;font-weight:700">W</span>`);
-    if (isFav)  badges.push(`<span style="color:#ff80ab;font-size:0.65rem">♥</span>`);
-    const badge = badges.length ? badges.join(" ") : `<span style="visibility:hidden">C</span>`;
+    if (inCol)  badges.push(`<span style="color:#6ddf70;font-weight:700">C</span>`);
+    if (inWant) badges.push(`<span style="color:#f0c95c;font-weight:700">W</span>`);
+    if (inList) badges.push(`<span style="color:#a0ccf0;font-weight:700">L</span>`);
+    if (inInv)  badges.push(`<span style="color:#cda0f5;font-weight:700">I</span>`);
+    if (isFav)  badges.push(`<span style="color:#ff80ab">♥</span>`);
+    const badge = badges.length ? badges.join("") : `<span style="visibility:hidden">C</span>`;
 
     const thumbHtml = r.thumb
       ? `<img src="${r.thumb}" alt="" loading="lazy" />`
