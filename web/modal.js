@@ -920,21 +920,21 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         })()}
         ${(!isMaster && d.master_id) ? `<div style="margin-top:0.4rem"><a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();setTimeout(()=>openModal(null,${d.master_id},'master','https://www.discogs.com/master/${d.master_id}'),100)" title="View all pressings of this release" style="font-size:0.75rem;color:#7eb8da;text-decoration:none">Master/Versions</a></div>` : ""}
         ${discogsUrl ? `<a href="${discogsUrl}" target="_blank" rel="noopener" title="Open this release on Discogs.com" style="font-size:0.75rem;color:#888;text-decoration:none;margin-top:0.25rem;display:inline-block">View on Discogs ↗</a>` : ""}
-        ${stats?.numForSale > 0 && stats?.lowestPrice != null
+        ${stats?.numForSale > 0 && (stats?.lowestPrice != null || stats?.medianPrice != null || stats?.highestPrice != null)
           ? (() => {
-              const low = parseFloat(stats.lowestPrice).toFixed(2);
-              const med = stats.medianPrice ? parseFloat(stats.medianPrice).toFixed(2) : null;
-              const high = stats.highestPrice ? parseFloat(stats.highestPrice).toFixed(2) : null;
+              const low = stats.lowestPrice != null ? parseFloat(stats.lowestPrice).toFixed(2) : null;
+              const med = stats.medianPrice != null ? parseFloat(stats.medianPrice).toFixed(2) : null;
+              const high = stats.highestPrice != null ? parseFloat(stats.highestPrice).toFixed(2) : null;
               const sellUrl = `https://www.discogs.com/sell/list?release_id=${escHtml(String(stats.releaseId))}`;
               const count = escHtml(String(stats.numForSale));
-              let priceBar;
-              if (med || high) {
-                priceBar = `<span style="color:var(--accent)">$${low}</span>`;
-                if (med) priceBar += `<span style="color:#555;margin:0 0.15rem"> ── </span><span style="color:#999">$${med}</span>`;
-                if (high) priceBar += `<span style="color:#555;margin:0 0.15rem"> ── </span><span style="color:#777">$${high}</span>`;
-              } else {
-                priceBar = `from <span style="color:var(--accent)">$${low}</span>`;
-              }
+              const dash = `<span style="color:#555;margin:0 0.15rem"> ── </span>`;
+              const parts = [];
+              if (low) parts.push(`<span style="color:var(--accent)">$${low}</span>`);
+              if (med) parts.push(`<span style="color:#999">$${med}</span>`);
+              if (high) parts.push(`<span style="color:#777">$${high}</span>`);
+              const priceBar = parts.length === 1
+                ? `from ${parts[0]}`
+                : parts.join(dash);
               return `<div style="font-size:0.75rem;margin-top:0.2rem">
                 <a href="${sellUrl}" target="_blank" rel="noopener" title="Browse ${count} listings on Discogs marketplace" style="color:#888;text-decoration:none">(${count}) :: ${priceBar} ↗</a>
               </div>`;
