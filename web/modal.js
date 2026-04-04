@@ -213,6 +213,29 @@ function lightboxStep(e, dir) {
   _renderLightbox();
 }
 
+// ── Touch swipe for lightbox ──────────────────────────────────────────────
+(function initLightboxSwipe() {
+  const overlay = document.getElementById("lightbox-overlay");
+  if (!overlay) return;
+  let startX = 0, startY = 0, tracking = false;
+  overlay.addEventListener("touchstart", e => {
+    if (e.touches.length === 1) {
+      startX = e.touches[0].clientX;
+      startY = e.touches[0].clientY;
+      tracking = true;
+    }
+  }, { passive: true });
+  overlay.addEventListener("touchend", e => {
+    if (!tracking) return;
+    tracking = false;
+    const dx = e.changedTouches[0].clientX - startX;
+    const dy = e.changedTouches[0].clientY - startY;
+    if (Math.abs(dx) < 40 || Math.abs(dy) > Math.abs(dx)) return; // too short or vertical
+    if (dx < 0 && _lbIdx < _lbImages.length - 1) { _lbIdx++; _renderLightbox(); }
+    if (dx > 0 && _lbIdx > 0) { _lbIdx--; _renderLightbox(); }
+  }, { passive: true });
+})();
+
 function _lbKey(e) {
   if (e.key === "ArrowLeft")  { _lbIdx = Math.max(0, _lbIdx - 1); _renderLightbox(); }
   if (e.key === "ArrowRight") { _lbIdx = Math.min(_lbImages.length - 1, _lbIdx + 1); _renderLightbox(); }

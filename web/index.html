@@ -729,7 +729,7 @@
 <div id="lightbox-overlay" onclick="closeLightbox()">
   <button id="lightbox-close" onclick="closeLightbox()">×</button>
   <button id="lightbox-prev" onclick="lightboxStep(event,-1)">&#8592;</button>
-  <img id="lightbox-img" src="" alt="" />
+  <img id="lightbox-img" src="" alt="" onclick="event.stopPropagation()" />
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
