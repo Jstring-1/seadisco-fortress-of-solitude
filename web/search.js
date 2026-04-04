@@ -854,6 +854,47 @@ function _shuffle(arr) {
   return arr;
 }
 
+// Extract just the artist portion of a "Artist - Title" combined title
+function _favArtist(item) {
+  const t = item.title ?? "";
+  const i = t.indexOf(" - ");
+  return (i > 0 ? t.slice(0, i) : t).toLowerCase();
+}
+function _favTitle(item) {
+  const t = item.title ?? "";
+  const i = t.indexOf(" - ");
+  return (i > 0 ? t.slice(i + 3) : t).toLowerCase();
+}
+
+function _applyFavoritesSort() {
+  const sel = document.getElementById("favorites-sort");
+  const sort = sel?.value || "added:desc";
+  const [field, order] = sort.split(":");
+  const dir = order === "desc" ? -1 : 1;
+  const getVal = (it) => {
+    if (field === "added") return it._addedAt ?? 0;
+    if (field === "year")  return parseInt(it.year) || 0;
+    if (field === "title") return _favTitle(it);
+    if (field === "artist") return _favArtist(it);
+    return 0;
+  };
+  _randomAll.sort((a, b) => {
+    const va = getVal(a), vb = getVal(b);
+    if (typeof va === "number") return (va - vb) * dir;
+    return va < vb ? -1 * dir : va > vb ? 1 * dir : 0;
+  });
+}
+
+// Called when the sort dropdown changes
+function sortFavoritesGrid() {
+  if (!_randomAll.length) return;
+  _applyFavoritesSort();
+  _randomShown = 0;
+  const grid = document.getElementById("random-records-grid");
+  if (grid) grid.innerHTML = "";
+  loadRandomRecords(true);
+}
+
 // Parse a row from the random-records API into a card-compatible item
 function _parseRandomRow(row) {
   const d = row.data ?? {};
@@ -898,17 +939,30 @@ async function loadRandomRecords(more) {
   const wrap = document.getElementById("random-records");
   if (!grid || !wrap) return;
 
-  // First call: fetch all and shuffle
+  // First call: fetch user's favorites (or owner's for signed-out viewers)
   if (!more) {
     try {
       const isLoggedIn = !!window._clerk?.user;
-      const url = isLoggedIn ? "/api/user/random-records?limit=192" : "/api/public/featured-records?limit=192";
+      const url = isLoggedIn ? "/api/user/favorites?limit=192" : "/api/public/featured-favorites?limit=192";
       const r = isLoggedIn ? await apiFetch(url) : await fetch(url);
       if (!r.ok) return;
       const data = await r.json();
-      _randomAll = _shuffle((data.items ?? []).map(_parseRandomRow)
-        .filter(r => r.type === "release" && r.cover_image));
+      // Preserve added-at order from the server (most recent first). Only
+      // keep items with a cover image for a clean grid.
+      _randomAll = (data.items ?? [])
+        .map(row => {
+          const item = _parseRandomRow(row);
+          item._addedAt = row.created_at ? new Date(row.created_at).getTime() : 0;
+          return item;
+        })
+        .filter(it => it.cover_image);
       _randomShown = 0;
+      // Update section title
+      const titleEl = document.getElementById("random-records-title");
+      if (titleEl) titleEl.textContent = isLoggedIn ? "Your Favorites" : "Featured Favorites";
+      // Apply current sort selection (defaults to added:desc which is
+      // already the server order)
+      _applyFavoritesSort();
     } catch { return; }
     if (!_randomAll.length) return;
   }
