@@ -1274,8 +1274,8 @@ function refreshCardBadges(releaseId) {
     const inCol = type === "release" && window._collectionIds?.has(id);
     const inWant = type === "release" && window._wantlistIds?.has(id);
     if (type === "release") {
-      badges += `<span class="card-badge badge-collection${inCol ? " is-active" : ""}" title="${inCol ? "In your collection" : "Not in collection"}">C</span>`;
-      badges += `<span class="card-badge badge-wantlist${inWant ? " is-active" : ""}" title="${inWant ? "In your wantlist" : "Not in wantlist"}">W</span>`;
+      badges += `<span class="card-badge badge-collection${inCol ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleCollectionFromCard(this,${id})" title="${inCol ? "Remove from collection" : "Add to collection"}">C</span>`;
+      badges += `<span class="card-badge badge-wantlist${inWant ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleWantlistFromCard(this,${id})" title="${inWant ? "Remove from wantlist" : "Add to wantlist"}">W</span>`;
       const lists = window._listMembership?.[id];
       if (lists?.length) {
         const names = lists.map(l => l.listName).join(", ");
