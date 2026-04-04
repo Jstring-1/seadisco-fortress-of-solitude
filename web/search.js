@@ -677,7 +677,7 @@ function renderCard(item, index) {
         <div class="card-bottom">
           ${label   ? `<div class="card-sub">${escHtml(label)}</div>` : ""}
           ${formats ? `<div class="card-format">${escHtml(formats)}</div>` : ""}
-          ${genre   ? `<div class="card-format">${escHtml(genre)}</div>`   : ""}
+          ${genre   ? `<div class="card-sub">${escHtml(genre)}</div>`   : ""}
           ${catno   ? `<div class="card-catno-line">${escHtml(catno)}</div>` : ""}
           ${ratingHtml}
           ${priceHtml}
