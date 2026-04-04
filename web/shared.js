@@ -274,12 +274,12 @@ function renderSharedHeader(opts) {
   };
 
   // Bottom-row tab (records — icons + labels)
-  const colors = { collection: "#4caf50", wantlist: "#d4a843", lists: "#7ba4cc", inventory: "#b07ce8", favorites: "#f06292" };
+  const colors = { collection: "#6ddf70", wantlist: "#f0c95c", lists: "#a0ccf0", inventory: "#cda0f5", favorites: "#ff80ab" };
   const icons  = { collection: "C", wantlist: "W", lists: "L", inventory: "I", favorites: "♥" };
   const recTab = (label, rtab) => {
     const icon = `<span class="rtab-icon" style="color:${colors[rtab]}">${icons[rtab]}</span>`;
     if (isSPA) {
-      return `<a class="nav-tab-bot nav-rec-disabled" href="/account" data-rtab="${rtab}" title="Sign in to access ${label}">${icon} ${label}</a>`;
+      return `<button class="nav-tab-bot nav-rec-disabled" data-rtab="${rtab}" onclick="showRecordSignIn('${rtab}')">${icon} ${label}</button>`;
     }
     return `<a class="nav-tab-bot" href="/account">${icon} ${label}</a>`;
   };
@@ -350,11 +350,13 @@ function renderSharedFooter(opts) {
           ? `<a href="/account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='collection';switchView('records')}">Collection</a>
              <a href="/account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='wantlist';switchView('records')}">Wantlist</a>
              <a href="/account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='inventory';switchView('records')}">Inventory</a>
-             <a href="/account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='lists';switchView('records')}">Lists</a>`
+             <a href="/account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='lists';switchView('records')}">Lists</a>
+             <a href="/account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='favorites';switchView('records')}">Favorites</a>`
           : `<a href="/account">Collection</a>
              <a href="/account">Wantlist</a>
              <a href="/account">Inventory</a>
-             <a href="/account">Lists</a>`}
+             <a href="/account">Lists</a>
+             <a href="/account">Favorites</a>`}
         <a href="/account">Account</a>
       </div>
       <div class="footer-col">
