@@ -935,8 +935,10 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
               const priceBar = parts.length === 1
                 ? `from ${parts[0]}`
                 : parts.join(dash);
+              const estId = `price-est-${escHtml(String(stats.releaseId))}`;
               return `<div style="font-size:0.75rem;margin-top:0.2rem">
                 <a href="${sellUrl}" target="_blank" rel="noopener" title="Browse ${count} listings on Discogs marketplace" style="color:#888;text-decoration:none">(${count}) :: ${priceBar} ↗</a>
+                ${!isMaster ? `<a href="#" onclick="event.preventDefault();loadPriceEstimates('${escHtml(String(stats.releaseId))}','${estId}')" style="color:#555;text-decoration:none;margin-left:0.4rem;font-size:0.7rem" title="Show estimated prices by condition">(est)</a><div id="${estId}"></div>` : ""}
               </div>`;
             })()
           : (stats?.numForSale === 0 ? `<div style="font-size:0.75rem;color:#555;margin-top:0.2rem">Not currently available on Discogs marketplace</div>` : "")
@@ -957,6 +959,39 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
 }
 
 // ── Modal action buttons (collection/wantlist/rating) ────────────────────
+
+async function loadPriceEstimates(releaseId, targetId) {
+  const el = document.getElementById(targetId);
+  if (!el) return;
+  // Toggle off if already showing
+  if (el.innerHTML) { el.innerHTML = ""; return; }
+  el.innerHTML = `<span style="color:#555;font-size:0.7rem">Loading…</span>`;
+  try {
+    const r = await apiFetch(`/api/price-suggestions/${releaseId}`);
+    if (!r.ok) throw new Error();
+    const data = await r.json();
+    // Conditions from best → worst, with short labels and gradient colors (orange → blue)
+    const grades = [
+      { key: "Mint (M)",                 label: "M",   color: "#e08a3a" },
+      { key: "Near Mint (NM or M-)",     label: "NM",  color: "#c4893f" },
+      { key: "Very Good Plus (VG+)",     label: "VG+", color: "#a08850" },
+      { key: "Very Good (VG)",           label: "VG",  color: "#7c8766" },
+      { key: "Good Plus (G+)",           label: "G+",  color: "#58867c" },
+      { key: "Good (G)",                 label: "G",   color: "#3a8596" },
+    ];
+    const rows = grades
+      .filter(g => data[g.key]?.value != null)
+      .map(g => {
+        const val = parseFloat(data[g.key].value).toFixed(2);
+        return `<span style="color:${g.color};font-weight:600">${g.label}</span>&nbsp;<span style="color:#aaa">$${val}</span>`;
+      });
+    el.innerHTML = rows.length
+      ? `<div style="font-size:0.72rem;margin-top:0.25rem;display:flex;flex-wrap:wrap;gap:0.15rem 0.6rem">${rows.map(r => `<span>${r}</span>`).join("")}</div>`
+      : `<span style="color:#555;font-size:0.7rem">No estimates available</span>`;
+  } catch {
+    el.innerHTML = `<span style="color:#555;font-size:0.7rem">Estimates unavailable</span>`;
+  }
+}
 
 // Render buttons immediately from local Sets (no network call)
 function renderActionsImmediate(rid, entityType = "release") {

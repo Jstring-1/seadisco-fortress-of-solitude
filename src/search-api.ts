@@ -2299,6 +2299,21 @@ app.get("/marketplace-stats/:id", async (req, res) => {
   }
 });
 
+// GET /price-suggestions/:id — condition-based price estimates for a release
+app.get("/price-suggestions/:id", async (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  const { id } = req.params;
+  const dc = await getDiscogsForRequest(req, true);
+  if (!dc) { res.status(503).json({ error: "No Discogs client" }); return; }
+  try {
+    const data = await dc.getPriceSuggestions(id);
+    res.json(data);
+  } catch (err: any) {
+    console.error("price-suggestions error:", err?.message ?? err);
+    res.status(500).json({ error: "Failed to fetch price suggestions" });
+  }
+});
+
 // GET /master-versions/:id — all pressings/versions of a master release
 app.get("/master-versions/:id", async (req, res) => {
   const { id } = req.params;
