@@ -2342,7 +2342,7 @@ app.get("/marketplace-stats/:id", async (req, res) => {
 });
 
 // GET /price-suggestions/:id — condition-based price estimates for a release
-app.get("/price-suggestions/:id", async (req, res) => {
+app.get("/api/price-suggestions/:id", async (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=300");
   const { id } = req.params;
   const dc = await getDiscogsForRequest(req, true);
