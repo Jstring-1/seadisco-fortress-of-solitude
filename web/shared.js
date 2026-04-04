@@ -261,21 +261,33 @@ function renderSharedHeader(opts) {
   const isSPA = opts?.spa;
   const active = opts?.active || "";
   const hideRecords = opts?.hideRecords;
+
+  // Top-row tab (discover pages + auth)
   const tab = (label, view) => {
-    if (hideRecords && view === "records") {
-      return `<a class="main-nav-tab" href="/?view=records">My Records</a>`;
-    }
     if (isSPA) {
       const cls = view === active ? ' active' : '';
-      if (view === 'records') {
-        return `<a class="main-nav-tab nav-disabled" href="/account" data-view="${view}">SIGN UP/IN</a>`;
-      }
-      return `<button class="main-nav-tab${cls}" data-view="${view}" onclick="switchView('${view}')">${label}</button>`;
+      return `<button class="nav-tab-top${cls}" data-view="${view}" onclick="switchView('${view}')">${label}</button>`;
     }
     const href = view === "search" ? "/" : `/?view=${view}`;
-    const cls = view === active ? ' class="main-nav-tab active"' : ' class="main-nav-tab"';
+    const cls = view === active ? ' class="nav-tab-top active"' : ' class="nav-tab-top"';
     return `<a${cls} href="${href}">${label}</a>`;
   };
+
+  // Bottom-row tab (records — icons + labels)
+  const colors = { collection: "#4caf50", wantlist: "#d4a843", lists: "#7ba4cc", inventory: "#b07ce8", favorites: "#f06292" };
+  const icons  = { collection: "C", wantlist: "W", lists: "L", inventory: "I", favorites: "♥" };
+  const recTab = (label, rtab) => {
+    const icon = `<span class="rtab-icon" style="color:${colors[rtab]}">${icons[rtab]}</span>`;
+    if (isSPA) {
+      return `<a class="nav-tab-bot nav-rec-disabled" href="/account" data-rtab="${rtab}" title="Sign in to access ${label}">${icon} ${label}</a>`;
+    }
+    return `<a class="nav-tab-bot" href="/account">${icon} ${label}</a>`;
+  };
+
+  // Auth tab (top row, rightmost)
+  const authTab = isSPA
+    ? `<a class="nav-tab-top nav-auth-tab" href="/account" data-view="auth" id="nav-auth-tab">Sign In</a>`
+    : `<a class="nav-tab-top nav-auth-tab" href="/account">Sign In</a>`;
 
   const header = document.getElementById("site-header");
   if (!header) return;
@@ -288,13 +300,22 @@ function renderSharedHeader(opts) {
       </button>
       <div id="nav-tabs-wrap">
         <div id="main-nav-tabs">
-          ${tab("Search", "search")}
-          ${tab("Drops", "drops")}
-          ${tab("Feed", "feed")}
-          ${tab("Live", "live")}
-          ${tab("Vinyl", "buy")}
-          ${tab("Gear", "gear")}
-          ${tab("My Records", "records")}
+          <div class="nav-row nav-row-top">
+            ${tab("Search", "search")}
+            ${tab("Drops", "drops")}
+            ${tab("Feed", "feed")}
+            ${tab("Live", "live")}
+            ${tab("Vinyl", "buy")}
+            ${tab("Gear", "gear")}
+            ${authTab}
+          </div>
+          <div class="nav-row nav-row-bot" id="nav-row-records">
+            ${recTab("Collection", "collection")}
+            ${recTab("Wantlist", "wantlist")}
+            ${recTab("Lists", "lists")}
+            ${recTab("Inventory", "inventory")}
+            ${recTab("Favorites", "favorites")}
+          </div>
         </div>
         ${isSPA ? '<div id="nav-auth-popup">Sign up and add your Discogs API token for unlimited searches</div>' : ''}
       </div>
@@ -326,10 +347,10 @@ function renderSharedFooter(opts) {
       <div class="footer-col">
         <h4>Your Music</h4>
         ${isSPA
-          ? `<a href="/account" onclick="var t=document.querySelector('#main-nav-tabs [data-view=records]');if(t&&!t.classList.contains('nav-disabled')){event.preventDefault();_cwTab='collection';switchView('records')}">Collection</a>
-             <a href="/account" onclick="var t=document.querySelector('#main-nav-tabs [data-view=records]');if(t&&!t.classList.contains('nav-disabled')){event.preventDefault();_cwTab='wantlist';switchView('records')}">Wantlist</a>
-             <a href="/account" onclick="var t=document.querySelector('#main-nav-tabs [data-view=records]');if(t&&!t.classList.contains('nav-disabled')){event.preventDefault();_cwTab='inventory';switchView('records')}">Inventory</a>
-             <a href="/account" onclick="var t=document.querySelector('#main-nav-tabs [data-view=records]');if(t&&!t.classList.contains('nav-disabled')){event.preventDefault();_cwTab='lists';switchView('records')}">Lists</a>`
+          ? `<a href="/account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='collection';switchView('records')}">Collection</a>
+             <a href="/account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='wantlist';switchView('records')}">Wantlist</a>
+             <a href="/account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='inventory';switchView('records')}">Inventory</a>
+             <a href="/account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='lists';switchView('records')}">Lists</a>`
           : `<a href="/account">Collection</a>
              <a href="/account">Wantlist</a>
              <a href="/account">Inventory</a>

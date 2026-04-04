@@ -54,22 +54,28 @@ function renderCardFromBasicInfo(basicInfo, index) {
 function addNavTab(view) {
   // Map old collection/wantlist enables to the new "records" tab
   if (view === "collection" || view === "wantlist") view = "records";
-  const el = document.querySelector(`#main-nav-tabs [data-view="${view}"]`);
-  if (!el) return;
-  // Replace the sign-in link with a proper nav button
-  if (el.tagName === "A" && view === "records") {
-    const btn = document.createElement("button");
-    btn.className = "main-nav-tab";
-    btn.dataset.view = view;
-    btn.textContent = "My Records";
-    btn.onclick = () => switchView(view);
-    el.replaceWith(btn);
-    // Enable swap-to-collection button now that user has records access
+
+  if (view === "records") {
+    // Enable all bottom-row record tabs
+    document.querySelectorAll("#nav-row-records .nav-tab-bot").forEach(el => {
+      el.classList.remove("nav-rec-disabled");
+      el.removeAttribute("title");
+      const rtab = el.dataset.rtab;
+      if (rtab) {
+        el.href = "#";
+        el.onclick = (e) => { e.preventDefault(); _cwTab = rtab; switchView("records"); };
+      }
+    });
+    // Enable swap-to-collection button
     const swapBtn = document.getElementById("swap-to-collection-btn");
     if (swapBtn) { swapBtn.disabled = false; swapBtn.title = "Search your collection with these criteria"; }
-  } else {
-    el.classList.remove("nav-disabled");
-    el.removeAttribute("title");
+    // Update auth tab to show Account
+    const authTab = document.getElementById("nav-auth-tab");
+    if (authTab) {
+      authTab.textContent = "Account";
+      authTab.href = "/account";
+      authTab.onclick = null;
+    }
   }
 }
 
@@ -77,12 +83,16 @@ function addNavTab(view) {
 
 function switchView(view, skipPushState = false) {
   document.getElementById("main-nav-tabs")?.classList.remove("mobile-open");
-  const tabBtn = document.querySelector(`#main-nav-tabs [data-view="${view}"]`);
-  if (tabBtn?.classList.contains("nav-disabled")) return;
 
-  document.querySelectorAll(".main-nav-tab").forEach(btn =>
+  // Highlight top row
+  document.querySelectorAll(".nav-tab-top").forEach(btn =>
     btn.classList.toggle("active", btn.dataset.view === view)
   );
+  // Highlight bottom row — active when in records view
+  const isRecords = view === "records";
+  document.querySelectorAll(".nav-tab-bot").forEach(btn => {
+    btn.classList.toggle("active", isRecords && btn.dataset.rtab === (_cwTab || "collection"));
+  });
   const searchView  = document.getElementById("search-view");
   const dropsView   = document.getElementById("drops-view");
   const liveView    = document.getElementById("live-view");
@@ -393,8 +403,8 @@ function switchRecordsTab(tab, skipPush) {
     if (sort) url += `&sort=${sort}`;
     history.pushState({ view: "records", tab }, "", url);
   }
-  // Update sub-tab active state
-  document.querySelectorAll(".records-sub-tab").forEach(btn =>
+  // Update nav bottom row active state
+  document.querySelectorAll(".nav-tab-bot").forEach(btn =>
     btn.classList.toggle("active", btn.dataset.rtab === tab)
   );
   // Reset search
