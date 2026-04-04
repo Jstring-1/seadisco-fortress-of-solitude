@@ -273,15 +273,16 @@ function renderSharedHeader(opts) {
     return `<a${cls} href="${href}">${label}</a>`;
   };
 
-  // Bottom-row tab (records — icons + labels)
+  // Bottom-row tab — first letter colored, rest normal. Heart for favorites.
   const colors = { collection: "#6ddf70", wantlist: "#f0c95c", lists: "#a0ccf0", inventory: "#cda0f5", favorites: "#ff80ab" };
-  const icons  = { collection: "C", wantlist: "W", lists: "L", inventory: "I", favorites: "♥" };
   const recTab = (label, rtab) => {
-    const icon = `<span class="rtab-icon" style="color:${colors[rtab]}">${icons[rtab]}</span>`;
+    const coloredLabel = rtab === "favorites"
+      ? `<span style="color:${colors[rtab]}">♥</span>${label.slice(0)}`
+      : `<span style="color:${colors[rtab]}">${label.charAt(0)}</span>${label.slice(1)}`;
     if (isSPA) {
-      return `<button class="nav-tab-bot nav-rec-disabled" data-rtab="${rtab}" onclick="showRecordSignIn('${rtab}')">${icon} ${label}</button>`;
+      return `<button class="nav-tab-bot nav-rec-disabled" data-rtab="${rtab}" onclick="showRecordSignIn('${rtab}')">${coloredLabel}</button>`;
     }
-    return `<a class="nav-tab-bot" href="/account">${icon} ${label}</a>`;
+    return `<a class="nav-tab-bot" href="/account">${coloredLabel}</a>`;
   };
 
   // Auth tab (top row, rightmost)

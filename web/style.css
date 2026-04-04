@@ -368,10 +368,7 @@ body {
 .nav-tab-bot:last-child      { box-shadow: none; }
 .nav-tab-bot.nav-rec-disabled { color: #555; cursor: pointer; }
 .nav-tab-bot.nav-rec-disabled:hover { color: var(--accent); }
-.rtab-icon {
-  font-weight: 700;
-  font-size: 0.72rem;
-}
+/* First-letter coloring handled inline */
 /* ─ Auth popup ──────────────────────────────────────────────────────────── */
 #nav-auth-popup {
   display: none;
@@ -2711,16 +2708,24 @@ body.modal-open  { overflow: hidden; }
   pointer-events: auto;
 }
 /* Fixed slot positions — each badge always lands in the same spot */
-.badge-collection { top: 4px;   color: #6ddf70; border-color: #6ddf7066; }
-.badge-wantlist   { top: 29px;  color: #f0c95c; border-color: #f0c95c66; }
+/* Inactive state — dimmed, show on card hover */
+.badge-collection { top: 4px;   color: #6ddf70; border-color: #6ddf7066; opacity: 0; transition: opacity 0.15s; }
+.badge-wantlist   { top: 29px;  color: #f0c95c; border-color: #f0c95c66; opacity: 0; transition: opacity 0.15s; }
 .badge-list       { top: 54px;  color: #a0ccf0; border-color: #a0ccf066; }
 .badge-inventory  { top: 79px;  color: #cda0f5; border-color: #cda0f566; }
-.badge-favorite   { top: 104px; color: #ff80ab; border-color: #ff80ab66; cursor: pointer; }
+.badge-favorite   { top: 104px; color: #ff80ab; border-color: #ff80ab66; cursor: pointer; opacity: 0; transition: opacity 0.15s; }
 .badge-favorite:hover { color: #ffaac8; }
-/* Show fav badge on hover or when active */
-.badge-favorite { opacity: 0; transition: opacity 0.15s; }
+/* Show C/W/♥ on hover or when active */
+.card:hover .badge-collection,
+.card:hover .badge-wantlist,
 .card:hover .badge-favorite,
+.badge-collection.is-active,
+.badge-wantlist.is-active,
 .badge-favorite.is-favorite { opacity: 1; }
+/* Inactive C/W shown dimmed on hover */
+.card:hover .badge-collection:not(.is-active),
+.card:hover .badge-wantlist:not(.is-active) { opacity: 0.35; }
+.card:hover .badge-favorite:not(.is-favorite) { opacity: 0.35; }
 
 /* Favorite button in modal */
 .modal-act-btn.is-favorite {
