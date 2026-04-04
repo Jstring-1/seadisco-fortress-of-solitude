@@ -1266,16 +1266,20 @@ function refreshCardBadges(releaseId) {
     } else return;
 
     let badges = "";
-    if (type === "release" && window._collectionIds?.has(id)) badges += `<span class="collection-badge" title="In your collection">✓</span>`;
-    if (type === "release" && window._wantlistIds?.has(id))   badges += `<span class="wantlist-badge" title="In your wantlist">🤞</span>`;
-    el.innerHTML = badges;
-    // Update card fav button too
-    const favBtn = card.querySelector(".card-fav-btn");
-    if (favBtn) {
-      const isFav = window._favoriteKeys?.has(`${type}:${id}`);
-      favBtn.classList.toggle("is-favorite", isFav);
-      favBtn.textContent = isFav ? "❤" : "♡";
+    if (type === "release") {
+      if (window._collectionIds?.has(id)) badges += `<span class="card-badge badge-collection" title="In your collection">C</span>`;
+      if (window._wantlistIds?.has(id))   badges += `<span class="card-badge badge-wantlist" title="In your wantlist">W</span>`;
+      const lists = window._listMembership?.[id];
+      if (lists?.length) {
+        const names = lists.map(l => l.listName).join(", ");
+        badges += `<span class="card-badge badge-list" title="In list: ${escHtml(names)}">L</span>`;
+      }
+      if (window._inventoryIds?.has(id)) badges += `<span class="card-badge badge-inventory" title="In your inventory">I</span>`;
     }
+    const favKey = `${type}:${id}`;
+    const isFav = window._favoriteKeys?.has(favKey);
+    badges += `<span class="card-badge badge-favorite${isFav ? " is-favorite" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,${id},'${type}')" title="${isFav ? "Remove from favorites" : "Add to favorites"}">${isFav ? "♥" : "♡"}</span>`;
+    el.innerHTML = badges;
   });
 }
 
