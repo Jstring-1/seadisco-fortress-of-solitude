@@ -334,7 +334,7 @@ function renderFeedSkeletonGrid(count = 16) {
 
 // ── Empty state helper ───────────────────────────────────────────────────
 function renderEmptyState(icon, title, subtitle) {
-  return `<div class="empty-state"><div class="empty-state-icon">${icon}</div><div class="empty-state-title">${escHtml(title)}</div><div class="empty-state-subtitle">${escHtml(subtitle)}</div></div>`;
+  return `<div class="empty-state"><div class="empty-state-icon">${icon}</div><div class="empty-state-title">${escHtml(title)}</div><div class="empty-state-subtitle">${subtitle}</div></div>`;
 }
 
 // ── Scroll-to-top button ─────────────────────────────────────────────────
