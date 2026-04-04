@@ -241,41 +241,56 @@ async function doSearch(page = 1, skipPushState = false) {
 
     let items, totalPages_new, totalItems_new = 0;
 
-    // Masters+ mode: run master + release searches in parallel, merge
+    // Masters+ mode: run master + release searches in parallel, merge.
+    // Resilient to partial failures — if one endpoint errors or returns
+    // nothing (e.g. exhausted pagination), use whatever succeeded.
     const isMasterPlus = resultType === "master+";
     let searchPromise;
     if (isMasterPlus) {
       const masterParams = buildParams(48); masterParams.set("type", "master");
       const releaseParams = buildParams(48); releaseParams.set("type", "release");
       searchPromise = Promise.all([
-        apiFetch(`${API}/search?${masterParams}`),
-        apiFetch(`${API}/search?${releaseParams}`),
+        apiFetch(`${API}/search?${masterParams}`).catch(e => ({ ok: false, status: 0, _err: e })),
+        apiFetch(`${API}/search?${releaseParams}`).catch(e => ({ ok: false, status: 0, _err: e })),
       ]).then(async ([mRes, rRes]) => {
-        // Return the master response for error handling, attach merged data
         mRes._masterPlus = true;
-        if (mRes.ok && rRes.ok) {
-          const [mData, rData] = await Promise.all([mRes.json(), rRes.json()]);
-          const masters = mData.results ?? [];
-          const releases = rData.results ?? [];
-          // Keep releases that have no master_id (orphans)
-          const masterIds = new Set(masters.map(m => m.id));
-          const orphans = releases.filter(r => !r.master_id || !masterIds.has(r.master_id));
-          // Dedupe orphans against masters by master_id
-          const seen = new Set(masters.map(m => m.id));
-          const uniqueOrphans = orphans.filter(r => {
-            if (seen.has(r.id)) return false;
-            seen.add(r.id);
-            return true;
-          });
-          let merged = [...masters, ...uniqueOrphans];
-          if (sort) _sortMerged(merged, sort);
-          mRes._mergedData = {
-            results: merged,
-            pagination: {
-              pages: Math.max(mData.pagination?.pages ?? 1, rData.pagination?.pages ?? 1),
-              items: (mData.pagination?.items ?? 0) + uniqueOrphans.length,
-            }
-          };
+        // Forward auth/rate-limit errors (check both responses)
+        if (mRes.status === 401 || mRes.status === 429) return mRes;
+        if (rRes.status === 401 || rRes.status === 429) { rRes._masterPlus = true; return rRes; }
+
+        let mData = null, rData = null;
+        if (mRes.ok) { try { mData = await mRes.json(); } catch {} }
+        if (rRes.ok) { try { rData = await rRes.json(); } catch {} }
+
+        const masters  = mData?.results ?? [];
+        const releases = rData?.results ?? [];
+
+        // If both empty/failed and this is page 1, surface the error
+        if (!mData && !rData) {
+          return mRes.ok ? mRes : (rRes.ok ? rRes : mRes);
+        }
+
+        const masterIds = new Set(masters.map(m => m.id));
+        const orphans = releases.filter(r => !r.master_id || !masterIds.has(r.master_id));
+        const seen = new Set(masters.map(m => m.id));
+        const uniqueOrphans = orphans.filter(r => {
+          if (seen.has(r.id)) return false;
+          seen.add(r.id);
+          return true;
+        });
+        let merged = [...masters, ...uniqueOrphans];
+        if (sort) _sortMerged(merged, sort);
+        mRes._mergedData = {
+          results: merged,
+          pagination: {
+            pages: Math.max(mData?.pagination?.pages ?? 0, rData?.pagination?.pages ?? 0, 1),
+            items: (mData?.pagination?.items ?? 0) + uniqueOrphans.length,
+          }
+        };
+        // Ensure the response we return looks OK to the caller even if
+        // only one endpoint succeeded.
+        if (!mRes.ok && rRes.ok) {
+          return { ok: true, status: 200, headers: rRes.headers, _masterPlus: true, _mergedData: mRes._mergedData, json: async () => mRes._mergedData };
         }
         return mRes;
       });
@@ -452,6 +467,13 @@ async function doSearch(page = 1, skipPushState = false) {
 
     if (!items.length) {
       setStatus("");
+      if (_append) {
+        // Load more returned nothing — keep existing results, hide button
+        document.getElementById("search-load-more").style.display = "none";
+        const lmBtn = document.getElementById("search-load-more-btn");
+        if (lmBtn) { lmBtn.classList.remove("loading"); lmBtn.textContent = "Load more results"; }
+        return;
+      }
       document.getElementById("results").innerHTML = renderEmptyState("🔍", "No results found", "Try a different search term or broaden your filters");
       const noResAi = document.getElementById("search-ai-summary");
       noResAi.innerHTML = "<i>Couldn't find any results at Discogs.</i>";
@@ -547,12 +569,21 @@ async function doSearch(page = 1, skipPushState = false) {
       }
     }
   } catch (e) {
+    console.error("Search failed:", e);
     setStatus("");
-    document.getElementById("results").innerHTML =
-      `<div class="empty-state"><div class="empty-state-icon">⚠️</div>` +
-      `<div class="empty-state-title">Search failed</div>` +
-      `<div class="empty-state-subtitle">${escHtml(e.message)} — please try again</div></div>`;
-    showToast("Search failed — please try again", "error");
+    if (_append) {
+      // Load-more failure: keep existing results, reset the button, hide "load more"
+      const lmBtn = document.getElementById("search-load-more-btn");
+      if (lmBtn) { lmBtn.classList.remove("loading"); lmBtn.textContent = "Load more results"; }
+      document.getElementById("search-load-more").style.display = "none";
+      showToast("Couldn't load more results — you may have reached the end", "info", 4000);
+    } else {
+      document.getElementById("results").innerHTML =
+        `<div class="empty-state"><div class="empty-state-icon">⚠️</div>` +
+        `<div class="empty-state-title">Search failed</div>` +
+        `<div class="empty-state-subtitle">${escHtml(e.message)} — please try again</div></div>`;
+      showToast("Search failed — please try again", "error");
+    }
   } finally {
     document.getElementById("search-btn").disabled = false;
   }
