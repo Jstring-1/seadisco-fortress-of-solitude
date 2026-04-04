@@ -303,6 +303,23 @@ export async function initDb() {
     )
   `);
 
+  // ── User list items (items inside each Discogs list) ─────────────────────
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_list_items (
+      id              SERIAL PRIMARY KEY,
+      clerk_user_id   TEXT NOT NULL,
+      list_id         INTEGER NOT NULL,
+      discogs_id      INTEGER NOT NULL,
+      entity_type     TEXT DEFAULT 'release',
+      comment         TEXT,
+      data            JSONB,
+      synced_at       TIMESTAMP DEFAULT NOW(),
+      UNIQUE(clerk_user_id, list_id, discogs_id)
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS user_list_items_user_idx ON user_list_items (clerk_user_id)`);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS user_list_items_release_idx ON user_list_items (clerk_user_id, discogs_id)`);
+
   // ── User orders (marketplace buy/sell history) ──────────────────────────
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS user_orders (
@@ -620,6 +637,7 @@ export async function deleteUserData(clerkUserId: string): Promise<void> {
     "triggered_alerts",
     "feedback",
     "user_orders",
+    "user_list_items",
     "user_lists",
     "user_inventory",
     "user_collection_folders",
@@ -1417,6 +1435,70 @@ export async function upsertUserLists(
   }
 }
 
+// ── List items ──────────────────────────────────────────────────────────
+
+export async function upsertListItems(
+  clerkUserId: string,
+  listId: number,
+  items: Array<{ discogsId: number; entityType?: string; comment?: string; data?: object }>
+): Promise<void> {
+  if (!items.length) return;
+  // Remove old items for this list, then insert fresh
+  await getPool().query(
+    `DELETE FROM user_list_items WHERE clerk_user_id = $1 AND list_id = $2`,
+    [clerkUserId, listId]
+  );
+  for (const item of items) {
+    await getPool().query(
+      `INSERT INTO user_list_items (clerk_user_id, list_id, discogs_id, entity_type, comment, data, synced_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+       ON CONFLICT (clerk_user_id, list_id, discogs_id) DO UPDATE SET entity_type = $4, comment = $5, data = $6, synced_at = NOW()`,
+      [clerkUserId, listId, item.discogsId, item.entityType ?? "release", item.comment ?? null, item.data ? JSON.stringify(item.data) : null]
+    );
+  }
+}
+
+export async function getListItems(clerkUserId: string, listId: number): Promise<any[]> {
+  const r = await getPool().query(
+    `SELECT discogs_id, entity_type, comment, data FROM user_list_items WHERE clerk_user_id = $1 AND list_id = $2 ORDER BY id`,
+    [clerkUserId, listId]
+  );
+  return r.rows;
+}
+
+/** Returns { discogsId → [{ listId, listName }] } for badge rendering */
+export async function getListMembership(clerkUserId: string): Promise<Record<number, Array<{ listId: number; listName: string }>>> {
+  const r = await getPool().query(
+    `SELECT li.discogs_id, li.list_id, l.name
+     FROM user_list_items li
+     JOIN user_lists l ON l.clerk_user_id = li.clerk_user_id AND l.list_id = li.list_id
+     WHERE li.clerk_user_id = $1`,
+    [clerkUserId]
+  );
+  const map: Record<number, Array<{ listId: number; listName: string }>> = {};
+  for (const row of r.rows) {
+    if (!map[row.discogs_id]) map[row.discogs_id] = [];
+    map[row.discogs_id].push({ listId: row.list_id, listName: row.name });
+  }
+  return map;
+}
+
+export async function getInventoryIds(clerkUserId: string): Promise<number[]> {
+  const r = await getPool().query(
+    "SELECT DISTINCT discogs_release_id FROM user_inventory WHERE clerk_user_id = $1 AND discogs_release_id IS NOT NULL",
+    [clerkUserId]
+  );
+  return r.rows.map(row => row.discogs_release_id);
+}
+
+export async function getListItemStats(clerkUserId: string): Promise<{ totalItems: number; listsWithItems: number }> {
+  const r = await getPool().query(
+    `SELECT COUNT(*)::int AS total_items, COUNT(DISTINCT list_id)::int AS lists_with_items FROM user_list_items WHERE clerk_user_id = $1`,
+    [clerkUserId]
+  );
+  return { totalItems: r.rows[0]?.total_items ?? 0, listsWithItems: r.rows[0]?.lists_with_items ?? 0 };
+}
+
 // ── Orders ───────────────────────────────────────────────────────────────
 
 export async function upsertUserOrders(
@@ -1759,7 +1841,7 @@ export async function logVinylFetch(fetchType: string, itemCount: number, error?
 export async function pruneAllStaleData(): Promise<{
   fresh: number; gear: number; gearLog: number; vinyl: number; vinylLog: number; liveEvents: number;
   collection: number; wantlist: number; folders: number;
-  inventory: number; lists: number; orders: number;
+  inventory: number; listItems: number; lists: number; orders: number;
 }> {
   const interval30d = `NOW() - INTERVAL '30 days'`;
 
@@ -1803,6 +1885,10 @@ export async function pruneAllStaleData(): Promise<{
   const inv = await getPool().query(
     `DELETE FROM user_inventory WHERE synced_at < ${interval30d}`
   );
+  // User list items older than 30 days
+  const lsti = await getPool().query(
+    `DELETE FROM user_list_items WHERE synced_at < ${interval30d}`
+  );
   // User lists older than 30 days
   const lst = await getPool().query(
     `DELETE FROM user_lists WHERE synced_at < ${interval30d}`
@@ -1822,6 +1908,7 @@ export async function pruneAllStaleData(): Promise<{
     wantlist: wl.rowCount ?? 0,
     folders: fld.rowCount ?? 0,
     inventory: inv.rowCount ?? 0,
+    listItems: lsti.rowCount ?? 0,
     lists: lst.rowCount ?? 0,
     orders: ord.rowCount ?? 0,
   };
@@ -2075,6 +2162,11 @@ export async function getUserCollectionStats(): Promise<{ users: any[]; global: 
       FROM user_lists ul
       WHERE ul.clerk_user_id = u.clerk_user_id
     ) l ON true
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*)::int AS list_item_count
+      FROM user_list_items uli
+      WHERE uli.clerk_user_id = u.clerk_user_id
+    ) li ON true
     WHERE u.discogs_username IS NOT NULL
     ORDER BY c.coll_count DESC NULLS LAST
   `);
@@ -2085,6 +2177,7 @@ export async function getUserCollectionStats(): Promise<{ users: any[]; global: 
       (SELECT COUNT(*)::int FROM user_collection) AS total_collection,
       (SELECT COUNT(*)::int FROM user_wantlist) AS total_wantlist,
       (SELECT COUNT(*)::int FROM user_inventory) AS total_inventory,
+      (SELECT COUNT(*)::int FROM user_list_items) AS total_list_items,
       (SELECT COUNT(DISTINCT discogs_release_id)::int FROM user_collection) AS unique_releases,
       (SELECT COUNT(DISTINCT discogs_release_id)::int FROM user_wantlist) AS unique_wants
   `);

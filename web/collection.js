@@ -653,11 +653,57 @@ function renderListCard(list) {
   const desc = escHtml(list.description || "");
   const count = list.item_count ?? 0;
   const vis = list.is_public ? "Public" : "Private";
-  return `<a href="https://www.discogs.com/lists/${list.list_id}" target="_blank" rel="noopener" class="list-card">
+  return `<div class="list-card" onclick="openListDetail(${list.list_id},'${name.replace(/'/g, "\\'")}')">
     <div class="list-card-name">${name}</div>
     ${desc ? `<div class="list-card-desc">${desc}</div>` : ""}
-    <div class="list-card-meta">${count} item${count !== 1 ? "s" : ""} \u00b7 ${vis}</div>
-  </a>`;
+    <div class="list-card-meta">${count} item${count !== 1 ? "s" : ""} · ${vis}
+      <a href="https://www.discogs.com/lists/${list.list_id}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:#555;margin-left:0.4rem;font-size:0.7rem" title="View on Discogs">↗</a>
+    </div>
+  </div>`;
+}
+
+// ── List detail view — show items inside a specific list ──────────────
+async function openListDetail(listId, listName) {
+  const grid = document.getElementById("results");
+  grid.innerHTML = renderSkeletonGrid(16);
+  setCwStatus("");
+  try {
+    const r = await apiFetch("/api/user/lists/" + listId + "/items");
+    const data = await r.json();
+    const items = (data.items ?? []).map(row => {
+      const d = row.data ?? {};
+      // Discogs list items have display_title, basic_information, etc.
+      const basic = d.basic_information ?? {};
+      return {
+        id:          d.id ?? row.discogs_id,
+        type:        row.entity_type ?? "release",
+        title:       d.display_title || basic.title || `${row.entity_type} ${row.discogs_id}`,
+        cover_image: d.image_url || basic.cover_image || basic.thumb || "",
+        uri:         d.uri || `/${row.entity_type}/${row.discogs_id}`,
+        label:       basic.labels?.map(l => l.name) ?? [],
+        format:      basic.formats?.map(f => f.name) ?? [],
+        genre:       basic.genres ?? [],
+        year:        basic.year || d.year || "",
+        country:     basic.country || "",
+        _comment:    row.comment || d.comment || "",
+      };
+    });
+    const q = (document.getElementById("cw-query")?.value ?? "").trim().toLowerCase();
+    const filtered = q ? items.filter(it => (it.title || "").toLowerCase().includes(q)) : items;
+    if (!filtered.length) {
+      grid.innerHTML = items.length
+        ? renderEmptyState("\uD83D\uDD0D", `No items matching "${escHtml(q)}"`, "Try a different search")
+        : renderEmptyState("\uD83D\uDCCB", "Empty list", "This list has no items");
+      setCwStatus(`${listName}`);
+      return;
+    }
+    setCwStatus(`${listName} · ${filtered.length} item${filtered.length !== 1 ? "s" : ""}`);
+    grid.innerHTML = `<div style="margin-bottom:0.5rem"><button onclick="loadListsTab()" style="background:none;border:none;color:var(--accent);cursor:pointer;font-size:0.8rem;padding:0">← All lists</button></div>`
+      + filtered.map((item, i) => renderCard(item, i)).join("");
+  } catch (e) {
+    grid.innerHTML = renderEmptyState("⚠", "Failed to load list items", e.message);
+    setCwStatus(listName);
+  }
 }
 
 function clearCwSearch() {
@@ -988,9 +1034,11 @@ async function loadDiscogsIds() {
     const r = await apiFetch("/api/user/discogs-ids");
     if (r.ok) {
       const data = await r.json();
-      window._collectionIds = new Set(data.collectionIds ?? []);
-      window._wantlistIds   = new Set(data.wantlistIds   ?? []);
-      window._favoriteKeys  = new Set((data.favoriteIds ?? []).map(f => `${f.entity_type}:${f.discogs_id}`));
+      window._collectionIds  = new Set(data.collectionIds ?? []);
+      window._wantlistIds    = new Set(data.wantlistIds   ?? []);
+      window._favoriteKeys   = new Set((data.favoriteIds ?? []).map(f => `${f.entity_type}:${f.discogs_id}`));
+      window._inventoryIds   = new Set(data.inventoryIds ?? []);
+      window._listMembership = data.listMembership ?? {};  // { discogsId: [{listId, listName}] }
       const cb = document.getElementById("hide-owned");
       const lbl = document.getElementById("hide-owned-label");
       if (cb && cb.disabled) {

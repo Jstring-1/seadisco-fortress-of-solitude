@@ -540,6 +540,7 @@ async function loadCollectionStats() {
       <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(g.total_collection ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">total collection items</span></div>
       <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(g.total_wantlist ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">total wantlist items</span></div>
       <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(g.total_inventory ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">inventory items</span></div>
+      <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(g.total_list_items ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">list items</span></div>
       <div><span style="color:var(--text);font-weight:600">${(g.unique_releases ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">unique releases</span></div>
       <div><span style="color:var(--text);font-weight:600">${(g.unique_wants ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">unique wants</span></div>
     </div>`;
@@ -553,7 +554,7 @@ async function loadCollectionStats() {
         <td style="text-align:right;color:var(--accent);font-weight:600">${(u.collection_count ?? 0).toLocaleString()}</td>
         <td style="text-align:right">${(u.wantlist_count ?? 0).toLocaleString()}</td>
         <td style="text-align:right">${(u.inventory_count ?? 0).toLocaleString()}</td>
-        <td style="text-align:right">${(u.list_count ?? 0).toLocaleString()}</td>
+        <td style="text-align:right">${(u.list_count ?? 0).toLocaleString()} <span style="color:#555;font-size:0.68rem">(${(u.list_item_count ?? 0).toLocaleString()})</span></td>
         <td style="white-space:nowrap">${fmtDate(u.coll_oldest)} \u2013 ${fmtDate(u.coll_newest)}</td>
         <td style="font-size:0.72rem;color:#8a7d6b;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${genres}">${genres || "\u2014"}</td>
         <td style="font-size:0.72rem;color:#8a7d6b;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${styles}">${styles || "\u2014"}</td>

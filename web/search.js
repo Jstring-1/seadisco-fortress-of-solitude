@@ -506,19 +506,28 @@ function renderCard(item, index) {
       ? `class="${typeClass}" href="#" data-entity-type="${escHtml(type)}" data-entity-name="${escHtml(title)}" data-entity-id="${item.id}" onclick="searchByEntity(event,this)"`
       : `class="${typeClass}" href="${url}" target="_blank" rel="noopener"`;
 
+  // ── Badge strip: fixed order — collection, wantlist, list, inventory, favorite
   let badges = "";
   const releaseId = item.id;
-  // Only show collection/wantlist badges for releases — master IDs are in a
-  // different namespace and could falsely match a release ID in the user's sets
   if (releaseId && type === "release") {
-    if (window._collectionIds?.has(releaseId)) badges += `<span class="collection-badge" title="In your collection">✓</span>`;
-    if (window._wantlistIds?.has(releaseId))   badges += `<span class="wantlist-badge" title="In your wantlist">🤞</span>`;
+    if (window._collectionIds?.has(releaseId))
+      badges += `<span class="card-badge badge-collection" title="In your collection">C</span>`;
+    if (window._wantlistIds?.has(releaseId))
+      badges += `<span class="card-badge badge-wantlist" title="In your wantlist">W</span>`;
+    const lists = window._listMembership?.[releaseId];
+    if (lists?.length) {
+      const names = lists.map(l => l.listName).join(", ");
+      badges += `<span class="card-badge badge-list" title="In list: ${escHtml(names)}">L</span>`;
+    }
+    if (window._inventoryIds?.has(releaseId))
+      badges += `<span class="card-badge badge-inventory" title="In your inventory">I</span>`;
   }
   const favKey = `${type}:${item.id}`;
   const isFav = window._favoriteKeys?.has(favKey);
-  const favBtn = (type && item.id) ? `<button class="card-fav-btn${isFav ? " is-favorite" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,${item.id},'${type}')" title="${isFav ? "Remove from favorites" : "Add to favorites"}">${isFav ? "❤" : "♡"}</button>` : "";
+  if (type && item.id)
+    badges += `<span class="card-badge badge-favorite${isFav ? " is-favorite" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,${item.id},'${type}')" title="${isFav ? "Remove from favorites" : "Add to favorites"}">${isFav ? "♥" : "♡"}</span>`;
 
-  const thumbWrap = `<div class="card-thumb-wrap">${thumb}<div class="card-thumb-badges">${badges}</div>${favBtn}</div>`;
+  const thumbWrap = `<div class="card-thumb-wrap">${thumb}<div class="card-thumb-badges">${badges}</div></div>`;
 
   // Rating stars (only for collection/wantlist cards)
   const rating = item._rating ?? 0;
@@ -881,7 +890,7 @@ function toggleFavoriteFromCard(btn, discogsId, entityType) {
   } else {
     window._favoriteKeys.add(key);
     btn.classList.add("is-favorite");
-    btn.textContent = "❤";
+    btn.textContent = "♥";
     btn.title = "Remove from favorites";
   }
 

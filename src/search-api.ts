@@ -6,7 +6,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, updateCollectionNotes, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, updateCollectionNotes, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats } from "./db.js";
 import { startFreshSyncSchedule, runFreshSync } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -854,6 +854,20 @@ app.get("/api/user/lists", async (req, res) => {
   res.json({ lists });
 });
 
+// GET /api/user/lists/:id/items — items inside a specific list
+app.get("/api/user/lists/:id/items", async (req, res) => {
+  const userId = await getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const listId = parseInt(req.params.id, 10);
+    if (isNaN(listId)) { res.status(400).json({ error: "Invalid list ID" }); return; }
+    const items = await getListItems(userId, listId);
+    res.json({ items });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // GET /api/live/upcoming — serve upcoming events from DB
 app.get("/api/live/upcoming", async (_req, res) => {
   try {
@@ -1471,12 +1485,14 @@ app.get("/api/user/discogs-ids", async (req, res) => {
   const userId = await getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
-    const [collectionIds, wantlistIds, favoriteIds] = await Promise.all([
+    const [collectionIds, wantlistIds, favoriteIds, inventoryIds, listMembership] = await Promise.all([
       getCollectionIds(userId),
       getWantlistIds(userId),
       getFavoriteIds(userId),
+      getInventoryIds(userId),
+      getListMembership(userId),
     ]);
-    res.json({ collectionIds, wantlistIds, favoriteIds });
+    res.json({ collectionIds, wantlistIds, favoriteIds, inventoryIds, listMembership });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
@@ -3559,6 +3575,31 @@ async function syncUserExtras(userId: string, username: string, client: DiscogsC
       lists = items.length;
     }
     console.log(`[extras] ${username}: ${lists} lists synced`);
+
+    // Fetch items for each list (Discogs API: GET /lists/{id})
+    let totalListItems = 0;
+    for (const list of userLists) {
+      try {
+        await sleep(1200);
+        const lr = await extrasFetch(`https://api.discogs.com/lists/${list.id}`);
+        if (!lr.ok) { console.log(`[extras] ${username}: list ${list.id} items fetch ${lr.status}`); continue; }
+        const listData = await lr.json() as any;
+        const listItems: any[] = listData.items ?? [];
+        if (listItems.length) {
+          const parsed = listItems.map((item: any) => ({
+            discogsId:  item.id as number,
+            entityType: item.type ?? "release",
+            comment:    item.comment ?? undefined,
+            data:       item as object,
+          }));
+          await upsertListItems(userId, list.id, parsed);
+          totalListItems += parsed.length;
+        }
+      } catch (err) {
+        console.error(`[extras] ${username} list ${list.id} items error:`, err);
+      }
+    }
+    console.log(`[extras] ${username}: ${totalListItems} list items synced across ${lists} lists`);
   } catch (err) {
     console.error(`[extras] ${username} lists error:`, err);
   }

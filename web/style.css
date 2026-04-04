@@ -562,6 +562,11 @@ body {
   color: var(--accent);
   border-bottom-color: var(--accent);
 }
+.rtab-icon {
+  font-weight: 700;
+  font-size: 0.72rem;
+  margin-right: 0.15rem;
+}
 
 /* Lists grid */
 .lists-grid {
@@ -578,6 +583,7 @@ body {
   padding: 1rem;
   text-decoration: none;
   transition: border-color 0.15s;
+  cursor: pointer;
 }
 .list-card:hover { border-color: var(--accent); }
 .list-card-name { font-size: 0.95rem; color: var(--muted); font-weight: 600; margin-bottom: 0.3rem; }
@@ -2677,57 +2683,40 @@ body.modal-open  { overflow: hidden; }
 .card-thumb-wrap {
   position: relative;
 }
+/* ── Card badge strip (right edge, top-to-bottom fixed slots) ──────── */
 .card-thumb-badges {
-  position: absolute;
-  bottom: 4px;
-  right: 4px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-}
-.collection-badge {
-  font-size: 0.7rem;
-  background: rgba(26, 58, 26, 0.88);
-  color: #4caf50;
-  border: 1px solid #4caf50;
-  border-radius: 3px;
-  padding: 1px 5px;
-  line-height: 1.4;
-}
-.wantlist-badge {
-  font-size: 0.7rem;
-  background: rgba(50, 40, 20, 0.88);
-  color: #d4a843;
-  border: 1px solid #d4a843;
-  border-radius: 3px;
-  padding: 1px 5px;
-  line-height: 1.4;
-}
-/* Heart overlay on cards */
-.card-fav-btn {
   position: absolute;
   top: 4px;
   right: 4px;
-  background: rgba(0,0,0,0.55);
-  border: none;
-  border-radius: 50%;
-  width: 26px;
-  height: 26px;
-  cursor: pointer;
-  color: #888;
-  font-size: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  z-index: 2;
+}
+.card-badge {
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: color 0.15s, opacity 0.15s;
-  opacity: 0;
-  z-index: 2;
+  font-size: 0.65rem;
+  line-height: 1;
+  border: 1px solid;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(4px);
 }
-.card:hover .card-fav-btn,
-.card-fav-btn.is-favorite { opacity: 1; }
-.card-fav-btn:hover { color: #f06292; }
-.card-fav-btn.is-favorite { color: #f06292; opacity: 1; }
+.badge-collection { color: #4caf50; border-color: #4caf5066; }
+.badge-wantlist   { color: #d4a843; border-color: #d4a84366; }
+.badge-list       { color: #7ba4cc; border-color: #7ba4cc66; }
+.badge-inventory  { color: #b07ce8; border-color: #b07ce866; }
+.badge-favorite   { color: #f06292; border-color: #f0629266; cursor: pointer; }
+.badge-favorite:hover { color: #ff80ab; }
+/* Show fav badge on hover or when active */
+.badge-favorite { opacity: 0; transition: opacity 0.15s; }
+.card:hover .badge-favorite,
+.badge-favorite.is-favorite { opacity: 1; }
 
 /* Favorite button in modal */
 .modal-act-btn.is-favorite {
