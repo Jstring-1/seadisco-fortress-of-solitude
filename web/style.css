@@ -1663,13 +1663,13 @@ body.modal-open  { overflow: hidden; }
 .concert-source { font-size: 0.6rem; color: #6a5d4a; text-transform: uppercase; letter-spacing: 0.04em; }
 .concert-empty { padding: 2rem; text-align: center; color: #8a7d68; font-style: italic; }
 
-/* ── Version overlay (layered over master popup) ── */
+/* ── Version overlay (layered over master popup & series browser) ── */
 #version-overlay {
   display: none;
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.55);
-  z-index: 200;
+  z-index: 220;
   align-items: center;
   justify-content: center;
   padding: 1rem;
@@ -1757,8 +1757,8 @@ body.modal-open  { overflow: hidden; }
   object-fit: cover;
   border-radius: 3px;
 }
-.sr-grid .sr-title { color: var(--fg); cursor: pointer; }
-.sr-grid .sr-title:hover { color: var(--accent); }
+.sr-grid .sr-title { color: var(--fg); cursor: pointer; text-decoration: none; }
+.sr-grid .sr-title:hover { color: var(--accent); text-decoration: dotted underline; }
 .sr-pill-row { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.6rem; }
 .sr-pill {
   background: #2a2a2a;
@@ -2279,7 +2279,7 @@ body.modal-open  { overflow: hidden; }
 #random-records-grid .card .card-body { display: none; }
 #random-records-grid .card { border-radius: var(--radius); overflow: hidden; }
 #random-records-grid .card .card-thumb-wrap img { border-radius: 0; }
-#random-records-grid { gap: 0.5rem; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+#random-records-grid { gap: 0.5rem; }
 
 /* ── Results grid ── */
 #results {
