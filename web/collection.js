@@ -222,7 +222,7 @@ function switchView(view, skipPushState = false) {
     if (recordsWrap) recordsWrap.style.display = "";
     if (wantedWrap) wantedWrap.style.display = "none";
     document.getElementById("artist-alts").innerHTML = "";
-    const ws1 = document.getElementById("favorites-sample"); if (ws1) ws1.style.display = "none";
+    const ws1 = document.getElementById("random-records"); if (ws1) ws1.style.display = "none";
     switchRecordsTab(_cwTab || "collection", true);
   } else {
     if (searchView) searchView.style.display = "";
@@ -236,7 +236,7 @@ function switchView(view, skipPushState = false) {
       const grid = document.getElementById("results");
       grid.innerHTML = window._lastResults.map((item, i) => renderCard(item, i)).join("");
       document.getElementById("pagination").style.display = "none";
-      const ws = document.getElementById("favorites-sample"); if (ws) ws.style.display = "none";
+      const ws = document.getElementById("random-records"); if (ws) ws.style.display = "none";
       const blurb = document.getElementById("blurb"); if (blurb) blurb.style.display = "none";
       // Show load-more if there are more pages
       const lmWrap = document.getElementById("search-load-more");
@@ -252,11 +252,10 @@ function switchView(view, skipPushState = false) {
       if (searchReturned) searchReturned.textContent = "";
       const blurb = document.getElementById("blurb");
       if (blurb) blurb.style.display = "";
-      const ws = document.getElementById("favorites-sample");
+      const ws = document.getElementById("random-records");
       if (ws) ws.style.display = "";
-      // Refresh favorites in case user favorited items from another tab
-      if (typeof updateFavoritesHeading === "function") updateFavoritesHeading();
-      if (window._favoriteKeys?.size > 0 && typeof loadFavoritesGrid === "function") loadFavoritesGrid();
+      // Show random records
+      if (typeof showRandomRecords === "function") showRandomRecords();
       const artistAlts = document.getElementById("artist-alts");
       if (artistAlts) artistAlts.innerHTML = "";
     }
@@ -1090,10 +1089,7 @@ async function loadDiscogsIds() {
       }
     }
   } catch { /* ignore */ }
-  // Always update heading + load favorites grid (even if discogs-ids failed)
-  if (typeof updateFavoritesHeading === "function") updateFavoritesHeading();
-  if (window._favoriteKeys?.size > 0 && typeof loadFavoritesGrid === "function") {
-    loadFavoritesGrid();
-  }
+  // Load random records for search page default
+  if (typeof loadRandomRecords === "function") loadRandomRecords();
 }
 
