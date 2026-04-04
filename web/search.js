@@ -1,3 +1,23 @@
+// ── Masters+ merged sort ──────────────────────────────────────────────────
+function _sortMerged(arr, sortStr) {
+  const [sf, so] = sortStr.split(":");
+  const dir = so === "desc" ? -1 : 1;
+  const getVal = (item) => {
+    if (sf === "year") return parseInt(item.year) || 0;
+    if (sf === "title") return (item.title ?? "").toLowerCase();
+    if (sf === "label") {
+      const labels = item.label ?? [];
+      return (Array.isArray(labels) ? labels[0] ?? "" : labels).toLowerCase();
+    }
+    return String(item[sf] ?? "").toLowerCase();
+  };
+  arr.sort((a, b) => {
+    const va = getVal(a), vb = getVal(b);
+    if (sf === "year") return (va - vb) * dir;
+    return va < vb ? -1 * dir : va > vb ? 1 * dir : 0;
+  });
+}
+
 // ── Advanced panel toggle ─────────────────────────────────────────────────
 function toggleAdvanced(forceOpen) {
   const isAi = document.querySelector('input[name="result-type"]:checked')?.value === "ai";
@@ -238,7 +258,8 @@ async function doSearch(page = 1, skipPushState = false) {
             seen.add(r.id);
             return true;
           });
-          const merged = [...masters, ...uniqueOrphans];
+          let merged = [...masters, ...uniqueOrphans];
+          if (sort) _sortMerged(merged, sort);
           mRes._mergedData = {
             results: merged,
             pagination: {
@@ -347,7 +368,8 @@ async function doSearch(page = 1, skipPushState = false) {
               const orphans = releases.filter(r => !r.master_id || !masterIds.has(r.master_id));
               const seen = new Set(masters.map(m => m.id));
               const uniqueOrphans = orphans.filter(r => { if (seen.has(r.id)) return false; seen.add(r.id); return true; });
-              const merged = [...masters, ...uniqueOrphans];
+              let merged = [...masters, ...uniqueOrphans];
+              if (sort) _sortMerged(merged, sort);
               if (merged.length > 0) {
                 items = merged;
                 totalPages = Math.max(mD.pagination?.pages ?? 1, rD.pagination?.pages ?? 1);
