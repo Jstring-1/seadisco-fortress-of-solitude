@@ -927,11 +927,16 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
               const high = stats.highestPrice ? parseFloat(stats.highestPrice).toFixed(2) : null;
               const sellUrl = `https://www.discogs.com/sell/list?release_id=${escHtml(String(stats.releaseId))}`;
               const count = escHtml(String(stats.numForSale));
-              let priceBar = `<span style="color:var(--accent)">$${low}</span>`;
-              if (med) priceBar += `<span style="color:#555;margin:0 0.15rem"> ── </span><span style="color:#999">$${med}</span>`;
-              if (high) priceBar += `<span style="color:#555;margin:0 0.15rem"> ── </span><span style="color:#777">$${high}</span>`;
+              let priceBar;
+              if (med || high) {
+                priceBar = `<span style="color:var(--accent)">$${low}</span>`;
+                if (med) priceBar += `<span style="color:#555;margin:0 0.15rem"> ── </span><span style="color:#999">$${med}</span>`;
+                if (high) priceBar += `<span style="color:#555;margin:0 0.15rem"> ── </span><span style="color:#777">$${high}</span>`;
+              } else {
+                priceBar = `from <span style="color:var(--accent)">$${low}</span>`;
+              }
               return `<div style="font-size:0.75rem;margin-top:0.2rem">
-                <a href="${sellUrl}" target="_blank" rel="noopener" title="Browse listings on Discogs marketplace" style="color:#888;text-decoration:none">(${count}) :: ${priceBar} ↗</a>
+                <a href="${sellUrl}" target="_blank" rel="noopener" title="Browse ${count} listings on Discogs marketplace" style="color:#888;text-decoration:none">(${count}) :: ${priceBar} ↗</a>
               </div>`;
             })()
           : (stats?.numForSale === 0 ? `<div style="font-size:0.75rem;color:#555;margin-top:0.2rem">Not currently available on Discogs marketplace</div>` : "")
