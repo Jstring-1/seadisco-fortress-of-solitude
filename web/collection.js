@@ -62,8 +62,7 @@ function addNavTab(view) {
       el.removeAttribute("title");
       const rtab = el.dataset.rtab;
       if (rtab) {
-        el.href = "#";
-        el.onclick = (e) => { e.preventDefault(); _cwTab = rtab; switchView("records"); };
+        el.onclick = () => { _cwTab = rtab; switchView("records"); };
       }
     });
     // Enable swap-to-collection button
@@ -77,6 +76,36 @@ function addNavTab(view) {
       authTab.onclick = null;
     }
   }
+}
+
+// ── Logged-out sign-in prompts for bottom row tabs ──────────────────────
+function showRecordSignIn(rtab) {
+  document.getElementById("main-nav-tabs")?.classList.remove("mobile-open");
+  // Highlight the clicked tab
+  document.querySelectorAll(".nav-tab-top").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".nav-tab-bot").forEach(b => b.classList.toggle("active", b.dataset.rtab === rtab));
+
+  // Show search view with empty results
+  const searchView = document.getElementById("search-view");
+  const mainForm = document.getElementById("main-search-form");
+  const recordsWrap = document.getElementById("records-wrap");
+  if (searchView) searchView.style.display = "";
+  if (mainForm) mainForm.style.display = "none";
+  if (recordsWrap) recordsWrap.style.display = "none";
+
+  const msgs = {
+    collection: "Login or sign up to view and manage your collection",
+    wantlist:   "Login or sign up to view and manage your wantlist",
+    lists:      "Login or sign up to view your lists",
+    inventory:  "Login or sign up to view your inventory",
+    favorites:  "Login or sign up to choose your own favorites",
+  };
+  const grid = document.getElementById("results");
+  grid.innerHTML = renderEmptyState("🔒", msgs[rtab] || "Sign in to continue",
+    `<a href="/account" style="color:var(--accent);text-decoration:none">Sign in or create an account →</a>`);
+  document.getElementById("pagination").style.display = "none";
+  const blurb = document.getElementById("blurb"); if (blurb) blurb.style.display = "none";
+  if (typeof setCwStatus === "function") setCwStatus("");
 }
 
 // toggleMobileNav — now in shared.js

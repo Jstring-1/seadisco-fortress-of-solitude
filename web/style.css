@@ -2711,12 +2711,12 @@ body.modal-open  { overflow: hidden; }
   pointer-events: auto;
 }
 /* Fixed slot positions — each badge always lands in the same spot */
-.badge-collection { top: 4px;   color: #4caf50; border-color: #4caf5066; }
-.badge-wantlist   { top: 29px;  color: #d4a843; border-color: #d4a84366; }
-.badge-list       { top: 54px;  color: #7ba4cc; border-color: #7ba4cc66; }
-.badge-inventory  { top: 79px;  color: #b07ce8; border-color: #b07ce866; }
-.badge-favorite   { top: 104px; color: #f06292; border-color: #f0629266; cursor: pointer; }
-.badge-favorite:hover { color: #ff80ab; }
+.badge-collection { top: 4px;   color: #6ddf70; border-color: #6ddf7066; }
+.badge-wantlist   { top: 29px;  color: #f0c95c; border-color: #f0c95c66; }
+.badge-list       { top: 54px;  color: #a0ccf0; border-color: #a0ccf066; }
+.badge-inventory  { top: 79px;  color: #cda0f5; border-color: #cda0f566; }
+.badge-favorite   { top: 104px; color: #ff80ab; border-color: #ff80ab66; cursor: pointer; }
+.badge-favorite:hover { color: #ffaac8; }
 /* Show fav badge on hover or when active */
 .badge-favorite { opacity: 0; transition: opacity 0.15s; }
 .card:hover .badge-favorite,
