@@ -52,7 +52,7 @@
         </p>
         <p style="margin-bottom:0.6rem"><strong style="color:var(--text)">Here's all it takes:</strong></p>
         <ol style="color:var(--muted);font-size:0.9rem;line-height:1.9;padding-left:1.2rem;margin-bottom:1.2rem">
-          <li>Sign in below with your email (no password — just a one-time verification code)</li>
+          <li>Enter your email below (no password — just a one-time verification code; new or returning, same box)</li>
           <li>Click <strong style="color:var(--text)">Connect with Discogs</strong> and approve access on Discogs</li>
           <li>That's it — your collection is yours to browse, rate, and organize</li>
         </ol>
@@ -202,7 +202,7 @@ let clerk = null;
 function showSignInWidget(c) {
   document.getElementById("loading-section").style.display = "none";
   document.getElementById("signed-out-section").style.display = "block";
-  c.mountSignIn(document.getElementById("clerk-sign-in"), {
+  c.mountSignUp(document.getElementById("clerk-sign-in"), {
     afterSignInUrl: "/account",
     afterSignUpUrl: "/account",
     appearance: {
