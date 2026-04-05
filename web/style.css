@@ -2548,11 +2548,15 @@ body.modal-open  { overflow: hidden; }
 .modal-sale-toggle:hover { background: #2a2218; border-color: #6b4a18; color: #e8a84a; }
 .modal-sale-list {
   list-style: none;
-  margin: 0.4rem 0 0;
+  margin: 0;
   padding: 0;
-  display: flex;
+  display: none;
   flex-direction: column;
   gap: 0.35rem;
+}
+.modal-sale-list.is-open {
+  display: flex;
+  margin-top: 0.4rem;
 }
 .modal-sale-row {
   padding: 0.45rem 0.55rem;
