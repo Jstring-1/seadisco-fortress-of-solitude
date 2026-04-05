@@ -180,9 +180,8 @@ async function applyAuthState(clerk) {
     } catch { /* token check optional */ }
     // Load favorite IDs + collection/wantlist IDs for all signed-in users
     await loadDiscogsIds();                   // calls loadRandomRecords inside
-  } else {
-    loadRandomRecords();                      // signed out — shows owner's records
   }
+  // Signed-out: do not show Featured Favorites on the home page
 }
 
 initAuth({
