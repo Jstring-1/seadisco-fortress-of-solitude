@@ -1122,7 +1122,8 @@ async function openInstancesPopover(event, releaseId) {
   } catch {}
   if (!instances.length) return;
 
-  // Look up folder names
+  // Look up folder names (lazy-load cache if needed)
+  await ensureCollectionFoldersLoaded();
   const folderMap = new Map([[0, "All"], [1, "Uncategorized"]]);
   try {
     if (Array.isArray(window._collectionFolders)) {
@@ -1212,9 +1213,24 @@ function closeInstancesPopover() {
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeInstancesPopover(); });
 
 // Render a "×N copies" panel when the user owns more than one instance of a release.
+// Make sure window._collectionFolders is populated so folder IDs can be
+// resolved to human-readable names. Safe to call repeatedly; only fetches
+// once unless the cache is empty.
+async function ensureCollectionFoldersLoaded() {
+  if (Array.isArray(window._collectionFolders) && window._collectionFolders.length) return;
+  try {
+    const r = await apiFetch("/api/user/folders");
+    if (r.ok) {
+      const d = await r.json();
+      window._collectionFolders = Array.isArray(d.folders) ? d.folders : [];
+    }
+  } catch {}
+}
+
 // Clicking a row switches the modal's active instance (rating stars, remove
 // button, folder, notes all become scoped to that copy).
-function renderMultiInstancePanel(releaseId, instances, activeInstanceId) {
+async function renderMultiInstancePanel(releaseId, instances, activeInstanceId) {
+  await ensureCollectionFoldersLoaded();
   const existing = document.getElementById("modal-instances-panel");
   if (existing) existing.remove();
   if (!Array.isArray(instances) || instances.length < 1) return;
