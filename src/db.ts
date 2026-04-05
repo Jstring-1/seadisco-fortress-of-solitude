@@ -1806,18 +1806,57 @@ export async function getInventoryIds(clerkUserId: string): Promise<number[]> {
 }
 
 /** Returns { releaseId → [listingId, ...] } for modal/card linking. */
-export async function getInventoryListingIdsByRelease(clerkUserId: string): Promise<Record<number, number[]>> {
+export interface InventoryListingSummary {
+  id: number;
+  status: string | null;
+  price: number | null;
+  currency: string | null;
+  condition: string | null;
+  sleeve: string | null;
+  comments: string | null;
+  posted_at: string | null;
+}
+
+/**
+ * Returns a map of `releaseId → [InventoryListingSummary, ...]` for all of
+ * the user's cached marketplace listings. Used to hydrate the release-modal
+ * "Listed" tooltip and the inventory-link badges on cards without needing
+ * an extra round-trip.
+ */
+export async function getInventoryListingIdsByRelease(
+  clerkUserId: string
+): Promise<Record<number, InventoryListingSummary[]>> {
   const r = await getPool().query(
-    `SELECT discogs_release_id, listing_id FROM user_inventory
+    `SELECT discogs_release_id, listing_id, status, price_value, price_currency,
+            condition, sleeve_condition, data, posted_at
+     FROM user_inventory
      WHERE clerk_user_id = $1 AND discogs_release_id IS NOT NULL
      ORDER BY posted_at DESC NULLS LAST`,
     [clerkUserId]
   );
-  const map: Record<number, number[]> = {};
+  const map: Record<number, InventoryListingSummary[]> = {};
   for (const row of r.rows) {
     const rid = Number(row.discogs_release_id);
     if (!map[rid]) map[rid] = [];
-    map[rid].push(Number(row.listing_id));
+    // Comments live in the full listing JSON; pull them out defensively.
+    const comments = (() => {
+      try {
+        const d = row.data;
+        if (!d) return null;
+        const obj = typeof d === "string" ? JSON.parse(d) : d;
+        return obj?.comments ?? null;
+      } catch { return null; }
+    })();
+    map[rid].push({
+      id:        Number(row.listing_id),
+      status:    row.status ?? null,
+      price:     row.price_value != null ? Number(row.price_value) : null,
+      currency:  row.price_currency ?? null,
+      condition: row.condition ?? null,
+      sleeve:    row.sleeve_condition ?? null,
+      comments,
+      posted_at: row.posted_at ? new Date(row.posted_at).toISOString() : null,
+    });
   }
   return map;
 }
