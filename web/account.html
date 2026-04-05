@@ -15,7 +15,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎹</text></svg>">
   <link rel="manifest" href="/site.webmanifest">
   <meta name="theme-color" content="#080706">
-  <link rel="stylesheet" href="/style.css?v=20260404g" />
+  <link rel="stylesheet" href="/style.css?v=20260405e" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -29,7 +29,7 @@
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260404g"></script>
+<script src="/shared.js?v=20260405e"></script>
 <script>renderSharedHeader({ hideRecords: true });</script>
 
 <main>
@@ -66,23 +66,10 @@
       <div id="auth-section">
         <div class="user-email" id="user-email"></div>
 
-        <!-- Discogs profile card (shown when connected) -->
-        <div id="discogs-profile" style="display:none;margin-bottom:1.5rem">
-          <div style="display:flex;align-items:center;gap:1rem;padding:1rem;background:#0f0f0f;border:1px solid var(--border);border-radius:8px">
-            <img id="profile-avatar" src="" alt="" style="width:56px;height:56px;border-radius:50%;object-fit:cover;background:#1a1a1a;display:none" />
-            <div style="flex:1;min-width:0">
-              <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap">
-                <strong id="profile-username" style="color:var(--fg);font-size:0.95rem"></strong>
-                <span id="profile-auth-badge" style="font-size:0.65rem;padding:0.1rem 0.4rem;border-radius:3px;font-weight:600;text-transform:uppercase"></span>
-              </div>
-              <div id="profile-stats" style="font-size:0.78rem;color:var(--muted);margin-top:0.3rem"></div>
-            </div>
-            <div style="display:flex;flex-direction:column;gap:0.3rem;align-items:center">
-              <button onclick="refreshProfile(this)" title="Refresh profile" style="background:none;border:none;color:#555;cursor:pointer;font-size:0.9rem;padding:0.2rem" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">↻</button>
-              <button id="oauth-disconnect-btn" onclick="disconnectOAuth()" title="Disconnect your Discogs connection" style="display:none;background:none;border:1px solid #333;border-radius:4px;color:#888;cursor:pointer;font-size:0.7rem;padding:0.2rem 0.5rem" onmouseover="this.style.borderColor='#e05050';this.style.color='#e05050'" onmouseout="this.style.borderColor='#333';this.style.color='#888'">Disconnect</button>
-            </div>
-          </div>
-        </div>
+        <!-- Rich Discogs profile dashboard — populated by loadProfilePanel() below.
+             The old compact profile card was retired; this is the single source of
+             truth for profile display (avatar, stats, seller rating, currency, and
+             the OAuth disconnect button). -->
 
         <!-- OAuth connect button -->
         <div id="oauth-section" style="display:none;margin-bottom:1.5rem">
@@ -124,6 +111,14 @@
           </div>
         </div>
 
+        <div id="profile-panel" style="display:none"></div>
+
+        <div id="marketplace-scope-banner" style="display:none;background:rgba(200,140,40,0.15);border:1px solid rgba(200,140,40,0.6);color:#ffd89b;padding:0.6rem 0.85rem;border-radius:6px;margin:0.8rem 0;font-size:0.85rem">
+          <strong>Marketplace permission needed.</strong>
+          Your Discogs connection was rejected when trying to create, edit, or delete a listing or order. Reconnect via OAuth (or replace your personal access token) to re-enable selling features.
+          <button onclick="dismissMarketplaceBanner()" style="float:right;background:none;border:none;color:#ffd89b;cursor:pointer;font-size:1.1rem;line-height:1;padding:0 0 0 0.5rem">×</button>
+        </div>
+
         <div id="sync-section" style="display:none">
         <hr class="section-divider" />
           <h2 style="margin-bottom:0.4rem">Collection &amp; Wantlist</h2>
@@ -131,6 +126,17 @@
           <div style="display:flex;align-items:center;gap:0.7rem;flex-wrap:wrap">
             <button id="account-sync-btn" onclick="accountSync()" style="font-size:0.82rem;padding:0.3rem 0.9rem;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-weight:600">Sync Now</button>
           </div>
+        </div>
+
+        <div id="orders-section" style="display:none">
+          <hr class="section-divider" />
+          <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.5rem">
+            <h2 style="margin-bottom:0.4rem">Seller Orders <span id="orders-unread-badge" class="orders-unread-badge" style="display:none"></span></h2>
+            <button id="orders-refresh-btn" onclick="refreshOrders()" style="font-size:0.8rem;padding:0.3rem 0.8rem;background:var(--bg-elevated);border:1px solid var(--border);color:var(--text);border-radius:5px;cursor:pointer">↻ Refresh</button>
+          </div>
+          <div id="orders-sync-status" style="font-size:0.82rem;color:var(--muted);margin-bottom:0.5rem"></div>
+          <div id="orders-filters" style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-bottom:0.6rem"></div>
+          <div id="orders-list"></div>
         </div>
 
         <hr class="section-divider" />
@@ -179,7 +185,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script src="/modal.js?v=20260404g"></script>
+<script src="/modal.js?v=20260405e"></script>
+<script src="/orders.js?v=20260405f"></script>
 
 <!-- Feedback modal -->
 <div id="feedback-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;display:none;align-items:center;justify-content:center">
@@ -280,87 +287,22 @@ async function showAuthSection() {
       statusEl.textContent = "Connected via OAuth — PAT is optional.";
       statusEl.className = "token-status ok";
     }
-    loadProfile();
   } else if (data?.hasToken) {
     statusEl.textContent = `Saved token: ${data.masked}`;
     statusEl.className = "token-status ok";
     removeBtn.style.display = "block";
-    loadProfile(); // also load profile for PAT users
   } else {
     statusEl.textContent = "No token saved — connect with Discogs or paste a token below.";
     statusEl.className = "token-status";
   }
 
-  if (data?.hasToken) loadSyncStatus();
+  if (data?.hasToken) { loadProfilePanel(); loadSyncStatus(); if (typeof loadOrdersSection === "function") loadOrdersSection(); renderMarketplaceScopeBanner(); }
 
   // Clean up OAuth success redirect param (UI is already refreshed above)
   const urlParams = new URLSearchParams(location.search);
   if (urlParams.get("oauth") === "success") {
     history.replaceState({}, "", "/account");
   }
-}
-
-async function loadProfile() {
-  try {
-    const data = await apiFetch("/api/user/profile").then(r => r.json());
-    if (!data?.username) return;
-    renderProfile(data);
-  } catch {}
-}
-
-function renderProfile(data) {
-  const profileEl = document.getElementById("discogs-profile");
-  const avatarEl = document.getElementById("profile-avatar");
-  const usernameEl = document.getElementById("profile-username");
-  const badgeEl = document.getElementById("profile-auth-badge");
-  const statsEl = document.getElementById("profile-stats");
-
-  usernameEl.textContent = "@" + data.username;
-
-  if (data.avatarUrl) {
-    avatarEl.src = data.avatarUrl;
-    avatarEl.style.display = "";
-  }
-
-  // Auth method badge
-  const disconnectBtn = document.getElementById("oauth-disconnect-btn");
-  if (data.authMethod === "oauth") {
-    badgeEl.textContent = "OAuth";
-    badgeEl.style.background = "#1a3a1a";
-    badgeEl.style.color = "#4caf50";
-    if (disconnectBtn) disconnectBtn.style.display = "";
-  } else {
-    badgeEl.textContent = "Token";
-    badgeEl.style.background = "#2a2a1a";
-    badgeEl.style.color = "#e8a020";
-    if (disconnectBtn) disconnectBtn.style.display = "none";
-  }
-
-  // Stats line
-  const p = data.profileData;
-  if (p) {
-    const parts = [];
-    if (p.num_collection) parts.push(`${p.num_collection.toLocaleString()} collected`);
-    if (p.num_wantlist) parts.push(`${p.num_wantlist.toLocaleString()} wanted`);
-    if (p.num_for_sale) parts.push(`${p.num_for_sale.toLocaleString()} for sale`);
-    if (p.releases_rated) parts.push(`${p.releases_rated} rated`);
-    if (p.location) parts.push(p.location);
-    statsEl.textContent = parts.join(" · ");
-  }
-
-  profileEl.style.display = "";
-}
-
-async function refreshProfile(btn) {
-  btn.style.opacity = "0.3";
-  try {
-    const data = await apiFetch("/api/user/profile/refresh", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" }
-    }).then(r => r.json());
-    if (data?.username) renderProfile(data);
-  } catch {}
-  btn.style.opacity = "1";
 }
 
 async function startOAuth() {
@@ -385,6 +327,107 @@ async function startOAuth() {
     btn.disabled = false;
     btn.style.opacity = "1";
   }
+}
+
+// Loads the cached Discogs profile and renders a small dashboard panel
+// showing the user's avatar, name, location, join date and key stats.
+// Clicking the "Refresh" link re-syncs from Discogs (used when stats feel
+// stale — the endpoint already lazy-refreshes at 1h anyway).
+async function loadProfilePanel() {
+  const panel = document.getElementById("profile-panel");
+  if (!panel) return;
+  try {
+    const r = await apiFetch("/api/user/profile");
+    if (!r.ok) { panel.style.display = "none"; return; }
+    const p = await r.json();
+    const d = p.profileData || {};
+    if (!p.username) { panel.style.display = "none"; return; }
+    const name = d.name || p.username;
+    const avatar = p.avatarUrl || "";
+    const loc = d.location || "";
+    const joined = d.registered ? new Date(d.registered).toLocaleDateString(undefined, { year: "numeric", month: "short" }) : "";
+    const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+    const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString());
+    const stars = (n) => {
+      if (n == null) return "";
+      const v = Number(n);
+      if (!Number.isFinite(v)) return "";
+      const full = Math.round(v);
+      return "★".repeat(full) + "☆".repeat(Math.max(0, 5 - full));
+    };
+
+    const sellerRatings = d.seller_num_ratings ?? 0;
+    const sellerStars = d.seller_rating_stars != null ? stars(d.seller_rating_stars) : (d.seller_rating != null ? stars(d.seller_rating) : "");
+    const sellerText = sellerRatings > 0 ? `${sellerStars} (${sellerRatings} rating${sellerRatings === 1 ? "" : "s"})` : "No seller ratings yet";
+
+    const curr = p.currAbbr || d.curr_abbr || "USD";
+    const isOAuth = p.authMethod === "oauth";
+    const badgeHtml = isOAuth
+      ? `<span class="profile-badge profile-badge-oauth">OAuth</span>`
+      : `<span class="profile-badge profile-badge-pat">Token</span>`;
+    const disconnectHtml = isOAuth
+      ? `<button type="button" class="profile-disconnect" onclick="disconnectOAuth()" title="Disconnect your Discogs connection">Disconnect</button>`
+      : "";
+
+    panel.innerHTML = `
+      <div class="profile-panel">
+        <div class="profile-head">
+          ${avatar ? `<img class="profile-avatar" src="${esc(avatar)}" alt=""/>` : `<div class="profile-avatar profile-avatar-ph"></div>`}
+          <div class="profile-head-text">
+            <div class="profile-name">${esc(name)} ${badgeHtml}</div>
+            <div class="profile-sub">
+              <strong>@${esc(p.username)}</strong>
+              ${loc ? ` · ${esc(loc)}` : ""}
+              ${joined ? ` · joined ${esc(joined)}` : ""}
+            </div>
+            <div class="profile-sub">Marketplace currency: <strong>${esc(curr)}</strong></div>
+          </div>
+          <div class="profile-head-actions">
+            <button type="button" class="profile-refresh" onclick="refreshProfilePanel(this)" title="Re-sync profile from Discogs">↻</button>
+            ${disconnectHtml}
+          </div>
+        </div>
+        <div class="profile-stats">
+          <div class="profile-stat"><div class="profile-stat-num">${fmt(d.num_collection)}</div><div class="profile-stat-label">Collection</div></div>
+          <div class="profile-stat"><div class="profile-stat-num">${fmt(d.num_wantlist)}</div><div class="profile-stat-label">Wantlist</div></div>
+          <div class="profile-stat"><div class="profile-stat-num">${fmt(d.num_lists)}</div><div class="profile-stat-label">Lists</div></div>
+          <div class="profile-stat"><div class="profile-stat-num">${fmt(d.num_for_sale)}</div><div class="profile-stat-label">For sale</div></div>
+          <div class="profile-stat"><div class="profile-stat-num">${fmt(d.releases_rated)}</div><div class="profile-stat-label">Rated</div></div>
+        </div>
+        <div class="profile-seller">Seller: ${esc(sellerText)}</div>
+      </div>
+    `;
+    panel.style.display = "block";
+  } catch {
+    panel.style.display = "none";
+  }
+}
+
+async function refreshProfilePanel(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = "…"; }
+  try {
+    await apiFetch("/api/user/profile/refresh", { method: "POST", headers: { "Content-Type": "application/json" } });
+    await loadProfilePanel();
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "↻"; }
+  }
+}
+
+// Reads a session flag set by inventory-editor.js / orders.js whenever
+// Discogs rejects a marketplace write as unauthorized, and shows a
+// dismissible banner prompting the user to reconnect.
+function renderMarketplaceScopeBanner() {
+  const el = document.getElementById("marketplace-scope-banner");
+  if (!el) return;
+  let flag = "";
+  try { flag = sessionStorage.getItem("marketplaceScopeIssue") || ""; } catch {}
+  el.style.display = flag ? "block" : "none";
+}
+function dismissMarketplaceBanner() {
+  try { sessionStorage.removeItem("marketplaceScopeIssue"); } catch {}
+  const el = document.getElementById("marketplace-scope-banner");
+  if (el) el.style.display = "none";
 }
 
 async function disconnectOAuth() {

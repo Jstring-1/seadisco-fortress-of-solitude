@@ -77,6 +77,8 @@ export async function initDb() {
   await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS discogs_user_id INTEGER`);
   await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS discogs_avatar_url TEXT`);
   await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS discogs_profile_data JSONB`);
+  await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS discogs_curr_abbr TEXT`);
+  await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS profile_synced_at TIMESTAMP`);
   // Temporary table for OAuth request tokens (handshake flow)
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS oauth_request_tokens (
@@ -352,7 +354,7 @@ export async function initDb() {
     CREATE TABLE IF NOT EXISTS user_orders (
       id              SERIAL PRIMARY KEY,
       clerk_user_id   TEXT NOT NULL,
-      order_id        INTEGER NOT NULL,
+      order_id        TEXT NOT NULL,
       status          TEXT,
       buyer_username  TEXT,
       seller_username TEXT,
@@ -365,6 +367,28 @@ export async function initDb() {
       UNIQUE(clerk_user_id, order_id)
     )
   `);
+  // Discogs order IDs are strings like "username-NNN"; widen if existing column is numeric
+  await getPool().query(`ALTER TABLE user_orders ALTER COLUMN order_id TYPE TEXT`);
+  await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS orders_synced_at TIMESTAMP`);
+  await getPool().query(`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMPTZ`);
+
+  // ── Order messages (per-order thread, fetched on demand) ─────────────────
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_order_messages (
+      id            SERIAL PRIMARY KEY,
+      clerk_user_id TEXT NOT NULL,
+      order_id      TEXT NOT NULL,
+      message_order INTEGER NOT NULL,
+      subject       TEXT,
+      message       TEXT,
+      from_user     TEXT,
+      ts            TIMESTAMPTZ,
+      data          JSONB,
+      synced_at     TIMESTAMP DEFAULT NOW(),
+      UNIQUE(clerk_user_id, order_id, message_order)
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS user_order_messages_order_idx ON user_order_messages (clerk_user_id, order_id)`);
 
   // ── API request log (errors + successes for all external API calls) ────
   await getPool().query(`
@@ -789,28 +813,50 @@ export async function getAuthMethod(clerkUserId: string): Promise<string> {
 }
 
 // ── Discogs profile cache ────────────────────────────────────────────────
-export async function setDiscogsProfile(clerkUserId: string, userId: number, avatarUrl: string, profileData: object): Promise<void> {
+export async function setDiscogsProfile(
+  clerkUserId: string,
+  userId: number,
+  avatarUrl: string,
+  profileData: object & { curr_abbr?: string }
+): Promise<void> {
+  const currAbbr = (profileData as any)?.curr_abbr ?? null;
   await getPool().query(
-    `UPDATE user_tokens SET discogs_user_id = $2, discogs_avatar_url = $3, discogs_profile_data = $4 WHERE clerk_user_id = $1`,
-    [clerkUserId, userId, avatarUrl, JSON.stringify(profileData)]
+    `UPDATE user_tokens
+        SET discogs_user_id = $2,
+            discogs_avatar_url = $3,
+            discogs_profile_data = $4,
+            discogs_curr_abbr = COALESCE($5, discogs_curr_abbr),
+            profile_synced_at = NOW()
+      WHERE clerk_user_id = $1`,
+    [clerkUserId, userId, avatarUrl, JSON.stringify(profileData), currAbbr]
   );
 }
 
 export async function getDiscogsProfile(clerkUserId: string): Promise<{
-  username: string | null; userId: number | null; avatarUrl: string | null; profileData: any; authMethod: string;
+  username: string | null;
+  userId: number | null;
+  avatarUrl: string | null;
+  profileData: any;
+  authMethod: string;
+  currAbbr: string | null;
+  profileSyncedAt: Date | null;
 }> {
   const r = await getPool().query(
-    `SELECT discogs_username, discogs_user_id, discogs_avatar_url, discogs_profile_data, auth_method, oauth_connected_at FROM user_tokens WHERE clerk_user_id = $1`,
+    `SELECT discogs_username, discogs_user_id, discogs_avatar_url, discogs_profile_data,
+            auth_method, oauth_connected_at, discogs_curr_abbr, profile_synced_at
+       FROM user_tokens WHERE clerk_user_id = $1`,
     [clerkUserId]
   );
   const row = r.rows[0];
-  if (!row) return { username: null, userId: null, avatarUrl: null, profileData: null, authMethod: "pat" };
+  if (!row) return { username: null, userId: null, avatarUrl: null, profileData: null, authMethod: "pat", currAbbr: null, profileSyncedAt: null };
   return {
     username: row.discogs_username,
     userId: row.discogs_user_id,
     avatarUrl: row.discogs_avatar_url,
     profileData: row.discogs_profile_data,
     authMethod: row.auth_method ?? "pat",
+    currAbbr: row.discogs_curr_abbr,
+    profileSyncedAt: row.profile_synced_at,
   };
 }
 
@@ -1759,6 +1805,39 @@ export async function getInventoryIds(clerkUserId: string): Promise<number[]> {
   return r.rows.map(row => row.discogs_release_id);
 }
 
+/** Returns { releaseId → [listingId, ...] } for modal/card linking. */
+export async function getInventoryListingIdsByRelease(clerkUserId: string): Promise<Record<number, number[]>> {
+  const r = await getPool().query(
+    `SELECT discogs_release_id, listing_id FROM user_inventory
+     WHERE clerk_user_id = $1 AND discogs_release_id IS NOT NULL
+     ORDER BY posted_at DESC NULLS LAST`,
+    [clerkUserId]
+  );
+  const map: Record<number, number[]> = {};
+  for (const row of r.rows) {
+    const rid = Number(row.discogs_release_id);
+    if (!map[rid]) map[rid] = [];
+    map[rid].push(Number(row.listing_id));
+  }
+  return map;
+}
+
+export async function getInventoryItem(clerkUserId: string, listingId: number): Promise<any | null> {
+  const r = await getPool().query(
+    `SELECT listing_id, discogs_release_id, data, status, price_value, price_currency, condition, sleeve_condition, posted_at, synced_at
+     FROM user_inventory WHERE clerk_user_id = $1 AND listing_id = $2`,
+    [clerkUserId, listingId]
+  );
+  return r.rows[0] ?? null;
+}
+
+export async function deleteInventoryItem(clerkUserId: string, listingId: number): Promise<void> {
+  await getPool().query(
+    `DELETE FROM user_inventory WHERE clerk_user_id = $1 AND listing_id = $2`,
+    [clerkUserId, listingId]
+  );
+}
+
 export async function getListItemStats(clerkUserId: string): Promise<{ totalItems: number; listsWithItems: number }> {
   const r = await getPool().query(
     `SELECT COUNT(*)::int AS total_items, COUNT(DISTINCT list_id)::int AS lists_with_items FROM user_list_items WHERE clerk_user_id = $1`,
@@ -1767,11 +1846,11 @@ export async function getListItemStats(clerkUserId: string): Promise<{ totalItem
   return { totalItems: r.rows[0]?.total_items ?? 0, listsWithItems: r.rows[0]?.lists_with_items ?? 0 };
 }
 
-// ── Orders ───────────────────────────────────────────────────────────────
+// ── Orders (seller-side marketplace orders) ───────────────────────────────
 
 export async function upsertUserOrders(
   clerkUserId: string,
-  orders: Array<{ orderId: number; status?: string; buyerUsername?: string; sellerUsername?: string; totalValue?: number; totalCurrency?: string; itemCount?: number; createdAt?: Date; data?: object }>
+  orders: Array<{ orderId: string; status?: string; buyerUsername?: string; sellerUsername?: string; totalValue?: number; totalCurrency?: string; itemCount?: number; createdAt?: Date; data?: object }>
 ): Promise<void> {
   for (const order of orders) {
     await getPool().query(
@@ -1782,6 +1861,112 @@ export async function upsertUserOrders(
       [clerkUserId, order.orderId, order.status ?? null, order.buyerUsername ?? null, order.sellerUsername ?? null, order.totalValue ?? null, order.totalCurrency ?? "USD", order.itemCount ?? 0, order.createdAt ?? null, order.data ? JSON.stringify(order.data) : null]
     );
   }
+}
+
+export async function updateOrdersSyncedAt(clerkUserId: string): Promise<void> {
+  await getPool().query(
+    "UPDATE user_tokens SET orders_synced_at = NOW() WHERE clerk_user_id = $1",
+    [clerkUserId]
+  );
+}
+
+export async function getOrdersCount(clerkUserId: string): Promise<number> {
+  const r = await getPool().query(
+    "SELECT COUNT(*)::int AS cnt FROM user_orders WHERE clerk_user_id = $1",
+    [clerkUserId]
+  );
+  return r.rows[0]?.cnt ?? 0;
+}
+
+export async function getUserOrdersPage(
+  clerkUserId: string, page = 1, perPage = 25, filters?: Record<string, any>
+): Promise<{ items: any[]; total: number }> {
+  const conditions = ["clerk_user_id = $1"];
+  const params: any[] = [clerkUserId];
+  let idx = 2;
+  if (filters?.status) {
+    conditions.push(`status = $${idx}`);
+    params.push(filters.status); idx++;
+  }
+  if (filters?.q) {
+    conditions.push(`(buyer_username ILIKE $${idx} OR order_id ILIKE $${idx} OR data::text ILIKE $${idx})`);
+    params.push(`%${filters.q}%`); idx++;
+  }
+  const where = conditions.join(" AND ");
+  const countR = await getPool().query(`SELECT COUNT(*)::int AS cnt FROM user_orders WHERE ${where}`, params);
+  const total = countR.rows[0]?.cnt ?? 0;
+  const offset = (page - 1) * perPage;
+  params.push(perPage, offset);
+  const r = await getPool().query(
+    `SELECT order_id, status, buyer_username, seller_username, total_value, total_currency, item_count, created_at, data, synced_at, viewed_at,
+            CASE
+              WHEN (data->>'last_activity') IS NULL THEN false
+              WHEN viewed_at IS NULL THEN true
+              WHEN (data->>'last_activity')::timestamptz > viewed_at THEN true
+              ELSE false
+            END AS has_new
+     FROM user_orders WHERE ${where} ORDER BY created_at DESC NULLS LAST LIMIT $${idx} OFFSET $${idx + 1}`,
+    params
+  );
+  return { items: r.rows, total };
+}
+
+export async function getUserOrder(clerkUserId: string, orderId: string): Promise<any | null> {
+  const r = await getPool().query(
+    `SELECT order_id, status, buyer_username, seller_username, total_value, total_currency, item_count, created_at, data, synced_at, viewed_at
+     FROM user_orders WHERE clerk_user_id = $1 AND order_id = $2`,
+    [clerkUserId, orderId]
+  );
+  return r.rows[0] ?? null;
+}
+
+export async function markOrderViewed(clerkUserId: string, orderId: string): Promise<void> {
+  await getPool().query(
+    `UPDATE user_orders SET viewed_at = NOW() WHERE clerk_user_id = $1 AND order_id = $2`,
+    [clerkUserId, orderId]
+  );
+}
+
+export async function getUnreadOrdersCount(clerkUserId: string): Promise<number> {
+  const r = await getPool().query(
+    `SELECT COUNT(*)::int AS cnt FROM user_orders
+      WHERE clerk_user_id = $1
+        AND (data->>'last_activity') IS NOT NULL
+        AND (viewed_at IS NULL OR (data->>'last_activity')::timestamptz > viewed_at)`,
+    [clerkUserId]
+  );
+  return r.rows[0]?.cnt ?? 0;
+}
+
+export async function upsertOrderMessages(
+  clerkUserId: string,
+  orderId: string,
+  messages: Array<{ order: number; subject?: string; message?: string; fromUser?: string; ts?: Date; data?: object }>
+): Promise<void> {
+  if (!messages.length) return;
+  // Replace the whole thread for a given order (simpler than merging)
+  await getPool().query(
+    `DELETE FROM user_order_messages WHERE clerk_user_id = $1 AND order_id = $2`,
+    [clerkUserId, orderId]
+  );
+  for (const m of messages) {
+    await getPool().query(
+      `INSERT INTO user_order_messages (clerk_user_id, order_id, message_order, subject, message, from_user, ts, data, synced_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+       ON CONFLICT (clerk_user_id, order_id, message_order)
+       DO UPDATE SET subject = $4, message = $5, from_user = $6, ts = $7, data = $8, synced_at = NOW()`,
+      [clerkUserId, orderId, m.order, m.subject ?? null, m.message ?? null, m.fromUser ?? null, m.ts ?? null, m.data ? JSON.stringify(m.data) : null]
+    );
+  }
+}
+
+export async function getOrderMessages(clerkUserId: string, orderId: string): Promise<any[]> {
+  const r = await getPool().query(
+    `SELECT message_order, subject, message, from_user, ts, data
+     FROM user_order_messages WHERE clerk_user_id = $1 AND order_id = $2 ORDER BY message_order ASC`,
+    [clerkUserId, orderId]
+  );
+  return r.rows;
 }
 
 export async function upsertFreshRelease(r: {
@@ -2401,6 +2586,8 @@ export async function getUserCollectionStats(): Promise<{ users: any[]; global: 
       COALESCE(w.want_count, 0)::int AS wantlist_count,
       COALESCE(i.inv_count, 0)::int AS inventory_count,
       COALESCE(l.list_count, 0)::int AS list_count,
+      COALESCE(li.list_item_count, 0)::int AS list_item_count,
+      COALESCE(o.orders_count, 0)::int AS orders_count,
       c.oldest_added AS coll_oldest,
       c.newest_added AS coll_newest,
       c.top_genres,
@@ -2447,6 +2634,11 @@ export async function getUserCollectionStats(): Promise<{ users: any[]; global: 
       FROM user_list_items uli
       WHERE uli.clerk_user_id = u.clerk_user_id
     ) li ON true
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*)::int AS orders_count
+      FROM user_orders uo
+      WHERE uo.clerk_user_id = u.clerk_user_id
+    ) o ON true
     WHERE u.discogs_username IS NOT NULL
     ORDER BY c.coll_count DESC NULLS LAST
   `);
@@ -2457,6 +2649,7 @@ export async function getUserCollectionStats(): Promise<{ users: any[]; global: 
       (SELECT COUNT(*)::int FROM user_collection) AS total_collection,
       (SELECT COUNT(*)::int FROM user_wantlist) AS total_wantlist,
       (SELECT COUNT(*)::int FROM user_inventory) AS total_inventory,
+      (SELECT COUNT(*)::int FROM user_orders) AS total_orders,
       (SELECT COUNT(*)::int FROM user_list_items) AS total_list_items,
       (SELECT COUNT(DISTINCT discogs_release_id)::int FROM user_collection) AS unique_releases,
       (SELECT COUNT(DISTINCT discogs_release_id)::int FROM user_wantlist) AS unique_wants

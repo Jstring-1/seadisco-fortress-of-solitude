@@ -282,7 +282,11 @@ function renderSharedHeader(opts) {
     if (isSPA) {
       return `<button class="nav-tab-bot nav-rec-disabled" data-rtab="${rtab}" onclick="showRecordSignIn('${rtab}')">${coloredLabel}</button>`;
     }
-    return `<a class="nav-tab-bot" href="/account">${coloredLabel}</a>`;
+    // Off-SPA (e.g. /account): jump straight to the main-page records view with
+    // the correct sub-tab selected. Previously this was `href="/account"`, which
+    // was a silent no-op when clicked FROM /account.
+    const href = rtab === "collection" ? "/?view=records" : `/?view=records&tab=${rtab}`;
+    return `<a class="nav-tab-bot" href="${href}">${coloredLabel}</a>`;
   };
 
   // Auth tab (top row, rightmost)
@@ -292,8 +296,15 @@ function renderSharedHeader(opts) {
 
   const header = document.getElementById("site-header");
   if (!header) return;
+  // Site build/version tag shown as tiny grey text under the logo. Updated
+  // whenever the cache-bust version is bumped so the user can eyeball whether
+  // they're on the latest build without digging into devtools.
+  const SITE_VERSION = "build 2026.04.05e";
   header.innerHTML = `
-    <a href="${isSPA ? 'https://seadisco.com' : '/'}" class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
+    <div class="header-logo-wrap">
+      <a href="${isSPA ? 'https://seadisco.com' : '/'}" class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
+      <div class="header-version" title="Current build">${SITE_VERSION}</div>
+    </div>
     ${isSPA ? '<h1 class="sr-only">SeaDisco — Music Discovery Platform: Search, News, Concerts, Gear &amp; Collection</h1>' : ''}
     <nav id="main-nav">
       <button id="nav-hamburger" onclick="toggleMobileNav()" aria-label="Open navigation">

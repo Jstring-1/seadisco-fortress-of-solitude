@@ -6,12 +6,12 @@
   <title>SeaDisco — Admin</title>
   <meta name="robots" content="noindex, nofollow" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎹</text></svg>">
-  <link rel="stylesheet" href="/style.css?v=20260404g" />
+  <link rel="stylesheet" href="/style.css?v=20260405e" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260404g"></script>
+<script src="/shared.js?v=20260405e"></script>
 <script>renderSharedHeader({ hideRecords: true });</script>
 
 <main>
@@ -148,7 +148,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script src="/modal.js?v=20260404g"></script>
+<script src="/modal.js?v=20260405e"></script>
 
 <footer></footer>
 <script>renderSharedFooter();</script>
@@ -414,7 +414,7 @@ async function adminExtrasFetch() {
   btn.disabled = true; btn.textContent = "Fetching\u2026";
   try {
     await apiFetch("/api/admin/extras/fetch", { method: "POST" }).then(r => r.json());
-    statusEl.textContent = "Extras sync started (inventory + lists + list items) — running in background.";
+    statusEl.textContent = "Extras sync started (inventory + lists + list items + seller orders) — running in background.";
   } catch { statusEl.textContent = "Extras fetch failed."; }
   finally { btn.disabled = false; btn.textContent = "Fetch Extras"; }
 }
@@ -555,6 +555,7 @@ async function loadCollectionStats() {
       <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(g.total_collection ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">total collection items</span></div>
       <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(g.total_wantlist ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">total wantlist items</span></div>
       <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(g.total_inventory ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">inventory items</span></div>
+      <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(g.total_orders ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">seller orders</span></div>
       <div><span style="color:var(--accent);font-weight:700;font-size:1.1rem">${(g.total_list_items ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">list items</span></div>
       <div><span style="color:var(--text);font-weight:600">${(g.unique_releases ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">unique releases</span></div>
       <div><span style="color:var(--text);font-weight:600">${(g.unique_wants ?? 0).toLocaleString()}</span> <span style="color:#8a7d6b">unique wants</span></div>
@@ -569,6 +570,7 @@ async function loadCollectionStats() {
         <td style="text-align:right;color:var(--accent);font-weight:600">${(u.collection_count ?? 0).toLocaleString()}</td>
         <td style="text-align:right">${(u.wantlist_count ?? 0).toLocaleString()}</td>
         <td style="text-align:right">${(u.inventory_count ?? 0).toLocaleString()}</td>
+        <td style="text-align:right">${(u.orders_count ?? 0).toLocaleString()}</td>
         <td style="text-align:right">${(u.list_count ?? 0).toLocaleString()} <span style="color:#555;font-size:0.68rem">(${(u.list_item_count ?? 0).toLocaleString()})</span></td>
         <td style="white-space:nowrap">${fmtDate(u.coll_oldest)} \u2013 ${fmtDate(u.coll_newest)}</td>
         <td style="font-size:0.72rem;color:#8a7d6b;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${genres}">${genres || "\u2014"}</td>
@@ -580,7 +582,7 @@ async function loadCollectionStats() {
       <table class="api-log-table" style="font-size:0.78rem">
         <thead><tr>
           <th>User</th><th style="text-align:right">Collection</th><th style="text-align:right">Wantlist</th>
-          <th style="text-align:right">Inventory</th><th style="text-align:right">Lists</th>
+          <th style="text-align:right">Inventory</th><th style="text-align:right">Orders</th><th style="text-align:right">Lists</th>
           <th>Date Range</th><th>Top Genres</th><th>Top Styles</th>
         </tr></thead>
         <tbody>${userRows}</tbody>
