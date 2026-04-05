@@ -6,12 +6,12 @@
   <title>SeaDisco — Admin</title>
   <meta name="robots" content="noindex, nofollow" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎹</text></svg>">
-  <link rel="stylesheet" href="/style.css?v=20260405e" />
+  <link rel="stylesheet" href="/style.css?v=20260405g" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260405e"></script>
+<script src="/shared.js?v=20260405g"></script>
 <script>renderSharedHeader({ hideRecords: true });</script>
 
 <main>
@@ -148,7 +148,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script src="/modal.js?v=20260405e"></script>
+<script src="/modal.js?v=20260405g"></script>
 
 <footer></footer>
 <script>renderSharedFooter();</script>
@@ -238,7 +238,7 @@ async function loadAdminSyncStatus() {
       const authBadge = badges.join('');
       const lastActiveStr = u.lastActiveAt ? fmtRelativeTime(u.lastActiveAt) : "\u2014";
       const lastActiveColor = u.online ? "#4caf50" : "#777";
-      return `<div class="sync-row" style="padding:0.45rem 0;border-bottom:1px solid #1a1a1a;display:grid;grid-template-columns:140px 1fr 110px 1fr auto;gap:0.5rem 1rem;align-items:baseline;font-size:0.8rem">
+      return `<div class="sync-row">
         <div class="sync-row-header">
           <span style="color:var(--fg);font-weight:600;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${u.online ? '#4caf50' : '#444'};margin-right:0.4rem;vertical-align:middle" title="${u.online ? 'Active in last 24h' : 'Inactive 24h+'}"></span>@${u.username}${authBadge}</span>
           <span style="display:flex;gap:0.3rem;align-items:center;flex-shrink:0">
@@ -562,30 +562,52 @@ async function loadCollectionStats() {
     </div>`;
 
     const fmtDate = d => d ? new Date(d).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "\u2014";
-    const userRows = (data.users ?? []).map(u => {
-      const genres = (u.top_genres ?? []).slice(0, 5).join(", ");
-      const styles = (u.top_styles ?? []).slice(0, 5).join(", ");
+    const users = data.users ?? [];
+
+    // Table 1: per-user counts (collection / wantlist / inventory / orders / lists)
+    const countRows = users.map(u => `<tr>
+      <td style="color:var(--text);font-weight:600;white-space:nowrap">@${u.username}</td>
+      <td style="text-align:right;color:var(--accent);font-weight:600">${(u.collection_count ?? 0).toLocaleString()}</td>
+      <td style="text-align:right">${(u.wantlist_count ?? 0).toLocaleString()}</td>
+      <td style="text-align:right">${(u.inventory_count ?? 0).toLocaleString()}</td>
+      <td style="text-align:right">${(u.orders_count ?? 0).toLocaleString()}</td>
+      <td style="text-align:right">${(u.list_count ?? 0).toLocaleString()} <span style="color:#555;font-size:0.68rem">(${(u.list_item_count ?? 0).toLocaleString()})</span></td>
+    </tr>`).join("");
+
+    // Table 2: per-user taste (date range / top genres / top styles). More horizontal room.
+    const tasteRows = users.map(u => {
+      const genres = (u.top_genres ?? []).slice(0, 6).join(", ");
+      const styles = (u.top_styles ?? []).slice(0, 6).join(", ");
       return `<tr>
         <td style="color:var(--text);font-weight:600;white-space:nowrap">@${u.username}</td>
-        <td style="text-align:right;color:var(--accent);font-weight:600">${(u.collection_count ?? 0).toLocaleString()}</td>
-        <td style="text-align:right">${(u.wantlist_count ?? 0).toLocaleString()}</td>
-        <td style="text-align:right">${(u.inventory_count ?? 0).toLocaleString()}</td>
-        <td style="text-align:right">${(u.orders_count ?? 0).toLocaleString()}</td>
-        <td style="text-align:right">${(u.list_count ?? 0).toLocaleString()} <span style="color:#555;font-size:0.68rem">(${(u.list_item_count ?? 0).toLocaleString()})</span></td>
         <td style="white-space:nowrap">${fmtDate(u.coll_oldest)} \u2013 ${fmtDate(u.coll_newest)}</td>
-        <td style="font-size:0.72rem;color:#8a7d6b;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${genres}">${genres || "\u2014"}</td>
-        <td style="font-size:0.72rem;color:#8a7d6b;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${styles}">${styles || "\u2014"}</td>
+        <td style="font-size:0.74rem;color:#9a8a70" title="${genres}">${genres || "\u2014"}</td>
+        <td style="font-size:0.74rem;color:#9a8a70" title="${styles}">${styles || "\u2014"}</td>
       </tr>`;
     }).join("");
 
     el.innerHTML = globalHtml + `
-      <table class="api-log-table" style="font-size:0.78rem">
+      <div style="font-size:0.7rem;color:#8a7d6b;text-transform:uppercase;letter-spacing:0.05em;margin:0.4rem 0 0.3rem">Per-user counts</div>
+      <table class="api-log-table admin-stats-counts" style="font-size:0.78rem">
         <thead><tr>
-          <th>User</th><th style="text-align:right">Collection</th><th style="text-align:right">Wantlist</th>
-          <th style="text-align:right">Inventory</th><th style="text-align:right">Orders</th><th style="text-align:right">Lists</th>
-          <th>Date Range</th><th>Top Genres</th><th>Top Styles</th>
+          <th>User</th>
+          <th style="text-align:right">Collection</th>
+          <th style="text-align:right">Wantlist</th>
+          <th style="text-align:right">Inventory</th>
+          <th style="text-align:right">Orders</th>
+          <th style="text-align:right">Lists</th>
         </tr></thead>
-        <tbody>${userRows}</tbody>
+        <tbody>${countRows}</tbody>
+      </table>
+      <div style="font-size:0.7rem;color:#8a7d6b;text-transform:uppercase;letter-spacing:0.05em;margin:1rem 0 0.3rem">Per-user taste</div>
+      <table class="api-log-table admin-stats-taste" style="font-size:0.78rem">
+        <thead><tr>
+          <th>User</th>
+          <th>Date Range</th>
+          <th>Top Genres</th>
+          <th>Top Styles</th>
+        </tr></thead>
+        <tbody>${tasteRows}</tbody>
       </table>`;
   } catch { el.textContent = "Could not load collection stats."; }
 }
@@ -851,6 +873,48 @@ async function loadAdminItems() {
 .api-td-ep { color: #7a6d58; font-size: 0.7rem; word-break: break-all; max-width: 300px; }
 .api-td-err { color: #cc5544; font-size: 0.7rem; margin-top: 0.15rem; padding: 0.15rem 0.3rem; background: rgba(204,85,68,0.08); border-radius: 3px; }
 
+/* Collection stats tables — taste table lets genre/style lists wrap onto
+   multiple lines on desktop so the full lists are visible instead of being
+   truncated with an ellipsis. */
+.admin-stats-taste td:nth-child(3),
+.admin-stats-taste td:nth-child(4) {
+  white-space: normal;
+  word-break: break-word;
+}
+.admin-stats-counts td { white-space: nowrap; }
+
+/* Sync status rows: desktop 3-column layout filling full row width.
+   Column 1: username + per-user actions. Column 2: status text.
+   Column 3: last active + last sync times, right-aligned. */
+.sync-row {
+  display: grid;
+  grid-template-columns: minmax(240px, auto) minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 0.5rem 1.25rem;
+  align-items: baseline;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid #1a1a1a;
+  font-size: 0.8rem;
+}
+.sync-row .sync-row-header {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+.sync-row .sync-row-status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sync-row .sync-row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.2rem 0.8rem;
+  text-align: right;
+}
+
 /* ── Mobile responsive ── */
 @media (max-width: 700px) {
   .account-box {
@@ -878,6 +942,7 @@ async function loadAdminItems() {
     gap: 0.2rem !important;
     padding: 0.5rem 0 !important;
     font-size: 0.76rem !important;
+    grid-template-columns: none !important;
   }
   .sync-row-header {
     display: flex;
@@ -891,6 +956,7 @@ async function loadAdminItems() {
   .sync-row-meta {
     display: flex;
     flex-wrap: wrap;
+    justify-content: flex-start !important;
     gap: 0.2rem 0.6rem;
     font-size: 0.7rem;
   }

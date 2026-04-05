@@ -216,6 +216,7 @@ html { overflow-x: hidden; }
 
 
 :root {
+  color-scheme: dark;
   --bg:        #080706;
   --surface:   #15120e;
   --border:    #2e2518;
@@ -2516,6 +2517,102 @@ body.modal-open  { overflow: hidden; }
 }
 .modal-instances-header strong { color: var(--text); }
 .modal-instances-title { flex: 1; min-width: 0; }
+
+/* ── Sale listings section inside the instances panel ─────────────── */
+.modal-sale-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.7rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+.modal-sale-header strong { color: #e8a84a; }
+.modal-sale-title { flex: 1; min-width: 0; }
+.modal-sale-toggle {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.22rem 0.55rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.modal-sale-toggle:hover { background: #2a2218; border-color: #6b4a18; color: #e8a84a; }
+.modal-sale-list {
+  list-style: none;
+  margin: 0.4rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.modal-sale-row {
+  padding: 0.45rem 0.55rem;
+  background: rgba(232, 168, 74, 0.04);
+  border: 1px solid rgba(107, 74, 24, 0.5);
+  border-radius: 5px;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.modal-sale-row-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.modal-sale-price {
+  font-weight: 700;
+  color: #e8a84a;
+  font-size: 0.8rem;
+}
+.modal-sale-status {
+  font-size: 0.65rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+}
+.modal-sale-status.sale-status-live    { background: #1a3a1a; color: #6bcf8e; }
+.modal-sale-status.sale-status-draft   { background: #2a2418; color: #c0a468; }
+.modal-sale-status.sale-status-expired { background: #3a1a1a; color: #cf6b6b; }
+.modal-sale-status.sale-status-other   { background: #222;    color: #888;    }
+.modal-sale-date { color: #7a6d58; font-size: 0.68rem; }
+.modal-sale-edit {
+  background: #3a2a0d;
+  border: 1px solid #6b4a18;
+  color: #e8a84a;
+  font: inherit;
+  font-size: 0.68rem;
+  font-weight: 600;
+  padding: 0.22rem 0.6rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.modal-sale-edit:hover { background: #4a3612; border-color: #8a5e22; color: #f5c060; }
+.modal-sale-row-cond {
+  display: flex;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+  margin-top: 0.3rem;
+  font-size: 0.7rem;
+}
+.modal-sale-row-cond strong { color: var(--text); font-weight: 600; }
+.modal-sale-row-notes {
+  margin-top: 0.3rem;
+  font-size: 0.7rem;
+  font-style: italic;
+  color: #8a7d6b;
+  word-break: break-word;
+}
 .modal-add-copy-btn {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -2689,6 +2786,11 @@ body.modal-open  { overflow: hidden; }
 .modal-act-btn.active { border-color: var(--border); background: var(--surface); }
 .modal-act-btn.in-collection { background: #1a3a1a; border-color: #2a5a2a; color: #6bcf8e; }
 .modal-act-btn.in-collection:hover { background: #1f4a1f; border-color: #3a6a3a; }
+/* "Listed for sale" button — amber/gold to distinguish from the green
+   "Collected" state, since owning a copy and actively selling one are
+   meaningfully different user-actions. */
+.modal-act-btn.is-listed { background: #3a2a0d; border-color: #6b4a18; color: #e8a84a; }
+.modal-act-btn.is-listed:hover { background: #4a3612; border-color: #8a5e22; color: #f5c060; }
 .modal-act-btn.in-wantlist { background: #2a2510; border-color: #4a3f20; color: #d4a843; }
 .modal-act-btn.in-wantlist:hover { background: #3a3518; border-color: #5a4f2a; }
 .want-icon { filter: grayscale(1) opacity(0.5); }
@@ -3861,6 +3963,13 @@ footer {
   font-size: 0.9rem;
   font-family: inherit;
 }
+/* Force dark styling on the expanded option list. Chrome/Edge honor
+   color-scheme on :root, but Firefox still needs explicit option colors. */
+.inv-editor-label select option,
+.inv-editor-label select optgroup {
+  background: #15120e;
+  color: #e8dcc8;
+}
 .inv-editor-label textarea { resize: vertical; }
 .inv-editor-wide { grid-column: 1 / -1; }
 .inv-editor-checkbox {
@@ -4283,6 +4392,7 @@ footer {
   border: 1px solid var(--border, #2d2d33);
   border-radius: 12px;
   padding: 1rem 1.1rem;
+  margin-top: 1.25rem;
   margin-bottom: 1rem;
 }
 .profile-head {

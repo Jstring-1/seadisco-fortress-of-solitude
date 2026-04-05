@@ -971,7 +971,6 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
             })()
           : (stats?.numForSale === 0 ? `<div style="font-size:0.75rem;color:#555;margin-top:0.2rem">Not currently available on Discogs marketplace</div>` : "")
         }
-        ${(!isMaster && releaseId) ? `<a href="https://www.discogs.com/sell/post/${escHtml(String(releaseId))}" target="_blank" rel="noopener" title="Sell a copy of this release on Discogs" style="font-size:0.75rem;color:#888;text-decoration:none;margin-top:0.2rem;display:inline-block">Sell a copy ↗</a>` : ""}
         ${releaseId ? renderActionsImmediate(Number(releaseId), isMaster ? "master" : "release") : ""}
       </div>
     </div>
@@ -1036,8 +1035,9 @@ function renderActionsImmediate(rid, entityType = "release") {
   }
   const invListings = (window._inventoryListingIds && window._inventoryListingIds[rid]) || [];
   const hasListing = invListings.length > 0;
+  const firstListingId = hasListing ? (invListings[0].id ?? invListings[0]) : 0;
   const sellBtn = hasListing
-    ? `<button class="modal-act-btn in-collection" id="modal-sell-btn" onclick="openInventoryEditor({mode:'edit',listingId:${invListings[0]}})" title="Edit marketplace listing">Listed${invListings.length > 1 ? ` (${invListings.length})` : ''}</button>`
+    ? `<button class="modal-act-btn is-listed" id="modal-sell-btn" onclick="openInventoryEditor({mode:'edit',listingId:${firstListingId}})" title="Edit marketplace listing">Listed${invListings.length > 1 ? ` (${invListings.length})` : ''}</button>`
     : `<button class="modal-act-btn" id="modal-sell-btn" onclick="openInventoryEditor({mode:'create',releaseId:${rid}})" title="Create a marketplace listing for this release">Sell</button>`;
   return `<div id="modal-actions" class="modal-actions" data-release-id="${rid}" data-entity-type="${entityType}">
     <button class="modal-act-btn ${inCol ? 'in-collection' : ''}" id="modal-col-btn" onclick="toggleCollection(${rid})" title="${inCol ? 'Remove from collection' : 'Add to collection'}">
@@ -1235,11 +1235,55 @@ async function ensureCollectionFoldersLoaded() {
 
 // Clicking a row switches the modal's active instance (rating stars, remove
 // button, folder, notes all become scoped to that copy).
+// Render a single row inside the "copies for sale" list on the modal.
+function renderSaleListingRow(l) {
+  if (!l || typeof l !== "object") return "";
+  const id = Number(l.id ?? 0);
+  const status = l.status || "";
+  const statusClass = status === "For Sale" ? "sale-status-live"
+    : status === "Draft" ? "sale-status-draft"
+    : status === "Expired" ? "sale-status-expired"
+    : "sale-status-other";
+  const price = (l.price != null && l.currency)
+    ? `${l.currency} ${Number(l.price).toFixed(2)}`
+    : (l.price != null ? Number(l.price).toFixed(2) : "—");
+  const cond = l.condition || "—";
+  const sleeve = l.sleeve || "—";
+  const comments = l.comments ? String(l.comments) : "";
+  const posted = l.posted_at ? new Date(l.posted_at).toLocaleDateString() : "";
+  return `<li class="modal-sale-row">
+    <div class="modal-sale-row-top">
+      <span class="modal-sale-price">${escapeHtml(price)}</span>
+      <span class="modal-sale-status ${statusClass}">${escapeHtml(status || "—")}</span>
+      ${posted ? `<span class="modal-sale-date">${escapeHtml(posted)}</span>` : ""}
+      <span style="flex:1"></span>
+      <button type="button" class="modal-sale-edit" onclick="openInventoryEditor({mode:'edit',listingId:${id}})" title="Edit this listing">Edit</button>
+    </div>
+    <div class="modal-sale-row-cond">
+      <span><strong>Media:</strong> ${escapeHtml(cond)}</span>
+      <span><strong>Sleeve:</strong> ${escapeHtml(sleeve)}</span>
+    </div>
+    ${comments ? `<div class="modal-sale-row-notes">${escapeHtml(comments)}</div>` : ""}
+  </li>`;
+}
+
+function toggleSaleListingDetails(btn) {
+  const list = document.getElementById("modal-sale-list");
+  if (!list) return;
+  const isOpen = !list.hidden;
+  list.hidden = isOpen;
+  btn.setAttribute("aria-expanded", String(!isOpen));
+  btn.textContent = isOpen ? "Show details" : "Hide details";
+}
+
 async function renderMultiInstancePanel(releaseId, instances, activeInstanceId) {
   await ensureCollectionFoldersLoaded();
   const existing = document.getElementById("modal-instances-panel");
   if (existing) existing.remove();
-  if (!Array.isArray(instances) || instances.length < 1) return;
+  instances = Array.isArray(instances) ? instances : [];
+  const saleListings = (window._inventoryListingIds && window._inventoryListingIds[Number(releaseId)]) || [];
+  // Render the panel if the user owns any copy OR has the release listed for sale.
+  if (instances.length < 1 && saleListings.length < 1) return;
   const actionsEl = document.getElementById("modal-actions");
   if (!actionsEl) return;
   const activeId = Number(activeInstanceId ?? 0);
@@ -1287,17 +1331,43 @@ async function renderMultiInstancePanel(releaseId, instances, activeInstanceId) 
   const panel = document.createElement("div");
   panel.id = "modal-instances-panel";
   panel.className = "modal-instances-panel";
-  const headerText = multi
-    ? `You own <strong>${count}</strong> copies of this release`
-    : `You own <strong>1</strong> copy of this release${singleFolderChip}`;
-  const hint = multi ? `<span class="modal-instances-hint">— click a copy to edit it</span>` : "";
-  panel.innerHTML = `
-    <div class="modal-instances-header">
-      <span class="modal-instances-title">${headerText} ${hint}</span>
-      <button type="button" class="modal-add-copy-btn" onclick="openAddCopyFolderPicker(${Number(releaseId)})" title="Add another copy of this release to a folder">+ Add another copy</button>
-    </div>
-    ${multi ? `<ul class="modal-instances-list">${rows}</ul>` : ""}
-  `;
+
+  // Collection header block — only render if the user actually owns copies.
+  let collectionBlock = "";
+  if (count > 0) {
+    const headerText = multi
+      ? `You own <strong>${count}</strong> copies of this release`
+      : `You own <strong>1</strong> copy of this release${singleFolderChip}`;
+    const hint = multi ? `<span class="modal-instances-hint">— click a copy to edit it</span>` : "";
+    collectionBlock = `
+      <div class="modal-instances-header">
+        <span class="modal-instances-title">${headerText} ${hint}</span>
+        <button type="button" class="modal-add-copy-btn" onclick="openAddCopyFolderPicker(${Number(releaseId)})" title="Add another copy of this release to a folder">+ Add another copy</button>
+      </div>
+      ${multi ? `<ul class="modal-instances-list">${rows}</ul>` : ""}
+    `;
+  }
+
+  // Sale-listings block — shown if the user has at least one marketplace
+  // listing for this release, whether or not they also own a collection copy.
+  let saleBlock = "";
+  if (saleListings.length > 0) {
+    const saleCount = saleListings.length;
+    const saleHeader = saleCount === 1
+      ? `You have <strong>1</strong> copy for sale`
+      : `You have <strong>${saleCount}</strong> copies for sale`;
+    saleBlock = `
+      <div class="modal-sale-header">
+        <span class="modal-sale-title">${saleHeader}</span>
+        <button type="button" class="modal-sale-toggle" id="modal-sale-toggle" aria-expanded="false" onclick="toggleSaleListingDetails(this)">Show details</button>
+      </div>
+      <ul class="modal-sale-list" id="modal-sale-list" hidden>
+        ${saleListings.map(l => renderSaleListingRow(l)).join("")}
+      </ul>
+    `;
+  }
+
+  panel.innerHTML = collectionBlock + saleBlock;
   actionsEl.insertAdjacentElement("afterend", panel);
 
   // Folder chips → open move picker for that specific instance
@@ -1352,7 +1422,7 @@ function loadModalActions(releaseId, context) {
     const invListings = (window._inventoryListingIds && window._inventoryListingIds[rid]) || [];
     const hasListing = invListings.length > 0;
     const sellBtn = hasListing
-      ? `<button class="modal-act-btn in-collection" id="modal-sell-btn" onclick="openInventoryEditor({mode:'edit',listingId:${invListings[0]}})" title="Edit marketplace listing">Listed${invListings.length > 1 ? ` (${invListings.length})` : ''}</button>`
+      ? `<button class="modal-act-btn is-listed" id="modal-sell-btn" onclick="openInventoryEditor({mode:'edit',listingId:${(invListings[0].id ?? invListings[0])}})" title="Edit marketplace listing">Listed${invListings.length > 1 ? ` (${invListings.length})` : ''}</button>`
       : `<button class="modal-act-btn" id="modal-sell-btn" onclick="openInventoryEditor({mode:'create',releaseId:${rid}})" title="Create a marketplace listing for this release">Sell</button>`;
     el.innerHTML = `
       <button class="modal-act-btn ${inCol ? 'in-collection' : ''}" id="modal-col-btn" onclick="toggleCollection(${rid})" title="${inCol ? 'Remove from collection' : 'Add to collection'}">
@@ -1367,8 +1437,13 @@ function loadModalActions(releaseId, context) {
     `;
   }
   el.style.display = "";
-  // If in collection, fetch instance data for rating
-  if (entityType === "release" && inCol) loadModalInstanceData(rid);
+  // If in collection, fetch instance data for rating; if not in collection
+  // but listed for sale, still render the panel so sale info is visible.
+  if (entityType === "release") {
+    const invListings = (window._inventoryListingIds && window._inventoryListingIds[rid]) || [];
+    if (inCol) loadModalInstanceData(rid);
+    else if (invListings.length) renderMultiInstancePanel(rid, [], null);
+  }
 }
 
 function renderStars(rating, releaseId) {
