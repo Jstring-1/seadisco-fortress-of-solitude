@@ -2113,7 +2113,7 @@ export async function logApiRequest(opts: {
   } catch {}
 }
 
-export async function getApiRequestLog(opts?: { service?: string; successOnly?: boolean; errorsOnly?: boolean; hours?: number }): Promise<{ items: any[]; total: number }> {
+export async function getApiRequestLog(opts?: { service?: string; successOnly?: boolean; errorsOnly?: boolean; scheduledOnly?: boolean; hours?: number }): Promise<{ items: any[]; total: number }> {
   const params: any[] = [];
   let where = "WHERE 1=1";
   const hours = opts?.hours ?? 24;
@@ -2125,6 +2125,18 @@ export async function getApiRequestLog(opts?: { service?: string; successOnly?: 
   }
   if (opts?.successOnly) where += " AND success = true";
   if (opts?.errorsOnly) where += " AND success = false";
+  if (opts?.scheduledOnly) {
+    // Match requests originating from scheduled/cron jobs. Services that
+    // are only called from scheduled jobs (rss, youtube, listenbrainz) plus
+    // specific context markers for other scheduled tasks.
+    where += ` AND (
+      service IN ('rss', 'youtube', 'listenbrainz')
+      OR context LIKE 'scheduled %'
+      OR context = 'profile-refresh'
+      OR context = 'price-update'
+      OR context LIKE 'extras: %'
+    )`;
+  }
 
   const r = await getPool().query(
     `SELECT * FROM api_request_log ${where} ORDER BY created_at DESC`,

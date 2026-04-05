@@ -3392,8 +3392,9 @@ app.get("/api/admin/api-log", async (req, res) => {
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   const service = req.query.service as string | undefined;
   const errorsOnly = req.query.errors === "true";
+  const scheduledOnly = req.query.scheduled === "true";
   const hours = Math.min(parseInt(req.query.hours as string) || 24, 168); // max 7 days
-  const result = await getApiRequestLog({ service: service || undefined, errorsOnly, hours });
+  const result = await getApiRequestLog({ service: service || undefined, errorsOnly, scheduledOnly, hours });
   res.json(result);
 });
 
