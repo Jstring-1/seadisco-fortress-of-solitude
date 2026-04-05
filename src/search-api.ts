@@ -6,7 +6,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, updateCollectionNotes, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId } from "./db.js";
 import { startFreshSyncSchedule, runFreshSync } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -632,7 +632,7 @@ async function runBackgroundSync(userId: string, client: DiscogsClient, username
     await updateSyncProgress(userId, "syncing", 0, estimatedTotal);
 
     if (syncCollection) {
-      const allCollectionIds: number[] = [];
+      const allInstanceIds: number[] = [];
       for (let page = 1; ; page++) {
         if (_syncAbort || _thisSyncAbort) { console.log(`Sync ${username}: aborted`); await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted"); _syncDone = true; return; }
         if (page > 1) await delay(1200); // 1.2s pacing — Discogs allows 60/min
@@ -653,16 +653,17 @@ async function runBackgroundSync(userId: string, client: DiscogsClient, username
         })).filter(i => i.id);
 
         await upsertCollectionItems(userId, items);
-        allCollectionIds.push(...items.map(i => i.id));
+        // Track every instance key we saw (synthetic -releaseId for items missing instance_id)
+        for (const i of items) allInstanceIds.push(i.instanceId ?? -i.id);
         totalSynced += items.length;
         lastProgressAt = Date.now();
         await updateSyncProgress(userId, "syncing", totalSynced, estimatedTotal);
         if (releases.length < 500) break;
       }
-      // Remove local items that are no longer in Discogs collection
-      if (allCollectionIds.length > 0) {
-        const pruned = await pruneCollectionItems(userId, allCollectionIds);
-        if (pruned > 0) console.log(`Sync ${username}: pruned ${pruned} stale collection items`);
+      // Remove local instances that are no longer in Discogs collection
+      if (allInstanceIds.length > 0) {
+        const pruned = await pruneCollectionItems(userId, allInstanceIds);
+        if (pruned > 0) console.log(`Sync ${username}: pruned ${pruned} stale collection instances`);
       }
       await updateCollectionSyncedAt(userId);
 
@@ -1112,8 +1113,13 @@ async function requireUsernameAndToken(req: express.Request, res: express.Respon
 app.post("/api/user/collection/add", express.json(), async (req, res) => {
   const ctx = await requireUsernameAndToken(req, res);
   if (!ctx) return;
-  const { releaseId, folderId = 1 } = req.body ?? {};
+  const { releaseId } = req.body ?? {};
   if (!releaseId) { res.status(400).json({ error: "releaseId required" }); return; }
+  // Resolve folder: body.folderId wins; otherwise fall back to the user's default.
+  let folderId = Number(req.body?.folderId);
+  if (!Number.isFinite(folderId) || folderId < 1) {
+    folderId = await getDefaultAddFolderId(ctx.userId);
+  }
   try {
     const url = `https://api.discogs.com/users/${encodeURIComponent(ctx.username)}/collection/folders/${folderId}/releases/${releaseId}`;
     const r = await loggedFetch("discogs", url, { method: "POST", headers: { ...ctx.client.buildHeaders("POST", url), "Content-Type": "application/json" }, context: "collection-add" });
@@ -1132,7 +1138,42 @@ app.post("/api/user/collection/add", express.json(), async (req, res) => {
       instanceId: data.instance_id ?? null,
       notes: [],
     }]);
-    res.json({ ok: true, instanceId: data.instance_id ?? null });
+    // Look up folder name for the client-side toast
+    let folderName: string | null = null;
+    try {
+      if (folderId === 1) folderName = "Uncategorized";
+      else {
+        const folders = await getCollectionFolderList(ctx.userId);
+        folderName = folders.find((f: any) => Number(f.folderId) === folderId)?.name ?? null;
+      }
+    } catch {}
+    res.json({ ok: true, instanceId: data.instance_id ?? null, folderId, folderName });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/user/settings/default-folder — returns the user's default add-to-collection folder id
+app.get("/api/user/settings/default-folder", async (req, res) => {
+  const userId = await getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const folderId = await getDefaultAddFolderId(userId);
+    res.json({ folderId });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// PUT /api/user/settings/default-folder — update the user's default add-to-collection folder id
+app.put("/api/user/settings/default-folder", express.json(), async (req, res) => {
+  const userId = await getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const folderId = Number(req.body?.folderId);
+  if (!Number.isFinite(folderId) || folderId < 1) { res.status(400).json({ error: "folderId required (>=1)" }); return; }
+  try {
+    await setDefaultAddFolderId(userId, folderId);
+    res.json({ ok: true, folderId });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
@@ -1151,8 +1192,8 @@ app.post("/api/user/collection/remove", express.json(), async (req, res) => {
       const text = await r.text();
       res.status(r.status).json({ error: `Discogs error: ${text}` }); return;
     }
-    // Remove from local DB
-    await deleteCollectionItem(ctx.userId, releaseId);
+    // Remove just this instance from local DB
+    await deleteCollectionItem(ctx.userId, releaseId, instanceId);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -1221,8 +1262,8 @@ app.post("/api/user/collection/rating", express.json(), async (req, res) => {
       const text = await r.text();
       res.status(r.status).json({ error: `Discogs error: ${text}` }); return;
     }
-    // Update local DB
-    await updateCollectionRating(ctx.userId, releaseId, rating);
+    // Update local DB (instance-scoped)
+    await updateCollectionRating(ctx.userId, releaseId, rating, instanceId);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -1251,6 +1292,133 @@ app.post("/api/user/folders/create", express.json(), async (req, res) => {
   }
 });
 
+// Helper: throttle loop for Discogs API calls (~55/min to stay under the 60/min limit)
+const DISCOGS_CALL_DELAY_MS = 1100;
+const _sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+// POST /api/user/folders/rename — rename an existing collection folder
+app.post("/api/user/folders/rename", express.json(), async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  const { folderId, name } = req.body ?? {};
+  if (folderId == null || !name?.trim()) { res.status(400).json({ error: "folderId and name required" }); return; }
+  const fid = Number(folderId);
+  if (fid === 0 || fid === 1) { res.status(400).json({ error: "Cannot rename the built-in 'All' or 'Uncategorized' folders" }); return; }
+  try {
+    const url = `https://api.discogs.com/users/${encodeURIComponent(ctx.username)}/collection/folders/${fid}`;
+    const r = await loggedFetch("discogs", url, {
+      method: "POST",
+      headers: { ...ctx.client.buildHeaders("POST", url), "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim() }),
+      context: "folder-rename",
+    });
+    if (!r.ok && r.status !== 200 && r.status !== 204) {
+      const text = await r.text();
+      res.status(r.status).json({ error: `Discogs error: ${text}` }); return;
+    }
+    await renameCollectionFolder(ctx.userId, fid, name.trim());
+    res.json({ ok: true, folderId: fid, name: name.trim() });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/user/folders/delete — delete an empty collection folder
+// If force=true and the folder has items, we first move every item to folder 1
+// (Uncategorized) so Discogs will permit the delete.
+app.post("/api/user/folders/delete", express.json(), async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  const { folderId, force } = req.body ?? {};
+  if (folderId == null) { res.status(400).json({ error: "folderId required" }); return; }
+  const fid = Number(folderId);
+  if (fid === 0 || fid === 1) { res.status(400).json({ error: "Cannot delete the built-in 'All' or 'Uncategorized' folders" }); return; }
+  try {
+    // If forcing and the folder has contents, move them to Uncategorized first
+    if (force) {
+      const contents = await getFolderContents(ctx.userId, fid);
+      // Safety cap: bulk delete through the API is slow (Discogs 60/min limit). For
+      // very large folders, ask the user to move items manually or use the Discogs
+      // website directly.
+      if (contents.length > 150) {
+        res.status(400).json({ error: `This folder contains ${contents.length} items. For folders this large, please move items in smaller batches or use the Discogs website.` });
+        return;
+      }
+      for (let i = 0; i < contents.length; i++) {
+        const item = contents[i];
+        if (!item.instanceId) continue; // skip synthetic legacy rows (shouldn't happen post-migration)
+        if (i > 0) await _sleep(DISCOGS_CALL_DELAY_MS);
+        const moveUrl = `https://api.discogs.com/users/${encodeURIComponent(ctx.username)}/collection/folders/${fid}/releases/${item.releaseId}/instances/${item.instanceId}`;
+        const mr = await loggedFetch("discogs", moveUrl, {
+          method: "POST",
+          headers: { ...ctx.client.buildHeaders("POST", moveUrl), "Content-Type": "application/json" },
+          body: JSON.stringify({ folder_id: 1 }),
+          context: "folder-delete-move",
+        });
+        if (!mr.ok && mr.status !== 204) {
+          const text = await mr.text();
+          // Persist whatever moves we already made locally so the state stays consistent
+          await moveAllCollectionItemsBetweenFolders(ctx.userId, fid, 1);
+          res.status(mr.status).json({ error: `Failed to move item during folder delete: ${text}` }); return;
+        }
+      }
+      await moveAllCollectionItemsBetweenFolders(ctx.userId, fid, 1);
+    }
+
+    const url = `https://api.discogs.com/users/${encodeURIComponent(ctx.username)}/collection/folders/${fid}`;
+    const r = await loggedFetch("discogs", url, {
+      method: "DELETE",
+      headers: ctx.client.buildHeaders("DELETE", url),
+      context: "folder-delete",
+    });
+    if (!r.ok && r.status !== 204) {
+      const text = await r.text();
+      res.status(r.status).json({ error: `Discogs error: ${text}` }); return;
+    }
+    await deleteCollectionFolder(ctx.userId, fid);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/user/folders/move-all — move every item from one folder to another
+app.post("/api/user/folders/move-all", express.json(), async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  const { fromFolderId, toFolderId } = req.body ?? {};
+  if (fromFolderId == null || toFolderId == null) { res.status(400).json({ error: "fromFolderId and toFolderId required" }); return; }
+  const from = Number(fromFolderId);
+  const to   = Number(toFolderId);
+  if (from === 0) { res.status(400).json({ error: "Cannot move items out of the virtual 'All' folder" }); return; }
+  if (from === to) { res.json({ ok: true, moved: 0 }); return; }
+  try {
+    const contents = await getFolderContents(ctx.userId, from);
+    if (contents.length > 150) {
+      res.status(400).json({ error: `This folder contains ${contents.length} items. For folders this large, please move items in smaller batches.` });
+      return;
+    }
+    let moved = 0;
+    for (let i = 0; i < contents.length; i++) {
+      const item = contents[i];
+      if (!item.instanceId) continue;
+      if (i > 0) await _sleep(DISCOGS_CALL_DELAY_MS);
+      const moveUrl = `https://api.discogs.com/users/${encodeURIComponent(ctx.username)}/collection/folders/${from}/releases/${item.releaseId}/instances/${item.instanceId}`;
+      const mr = await loggedFetch("discogs", moveUrl, {
+        method: "POST",
+        headers: { ...ctx.client.buildHeaders("POST", moveUrl), "Content-Type": "application/json" },
+        body: JSON.stringify({ folder_id: to }),
+        context: "folder-move-all",
+      });
+      if (mr.ok || mr.status === 204) moved++;
+    }
+    await moveAllCollectionItemsBetweenFolders(ctx.userId, from, to);
+    res.json({ ok: true, moved });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // POST /api/user/collection/move — move item to different folder
 app.post("/api/user/collection/move", express.json(), async (req, res) => {
   const ctx = await requireUsernameAndToken(req, res);
@@ -1266,7 +1434,7 @@ app.post("/api/user/collection/move", express.json(), async (req, res) => {
       const text = await r.text();
       res.status(r.status).json({ error: `Discogs error: ${text}` }); return;
     }
-    await updateCollectionFolder(ctx.userId, releaseId, toFolderId);
+    await updateCollectionFolder(ctx.userId, releaseId, toFolderId, instanceId);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -1286,7 +1454,7 @@ app.post("/api/user/collection/notes", express.json(), async (req, res) => {
       const text = await r.text();
       res.status(r.status).json({ error: `Discogs error: ${text}` }); return;
     }
-    // Update local DB notes — merge into existing JSONB notes array
+    // Update local DB notes — merge into existing JSONB notes array (instance-scoped)
     const instance = await getCollectionInstance(ctx.userId, releaseId);
     const currentNotes = instance?.notes ?? [];
     const noteIdx = currentNotes.findIndex((n: any) => n.field_id === fieldId);
@@ -1295,7 +1463,7 @@ app.post("/api/user/collection/notes", express.json(), async (req, res) => {
     } else {
       currentNotes.push({ field_id: fieldId, value: value ?? "" });
     }
-    await updateCollectionNotes(ctx.userId, releaseId, currentNotes);
+    await updateCollectionNotes(ctx.userId, releaseId, currentNotes, instanceId);
     res.json({ ok: true });
   } catch (e) {
     res.status(500).json({ error: String(e) });
@@ -1327,6 +1495,29 @@ app.get("/api/user/collection/instance", async (req, res) => {
     const instance = await getCollectionInstance(userId, releaseId);
     if (!instance) { res.json({ found: false }); return; }
     res.json({ found: true, instance_id: instance.instanceId, folder_id: instance.folderId, rating: instance.rating, notes: instance.notes });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/user/collection/instances — list every stored instance of a release
+app.get("/api/user/collection/instances", async (req, res) => {
+  const userId = await getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const releaseId = Number(req.query.releaseId);
+  if (!releaseId) { res.status(400).json({ error: "releaseId required" }); return; }
+  try {
+    const instances = await getCollectionInstances(userId, releaseId);
+    res.json({
+      count: instances.length,
+      instances: instances.map(i => ({
+        instance_id: i.instanceId,
+        folder_id:   i.folderId,
+        rating:      i.rating,
+        notes:       i.notes,
+        added_at:    i.addedAt,
+      })),
+    });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
@@ -1485,14 +1676,16 @@ app.get("/api/user/discogs-ids", async (req, res) => {
   const userId = await getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
-    const [collectionIds, wantlistIds, favoriteIds, inventoryIds, listMembership] = await Promise.all([
+    const [collectionIds, wantlistIds, favoriteIds, inventoryIds, listMembership, collectionInstanceCounts, defaultAddFolderId] = await Promise.all([
       getCollectionIds(userId),
       getWantlistIds(userId),
       getFavoriteIds(userId),
       getInventoryIds(userId),
       getListMembership(userId),
+      getCollectionMultiInstanceCounts(userId),
+      getDefaultAddFolderId(userId),
     ]);
-    res.json({ collectionIds, wantlistIds, favoriteIds, inventoryIds, listMembership });
+    res.json({ collectionIds, wantlistIds, favoriteIds, inventoryIds, listMembership, collectionInstanceCounts, defaultAddFolderId });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }

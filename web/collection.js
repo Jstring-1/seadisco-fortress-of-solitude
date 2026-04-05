@@ -287,15 +287,396 @@ async function loadCollectionFolders() {
   try {
     const data = await apiFetch("/api/user/folders").then(r => r.json());
     const folders = data.folders ?? [];
+    // Cache globally so the modal's move-dropdown and multi-instance panel can look up names
+    window._collectionFolders = folders;
     if (!folders.length) { el.style.display = "none"; return; }
     el.style.display = "";
     const totalCount = folders.reduce((sum, f) => sum + (f.count ?? 0), 0);
-    let html = `<span class="pill cw-folder-pill active" data-folder="0" onclick="filterByFolder(0)" title="All folders (${totalCount} items)">All</span>`;
+    // Folder-manager icon button — opens the manage-folders popover
+    let html = `<button type="button" class="cw-folder-manage-btn" onclick="openFolderManager()" title="Manage folders" aria-label="Manage folders">📁</button>`;
+    html += `<span class="pill cw-folder-pill active" data-folder="0" onclick="filterByFolder(0)" title="All folders (${totalCount} items)">All</span>`;
     html += folders.map(f =>
       `<span class="pill cw-folder-pill" data-folder="${f.folderId}" onclick="filterByFolder(${f.folderId})" title="Folder: ${escHtml(f.name)} (${f.count} items)">${escHtml(f.name)}</span>`
     ).join("");
     el.innerHTML = html;
   } catch { el.style.display = "none"; }
+}
+
+// ── Folder Manager modal ──────────────────────────────────────────────────
+async function openFolderManager() {
+  closeFolderManager();
+  const folders = Array.isArray(window._collectionFolders) ? window._collectionFolders : [];
+
+  const overlay = document.createElement("div");
+  overlay.id = "folder-manager-overlay";
+  overlay.className = "folder-manager-overlay";
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) closeFolderManager(); });
+
+  const rows = folders.map(f => {
+    const fid = Number(f.folderId);
+    const locked = fid === 0 || fid === 1;
+    return `<tr data-folder-id="${fid}">
+      <td class="fm-name">
+        <span class="fm-name-display">${escHtml(f.name)}</span>
+        <input type="text" class="fm-name-input" value="${escHtml(f.name)}" style="display:none" />
+      </td>
+      <td class="fm-count">${f.count}</td>
+      <td class="fm-actions">
+        ${locked
+          ? `<span class="fm-locked" title="Built-in folder — cannot be modified">—</span>`
+          : `<button type="button" class="fm-btn fm-btn-edit" onclick="fmStartRename(${fid})" title="Rename">✎</button>
+             <button type="button" class="fm-btn fm-btn-save" onclick="fmSaveRename(${fid})" style="display:none" title="Save">✓</button>
+             <button type="button" class="fm-btn fm-btn-cancel" onclick="fmCancelRename(${fid})" style="display:none" title="Cancel">✕</button>
+             <button type="button" class="fm-btn fm-btn-del" onclick="fmDeleteFolder(${fid},'${escHtml(f.name).replace(/'/g, "\\'")}',${f.count})" title="Delete">🗑</button>`
+        }
+      </td>
+    </tr>`;
+  }).join("");
+
+  // Default-add-to folder picker
+  const currentDefault = Number(window._defaultAddFolderId) || 1;
+  const defaultOptions = folders
+    .filter(f => Number(f.folderId) !== 0) // exclude the "All" virtual folder
+    .map(f => {
+      const fid = Number(f.folderId);
+      return `<option value="${fid}"${fid === currentDefault ? " selected" : ""}>${escHtml(f.name)}</option>`;
+    }).join("");
+
+  overlay.innerHTML = `
+    <div class="folder-manager-panel" role="dialog" aria-label="Folder manager">
+      <div class="fm-header">
+        <h3>Collection folders</h3>
+        <button type="button" class="fm-close" onclick="closeFolderManager()" aria-label="Close">✕</button>
+      </div>
+      <div class="fm-default-row">
+        <label for="fm-default-select">Default folder for new additions:</label>
+        <select id="fm-default-select" onchange="fmSaveDefaultFolder(this.value)">${defaultOptions}</select>
+        <span id="fm-default-status" class="fm-default-status"></span>
+      </div>
+      <div class="fm-create-row">
+        <input type="text" id="fm-new-name" placeholder="New folder name" maxlength="80" />
+        <button type="button" class="fm-btn fm-btn-create" onclick="fmCreateFolder()">+ Create</button>
+      </div>
+      <div class="fm-table-wrap">
+        <table class="fm-table">
+          <thead><tr><th>Name</th><th>Items</th><th></th></tr></thead>
+          <tbody id="fm-tbody">${rows || `<tr><td colspan="3" class="fm-empty">No folders yet — create one above.</td></tr>`}</tbody>
+        </table>
+      </div>
+      <div class="fm-footer-hint">Built-in "All" and "Uncategorized" folders cannot be renamed or deleted.</div>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.body.classList.add("modal-open");
+  // Enter-to-create
+  const nameInput = document.getElementById("fm-new-name");
+  nameInput?.addEventListener("keydown", (e) => { if (e.key === "Enter") fmCreateFolder(); });
+  nameInput?.focus();
+  // Esc to close
+  document.addEventListener("keydown", _fmEscHandler);
+}
+
+function _fmEscHandler(e) { if (e.key === "Escape") closeFolderManager(); }
+function closeFolderManager() {
+  const ov = document.getElementById("folder-manager-overlay");
+  if (ov) ov.remove();
+  document.removeEventListener("keydown", _fmEscHandler);
+  // Only drop modal-open if the main modal isn't also open
+  if (!document.getElementById("modal-overlay")?.classList.contains("open")) {
+    document.body.classList.remove("modal-open");
+  }
+}
+
+function fmStartRename(folderId) {
+  const row = document.querySelector(`#fm-tbody tr[data-folder-id="${folderId}"]`);
+  if (!row) return;
+  row.querySelector(".fm-name-display").style.display = "none";
+  row.querySelector(".fm-name-input").style.display = "";
+  row.querySelector(".fm-btn-edit").style.display = "none";
+  row.querySelector(".fm-btn-del").style.display = "none";
+  row.querySelector(".fm-btn-save").style.display = "";
+  row.querySelector(".fm-btn-cancel").style.display = "";
+  const input = row.querySelector(".fm-name-input");
+  input.focus();
+  input.select();
+  input.onkeydown = (e) => {
+    if (e.key === "Enter") fmSaveRename(folderId);
+    else if (e.key === "Escape") fmCancelRename(folderId);
+  };
+}
+
+function fmCancelRename(folderId) {
+  const row = document.querySelector(`#fm-tbody tr[data-folder-id="${folderId}"]`);
+  if (!row) return;
+  const display = row.querySelector(".fm-name-display");
+  const input = row.querySelector(".fm-name-input");
+  input.value = display.textContent; // revert
+  display.style.display = "";
+  input.style.display = "none";
+  row.querySelector(".fm-btn-edit").style.display = "";
+  row.querySelector(".fm-btn-del").style.display = "";
+  row.querySelector(".fm-btn-save").style.display = "none";
+  row.querySelector(".fm-btn-cancel").style.display = "none";
+}
+
+async function fmSaveRename(folderId) {
+  const row = document.querySelector(`#fm-tbody tr[data-folder-id="${folderId}"]`);
+  if (!row) return;
+  const newName = row.querySelector(".fm-name-input").value.trim();
+  if (!newName) { showToast("Folder name cannot be empty", "error"); return; }
+  try {
+    const r = await apiFetch("/api/user/folders/rename", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folderId, name: newName }),
+    }).then(r => r.json());
+    if (!r.ok) { showToast(r.error || "Rename failed", "error"); return; }
+    row.querySelector(".fm-name-display").textContent = newName;
+    showToast(`Renamed to "${newName}"`);
+    fmCancelRename(folderId); // flips UI back
+    // Refresh pill row
+    loadCollectionFolders();
+  } catch (e) {
+    showToast("Rename failed — try again", "error");
+  }
+}
+
+async function fmDeleteFolder(folderId, folderName, itemCount) {
+  let force = false;
+  if (itemCount > 150) {
+    showToast(`"${folderName}" has ${itemCount} items — too many to bulk-move. Please move items in smaller batches first.`, "error");
+    return;
+  }
+  if (itemCount > 0) {
+    const eta = itemCount > 10 ? ` This will take about ${Math.ceil(itemCount * 1.1)} seconds.` : "";
+    const confirmMsg = `"${folderName}" contains ${itemCount} item${itemCount === 1 ? "" : "s"}. Move them all to Uncategorized and delete the folder?${eta}`;
+    if (!confirm(confirmMsg)) return;
+    force = true;
+  } else {
+    if (!confirm(`Delete folder "${folderName}"?`)) return;
+  }
+  try {
+    const r = await apiFetch("/api/user/folders/delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folderId, force }),
+    }).then(r => r.json());
+    if (!r.ok) { showToast(r.error || "Delete failed", "error"); return; }
+    showToast(`Deleted "${folderName}"`);
+    // Remove row and refresh pills
+    document.querySelector(`#fm-tbody tr[data-folder-id="${folderId}"]`)?.remove();
+    loadCollectionFolders();
+    // Refresh the grid if we were filtering by this folder
+    if (_cwFolderId === folderId) { _cwFolderId = 0; loadCollectionTab(1); }
+  } catch (e) {
+    showToast("Delete failed — try again", "error");
+  }
+}
+
+// Inline folder picker popover — used by the post-add toast to let the user
+// move a just-added release into a different folder in one click.
+async function openQuickFolderPicker(releaseId, instanceId, fromFolderId) {
+  closeQuickFolderPicker();
+  // Make sure we have folder names cached
+  if (!Array.isArray(window._collectionFolders) || !window._collectionFolders.length) {
+    try {
+      const r = await apiFetch("/api/user/folders");
+      if (r.ok) {
+        const d = await r.json();
+        window._collectionFolders = Array.isArray(d.folders) ? d.folders : [];
+      }
+    } catch {}
+  }
+  const folders = (window._collectionFolders || []).filter(f => Number(f.folderId) !== 0);
+  if (!folders.length) { showToast?.("No folders available", "error"); return; }
+
+  const overlay = document.createElement("div");
+  overlay.id = "quick-folder-picker-overlay";
+  overlay.className = "quick-folder-picker-overlay";
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) closeQuickFolderPicker(); });
+
+  const rows = folders.map(f => {
+    const fid = Number(f.folderId);
+    const isCurrent = fid === Number(fromFolderId);
+    return `<li class="qfp-row${isCurrent ? " is-current" : ""}" data-folder-id="${fid}">
+      <span class="qfp-name">${escHtml(f.name)}</span>
+      ${isCurrent ? `<span class="qfp-current-label">current</span>` : ""}
+    </li>`;
+  }).join("");
+
+  overlay.innerHTML = `
+    <div class="quick-folder-picker-panel" role="dialog" aria-label="Move to folder">
+      <div class="qfp-header">
+        <h4>Move to folder</h4>
+        <button type="button" class="qfp-close" onclick="closeQuickFolderPicker()" aria-label="Close">✕</button>
+      </div>
+      <ul class="qfp-list">${rows}</ul>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.addEventListener("keydown", _qfpEscHandler);
+
+  overlay.querySelectorAll(".qfp-row").forEach(row => {
+    row.addEventListener("click", async () => {
+      const toFolderId = Number(row.dataset.folderId);
+      if (!Number.isFinite(toFolderId) || toFolderId === Number(fromFolderId)) {
+        closeQuickFolderPicker();
+        return;
+      }
+      try {
+        const r = await apiFetch("/api/user/collection/move", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ releaseId, instanceId, fromFolderId, toFolderId }),
+        });
+        if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error || "Move failed");
+        const name = folders.find(f => Number(f.folderId) === toFolderId)?.name || "folder";
+        showToast?.(`Moved to ${name}`, "success");
+        // If the album modal is open on this release, refresh its instance panel
+        // so the new folder name shows up immediately.
+        if (typeof loadModalInstanceData === "function") {
+          const modalOpen = document.getElementById("modal-overlay")?.classList.contains("open");
+          if (modalOpen) loadModalInstanceData(Number(releaseId));
+        }
+      } catch (e) {
+        showToast?.(e.message || "Failed to move", "error");
+      } finally {
+        closeQuickFolderPicker();
+      }
+    });
+  });
+}
+// Add-another-copy folder picker — same shell as the quick move picker, but
+// the row action POSTs /collection/add with an explicit folderId to create a
+// new instance rather than moving an existing one.
+async function openAddCopyFolderPicker(releaseId) {
+  closeQuickFolderPicker();
+  if (!Array.isArray(window._collectionFolders) || !window._collectionFolders.length) {
+    try {
+      const r = await apiFetch("/api/user/folders");
+      if (r.ok) {
+        const d = await r.json();
+        window._collectionFolders = Array.isArray(d.folders) ? d.folders : [];
+      }
+    } catch {}
+  }
+  const folders = (window._collectionFolders || []).filter(f => Number(f.folderId) !== 0);
+  if (!folders.length) { showToast?.("No folders available", "error"); return; }
+  const defaultId = Number(window._defaultAddFolderId) || 1;
+
+  const overlay = document.createElement("div");
+  overlay.id = "quick-folder-picker-overlay";
+  overlay.className = "quick-folder-picker-overlay";
+  overlay.addEventListener("click", (e) => { if (e.target === overlay) closeQuickFolderPicker(); });
+
+  const rows = folders.map(f => {
+    const fid = Number(f.folderId);
+    const isDefault = fid === defaultId;
+    return `<li class="qfp-row" data-folder-id="${fid}">
+      <span class="qfp-name">${escHtml(f.name)}</span>
+      ${isDefault ? `<span class="qfp-current-label">default</span>` : ""}
+    </li>`;
+  }).join("");
+
+  overlay.innerHTML = `
+    <div class="quick-folder-picker-panel" role="dialog" aria-label="Add another copy to folder">
+      <div class="qfp-header">
+        <h4>Add another copy to…</h4>
+        <button type="button" class="qfp-close" onclick="closeQuickFolderPicker()" aria-label="Close">✕</button>
+      </div>
+      <ul class="qfp-list">${rows}</ul>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.addEventListener("keydown", _qfpEscHandler);
+
+  overlay.querySelectorAll(".qfp-row").forEach(row => {
+    row.addEventListener("click", async () => {
+      const folderId = Number(row.dataset.folderId);
+      if (!Number.isFinite(folderId) || folderId < 1) return;
+      // Disable interaction while posting
+      row.style.opacity = "0.5";
+      row.style.pointerEvents = "none";
+      try {
+        const r = await apiFetch("/api/user/collection/add", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ releaseId, folderId }),
+        });
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok || data.error) throw new Error(data.error || "Add failed");
+        const name = data.folderName || folders.find(f => Number(f.folderId) === folderId)?.name || "folder";
+        showToast?.(`Added another copy to ${name}`, "success");
+        closeQuickFolderPicker();
+        // Update client-side caches so badges & counts are correct
+        if (window._collectionIds) window._collectionIds.add(Number(releaseId));
+        if (!window._collectionInstanceCounts) window._collectionInstanceCounts = {};
+        window._collectionInstanceCounts[Number(releaseId)] = (Number(window._collectionInstanceCounts[Number(releaseId)]) || 1) + 1;
+        refreshCardBadges?.(Number(releaseId));
+        // Refresh the modal's instance panel to show the new copy
+        if (typeof loadModalInstanceData === "function") {
+          loadModalInstanceData(Number(releaseId));
+        }
+      } catch (e) {
+        showToast?.(e.message || "Failed to add copy", "error");
+        row.style.opacity = "";
+        row.style.pointerEvents = "";
+      }
+    });
+  });
+}
+
+function _qfpEscHandler(e) { if (e.key === "Escape") closeQuickFolderPicker(); }
+function closeQuickFolderPicker() {
+  const ov = document.getElementById("quick-folder-picker-overlay");
+  if (ov) ov.remove();
+  document.removeEventListener("keydown", _qfpEscHandler);
+}
+
+async function fmSaveDefaultFolder(value) {
+  const folderId = Number(value);
+  if (!Number.isFinite(folderId) || folderId < 1) return;
+  const statusEl = document.getElementById("fm-default-status");
+  if (statusEl) { statusEl.textContent = "Saving…"; statusEl.style.color = "var(--muted)"; }
+  try {
+    const r = await apiFetch("/api/user/settings/default-folder", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ folderId }),
+    });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({})))?.error || "Save failed");
+    window._defaultAddFolderId = folderId;
+    if (statusEl) {
+      statusEl.textContent = "Saved";
+      statusEl.style.color = "#6bcf8e";
+      setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 1500);
+    }
+  } catch (e) {
+    if (statusEl) { statusEl.textContent = "Save failed"; statusEl.style.color = "#e05050"; }
+    showToast?.(e.message || "Failed to save default folder", "error");
+  }
+}
+
+async function fmCreateFolder() {
+  const input = document.getElementById("fm-new-name");
+  if (!input) return;
+  const name = input.value.trim();
+  if (!name) { showToast("Folder name required", "error"); return; }
+  try {
+    const r = await apiFetch("/api/user/folders/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    }).then(r => r.json());
+    if (!r.ok) { showToast(r.error || "Create failed", "error"); return; }
+    showToast(`Created "${name}"`);
+    input.value = "";
+    // Refresh pills and re-open manager to show new row
+    await loadCollectionFolders();
+    openFolderManager();
+  } catch (e) {
+    showToast("Create failed — try again", "error");
+  }
 }
 
 function filterByFolder(folderId) {
@@ -1078,6 +1459,8 @@ async function loadDiscogsIds() {
       window._favoriteKeys   = new Set((data.favoriteIds ?? []).map(f => `${f.entity_type}:${f.discogs_id}`));
       window._inventoryIds   = new Set(data.inventoryIds ?? []);
       window._listMembership = data.listMembership ?? {};  // { discogsId: [{listId, listName}] }
+      window._collectionInstanceCounts = data.collectionInstanceCounts ?? {}; // { releaseId: count } for multi-copy releases
+      window._defaultAddFolderId = Number(data.defaultAddFolderId) || 1;
       const cb = document.getElementById("hide-owned");
       const lbl = document.getElementById("hide-owned-label");
       if (cb && cb.disabled) {
