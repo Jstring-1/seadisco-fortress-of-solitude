@@ -6,12 +6,12 @@
   <title>SeaDisco — Admin</title>
   <meta name="robots" content="noindex, nofollow" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎹</text></svg>">
-  <link rel="stylesheet" href="/style.css?v=20260404f" />
+  <link rel="stylesheet" href="/style.css?v=20260404g" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260404f"></script>
+<script src="/shared.js?v=20260404g"></script>
 <script>renderSharedHeader({ hideRecords: true });</script>
 
 <main>
@@ -89,6 +89,7 @@
             <option value="168">Last 7 days</option>
           </select>
           <label style="font-size:0.75rem;color:var(--muted);margin-left:0.3rem"><input type="checkbox" id="api-log-errors-only" onchange="loadApiLog()"> Errors only</label>
+          <label style="font-size:0.75rem;color:var(--muted);margin-left:0.3rem"><input type="checkbox" id="api-log-scheduled-only" onchange="loadApiLog()"> Scheduled only</label>
         </div>
         <div id="api-log-list" style="font-size:0.82rem;color:var(--muted);max-height:500px;overflow-y:auto"></div>
       </div>
@@ -147,7 +148,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script src="/modal.js?v=20260404f"></script>
+<script src="/modal.js?v=20260404g"></script>
 
 <footer></footer>
 <script>renderSharedFooter();</script>
@@ -423,10 +424,12 @@ async function loadApiLog() {
   try {
     const service = document.getElementById("api-log-filter").value;
     const errorsOnly = document.getElementById("api-log-errors-only").checked;
+    const scheduledOnly = document.getElementById("api-log-scheduled-only").checked;
     const hours = document.getElementById("api-log-hours").value || "24";
     const params = new URLSearchParams({ hours });
     if (service) params.set("service", service);
     if (errorsOnly) params.set("errors", "true");
+    if (scheduledOnly) params.set("scheduled", "true");
 
     // Update header label
     const rangeLabel = document.getElementById("api-log-range-label");
