@@ -863,6 +863,10 @@ function switchRecordsTab(tab, skipPush) {
 
   const hasPending = pending || swap;
 
+  // Hide the inventory toolbar by default; loadInventoryTab will re-show it
+  const invToolbar = document.getElementById("inventory-toolbar");
+  if (invToolbar && tab !== "inventory") invToolbar.style.display = "none";
+
   if (tab === "collection") {
     if (cwInput) { cwInput.placeholder = "Search your collection\u2026"; if (!hasPending) cwInput.value = ""; }
     if (controlsRow) controlsRow.style.display = "";
@@ -908,6 +912,7 @@ async function loadInventoryTab(page = 1, filters) {
   document.getElementById("blurb").style.display = "none";
   document.getElementById("results").innerHTML = renderSkeletonGrid(16);
   document.getElementById("pagination").style.display = "none";
+  renderInventoryToolbar();
   setCwStatus("");
   try {
     let url = `/api/user/inventory?page=${page}&per_page=96`;
@@ -919,7 +924,7 @@ async function loadInventoryTab(page = 1, filters) {
       setCwStatus("");
       document.getElementById("results").innerHTML = f.q
         ? renderEmptyState("\uD83D\uDD0D", `No inventory items matching "${f.q}"`, "Try a different search")
-        : renderEmptyState("\uD83D\uDCE6", "No inventory items synced", "Your Discogs marketplace inventory will appear here after syncing");
+        : `<div class="empty-state"><div class="empty-state-icon">📦</div><div class="empty-state-title">No listings yet</div><div class="empty-state-sub">Create your first marketplace listing below</div><div style="margin-top:1rem"><button class="inv-new-btn" onclick="openInventoryEditor({mode:'create'})">+ New listing</button></div></div>`;
       return;
     }
     setCwStatus(`${data.total} inventory listings \u2014 page ${page} of ${data.pages}`);
@@ -929,6 +934,46 @@ async function loadInventoryTab(page = 1, filters) {
     renderInventoryPagination();
   } catch (e) {
     setCwStatus("Failed to load inventory: " + e.message);
+  }
+}
+
+// Render the "+ New listing" button and other inventory-tab actions in the
+// area above the grid. Looks for #inventory-toolbar and creates it if missing.
+function renderInventoryToolbar() {
+  let toolbar = document.getElementById("inventory-toolbar");
+  const host = document.getElementById("cw-status-row") || document.getElementById("cw-status")?.parentElement;
+  if (!toolbar) {
+    toolbar = document.createElement("div");
+    toolbar.id = "inventory-toolbar";
+    toolbar.className = "inventory-toolbar";
+    // Insert right before the results grid
+    const results = document.getElementById("results");
+    results?.parentElement?.insertBefore(toolbar, results);
+  }
+  toolbar.innerHTML = `
+    <button class="inv-new-btn" onclick="openInventoryEditor({mode:'create'})" title="Create a new marketplace listing">+ New listing</button>
+    <button class="inv-refresh-btn" onclick="refreshInventoryNow(this)" title="Sync inventory from Discogs">↻ Refresh</button>
+  `;
+  toolbar.style.display = "flex";
+}
+
+// Fast single-phase refresh for the inventory tab — bypasses the full
+// collection/wantlist sync and responds as soon as Discogs has returned
+// all inventory pages.
+async function refreshInventoryNow(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = "Refreshing…"; }
+  try {
+    const r = await apiFetch("/api/user/inventory/refresh", { method: "POST" });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      showToast?.(j.error || `Refresh failed (${r.status})`, "error");
+    } else {
+      showToast?.(`Synced ${j.count || 0} listings`, "success");
+    }
+    loadInventoryTab(_invPage || 1);
+    if (typeof loadDiscogsIds === "function") loadDiscogsIds();
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "↻ Refresh"; }
   }
 }
 
@@ -960,7 +1005,16 @@ function renderInventoryCard(item, index) {
     _condition: cond,
     _status: status,
   };
-  return renderCard(syntheticItem, index);
+  const card = renderCard(syntheticItem, index);
+  const lid = Number(item.listing_id) || 0;
+  // Wrap the card in a container so we can overlay edit/delete affordances
+  // without touching renderCard's internals.
+  return `<div class="inv-card-wrap" data-listing-id="${lid}">
+    ${card}
+    <div class="inv-card-actions" onclick="event.stopPropagation()">
+      <button class="inv-card-edit" title="Edit listing" onclick="event.stopPropagation();openInventoryEditor({mode:'edit',listingId:${lid}})">✏️</button>
+    </div>
+  </div>`;
 }
 
 function renderInventoryPagination() {
@@ -1458,9 +1512,11 @@ async function loadDiscogsIds() {
       window._wantlistIds    = new Set(data.wantlistIds   ?? []);
       window._favoriteKeys   = new Set((data.favoriteIds ?? []).map(f => `${f.entity_type}:${f.discogs_id}`));
       window._inventoryIds   = new Set(data.inventoryIds ?? []);
+      window._inventoryListingIds = data.inventoryListingIds ?? {};  // { releaseId: [listingId1, ...] }
       window._listMembership = data.listMembership ?? {};  // { discogsId: [{listId, listName}] }
       window._collectionInstanceCounts = data.collectionInstanceCounts ?? {}; // { releaseId: count } for multi-copy releases
       window._defaultAddFolderId = Number(data.defaultAddFolderId) || 1;
+      window._userCurrency = data.currency || "USD";
       const cb = document.getElementById("hide-owned");
       const lbl = document.getElementById("hide-owned-label");
       if (cb && cb.disabled) {

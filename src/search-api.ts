@@ -6,7 +6,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount } from "./db.js";
 import { startFreshSyncSchedule, runFreshSync } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -29,6 +29,37 @@ const bandsintownAppId = "seadisco"; // Bandsintown just needs an app identifier
 const youtubeApiKey = process.env.YOUTUBE_API_KEY ?? "";
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+// Shape the subset of Discogs profile fields we persist, so all three
+// setDiscogsProfile call sites stay in sync and every field the dashboard
+// needs (including curr_abbr for default listing currency and the seller
+// rating stars) is captured.
+function _extractDiscogsProfile(profile: any): any {
+  return {
+    username:            profile.username,
+    name:                profile.name,
+    registered:          profile.registered,
+    home_page:           profile.home_page,
+    profile:             profile.profile,
+    location:            profile.location,
+    curr_abbr:           profile.curr_abbr,
+    num_collection:      profile.num_collection,
+    num_wantlist:        profile.num_wantlist,
+    num_lists:           profile.num_lists,
+    num_for_sale:        profile.num_for_sale,
+    num_pending:         profile.num_pending,
+    releases_rated:      profile.releases_rated,
+    rating_avg:          profile.rating_avg,
+    seller_rating:       profile.seller_rating,
+    seller_num_ratings:  profile.seller_num_ratings,
+    seller_rating_stars: profile.seller_rating_stars,
+    buyer_rating:        profile.buyer_rating,
+    buyer_num_ratings:   profile.buyer_num_ratings,
+    buyer_rating_stars:  profile.buyer_rating_stars,
+    releases_contributed: profile.releases_contributed,
+    rank:                profile.rank,
+  };
+}
 
 // ── Global API kill switch ──────────────────────────────────────────────
 let _apiKillSwitch = false;
@@ -293,20 +324,7 @@ app.post("/api/user/token", express.json(), async (req, res) => {
           });
           if (profileRes.ok) {
             const profile = await profileRes.json() as any;
-            await setDiscogsProfile(userId, profile.id ?? ident.id ?? 0, profile.avatar_url ?? "", {
-              username: profile.username,
-              name: profile.name,
-              registered: profile.registered,
-              num_collection: profile.num_collection,
-              num_wantlist: profile.num_wantlist,
-              num_lists: profile.num_lists,
-              num_for_sale: profile.num_for_sale,
-              releases_rated: profile.releases_rated,
-              rating_avg: profile.rating_avg,
-              seller_rating: profile.seller_rating,
-              buyer_rating: profile.buyer_rating,
-              location: profile.location,
-            });
+            await setDiscogsProfile(userId, profile.id ?? ident.id ?? 0, profile.avatar_url ?? "", _extractDiscogsProfile(profile));
           }
         } catch {}
       }
@@ -457,20 +475,7 @@ app.get("/api/auth/discogs/callback", async (req, res) => {
           });
           if (profileRes.ok) {
             const profile = await profileRes.json() as any;
-            await setDiscogsProfile(stored.clerkUserId, profile.id ?? ident.id ?? 0, profile.avatar_url ?? "", {
-              username: profile.username,
-              name: profile.name,
-              registered: profile.registered,
-              num_collection: profile.num_collection,
-              num_wantlist: profile.num_wantlist,
-              num_lists: profile.num_lists,
-              num_for_sale: profile.num_for_sale,
-              releases_rated: profile.releases_rated,
-              rating_avg: profile.rating_avg,
-              seller_rating: profile.seller_rating,
-              buyer_rating: profile.buyer_rating,
-              location: profile.location,
-            });
+            await setDiscogsProfile(stored.clerkUserId, profile.id ?? ident.id ?? 0, profile.avatar_url ?? "", _extractDiscogsProfile(profile));
           }
         }
       }
@@ -494,11 +499,29 @@ app.delete("/api/auth/discogs/disconnect", async (req, res) => {
   res.json({ ok: true });
 });
 
-// GET /api/user/profile — returns cached Discogs profile
+// GET /api/user/profile — returns cached Discogs profile. Lazily refreshes
+// from Discogs when the cache is older than 1 hour (or absent) so stats
+// like num_collection / num_for_sale stay fresh enough for the account
+// dashboard without us having to sync on every pageview.
 app.get("/api/user/profile", async (req, res) => {
   const userId = await getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-  const profile = await getDiscogsProfile(userId);
+  let profile = await getDiscogsProfile(userId);
+  const stale = !profile.profileSyncedAt || (Date.now() - new Date(profile.profileSyncedAt).getTime() > 60 * 60 * 1000);
+  if (stale && profile.username) {
+    try {
+      const client = await getDiscogsForRequest(req);
+      if (client) {
+        const url = `https://api.discogs.com/users/${encodeURIComponent(profile.username)}`;
+        const r = await loggedFetch("discogs", url, { headers: client.buildHeaders("GET", url), context: "profile-lazy-refresh" });
+        if (r.ok) {
+          const fresh = await r.json() as any;
+          await setDiscogsProfile(userId, fresh.id ?? profile.userId ?? 0, fresh.avatar_url ?? profile.avatarUrl ?? "", _extractDiscogsProfile(fresh));
+          profile = await getDiscogsProfile(userId);
+        }
+      }
+    } catch {}
+  }
   res.json(profile);
 });
 
@@ -518,20 +541,7 @@ app.post("/api/user/profile/refresh", express.json(), async (req, res) => {
     });
     if (!profileRes.ok) { res.status(500).json({ error: "Failed to fetch profile" }); return; }
     const profile = await profileRes.json() as any;
-    await setDiscogsProfile(userId, profile.id ?? 0, profile.avatar_url ?? "", {
-      username: profile.username,
-      name: profile.name,
-      registered: profile.registered,
-      num_collection: profile.num_collection,
-      num_wantlist: profile.num_wantlist,
-      num_lists: profile.num_lists,
-      num_for_sale: profile.num_for_sale,
-      releases_rated: profile.releases_rated,
-      rating_avg: profile.rating_avg,
-      seller_rating: profile.seller_rating,
-      buyer_rating: profile.buyer_rating,
-      location: profile.location,
-    });
+    await setDiscogsProfile(userId, profile.id ?? 0, profile.avatar_url ?? "", _extractDiscogsProfile(profile));
     const updated = await getDiscogsProfile(userId);
     res.json(updated);
   } catch (e) {
@@ -843,8 +853,482 @@ app.get("/api/user/inventory", async (req, res) => {
   const filters: Record<string, any> = {};
   const q = (req.query.q as string ?? "").trim();
   if (q) filters.q = q;
+  const status = (req.query.status as string ?? "").trim();
+  if (status) filters.status = status;
   const { items, total } = await getInventoryPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
   res.json({ items, total, page, pages: Math.ceil(total / perPage) });
+});
+
+// ── Inventory (marketplace) management: create / edit / delete ────────────
+// Helper: fetch a single listing from Discogs and mirror into user_inventory.
+async function refreshInventoryListing(
+  userId: string, client: DiscogsClient, listingId: number
+): Promise<any | null> {
+  const url = `https://api.discogs.com/marketplace/listings/${listingId}`;
+  const r = await loggedFetch("discogs", url, { method: "GET", headers: client.buildHeaders("GET", url), context: "inventory-refresh" });
+  if (!r.ok) return null;
+  const data = await r.json() as any;
+  const releaseId = data?.release?.id ? Number(data.release.id) : undefined;
+  const priceValue = data?.price?.value != null ? Number(data.price.value) : undefined;
+  const priceCurrency = data?.price?.currency ?? "USD";
+  const postedAt = data?.posted ? new Date(data.posted) : undefined;
+  await upsertInventoryItems(userId, [{
+    listingId,
+    releaseId,
+    data,
+    status: data?.status ?? "For Sale",
+    priceValue,
+    priceCurrency,
+    condition: data?.condition ?? undefined,
+    sleeveCondition: data?.sleeve_condition ?? undefined,
+    postedAt,
+  }]);
+  return data;
+}
+
+// Build the JSON body Discogs expects for create/edit listing.
+function buildListingBody(body: any): { ok: true; payload: any } | { ok: false; error: string } {
+  const required = ["releaseId", "condition", "sleeveCondition", "price", "status"];
+  for (const k of required) if (body?.[k] == null || body?.[k] === "") return { ok: false, error: `${k} required` };
+  const payload: any = {
+    release_id:       Number(body.releaseId),
+    condition:        String(body.condition),
+    sleeve_condition: String(body.sleeveCondition),
+    price:            Number(body.price),
+    status:           String(body.status),
+  };
+  // Treat empty strings as "unset" so we don't send 0 for numeric optional fields.
+  const has = (v: any) => v != null && v !== "";
+  if (has(body.comments))       payload.comments        = String(body.comments);
+  if (body.allowOffers != null) payload.allow_offers    = !!body.allowOffers;
+  if (has(body.externalId))     payload.external_id     = String(body.externalId);
+  if (has(body.location))       payload.location        = String(body.location);
+  if (has(body.weight)) {
+    payload.weight = body.weight === "auto" ? "auto" : Number(body.weight);
+    if (typeof payload.weight === "number" && !Number.isFinite(payload.weight)) delete payload.weight;
+  }
+  if (has(body.formatQuantity)) {
+    const n = Number(body.formatQuantity);
+    if (Number.isFinite(n) && n > 0) payload.format_quantity = n;
+  }
+  if (!Number.isFinite(payload.release_id) || payload.release_id < 1) return { ok: false, error: "Invalid releaseId" };
+  if (!Number.isFinite(payload.price) || payload.price < 0) return { ok: false, error: "Invalid price" };
+  return { ok: true, payload };
+}
+
+// POST /api/user/inventory/create — create a new marketplace listing
+app.post("/api/user/inventory/create", express.json(), async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  const built = buildListingBody(req.body);
+  if (!built.ok) { res.status(400).json({ error: built.error }); return; }
+  try {
+    const url = "https://api.discogs.com/marketplace/listings";
+    const r = await loggedFetch("discogs", url, {
+      method: "POST",
+      headers: { ...ctx.client.buildHeaders("POST", url), "Content-Type": "application/json" },
+      body: JSON.stringify(built.payload),
+      context: "inventory-create",
+    });
+    if (!r.ok) {
+      const text = await r.text();
+      res.status(r.status).json({ error: `Discogs error: ${text}` }); return;
+    }
+    const created = await r.json() as any;
+    const listingId = Number(created?.listing_id);
+    if (!listingId) { res.status(502).json({ error: "Discogs create did not return a listing_id" }); return; }
+    // Discogs create returns only the ID + URI; fetch the full listing for the cache.
+    await _sleep(DISCOGS_CALL_DELAY_MS);
+    const full = await refreshInventoryListing(ctx.userId, ctx.client, listingId);
+    res.json({ ok: true, listingId, item: full });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/user/inventory/refresh — sync only inventory, respond when done.
+// MUST be registered before the POST /:listingId route because Express matches
+// the first pattern that fits — otherwise "refresh" would be parsed as a listingId.
+app.post("/api/user/inventory/refresh", async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  try {
+    const count = await syncInventoryOnly(ctx.userId, ctx.username, ctx.client);
+    res.json({ ok: true, count });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/user/inventory/:listingId — edit an existing listing (Discogs uses POST)
+app.post("/api/user/inventory/:listingId", express.json(), async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  const listingId = Number(req.params.listingId);
+  if (!Number.isFinite(listingId) || listingId < 1) { res.status(400).json({ error: "Invalid listingId" }); return; }
+  const built = buildListingBody(req.body);
+  if (!built.ok) { res.status(400).json({ error: built.error }); return; }
+  try {
+    const url = `https://api.discogs.com/marketplace/listings/${listingId}`;
+    const r = await loggedFetch("discogs", url, {
+      method: "POST",
+      headers: { ...ctx.client.buildHeaders("POST", url), "Content-Type": "application/json" },
+      body: JSON.stringify(built.payload),
+      context: "inventory-edit",
+    });
+    if (!r.ok && r.status !== 204) {
+      const text = await r.text();
+      res.status(r.status).json({ error: `Discogs error: ${text}` }); return;
+    }
+    await _sleep(DISCOGS_CALL_DELAY_MS);
+    const full = await refreshInventoryListing(ctx.userId, ctx.client, listingId);
+    res.json({ ok: true, item: full });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// DELETE /api/user/inventory/:listingId — remove a listing
+app.delete("/api/user/inventory/:listingId", async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  const listingId = Number(req.params.listingId);
+  if (!Number.isFinite(listingId) || listingId < 1) { res.status(400).json({ error: "Invalid listingId" }); return; }
+  try {
+    const url = `https://api.discogs.com/marketplace/listings/${listingId}`;
+    const r = await loggedFetch("discogs", url, {
+      method: "DELETE",
+      headers: ctx.client.buildHeaders("DELETE", url),
+      context: "inventory-delete",
+    });
+    if (!r.ok && r.status !== 204) {
+      const text = await r.text();
+      res.status(r.status).json({ error: `Discogs error: ${text}` }); return;
+    }
+    await deleteInventoryItem(ctx.userId, listingId);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/user/inventory/:listingId — single listing detail for the edit modal
+app.get("/api/user/inventory/:listingId", async (req, res) => {
+  const userId = await getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const listingId = Number(req.params.listingId);
+  if (!Number.isFinite(listingId) || listingId < 1) { res.status(400).json({ error: "Invalid listingId" }); return; }
+  try {
+    let row = await getInventoryItem(userId, listingId);
+    // If missing or older than 5 minutes, refresh from Discogs
+    const stale = !row || !row.synced_at || (Date.now() - new Date(row.synced_at).getTime() > 5 * 60 * 1000);
+    if (stale) {
+      const client = await getDiscogsClientForUser(userId);
+      if (client) {
+        await refreshInventoryListing(userId, client, listingId);
+        row = await getInventoryItem(userId, listingId);
+      }
+    }
+    if (!row) { res.status(404).json({ error: "Listing not found" }); return; }
+    res.json({ item: row });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/user/inventory/price-suggestions/:releaseId — Discogs price suggestions proxy
+app.get("/api/user/inventory/price-suggestions/:releaseId", async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  const releaseId = Number(req.params.releaseId);
+  if (!Number.isFinite(releaseId) || releaseId < 1) { res.status(400).json({ error: "Invalid releaseId" }); return; }
+  try {
+    const url = `https://api.discogs.com/marketplace/price_suggestions/${releaseId}`;
+    const r = await loggedFetch("discogs", url, { method: "GET", headers: ctx.client.buildHeaders("GET", url), context: "price-suggestions" });
+    if (!r.ok) {
+      const text = await r.text();
+      res.status(r.status).json({ error: `Discogs error: ${text}` }); return;
+    }
+    const data = await r.json() as any;
+    res.json({ suggestions: data });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// ── Seller orders endpoints ───────────────────────────────────────────────
+// Helper: refresh a single order from Discogs and upsert into local cache.
+async function refreshOrder(userId: string, client: DiscogsClient, orderId: string) {
+  const url = `https://api.discogs.com/marketplace/orders/${encodeURIComponent(orderId)}`;
+  const r = await loggedFetch("discogs", url, { method: "GET", headers: client.buildHeaders("GET", url), context: "order-refresh" });
+  if (!r.ok) return null;
+  const o = await r.json() as any;
+  await upsertUserOrders(userId, [{
+    orderId:       String(o.id),
+    status:        o.status ?? undefined,
+    buyerUsername: o.buyer?.username ?? undefined,
+    itemCount:    Array.isArray(o.items) ? o.items.length : undefined,
+    totalValue:    parseFloat(o.total?.value) || undefined,
+    totalCurrency: o.total?.currency ?? undefined,
+    createdAt:     o.created ? new Date(o.created) : undefined,
+    data:          o as object,
+  }]);
+  return o;
+}
+
+// Shared: single-phase sync for just the orders list. Runs inline and
+// responds when finished (bounded: Discogs orders are small compared to
+// collection). Reused by POST /api/user/orders/refresh.
+async function syncOrdersOnly(userId: string, username: string, client: DiscogsClient): Promise<number> {
+  let total = 0;
+  for (let page = 1; ; page++) {
+    if (page > 1) await sleep(DISCOGS_CALL_DELAY_MS);
+    const url = `https://api.discogs.com/marketplace/orders?per_page=100&page=${page}&sort=last_activity&sort_order=desc`;
+    const r = await loggedFetch("discogs", url, { headers: client.buildHeaders("GET", url), context: `orders-refresh: ${username}` });
+    if (r.status === 401 || r.status === 403 || r.status === 404) break;
+    if (!r.ok) throw new Error(`Discogs ${r.status}`);
+    const data = await r.json() as any;
+    const rows: any[] = data.orders ?? [];
+    if (!rows.length) break;
+    const mapped = rows.map((o: any) => ({
+      orderId:       String(o.id),
+      status:        o.status ?? undefined,
+      buyerUsername: o.buyer?.username ?? undefined,
+      itemCount:     Array.isArray(o.items) ? o.items.length : undefined,
+      totalValue:    parseFloat(o.total?.value) || undefined,
+      totalCurrency: o.total?.currency ?? undefined,
+      createdAt:     o.created ? new Date(o.created) : undefined,
+      data:          o as object,
+    }));
+    await upsertUserOrders(userId, mapped);
+    total += mapped.length;
+    if (rows.length < 100) break;
+  }
+  await updateOrdersSyncedAt(userId);
+  return total;
+}
+
+// Shared: single-phase sync for just the inventory list.
+async function syncInventoryOnly(userId: string, username: string, client: DiscogsClient): Promise<number> {
+  let total = 0;
+  for (let page = 1; ; page++) {
+    if (page > 1) await sleep(DISCOGS_CALL_DELAY_MS);
+    const url = `https://api.discogs.com/users/${encodeURIComponent(username)}/inventory?per_page=100&page=${page}&sort=listed&sort_order=desc`;
+    const r = await loggedFetch("discogs", url, { headers: client.buildHeaders("GET", url), context: `inventory-refresh: ${username}` });
+    if (r.status === 401 || r.status === 403) break;
+    if (!r.ok) throw new Error(`Discogs ${r.status}`);
+    const data = await r.json() as any;
+    const listings: any[] = data.listings ?? [];
+    if (!listings.length) break;
+    const items = listings.map((l: any) => ({
+      listingId:       l.id as number,
+      releaseId:       l.release?.id ?? undefined,
+      data:            l as object,
+      status:          l.status ?? "For Sale",
+      priceValue:      parseFloat(l.price?.value) || undefined,
+      priceCurrency:   l.price?.currency ?? "USD",
+      condition:       l.condition ?? undefined,
+      sleeveCondition: l.sleeve_condition ?? undefined,
+      postedAt:        l.posted ? new Date(l.posted) : undefined,
+    }));
+    await upsertInventoryItems(userId, items);
+    total += items.length;
+    if (listings.length < 100) break;
+  }
+  await updateInventorySyncedAt(userId);
+  return total;
+}
+
+// POST /api/user/orders/refresh — sync only orders, respond when done
+app.post("/api/user/orders/refresh", async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  try {
+    const count = await syncOrdersOnly(ctx.userId, ctx.username, ctx.client);
+    res.json({ ok: true, count });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/user/orders — paginated seller orders from local cache
+app.get("/api/user/orders", async (req, res) => {
+  const userId = await getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const page = Math.max(1, Number(req.query.page) || 1);
+  const perPage = Math.min(200, Math.max(1, Number(req.query.per_page) || 20));
+  const status = typeof req.query.status === "string" ? req.query.status : undefined;
+  const q = typeof req.query.q === "string" ? req.query.q : undefined;
+  try {
+    const result = await getUserOrdersPage(userId, page, perPage, { status, q });
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/user/orders/count — lightweight visibility check for Account UI
+app.get("/api/user/orders/count", async (req, res) => {
+  const userId = await getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const count = await getOrdersCount(userId);
+    res.json({ count });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/user/orders/unread-count — orders where last_activity > viewed_at
+app.get("/api/user/orders/unread-count", async (req, res) => {
+  const userId = await getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    const count = await getUnreadOrdersCount(userId);
+    res.json({ count });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/user/orders/:orderId/view — mark order as viewed (clears unread)
+app.post("/api/user/orders/:orderId/view", async (req, res) => {
+  const userId = await getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  try {
+    await markOrderViewed(userId, String(req.params.orderId));
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/user/orders/:orderId — single order (refreshes from Discogs if stale)
+app.get("/api/user/orders/:orderId", async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  const orderId = String(req.params.orderId);
+  try {
+    const row = await getUserOrder(ctx.userId, orderId);
+    const stale = !row || (row.synced_at && Date.now() - new Date(row.synced_at).getTime() > 5 * 60 * 1000);
+    if (stale) {
+      const fresh = await refreshOrder(ctx.userId, ctx.client, orderId);
+      if (!fresh && !row) { res.status(404).json({ error: "Order not found" }); return; }
+    }
+    const final = await getUserOrder(ctx.userId, orderId);
+    // Opening the order counts as a view — clears the unread indicator.
+    await markOrderViewed(ctx.userId, orderId);
+    res.json({ item: final });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/user/orders/:orderId/messages — fetch message thread (always fresh)
+app.get("/api/user/orders/:orderId/messages", async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  const orderId = String(req.params.orderId);
+  try {
+    const url = `https://api.discogs.com/marketplace/orders/${encodeURIComponent(orderId)}/messages`;
+    const r = await loggedFetch("discogs", url, { method: "GET", headers: ctx.client.buildHeaders("GET", url), context: "order-messages" });
+    if (!r.ok) {
+      const text = await r.text();
+      res.status(r.status).json({ error: `Discogs error: ${text}` });
+      return;
+    }
+    const data = await r.json() as any;
+    const messages: any[] = data.messages ?? [];
+    const mapped = messages.map((m: any, i: number) => ({
+      order: i,
+      subject:      m.subject ?? undefined,
+      message:      m.message ?? undefined,
+      fromUser:     m.from?.username ?? m.from_user ?? undefined,
+      ts:           m.timestamp ? new Date(m.timestamp) : undefined,
+      data:         m as object,
+    }));
+    await upsertOrderMessages(ctx.userId, orderId, mapped);
+    res.json({ messages: await getOrderMessages(ctx.userId, orderId) });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/user/orders/:orderId/status — update order status / shipping
+app.post("/api/user/orders/:orderId/status", express.json(), async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  const orderId = String(req.params.orderId);
+  const body = req.body || {};
+  const payload: any = {};
+  if (body.status) payload.status = String(body.status);
+  if (body.shipping != null) payload.shipping = Number(body.shipping);
+  if (!payload.status && payload.shipping == null) {
+    res.status(400).json({ error: "status or shipping required" }); return;
+  }
+  try {
+    const url = `https://api.discogs.com/marketplace/orders/${encodeURIComponent(orderId)}`;
+    const r = await loggedFetch("discogs", url, {
+      method: "POST",
+      headers: { ...ctx.client.buildHeaders("POST", url), "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      context: "order-update",
+    });
+    if (!r.ok) {
+      const text = await r.text();
+      res.status(r.status).json({ error: `Discogs error: ${text}` }); return;
+    }
+    await sleep(DISCOGS_CALL_DELAY_MS);
+    const fresh = await refreshOrder(ctx.userId, ctx.client, orderId);
+    res.json({ ok: true, item: fresh });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// POST /api/user/orders/:orderId/messages — send a message on the order
+app.post("/api/user/orders/:orderId/messages", express.json(), async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  const orderId = String(req.params.orderId);
+  const body = req.body || {};
+  if (!body.message) { res.status(400).json({ error: "message required" }); return; }
+  const payload: any = { message: String(body.message) };
+  if (body.subject) payload.subject = String(body.subject);
+  if (body.status) payload.status = String(body.status);
+  try {
+    const url = `https://api.discogs.com/marketplace/orders/${encodeURIComponent(orderId)}/messages`;
+    const r = await loggedFetch("discogs", url, {
+      method: "POST",
+      headers: { ...ctx.client.buildHeaders("POST", url), "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      context: "order-message",
+    });
+    if (!r.ok) {
+      const text = await r.text();
+      res.status(r.status).json({ error: `Discogs error: ${text}` }); return;
+    }
+    // Re-fetch the full thread so local cache stays authoritative
+    await sleep(DISCOGS_CALL_DELAY_MS);
+    const mUrl = `https://api.discogs.com/marketplace/orders/${encodeURIComponent(orderId)}/messages`;
+    const mr = await loggedFetch("discogs", mUrl, { method: "GET", headers: ctx.client.buildHeaders("GET", mUrl), context: "order-messages" });
+    if (mr.ok) {
+      const data = await mr.json() as any;
+      const messages: any[] = data.messages ?? [];
+      const mapped = messages.map((m: any, i: number) => ({
+        order: i,
+        subject:      m.subject ?? undefined,
+        message:      m.message ?? undefined,
+        fromUser:     m.from?.username ?? m.from_user ?? undefined,
+        ts:           m.timestamp ? new Date(m.timestamp) : undefined,
+        data:         m as object,
+      }));
+      await upsertOrderMessages(ctx.userId, orderId, mapped);
+    }
+    res.json({ ok: true, messages: await getOrderMessages(ctx.userId, orderId) });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
 });
 
 // GET /api/user/lists — user's Discogs lists
@@ -1676,16 +2160,18 @@ app.get("/api/user/discogs-ids", async (req, res) => {
   const userId = await getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
   try {
-    const [collectionIds, wantlistIds, favoriteIds, inventoryIds, listMembership, collectionInstanceCounts, defaultAddFolderId] = await Promise.all([
+    const [collectionIds, wantlistIds, favoriteIds, inventoryIds, inventoryListingIds, listMembership, collectionInstanceCounts, defaultAddFolderId, profile] = await Promise.all([
       getCollectionIds(userId),
       getWantlistIds(userId),
       getFavoriteIds(userId),
       getInventoryIds(userId),
+      getInventoryListingIdsByRelease(userId),
       getListMembership(userId),
       getCollectionMultiInstanceCounts(userId),
       getDefaultAddFolderId(userId),
+      getDiscogsProfile(userId),
     ]);
-    res.json({ collectionIds, wantlistIds, favoriteIds, inventoryIds, listMembership, collectionInstanceCounts, defaultAddFolderId });
+    res.json({ collectionIds, wantlistIds, favoriteIds, inventoryIds, inventoryListingIds, listMembership, collectionInstanceCounts, defaultAddFolderId, currency: profile.currAbbr || "USD" });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
@@ -3568,7 +4054,7 @@ app.post("/api/admin/extras/fetch", express.json(), async (req, res) => {
         const userClient = await getDiscogsClientForUser(user.clerkUserId);
         if (!userClient) { console.warn(`[admin-extras] no auth for ${user.username}, skipping`); continue; }
         const result = await syncUserExtras(user.clerkUserId, user.username, userClient);
-        console.log(`[admin-extras] ${user.username}: ${result.inventory} inventory, ${result.lists} lists`);
+        console.log(`[admin-extras] ${user.username}: ${result.inventory} inventory, ${result.lists} lists, ${result.orders ?? 0} orders`);
         await sleep(30000); // 30s between users
       } catch (err) {
         console.error(`[admin-extras] Error syncing ${user.username}:`, err);
@@ -3747,7 +4233,7 @@ function startDailySyncSchedule() {
 }
 
 // ── Inventory / Lists / Orders sync (5 AM Pacific daily) ──────────────────
-async function syncUserExtras(userId: string, username: string, client: DiscogsClient): Promise<{ inventory: number; lists: number }> {
+async function syncUserExtras(userId: string, username: string, client: DiscogsClient): Promise<{ inventory: number; lists: number; orders: number }> {
   const getHeaders = (url: string) => client.buildHeaders("GET", url);
 
   // Simple fetch with retry for extras sync
@@ -3769,7 +4255,7 @@ async function syncUserExtras(userId: string, username: string, client: DiscogsC
     throw new Error("unreachable");
   }
 
-  let inventory = 0, lists = 0;
+  let inventory = 0, lists = 0, orders = 0;
 
   // Inventory (paginated) — Discogs returns 401 if user isn't a seller
   try {
@@ -3854,7 +4340,43 @@ async function syncUserExtras(userId: string, username: string, client: DiscogsC
     console.error(`[extras] ${username} lists error:`, err);
   }
 
-  return { inventory, lists };
+  // Orders (seller side only). Discogs returns 401/403/404 if the user has
+  // never sold or lacks marketplace permission — log and skip quietly.
+  try {
+    for (let page = 1; ; page++) {
+      await sleep(1200);
+      const r = await extrasFetch(
+        `https://api.discogs.com/marketplace/orders?per_page=100&page=${page}&sort=last_activity&sort_order=desc`,
+      );
+      if (r.status === 401 || r.status === 403 || r.status === 404) {
+        console.log(`[extras] ${username}: no seller orders (${r.status})`);
+        break;
+      }
+      if (!r.ok) break;
+      const data = await r.json() as any;
+      const rows: any[] = data.orders ?? [];
+      if (!rows.length) break;
+      const mapped = rows.map((o: any) => ({
+        orderId:       String(o.id),
+        status:        o.status ?? undefined,
+        buyerUsername: o.buyer?.username ?? undefined,
+        itemCount:    Array.isArray(o.items) ? o.items.length : undefined,
+        totalValue:    parseFloat(o.total?.value) || undefined,
+        totalCurrency: o.total?.currency ?? undefined,
+        createdAt:     o.created ? new Date(o.created) : undefined,
+        data:          o as object,
+      }));
+      await upsertUserOrders(userId, mapped);
+      orders += mapped.length;
+      if (rows.length < 100) break;
+    }
+    await updateOrdersSyncedAt(userId);
+    console.log(`[extras] ${username}: ${orders} seller orders synced`);
+  } catch (err) {
+    console.error(`[extras] ${username} orders error:`, err);
+  }
+
+  return { inventory, lists, orders };
 }
 
 function startExtrasSyncSchedule() {

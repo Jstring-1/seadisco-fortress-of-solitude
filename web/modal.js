@@ -1034,6 +1034,11 @@ function renderActionsImmediate(rid, entityType = "release") {
     // Master/artist/label — only show favorite button
     return `<div id="modal-actions" class="modal-actions" data-release-id="${rid}" data-entity-type="${entityType}">${favBtn}</div>`;
   }
+  const invListings = (window._inventoryListingIds && window._inventoryListingIds[rid]) || [];
+  const hasListing = invListings.length > 0;
+  const sellBtn = hasListing
+    ? `<button class="modal-act-btn in-collection" id="modal-sell-btn" onclick="openInventoryEditor({mode:'edit',listingId:${invListings[0]}})" title="Edit marketplace listing">Listed${invListings.length > 1 ? ` (${invListings.length})` : ''}</button>`
+    : `<button class="modal-act-btn" id="modal-sell-btn" onclick="openInventoryEditor({mode:'create',releaseId:${rid}})" title="Create a marketplace listing for this release">Sell</button>`;
   return `<div id="modal-actions" class="modal-actions" data-release-id="${rid}" data-entity-type="${entityType}">
     <button class="modal-act-btn ${inCol ? 'in-collection' : ''}" id="modal-col-btn" onclick="toggleCollection(${rid})" title="${inCol ? 'Remove from collection' : 'Add to collection'}">
       ${inCol ? 'Collected' : 'Collection'}
@@ -1041,6 +1046,7 @@ function renderActionsImmediate(rid, entityType = "release") {
     <button class="modal-act-btn ${inWant ? 'in-wantlist' : ''}" id="modal-want-btn" onclick="toggleWantlist(${rid})" title="${inWant ? 'Remove from wantlist' : 'Add to wantlist'}">
       ${inWant ? 'Wanted' : 'Want'}
     </button>
+    ${sellBtn}
     ${favBtn}
     ${inCol ? '<span class="modal-rating" id="modal-rating" style="opacity:0.4">☆☆☆☆☆</span>' : ''}
   </div>`;
@@ -1343,6 +1349,11 @@ function loadModalActions(releaseId, context) {
   if (entityType !== "release") {
     el.innerHTML = favBtn;
   } else {
+    const invListings = (window._inventoryListingIds && window._inventoryListingIds[rid]) || [];
+    const hasListing = invListings.length > 0;
+    const sellBtn = hasListing
+      ? `<button class="modal-act-btn in-collection" id="modal-sell-btn" onclick="openInventoryEditor({mode:'edit',listingId:${invListings[0]}})" title="Edit marketplace listing">Listed${invListings.length > 1 ? ` (${invListings.length})` : ''}</button>`
+      : `<button class="modal-act-btn" id="modal-sell-btn" onclick="openInventoryEditor({mode:'create',releaseId:${rid}})" title="Create a marketplace listing for this release">Sell</button>`;
     el.innerHTML = `
       <button class="modal-act-btn ${inCol ? 'in-collection' : ''}" id="modal-col-btn" onclick="toggleCollection(${rid})" title="${inCol ? 'Remove from collection' : 'Add to collection'}">
         ${inCol ? 'Collected' : 'Collection'}
@@ -1350,6 +1361,7 @@ function loadModalActions(releaseId, context) {
       <button class="modal-act-btn ${inWant ? 'in-wantlist' : ''}" id="modal-want-btn" onclick="toggleWantlist(${rid})" title="${inWant ? 'Remove from wantlist' : 'Add to wantlist'}">
         ${inWant ? 'Wanted' : 'Want'}
       </button>
+      ${sellBtn}
       ${favBtn}
       ${inCol ? '<span class="modal-rating" id="modal-rating" style="opacity:0.4">☆☆☆☆☆</span>' : ''}
     `;
