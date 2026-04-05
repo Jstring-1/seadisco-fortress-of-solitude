@@ -39,6 +39,7 @@ export async function initDb() {
   await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS discogs_username TEXT`);
   await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS collection_synced_at TIMESTAMP`);
   await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS wantlist_synced_at TIMESTAMP`);
+  await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS default_add_folder_id INTEGER DEFAULT 1`);
   // Folder support for collection items
   await getPool().query(`ALTER TABLE user_collection ADD COLUMN IF NOT EXISTS folder_id INTEGER DEFAULT 0`);
   await getPool().query(`
@@ -52,9 +53,13 @@ export async function initDb() {
     )
   `);
   // Extra collection fields — rating, notes, instance_id
-  await getPool().query(`ALTER TABLE user_collection ADD COLUMN IF NOT EXISTS rating INTEGER DEFAULT 0`);
-  await getPool().query(`ALTER TABLE user_collection ADD COLUMN IF NOT EXISTS instance_id INTEGER`);
-  await getPool().query(`ALTER TABLE user_collection ADD COLUMN IF NOT EXISTS notes JSONB`);
+  // NOTE: the CREATE TABLE IF NOT EXISTS user_collection runs further down, so
+  // we wrap these ALTERs in IF EXISTS to avoid errors on a truly fresh install.
+  // On fresh installs, the CREATE TABLE below will include these columns once
+  // we also run the migration after that CREATE (see below).
+  await getPool().query(`ALTER TABLE IF EXISTS user_collection ADD COLUMN IF NOT EXISTS rating INTEGER DEFAULT 0`);
+  await getPool().query(`ALTER TABLE IF EXISTS user_collection ADD COLUMN IF NOT EXISTS instance_id INTEGER`);
+  await getPool().query(`ALTER TABLE IF EXISTS user_collection ADD COLUMN IF NOT EXISTS notes JSONB`);
   // Extra wantlist fields — rating, notes
   await getPool().query(`ALTER TABLE user_wantlist ADD COLUMN IF NOT EXISTS rating INTEGER DEFAULT 0`);
   await getPool().query(`ALTER TABLE user_wantlist ADD COLUMN IF NOT EXISTS notes JSONB`);
@@ -91,10 +96,32 @@ export async function initDb() {
       discogs_release_id INTEGER NOT NULL,
       data               JSONB NOT NULL,
       added_at           TIMESTAMP,
-      synced_at          TIMESTAMP DEFAULT NOW(),
-      UNIQUE(clerk_user_id, discogs_release_id)
+      synced_at          TIMESTAMP DEFAULT NOW()
     )
   `);
+  // Ensure required columns exist (covers fresh installs where the earlier
+  // IF EXISTS block was a no-op because the table didn't yet exist)
+  await getPool().query(`ALTER TABLE user_collection ADD COLUMN IF NOT EXISTS folder_id INTEGER DEFAULT 0`);
+  await getPool().query(`ALTER TABLE user_collection ADD COLUMN IF NOT EXISTS rating INTEGER DEFAULT 0`);
+  await getPool().query(`ALTER TABLE user_collection ADD COLUMN IF NOT EXISTS instance_id INTEGER`);
+  await getPool().query(`ALTER TABLE user_collection ADD COLUMN IF NOT EXISTS notes JSONB`);
+  // Migration: switch user_collection uniqueness from (user, release_id) to
+  // (user, instance_id) so users can store multiple copies of the same release.
+  // Backfill NULL instance_ids with a synthetic negative value derived from
+  // release_id (guaranteed unique per-user under the legacy constraint).
+  try {
+    await getPool().query(
+      `UPDATE user_collection SET instance_id = -discogs_release_id WHERE instance_id IS NULL`
+    );
+    await getPool().query(
+      `ALTER TABLE user_collection DROP CONSTRAINT IF EXISTS user_collection_clerk_user_id_discogs_release_id_key`
+    );
+    await getPool().query(
+      `ALTER TABLE user_collection ADD CONSTRAINT user_collection_user_instance_key UNIQUE (clerk_user_id, instance_id)`
+    );
+  } catch (e) {
+    // Constraint may already exist — ignore
+  }
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS user_wantlist (
       id                 SERIAL PRIMARY KEY,
@@ -839,33 +866,37 @@ export async function upsertCollectionItems(
   items: Array<{ id: number; data: object; addedAt?: Date; folderId?: number; rating?: number; instanceId?: number; notes?: any[] }>
 ): Promise<void> {
   if (!items.length) return;
-  // Deduplicate by release ID within batch — keep last occurrence (user may own multiple copies)
+  // Deduplicate by instance_id within the batch. Items without an instance_id get a
+  // synthetic negative id derived from the release_id so they still conflict-check
+  // correctly against the (clerk_user_id, instance_id) unique constraint.
   const deduped = new Map<number, typeof items[0]>();
-  for (const item of items) deduped.set(item.id, item);
-  const unique = [...deduped.values()];
+  for (const item of items) {
+    const key = item.instanceId ?? -item.id;
+    deduped.set(key, item);
+  }
   const ids:        number[]       = [];
   const dataArr:    string[]       = [];
   const addedArr:   (Date | null)[] = [];
   const folderArr:  number[]       = [];
   const ratingArr:  number[]       = [];
-  const instanceArr:(number|null)[]= [];
+  const instanceArr:number[]       = [];
   const notesArr:   (string|null)[]= [];
-  for (const item of unique) {
+  for (const [key, item] of deduped) {
     ids.push(item.id);
     dataArr.push(JSON.stringify(item.data));
     addedArr.push(item.addedAt ?? null);
     folderArr.push(item.folderId ?? 0);
     ratingArr.push(item.rating ?? 0);
-    instanceArr.push(item.instanceId ?? null);
+    instanceArr.push(key);
     notesArr.push(item.notes ? JSON.stringify(item.notes) : null);
   }
   await getPool().query(
     `INSERT INTO user_collection (clerk_user_id, discogs_release_id, data, added_at, synced_at, folder_id, rating, instance_id, notes)
      SELECT $1, unnest($2::int[]), unnest($3::jsonb[]), unnest($4::timestamptz[]), NOW(), unnest($5::int[]), unnest($6::int[]), unnest($7::int[]), unnest($8::jsonb[])
-     ON CONFLICT (clerk_user_id, discogs_release_id)
+     ON CONFLICT (clerk_user_id, instance_id)
      DO UPDATE SET data = EXCLUDED.data, added_at = EXCLUDED.added_at, synced_at = NOW(),
                    folder_id = EXCLUDED.folder_id, rating = EXCLUDED.rating,
-                   instance_id = EXCLUDED.instance_id, notes = EXCLUDED.notes`,
+                   discogs_release_id = EXCLUDED.discogs_release_id, notes = EXCLUDED.notes`,
     [clerkUserId, ids, dataArr, addedArr, folderArr, ratingArr, instanceArr, notesArr]
   );
 }
@@ -885,15 +916,76 @@ export async function upsertCollectionFolders(
   }
 }
 
+export async function renameCollectionFolder(
+  clerkUserId: string,
+  folderId: number,
+  newName: string
+): Promise<void> {
+  await getPool().query(
+    `UPDATE user_collection_folders SET folder_name = $3 WHERE clerk_user_id = $1 AND folder_id = $2`,
+    [clerkUserId, folderId, newName]
+  );
+}
+
+export async function deleteCollectionFolder(
+  clerkUserId: string,
+  folderId: number
+): Promise<void> {
+  await getPool().query(
+    `DELETE FROM user_collection_folders WHERE clerk_user_id = $1 AND folder_id = $2`,
+    [clerkUserId, folderId]
+  );
+  // If the user's default-add folder pointed at this folder, reset it to Uncategorized (1)
+  await getPool().query(
+    `UPDATE user_tokens SET default_add_folder_id = 1
+      WHERE clerk_user_id = $1 AND default_add_folder_id = $2`,
+    [clerkUserId, folderId]
+  );
+}
+
+/** Bulk reassign every collection item in one folder to another (local only). */
+export async function moveAllCollectionItemsBetweenFolders(
+  clerkUserId: string,
+  fromFolderId: number,
+  toFolderId: number
+): Promise<number> {
+  const r = await getPool().query(
+    `UPDATE user_collection SET folder_id = $3 WHERE clerk_user_id = $1 AND folder_id = $2 RETURNING 1`,
+    [clerkUserId, fromFolderId, toFolderId]
+  );
+  return r.rowCount ?? 0;
+}
+
+/** Return every (releaseId, instanceId, folderId) tuple for a user's items in a specific folder. */
+export async function getFolderContents(
+  clerkUserId: string,
+  folderId: number
+): Promise<Array<{ releaseId: number; instanceId: number | null }>> {
+  const r = await getPool().query(
+    `SELECT discogs_release_id, instance_id FROM user_collection WHERE clerk_user_id = $1 AND folder_id = $2`,
+    [clerkUserId, folderId]
+  );
+  return r.rows.map(row => ({
+    releaseId: row.discogs_release_id,
+    instanceId: row.instance_id != null && row.instance_id > 0 ? row.instance_id : null,
+  }));
+}
+
 export async function getCollectionFolderList(
   clerkUserId: string
 ): Promise<Array<{ folderId: number; name: string; count: number }>> {
+  // Join against user_collection for a live count so after local rename/move
+  // operations the folder pill counts stay accurate without waiting for sync.
   const r = await getPool().query(
-    `SELECT folder_id, folder_name, item_count FROM user_collection_folders
-     WHERE clerk_user_id = $1 ORDER BY folder_name ASC`,
+    `SELECT f.folder_id, f.folder_name,
+            COALESCE((SELECT COUNT(*)::int FROM user_collection uc
+                      WHERE uc.clerk_user_id = f.clerk_user_id AND uc.folder_id = f.folder_id), 0) AS live_count
+       FROM user_collection_folders f
+      WHERE f.clerk_user_id = $1
+      ORDER BY f.folder_name ASC`,
     [clerkUserId]
   );
-  return r.rows.map(row => ({ folderId: row.folder_id, name: row.folder_name, count: row.item_count }));
+  return r.rows.map(row => ({ folderId: row.folder_id, name: row.folder_name, count: row.live_count }));
 }
 
 export async function upsertWantlistItems(
@@ -929,8 +1021,23 @@ export async function upsertWantlistItems(
 
 // ── Phase 2: Collection/Wantlist action helpers ──────────────────────────
 
-export async function deleteCollectionItem(clerkUserId: string, releaseId: number): Promise<void> {
-  await getPool().query(`DELETE FROM user_collection WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId]);
+export async function deleteCollectionItem(
+  clerkUserId: string,
+  releaseId: number,
+  instanceId?: number
+): Promise<void> {
+  if (instanceId !== undefined && instanceId !== null) {
+    await getPool().query(
+      `DELETE FROM user_collection WHERE clerk_user_id = $1 AND discogs_release_id = $2 AND instance_id = $3`,
+      [clerkUserId, releaseId, instanceId]
+    );
+  } else {
+    // No instance_id given — remove all instances of this release (legacy callers)
+    await getPool().query(
+      `DELETE FROM user_collection WHERE clerk_user_id = $1 AND discogs_release_id = $2`,
+      [clerkUserId, releaseId]
+    );
+  }
 }
 
 export async function deleteWantlistItem(clerkUserId: string, releaseId: number): Promise<void> {
@@ -947,35 +1054,109 @@ export async function pruneWantlistItems(clerkUserId: string, keepIds: number[])
   return r.rowCount ?? 0;
 }
 
-/** Remove local collection items that no longer exist in Discogs after a full sync */
-export async function pruneCollectionItems(clerkUserId: string, keepIds: number[]): Promise<number> {
-  if (!keepIds.length) return 0;
+/** Remove local collection items (by instance_id) that no longer exist in Discogs after a full sync */
+export async function pruneCollectionItems(clerkUserId: string, keepInstanceIds: number[]): Promise<number> {
+  if (!keepInstanceIds.length) return 0;
   const r = await getPool().query(
-    `DELETE FROM user_collection WHERE clerk_user_id = $1 AND discogs_release_id != ALL($2::int[]) RETURNING 1`,
-    [clerkUserId, keepIds]
+    `DELETE FROM user_collection WHERE clerk_user_id = $1 AND instance_id IS NOT NULL AND instance_id != ALL($2::int[]) RETURNING 1`,
+    [clerkUserId, keepInstanceIds]
   );
   return r.rowCount ?? 0;
 }
 
-export async function updateCollectionRating(clerkUserId: string, releaseId: number, rating: number): Promise<void> {
-  await getPool().query(`UPDATE user_collection SET rating = $3 WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId, rating]);
+export async function updateCollectionRating(
+  clerkUserId: string,
+  releaseId: number,
+  rating: number,
+  instanceId?: number
+): Promise<void> {
+  if (instanceId !== undefined && instanceId !== null) {
+    await getPool().query(
+      `UPDATE user_collection SET rating = $4 WHERE clerk_user_id = $1 AND discogs_release_id = $2 AND instance_id = $3`,
+      [clerkUserId, releaseId, instanceId, rating]
+    );
+  } else {
+    await getPool().query(
+      `UPDATE user_collection SET rating = $3 WHERE clerk_user_id = $1 AND discogs_release_id = $2`,
+      [clerkUserId, releaseId, rating]
+    );
+  }
 }
 
-export async function updateCollectionFolder(clerkUserId: string, releaseId: number, folderId: number): Promise<void> {
-  await getPool().query(`UPDATE user_collection SET folder_id = $3 WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId, folderId]);
+export async function updateCollectionFolder(
+  clerkUserId: string,
+  releaseId: number,
+  folderId: number,
+  instanceId?: number
+): Promise<void> {
+  if (instanceId !== undefined && instanceId !== null) {
+    await getPool().query(
+      `UPDATE user_collection SET folder_id = $4 WHERE clerk_user_id = $1 AND discogs_release_id = $2 AND instance_id = $3`,
+      [clerkUserId, releaseId, instanceId, folderId]
+    );
+  } else {
+    await getPool().query(
+      `UPDATE user_collection SET folder_id = $3 WHERE clerk_user_id = $1 AND discogs_release_id = $2`,
+      [clerkUserId, releaseId, folderId]
+    );
+  }
 }
 
+/** Return the first stored instance for a release (legacy single-instance helper). */
 export async function getCollectionInstance(clerkUserId: string, releaseId: number): Promise<{ instanceId: number | null; folderId: number; rating: number; notes: any[] } | null> {
   const r = await getPool().query(
-    `SELECT instance_id, folder_id, rating, notes FROM user_collection WHERE clerk_user_id = $1 AND discogs_release_id = $2`,
+    `SELECT instance_id, folder_id, rating, notes FROM user_collection WHERE clerk_user_id = $1 AND discogs_release_id = $2 ORDER BY instance_id ASC LIMIT 1`,
     [clerkUserId, releaseId]
   );
   if (!r.rows[0]) return null;
-  return { instanceId: r.rows[0].instance_id, folderId: r.rows[0].folder_id ?? 0, rating: r.rows[0].rating ?? 0, notes: r.rows[0].notes ?? [] };
+  const instId = r.rows[0].instance_id;
+  // Hide synthetic negative instance_ids (used as placeholders for legacy rows)
+  return {
+    instanceId: instId != null && instId > 0 ? instId : null,
+    folderId: r.rows[0].folder_id ?? 0,
+    rating: r.rows[0].rating ?? 0,
+    notes: r.rows[0].notes ?? [],
+  };
 }
 
-export async function updateCollectionNotes(clerkUserId: string, releaseId: number, notes: any[]): Promise<void> {
-  await getPool().query(`UPDATE user_collection SET notes = $3 WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId, JSON.stringify(notes)]);
+/** Return every stored instance of a release in the user's collection. */
+export async function getCollectionInstances(
+  clerkUserId: string,
+  releaseId: number
+): Promise<Array<{ instanceId: number | null; folderId: number; rating: number; notes: any[]; addedAt: Date | null }>> {
+  const r = await getPool().query(
+    `SELECT instance_id, folder_id, rating, notes, added_at
+       FROM user_collection
+      WHERE clerk_user_id = $1 AND discogs_release_id = $2
+      ORDER BY added_at ASC NULLS LAST, instance_id ASC`,
+    [clerkUserId, releaseId]
+  );
+  return r.rows.map(row => ({
+    instanceId: row.instance_id != null && row.instance_id > 0 ? row.instance_id : null,
+    folderId: row.folder_id ?? 0,
+    rating: row.rating ?? 0,
+    notes: row.notes ?? [],
+    addedAt: row.added_at ?? null,
+  }));
+}
+
+export async function updateCollectionNotes(
+  clerkUserId: string,
+  releaseId: number,
+  notes: any[],
+  instanceId?: number
+): Promise<void> {
+  if (instanceId !== undefined && instanceId !== null) {
+    await getPool().query(
+      `UPDATE user_collection SET notes = $4 WHERE clerk_user_id = $1 AND discogs_release_id = $2 AND instance_id = $3`,
+      [clerkUserId, releaseId, instanceId, JSON.stringify(notes)]
+    );
+  } else {
+    await getPool().query(
+      `UPDATE user_collection SET notes = $3 WHERE clerk_user_id = $1 AND discogs_release_id = $2`,
+      [clerkUserId, releaseId, JSON.stringify(notes)]
+    );
+  }
 }
 
 // ── Phase 4: Price intelligence DB functions ─────────────────────────────
@@ -1180,19 +1361,43 @@ export async function getCollectionPage(
   const { clause: dataClause, params: dataFilterParams } = buildCwWhere(filters ?? {}, 4);
   const { clause: countClause, params: countFilterParams } = buildCwWhere(filters ?? {}, 2);
   const orderBy = cwOrderBy(filters?.sort);
+  // A release may have multiple instances (multiple copies owned). Collapse to one
+  // card per release in the grid via DISTINCT ON, picking the highest-rated/most-
+  // recently-added instance as representative. Also surface a per-release instance
+  // count so the UI can show "×N copies" badges.
   const [dataR, countR] = await Promise.all([
     getPool().query(
-      `SELECT data, rating, notes FROM user_collection WHERE clerk_user_id = $1${dataClause}
+      `SELECT data, rating, notes, instance_count FROM (
+         SELECT DISTINCT ON (discogs_release_id)
+                discogs_release_id,
+                data,
+                rating,
+                notes,
+                added_at,
+                id,
+                COUNT(*) OVER (PARTITION BY discogs_release_id) AS instance_count
+           FROM user_collection
+          WHERE clerk_user_id = $1${dataClause}
+          ORDER BY discogs_release_id, rating DESC NULLS LAST, added_at DESC NULLS LAST, id DESC
+       ) sub
        ${orderBy}
        LIMIT $2 OFFSET $3`,
       [clerkUserId, perPage, offset, ...dataFilterParams]
     ),
     getPool().query(
-      `SELECT COUNT(*)::int AS total FROM user_collection WHERE clerk_user_id = $1${countClause}`,
+      `SELECT COUNT(DISTINCT discogs_release_id)::int AS total FROM user_collection WHERE clerk_user_id = $1${countClause}`,
       [clerkUserId, ...countFilterParams]
     ),
   ]);
-  return { items: dataR.rows.map(r => ({ ...r.data, _rating: r.rating ?? 0, _notes: r.notes ?? [] })), total: countR.rows[0]?.total ?? 0 };
+  return {
+    items: dataR.rows.map(r => ({
+      ...r.data,
+      _rating: r.rating ?? 0,
+      _notes: r.notes ?? [],
+      _instanceCount: r.instance_count ?? 1,
+    })),
+    total: countR.rows[0]?.total ?? 0,
+  };
 }
 
 export async function getAllCollectionItems(clerkUserId: string): Promise<any[]> {
@@ -1270,10 +1475,48 @@ export async function getWantlistFacets(clerkUserId: string, genre?: string): Pr
 
 export async function getCollectionIds(clerkUserId: string): Promise<number[]> {
   const r = await getPool().query(
-    "SELECT discogs_release_id FROM user_collection WHERE clerk_user_id = $1",
+    "SELECT DISTINCT discogs_release_id FROM user_collection WHERE clerk_user_id = $1",
     [clerkUserId]
   );
   return r.rows.map(row => row.discogs_release_id);
+}
+
+/**
+ * Returns a map of discogs_release_id → instance_count for releases the user owns
+ * more than one copy of. Used to render the "(N)" badge on card thumbnails.
+ */
+export async function getCollectionMultiInstanceCounts(
+  clerkUserId: string
+): Promise<Record<number, number>> {
+  const r = await getPool().query(
+    `SELECT discogs_release_id, COUNT(*)::int AS n
+       FROM user_collection
+      WHERE clerk_user_id = $1
+      GROUP BY discogs_release_id
+     HAVING COUNT(*) > 1`,
+    [clerkUserId]
+  );
+  const out: Record<number, number> = {};
+  for (const row of r.rows) out[row.discogs_release_id] = row.n;
+  return out;
+}
+
+export async function getDefaultAddFolderId(clerkUserId: string): Promise<number> {
+  const r = await getPool().query(
+    `SELECT default_add_folder_id FROM user_tokens WHERE clerk_user_id = $1`,
+    [clerkUserId]
+  );
+  const v = r.rows[0]?.default_add_folder_id;
+  return Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : 1;
+}
+
+export async function setDefaultAddFolderId(clerkUserId: string, folderId: number): Promise<void> {
+  const fid = Number(folderId);
+  if (!Number.isFinite(fid) || fid < 1) throw new Error("Invalid folder id");
+  await getPool().query(
+    `UPDATE user_tokens SET default_add_folder_id = $2 WHERE clerk_user_id = $1`,
+    [clerkUserId, fid]
+  );
 }
 
 export async function getWantedSample(limit: number = 24, excludeIds: number[] = []): Promise<object[]> {
@@ -2164,7 +2407,7 @@ export async function getUserCollectionStats(): Promise<{ users: any[]; global: 
       c.top_styles
     FROM user_tokens u
     LEFT JOIN LATERAL (
-      SELECT COUNT(*)::int AS coll_count,
+      SELECT COUNT(DISTINCT discogs_release_id)::int AS coll_count,
              MIN(added_at) AS oldest_added,
              MAX(added_at) AS newest_added,
              (SELECT array_agg(g ORDER BY cnt DESC) FROM (

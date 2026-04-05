@@ -313,6 +313,40 @@ function showToast(message, type = "error", duration = 4000) {
   }, duration);
 }
 
+// Toast with a single clickable action link. `onAction` is called if the link is clicked.
+// The toast stays visible longer by default so the user can react.
+function showToastWithAction(message, actionLabel, onAction, { type = "success", duration = 6000 } = {}) {
+  let container = document.getElementById("toast-container");
+  if (!container) {
+    container = document.createElement("div");
+    container.id = "toast-container";
+    document.body.appendChild(container);
+  }
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type} toast-with-action`;
+  const msgSpan = document.createElement("span");
+  msgSpan.textContent = message + " ";
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "toast-action-btn";
+  btn.textContent = actionLabel;
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try { onAction?.(); } finally {
+      toast.classList.add("toast-removing");
+      toast.addEventListener("animationend", () => toast.remove());
+    }
+  });
+  toast.appendChild(msgSpan);
+  toast.appendChild(btn);
+  container.appendChild(toast);
+  setTimeout(() => {
+    toast.classList.add("toast-removing");
+    toast.addEventListener("animationend", () => toast.remove());
+  }, duration);
+}
+
 // ── Loading skeleton helpers ─────────────────────────────────────────────
 function renderSkeletonGrid(count = 16) {
   return Array.from({ length: count }, () =>

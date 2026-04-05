@@ -1046,22 +1046,45 @@ function renderActionsImmediate(rid, entityType = "release") {
   </div>`;
 }
 
-// Fetch instance data in background and upgrade the rating stars
+// Fetch instance data in background and upgrade the rating stars.
+// Also fetches all instances (multi-copy support) and renders a per-copy
+// summary when the user owns more than one instance of this release.
+//
+// If window._modalActiveInstanceId is set (from the (N) popover on a card),
+// the modal's rating stars / folder / remove button are scoped to that
+// specific instance instead of the default primary one. The hint is
+// consumed once and cleared.
 async function loadModalInstanceData(releaseId) {
   const el = document.getElementById("modal-actions");
   if (!el) return;
   const rid = Number(releaseId);
   let instanceId = null, folderId = 1, currentRating = 0;
+  let allInstances = [];
   try {
     const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
     if (sessionToken) {
-      const data = await fetch(`/api/user/collection/instance?releaseId=${rid}`, {
-        headers: { Authorization: `Bearer ${sessionToken}` }
-      }).then(r => r.json());
-      if (data?.found) {
-        instanceId = data.instance_id;
-        folderId = data.folder_id ?? 1;
-        currentRating = data.rating ?? 0;
+      const headers = { Authorization: `Bearer ${sessionToken}` };
+      const [singleRes, allRes] = await Promise.all([
+        fetch(`/api/user/collection/instance?releaseId=${rid}`, { headers }).then(r => r.json()).catch(() => null),
+        fetch(`/api/user/collection/instances?releaseId=${rid}`, { headers }).then(r => r.json()).catch(() => null),
+      ]);
+      if (singleRes?.found) {
+        instanceId = singleRes.instance_id;
+        folderId = singleRes.folder_id ?? 1;
+        currentRating = singleRes.rating ?? 0;
+      }
+      if (Array.isArray(allRes?.instances)) allInstances = allRes.instances;
+
+      // If the user clicked a specific instance in the (N) popover, prefer it.
+      const hint = Number(window._modalActiveInstanceId ?? 0);
+      if (hint) {
+        const match = allInstances.find(i => Number(i.instance_id) === hint);
+        if (match) {
+          instanceId = match.instance_id;
+          folderId = match.folder_id ?? 1;
+          currentRating = match.rating ?? 0;
+        }
+        window._modalActiveInstanceId = null; // consume hint
       }
     }
   } catch {}
@@ -1074,6 +1097,215 @@ async function loadModalInstanceData(releaseId) {
     ratingEl.dataset.rating = currentRating;
     ratingEl.style.opacity = "";
   }
+  renderMultiInstancePanel(rid, allInstances, instanceId);
+}
+
+// Open the (N) popover listing every instance the user owns of this release.
+// Clicking a row opens the standard album modal pre-scoped to that instance.
+async function openInstancesPopover(event, releaseId) {
+  event?.preventDefault?.();
+  event?.stopPropagation?.();
+  closeInstancesPopover();
+  const rid = Number(releaseId);
+  const anchor = event?.currentTarget || event?.target;
+  if (!anchor) return;
+
+  // Fetch instances
+  let instances = [];
+  try {
+    const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
+    if (!sessionToken) { showToast?.("Sign in to view your copies", "error"); return; }
+    const data = await fetch(`/api/user/collection/instances?releaseId=${rid}`, {
+      headers: { Authorization: `Bearer ${sessionToken}` }
+    }).then(r => r.json()).catch(() => null);
+    if (Array.isArray(data?.instances)) instances = data.instances;
+  } catch {}
+  if (!instances.length) return;
+
+  // Look up folder names
+  const folderMap = new Map([[0, "All"], [1, "Uncategorized"]]);
+  try {
+    if (Array.isArray(window._collectionFolders)) {
+      for (const f of window._collectionFolders) folderMap.set(Number(f.folderId ?? f.id), f.name);
+    }
+  } catch {}
+
+  // Find the card's discogs URL so the modal can link back
+  const card = anchor.closest("a[onclick]");
+  let discogsUrl = "#";
+  const match = card?.getAttribute("onclick")?.match(/openModal\(event,['"]?\d+['"]?,\s*'\w+',\s*'([^']+)'/);
+  if (match) discogsUrl = match[1];
+
+  const rows = instances.map((inst, idx) => {
+    const folderName = folderMap.get(Number(inst.folder_id)) || `Folder ${inst.folder_id}`;
+    const rating = inst.rating > 0 ? "★".repeat(inst.rating) + "☆".repeat(5 - inst.rating) : "unrated";
+    const added = inst.added_at ? new Date(inst.added_at).toLocaleDateString() : "";
+    const instId = Number(inst.instance_id ?? 0);
+    return `<li class="instance-popover-row" data-instance-id="${instId}">
+      <span class="instance-popover-folder">${escapeHtml(folderName)}</span>
+      <span class="instance-popover-rating">${rating}</span>
+      ${added ? `<span class="instance-popover-added">${added}</span>` : ""}
+    </li>`;
+  }).join("");
+
+  const pop = document.createElement("div");
+  pop.id = "instance-popover";
+  pop.className = "instance-popover";
+  pop.innerHTML = `
+    <div class="instance-popover-header">${instances.length} ${instances.length === 1 ? "copy" : "copies"} — click to open</div>
+    <ul class="instance-popover-list">${rows}</ul>
+  `;
+  document.body.appendChild(pop);
+
+  // Position near the anchor (below, aligned left)
+  const rect = anchor.getBoundingClientRect();
+  const top = rect.bottom + window.scrollY + 6;
+  const left = rect.left + window.scrollX;
+  pop.style.top = `${top}px`;
+  pop.style.left = `${left}px`;
+
+  // Clamp to viewport
+  requestAnimationFrame(() => {
+    const pr = pop.getBoundingClientRect();
+    if (pr.right > window.innerWidth - 8) {
+      pop.style.left = `${window.scrollX + window.innerWidth - pr.width - 8}px`;
+    }
+  });
+
+  // Click rows → open modal scoped to that instance
+  pop.querySelectorAll(".instance-popover-row").forEach(row => {
+    row.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      const instId = Number(row.dataset.instanceId) || 0;
+      window._modalActiveInstanceId = instId;
+      closeInstancesPopover();
+      if (typeof openModal === "function") openModal(null, rid, "release", discogsUrl);
+    });
+  });
+
+  // Dismiss on outside click / escape
+  setTimeout(() => {
+    const outsideClickHandler = (ev) => {
+      const pop = document.getElementById("instance-popover");
+      if (!pop) {
+        document.removeEventListener("click", outsideClickHandler, true);
+        return;
+      }
+      if (!pop.contains(ev.target)) {
+        document.removeEventListener("click", outsideClickHandler, true);
+        closeInstancesPopover();
+      }
+    };
+    document.addEventListener("click", outsideClickHandler, true);
+    window._instancePopoverOutsideHandler = outsideClickHandler;
+  }, 0);
+}
+
+function closeInstancesPopover() {
+  const existing = document.getElementById("instance-popover");
+  if (existing) existing.remove();
+  if (window._instancePopoverOutsideHandler) {
+    document.removeEventListener("click", window._instancePopoverOutsideHandler, true);
+    window._instancePopoverOutsideHandler = null;
+  }
+}
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeInstancesPopover(); });
+
+// Render a "×N copies" panel when the user owns more than one instance of a release.
+// Clicking a row switches the modal's active instance (rating stars, remove
+// button, folder, notes all become scoped to that copy).
+function renderMultiInstancePanel(releaseId, instances, activeInstanceId) {
+  const existing = document.getElementById("modal-instances-panel");
+  if (existing) existing.remove();
+  if (!Array.isArray(instances) || instances.length < 1) return;
+  const actionsEl = document.getElementById("modal-actions");
+  if (!actionsEl) return;
+  const activeId = Number(activeInstanceId ?? 0);
+  const count = instances.length;
+  const multi = count >= 2;
+
+  // Look up folder names from window._collectionFolders (if available)
+  const folderMap = new Map();
+  try {
+    if (Array.isArray(window._collectionFolders)) {
+      for (const f of window._collectionFolders) folderMap.set(Number(f.folderId ?? f.id), f.name);
+    }
+  } catch {}
+  folderMap.set(0, "All");
+  folderMap.set(1, "Uncategorized");
+
+  const rows = multi ? instances.map(inst => {
+    const fid = Number(inst.folder_id);
+    const folderName = folderMap.get(fid) || `Folder ${fid}`;
+    const rating = inst.rating > 0 ? "★".repeat(inst.rating) + "☆".repeat(5 - inst.rating) : "unrated";
+    const added = inst.added_at ? new Date(inst.added_at).toLocaleDateString() : "";
+    const notesStr = Array.isArray(inst.notes) && inst.notes.length
+      ? inst.notes.filter(n => n?.value).map(n => n.value).join(" · ")
+      : "";
+    const instId = Number(inst.instance_id ?? 0);
+    const isActive = instId && instId === activeId;
+    return `<li class="modal-instance-row${isActive ? " is-active" : ""}" data-instance-id="${instId}" title="Click to make this copy active">
+      <button type="button" class="modal-instance-folder modal-folder-chip" data-instance-id="${instId}" data-folder-id="${fid}" title="Click to move this copy to a different folder">${escapeHtml(folderName)}</button>
+      <span class="modal-instance-rating">${rating}</span>
+      ${added ? `<span class="modal-instance-added">${added}</span>` : ""}
+      ${notesStr ? `<span class="modal-instance-notes">${escapeHtml(notesStr)}</span>` : ""}
+    </li>`;
+  }).join("") : "";
+
+  // Single-copy header needs a folder chip too
+  let singleFolderChip = "";
+  if (!multi && instances[0]) {
+    const inst = instances[0];
+    const fid = Number(inst.folder_id);
+    const folderName = folderMap.get(fid) || `Folder ${fid}`;
+    const instId = Number(inst.instance_id ?? 0);
+    singleFolderChip = ` in <button type="button" class="modal-folder-chip modal-folder-chip-inline" data-instance-id="${instId}" data-folder-id="${fid}" title="Click to move this copy to a different folder">${escapeHtml(folderName)}</button>`;
+  }
+
+  const panel = document.createElement("div");
+  panel.id = "modal-instances-panel";
+  panel.className = "modal-instances-panel";
+  const headerText = multi
+    ? `You own <strong>${count}</strong> copies of this release`
+    : `You own <strong>1</strong> copy of this release${singleFolderChip}`;
+  const hint = multi ? `<span class="modal-instances-hint">— click a copy to edit it</span>` : "";
+  panel.innerHTML = `
+    <div class="modal-instances-header">
+      <span class="modal-instances-title">${headerText} ${hint}</span>
+      <button type="button" class="modal-add-copy-btn" onclick="openAddCopyFolderPicker(${Number(releaseId)})" title="Add another copy of this release to a folder">+ Add another copy</button>
+    </div>
+    ${multi ? `<ul class="modal-instances-list">${rows}</ul>` : ""}
+  `;
+  actionsEl.insertAdjacentElement("afterend", panel);
+
+  // Folder chips → open move picker for that specific instance
+  panel.querySelectorAll(".modal-folder-chip").forEach(chip => {
+    chip.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const instId = Number(chip.dataset.instanceId) || 0;
+      const fromFolderId = Number(chip.dataset.folderId);
+      if (!instId || !Number.isFinite(fromFolderId)) return;
+      if (typeof openQuickFolderPicker === "function") {
+        openQuickFolderPicker(Number(releaseId), instId, fromFolderId);
+      }
+    });
+  });
+
+  // Row click → switch the active instance without closing the modal.
+  // (Folder chip clicks are captured above with stopPropagation so they don't trigger this.)
+  panel.querySelectorAll(".modal-instance-row").forEach(row => {
+    row.addEventListener("click", () => {
+      const instId = Number(row.dataset.instanceId) || 0;
+      if (!instId || instId === activeId) return;
+      window._modalActiveInstanceId = instId;
+      loadModalInstanceData(releaseId);
+    });
+  });
+}
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 }
 
 // Full re-render of action buttons (used after toggle actions)
@@ -1178,7 +1410,23 @@ async function toggleCollection(releaseId) {
       return;
     }
 
-    showToast(inCol ? "Removed from collection" : "Added to collection");
+    if (inCol) {
+      showToast("Removed from collection");
+    } else {
+      const landedFolderId = Number(r.folderId) || 1;
+      const folderName = r.folderName || (window._collectionFolders || []).find(f => Number(f.folderId) === landedFolderId)?.name || "Uncategorized";
+      const instanceId = Number(r.instanceId) || null;
+      if (instanceId && typeof showToastWithAction === "function") {
+        showToastWithAction(
+          `Added to ${folderName}`,
+          "Move…",
+          () => openQuickFolderPicker?.(releaseId, instanceId, landedFolderId),
+          { type: "success", duration: 6000 }
+        );
+      } else {
+        showToast(`Added to ${folderName}`, "success");
+      }
+    }
     // Refresh action row to update rating stars, instance info
     loadModalActions(releaseId);
     // Update badges on cards in the background
@@ -1403,17 +1651,22 @@ function renderMasterVersions() {
     const inList = window._listMembership?.[v.id]?.length > 0;
     const inInv  = window._inventoryIds?.has(v.id);
     const isFav  = window._favoriteKeys?.has(`release:${v.id}`);
+    const listNames = inList ? (window._listMembership[v.id].map(l => l.name || l.title).filter(Boolean).join(", ")) : "";
     const badgeParts = [];
-    if (inCol)  badgeParts.push(`<span style="color:#6ddf70;font-weight:700">C</span>`);
-    if (inWant) badgeParts.push(`<span style="color:#f0c95c;font-weight:700">W</span>`);
-    if (inList) badgeParts.push(`<span style="color:#a0ccf0;font-weight:700">L</span>`);
-    if (inInv)  badgeParts.push(`<span style="color:#cda0f5;font-weight:700">I</span>`);
-    if (isFav)  badgeParts.push(`<span style="color:#ff80ab">♥</span>`);
+    if (inCol)  badgeParts.push(`<span style="color:#6ddf70;font-weight:700" title="In your collection">C</span>`);
+    if (inWant) badgeParts.push(`<span style="color:#f0c95c;font-weight:700" title="In your wantlist">W</span>`);
+    if (inList) badgeParts.push(`<span style="color:#a0ccf0;font-weight:700" title="${escHtml(listNames ? `In your list${window._listMembership[v.id].length > 1 ? "s" : ""}: ${listNames}` : "In one of your lists")}">L</span>`);
+    if (inInv)  badgeParts.push(`<span style="color:#cda0f5;font-weight:700" title="In your marketplace inventory">I</span>`);
+    if (isFav)  badgeParts.push(`<span style="color:#ff80ab" title="Favorited">♥</span>`);
     const badge  = `<span>${badgeParts.length ? badgeParts.join("") : "&nbsp;"}</span>`;
+    const fmtText = _mvGetDisplayFormat(v);
+    const fmtCell = inCol
+      ? `<span title="Click to view your copy / change folder"><a href="#" class="modal-internal-link mv-format-owned" onclick="event.preventDefault();event.stopPropagation();openInstancesPopover(event,${v.id})" style="color:#7ec87e">${escHtml(fmtText)}</a></span>`
+      : `<span style="color:#888" title="${escHtml(fmtText)}">${escHtml(fmtText)}</span>`;
     return `
       <span style="color:#888">${escHtml(!v.year || v.year === "0" ? "?" : String(v.year))}</span>
       <span style="color:#aaa">${escHtml(v.country || "?")}</span>
-      <span style="color:#888" title="${escHtml(_mvGetDisplayFormat(v))}">${escHtml(_mvGetDisplayFormat(v))}</span>
+      ${fmtCell}
       ${badge}
       <span title="${escHtml(v.catno || "")}">${v.catno && v.catno !== "—" ? `<a href="#" class="modal-internal-link catno-link" onclick="openVersionPopup(event,${v.id})" title="Open this release">${escHtml(v.catno)}</a>` : `<span style="color:#7ec87e">—</span>`}</span>
       <span title="${escHtml(v.label ?? v.title ?? "")}">${(v.label) ? `<a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('f-label').value='${escHtml((v.label).replace(/'/g, "\\'"))}';toggleAdvanced(true);doSearch(1)" title="Search for ${escHtml(v.label)}" style="color:var(--fg)">${escHtml(v.label)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-label','${escHtml((v.label).replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(v.label)}" style="font-size:0.85em">⌕</a>` : `<span style="color:#888">${escHtml(v.title ?? "—")}</span>`}</span>`;

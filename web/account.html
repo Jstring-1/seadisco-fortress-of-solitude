@@ -46,18 +46,19 @@
       <div id="signed-out-section">
         <p style="color:var(--text);font-size:1rem;margin-bottom:1rem">
           SeaDisco is powered by the Discogs music database. Free visitors get a handful of searches —
-          connect your own free Discogs token and you get <strong style="color:var(--accent)">your own unlimited search quota</strong>,
-          collection and wantlist syncing, and a curated music news feed.
+          sign in and connect your free Discogs account in one click to unlock
+          <strong style="color:var(--accent)">your own unlimited search quota</strong>,
+          collection and wantlist syncing, ratings, folder management, and a curated music news feed.
         </p>
         <p style="margin-bottom:0.6rem"><strong style="color:var(--text)">Here's all it takes:</strong></p>
         <ol style="color:var(--muted);font-size:0.9rem;line-height:1.9;padding-left:1.2rem;margin-bottom:1.2rem">
-          <li>Create a free account at <a href="https://www.discogs.com/users/register" target="_blank" rel="noopener" style="color:var(--accent)">discogs.com</a> (if you don't have one)</li>
-          <li>Go to <a href="https://www.discogs.com/settings/developers" target="_blank" rel="noopener" style="color:var(--accent)">Settings → Developers</a> and click <strong style="color:var(--text)">Generate new token</strong></li>
-          <li>Come back here, paste it in, and you're done</li>
+          <li>Sign in below with your email (no password — just a one-time verification code)</li>
+          <li>Click <strong style="color:var(--text)">Connect with Discogs</strong> and approve access on Discogs</li>
+          <li>That's it — your collection is yours to browse, rate, and organize</li>
         </ol>
         <p style="color:#555;font-size:0.8rem;margin-bottom:1.4rem">
-          No password needed — signing up just requires an email and a one-time verification code.
-          Your Discogs token is stored securely and only used to search on your behalf. We never see your Discogs password.
+          SeaDisco never sees your Discogs password. The connection is a standard Discogs OAuth authorization,
+          and you can disconnect anytime. Prefer a Personal Access Token? That option is still available after sign-in.
         </p>
         <div id="clerk-sign-in"></div>
       </div>

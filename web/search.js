@@ -680,7 +680,15 @@ function renderCard(item, index) {
   if (type && item.id)
     badges += `<span class="card-badge badge-favorite${isFav ? " is-favorite" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,${item.id},'${type}')" title="${isFav ? "Remove from favorites" : "Add to favorites"}">${isFav ? "♥" : "♡"}</span>`;
 
-  const thumbWrap = `<div class="card-thumb-wrap">${thumb}<div class="card-thumb-badges">${badges}</div></div>`;
+  // Multi-instance "(N)" badge at lower-left — shown when user owns multiple copies
+  // of the same release. Clicking opens a popover listing each instance.
+  const instanceCount = Number(
+    item._instanceCount ?? (isRelease ? (window._collectionInstanceCounts?.[item.id] ?? 0) : 0)
+  );
+  const instanceBadge = (instanceCount > 1 && isRelease)
+    ? `<span class="card-instance-badge" onclick="event.preventDefault();event.stopPropagation();openInstancesPopover(event,${item.id})" title="${instanceCount} copies in your collection — click to view">(${instanceCount})</span>`
+    : "";
+  const thumbWrap = `<div class="card-thumb-wrap">${thumb}<div class="card-thumb-badges">${badges}</div>${instanceBadge}</div>`;
 
   // Rating stars (only for collection/wantlist cards)
   const rating = item._rating ?? 0;
@@ -1074,7 +1082,24 @@ async function toggleCollectionFromCard(btn, releaseId) {
       body: JSON.stringify(body),
     }).then(r => r.json());
     if (!r.ok && r.error) throw new Error(r.error);
-    showToast(inCol ? "Removed from collection" : "Added to collection");
+    if (inCol) {
+      showToast("Removed from collection");
+    } else {
+      // Post-add toast with a "Move…" action so the user can redirect this copy
+      const landedFolderId = Number(r.folderId) || 1;
+      const folderName = r.folderName || (window._collectionFolders || []).find(f => Number(f.folderId) === landedFolderId)?.name || "Uncategorized";
+      const instanceId = Number(r.instanceId) || null;
+      if (instanceId && typeof showToastWithAction === "function") {
+        showToastWithAction(
+          `Added to ${folderName}`,
+          "Move…",
+          () => openQuickFolderPicker?.(releaseId, instanceId, landedFolderId),
+          { type: "success", duration: 6000 }
+        );
+      } else {
+        showToast(`Added to ${folderName}`, "success");
+      }
+    }
     // Update modal buttons if open
     const modalBtn = document.getElementById("modal-col-btn");
     if (modalBtn) {
