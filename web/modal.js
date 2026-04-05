@@ -1035,9 +1035,11 @@ function renderActionsImmediate(rid, entityType = "release") {
   }
   const invListings = (window._inventoryListingIds && window._inventoryListingIds[rid]) || [];
   const hasListing = invListings.length > 0;
-  const firstListingId = hasListing ? (invListings[0].id ?? invListings[0]) : 0;
+  // When the user already has listings for this release, the "copies for sale"
+  // panel below handles editing — no button in the action row. Only offer the
+  // Sell action for releases the user hasn't yet listed.
   const sellBtn = hasListing
-    ? `<button class="modal-act-btn is-listed" id="modal-sell-btn" onclick="openInventoryEditor({mode:'edit',listingId:${firstListingId}})" title="Edit marketplace listing">Listed${invListings.length > 1 ? ` (${invListings.length})` : ''}</button>`
+    ? ""
     : `<button class="modal-act-btn" id="modal-sell-btn" onclick="openInventoryEditor({mode:'create',releaseId:${rid}})" title="Create a marketplace listing for this release">Sell</button>`;
   return `<div id="modal-actions" class="modal-actions" data-release-id="${rid}" data-entity-type="${entityType}">
     <button class="modal-act-btn ${inCol ? 'in-collection' : ''}" id="modal-col-btn" onclick="toggleCollection(${rid})" title="${inCol ? 'Remove from collection' : 'Add to collection'}">
@@ -1270,8 +1272,11 @@ function renderSaleListingRow(l) {
 function toggleSaleListingDetails(btn) {
   const list = document.getElementById("modal-sale-list");
   if (!list) return;
-  const isOpen = !list.hidden;
-  list.hidden = isOpen;
+  // Don't rely on the `hidden` attribute here — the list's base display is
+  // `flex`, which would override `[hidden]` unless marked !important. Use a
+  // class instead so the open/closed state is explicit.
+  const isOpen = list.classList.contains("is-open");
+  list.classList.toggle("is-open", !isOpen);
   btn.setAttribute("aria-expanded", String(!isOpen));
   btn.textContent = isOpen ? "Show details" : "Hide details";
 }
@@ -1361,7 +1366,7 @@ async function renderMultiInstancePanel(releaseId, instances, activeInstanceId) 
         <span class="modal-sale-title">${saleHeader}</span>
         <button type="button" class="modal-sale-toggle" id="modal-sale-toggle" aria-expanded="false" onclick="toggleSaleListingDetails(this)">Show details</button>
       </div>
-      <ul class="modal-sale-list" id="modal-sale-list" hidden>
+      <ul class="modal-sale-list" id="modal-sale-list">
         ${saleListings.map(l => renderSaleListingRow(l)).join("")}
       </ul>
     `;
@@ -1421,8 +1426,10 @@ function loadModalActions(releaseId, context) {
   } else {
     const invListings = (window._inventoryListingIds && window._inventoryListingIds[rid]) || [];
     const hasListing = invListings.length > 0;
+    // No button in the action row when listings exist — the "copies for sale"
+    // panel below handles editing and details.
     const sellBtn = hasListing
-      ? `<button class="modal-act-btn is-listed" id="modal-sell-btn" onclick="openInventoryEditor({mode:'edit',listingId:${(invListings[0].id ?? invListings[0])}})" title="Edit marketplace listing">Listed${invListings.length > 1 ? ` (${invListings.length})` : ''}</button>`
+      ? ""
       : `<button class="modal-act-btn" id="modal-sell-btn" onclick="openInventoryEditor({mode:'create',releaseId:${rid}})" title="Create a marketplace listing for this release">Sell</button>`;
     el.innerHTML = `
       <button class="modal-act-btn ${inCol ? 'in-collection' : ''}" id="modal-col-btn" onclick="toggleCollection(${rid})" title="${inCol ? 'Remove from collection' : 'Add to collection'}">

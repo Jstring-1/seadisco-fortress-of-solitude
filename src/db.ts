@@ -1838,15 +1838,23 @@ export async function getInventoryListingIdsByRelease(
   for (const row of r.rows) {
     const rid = Number(row.discogs_release_id);
     if (!map[rid]) map[rid] = [];
-    // Comments live in the full listing JSON; pull them out defensively.
-    const comments = (() => {
-      try {
-        const d = row.data;
-        if (!d) return null;
+    // Pull comments and posted date out of the full listing JSON. The JSON
+    // blob is refreshed on every sync/write so it's the most reliable source,
+    // whereas the dedicated `posted_at` column can be stale if an earlier
+    // sync pass persisted a NULL or a touch-timestamp by mistake.
+    let comments: string | null = null;
+    let postedFromJson: string | null = null;
+    try {
+      const d = row.data;
+      if (d) {
         const obj = typeof d === "string" ? JSON.parse(d) : d;
-        return obj?.comments ?? null;
-      } catch { return null; }
-    })();
+        comments = obj?.comments ?? null;
+        if (obj?.posted) postedFromJson = String(obj.posted);
+      }
+    } catch {}
+    const postedIso = postedFromJson
+      ? new Date(postedFromJson).toISOString()
+      : (row.posted_at ? new Date(row.posted_at).toISOString() : null);
     map[rid].push({
       id:        Number(row.listing_id),
       status:    row.status ?? null,
@@ -1855,7 +1863,7 @@ export async function getInventoryListingIdsByRelease(
       condition: row.condition ?? null,
       sleeve:    row.sleeve_condition ?? null,
       comments,
-      posted_at: row.posted_at ? new Date(row.posted_at).toISOString() : null,
+      posted_at: postedIso,
     });
   }
   return map;
