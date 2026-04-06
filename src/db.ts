@@ -1569,7 +1569,7 @@ export async function getCollectionPage(
       [clerkUserId, perPage, offset, ...dataFilterParams]
     ),
     getPool().query(
-      `SELECT COUNT(*)::int AS total FROM user_collection WHERE clerk_user_id = $1${countClause}`,
+      `SELECT COUNT(DISTINCT discogs_release_id)::int AS total FROM user_collection WHERE clerk_user_id = $1${countClause}`,
       [clerkUserId, ...countFilterParams]
     ),
   ]);
