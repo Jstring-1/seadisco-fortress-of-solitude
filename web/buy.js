@@ -207,6 +207,12 @@ function renderBuyGrid() {
   grid.innerHTML = _buyItems.map((item, idx) => renderBuyCard(item, idx)).join("");
 }
 
+function refreshBuyListings() {
+  _buyOffset = 0;
+  _buyItems = [];
+  loadBuyListings();
+}
+
 function setBuyPriceFilter(minPrice) {
   _buyMinPrice = minPrice;
   _buyOffset = 0;

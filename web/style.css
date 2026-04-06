@@ -1093,6 +1093,16 @@ a.fresh-card-search-link:hover {
   justify-content: space-between;
   gap: 0.5rem;
 }
+.buy-refresh-btn {
+  background: none;
+  border: 1px solid #333;
+  color: #777;
+  font-size: 0.9rem;
+  padding: 0.15rem 0.45rem;
+  cursor: pointer;
+  line-height: 1;
+}
+.buy-refresh-btn:hover { color: var(--accent); border-color: var(--accent-dim); }
 .buy-price-pills {
   display: flex;
   flex-wrap: wrap;
