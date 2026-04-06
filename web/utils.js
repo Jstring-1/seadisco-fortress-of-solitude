@@ -465,24 +465,47 @@ function toggleSavedDropdown(view) {
   document.querySelectorAll(".saved-search-dropdown").forEach(d => d.style.display = "none");
   if (!showing) {
     dd.style.display = "";
-    // Refresh list
-    loadSavedSearches(view).then(searches => renderSavedList(view, searches));
+    // Cross-pollinate: records ↔ search saved searches
+    const crossView = view === "records" ? "search" : view === "search" ? "records" : null;
+    if (crossView) {
+      Promise.all([loadSavedSearches(view), loadSavedSearches(crossView)])
+        .then(([own, cross]) => renderSavedList(view, own, cross, crossView));
+    } else {
+      loadSavedSearches(view).then(searches => renderSavedList(view, searches));
+    }
   }
 }
 
-function renderSavedList(view, searches) {
+function renderSavedList(view, searches, extraSearches, crossView) {
   const list = document.getElementById(`ss-list-${view}`);
   if (!list) return;
-  if (!searches.length) {
+  const hasOwn = searches.length > 0;
+  const hasCross = (extraSearches ?? []).length > 0;
+  if (!hasOwn && !hasCross) {
     list.innerHTML = '<div class="ss-empty">No saved searches</div>';
     return;
   }
-  list.innerHTML = searches.map(s =>
-    `<div class="ss-item" id="ss-item-${s.id}">
-      <button class="ss-item-btn" onclick="applySavedSearch('${escHtml(view)}',${s.id})" title="${escHtml(JSON.stringify(s.params))}">${escHtml(s.label)}</button>
-      <button class="ss-item-del" onclick="deleteSavedSearchItem(event,'${escHtml(view)}',${s.id})" title="Remove">&times;</button>
-    </div>`
-  ).join("");
+  const ownLabel = view === "search" ? "Search" : view === "records" ? "Collection" : view;
+  const crossLabel = crossView === "search" ? "Search" : crossView === "records" ? "Collection" : crossView;
+  let html = "";
+  if (hasOwn) {
+    if (hasCross) html += `<div class="ss-section-label">${ownLabel}</div>`;
+    html += searches.map(s =>
+      `<div class="ss-item" id="ss-item-${s.id}">
+        <button class="ss-item-btn" onclick="applySavedSearch('${escHtml(view)}',${s.id})" title="${escHtml(JSON.stringify(s.params))}">${escHtml(s.label)}</button>
+        <button class="ss-item-del" onclick="deleteSavedSearchItem(event,'${escHtml(view)}',${s.id})" title="Remove">&times;</button>
+      </div>`
+    ).join("");
+  }
+  if (hasCross) {
+    html += `<div class="ss-section-label">${crossLabel}</div>`;
+    html += extraSearches.map(s =>
+      `<div class="ss-item" id="ss-item-${s.id}">
+        <button class="ss-item-btn" onclick="applySavedSearch('${escHtml(view)}',${s.id},'${escHtml(crossView)}')" title="${escHtml(JSON.stringify(s.params))}">${escHtml(s.label)}</button>
+      </div>`
+    ).join("");
+  }
+  list.innerHTML = html;
 }
 
 async function saveCurrentSearch(view) {
@@ -510,9 +533,10 @@ async function saveCurrentSearch(view) {
   } catch { showToast("Failed to save search", "error"); }
 }
 
-function applySavedSearch(view, id) {
+function applySavedSearch(view, id, sourceView) {
+  const actualSource = sourceView || view;
   const wrap = document.getElementById(`saved-search-${view}`);
-  const searches = _savedSearchCache[view] ?? [];
+  const searches = _savedSearchCache[actualSource] ?? [];
   const s = searches.find(x => x.id === id);
   if (!s || !wrap?._apply) return;
   wrap._apply(s.params);
