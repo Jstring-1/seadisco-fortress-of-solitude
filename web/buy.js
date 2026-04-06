@@ -9,6 +9,12 @@ let _buyLoading = false;
 let _buyDebounce = null;
 const BUY_PAGE_SIZE = 200;
 
+// ── Live eBay search state ──────────────────────────────────────────
+let _ebaySearchItems = [];
+let _ebayRateRemaining = null;
+let _ebayResetAt = null;
+let _ebayCountdownInterval = null;
+
 function renderBuyCard(item, idx) {
   const img = item.image_url
     ? `<img src="${escHtml(item.image_url)}" alt="${escHtml(item.title)}" loading="lazy" onerror="this.style.display='none'">`
@@ -225,4 +231,203 @@ async function loadBuyListings(append = false) {
 function loadMoreBuy() {
   _buyOffset += BUY_PAGE_SIZE;
   loadBuyListings(true);
+}
+
+// ── Live eBay Search ────────────────────────────────────────────────
+
+async function initEbaySearchStatus() {
+  try {
+    const r = await fetch("/api/ebay/search/status");
+    const data = await r.json();
+    _ebayRateRemaining = data.remaining;
+    _ebayResetAt = data.resetsAt;
+    updateEbayMeta();
+    startEbayCountdown();
+  } catch (e) { /* silent */ }
+}
+
+function startEbayCountdown() {
+  if (_ebayCountdownInterval) clearInterval(_ebayCountdownInterval);
+  _ebayCountdownInterval = setInterval(updateEbayMeta, 1000);
+}
+
+function updateEbayMeta() {
+  const el = document.getElementById("ebay-search-meta");
+  if (!el) return;
+  if (_ebayRateRemaining == null) { el.textContent = ""; return; }
+
+  let countdown = "";
+  if (_ebayResetAt) {
+    const ms = new Date(_ebayResetAt).getTime() - Date.now();
+    if (ms > 0) {
+      const h = Math.floor(ms / 3600000);
+      const m = Math.floor((ms % 3600000) / 60000);
+      const s = Math.floor((ms % 60000) / 1000);
+      countdown = ` · resets in ${h}h ${m}m ${s}s`;
+    }
+  }
+
+  el.textContent = `${_ebayRateRemaining.toLocaleString()} / 2,000 searches left today${countdown}`;
+}
+
+async function doEbaySearch() {
+  const input = document.getElementById("ebay-search-input");
+  const q = (input?.value || "").trim();
+  if (q.length < 2) { showToast("Enter at least 2 characters", "error"); return; }
+
+  const resultsDiv = document.getElementById("ebay-search-results");
+  const statusDiv = document.getElementById("ebay-search-status");
+  const clearBtn = document.getElementById("ebay-clear-btn");
+
+  if (resultsDiv) { resultsDiv.style.display = ""; resultsDiv.innerHTML = renderSkeletonGrid(8); }
+  if (statusDiv) statusDiv.style.display = "none";
+  if (clearBtn) clearBtn.style.display = "";
+
+  try {
+    const r = await fetch(`/api/ebay/search?q=${encodeURIComponent(q)}`);
+    const data = await r.json();
+
+    if (r.status === 429) {
+      if (resultsDiv) resultsDiv.style.display = "none";
+      if (statusDiv) {
+        statusDiv.style.display = "";
+        statusDiv.textContent = data.error || "Daily search limit reached. Try again after reset.";
+      }
+      if (data.rateLimit) {
+        _ebayRateRemaining = data.rateLimit.remaining;
+        _ebayResetAt = data.rateLimit.resetsAt;
+        updateEbayMeta();
+      }
+      return;
+    }
+
+    _ebaySearchItems = data.items || [];
+
+    if (data.rateLimit) {
+      _ebayRateRemaining = data.rateLimit.remaining;
+      _ebayResetAt = data.rateLimit.resetsAt;
+      updateEbayMeta();
+    }
+
+    if (!_ebaySearchItems.length) {
+      if (resultsDiv) resultsDiv.innerHTML = renderEmptyState("🔍", "No results", `No eBay listings found for "${escHtml(q)}"`);
+      return;
+    }
+
+    if (resultsDiv) {
+      resultsDiv.innerHTML = _ebaySearchItems.map((item, idx) => renderEbayCard(item, idx)).join("");
+    }
+    if (statusDiv) {
+      statusDiv.style.display = "";
+      const cachedTag = data.cached ? " · cached" : "";
+      statusDiv.textContent = `${data.total.toLocaleString()} results for "${q}"${cachedTag}`;
+    }
+  } catch (e) {
+    if (resultsDiv) resultsDiv.style.display = "none";
+    showToast("eBay search failed — please try again", "error");
+  }
+}
+
+function renderEbayCard(item, idx) {
+  const img = item.image_url
+    ? `<img src="${escHtml(item.image_url)}" alt="${escHtml(item.title)}" loading="lazy" onerror="this.style.display='none'">`
+    : `<div class="thumb-placeholder">🎵</div>`;
+
+  const price = parseFloat(item.price);
+  const priceStr = price.toLocaleString("en-US", { style: "currency", currency: item.currency || "USD" });
+
+  const condition = item.condition || "";
+  const loc = [item.location_city, item.location_state].filter(Boolean).join(", ");
+
+  const bids = item.bid_count ?? 0;
+  const bidStr = `${bids} bid${bids !== 1 ? "s" : ""}`;
+
+  let timeLeft = "";
+  let endingSoon = false;
+  if (item.item_end_date) {
+    const ms = new Date(item.item_end_date).getTime() - Date.now();
+    if (ms > 0) {
+      const hrs = Math.floor(ms / 3600000);
+      const mins = Math.floor((ms % 3600000) / 60000);
+      if (hrs >= 24) { const d = Math.floor(hrs / 24); timeLeft = `${d}d ${hrs % 24}h left`; }
+      else if (hrs > 0) timeLeft = `${hrs}h ${mins}m left`;
+      else if (mins > 0) timeLeft = `${mins}m left`;
+      else timeLeft = `<1m left`;
+      if (ms <= 900000) endingSoon = true;
+    }
+  }
+
+  const conditionShow = condition && condition !== "Used" ? condition : "";
+
+  return `<div class="card buy-card card-animate" onclick="event.stopPropagation();openEbaySearchPopup(${idx})" role="button" tabindex="0" style="--i:${Math.min(idx, 20)};cursor:pointer;-webkit-tap-highlight-color:transparent" title="${escHtml(item.title)}">
+    <div class="card-thumb-wrap" style="pointer-events:none">${img}</div>
+    <div class="card-body" style="pointer-events:none">
+      <div class="card-title">${escHtml(item.title.length > 65 ? item.title.slice(0, 63) + "…" : item.title)}</div>
+      <div class="buy-price">${priceStr}</div>
+      <div class="card-sub buy-bids">${escHtml(bidStr)}</div>
+      ${conditionShow ? `<div class="card-meta">${escHtml(conditionShow)}</div>` : ""}
+      ${loc ? `<div class="card-meta">${escHtml(loc)}</div>` : ""}
+      ${timeLeft ? `<div class="card-meta buy-time-left${endingSoon ? ' ending-soon' : ''}">${timeLeft}</div>` : ""}
+    </div>
+  </div>`;
+}
+
+function openEbaySearchPopup(idx) {
+  const item = _ebaySearchItems[idx];
+  if (!item) return;
+
+  const price = parseFloat(item.price);
+  const priceStr = price.toLocaleString("en-US", { style: "currency", currency: item.currency || "USD" });
+  const condition = item.condition || "";
+  const loc = [item.location_city, item.location_state, item.location_country].filter(Boolean).join(", ");
+  const allImages = item.all_images && item.all_images.length ? item.all_images : (item.image_url ? [item.image_url] : []);
+
+  const buyType = (item.buying_options ?? []).includes("AUCTION")
+    ? `Auction${item.bid_count > 0 ? ` · ${item.bid_count} bid${item.bid_count !== 1 ? "s" : ""}` : ""}`
+    : "Buy Now";
+
+  const endDate = item.item_end_date
+    ? new Date(item.item_end_date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+    : "";
+
+  const seller = item.seller_name || "";
+  const feedback = item.seller_feedback ? `(${item.seller_feedback}%)` : "";
+
+  const galleryHtml = allImages.length > 1
+    ? `<div class="buy-popup-gallery">${allImages.map(u => `<img src="${escHtml(u)}" loading="lazy" onclick="this.parentElement.previousElementSibling.src='${escHtml(u)}'" onerror="this.style.display='none'">`).join("")}</div>`
+    : "";
+
+  const overlay = document.createElement("div");
+  overlay.className = "buy-popup-overlay";
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+
+  overlay.innerHTML = `<div class="buy-popup">
+    <button class="buy-popup-close" onclick="this.closest('.buy-popup-overlay').remove()">✕</button>
+    ${allImages.length ? `<img class="buy-popup-main-img" src="${escHtml(allImages[0])}" onerror="this.style.display='none'">` : ""}
+    ${galleryHtml}
+    <div class="buy-popup-body">
+      <h3 class="buy-popup-title">${escHtml(item.title)}</h3>
+      <div class="buy-popup-price">${priceStr} <span style="font-size:0.78rem;font-weight:400;color:#aaa;margin-left:0.5rem">${escHtml(buyType)}</span></div>
+      ${endDate ? `<div class="buy-popup-meta">Ends ${endDate}</div>` : ""}
+      ${condition ? `<div class="buy-popup-meta">Condition: ${escHtml(condition)}</div>` : ""}
+      ${loc ? `<div class="buy-popup-meta">Location: ${escHtml(loc)}</div>` : ""}
+      ${seller ? `<div class="buy-popup-meta">Seller: ${escHtml(seller)} ${feedback}</div>` : ""}
+      <a class="buy-popup-ebay-link" href="${escHtml(item.item_url)}" target="_blank" rel="noopener">View on eBay →</a>
+    </div>
+  </div>`;
+
+  document.body.appendChild(overlay);
+}
+
+function clearEbaySearch() {
+  const input = document.getElementById("ebay-search-input");
+  const resultsDiv = document.getElementById("ebay-search-results");
+  const statusDiv = document.getElementById("ebay-search-status");
+  const clearBtn = document.getElementById("ebay-clear-btn");
+
+  if (input) input.value = "";
+  if (resultsDiv) { resultsDiv.style.display = "none"; resultsDiv.innerHTML = ""; }
+  if (statusDiv) { statusDiv.style.display = "none"; statusDiv.textContent = ""; }
+  if (clearBtn) clearBtn.style.display = "none";
+  _ebaySearchItems = [];
 }
