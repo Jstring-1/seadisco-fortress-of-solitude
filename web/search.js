@@ -484,18 +484,12 @@ async function doSearch(page = 1, skipPushState = false) {
     }
 
     setStatus("");
-    // Masters+ with sort on load more: merge new items with existing and re-sort
-    // the entire list, then re-render from scratch so chronological order is
-    // preserved across pages (individual page fetches can return items older
-    // than the previous page's max).
+    // Masters+ load more: deduplicate against existing results (use type+id
+    // since masters and releases can share the same numeric id)
     let _appendMode = _append;
-    if (_append && isMasterPlus && sort && window._lastResults?.length) {
-      const existingIds = new Set(window._lastResults.map(it => it.id));
-      const newItems = items.filter(it => !existingIds.has(it.id));
-      const combined = [...window._lastResults, ...newItems];
-      _sortMerged(combined, sort);
-      items = combined;
-      _appendMode = false; // full re-render
+    if (_append && isMasterPlus && window._lastResults?.length) {
+      const existingKeys = new Set(window._lastResults.map(it => `${it.type}:${it.id}`));
+      items = items.filter(it => !existingKeys.has(`${it.type}:${it.id}`));
     }
     const shown = _appendMode ? document.getElementById("results").querySelectorAll(".card, .card-animate").length + items.length : items.length;
     const returnedMsg = `Returned :: ${totalItems_new.toLocaleString()} results — showing ${shown}`;
@@ -593,8 +587,8 @@ async function doSearch(page = 1, skipPushState = false) {
 function renderResults(items, append = false) {
   if (!append) window._lastResults = items;
   else {
-    const existingIds = new Set((window._lastResults || []).map(it => it.id));
-    items = items.filter(it => !existingIds.has(it.id));
+    const existingKeys = new Set((window._lastResults || []).map(it => `${it.type}:${it.id}`));
+    items = items.filter(it => !existingKeys.has(`${it.type}:${it.id}`));
     window._lastResults = (window._lastResults || []).concat(items);
   }
   const hideOwned = document.getElementById("hide-owned")?.checked;
