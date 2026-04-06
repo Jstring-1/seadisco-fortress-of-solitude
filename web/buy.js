@@ -95,7 +95,9 @@ function _openEbayPopup(item) {
     : "";
 
   const seller = item.seller_name || item.seller_username || "";
-  const feedback = item.seller_feedback ? `(${item.seller_feedback}%)` : "";
+  const feedback = item.seller_feedback_percent
+    ? `(${item.seller_feedback_percent}%)`
+    : (item.seller_feedback ? `(${item.seller_feedback.toLocaleString()} reviews)` : "");
 
   const galleryHtml = allImages.length > 1
     ? `<div class="buy-popup-gallery">${allImages.map(u => `<img src="${escHtml(u)}" loading="lazy" onclick="this.parentElement.previousElementSibling.src='${escHtml(u)}'" onerror="this.style.display='none'">`).join("")}</div>`
@@ -136,17 +138,21 @@ function _openEbayPopup(item) {
 async function _fetchEbayDetail(itemId, overlay) {
   const area = overlay.querySelector(".buy-popup-detail-area");
   try {
+    console.log("[ebay detail] fetching:", itemId);
     const r = await fetch(`/api/ebay/item/${encodeURIComponent(itemId)}`);
+    console.log("[ebay detail] response:", r.status);
     if (!overlay.isConnected) return; // popup was closed
     if (r.status === 429) {
       if (area) area.textContent = "Daily eBay request limit reached.";
       return;
     }
     if (!r.ok) {
+      console.warn("[ebay detail] non-ok:", r.status, await r.text().catch(() => ""));
       if (area) area.textContent = "";
       return;
     }
     const d = await r.json();
+    console.log("[ebay detail] data:", { specs: Object.keys(d.specifics || {}), hasDesc: !!d.description, images: (d.allImages || []).length, seller: d.seller, remaining: d.rateLimit?.remaining });
 
     // Update bid count if fresher
     if (d.bidCount != null) {
@@ -188,11 +194,17 @@ async function _fetchEbayDetail(itemId, overlay) {
         el.textContent = `Location: ${d.location}`;
         if (insertBefore) body.insertBefore(el, insertBefore);
       }
-      if (!hasSeller && d.seller) {
-        const el = document.createElement("div");
-        el.className = "buy-popup-meta";
-        el.textContent = `Seller: ${d.seller}${d.sellerFeedbackPercent ? " (" + d.sellerFeedbackPercent + "%)" : ""}`;
-        if (insertBefore) body.insertBefore(el, insertBefore);
+      if (d.seller) {
+        const sellerText = `Seller: ${d.seller}${d.sellerFeedbackPercent ? " (" + d.sellerFeedbackPercent + "%)" : ""}`;
+        const existingSeller = Array.from(existingMetas).find(m => m.textContent.startsWith("Seller:"));
+        if (existingSeller) {
+          existingSeller.textContent = sellerText;
+        } else {
+          const el = document.createElement("div");
+          el.className = "buy-popup-meta";
+          el.textContent = sellerText;
+          if (insertBefore) body.insertBefore(el, insertBefore);
+        }
       }
     }
 
