@@ -41,8 +41,10 @@ function renderGearCard(item, idx) {
 
   // Show condition only if it's notable (not just "Used")
   const conditionShow = condition && condition !== "Used" ? condition : "";
+  const endMs = item.item_end_date ? new Date(item.item_end_date).getTime() : 0;
+  const expired = endMs && endMs < Date.now();
 
-  return `<div class="card gear-card card-animate" onclick="event.stopPropagation();openGearPopup(${idx})" role="button" tabindex="0" style="--i:${Math.min(idx, 20)};cursor:pointer;-webkit-tap-highlight-color:transparent" title="${escHtml(item.title)}">
+  return `<div class="card gear-card card-animate${expired ? ' card-expired' : ''}" onclick="event.stopPropagation();openGearPopup(${idx})" role="button" tabindex="0" style="--i:${Math.min(idx, 20)};cursor:pointer;-webkit-tap-highlight-color:transparent"${endMs ? ` data-end="${endMs}"` : ""} title="${escHtml(item.title)}">
     <div class="card-thumb-wrap" style="pointer-events:none">${img}</div>
     <div class="card-body" style="pointer-events:none">
       <div class="card-title">${escHtml(item.title.length > 65 ? item.title.slice(0, 63) + "…" : item.title)}</div>

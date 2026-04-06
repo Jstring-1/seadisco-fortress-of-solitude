@@ -237,15 +237,18 @@ export async function initDb() {
   // ── eBay live search rate limiting ──────────────────────────────────────
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS ebay_rate_limit (
-      id         INTEGER PRIMARY KEY DEFAULT 1,
-      call_count INTEGER NOT NULL DEFAULT 0,
-      reset_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      id          INTEGER PRIMARY KEY DEFAULT 1,
+      call_count  INTEGER NOT NULL DEFAULT 0,
+      click_count INTEGER NOT NULL DEFAULT 0,
+      reset_date  DATE NOT NULL DEFAULT CURRENT_DATE,
       CHECK (id = 1)
     )
   `);
   await getPool().query(
-    `INSERT INTO ebay_rate_limit (id, call_count, reset_date) VALUES (1, 0, CURRENT_DATE) ON CONFLICT DO NOTHING`
+    `INSERT INTO ebay_rate_limit (id, call_count, click_count, reset_date) VALUES (1, 0, 0, CURRENT_DATE) ON CONFLICT DO NOTHING`
   );
+  // Add click_count column if table already existed without it
+  await getPool().query(`ALTER TABLE ebay_rate_limit ADD COLUMN IF NOT EXISTS click_count INTEGER NOT NULL DEFAULT 0`);
   // ── eBay live search cache ────────────────────────────────────────────
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS ebay_search_cache (
@@ -2454,23 +2457,23 @@ export async function logVinylFetch(fetchType: string, itemCount: number, error?
 }
 
 // ── eBay live search rate limiting & cache ─────────────────────────────────
-export async function getEbayRateCount(): Promise<{ count: number; resetDate: string }> {
+export async function getEbayRateCount(): Promise<{ count: number; clickCount: number; resetDate: string }> {
   const r = await getPool().query(
-    `SELECT call_count, reset_date FROM ebay_rate_limit WHERE id = 1`
+    `SELECT call_count, click_count, reset_date FROM ebay_rate_limit WHERE id = 1`
   );
-  if (!r.rows.length) return { count: 0, resetDate: new Date().toISOString().slice(0, 10) };
+  if (!r.rows.length) return { count: 0, clickCount: 0, resetDate: new Date().toISOString().slice(0, 10) };
   const row = r.rows[0];
   // Auto-reset if stored date is before today (Pacific)
   const todayPacific = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" }))
     .toISOString().slice(0, 10);
   if (row.reset_date < todayPacific) {
     await getPool().query(
-      `UPDATE ebay_rate_limit SET call_count = 0, reset_date = $1 WHERE id = 1`,
+      `UPDATE ebay_rate_limit SET call_count = 0, click_count = 0, reset_date = $1 WHERE id = 1`,
       [todayPacific]
     );
-    return { count: 0, resetDate: todayPacific };
+    return { count: 0, clickCount: 0, resetDate: todayPacific };
   }
-  return { count: row.call_count, resetDate: row.reset_date };
+  return { count: row.call_count, clickCount: row.click_count ?? 0, resetDate: row.reset_date };
 }
 
 export async function incrementEbayRateCount(): Promise<number> {
@@ -2485,6 +2488,20 @@ export async function incrementEbayRateCount(): Promise<number> {
     RETURNING call_count
   `);
   return r.rows[0]?.call_count ?? 0;
+}
+
+export async function incrementEbayClickCount(): Promise<number> {
+  const r = await getPool().query(`
+    UPDATE ebay_rate_limit
+    SET click_count = CASE
+          WHEN reset_date < (NOW() AT TIME ZONE 'America/Los_Angeles')::date THEN 1
+          ELSE click_count + 1
+        END,
+        reset_date = (NOW() AT TIME ZONE 'America/Los_Angeles')::date
+    WHERE id = 1
+    RETURNING click_count
+  `);
+  return r.rows[0]?.click_count ?? 0;
 }
 
 export async function getEbaySearchCache(queryKey: string): Promise<{ results: any[]; total: number; cachedAt: string } | null> {

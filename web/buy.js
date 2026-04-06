@@ -13,8 +13,11 @@ const BUY_PAGE_SIZE = 200;
 let _ebaySearchItems = [];
 let _ebayRateRemaining = null;
 let _ebayRateLimit = null;
+let _ebayClickRemaining = null;
+let _ebayClickLimit = null;
 let _ebayResetAt = null;
 let _ebayCountdownInterval = null;
+let _ebayExpiryInterval = null;
 
 function renderBuyCard(item, idx) {
   const img = item.image_url
@@ -53,7 +56,10 @@ function renderBuyCard(item, idx) {
 
   const conditionShow = condition && condition !== "Used" ? condition : "";
 
-  return `<div class="card buy-card card-animate" onclick="event.stopPropagation();openBuyPopup(${idx})" role="button" tabindex="0" style="--i:${Math.min(idx, 20)};cursor:pointer;-webkit-tap-highlight-color:transparent" title="${escHtml(item.title)}">
+  const endMs = item.item_end_date ? new Date(item.item_end_date).getTime() : 0;
+  const expired = endMs && endMs < Date.now();
+
+  return `<div class="card buy-card card-animate${expired ? ' card-expired' : ''}" onclick="event.stopPropagation();openBuyPopup(${idx})" role="button" tabindex="0" style="--i:${Math.min(idx, 20)};cursor:pointer;-webkit-tap-highlight-color:transparent"${endMs ? ` data-end="${endMs}"` : ""} title="${escHtml(item.title)}">
     <div class="card-thumb-wrap" style="pointer-events:none">${img}</div>
     <div class="card-body" style="pointer-events:none">
       <div class="card-title">${escHtml(item.title.length > 65 ? item.title.slice(0, 63) + "…" : item.title)}</div>
@@ -68,39 +74,31 @@ function renderBuyCard(item, idx) {
 }
 
 function openBuyPopup(idx) {
-  const item = _buyItems[idx];
+  _openEbayPopup(_buyItems[idx]);
+}
+
+function _openEbayPopup(item) {
   if (!item) return;
 
   const price = parseFloat(item.price);
   const priceStr = price.toLocaleString("en-US", { style: "currency", currency: item.currency || "USD" });
   const condition = item.condition || "";
   const loc = [item.location_city, item.location_state, item.location_country].filter(Boolean).join(", ");
-  const specifics = item.item_specifics ?? {};
   const allImages = item.all_images && item.all_images.length ? item.all_images : (item.image_url ? [item.image_url] : []);
 
   const buyType = (item.buying_options ?? []).includes("AUCTION")
-    ? `Auction${item.bid_count > 0 ? ` · ${item.bid_count} bid${item.bid_count !== 1 ? "s" : ""}` : ""}`
+    ? `Auction${item.bid_count > 0 ? ` · ${item.bid_count}+ bid${item.bid_count !== 1 ? "s" : ""}` : ""}`
     : "Buy Now";
 
   const endDate = item.item_end_date
     ? new Date(item.item_end_date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
     : "";
 
-  const seller = item.seller_name || "";
+  const seller = item.seller_name || item.seller_username || "";
   const feedback = item.seller_feedback ? `(${item.seller_feedback}%)` : "";
-
-  const specKeys = Object.keys(specifics).filter(k => specifics[k]);
-  const specsHtml = specKeys.length
-    ? `<div class="buy-popup-specs">${specKeys.map(k => `<div class="buy-spec-row"><span class="buy-spec-label">${escHtml(k)}</span> <span>${escHtml(String(specifics[k]))}</span></div>`).join("")}</div>`
-    : "";
 
   const galleryHtml = allImages.length > 1
     ? `<div class="buy-popup-gallery">${allImages.map(u => `<img src="${escHtml(u)}" loading="lazy" onclick="this.parentElement.previousElementSibling.src='${escHtml(u)}'" onerror="this.style.display='none'">`).join("")}</div>`
-    : "";
-
-  // Detail text (strip eBay HTML formatting)
-  const detailHtml = item.detail_html
-    ? `<div class="buy-popup-description">${escHtml(stripHtml(item.detail_html))}</div>`
     : "";
 
   const overlay = document.createElement("div");
@@ -118,13 +116,83 @@ function openBuyPopup(idx) {
       ${condition ? `<div class="buy-popup-meta">Condition: ${escHtml(condition)}</div>` : ""}
       ${loc ? `<div class="buy-popup-meta">Location: ${escHtml(loc)}</div>` : ""}
       ${seller ? `<div class="buy-popup-meta">Seller: ${escHtml(seller)} ${feedback}</div>` : ""}
-      ${specsHtml}
-      ${detailHtml}
+      <div class="buy-popup-detail-area" style="color:#666;font-size:0.8rem">Loading details…</div>
       <a class="buy-popup-ebay-link" href="${escHtml(item.item_url)}" target="_blank" rel="noopener">View on eBay →</a>
     </div>
   </div>`;
 
   document.body.appendChild(overlay);
+
+  // Fetch live detail (description, images, specs, current bid count)
+  const itemId = item.item_id || item.ebay_item_id || "";
+  if (itemId) {
+    _fetchEbayDetail(itemId, overlay);
+  } else {
+    const area = overlay.querySelector(".buy-popup-detail-area");
+    if (area) area.remove();
+  }
+}
+
+async function _fetchEbayDetail(itemId, overlay) {
+  const area = overlay.querySelector(".buy-popup-detail-area");
+  try {
+    const r = await fetch(`/api/ebay/item/${encodeURIComponent(itemId)}`);
+    if (!overlay.isConnected) return; // popup was closed
+    if (r.status === 429) {
+      if (area) area.textContent = "Detail view limit reached for today.";
+      return;
+    }
+    if (!r.ok) {
+      if (area) area.textContent = "";
+      return;
+    }
+    const d = await r.json();
+
+    // Update bid count if fresher
+    if (d.bidCount != null) {
+      const bidsEl = overlay.querySelector(".buy-popup-price span");
+      if (bidsEl && d.bidCount > 0) {
+        const isAuction = bidsEl.textContent.includes("Auction");
+        if (isAuction) bidsEl.textContent = `Auction · ${d.bidCount} bid${d.bidCount !== 1 ? "s" : ""}`;
+      }
+    }
+
+    // Insert specs
+    let html = "";
+    const specKeys = Object.keys(d.specifics || {}).filter(k => d.specifics[k]);
+    if (specKeys.length) {
+      html += `<div class="buy-popup-specs">${specKeys.map(k =>
+        `<div class="buy-spec-row"><span class="buy-spec-label">${escHtml(k)}</span> <span>${escHtml(String(d.specifics[k]))}</span></div>`
+      ).join("")}</div>`;
+    }
+
+    // Insert description
+    if (d.description) {
+      html += `<div class="buy-popup-description">${escHtml(typeof stripHtml === "function" ? stripHtml(d.description) : d.description)}</div>`;
+    }
+
+    if (area) area.innerHTML = html || "";
+
+    // Update gallery with additional images
+    if (d.allImages && d.allImages.length > 1) {
+      const mainImg = overlay.querySelector(".buy-popup-main-img");
+      const existingGallery = overlay.querySelector(".buy-popup-gallery");
+      if (!existingGallery && mainImg) {
+        const gal = document.createElement("div");
+        gal.className = "buy-popup-gallery";
+        gal.innerHTML = d.allImages.map(u => `<img src="${escHtml(u)}" loading="lazy" onclick="this.parentElement.previousElementSibling.src='${escHtml(u)}'" onerror="this.style.display='none'">`).join("");
+        mainImg.after(gal);
+      }
+    }
+
+    // Update item URL with affiliate link if returned
+    if (d.itemUrl) {
+      const link = overlay.querySelector(".buy-popup-ebay-link");
+      if (link) link.href = d.itemUrl;
+    }
+  } catch {
+    if (area) area.textContent = "";
+  }
 }
 
 function renderBuyGrid() {
@@ -245,6 +313,8 @@ async function initEbaySearchStatus() {
       if (data.remaining == null) return;
       _ebayRateRemaining = data.remaining;
       _ebayRateLimit = data.limit;
+      _ebayClickRemaining = data.clickRemaining ?? null;
+      _ebayClickLimit = data.clickLimit ?? null;
       _ebayResetAt = data.resetsAt;
       updateEbayMeta();
       startEbayCountdown();
@@ -258,6 +328,20 @@ async function initEbaySearchStatus() {
 function startEbayCountdown() {
   if (_ebayCountdownInterval) clearInterval(_ebayCountdownInterval);
   _ebayCountdownInterval = setInterval(updateEbayMeta, 1000);
+  // Check for expired cards every 30s
+  if (_ebayExpiryInterval) clearInterval(_ebayExpiryInterval);
+  _ebayExpiryInterval = setInterval(greyExpiredCards, 30000);
+  greyExpiredCards();
+}
+
+function greyExpiredCards() {
+  const now = Date.now();
+  document.querySelectorAll(".buy-card[data-end], .gear-card[data-end]").forEach(card => {
+    const end = parseInt(card.dataset.end);
+    if (end && end < now && !card.classList.contains("card-expired")) {
+      card.classList.add("card-expired");
+    }
+  });
 }
 
 function updateEbayMeta() {
@@ -278,8 +362,12 @@ function updateEbayMeta() {
     }
   }
 
-  const limit = _ebayRateLimit || 4900;
-  el.textContent = `${_ebayRateRemaining.toLocaleString()} / ${limit.toLocaleString()} searches left today${countdown}`;
+  const limit = _ebayRateLimit || 3000;
+  let text = `${_ebayRateRemaining.toLocaleString()} / ${limit.toLocaleString()} searches`;
+  if (_ebayClickRemaining != null && _ebayClickLimit != null) {
+    text += ` · ${_ebayClickRemaining.toLocaleString()} / ${_ebayClickLimit.toLocaleString()} detail views`;
+  }
+  el.textContent = text + countdown;
 }
 
 async function doEbaySearch() {
@@ -370,8 +458,10 @@ function renderEbayCard(item, idx) {
   }
 
   const conditionShow = condition && condition !== "Used" ? condition : "";
+  const endMs = item.item_end_date ? new Date(item.item_end_date).getTime() : 0;
+  const expired = endMs && endMs < Date.now();
 
-  return `<div class="card buy-card card-animate" onclick="event.stopPropagation();openEbaySearchPopup(${idx})" role="button" tabindex="0" style="--i:${Math.min(idx, 20)};cursor:pointer;-webkit-tap-highlight-color:transparent" title="${escHtml(item.title)}">
+  return `<div class="card buy-card card-animate${expired ? ' card-expired' : ''}" onclick="event.stopPropagation();openEbaySearchPopup(${idx})" role="button" tabindex="0" style="--i:${Math.min(idx, 20)};cursor:pointer;-webkit-tap-highlight-color:transparent"${endMs ? ` data-end="${endMs}"` : ""} title="${escHtml(item.title)}">
     <div class="card-thumb-wrap" style="pointer-events:none">${img}</div>
     <div class="card-body" style="pointer-events:none">
       <div class="card-title">${escHtml(item.title.length > 65 ? item.title.slice(0, 63) + "…" : item.title)}</div>
@@ -385,50 +475,7 @@ function renderEbayCard(item, idx) {
 }
 
 function openEbaySearchPopup(idx) {
-  const item = _ebaySearchItems[idx];
-  if (!item) return;
-
-  const price = parseFloat(item.price);
-  const priceStr = price.toLocaleString("en-US", { style: "currency", currency: item.currency || "USD" });
-  const condition = item.condition || "";
-  const loc = [item.location_city, item.location_state, item.location_country].filter(Boolean).join(", ");
-  const allImages = item.all_images && item.all_images.length ? item.all_images : (item.image_url ? [item.image_url] : []);
-
-  const buyType = (item.buying_options ?? []).includes("AUCTION")
-    ? `Auction${item.bid_count > 0 ? ` · ${item.bid_count} bid${item.bid_count !== 1 ? "s" : ""}` : ""}`
-    : "Buy Now";
-
-  const endDate = item.item_end_date
-    ? new Date(item.item_end_date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
-    : "";
-
-  const seller = item.seller_name || "";
-  const feedback = item.seller_feedback ? `(${item.seller_feedback}%)` : "";
-
-  const galleryHtml = allImages.length > 1
-    ? `<div class="buy-popup-gallery">${allImages.map(u => `<img src="${escHtml(u)}" loading="lazy" onclick="this.parentElement.previousElementSibling.src='${escHtml(u)}'" onerror="this.style.display='none'">`).join("")}</div>`
-    : "";
-
-  const overlay = document.createElement("div");
-  overlay.className = "buy-popup-overlay";
-  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-
-  overlay.innerHTML = `<div class="buy-popup">
-    <button class="buy-popup-close" onclick="this.closest('.buy-popup-overlay').remove()">✕</button>
-    ${allImages.length ? `<img class="buy-popup-main-img" src="${escHtml(allImages[0])}" onerror="this.style.display='none'">` : ""}
-    ${galleryHtml}
-    <div class="buy-popup-body">
-      <h3 class="buy-popup-title">${escHtml(item.title)}</h3>
-      <div class="buy-popup-price">${priceStr} <span style="font-size:0.78rem;font-weight:400;color:#aaa;margin-left:0.5rem">${escHtml(buyType)}</span></div>
-      ${endDate ? `<div class="buy-popup-meta">Ends ${endDate}</div>` : ""}
-      ${condition ? `<div class="buy-popup-meta">Condition: ${escHtml(condition)}</div>` : ""}
-      ${loc ? `<div class="buy-popup-meta">Location: ${escHtml(loc)}</div>` : ""}
-      ${seller ? `<div class="buy-popup-meta">Seller: ${escHtml(seller)} ${feedback}</div>` : ""}
-      <a class="buy-popup-ebay-link" href="${escHtml(item.item_url)}" target="_blank" rel="noopener">View on eBay →</a>
-    </div>
-  </div>`;
-
-  document.body.appendChild(overlay);
+  _openEbayPopup(_ebaySearchItems[idx]);
 }
 
 function clearEbaySearch() {
