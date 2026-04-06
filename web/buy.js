@@ -263,7 +263,9 @@ function updateEbayMeta() {
       const h = Math.floor(ms / 3600000);
       const m = Math.floor((ms % 3600000) / 60000);
       const s = Math.floor((ms % 60000) / 1000);
-      countdown = ` · resets in ${h}h ${m}m ${s}s`;
+      if (h > 0) countdown = ` · resets in ${h}h`;
+      else if (m > 0) countdown = ` · resets in ${m}m`;
+      else countdown = ` · resets in ${s}s`;
     }
   }
 
