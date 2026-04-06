@@ -236,14 +236,21 @@ function loadMoreBuy() {
 // ── Live eBay Search ────────────────────────────────────────────────
 
 async function initEbaySearchStatus() {
-  try {
-    const r = await fetch("/api/ebay/search/status");
-    const data = await r.json();
-    _ebayRateRemaining = data.remaining;
-    _ebayResetAt = data.resetsAt;
-    updateEbayMeta();
-    startEbayCountdown();
-  } catch (e) { /* silent */ }
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const r = await fetch("/api/ebay/search/status");
+      if (!r.ok) { if (!attempt) { await new Promise(r => setTimeout(r, 2000)); continue; } return; }
+      const data = await r.json();
+      if (data.remaining == null) return;
+      _ebayRateRemaining = data.remaining;
+      _ebayResetAt = data.resetsAt;
+      updateEbayMeta();
+      startEbayCountdown();
+      return;
+    } catch (e) {
+      if (!attempt) { await new Promise(r => setTimeout(r, 2000)); continue; }
+    }
+  }
 }
 
 function startEbayCountdown() {

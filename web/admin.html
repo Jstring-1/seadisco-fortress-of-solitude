@@ -420,7 +420,9 @@ async function adminExtrasFetch() {
 }
 
 // ── API Request Log ───────────────────────────────────────────────────
+let _apiLogSeq = 0;
 async function loadApiLog() {
+  const mySeq = ++_apiLogSeq;
   try {
     const service = document.getElementById("api-log-filter").value;
     const errorsOnly = document.getElementById("api-log-errors-only").checked;
@@ -435,9 +437,11 @@ async function loadApiLog() {
     const rangeLabel = document.getElementById("api-log-range-label");
     if (rangeLabel) rangeLabel.textContent = hours === "168" ? "(7 days)" : "(24h)";
 
+    params.set("_t", Date.now().toString());
     const logRes = await apiFetch(`/api/admin/api-log?${params}`);
-    if (!logRes.ok) return;
+    if (!logRes.ok || mySeq !== _apiLogSeq) return;
     const { items, total } = await logRes.json();
+    if (mySeq !== _apiLogSeq) return;
 
     // Derive stats from the same items so they always match
     const statsMap = {};
