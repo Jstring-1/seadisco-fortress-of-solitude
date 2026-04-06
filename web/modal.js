@@ -902,7 +902,13 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
           ? `<a class="track-link" href="#" data-video="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" onclick="openVideo(event,'${url.replace(/'/g, "\\'")}')" title="Play this track">${escHtml(t.title || "")} ▶</a>${searchIcon}`
           : `${escHtml(t.title || "")}${ytIcon}${searchIcon}`;
         const trackCredits = (t.extraartists ?? []).length
-          ? `<div class="track-credits">${t.extraartists.map(a => `${escHtml(a.name)} (${escHtml(a.role || "")})`).join(", ")}</div>`
+          ? `<div class="track-credits">${t.extraartists.map(a => {
+              const nameEl = a.id
+                ? `<a href="#" class="modal-internal-link credit-name" data-alt-name="${escHtml(a.name)}" data-alt-id="${a.id}" onclick="selectAltArtist(event,this);closeModal()" title="Search for ${escHtml(a.name)}">${escHtml(a.name)}</a>`
+                : `<span class="credit-name">${escHtml(a.name)}</span>`;
+              const searchIcon = ` <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(a.name.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(a.name)}" style="font-size:1.1em">\u2315</a>`;
+              return `${nameEl}${searchIcon}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}`;
+            }).join(", ")}</div>`
           : "";
         return `<div class="track">
           <span class="track-pos">${escHtml(t.position || "")}</span>

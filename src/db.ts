@@ -80,6 +80,9 @@ export async function initDb() {
   await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS discogs_profile_data JSONB`);
   await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS discogs_curr_abbr TEXT`);
   await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS profile_synced_at TIMESTAMP`);
+  // Activity tracking + hibernate
+  await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMPTZ DEFAULT NOW()`);
+  await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS hibernated_at TIMESTAMPTZ`);
   // Temporary table for OAuth request tokens (handshake flow)
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS oauth_request_tokens (
@@ -689,6 +692,44 @@ export async function getAllUsersForSync(): Promise<Array<{ clerkUserId: string;
 export async function getUserCount(): Promise<number> {
   const r = await getPool().query("SELECT COUNT(*)::int AS cnt FROM user_tokens");
   return r.rows[0]?.cnt ?? 0;
+}
+
+export async function getActiveUserCount(): Promise<number> {
+  const r = await getPool().query("SELECT COUNT(*)::int AS cnt FROM user_tokens WHERE hibernated_at IS NULL");
+  return r.rows[0]?.cnt ?? 0;
+}
+
+export async function touchUserActivity(clerkUserId: string): Promise<void> {
+  await getPool().query(
+    "UPDATE user_tokens SET last_active_at = NOW() WHERE clerk_user_id = $1",
+    [clerkUserId]
+  );
+}
+
+export async function isUserHibernated(clerkUserId: string): Promise<boolean> {
+  const r = await getPool().query(
+    "SELECT hibernated_at FROM user_tokens WHERE clerk_user_id = $1",
+    [clerkUserId]
+  );
+  return r.rows[0]?.hibernated_at != null;
+}
+
+export async function reactivateUser(clerkUserId: string): Promise<void> {
+  await getPool().query(
+    "UPDATE user_tokens SET hibernated_at = NULL, last_active_at = NOW() WHERE clerk_user_id = $1",
+    [clerkUserId]
+  );
+}
+
+export async function hibernateInactiveUsers(): Promise<number> {
+  const r = await getPool().query(
+    `UPDATE user_tokens
+     SET hibernated_at = NOW()
+     WHERE hibernated_at IS NULL
+       AND last_active_at < NOW() - INTERVAL '6 months'
+     RETURNING clerk_user_id`
+  );
+  return r.rowCount ?? 0;
 }
 
 export async function getUserToken(clerkUserId: string): Promise<string | null> {

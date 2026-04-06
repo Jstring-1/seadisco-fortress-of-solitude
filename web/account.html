@@ -15,7 +15,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎹</text></svg>">
   <link rel="manifest" href="/site.webmanifest">
   <meta name="theme-color" content="#080706">
-  <link rel="stylesheet" href="/style.css?v=20260405l" />
+  <link rel="stylesheet" href="/style.css?v=20260405s" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -29,7 +29,7 @@
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260405l"></script>
+<script src="/shared.js?v=20260405s"></script>
 <script>renderSharedHeader({ hideRecords: true });</script>
 
 <main>
@@ -56,9 +56,17 @@
           <li>Click <strong style="color:var(--text)">Connect with Discogs</strong> and approve access on Discogs</li>
           <li>That's it — your collection is yours to browse, rate, and organize</li>
         </ol>
-        <p style="color:#555;font-size:0.8rem;margin-bottom:1.4rem">
+        <p style="color:#555;font-size:0.8rem;margin-bottom:0.8rem">
           SeaDisco never sees your Discogs password. The connection is a standard Discogs OAuth authorization,
           and you can disconnect anytime. Prefer a Personal Access Token? That option is still available after sign-in.
+        </p>
+        <p style="color:#e8a020;font-size:0.78rem;margin-bottom:0.5rem;line-height:1.6">
+          <strong>Registration is limited.</strong> SeaDisco has a small number of spots available.
+          <span id="signed-out-spots" style="display:none"></span>
+        </p>
+        <p style="color:#888;font-size:0.75rem;margin-bottom:1.4rem;line-height:1.5">
+          Accounts inactive for 6 months are automatically hibernated to free up spots for others.
+          Hibernated accounts can reactivate when a spot opens up — no data is deleted.
         </p>
         <div id="clerk-sign-in"></div>
       </div>
@@ -185,8 +193,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script src="/modal.js?v=20260405l"></script>
-<script src="/orders.js?v=20260405l"></script>
+<script src="/modal.js?v=20260405s"></script>
+<script src="/orders.js?v=20260405s"></script>
 
 <!-- Feedback modal -->
 <div id="feedback-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;display:none;align-items:center;justify-content:center">
@@ -209,6 +217,17 @@ let clerk = null;
 function showSignInWidget(c) {
   document.getElementById("loading-section").style.display = "none";
   document.getElementById("signed-out-section").style.display = "block";
+  // Show spots remaining
+  fetch("/api/user-count").then(r => r.json()).then(d => {
+    const el = document.getElementById("signed-out-spots");
+    if (el && d.count != null) {
+      const remaining = Math.max(0, d.limit - d.count);
+      el.textContent = remaining > 0
+        ? `Currently ${remaining} of ${d.limit} spots available.`
+        : `All ${d.limit} spots are currently taken. Check back later.`;
+      el.style.display = "";
+    }
+  }).catch(() => {});
   c.mountSignUp(document.getElementById("clerk-sign-in"), {
     afterSignInUrl: "/account",
     afterSignUpUrl: "/account",
@@ -259,7 +278,23 @@ async function showAuthSection() {
   document.getElementById("user-email").textContent = email;
 
   // Check if they already have a token saved
-  const data = await apiFetch("/api/user/token").then(r => r.json()).catch(() => null);
+  const tokenRes = await apiFetch("/api/user/token").catch(() => null);
+  if (tokenRes && tokenRes.status === 403) {
+    const err = await tokenRes.json().catch(() => ({}));
+    if (err.error === "hibernated") {
+      document.getElementById("auth-section").innerHTML = `
+        <div style="text-align:center;padding:2rem 1rem">
+          <h2 style="color:#e8a020;margin-bottom:0.8rem">Account Hibernated</h2>
+          <p style="color:var(--muted);font-size:0.9rem;line-height:1.6;max-width:380px;margin:0 auto 1rem">${escHtml(err.message || "Your account is hibernated due to inactivity. All spots are currently full.")}</p>
+          <p style="color:#666;font-size:0.82rem">Your data is preserved. You'll be reactivated automatically when a spot opens up.</p>
+          <div style="margin-top:1.5rem">
+            <button onclick="signOut()" style="background:none;border:1px solid #444;color:#aaa;font-size:0.85rem;padding:0.4rem 1rem;border-radius:5px;cursor:pointer">Sign out</button>
+          </div>
+        </div>`;
+      return;
+    }
+  }
+  const data = tokenRes ? await tokenRes.json().catch(() => null) : null;
 
   const statusEl = document.getElementById("token-status");
   const removeBtn = document.getElementById("remove-btn");
