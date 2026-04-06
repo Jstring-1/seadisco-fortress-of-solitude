@@ -86,7 +86,7 @@ function renderGearGrid() {
 function refreshGearListings() {
   _gearOffset = 0;
   _gearItems = [];
-  loadGearListings();
+  loadGearListings(false, true);
 }
 
 function setGearPriceFilter(minPrice) {
@@ -116,7 +116,7 @@ function onGearSearch(val) {
   }, 350);
 }
 
-async function loadGearListings(append = false) {
+async function loadGearListings(append = false, bustCache = false) {
   if (_gearLoading) return;
   _gearLoading = true;
 
@@ -134,7 +134,8 @@ async function loadGearListings(append = false) {
 
   try {
     const qEnc = _gearQuery ? `&q=${encodeURIComponent(_gearQuery)}` : "";
-    const url = `/api/gear?min_price=${_gearMinPrice}&sort=${_gearSort}${qEnc}&limit=${GEAR_PAGE_SIZE}&offset=${_gearOffset}`;
+    const bust = bustCache ? `&_t=${Date.now()}` : "";
+    const url = `/api/gear?min_price=${_gearMinPrice}&sort=${_gearSort}${qEnc}&limit=${GEAR_PAGE_SIZE}&offset=${_gearOffset}${bust}`;
     const r = await fetch(url);
     const data = await r.json();
     const newItems = data.items ?? [];
