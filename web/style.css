@@ -3417,17 +3417,19 @@ body.modal-open  { overflow: hidden; }
   background: var(--accent); border-color: #4a2a12;
 }
 .badge-favorite:hover { background: var(--accent2); }
-/* Show C/W/F/L/I on hover or when active */
-.card:hover .badge-collection,
-.card:hover .badge-wantlist,
-.card:hover .badge-favorite,
+/* Active badges always visible */
 .badge-collection.is-active,
 .badge-wantlist.is-active,
 .badge-favorite.is-favorite { opacity: 1; }
-/* Inactive C/W shown dimmed on hover */
-.card:hover .badge-collection:not(.is-active),
-.card:hover .badge-wantlist:not(.is-active) { opacity: 0.55; }
-.card:hover .badge-favorite:not(.is-favorite) { opacity: 0.55; }
+/* Show inactive C/W/F on hover — only on devices that support hover (not touch) */
+@media (hover: hover) {
+  .card:hover .badge-collection,
+  .card:hover .badge-wantlist,
+  .card:hover .badge-favorite { opacity: 1; }
+  .card:hover .badge-collection:not(.is-active),
+  .card:hover .badge-wantlist:not(.is-active) { opacity: 0.55; }
+  .card:hover .badge-favorite:not(.is-favorite) { opacity: 0.55; }
+}
 
 /* Favorite button in modal */
 .modal-act-btn.is-favorite {
