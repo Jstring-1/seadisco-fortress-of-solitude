@@ -2354,7 +2354,7 @@ export async function getGearListings(minPrice: number = 0, limit: number = 200,
   const params: any[] = [minPrice];
   let where = `WHERE price >= $1 AND NOT expired
     AND (condition IS NULL OR condition NOT ILIKE '%for parts%')
-    AND (item_end_date IS NULL OR item_end_date > NOW())`;
+    AND (item_end_date IS NULL OR item_end_date > NOW() + INTERVAL '3 minutes')`;
   if (q.trim()) {
     params.push(`%${q.trim()}%`);
     where += ` AND title ILIKE $${params.length}`;
@@ -2438,7 +2438,7 @@ export async function upsertVinylListings(items: Array<{
 export async function getVinylListings(minPrice: number = 0, limit: number = 200, offset: number = 0, sort: string = "ending", q: string = ""): Promise<{ items: any[]; total: number }> {
   const params: any[] = [minPrice];
   let where = `WHERE price >= $1 AND NOT expired
-    AND (item_end_date IS NULL OR item_end_date > NOW())`;
+    AND (item_end_date IS NULL OR item_end_date > NOW() + INTERVAL '3 minutes')`;
   if (q.trim()) {
     params.push(`%${q.trim()}%`);
     where += ` AND title ILIKE $${params.length}`;
