@@ -3573,7 +3573,7 @@ app.get("/api/gear", async (_req, res) => {
     const q        = (_req.query.q as string) || "";
     const limit    = Math.min(parseInt(_req.query.limit as string) || 200, 500);
     const offset   = parseInt(_req.query.offset as string) || 0;
-    res.setHeader("Cache-Control", "public, max-age=300"); // 5 min
+    res.setHeader("Cache-Control", "public, max-age=60");
     const { items, total } = await getGearListings(minPrice, limit, offset, sort, q);
     res.json({ items, total });
   } catch (e) {
@@ -3705,7 +3705,7 @@ app.get("/api/vinyl", async (_req, res) => {
     const q        = (_req.query.q as string) || "";
     const limit    = Math.min(parseInt(_req.query.limit as string) || 200, 500);
     const offset   = parseInt(_req.query.offset as string) || 0;
-    res.setHeader("Cache-Control", "public, max-age=300");
+    res.setHeader("Cache-Control", "public, max-age=60");
     const { items, total } = await getVinylListings(minPrice, limit, offset, sort, q);
     res.json({ items, total });
   } catch (e) {

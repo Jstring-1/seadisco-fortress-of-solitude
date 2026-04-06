@@ -2366,10 +2366,10 @@ export async function getGearListings(minPrice: number = 0, limit: number = 200,
   const total = countR.rows[0]?.cnt ?? 0;
   const orderMap: Record<string, string> = {
     bids: "bid_count DESC, price DESC",
-    price_desc: "price DESC",
-    price_asc: "price ASC",
+    price_desc: "price DESC, item_end_date ASC NULLS LAST",
+    price_asc: "price ASC, item_end_date ASC NULLS LAST",
     ending: "item_end_date ASC NULLS LAST",
-    newest: "fetched_at DESC",
+    newest: "item_end_date DESC NULLS LAST",
   };
   const orderBy = orderMap[sort] ?? orderMap.bids;
   const r = await getPool().query(
@@ -2450,10 +2450,10 @@ export async function getVinylListings(minPrice: number = 0, limit: number = 200
   const total = countR.rows[0]?.cnt ?? 0;
   const orderMap: Record<string, string> = {
     bids: "bid_count DESC, price DESC",
-    price_desc: "price DESC",
-    price_asc: "price ASC",
+    price_desc: "price DESC, item_end_date ASC NULLS LAST",
+    price_asc: "price ASC, item_end_date ASC NULLS LAST",
     ending: "item_end_date ASC NULLS LAST",
-    newest: "fetched_at DESC",
+    newest: "item_end_date DESC NULLS LAST",
   };
   const orderBy = orderMap[sort] ?? orderMap.ending;
   const r = await getPool().query(
