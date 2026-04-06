@@ -2391,7 +2391,7 @@ export async function getGearListings(minPrice: number = 0, limit: number = 200,
 export async function markExpiredGearListings(): Promise<number> {
   const r = await getPool().query(
     `UPDATE gear_listings SET expired = true
-     WHERE NOT expired AND fetched_at < NOW() - INTERVAL '3 days'`
+     WHERE NOT expired AND (item_end_date IS NOT NULL AND item_end_date < NOW())`
   );
   return r.rowCount ?? 0;
 }
@@ -2475,7 +2475,7 @@ export async function getVinylListings(minPrice: number = 0, limit: number = 200
 export async function markExpiredVinylListings(): Promise<number> {
   const r = await getPool().query(
     `UPDATE vinyl_listings SET expired = true
-     WHERE NOT expired AND fetched_at < NOW() - INTERVAL '3 days'`
+     WHERE NOT expired AND (item_end_date IS NOT NULL AND item_end_date < NOW())`
   );
   return r.rowCount ?? 0;
 }
