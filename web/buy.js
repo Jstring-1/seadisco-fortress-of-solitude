@@ -12,6 +12,7 @@ const BUY_PAGE_SIZE = 200;
 // ── Live eBay search state ──────────────────────────────────────────
 let _ebaySearchItems = [];
 let _ebayRateRemaining = null;
+let _ebayRateLimit = null;
 let _ebayResetAt = null;
 let _ebayCountdownInterval = null;
 
@@ -27,7 +28,7 @@ function renderBuyCard(item, idx) {
   const loc = [item.location_city, item.location_state].filter(Boolean).join(", ");
 
   const bids = item.bid_count ?? 0;
-  const bidStr = `${bids} bid${bids !== 1 ? "s" : ""}`;
+  const bidStr = bids > 0 ? `${bids}+ bid${bids !== 1 ? "s" : ""}` : "0 bids";
 
   const specifics = item.item_specifics ?? {};
   const artist = specifics.Artist || specifics.artist || "";
@@ -243,6 +244,7 @@ async function initEbaySearchStatus() {
       const data = await r.json();
       if (data.remaining == null) return;
       _ebayRateRemaining = data.remaining;
+      _ebayRateLimit = data.limit;
       _ebayResetAt = data.resetsAt;
       updateEbayMeta();
       startEbayCountdown();
@@ -276,7 +278,8 @@ function updateEbayMeta() {
     }
   }
 
-  el.textContent = `${_ebayRateRemaining.toLocaleString()} / 2,000 searches left today${countdown}`;
+  const limit = _ebayRateLimit || 4900;
+  el.textContent = `${_ebayRateRemaining.toLocaleString()} / ${limit.toLocaleString()} searches left today${countdown}`;
 }
 
 async function doEbaySearch() {
@@ -349,7 +352,7 @@ function renderEbayCard(item, idx) {
   const loc = [item.location_city, item.location_state].filter(Boolean).join(", ");
 
   const bids = item.bid_count ?? 0;
-  const bidStr = `${bids} bid${bids !== 1 ? "s" : ""}`;
+  const bidStr = bids > 0 ? `${bids}+ bid${bids !== 1 ? "s" : ""}` : "0 bids";
 
   let timeLeft = "";
   let endingSoon = false;
