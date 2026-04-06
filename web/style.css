@@ -3403,17 +3403,18 @@ body.modal-open  { overflow: hidden; }
   overflow: hidden;
   text-indent: -999px;
   border: 1.5px solid;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.45);
   pointer-events: auto;
 }
 /* Fixed slot positions */
-.badge-collection { top: 6px;   background: #6ddf70; border-color: #6ddf7066; opacity: 0; transition: opacity 0.15s; cursor: pointer; }
-.badge-wantlist   { top: 22px;  background: #f0c95c; border-color: #f0c95c66; opacity: 0; transition: opacity 0.15s; cursor: pointer; }
-.badge-list       { top: 38px;  background: #a0ccf0; border-color: #a0ccf066; }
-.badge-inventory  { top: 54px;  background: #cda0f5; border-color: #cda0f566; }
+.badge-collection { top: 6px;   background: #6ddf70; border-color: #2a4a2b; opacity: 0; transition: opacity 0.15s; cursor: pointer; }
+.badge-wantlist   { top: 22px;  background: #f0c95c; border-color: #4a3e1e; opacity: 0; transition: opacity 0.15s; cursor: pointer; }
+.badge-list       { top: 38px;  background: #a0ccf0; border-color: #2a3a4a; }
+.badge-inventory  { top: 54px;  background: #cda0f5; border-color: #3a2a4a; }
 /* Favorite: orange dot — same style as other badge dots */
 .badge-favorite {
   top: 70px; cursor: pointer; opacity: 0; transition: opacity 0.15s;
-  background: var(--accent); border-color: #ff6b3566;
+  background: var(--accent); border-color: #4a2a12;
 }
 .badge-favorite:hover { background: var(--accent2); }
 /* Show C/W/F/L/I on hover or when active */
