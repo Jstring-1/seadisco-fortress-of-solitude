@@ -3134,8 +3134,19 @@ app.get("/search", async (req, res) => {
     const ip = clientIp(req);
     const whitelisted = IP_WHITELIST.has(ip);
     const userId = await getClerkUserId(req);
+    const hasAuthHeader = !!req.headers.authorization?.startsWith("Bearer ");
+    // If the user sent a token but it failed verification, return 401 so the
+    // frontend can refresh the session and retry (instead of falling into the
+    // rate limiter and showing "free searches used up" to a signed-in user)
+    if (!userId && hasAuthHeader) {
+        res.status(401).json({ error: "session_expired", message: "Session expired. Please refresh the page." });
+        return;
+    }
     const userToken = userId ? await getUserToken(userId) : null;
     const usingSharedToken = !userToken;
+    // Touch activity for authenticated users
+    if (userId && userToken)
+        touchUserActivity(userId).catch(() => { });
     // Rate-limit unauthenticated users — allow 5 free searches/day via shared token
     // Only count page 1 — pagination ("load more") shouldn't burn a search
     const page = parseInt(req.query.page) || 1;
