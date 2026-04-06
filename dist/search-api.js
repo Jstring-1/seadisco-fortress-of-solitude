@@ -4068,7 +4068,7 @@ async function fetchEbayVinylListings() {
     let totalUpserted = 0;
     try {
         const token = await getEbayToken();
-        const baseUrl = `https://api.ebay.com/buy/browse/v1/item_summary/search?category_ids=176985&limit=200&sort=endingSoonest&filter=priceCurrency:USD,buyingOptions:{AUCTION}&aspect_filter=categoryId:176985,Record%20Size:12%22`;
+        const baseUrl = `https://api.ebay.com/buy/browse/v1/item_summary/search?category_ids=176985&limit=200&sort=endingSoonest&filter=price:[10..],priceCurrency:USD,buyingOptions:{AUCTION}&aspect_filter=categoryId:176985,Record%20Size:12%22`;
         // Paginate through up to 5000 results (25 pages × 200)
         for (let offset = 0; offset < 5000; offset += 200) {
             try {

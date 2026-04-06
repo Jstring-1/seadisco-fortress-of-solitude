@@ -287,7 +287,7 @@ function renderSharedHeader(opts) {
   // Auth tab (top row, rightmost)
   const authTab = isSPA
     ? `<a class="nav-tab-top nav-auth-tab" href="/account" data-view="auth" id="nav-auth-tab">Sign In</a>`
-    : `<a class="nav-tab-top nav-auth-tab" href="/account">Sign In</a>`;
+    : `<a class="nav-tab-top nav-auth-tab" href="/account" id="nav-auth-tab">Sign In</a>`;
 
   const header = document.getElementById("site-header");
   if (!header) return;
@@ -326,6 +326,16 @@ function renderSharedHeader(opts) {
         </div>
       </div>
     </nav>`;
+
+  // On non-SPA pages (account, admin), update auth tab once Clerk resolves
+  if (!isSPA) {
+    loadClerkInstance().then(c => {
+      if (c?.user) {
+        const el = document.getElementById("nav-auth-tab");
+        if (el) el.textContent = "Account";
+      }
+    }).catch(() => {});
+  }
 }
 
 // ── Shared footer injection ──────────────────────────────────────────────

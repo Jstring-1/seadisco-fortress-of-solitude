@@ -51,6 +51,8 @@ function renderBuyCard(item, idx) {
       else if (mins > 0) timeLeft = `${mins}m left`;
       else timeLeft = `<1m left`;
       if (ms <= 900000) endingSoon = true; // ≤ 15 minutes
+    } else {
+      timeLeft = "ENDED";
     }
   }
 
@@ -340,6 +342,8 @@ function greyExpiredCards() {
     const end = parseInt(card.dataset.end);
     if (end && end < now && !card.classList.contains("card-expired")) {
       card.classList.add("card-expired");
+      const timeEl = card.querySelector(".buy-time-left, .gear-time-left");
+      if (timeEl) { timeEl.textContent = "ENDED"; timeEl.classList.remove("ending-soon"); }
     }
   });
 }
@@ -379,8 +383,11 @@ async function doEbaySearch() {
   const statusDiv = document.getElementById("ebay-search-status");
   const clearBtn = document.getElementById("ebay-clear-btn");
 
+  // Hide the main vinyl grid while showing search results
+  const mainGrid = document.getElementById("buy-results");
+  if (mainGrid) mainGrid.style.display = "none";
   if (resultsDiv) { resultsDiv.style.display = ""; resultsDiv.innerHTML = renderSkeletonGrid(8); }
-  if (statusDiv) statusDiv.style.display = "none";
+  if (statusDiv) { statusDiv.style.display = ""; statusDiv.textContent = `Searching eBay for "${q}"…`; }
   if (clearBtn) clearBtn.style.display = "";
 
   try {
@@ -424,6 +431,7 @@ async function doEbaySearch() {
     }
   } catch (e) {
     if (resultsDiv) resultsDiv.style.display = "none";
+    if (mainGrid) mainGrid.style.display = "";
     showToast("eBay search failed — please try again", "error");
   }
 }
@@ -454,6 +462,8 @@ function renderEbayCard(item, idx) {
       else if (mins > 0) timeLeft = `${mins}m left`;
       else timeLeft = `<1m left`;
       if (ms <= 900000) endingSoon = true;
+    } else {
+      timeLeft = "ENDED";
     }
   }
 
@@ -489,4 +499,7 @@ function clearEbaySearch() {
   if (statusDiv) { statusDiv.style.display = "none"; statusDiv.textContent = ""; }
   if (clearBtn) clearBtn.style.display = "none";
   _ebaySearchItems = [];
+  // Restore the main vinyl grid
+  const mainGrid = document.getElementById("buy-results");
+  if (mainGrid) mainGrid.style.display = "";
 }
