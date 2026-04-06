@@ -3403,16 +3403,13 @@ body.modal-open  { overflow: hidden; }
 .badge-wantlist   { top: 22px;  background: #f0c95c; border-color: #f0c95c66; opacity: 0; transition: opacity 0.15s; cursor: pointer; }
 .badge-list       { top: 38px;  background: #a0ccf0; border-color: #a0ccf066; }
 .badge-inventory  { top: 54px;  background: #cda0f5; border-color: #cda0f566; }
-/* Favorite: heart-shaped dot — same size as other badge dots */
+/* Favorite: orange dot — same style as other badge dots */
 .badge-favorite {
   top: 70px; cursor: pointer; opacity: 0; transition: opacity 0.15s;
-  background: transparent; border-color: transparent;
-  color: var(--accent); font-size: 14px; text-indent: 0; line-height: 1;
-  width: 14px; height: 14px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
+  background: var(--accent); border-color: #ff6b3566;
 }
-.badge-favorite:hover { color: var(--accent2); cursor: pointer; }
-/* Show C/W/♥ on hover or when active */
+.badge-favorite:hover { background: var(--accent2); }
+/* Show C/W/F/L/I on hover or when active */
 .card:hover .badge-collection,
 .card:hover .badge-wantlist,
 .card:hover .badge-favorite,

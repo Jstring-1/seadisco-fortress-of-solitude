@@ -31,10 +31,8 @@ function saveCwSynonyms() {
   try { localStorage.setItem("cw-synonyms", _cwSynonyms ? "1" : "0"); } catch {}
 }
 function updateSynonymToggleUI() {
-  const btn = document.getElementById("cw-synonyms-toggle");
-  if (btn) btn.classList.toggle("active", _cwSynonyms);
   const chk = document.getElementById("cw-syn-check");
-  if (chk) chk.textContent = _cwSynonyms ? "✓" : "✗";
+  if (chk) chk.checked = _cwSynonyms;
 }
 function restoreCwSynonyms() {
   try {
@@ -44,9 +42,9 @@ function restoreCwSynonyms() {
   } catch {}
 }
 function toggleCwSynonyms() {
-  _cwSynonyms = !_cwSynonyms;
+  const chk = document.getElementById("cw-syn-check");
+  _cwSynonyms = chk ? chk.checked : !_cwSynonyms;
   saveCwSynonyms();
-  updateSynonymToggleUI();
   doCwSearch(1);
 }
 function showSynonymInfo(synonymsApplied) {
@@ -60,37 +58,45 @@ function showSynonymInfo(synonymsApplied) {
   el.style.display = "block";
 }
 
-// ── Unified filter persistence across views ──────────────────────────────
-let _filtersRestored = false;
+// ── Per-tab filter persistence ───────────────────────────────────────────
+let _prevCwTab = null; // tracks which tab we're leaving (for saving)
 const _cwFilterIds = ["cw-query","cw-artist","cw-release","cw-label","cw-year","cw-genre","cw-style","cw-format","cw-notes","cw-rating"];
 const _searchToCw = { "query":"cw-query", "f-artist":"cw-artist", "f-release":"cw-release", "f-label":"cw-label", "f-year":"cw-year", "f-format":"cw-format" };
 
-function saveFilterState() {
+function saveFilterState(tab) {
+  tab = tab || _cwTab || "collection";
   const state = {};
   _cwFilterIds.forEach(id => {
     const el = document.getElementById(id);
     if (el) state[id] = el.value || "";
   });
+  const sort = document.getElementById("cw-sort")?.value ?? "";
+  if (sort) state["cw-sort"] = sort;
   const rtype = document.querySelector('input[name="cw-result-type"]:checked')?.value ?? "";
   if (rtype) state["cw-rtype"] = rtype;
   if (_cwAdvOpen) state["cw-advOpen"] = "1";
-  try { localStorage.setItem("saved-filters", JSON.stringify(state)); } catch {}
+  try { localStorage.setItem("cw-filters-" + tab, JSON.stringify(state)); } catch {}
 }
 
-function restoreFilterState() {
-  if (_filtersRestored) return;
-  _filtersRestored = true;
+function restoreFilterState(tab) {
+  tab = tab || _cwTab || "collection";
   try {
-    const state = JSON.parse(localStorage.getItem("saved-filters") || "{}");
+    const state = JSON.parse(localStorage.getItem("cw-filters-" + tab) || "{}");
     _cwFilterIds.forEach(id => {
       const el = document.getElementById(id);
-      if (el && state[id]) el.value = state[id];
+      if (el) el.value = state[id] || "";
     });
+    const sortEl = document.getElementById("cw-sort");
+    if (sortEl && state["cw-sort"]) sortEl.value = state["cw-sort"];
     if (state["cw-rtype"]) {
       const radio = document.querySelector(`input[name="cw-result-type"][value="${state["cw-rtype"]}"]`);
       if (radio) radio.checked = true;
+    } else {
+      const allRadio = document.querySelector('input[name="cw-result-type"][value=""]');
+      if (allRadio) allRadio.checked = true;
     }
     if (state["cw-advOpen"]) toggleCwAdvanced(true);
+    else toggleCwAdvanced(false);
   } catch {}
 }
 
@@ -904,6 +910,9 @@ function doCwSearch(page = 1) {
 }
 
 function switchRecordsTab(tab, skipPush) {
+  // Save outgoing tab's filter state before switching
+  if (_prevCwTab && _prevCwTab !== tab) saveFilterState(_prevCwTab);
+  _prevCwTab = tab;
   _cwTab = tab;
   // Update URL to reflect active sub-tab
   if (!skipPush) {
@@ -931,10 +940,8 @@ function switchRecordsTab(tab, skipPush) {
   if (hasPending) {
     clearCwFilters();
   } else {
-    // First load: restore persisted filters from localStorage
-    // Subsequent tab switches: DOM fields retain their values naturally
-    restoreFilterState();
-    restoreCwSort();
+    // Restore this tab's saved filter state (per-tab persistence)
+    restoreFilterState(tab);
   }
   restoreCwSynonyms();
 
@@ -1205,7 +1212,7 @@ function renderFavoritesTabGrid() {
     setCwStatus("");
     grid.innerHTML = q
       ? renderEmptyState("\uD83D\uDD0D", `No favorites matching "${q}"`, "Try a different search")
-      : renderEmptyState("♡", "No favorites yet", "Favorite albums, artists & labels from search results to see them here");
+      : renderEmptyState("F", "No favorites yet", "Favorite albums, artists & labels from search results to see them here");
     document.getElementById("pagination").style.display = "none";
     return;
   }
