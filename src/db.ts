@@ -686,6 +686,11 @@ export async function getAllUsersForSync(): Promise<Array<{ clerkUserId: string;
   }));
 }
 
+export async function getUserCount(): Promise<number> {
+  const r = await getPool().query("SELECT COUNT(*)::int AS cnt FROM user_tokens");
+  return r.rows[0]?.cnt ?? 0;
+}
+
 export async function getUserToken(clerkUserId: string): Promise<string | null> {
   const r = await getPool().query(
     "SELECT discogs_token FROM user_tokens WHERE clerk_user_id = $1",

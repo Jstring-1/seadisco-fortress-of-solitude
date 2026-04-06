@@ -611,6 +611,10 @@ export async function getAllUsersForSync() {
         wantlistSyncedAt: row.wantlist_synced_at ?? null,
     }));
 }
+export async function getUserCount() {
+    const r = await getPool().query("SELECT COUNT(*)::int AS cnt FROM user_tokens");
+    return r.rows[0]?.cnt ?? 0;
+}
 export async function getUserToken(clerkUserId) {
     const r = await getPool().query("SELECT discogs_token FROM user_tokens WHERE clerk_user_id = $1", [clerkUserId]);
     return r.rows[0]?.discogs_token ?? null;
