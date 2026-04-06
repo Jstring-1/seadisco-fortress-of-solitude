@@ -6,7 +6,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, upsertGearListings, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getEbayRateCount, incrementEbayRateCount, incrementEbayClickCount, getEbaySearchCache, setEbaySearchCache, pruneEbaySearchCache } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, upsertGearListings, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getEbayRateCount, incrementEbayRateCount, incrementEbayClickCount, getEbaySearchCache, setEbaySearchCache, pruneEbaySearchCache } from "./db.js";
 import { startFreshSyncSchedule, runFreshSync } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -279,10 +279,36 @@ app.get("/api/config", (_req, res) => {
   res.json({ clerkPublishableKey: authPk, authEnabled: requireAuth });
 });
 
+// GET /api/user-count — public, returns active user count + limit
+app.get("/api/user-count", async (_req, res) => {
+  try {
+    res.setHeader("Cache-Control", "public, max-age=60");
+    const count = await getActiveUserCount();
+    res.json({ count, limit: MAX_USERS });
+  } catch { res.json({ count: 0, limit: MAX_USERS }); }
+});
+
 // GET /api/user/token — returns whether the user has a token saved + auth method
 app.get("/api/user/token", async (req, res) => {
   const userId = await getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  // Check if this user is hibernated
+  const hibernated = await isUserHibernated(userId);
+  if (hibernated) {
+    const activeCount = await getActiveUserCount();
+    if (activeCount >= MAX_USERS) {
+      res.status(403).json({ error: "hibernated", message: `Your account is hibernated due to inactivity. All ${MAX_USERS} spots are currently full. Please try again later.` });
+      return;
+    }
+    // There's room — reactivate automatically
+    await reactivateUser(userId);
+  }
+
+  // Touch activity
+  const existingToken = await getUserToken(userId);
+  if (existingToken) touchUserActivity(userId).catch(() => {});
+
   const [t, oauthCreds] = await Promise.all([
     getUserToken(userId),
     getOAuthCredentials(userId),
@@ -308,7 +334,7 @@ app.post("/api/user/token", express.json(), async (req, res) => {
   // Check user cap for new users
   const existingToken = await getUserToken(userId);
   if (!existingToken) {
-    const count = await getUserCount();
+    const count = await getActiveUserCount();
     if (count >= MAX_USERS) {
       res.status(403).json({ error: `User limit reached (${MAX_USERS}). New registrations are currently closed.` });
       return;
@@ -453,7 +479,7 @@ app.get("/api/auth/discogs/callback", async (req, res) => {
     const existingToken = await getUserToken(stored.clerkUserId);
     if (!existingToken) {
       // Check user cap for new users
-      const userCount = await getUserCount();
+      const userCount = await getActiveUserCount();
       if (userCount >= MAX_USERS) {
         res.status(403).send(`User limit reached (${MAX_USERS}). New registrations are currently closed. <a href="/">Home</a>`);
         return;
@@ -4134,7 +4160,8 @@ async function fetchAllFeedContent() {
   const videos = await fetchYouTubeVideos();
   const pruned = await pruneFeedArticles(90);
   const stale = await pruneAllStaleData();
-  console.log(`Feed fetch complete: ${articles} articles, ${videos} videos, ${pruned} feed pruned`);
+  const hibernated = await hibernateInactiveUsers().catch(() => 0);
+  console.log(`Feed fetch complete: ${articles} articles, ${videos} videos, ${pruned} feed pruned${hibernated ? `, ${hibernated} users hibernated` : ""}`);
   const staleTotal = Object.values(stale).reduce((a, b) => a + b, 0);
   if (staleTotal > 0) {
     console.log(`Pruned stale data: ${JSON.stringify(stale)}`);

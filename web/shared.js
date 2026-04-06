@@ -374,5 +374,10 @@ function renderSharedFooter(opts) {
     </div>
     <div style="color:#555;font-style:italic;margin-bottom:0.3rem">DISCLAIMER: AI be funky sometimes</div>
     <div>Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Discogs</a>, <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Claude</a>, and <a href="https://listenbrainz.org" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">ListenBrainz</a></div>
-    <div style="margin-top:0.3rem">&copy; 2026 SeaDisco &nbsp;&middot;&nbsp; Music data courtesy of Discogs API &nbsp;&middot;&nbsp; Not affiliated with Discogs &nbsp;&middot;&nbsp; Jimmy Witherfork Strikes Again</div>`;
+    <div style="margin-top:0.3rem">&copy; 2026 SeaDisco <span id="footer-user-count" style="color:#555;font-size:0.8em"></span> &nbsp;&middot;&nbsp; Music data courtesy of Discogs API &nbsp;&middot;&nbsp; Not affiliated with Discogs &nbsp;&middot;&nbsp; Jimmy Witherfork Strikes Again</div>`;
+  // Fetch user count for footer
+  fetch("/api/user-count").then(r => r.json()).then(d => {
+    const el = document.getElementById("footer-user-count");
+    if (el && d.count != null) el.textContent = `${d.count}/${d.limit}`;
+  }).catch(() => {});
 }
