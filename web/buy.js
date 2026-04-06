@@ -139,7 +139,7 @@ async function _fetchEbayDetail(itemId, overlay) {
     const r = await fetch(`/api/ebay/item/${encodeURIComponent(itemId)}`);
     if (!overlay.isConnected) return; // popup was closed
     if (r.status === 429) {
-      if (area) area.textContent = "Detail view limit reached for today.";
+      if (area) area.textContent = "Daily eBay request limit reached.";
       return;
     }
     if (!r.ok) {
@@ -154,6 +154,45 @@ async function _fetchEbayDetail(itemId, overlay) {
       if (bidsEl && d.bidCount > 0) {
         const isAuction = bidsEl.textContent.includes("Auction");
         if (isAuction) bidsEl.textContent = `Auction · ${d.bidCount} bid${d.bidCount !== 1 ? "s" : ""}`;
+      }
+    }
+
+    // Update price if fresher
+    if (d.price && d.price > 0) {
+      const priceEl = overlay.querySelector(".buy-popup-price");
+      if (priceEl) {
+        const priceStr = d.price.toLocaleString("en-US", { style: "currency", currency: d.currency || "USD" });
+        const spanEl = priceEl.querySelector("span");
+        priceEl.childNodes[0].textContent = priceStr + " ";
+      }
+    }
+
+    // Fill in missing meta fields from detail response
+    const body = overlay.querySelector(".buy-popup-body");
+    if (body) {
+      const existingMetas = body.querySelectorAll(".buy-popup-meta");
+      const hasCondition = Array.from(existingMetas).some(m => m.textContent.startsWith("Condition:"));
+      const hasLocation = Array.from(existingMetas).some(m => m.textContent.startsWith("Location:"));
+      const hasSeller = Array.from(existingMetas).some(m => m.textContent.startsWith("Seller:"));
+      const insertBefore = overlay.querySelector(".buy-popup-detail-area") || overlay.querySelector(".buy-popup-ebay-link");
+
+      if (!hasCondition && d.condition) {
+        const el = document.createElement("div");
+        el.className = "buy-popup-meta";
+        el.textContent = `Condition: ${d.condition}${d.conditionDescription ? " — " + d.conditionDescription : ""}`;
+        if (insertBefore) body.insertBefore(el, insertBefore);
+      }
+      if (!hasLocation && d.location) {
+        const el = document.createElement("div");
+        el.className = "buy-popup-meta";
+        el.textContent = `Location: ${d.location}`;
+        if (insertBefore) body.insertBefore(el, insertBefore);
+      }
+      if (!hasSeller && d.seller) {
+        const el = document.createElement("div");
+        el.className = "buy-popup-meta";
+        el.textContent = `Seller: ${d.seller}${d.sellerFeedbackPercent ? " (" + d.sellerFeedbackPercent + "%)" : ""}`;
+        if (insertBefore) body.insertBefore(el, insertBefore);
       }
     }
 
@@ -173,15 +212,31 @@ async function _fetchEbayDetail(itemId, overlay) {
 
     if (area) area.innerHTML = html || "";
 
-    // Update gallery with additional images
-    if (d.allImages && d.allImages.length > 1) {
-      const mainImg = overlay.querySelector(".buy-popup-main-img");
-      const existingGallery = overlay.querySelector(".buy-popup-gallery");
-      if (!existingGallery && mainImg) {
-        const gal = document.createElement("div");
-        gal.className = "buy-popup-gallery";
-        gal.innerHTML = d.allImages.map(u => `<img src="${escHtml(u)}" loading="lazy" onclick="this.parentElement.previousElementSibling.src='${escHtml(u)}'" onerror="this.style.display='none'">`).join("");
-        mainImg.after(gal);
+    // Update images from detail response
+    if (d.allImages && d.allImages.length) {
+      let mainImg = overlay.querySelector(".buy-popup-main-img");
+      // Create main image if none existed (initial item had no images)
+      if (!mainImg) {
+        const img = document.createElement("img");
+        img.className = "buy-popup-main-img";
+        img.src = d.allImages[0];
+        img.onerror = () => { img.style.display = "none"; };
+        const popup = overlay.querySelector(".buy-popup");
+        const closeBtn = overlay.querySelector(".buy-popup-close");
+        if (popup && closeBtn) closeBtn.after(img);
+        mainImg = img;
+      } else if (d.allImages[0]) {
+        mainImg.src = d.allImages[0];
+      }
+      // Add gallery thumbnails
+      if (d.allImages.length > 1) {
+        const existingGallery = overlay.querySelector(".buy-popup-gallery");
+        if (!existingGallery && mainImg) {
+          const gal = document.createElement("div");
+          gal.className = "buy-popup-gallery";
+          gal.innerHTML = d.allImages.map(u => `<img src="${escHtml(u)}" loading="lazy" onclick="this.parentElement.previousElementSibling.src='${escHtml(u)}'" onerror="this.style.display='none'">`).join("");
+          mainImg.after(gal);
+        }
       }
     }
 
@@ -216,7 +271,7 @@ function renderBuyGrid() {
 function refreshBuyListings() {
   _buyOffset = 0;
   _buyItems = [];
-  loadBuyListings();
+  loadBuyListings(false, true);
 }
 
 function setBuyPriceFilter(minPrice) {
@@ -246,7 +301,7 @@ function onBuySearch(val) {
   }, 350);
 }
 
-async function loadBuyListings(append = false) {
+async function loadBuyListings(append = false, bustCache = false) {
   if (_buyLoading) return;
   _buyLoading = true;
 
@@ -264,7 +319,8 @@ async function loadBuyListings(append = false) {
 
   try {
     const qEnc = _buyQuery ? `&q=${encodeURIComponent(_buyQuery)}` : "";
-    const url = `/api/vinyl?min_price=${_buyMinPrice}&sort=${_buySort}${qEnc}&limit=${BUY_PAGE_SIZE}&offset=${_buyOffset}`;
+    const bust = bustCache ? `&_t=${Date.now()}` : "";
+    const url = `/api/vinyl?min_price=${_buyMinPrice}&sort=${_buySort}${qEnc}&limit=${BUY_PAGE_SIZE}&offset=${_buyOffset}${bust}`;
     const r = await fetch(url);
     const data = await r.json();
     const newItems = data.items ?? [];

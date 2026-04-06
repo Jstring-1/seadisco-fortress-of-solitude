@@ -4434,6 +4434,15 @@ app.get("/api/ebay/item/:itemId", async (req, res) => {
             specifics,
             bidCount: d.bidCount ?? 0,
             itemUrl: d.itemWebUrl ?? "",
+            condition: d.condition ?? d.conditionDescription ?? "",
+            conditionDescription: d.conditionDescription ?? "",
+            seller: d.seller?.username ?? "",
+            sellerFeedback: d.seller?.feedbackScore ?? 0,
+            sellerFeedbackPercent: d.seller?.feedbackPercentage ?? "",
+            price: parseFloat(d.currentBidPrice?.value ?? d.price?.value ?? "0"),
+            currency: d.currentBidPrice?.currency ?? d.price?.currency ?? "USD",
+            location: [d.itemLocation?.city, d.itemLocation?.stateOrProvince, d.itemLocation?.country].filter(Boolean).join(", "),
+            itemEndDate: d.itemEndDate ?? "",
             rateLimit: { remaining: Math.max(0, EBAY_USER_LIMIT - newCount), limit: EBAY_USER_LIMIT, resetsAt },
         });
     }
