@@ -3426,8 +3426,8 @@ body.modal-open  { overflow: hidden; }
 .badge-favorite.is-favorite { opacity: 1; }
 /* Inactive C/W shown dimmed on hover */
 .card:hover .badge-collection:not(.is-active),
-.card:hover .badge-wantlist:not(.is-active) { opacity: 0.35; }
-.card:hover .badge-favorite:not(.is-favorite) { opacity: 0.35; }
+.card:hover .badge-wantlist:not(.is-active) { opacity: 0.55; }
+.card:hover .badge-favorite:not(.is-favorite) { opacity: 0.55; }
 
 /* Favorite button in modal */
 .modal-act-btn.is-favorite {
