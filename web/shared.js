@@ -273,20 +273,15 @@ function renderSharedHeader(opts) {
     return `<a${cls} href="${href}">${label}</a>`;
   };
 
-  // Bottom-row tab — first letter colored, rest normal. Heart for favorites.
+  // Bottom-row tab — plain text, hover color matches the badge dot for that tab.
   const colors = { collection: "#6ddf70", wantlist: "#f0c95c", lists: "#a0ccf0", inventory: "#cda0f5", favorites: "#ff80ab" };
   const recTab = (label, rtab) => {
-    const coloredLabel = rtab === "favorites"
-      ? `<span style="color:${colors[rtab]}">♥</span>${label.slice(0)}`
-      : `<span style="color:${colors[rtab]}">${label.charAt(0)}</span>${label.slice(1)}`;
+    const displayLabel = rtab === "favorites" ? `♥ ${label}` : label;
     if (isSPA) {
-      return `<button class="nav-tab-bot nav-rec-disabled" data-rtab="${rtab}" onclick="showRecordSignIn('${rtab}')">${coloredLabel}</button>`;
+      return `<button class="nav-tab-bot nav-rec-disabled" data-rtab="${rtab}" onclick="showRecordSignIn('${rtab}')">${displayLabel}</button>`;
     }
-    // Off-SPA (e.g. /account): jump straight to the main-page records view with
-    // the correct sub-tab selected. Previously this was `href="/account"`, which
-    // was a silent no-op when clicked FROM /account.
     const href = rtab === "collection" ? "/?view=records" : `/?view=records&tab=${rtab}`;
-    return `<a class="nav-tab-bot" href="${href}">${coloredLabel}</a>`;
+    return `<a class="nav-tab-bot" href="${href}" data-rtab="${rtab}">${displayLabel}</a>`;
   };
 
   // Auth tab (top row, rightmost)
@@ -299,7 +294,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 2026.04.05h";
+  const SITE_VERSION = "build 2026.04.05i";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'https://seadisco.com' : '/'}" class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>

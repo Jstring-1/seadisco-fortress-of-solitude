@@ -15,7 +15,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎹</text></svg>">
   <link rel="manifest" href="/site.webmanifest">
   <meta name="theme-color" content="#080706">
-  <link rel="stylesheet" href="/style.css?v=20260405h" />
+  <link rel="stylesheet" href="/style.css?v=20260405i" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -29,7 +29,7 @@
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260405h"></script>
+<script src="/shared.js?v=20260405i"></script>
 <script>renderSharedHeader({ hideRecords: true });</script>
 
 <main>
@@ -75,7 +75,7 @@
         <div id="oauth-section" style="display:none;margin-bottom:1.5rem">
           <h2 style="margin-top:0;margin-bottom:0.5rem">Connect with Discogs</h2>
           <p style="font-size:0.85rem;color:var(--muted);margin-bottom:0.8rem">
-            One click to connect your Discogs account — unlocks unlimited searches, collection syncing, collection/wantlist management, and ratings.
+            One click to connect your Discogs account. OAuth gives full access including marketplace listing management (create, edit, delete), seller order management, and messaging with buyers — features not available with a Personal Access Token.
           </p>
           <button id="oauth-connect-btn" onclick="startOAuth()" style="font-size:0.88rem;padding:0.5rem 1.2rem;background:#333;color:#fff;border:1px solid #555;border-radius:6px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:0.5rem">
             <span style="font-size:1.1rem">🔗</span> Connect with Discogs
@@ -185,7 +185,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script src="/modal.js?v=20260405h"></script>
+<script src="/modal.js?v=20260405i"></script>
 <script src="/orders.js?v=20260405f"></script>
 
 <!-- Feedback modal -->
@@ -364,8 +364,11 @@ async function loadProfilePanel() {
     const curr = p.currAbbr || d.curr_abbr || "USD";
     const isOAuth = p.authMethod === "oauth";
     const badgeHtml = isOAuth
-      ? `<span class="profile-badge profile-badge-oauth">OAuth</span>`
-      : `<span class="profile-badge profile-badge-pat">Token</span>`;
+      ? `<span class="profile-badge profile-badge-oauth" title="Connected via OAuth — full access including marketplace management">OAuth</span>`
+      : `<span class="profile-badge profile-badge-pat" title="Connected via Personal Access Token — read-only; connect via OAuth above for marketplace management">Token</span>`;
+    const authHint = isOAuth
+      ? `<div class="profile-sub" style="color:#6bcf8e;font-size:0.72rem;margin-top:0.15rem">Full access — collection, wantlist, marketplace listings, orders &amp; messages</div>`
+      : `<div class="profile-sub" style="color:#e8a020;font-size:0.72rem;margin-top:0.15rem">Read-only — connect via OAuth above to manage marketplace listings &amp; orders</div>`;
     const disconnectHtml = isOAuth
       ? `<button type="button" class="profile-disconnect" onclick="disconnectOAuth()" title="Disconnect your Discogs connection">Disconnect</button>`
       : "";
@@ -382,6 +385,7 @@ async function loadProfilePanel() {
               ${joined ? ` · joined ${esc(joined)}` : ""}
             </div>
             <div class="profile-sub">Marketplace currency: <strong>${esc(curr)}</strong></div>
+            ${authHint}
           </div>
           <div class="profile-head-actions">
             <button type="button" class="profile-refresh" onclick="refreshProfilePanel(this)" title="Re-sync profile from Discogs">↻</button>
