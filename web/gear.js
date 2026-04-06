@@ -36,6 +36,8 @@ function renderGearCard(item, idx) {
       else if (mins > 0) timeLeft = `${mins}m left`;
       else timeLeft = `<1m left`;
       if (ms <= 900000) endingSoon = true; // ≤ 15 minutes
+    } else {
+      timeLeft = "ENDED";
     }
   }
 
