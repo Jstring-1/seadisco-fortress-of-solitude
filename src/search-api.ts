@@ -6,7 +6,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getEbayRateCount, incrementEbayRateCount, getEbaySearchCache, setEbaySearchCache, pruneEbaySearchCache } from "./db.js";
 import { startFreshSyncSchedule, runFreshSync } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -551,6 +551,7 @@ app.post("/api/user/profile/refresh", express.json(), async (req, res) => {
 
 // Prune expired OAuth request tokens every 10 minutes
 setInterval(() => { pruneOAuthRequestTokens().catch(() => {}); }, 10 * 60 * 1000);
+setInterval(() => { pruneEbaySearchCache().catch(() => {}); }, 60 * 60 * 1000);
 
 // Abort flag for stopping all syncs
 let _syncAbort = false;
@@ -3385,8 +3386,10 @@ app.get("/api/concerts/:artist", async (req, res) => {
 // ── eBay Gear integration ─────────────────────────────────────────────────
 const ebayClientId     = process.env.EBAY_CLIENT_ID ?? "";
 const ebayClientSecret = process.env.EBAY_CLIENT_SECRET ?? "";
+const ebayAffiliateCampaignId = process.env.EBAY_AFFILIATE_CAMPAIGN_ID ?? "";
 let ebayAccessToken    = "";
 let ebayTokenExpiry    = 0;
+const EBAY_USER_LIMIT  = 2000;
 
 async function getEbayToken(): Promise<string> {
   if (ebayAccessToken && Date.now() < ebayTokenExpiry - 60000) return ebayAccessToken;
@@ -3727,6 +3730,129 @@ app.post("/api/admin/vinyl/fetch", express.json(), async (req, res) => {
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   res.json({ ok: true, started: true });
   fetchEbayVinylListings();
+});
+
+// ── eBay live search ─────────────────────────────────────────────────────
+
+function nextPacificMidnightIso(): string {
+  // Get current time in Pacific, find next midnight, convert to UTC ISO
+  const nowPacific = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" }));
+  const tomorrow = new Date(nowPacific);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(0, 0, 0, 0);
+  // Offset back to UTC: Pacific is UTC-7 (PDT) or UTC-8 (PST)
+  const jan = new Date(tomorrow.getFullYear(), 0, 1);
+  const jul = new Date(tomorrow.getFullYear(), 6, 1);
+  const stdOff = Math.max(jan.getTimezoneOffset(), jul.getTimezoneOffset());
+  const isDST = nowPacific.getTimezoneOffset() < stdOff;
+  // Pacific offset: -7 (PDT) or -8 (PST)
+  const pacificOffsetHours = isDST ? 7 : 8;
+  const utcMidnight = new Date(tomorrow.getTime() + pacificOffsetHours * 60 * 60 * 1000);
+  return utcMidnight.toISOString();
+}
+
+app.get("/api/ebay/search/status", async (_req, res) => {
+  try {
+    const { count } = await getEbayRateCount();
+    const remaining = Math.max(0, EBAY_USER_LIMIT - count);
+    res.json({ remaining, limit: EBAY_USER_LIMIT, resetsAt: nextPacificMidnightIso() });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+app.get("/api/ebay/search", async (req, res) => {
+  const q = ((req.query.q as string) ?? "").trim();
+  if (q.length < 2) return res.status(400).json({ error: "Query must be at least 2 characters" });
+  if (q.length > 200) return res.status(400).json({ error: "Query too long" });
+
+  if (!ebayClientId || !ebayClientSecret) {
+    return res.status(503).json({ error: "eBay search not available" });
+  }
+
+  const queryKey = q.toLowerCase();
+  const resetsAt = nextPacificMidnightIso();
+
+  try {
+    // Check cache first — free, no counter increment
+    const cached = await getEbaySearchCache(queryKey);
+    if (cached) {
+      const { count } = await getEbayRateCount();
+      return res.json({
+        items: cached.results,
+        total: cached.total,
+        cached: true,
+        rateLimit: { remaining: Math.max(0, EBAY_USER_LIMIT - count), limit: EBAY_USER_LIMIT, resetsAt },
+      });
+    }
+
+    // Check rate limit
+    const { count } = await getEbayRateCount();
+    if (count >= EBAY_USER_LIMIT) {
+      return res.status(429).json({
+        error: "Daily eBay search limit reached",
+        rateLimit: { remaining: 0, limit: EBAY_USER_LIMIT, resetsAt },
+      });
+    }
+
+    // Increment counter and call eBay
+    const newCount = await incrementEbayRateCount();
+    const token = await getEbayToken();
+
+    const headers: Record<string, string> = {
+      "Authorization": `Bearer ${token}`,
+      "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
+    };
+    if (ebayAffiliateCampaignId) {
+      headers["X-EBAY-C-ENDUSERCTX"] = `affiliateCampaignId=${ebayAffiliateCampaignId}`;
+    }
+
+    const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&category_ids=176985&limit=50&sort=endingSoonest&filter=priceCurrency:USD`;
+    const r = await loggedFetch("ebay", url, { headers, context: `live search: ${q}` });
+
+    if (!r.ok) {
+      console.error(`eBay live search failed: ${r.status}`);
+      return res.status(502).json({ error: "eBay search failed" });
+    }
+
+    const data = await r.json() as any;
+    const summaries: any[] = data.itemSummaries ?? [];
+
+    // Transform to match vinyl_listings field names
+    const items = summaries.map((s: any) => ({
+      item_id:          s.itemId,
+      title:            s.title ?? "",
+      price:            parseFloat(s.currentBidPrice?.value ?? s.price?.value ?? "0"),
+      currency:         s.currentBidPrice?.currency ?? s.price?.currency ?? "USD",
+      condition:        s.condition ?? "",
+      image_url:        s.image?.imageUrl ?? s.thumbnailImages?.[0]?.imageUrl ?? "",
+      item_url:         s.itemWebUrl ?? s.itemHref ?? "",
+      location_city:    s.itemLocation?.city ?? "",
+      location_state:   s.itemLocation?.stateOrProvince ?? "",
+      location_country: s.itemLocation?.country ?? "",
+      seller_username:  s.seller?.username ?? "",
+      seller_feedback:  s.seller?.feedbackScore ?? 0,
+      buying_options:   s.buyingOptions ?? [],
+      bid_count:        s.bidCount ?? 0,
+      item_end_date:    s.itemEndDate ?? null,
+      thumbnail_url:    (s.thumbnailImages ?? [])[0]?.imageUrl ?? "",
+    }));
+
+    const total = data.total ?? items.length;
+
+    // Cache results
+    await setEbaySearchCache(queryKey, items, total);
+
+    res.json({
+      items,
+      total,
+      cached: false,
+      rateLimit: { remaining: Math.max(0, EBAY_USER_LIMIT - newCount), limit: EBAY_USER_LIMIT, resetsAt },
+    });
+  } catch (e) {
+    console.error("eBay live search error:", e);
+    res.status(500).json({ error: String(e) });
+  }
 });
 
 // ── eBay Marketplace Account Deletion Notification (compliance) ──────────

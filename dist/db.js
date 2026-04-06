@@ -225,6 +225,25 @@ export async function initDb() {
       finished_at TIMESTAMPTZ
     )
   `);
+    // ── eBay live search rate limiting ──────────────────────────────────────
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS ebay_rate_limit (
+      id         INTEGER PRIMARY KEY DEFAULT 1,
+      call_count INTEGER NOT NULL DEFAULT 0,
+      reset_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      CHECK (id = 1)
+    )
+  `);
+    await getPool().query(`INSERT INTO ebay_rate_limit (id, call_count, reset_date) VALUES (1, 0, CURRENT_DATE) ON CONFLICT DO NOTHING`);
+    // ── eBay live search cache ────────────────────────────────────────────
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS ebay_search_cache (
+      query_key     TEXT PRIMARY KEY,
+      results_json  JSONB NOT NULL,
+      total_results INTEGER NOT NULL DEFAULT 0,
+      cached_at     TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
     // ── Feed articles (RSS + YouTube) ──────────────────────────────────────
     await getPool().query(`
     CREATE TABLE IF NOT EXISTS feed_articles (
@@ -1794,6 +1813,56 @@ export async function getVinylStats() {
 export async function logVinylFetch(fetchType, itemCount, error) {
     await getPool().query(`INSERT INTO vinyl_fetch_log (fetch_type, item_count, error, finished_at)
      VALUES ($1, $2, $3, NOW())`, [fetchType, itemCount, error ?? null]);
+}
+// ── eBay live search rate limiting & cache ─────────────────────────────────
+export async function getEbayRateCount() {
+    const r = await getPool().query(`SELECT call_count, reset_date FROM ebay_rate_limit WHERE id = 1`);
+    if (!r.rows.length)
+        return { count: 0, resetDate: new Date().toISOString().slice(0, 10) };
+    const row = r.rows[0];
+    // Auto-reset if stored date is before today (Pacific)
+    const todayPacific = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" }))
+        .toISOString().slice(0, 10);
+    if (row.reset_date < todayPacific) {
+        await getPool().query(`UPDATE ebay_rate_limit SET call_count = 0, reset_date = $1 WHERE id = 1`, [todayPacific]);
+        return { count: 0, resetDate: todayPacific };
+    }
+    return { count: row.call_count, resetDate: row.reset_date };
+}
+export async function incrementEbayRateCount() {
+    const r = await getPool().query(`
+    UPDATE ebay_rate_limit
+    SET call_count = CASE
+          WHEN reset_date < (NOW() AT TIME ZONE 'America/Los_Angeles')::date THEN 1
+          ELSE call_count + 1
+        END,
+        reset_date = (NOW() AT TIME ZONE 'America/Los_Angeles')::date
+    WHERE id = 1
+    RETURNING call_count
+  `);
+    return r.rows[0]?.call_count ?? 0;
+}
+export async function getEbaySearchCache(queryKey) {
+    const r = await getPool().query(`SELECT results_json, total_results, cached_at
+     FROM ebay_search_cache
+     WHERE query_key = $1 AND cached_at > NOW() - INTERVAL '30 minutes'`, [queryKey]);
+    if (!r.rows.length)
+        return null;
+    return {
+        results: r.rows[0].results_json,
+        total: r.rows[0].total_results,
+        cachedAt: r.rows[0].cached_at,
+    };
+}
+export async function setEbaySearchCache(queryKey, results, total) {
+    await getPool().query(`INSERT INTO ebay_search_cache (query_key, results_json, total_results, cached_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (query_key) DO UPDATE SET
+       results_json = $2, total_results = $3, cached_at = NOW()`, [queryKey, JSON.stringify(results), total]);
+}
+export async function pruneEbaySearchCache() {
+    const r = await getPool().query(`DELETE FROM ebay_search_cache WHERE cached_at < NOW() - INTERVAL '30 minutes'`);
+    return r.rowCount ?? 0;
 }
 // ── Auto-prune stale data ─────────────────────────────────────────────────
 export async function pruneAllStaleData() {
