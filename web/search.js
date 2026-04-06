@@ -145,7 +145,7 @@ async function doSearch(page = 1, skipPushState = false) {
 
   if (!skipPushState) pushSearchState(q, artistRaw, release, year, label, genre, sort, resultType, page);
 
-  if (page === 1) detectedArtist = null;
+  if (page === 1) { detectedArtist = null; }
 
   const _append = page > 1;
   currentPage = page;
@@ -270,8 +270,10 @@ async function doSearch(page = 1, skipPushState = false) {
           return mRes.ok ? mRes : (rRes.ok ? rRes : mRes);
         }
 
-        const masterIds = new Set(masters.map(m => m.id));
-        const orphans = releases.filter(r => !r.master_id || !masterIds.has(r.master_id));
+        // Only include releases that have NO master at all (true orphans).
+        // Any release with a master_id has a master somewhere in Discogs,
+        // so the master search already covers it.
+        const orphans = releases.filter(r => !r.master_id);
         const seen = new Set(masters.map(m => m.id));
         const uniqueOrphans = orphans.filter(r => {
           if (seen.has(r.id)) return false;
@@ -390,8 +392,7 @@ async function doSearch(page = 1, skipPushState = false) {
               const [mD, rD] = await Promise.all([mR.json(), rR.json()]);
               const masters = mD.results ?? [];
               const releases = rD.results ?? [];
-              const masterIds = new Set(masters.map(m => m.id));
-              const orphans = releases.filter(r => !r.master_id || !masterIds.has(r.master_id));
+              const orphans = releases.filter(r => !r.master_id);
               const seen = new Set(masters.map(m => m.id));
               const uniqueOrphans = orphans.filter(r => { if (seen.has(r.id)) return false; seen.add(r.id); return true; });
               let merged = [...masters, ...uniqueOrphans];
