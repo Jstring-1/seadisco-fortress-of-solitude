@@ -3493,8 +3493,8 @@ async function fetchEbayGearListings(): Promise<number> {
     const token = await getEbayToken();
     for (const query of GEAR_SEARCH_QUERIES) {
       try {
-        // Auctions only, sorted by ending soonest (most active)
-        const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&limit=200&sort=endingSoonest&filter=price:[50..],priceCurrency:USD,buyingOptions:{AUCTION}`;
+        // Auctions only, sorted by newly listed (accumulate over time)
+        const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&limit=200&sort=newlyListed&filter=price:[50..],priceCurrency:USD,buyingOptions:{AUCTION}`;
         const r = await loggedFetch("ebay", url, {
           headers: { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" },
           context: `gear search: ${query}`,
@@ -3550,18 +3550,18 @@ async function fetchEbayGearListings(): Promise<number> {
   return totalUpserted;
 }
 
-// Schedule: gear search every 4 hours
+// Schedule: gear search every hour (staggered 30min from vinyl)
 function startGearSchedule() {
   if (!ebayClientId || !ebayClientSecret) {
     console.log("eBay gear schedule not started — no credentials");
     return;
   }
-  // Gear search at :50 past the hour, every 4 hours (anchored to 4:50 AM Pacific)
-  const msSearch = msUntilPacific(4, 50, 4);
-  console.log(`[gear] Next search in ${Math.round(msSearch / 60000)}min, then every 4h`);
+  // Gear search at :50 past the hour, every hour
+  const msSearch = msUntilPacific(4, 50, 1);
+  console.log(`[gear] Next search in ${Math.round(msSearch / 60000)}min, then every 1h`);
   setTimeout(() => {
     fetchEbayGearListings();
-    setInterval(() => fetchEbayGearListings(), 4 * 60 * 60 * 1000);
+    setInterval(() => fetchEbayGearListings(), 1 * 60 * 60 * 1000);
   }, msSearch);
 }
 
@@ -3614,7 +3614,7 @@ async function fetchEbayVinylListings(): Promise<number> {
   let totalUpserted = 0;
   try {
     const token = await getEbayToken();
-    const baseUrl = `https://api.ebay.com/buy/browse/v1/item_summary/search?category_ids=176985&limit=200&sort=endingSoonest&filter=price:[10..],priceCurrency:USD,buyingOptions:{AUCTION}&aspect_filter=categoryId:176985,Record%20Size:12%22`;
+    const baseUrl = `https://api.ebay.com/buy/browse/v1/item_summary/search?category_ids=176985&limit=200&sort=newlyListed&filter=price:[10..],priceCurrency:USD,buyingOptions:{AUCTION}&aspect_filter=categoryId:176985,Record%20Size:12%22`;
 
     // Paginate through up to 5000 results (25 pages × 200)
     for (let offset = 0; offset < 5000; offset += 200) {
@@ -3682,18 +3682,18 @@ async function fetchEbayVinylListings(): Promise<number> {
   return totalUpserted;
 }
 
-// Schedule: vinyl search every 4 hours (staggered 2h from gear)
+// Schedule: vinyl search every hour
 function startVinylSchedule() {
   if (!ebayClientId || !ebayClientSecret) {
     console.log("eBay vinyl schedule not started — no credentials");
     return;
   }
-  // Vinyl search at :20 past the hour, every 2 hours
-  const msSearch = msUntilPacific(6, 20, 2);
-  console.log(`[vinyl] Next search in ${Math.round(msSearch / 60000)}min, then every 2h`);
+  // Vinyl search at :20 past the hour, every hour
+  const msSearch = msUntilPacific(6, 20, 1);
+  console.log(`[vinyl] Next search in ${Math.round(msSearch / 60000)}min, then every 1h`);
   setTimeout(() => {
     fetchEbayVinylListings();
-    setInterval(() => fetchEbayVinylListings(), 2 * 60 * 60 * 1000);
+    setInterval(() => fetchEbayVinylListings(), 1 * 60 * 60 * 1000);
   }, msSearch);
 }
 
