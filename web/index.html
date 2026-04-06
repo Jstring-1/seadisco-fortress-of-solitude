@@ -31,7 +31,7 @@
   <link rel="preconnect" href="https://i.ebayimg.com" />
   <link rel="dns-prefetch" href="https://clerk.seadisco.com" />
   <link rel="dns-prefetch" href="https://api.anthropic.com" />
-  <link rel="stylesheet" href="/style.css?v=20260405k" />
+  <link rel="stylesheet" href="/style.css?v=20260405l" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -64,7 +64,7 @@
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260405k"></script>
+<script src="/shared.js?v=20260405l"></script>
 <script>renderSharedHeader({ spa: true, active: "search" });</script>
 <div id="search-view">
 
@@ -302,7 +302,7 @@
       <span style="color:#333;margin:0 0.25rem">|</span>
       <button type="button" id="cw-export-btn" onclick="_cwTab==='collection'?exportCollection():exportWantlist()" title="Download as CSV" style="background:none;border:none;padding:0;font-size:0.78rem;color:#555;cursor:pointer;white-space:nowrap;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">⬇ CSV</button>
       <span style="color:#333;margin:0 0.25rem">|</span>
-      <button type="button" id="cw-synonyms-toggle" class="pill active" onclick="toggleCwSynonyms()" title="Expand classical music synonyms (Symphony = Sinfonie, Symphonie, etc.)">Synonyms</button>
+      <button type="button" id="cw-synonyms-toggle" class="pill active" onclick="toggleCwSynonyms()" title="Expand classical music synonyms (Symphony = Sinfonie, Symphonie, etc.)"><span id="cw-syn-check">✓</span> Synonyms</button>
     </div>
     <div id="cw-advanced-panel" style="display:none;margin-top:0.5rem">
       <div style="font-size:0.72rem;color:#444;margin-bottom:0.4rem;line-height:1.6">Filters support operators: use <span style="color:#888">+</span> to require multiple terms, <span style="color:#888">|</span> for either/or, and <span style="color:#888">-</span> before a term to exclude it &nbsp;·&nbsp; e.g. Artist: <span style="color:#777">miles davis | coltrane</span> &nbsp; Label: <span style="color:#777">columbia + -legacy</span></div>
@@ -545,7 +545,7 @@
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Click any card for full details: tracklist with YouTube previews, version finder, pressing info, credits, and photos. From the detail popup you can <strong style="color:#ccc">add/remove items from your collection or wantlist</strong> and <strong style="color:#ccc">rate releases</strong> 1–5 stars. <strong style="color:#ccc">Hide owned</strong> removes synced collection items from results. Select <strong style="color:#ccc">✦ AI</strong> to describe what you want in plain language — Claude returns 12 curated picks with Discogs links.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">The tracklist is collapsible (setting saved across sessions) with an inline track filter. Credits are filterable too — useful for releases with long personnel lists. Master release popups show all pressings with format and country filter pills (selections persist across popups). If a release belongs to a <strong style="color:#ccc">series</strong>, the series name is clickable — browse all releases in the series with collection/wantlist badges so you can see what you own and what's missing.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Marketplace stats show lowest price, number for sale, and community want/have counts. Click <strong style="color:#ccc">(est)</strong> to see condition-based price estimates from Good through Mint, color-coded by grade.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Every album card shows badge indicators on hover: <strong style="color:#6ddf70">C</strong> (collection), <strong style="color:#f0c95c">W</strong> (wantlist), and <strong style="color:#ff80ab">♥</strong> (favorite). Active badges are bright; inactive ones appear dimmed. Click <strong style="color:#6ddf70">C</strong>, <strong style="color:#f0c95c">W</strong>, or <strong style="color:#ff80ab">♥</strong> to add/remove directly from any card — no need to open the popup. If an item is in your lists or inventory, <strong style="color:#a0ccf0">L</strong> and <strong style="color:#cda0f5">I</strong> badges appear too.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Every album card shows badge indicators on hover: <strong style="color:#6ddf70">C</strong> (collection), <strong style="color:#f0c95c">W</strong> (wantlist), and <strong style="color:#ff6b35">♥</strong> (favorite). Active badges are bright; inactive ones appear dimmed. Click <strong style="color:#6ddf70">C</strong>, <strong style="color:#f0c95c">W</strong>, or <strong style="color:#ff6b35">♥</strong> to add/remove directly from any card — no need to open the popup. If an item is in your lists or inventory, <strong style="color:#a0ccf0">L</strong> and <strong style="color:#cda0f5">I</strong> badges appear too.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Your Records at a Glance</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When signed in, the main search page displays a shuffled grid of album covers drawn from all your data — collection, wantlist, lists, inventory, and favorites. 48 cards are shown at a time with a load-more button for up to 192 total. This gives you a quick visual snapshot of your library every time you visit.</p>
@@ -576,7 +576,7 @@
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Seller Orders</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">If you sell on the Discogs marketplace, the <strong style="color:#ccc">Account</strong> page shows a Seller Orders panel with every open and recent order. Filter by status, search by buyer or release title, and open any order for full details — items, shipping address, buyer info, and the full message thread. Advance the status through Discogs' seller state machine (New Order → Payment Received → Shipped, etc.) and reply to buyers inline with the 💬 quick-reply composer, or open the detail modal for longer messages. A badge on the section header shows how many orders have unread activity since you last looked.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">The <strong style="color:#ccc">Favorites</strong> tab shows all items you've hearted. The bottom navigation row (<strong style="color:#6ddf70">C</strong>ollection, <strong style="color:#f0c95c">W</strong>antlist, <strong style="color:#a0ccf0">L</strong>ists, <strong style="color:#cda0f5">I</strong>nventory, <strong style="color:#ff80ab">♥</strong> Favorites) provides quick access to each tab.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">The <strong style="color:#ccc">Favorites</strong> tab shows all items you've hearted. The bottom navigation row (<strong style="color:#6ddf70">C</strong>ollection, <strong style="color:#f0c95c">W</strong>antlist, <strong style="color:#a0ccf0">L</strong>ists, <strong style="color:#cda0f5">I</strong>nventory, <strong style="color:#ff6b35">♥</strong> Favorites) provides quick access to each tab.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Collection Actions</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">From any release detail popup, you can add or remove items from your collection, wantlist, and favorites with one click. Rate releases 1–5 stars — ratings sync to your Discogs account. Favorites are SeaDisco-only (not synced to Discogs) and work for releases, masters, artists, and labels. All actions update instantly with optimistic UI and revert gracefully if anything goes wrong. Card badges update in real time to reflect changes.</p>
@@ -762,18 +762,18 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script src="/utils.js?v=20260405k"></script>
-<script src="/search.js?v=20260405k"></script>
-<script src="/collection.js?v=20260405k"></script>
-<script src="/app.js?v=20260405k"></script>
+<script src="/utils.js?v=20260405l"></script>
+<script src="/search.js?v=20260405l"></script>
+<script src="/collection.js?v=20260405l"></script>
+<script src="/app.js?v=20260405l"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/modal.js?v=20260405k"></script>
-<script defer src="/inventory-editor.js?v=20260405k"></script>
-<script defer src="/drops.js?v=20260405k"></script>
-<script defer src="/live.js?v=20260405k"></script>
-<script defer src="/buy.js?v=20260405k"></script>
-<script defer src="/gear.js?v=20260405k"></script>
-<script defer src="/feed.js?v=20260405k"></script>
+<script defer src="/modal.js?v=20260405l"></script>
+<script defer src="/inventory-editor.js?v=20260405l"></script>
+<script defer src="/drops.js?v=20260405l"></script>
+<script defer src="/live.js?v=20260405l"></script>
+<script defer src="/buy.js?v=20260405l"></script>
+<script defer src="/gear.js?v=20260405l"></script>
+<script defer src="/feed.js?v=20260405l"></script>
 
 </body>
 </html>
