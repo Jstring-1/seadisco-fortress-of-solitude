@@ -238,9 +238,9 @@ export async function initDb() {
       CHECK (id = 1)
     )
   `);
-    await getPool().query(`INSERT INTO ebay_rate_limit (id, call_count, click_count, reset_date) VALUES (1, 0, 0, CURRENT_DATE) ON CONFLICT DO NOTHING`);
     // Add click_count column if table already existed without it
     await getPool().query(`ALTER TABLE ebay_rate_limit ADD COLUMN IF NOT EXISTS click_count INTEGER NOT NULL DEFAULT 0`);
+    await getPool().query(`INSERT INTO ebay_rate_limit (id, call_count, click_count, reset_date) VALUES (1, 0, 0, CURRENT_DATE) ON CONFLICT DO NOTHING`);
     // ── eBay live search cache ────────────────────────────────────────────
     await getPool().query(`
     CREATE TABLE IF NOT EXISTS ebay_search_cache (
