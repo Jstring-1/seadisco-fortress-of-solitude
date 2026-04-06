@@ -1073,9 +1073,10 @@ a.fresh-card-search-link:hover {
 }
 
 /* ── Buy tab (vinyl auctions) ── */
-.ebay-live-search { margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid #2a2a2a; }
-.ebay-search-bar { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; }
-.ebay-search-bar .buy-search-field { flex: 1; min-width: 180px; max-width: 400px; }
+.ebay-live-search { margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid #2a2a2a; text-align: center; }
+.ebay-search-bar { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; justify-content: center; }
+.ebay-search-bar .buy-search-field { flex: 0 1 400px; min-width: 180px; }
+#ebay-search-meta { text-align: center; }
 
 .buy-header {
   margin-bottom: 0.75rem;
