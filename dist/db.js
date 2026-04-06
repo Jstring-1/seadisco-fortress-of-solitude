@@ -1819,18 +1819,24 @@ export async function logVinylFetch(fetchType, itemCount, error) {
 }
 // ── eBay live search rate limiting & cache ─────────────────────────────────
 export async function getEbayRateCount() {
-    const r = await getPool().query(`SELECT call_count, click_count, reset_date FROM ebay_rate_limit WHERE id = 1`);
+    const r = await getPool().query(`SELECT * FROM ebay_rate_limit WHERE id = 1`);
     if (!r.rows.length)
         return { count: 0, clickCount: 0, resetDate: new Date().toISOString().slice(0, 10) };
     const row = r.rows[0];
+    const clickCount = row.click_count ?? 0;
     // Auto-reset if stored date is before today (Pacific)
     const todayPacific = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" }))
         .toISOString().slice(0, 10);
     if (row.reset_date < todayPacific) {
-        await getPool().query(`UPDATE ebay_rate_limit SET call_count = 0, click_count = 0, reset_date = $1 WHERE id = 1`, [todayPacific]);
+        try {
+            await getPool().query(`UPDATE ebay_rate_limit SET call_count = 0, click_count = 0, reset_date = $1 WHERE id = 1`, [todayPacific]);
+        }
+        catch {
+            await getPool().query(`UPDATE ebay_rate_limit SET call_count = 0, reset_date = $1 WHERE id = 1`, [todayPacific]);
+        }
         return { count: 0, clickCount: 0, resetDate: todayPacific };
     }
-    return { count: row.call_count, clickCount: row.click_count ?? 0, resetDate: row.reset_date };
+    return { count: row.call_count, clickCount, resetDate: row.reset_date };
 }
 export async function incrementEbayRateCount() {
     const r = await getPool().query(`
