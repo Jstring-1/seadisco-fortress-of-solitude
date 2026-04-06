@@ -1667,7 +1667,7 @@ function refreshCardBadges(releaseId) {
     }
     const favKey = `${type}:${id}`;
     const isFav = window._favoriteKeys?.has(favKey);
-    badges += `<span class="card-badge badge-favorite${isFav ? " is-favorite" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,${id},'${type}')" title="${isFav ? "Remove from favorites" : "Add to favorites"}">${isFav ? "♥" : "♡"}</span>`;
+    badges += `<span class="card-badge badge-favorite${isFav ? " is-favorite" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,${id},'${type}')" title="${isFav ? "Remove from favorites" : "Add to favorites"}">F</span>`;
     el.innerHTML = badges;
   });
 }
@@ -1768,7 +1768,7 @@ function renderMasterVersions() {
     if (inWant) badgeParts.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f0c95c;vertical-align:middle" title="In your wantlist"></span>`);
     if (inList) badgeParts.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a0ccf0;vertical-align:middle" title="${escHtml(listNames ? `In your list${window._listMembership[v.id].length > 1 ? "s" : ""}: ${listNames}` : "In one of your lists")}"></span>`);
     if (inInv)  badgeParts.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#cda0f5;vertical-align:middle" title="In your marketplace inventory"></span>`);
-    if (isFav)  badgeParts.push(`<span style="color:#ff6b35" title="Favorited">♥</span>`);
+    if (isFav)  badgeParts.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff6b35;vertical-align:middle;cursor:pointer" title="Favorited"></span>`);
     const badge  = `<span>${badgeParts.length ? badgeParts.join("") : "&nbsp;"}</span>`;
     const fmtText = _mvGetDisplayFormat(v);
     const fmtCell = inCol
@@ -1889,7 +1889,7 @@ function renderSeriesReleases() {
     if (inWant) badges.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f0c95c;vertical-align:middle" title="In your wantlist"></span>`);
     if (inList) badges.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a0ccf0;vertical-align:middle" title="In a list"></span>`);
     if (inInv)  badges.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#cda0f5;vertical-align:middle" title="In your inventory"></span>`);
-    if (isFav)  badges.push(`<span style="color:#ff6b35">♥</span>`);
+    if (isFav)  badges.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff6b35;vertical-align:middle;cursor:pointer" title="Favorited"></span>`);
     const badge = badges.length ? badges.join(" ") : `<span style="display:inline-block;width:8px"></span>`;
 
     const thumbHtml = r.thumb

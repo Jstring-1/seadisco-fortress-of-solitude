@@ -659,7 +659,7 @@ function renderCard(item, index) {
       : `class="${typeClass}" href="${url}" title="${escHtml(fullTitle)}" target="_blank" rel="noopener"`;
 
   // ── Badge strip: fixed order — collection, wantlist, list, inventory, favorite
-  // C/W/♥ always shown (dimmed when inactive); L/I only when active
+  // C/W/F always shown (dimmed when inactive); L/I only when active
   let badges = "";
   const releaseId = item.id;
   const inCol = releaseId && type === "release" && window._collectionIds?.has(releaseId);
@@ -678,7 +678,7 @@ function renderCard(item, index) {
   const favKey = `${type}:${item.id}`;
   const isFav = window._favoriteKeys?.has(favKey);
   if (type && item.id)
-    badges += `<span class="card-badge badge-favorite${isFav ? " is-favorite" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,${item.id},'${type}')" title="${isFav ? "Remove from favorites" : "Add to favorites"}">${isFav ? "♥" : "♡"}</span>`;
+    badges += `<span class="card-badge badge-favorite${isFav ? " is-favorite" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,${item.id},'${type}')" title="${isFav ? "Remove from favorites" : "Add to favorites"}">F</span>`;
 
   // Multi-instance "(N)" badge at lower-left — shown when user owns multiple copies
   // of the same release. Clicking opens a popover listing each instance.
@@ -1025,12 +1025,12 @@ function toggleFavoriteFromCard(btn, discogsId, entityType) {
   if (wasFav) {
     window._favoriteKeys.delete(key);
     btn.classList.remove("is-favorite");
-    btn.textContent = "♡";
+    btn.textContent = "F";
     btn.title = "Add to favorites";
   } else {
     window._favoriteKeys.add(key);
     btn.classList.add("is-favorite");
-    btn.textContent = "♥";
+    btn.textContent = "F";
     btn.title = "Remove from favorites";
   }
 
@@ -1058,7 +1058,7 @@ function toggleFavoriteFromCard(btn, discogsId, entityType) {
       // Revert on error
       if (wasFav) window._favoriteKeys.add(key); else window._favoriteKeys.delete(key);
       btn.classList.toggle("is-favorite", wasFav);
-      btn.textContent = wasFav ? "❤" : "♡";
+      btn.textContent = "F";
       showToast("Failed to update favorite", "error");
     });
 }

@@ -276,7 +276,7 @@ function renderSharedHeader(opts) {
   // Bottom-row tab — plain text, hover color matches the badge dot for that tab.
   const colors = { collection: "#6ddf70", wantlist: "#f0c95c", lists: "#a0ccf0", inventory: "#cda0f5", favorites: "#ff6b35" };
   const recTab = (label, rtab) => {
-    const displayLabel = rtab === "favorites" ? `♥ ${label}` : label;
+    const displayLabel = label;
     if (isSPA) {
       return `<button class="nav-tab-bot nav-rec-disabled" data-rtab="${rtab}" onclick="showRecordSignIn('${rtab}')">${displayLabel}</button>`;
     }
