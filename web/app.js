@@ -52,14 +52,20 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
       const pType = openParam.slice(0, colon);
       const pId   = openParam.slice(colon + 1);
       const pUrl  = `https://www.discogs.com/${pType}/${pId}`;
-      // Small delay ensures DOM + Clerk are settled before opening
-      setTimeout(() => {
+      // Wait for discogs IDs to load (for badge dots) with a timeout for
+      // signed-out users where loadDiscogsIds is never called.
+      const idsOrTimeout = Promise.race([
+        window._discogsIdsReady,
+        new Promise(r => setTimeout(r, 3000)),
+      ]);
+      const versionParam = p.get("vr");
+      idsOrTimeout.then(() => {
         try {
           openModal(null, pId, pType, pUrl);
         } catch (e) { console.error("[op] openModal error:", e); }
-      }, 150);
-      const versionParam = p.get("vr");
-      if (versionParam) setTimeout(() => openVersionPopup(null, versionParam), 1400);
+        // Open version popup after modal has had time to load
+        if (versionParam) setTimeout(() => openVersionPopup(null, versionParam), 1400);
+      });
     }
   }
   // Resume video from URL — wait for tracklist if a popup is also opening
@@ -180,6 +186,9 @@ async function applyAuthState(clerk) {
     } catch { /* token check optional */ }
     // Load favorite IDs + collection/wantlist IDs for all signed-in users
     await loadDiscogsIds();                   // calls loadRandomRecords inside
+  } else {
+    // Signed-out: resolve the IDs promise immediately so URL modals don't wait
+    if (window._resolveDiscogsIds) window._resolveDiscogsIds();
   }
   // Signed-out: do not show Featured Favorites on the home page
 }

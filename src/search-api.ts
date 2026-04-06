@@ -818,8 +818,9 @@ app.get("/api/user/collection", async (req, res) => {
   if (notesParam) filters.notes = notesParam;
   const sort = (req.query.sort as string ?? "").trim();
   if (sort) filters.sort = sort;
-  const { items, total } = await getCollectionPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
-  res.json({ items, total, page, pages: Math.ceil(total / perPage) });
+  if (req.query.synonyms === "false") filters.synonyms = false;
+  const { items, total, synonymsApplied } = await getCollectionPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
+  res.json({ items, total, page, pages: Math.ceil(total / perPage), synonymsApplied });
 });
 
 // GET /api/user/wantlist — paginated cached wantlist (with optional filters)
@@ -840,8 +841,9 @@ app.get("/api/user/wantlist", async (req, res) => {
   if (notesParam) filters.notes = notesParam;
   const sort = (req.query.sort as string ?? "").trim();
   if (sort) filters.sort = sort;
-  const { items, total } = await getWantlistPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
-  res.json({ items, total, page, pages: Math.ceil(total / perPage) });
+  if (req.query.synonyms === "false") filters.synonyms = false;
+  const { items, total, synonymsApplied } = await getWantlistPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
+  res.json({ items, total, page, pages: Math.ceil(total / perPage), synonymsApplied });
 });
 
 // GET /api/user/inventory — paginated inventory listings
@@ -855,8 +857,9 @@ app.get("/api/user/inventory", async (req, res) => {
   if (q) filters.q = q;
   const status = (req.query.status as string ?? "").trim();
   if (status) filters.status = status;
-  const { items, total } = await getInventoryPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
-  res.json({ items, total, page, pages: Math.ceil(total / perPage) });
+  if (req.query.synonyms === "false") filters.synonyms = false;
+  const { items, total, synonymsApplied } = await getInventoryPage(userId, page, perPage, Object.keys(filters).length ? filters : undefined);
+  res.json({ items, total, page, pages: Math.ceil(total / perPage), synonymsApplied });
 });
 
 // ── Inventory (marketplace) management: create / edit / delete ────────────

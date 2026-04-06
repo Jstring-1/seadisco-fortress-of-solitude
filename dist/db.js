@@ -1,5 +1,6 @@
 import pg from "pg";
 const { Pool } = pg;
+import { expandWithSynonyms } from "./classical-synonyms.js";
 let pool = null;
 function getPool() {
     if (!pool) {
@@ -37,6 +38,7 @@ export async function initDb() {
     await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS discogs_username TEXT`);
     await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS collection_synced_at TIMESTAMP`);
     await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS wantlist_synced_at TIMESTAMP`);
+    await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS default_add_folder_id INTEGER DEFAULT 1`);
     // Folder support for collection items
     await getPool().query(`ALTER TABLE user_collection ADD COLUMN IF NOT EXISTS folder_id INTEGER DEFAULT 0`);
     await getPool().query(`
@@ -50,9 +52,13 @@ export async function initDb() {
     )
   `);
     // Extra collection fields — rating, notes, instance_id
-    await getPool().query(`ALTER TABLE user_collection ADD COLUMN IF NOT EXISTS rating INTEGER DEFAULT 0`);
-    await getPool().query(`ALTER TABLE user_collection ADD COLUMN IF NOT EXISTS instance_id INTEGER`);
-    await getPool().query(`ALTER TABLE user_collection ADD COLUMN IF NOT EXISTS notes JSONB`);
+    // NOTE: the CREATE TABLE IF NOT EXISTS user_collection runs further down, so
+    // we wrap these ALTERs in IF EXISTS to avoid errors on a truly fresh install.
+    // On fresh installs, the CREATE TABLE below will include these columns once
+    // we also run the migration after that CREATE (see below).
+    await getPool().query(`ALTER TABLE IF EXISTS user_collection ADD COLUMN IF NOT EXISTS rating INTEGER DEFAULT 0`);
+    await getPool().query(`ALTER TABLE IF EXISTS user_collection ADD COLUMN IF NOT EXISTS instance_id INTEGER`);
+    await getPool().query(`ALTER TABLE IF EXISTS user_collection ADD COLUMN IF NOT EXISTS notes JSONB`);
     // Extra wantlist fields — rating, notes
     await getPool().query(`ALTER TABLE user_wantlist ADD COLUMN IF NOT EXISTS rating INTEGER DEFAULT 0`);
     await getPool().query(`ALTER TABLE user_wantlist ADD COLUMN IF NOT EXISTS notes JSONB`);
@@ -70,6 +76,8 @@ export async function initDb() {
     await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS discogs_user_id INTEGER`);
     await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS discogs_avatar_url TEXT`);
     await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS discogs_profile_data JSONB`);
+    await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS discogs_curr_abbr TEXT`);
+    await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS profile_synced_at TIMESTAMP`);
     // Temporary table for OAuth request tokens (handshake flow)
     await getPool().query(`
     CREATE TABLE IF NOT EXISTS oauth_request_tokens (
@@ -88,10 +96,27 @@ export async function initDb() {
       discogs_release_id INTEGER NOT NULL,
       data               JSONB NOT NULL,
       added_at           TIMESTAMP,
-      synced_at          TIMESTAMP DEFAULT NOW(),
-      UNIQUE(clerk_user_id, discogs_release_id)
+      synced_at          TIMESTAMP DEFAULT NOW()
     )
   `);
+    // Ensure required columns exist (covers fresh installs where the earlier
+    // IF EXISTS block was a no-op because the table didn't yet exist)
+    await getPool().query(`ALTER TABLE user_collection ADD COLUMN IF NOT EXISTS folder_id INTEGER DEFAULT 0`);
+    await getPool().query(`ALTER TABLE user_collection ADD COLUMN IF NOT EXISTS rating INTEGER DEFAULT 0`);
+    await getPool().query(`ALTER TABLE user_collection ADD COLUMN IF NOT EXISTS instance_id INTEGER`);
+    await getPool().query(`ALTER TABLE user_collection ADD COLUMN IF NOT EXISTS notes JSONB`);
+    // Migration: switch user_collection uniqueness from (user, release_id) to
+    // (user, instance_id) so users can store multiple copies of the same release.
+    // Backfill NULL instance_ids with a synthetic negative value derived from
+    // release_id (guaranteed unique per-user under the legacy constraint).
+    try {
+        await getPool().query(`UPDATE user_collection SET instance_id = -discogs_release_id WHERE instance_id IS NULL`);
+        await getPool().query(`ALTER TABLE user_collection DROP CONSTRAINT IF EXISTS user_collection_clerk_user_id_discogs_release_id_key`);
+        await getPool().query(`ALTER TABLE user_collection ADD CONSTRAINT user_collection_user_instance_key UNIQUE (clerk_user_id, instance_id)`);
+    }
+    catch (e) {
+        // Constraint may already exist — ignore
+    }
     await getPool().query(`
     CREATE TABLE IF NOT EXISTS user_wantlist (
       id                 SERIAL PRIMARY KEY,
@@ -295,12 +320,28 @@ export async function initDb() {
       UNIQUE(clerk_user_id, list_id)
     )
   `);
+    // ── User list items (items inside each Discogs list) ─────────────────────
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_list_items (
+      id              SERIAL PRIMARY KEY,
+      clerk_user_id   TEXT NOT NULL,
+      list_id         INTEGER NOT NULL,
+      discogs_id      INTEGER NOT NULL,
+      entity_type     TEXT DEFAULT 'release',
+      comment         TEXT,
+      data            JSONB,
+      synced_at       TIMESTAMP DEFAULT NOW(),
+      UNIQUE(clerk_user_id, list_id, discogs_id)
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS user_list_items_user_idx ON user_list_items (clerk_user_id)`);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS user_list_items_release_idx ON user_list_items (clerk_user_id, discogs_id)`);
     // ── User orders (marketplace buy/sell history) ──────────────────────────
     await getPool().query(`
     CREATE TABLE IF NOT EXISTS user_orders (
       id              SERIAL PRIMARY KEY,
       clerk_user_id   TEXT NOT NULL,
-      order_id        INTEGER NOT NULL,
+      order_id        TEXT NOT NULL,
       status          TEXT,
       buyer_username  TEXT,
       seller_username TEXT,
@@ -313,6 +354,27 @@ export async function initDb() {
       UNIQUE(clerk_user_id, order_id)
     )
   `);
+    // Discogs order IDs are strings like "username-NNN"; widen if existing column is numeric
+    await getPool().query(`ALTER TABLE user_orders ALTER COLUMN order_id TYPE TEXT`);
+    await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS orders_synced_at TIMESTAMP`);
+    await getPool().query(`ALTER TABLE user_orders ADD COLUMN IF NOT EXISTS viewed_at TIMESTAMPTZ`);
+    // ── Order messages (per-order thread, fetched on demand) ─────────────────
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_order_messages (
+      id            SERIAL PRIMARY KEY,
+      clerk_user_id TEXT NOT NULL,
+      order_id      TEXT NOT NULL,
+      message_order INTEGER NOT NULL,
+      subject       TEXT,
+      message       TEXT,
+      from_user     TEXT,
+      ts            TIMESTAMPTZ,
+      data          JSONB,
+      synced_at     TIMESTAMP DEFAULT NOW(),
+      UNIQUE(clerk_user_id, order_id, message_order)
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS user_order_messages_order_idx ON user_order_messages (clerk_user_id, order_id)`);
     // ── API request log (errors + successes for all external API calls) ────
     await getPool().query(`
     CREATE TABLE IF NOT EXISTS api_request_log (
@@ -436,6 +498,26 @@ export async function saveSavedSearch(clerkUserId, view, label, params) {
 export async function deleteSavedSearch(clerkUserId, id) {
     await getPool().query(`DELETE FROM saved_searches WHERE id = $1 AND clerk_user_id = $2`, [id, clerkUserId]);
 }
+// ── Random records (all sources combined) ─────────────────────────────────
+export async function getRandomRecords(clerkUserId, limit = 192) {
+    // Union all sources, deduplicate by release ID, randomize
+    const r = await getPool().query(`WITH all_records AS (
+      SELECT DISTINCT ON (rid) rid, src, data FROM (
+        SELECT discogs_release_id AS rid, 'collection' AS src, data FROM user_collection WHERE clerk_user_id = $1
+        UNION ALL
+        SELECT discogs_release_id AS rid, 'wantlist' AS src, data FROM user_wantlist WHERE clerk_user_id = $1
+        UNION ALL
+        SELECT discogs_id AS rid, 'favorites' AS src, data FROM user_favorites WHERE clerk_user_id = $1 AND entity_type = 'release'
+        UNION ALL
+        SELECT discogs_release_id AS rid, 'inventory' AS src, data FROM user_inventory WHERE clerk_user_id = $1 AND discogs_release_id IS NOT NULL
+        UNION ALL
+        SELECT discogs_id AS rid, 'list' AS src, data FROM user_list_items WHERE clerk_user_id = $1 AND entity_type = 'release'
+      ) combined WHERE rid IS NOT NULL
+      ORDER BY rid, src  -- DISTINCT ON needs ORDER BY on the same column
+    )
+    SELECT rid, src, data FROM all_records ORDER BY RANDOM() LIMIT $2`, [clerkUserId, limit]);
+    return r.rows;
+}
 // ── Favorites ──────────────────────────────────────────────────────────────
 export async function getFavoriteIds(clerkUserId) {
     const r = await getPool().query("SELECT discogs_id, entity_type FROM user_favorites WHERE clerk_user_id = $1", [clerkUserId]);
@@ -538,6 +620,7 @@ export async function deleteUserData(clerkUserId) {
         "triggered_alerts",
         "feedback",
         "user_orders",
+        "user_list_items",
         "user_lists",
         "user_inventory",
         "user_collection_folders",
@@ -601,19 +684,30 @@ export async function getAuthMethod(clerkUserId) {
 }
 // ── Discogs profile cache ────────────────────────────────────────────────
 export async function setDiscogsProfile(clerkUserId, userId, avatarUrl, profileData) {
-    await getPool().query(`UPDATE user_tokens SET discogs_user_id = $2, discogs_avatar_url = $3, discogs_profile_data = $4 WHERE clerk_user_id = $1`, [clerkUserId, userId, avatarUrl, JSON.stringify(profileData)]);
+    const currAbbr = profileData?.curr_abbr ?? null;
+    await getPool().query(`UPDATE user_tokens
+        SET discogs_user_id = $2,
+            discogs_avatar_url = $3,
+            discogs_profile_data = $4,
+            discogs_curr_abbr = COALESCE($5, discogs_curr_abbr),
+            profile_synced_at = NOW()
+      WHERE clerk_user_id = $1`, [clerkUserId, userId, avatarUrl, JSON.stringify(profileData), currAbbr]);
 }
 export async function getDiscogsProfile(clerkUserId) {
-    const r = await getPool().query(`SELECT discogs_username, discogs_user_id, discogs_avatar_url, discogs_profile_data, auth_method, oauth_connected_at FROM user_tokens WHERE clerk_user_id = $1`, [clerkUserId]);
+    const r = await getPool().query(`SELECT discogs_username, discogs_user_id, discogs_avatar_url, discogs_profile_data,
+            auth_method, oauth_connected_at, discogs_curr_abbr, profile_synced_at
+       FROM user_tokens WHERE clerk_user_id = $1`, [clerkUserId]);
     const row = r.rows[0];
     if (!row)
-        return { username: null, userId: null, avatarUrl: null, profileData: null, authMethod: "pat" };
+        return { username: null, userId: null, avatarUrl: null, profileData: null, authMethod: "pat", currAbbr: null, profileSyncedAt: null };
     return {
         username: row.discogs_username,
         userId: row.discogs_user_id,
         avatarUrl: row.discogs_avatar_url,
         profileData: row.discogs_profile_data,
         authMethod: row.auth_method ?? "pat",
+        currAbbr: row.discogs_curr_abbr,
+        profileSyncedAt: row.profile_synced_at,
     };
 }
 export async function updateSyncProgress(clerkUserId, status, progress, total, error) {
@@ -647,11 +741,14 @@ export async function getLatestWantlistAddedAt(clerkUserId) {
 export async function upsertCollectionItems(clerkUserId, items) {
     if (!items.length)
         return;
-    // Deduplicate by release ID within batch — keep last occurrence (user may own multiple copies)
+    // Deduplicate by instance_id within the batch. Items without an instance_id get a
+    // synthetic negative id derived from the release_id so they still conflict-check
+    // correctly against the (clerk_user_id, instance_id) unique constraint.
     const deduped = new Map();
-    for (const item of items)
-        deduped.set(item.id, item);
-    const unique = [...deduped.values()];
+    for (const item of items) {
+        const key = item.instanceId ?? -item.id;
+        deduped.set(key, item);
+    }
     const ids = [];
     const dataArr = [];
     const addedArr = [];
@@ -659,21 +756,21 @@ export async function upsertCollectionItems(clerkUserId, items) {
     const ratingArr = [];
     const instanceArr = [];
     const notesArr = [];
-    for (const item of unique) {
+    for (const [key, item] of deduped) {
         ids.push(item.id);
         dataArr.push(JSON.stringify(item.data));
         addedArr.push(item.addedAt ?? null);
         folderArr.push(item.folderId ?? 0);
         ratingArr.push(item.rating ?? 0);
-        instanceArr.push(item.instanceId ?? null);
+        instanceArr.push(key);
         notesArr.push(item.notes ? JSON.stringify(item.notes) : null);
     }
     await getPool().query(`INSERT INTO user_collection (clerk_user_id, discogs_release_id, data, added_at, synced_at, folder_id, rating, instance_id, notes)
      SELECT $1, unnest($2::int[]), unnest($3::jsonb[]), unnest($4::timestamptz[]), NOW(), unnest($5::int[]), unnest($6::int[]), unnest($7::int[]), unnest($8::jsonb[])
-     ON CONFLICT (clerk_user_id, discogs_release_id)
+     ON CONFLICT (clerk_user_id, instance_id)
      DO UPDATE SET data = EXCLUDED.data, added_at = EXCLUDED.added_at, synced_at = NOW(),
                    folder_id = EXCLUDED.folder_id, rating = EXCLUDED.rating,
-                   instance_id = EXCLUDED.instance_id, notes = EXCLUDED.notes`, [clerkUserId, ids, dataArr, addedArr, folderArr, ratingArr, instanceArr, notesArr]);
+                   discogs_release_id = EXCLUDED.discogs_release_id, notes = EXCLUDED.notes`, [clerkUserId, ids, dataArr, addedArr, folderArr, ratingArr, instanceArr, notesArr]);
 }
 export async function upsertCollectionFolders(clerkUserId, folders) {
     // Clear old folders and re-insert
@@ -683,10 +780,38 @@ export async function upsertCollectionFolders(clerkUserId, folders) {
        VALUES ($1, $2, $3, $4)`, [clerkUserId, f.id, f.name, f.count]);
     }
 }
+export async function renameCollectionFolder(clerkUserId, folderId, newName) {
+    await getPool().query(`UPDATE user_collection_folders SET folder_name = $3 WHERE clerk_user_id = $1 AND folder_id = $2`, [clerkUserId, folderId, newName]);
+}
+export async function deleteCollectionFolder(clerkUserId, folderId) {
+    await getPool().query(`DELETE FROM user_collection_folders WHERE clerk_user_id = $1 AND folder_id = $2`, [clerkUserId, folderId]);
+    // If the user's default-add folder pointed at this folder, reset it to Uncategorized (1)
+    await getPool().query(`UPDATE user_tokens SET default_add_folder_id = 1
+      WHERE clerk_user_id = $1 AND default_add_folder_id = $2`, [clerkUserId, folderId]);
+}
+/** Bulk reassign every collection item in one folder to another (local only). */
+export async function moveAllCollectionItemsBetweenFolders(clerkUserId, fromFolderId, toFolderId) {
+    const r = await getPool().query(`UPDATE user_collection SET folder_id = $3 WHERE clerk_user_id = $1 AND folder_id = $2 RETURNING 1`, [clerkUserId, fromFolderId, toFolderId]);
+    return r.rowCount ?? 0;
+}
+/** Return every (releaseId, instanceId, folderId) tuple for a user's items in a specific folder. */
+export async function getFolderContents(clerkUserId, folderId) {
+    const r = await getPool().query(`SELECT discogs_release_id, instance_id FROM user_collection WHERE clerk_user_id = $1 AND folder_id = $2`, [clerkUserId, folderId]);
+    return r.rows.map(row => ({
+        releaseId: row.discogs_release_id,
+        instanceId: row.instance_id != null && row.instance_id > 0 ? row.instance_id : null,
+    }));
+}
 export async function getCollectionFolderList(clerkUserId) {
-    const r = await getPool().query(`SELECT folder_id, folder_name, item_count FROM user_collection_folders
-     WHERE clerk_user_id = $1 ORDER BY folder_name ASC`, [clerkUserId]);
-    return r.rows.map(row => ({ folderId: row.folder_id, name: row.folder_name, count: row.item_count }));
+    // Join against user_collection for a live count so after local rename/move
+    // operations the folder pill counts stay accurate without waiting for sync.
+    const r = await getPool().query(`SELECT f.folder_id, f.folder_name,
+            COALESCE((SELECT COUNT(*)::int FROM user_collection uc
+                      WHERE uc.clerk_user_id = f.clerk_user_id AND uc.folder_id = f.folder_id), 0) AS live_count
+       FROM user_collection_folders f
+      WHERE f.clerk_user_id = $1
+      ORDER BY f.folder_name ASC`, [clerkUserId]);
+    return r.rows.map(row => ({ folderId: row.folder_id, name: row.folder_name, count: row.live_count }));
 }
 export async function upsertWantlistItems(clerkUserId, items) {
     if (!items.length)
@@ -715,8 +840,14 @@ export async function upsertWantlistItems(clerkUserId, items) {
                    rating = EXCLUDED.rating, notes = EXCLUDED.notes`, [clerkUserId, ids, dataArr, addedArr, ratingArr, notesArr]);
 }
 // ── Phase 2: Collection/Wantlist action helpers ──────────────────────────
-export async function deleteCollectionItem(clerkUserId, releaseId) {
-    await getPool().query(`DELETE FROM user_collection WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId]);
+export async function deleteCollectionItem(clerkUserId, releaseId, instanceId) {
+    if (instanceId !== undefined && instanceId !== null) {
+        await getPool().query(`DELETE FROM user_collection WHERE clerk_user_id = $1 AND discogs_release_id = $2 AND instance_id = $3`, [clerkUserId, releaseId, instanceId]);
+    }
+    else {
+        // No instance_id given — remove all instances of this release (legacy callers)
+        await getPool().query(`DELETE FROM user_collection WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId]);
+    }
 }
 export async function deleteWantlistItem(clerkUserId, releaseId) {
     await getPool().query(`DELETE FROM user_wantlist WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId]);
@@ -728,27 +859,64 @@ export async function pruneWantlistItems(clerkUserId, keepIds) {
     const r = await getPool().query(`DELETE FROM user_wantlist WHERE clerk_user_id = $1 AND discogs_release_id != ALL($2::int[]) RETURNING 1`, [clerkUserId, keepIds]);
     return r.rowCount ?? 0;
 }
-/** Remove local collection items that no longer exist in Discogs after a full sync */
-export async function pruneCollectionItems(clerkUserId, keepIds) {
-    if (!keepIds.length)
+/** Remove local collection items (by instance_id) that no longer exist in Discogs after a full sync */
+export async function pruneCollectionItems(clerkUserId, keepInstanceIds) {
+    if (!keepInstanceIds.length)
         return 0;
-    const r = await getPool().query(`DELETE FROM user_collection WHERE clerk_user_id = $1 AND discogs_release_id != ALL($2::int[]) RETURNING 1`, [clerkUserId, keepIds]);
+    const r = await getPool().query(`DELETE FROM user_collection WHERE clerk_user_id = $1 AND instance_id IS NOT NULL AND instance_id != ALL($2::int[]) RETURNING 1`, [clerkUserId, keepInstanceIds]);
     return r.rowCount ?? 0;
 }
-export async function updateCollectionRating(clerkUserId, releaseId, rating) {
-    await getPool().query(`UPDATE user_collection SET rating = $3 WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId, rating]);
+export async function updateCollectionRating(clerkUserId, releaseId, rating, instanceId) {
+    if (instanceId !== undefined && instanceId !== null) {
+        await getPool().query(`UPDATE user_collection SET rating = $4 WHERE clerk_user_id = $1 AND discogs_release_id = $2 AND instance_id = $3`, [clerkUserId, releaseId, instanceId, rating]);
+    }
+    else {
+        await getPool().query(`UPDATE user_collection SET rating = $3 WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId, rating]);
+    }
 }
-export async function updateCollectionFolder(clerkUserId, releaseId, folderId) {
-    await getPool().query(`UPDATE user_collection SET folder_id = $3 WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId, folderId]);
+export async function updateCollectionFolder(clerkUserId, releaseId, folderId, instanceId) {
+    if (instanceId !== undefined && instanceId !== null) {
+        await getPool().query(`UPDATE user_collection SET folder_id = $4 WHERE clerk_user_id = $1 AND discogs_release_id = $2 AND instance_id = $3`, [clerkUserId, releaseId, instanceId, folderId]);
+    }
+    else {
+        await getPool().query(`UPDATE user_collection SET folder_id = $3 WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId, folderId]);
+    }
 }
+/** Return the first stored instance for a release (legacy single-instance helper). */
 export async function getCollectionInstance(clerkUserId, releaseId) {
-    const r = await getPool().query(`SELECT instance_id, folder_id, rating, notes FROM user_collection WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId]);
+    const r = await getPool().query(`SELECT instance_id, folder_id, rating, notes FROM user_collection WHERE clerk_user_id = $1 AND discogs_release_id = $2 ORDER BY instance_id ASC LIMIT 1`, [clerkUserId, releaseId]);
     if (!r.rows[0])
         return null;
-    return { instanceId: r.rows[0].instance_id, folderId: r.rows[0].folder_id ?? 0, rating: r.rows[0].rating ?? 0, notes: r.rows[0].notes ?? [] };
+    const instId = r.rows[0].instance_id;
+    // Hide synthetic negative instance_ids (used as placeholders for legacy rows)
+    return {
+        instanceId: instId != null && instId > 0 ? instId : null,
+        folderId: r.rows[0].folder_id ?? 0,
+        rating: r.rows[0].rating ?? 0,
+        notes: r.rows[0].notes ?? [],
+    };
 }
-export async function updateCollectionNotes(clerkUserId, releaseId, notes) {
-    await getPool().query(`UPDATE user_collection SET notes = $3 WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId, JSON.stringify(notes)]);
+/** Return every stored instance of a release in the user's collection. */
+export async function getCollectionInstances(clerkUserId, releaseId) {
+    const r = await getPool().query(`SELECT instance_id, folder_id, rating, notes, added_at
+       FROM user_collection
+      WHERE clerk_user_id = $1 AND discogs_release_id = $2
+      ORDER BY added_at ASC NULLS LAST, instance_id ASC`, [clerkUserId, releaseId]);
+    return r.rows.map(row => ({
+        instanceId: row.instance_id != null && row.instance_id > 0 ? row.instance_id : null,
+        folderId: row.folder_id ?? 0,
+        rating: row.rating ?? 0,
+        notes: row.notes ?? [],
+        addedAt: row.added_at ?? null,
+    }));
+}
+export async function updateCollectionNotes(clerkUserId, releaseId, notes, instanceId) {
+    if (instanceId !== undefined && instanceId !== null) {
+        await getPool().query(`UPDATE user_collection SET notes = $4 WHERE clerk_user_id = $1 AND discogs_release_id = $2 AND instance_id = $3`, [clerkUserId, releaseId, instanceId, JSON.stringify(notes)]);
+    }
+    else {
+        await getPool().query(`UPDATE user_collection SET notes = $3 WHERE clerk_user_id = $1 AND discogs_release_id = $2`, [clerkUserId, releaseId, JSON.stringify(notes)]);
+    }
 }
 // ── Phase 4: Price intelligence DB functions ─────────────────────────────
 export async function upsertPriceCache(releaseId, lowest, median, highest, numForSale, currency = "USD") {
@@ -779,11 +947,12 @@ export async function getPriceHistory(releaseId, currency = "USD", days = 90) {
 }
 export async function getStaleReleaseIds(limit = 100) {
     // Get unique release IDs from all collections where price is stale (>24h) or missing
-    const r = await getPool().query(`SELECT DISTINCT uc.discogs_release_id
+    const r = await getPool().query(`SELECT uc.discogs_release_id, MIN(pc.fetched_at) AS oldest
      FROM user_collection uc
      LEFT JOIN price_cache pc ON pc.discogs_release_id = uc.discogs_release_id
      WHERE pc.fetched_at IS NULL OR pc.fetched_at < NOW() - INTERVAL '24 hours'
-     ORDER BY pc.fetched_at ASC NULLS FIRST
+     GROUP BY uc.discogs_release_id
+     ORDER BY oldest ASC NULLS FIRST
      LIMIT $1`, [limit]);
     return r.rows.map(row => row.discogs_release_id);
 }
@@ -839,10 +1008,59 @@ function parseFilterExpr(value, column, startIdx) {
             : `(${orClauses.join(" OR ")})`;
     return { clause, params, nextIdx: idx };
 }
+// Like parseFilterExpr but expands classical music synonyms on positive terms
+function parseFilterExprWithSynonyms(value, column, startIdx) {
+    const orBranches = value.split(/\s*\|\s*/);
+    const orClauses = [];
+    const params = [];
+    const synonymsApplied = [];
+    let idx = startIdx;
+    for (const branch of orBranches) {
+        const terms = branch.split(/\s*\+\s*/);
+        const andClauses = [];
+        for (let term of terms) {
+            term = term.trim();
+            if (!term)
+                continue;
+            if (term.startsWith("-") && term.length > 1) {
+                // NOT: exclude this term — do NOT expand synonyms for negations
+                andClauses.push(`${column} NOT ILIKE $${idx}`);
+                params.push(`%${term.slice(1).trim()}%`);
+                idx++;
+            }
+            else {
+                // Positive term: expand with synonyms
+                const { variants, applied } = expandWithSynonyms(term);
+                const likeClauses = [`${column} ILIKE $${idx}`];
+                params.push(`%${term}%`);
+                idx++;
+                for (const variant of variants) {
+                    likeClauses.push(`${column} ILIKE $${idx}`);
+                    params.push(`%${variant}%`);
+                    idx++;
+                }
+                if (applied.length)
+                    synonymsApplied.push(...applied);
+                andClauses.push(likeClauses.length === 1 ? likeClauses[0] : `(${likeClauses.join(" OR ")})`);
+            }
+        }
+        if (andClauses.length) {
+            orClauses.push(andClauses.length === 1 ? andClauses[0] : `(${andClauses.join(" AND ")})`);
+        }
+    }
+    const clause = orClauses.length === 0 ? ""
+        : orClauses.length === 1 ? orClauses[0]
+            : `(${orClauses.join(" OR ")})`;
+    return { clause, params, nextIdx: idx, synonymsApplied };
+}
 function buildCwWhere(filters, startIdx) {
     const clauses = [];
     const allParams = [];
+    const allSynonyms = [];
     let idx = startIdx;
+    const useSynonyms = filters.synonyms !== false;
+    // Fields eligible for synonym expansion (q and release/title)
+    const synonymFields = new Set(["data::text", "data->>'title'"]);
     const fields = [
         [filters.q, "data::text"],
         [filters.artist, "(data->'artists')::text"],
@@ -852,16 +1070,26 @@ function buildCwWhere(filters, startIdx) {
         [filters.genre, "(data->'genres')::text"],
         [filters.style, "(data->'styles')::text"],
         [filters.format, "(data->'formats')::text"],
-        [filters.country, "data->>'country'"],
     ];
     for (const [value, column] of fields) {
         if (!value)
             continue;
-        const { clause, params, nextIdx } = parseFilterExpr(value, column, idx);
-        if (clause) {
-            clauses.push(clause);
-            allParams.push(...params);
-            idx = nextIdx;
+        if (useSynonyms && synonymFields.has(column)) {
+            const { clause, params, nextIdx, synonymsApplied } = parseFilterExprWithSynonyms(value, column, idx);
+            if (clause) {
+                clauses.push(clause);
+                allParams.push(...params);
+                allSynonyms.push(...synonymsApplied);
+                idx = nextIdx;
+            }
+        }
+        else {
+            const { clause, params, nextIdx } = parseFilterExpr(value, column, idx);
+            if (clause) {
+                clauses.push(clause);
+                allParams.push(...params);
+                idx = nextIdx;
+            }
         }
     }
     // Folder filter (exact match on integer column)
@@ -892,20 +1120,47 @@ function buildCwWhere(filters, startIdx) {
         allParams.push(`%${filters.notes}%`);
         idx++;
     }
-    return { clause: clauses.length ? " AND " + clauses.join(" AND ") : "", params: allParams };
+    // Deduplicate synonym descriptions
+    const uniqueSynonyms = [...new Set(allSynonyms)];
+    return { clause: clauses.length ? " AND " + clauses.join(" AND ") : "", params: allParams, synonymsApplied: uniqueSynonyms };
 }
 export async function getCollectionPage(clerkUserId, page, perPage, filters) {
     const offset = (page - 1) * perPage;
-    const { clause: dataClause, params: dataFilterParams } = buildCwWhere(filters ?? {}, 4);
+    const { clause: dataClause, params: dataFilterParams, synonymsApplied } = buildCwWhere(filters ?? {}, 4);
     const { clause: countClause, params: countFilterParams } = buildCwWhere(filters ?? {}, 2);
     const orderBy = cwOrderBy(filters?.sort);
+    // A release may have multiple instances (multiple copies owned). Collapse to one
+    // card per release in the grid via DISTINCT ON, picking the highest-rated/most-
+    // recently-added instance as representative. Also surface a per-release instance
+    // count so the UI can show "×N copies" badges.
     const [dataR, countR] = await Promise.all([
-        getPool().query(`SELECT data, rating, notes FROM user_collection WHERE clerk_user_id = $1${dataClause}
+        getPool().query(`SELECT data, rating, notes, instance_count FROM (
+         SELECT DISTINCT ON (discogs_release_id)
+                discogs_release_id,
+                data,
+                rating,
+                notes,
+                added_at,
+                id,
+                COUNT(*) OVER (PARTITION BY discogs_release_id) AS instance_count
+           FROM user_collection
+          WHERE clerk_user_id = $1${dataClause}
+          ORDER BY discogs_release_id, rating DESC NULLS LAST, added_at DESC NULLS LAST, id DESC
+       ) sub
        ${orderBy}
        LIMIT $2 OFFSET $3`, [clerkUserId, perPage, offset, ...dataFilterParams]),
         getPool().query(`SELECT COUNT(*)::int AS total FROM user_collection WHERE clerk_user_id = $1${countClause}`, [clerkUserId, ...countFilterParams]),
     ]);
-    return { items: dataR.rows.map(r => ({ ...r.data, _rating: r.rating ?? 0, _notes: r.notes ?? [] })), total: countR.rows[0]?.total ?? 0 };
+    return {
+        items: dataR.rows.map(r => ({
+            ...r.data,
+            _rating: r.rating ?? 0,
+            _notes: r.notes ?? [],
+            _instanceCount: r.instance_count ?? 1,
+        })),
+        total: countR.rows[0]?.total ?? 0,
+        synonymsApplied: synonymsApplied.length ? synonymsApplied : undefined,
+    };
 }
 export async function getAllCollectionItems(clerkUserId) {
     const r = await getPool().query(`SELECT data, folder_id FROM user_collection WHERE clerk_user_id = $1
@@ -919,7 +1174,7 @@ export async function getAllWantlistItems(clerkUserId) {
 }
 export async function getWantlistPage(clerkUserId, page, perPage, filters) {
     const offset = (page - 1) * perPage;
-    const { clause: dataClause, params: dataFilterParams } = buildCwWhere(filters ?? {}, 4);
+    const { clause: dataClause, params: dataFilterParams, synonymsApplied } = buildCwWhere(filters ?? {}, 4);
     const { clause: countClause, params: countFilterParams } = buildCwWhere(filters ?? {}, 2);
     const orderBy = cwOrderBy(filters?.sort);
     const [dataR, countR] = await Promise.all([
@@ -928,35 +1183,63 @@ export async function getWantlistPage(clerkUserId, page, perPage, filters) {
        LIMIT $2 OFFSET $3`, [clerkUserId, perPage, offset, ...dataFilterParams]),
         getPool().query(`SELECT COUNT(*)::int AS total FROM user_wantlist WHERE clerk_user_id = $1${countClause}`, [clerkUserId, ...countFilterParams]),
     ]);
-    return { items: dataR.rows.map(r => ({ ...r.data, _rating: r.rating ?? 0, _notes: r.notes ?? [] })), total: countR.rows[0]?.total ?? 0 };
+    return {
+        items: dataR.rows.map(r => ({ ...r.data, _rating: r.rating ?? 0, _notes: r.notes ?? [] })),
+        total: countR.rows[0]?.total ?? 0,
+        synonymsApplied: synonymsApplied.length ? synonymsApplied : undefined,
+    };
 }
 export async function getCollectionFacets(clerkUserId, genre) {
     const stylesQuery = genre
         ? `SELECT DISTINCT s AS name FROM user_collection, jsonb_array_elements_text(data->'styles') AS s WHERE clerk_user_id = $1 AND (data->'genres')::text ILIKE $2 ORDER BY s`
         : `SELECT DISTINCT s AS name FROM user_collection, jsonb_array_elements_text(data->'styles') AS s WHERE clerk_user_id = $1 ORDER BY s`;
     const stylesParams = genre ? [clerkUserId, `%${genre}%`] : [clerkUserId];
-    const [genresR, stylesR, countriesR] = await Promise.all([
+    const [genresR, stylesR] = await Promise.all([
         getPool().query(`SELECT DISTINCT g AS name FROM user_collection, jsonb_array_elements_text(data->'genres') AS g WHERE clerk_user_id = $1 ORDER BY g`, [clerkUserId]),
         getPool().query(stylesQuery, stylesParams),
-        getPool().query(`SELECT DISTINCT data->>'country' AS name FROM user_collection WHERE clerk_user_id = $1 AND data->>'country' IS NOT NULL AND data->>'country' != '' ORDER BY name`, [clerkUserId]),
     ]);
-    return { genres: genresR.rows.map(r => r.name), styles: stylesR.rows.map(r => r.name), countries: countriesR.rows.map(r => r.name) };
+    return { genres: genresR.rows.map(r => r.name), styles: stylesR.rows.map(r => r.name) };
 }
 export async function getWantlistFacets(clerkUserId, genre) {
     const stylesQuery = genre
         ? `SELECT DISTINCT s AS name FROM user_wantlist, jsonb_array_elements_text(data->'styles') AS s WHERE clerk_user_id = $1 AND (data->'genres')::text ILIKE $2 ORDER BY s`
         : `SELECT DISTINCT s AS name FROM user_wantlist, jsonb_array_elements_text(data->'styles') AS s WHERE clerk_user_id = $1 ORDER BY s`;
     const stylesParams = genre ? [clerkUserId, `%${genre}%`] : [clerkUserId];
-    const [genresR, stylesR, countriesR] = await Promise.all([
+    const [genresR, stylesR] = await Promise.all([
         getPool().query(`SELECT DISTINCT g AS name FROM user_wantlist, jsonb_array_elements_text(data->'genres') AS g WHERE clerk_user_id = $1 ORDER BY g`, [clerkUserId]),
         getPool().query(stylesQuery, stylesParams),
-        getPool().query(`SELECT DISTINCT data->>'country' AS name FROM user_wantlist WHERE clerk_user_id = $1 AND data->>'country' IS NOT NULL AND data->>'country' != '' ORDER BY name`, [clerkUserId]),
     ]);
-    return { genres: genresR.rows.map(r => r.name), styles: stylesR.rows.map(r => r.name), countries: countriesR.rows.map(r => r.name) };
+    return { genres: genresR.rows.map(r => r.name), styles: stylesR.rows.map(r => r.name) };
 }
 export async function getCollectionIds(clerkUserId) {
-    const r = await getPool().query("SELECT discogs_release_id FROM user_collection WHERE clerk_user_id = $1", [clerkUserId]);
+    const r = await getPool().query("SELECT DISTINCT discogs_release_id FROM user_collection WHERE clerk_user_id = $1", [clerkUserId]);
     return r.rows.map(row => row.discogs_release_id);
+}
+/**
+ * Returns a map of discogs_release_id → instance_count for releases the user owns
+ * more than one copy of. Used to render the "(N)" badge on card thumbnails.
+ */
+export async function getCollectionMultiInstanceCounts(clerkUserId) {
+    const r = await getPool().query(`SELECT discogs_release_id, COUNT(*)::int AS n
+       FROM user_collection
+      WHERE clerk_user_id = $1
+      GROUP BY discogs_release_id
+     HAVING COUNT(*) > 1`, [clerkUserId]);
+    const out = {};
+    for (const row of r.rows)
+        out[row.discogs_release_id] = row.n;
+    return out;
+}
+export async function getDefaultAddFolderId(clerkUserId) {
+    const r = await getPool().query(`SELECT default_add_folder_id FROM user_tokens WHERE clerk_user_id = $1`, [clerkUserId]);
+    const v = r.rows[0]?.default_add_folder_id;
+    return Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : 1;
+}
+export async function setDefaultAddFolderId(clerkUserId, folderId) {
+    const fid = Number(folderId);
+    if (!Number.isFinite(fid) || fid < 1)
+        throw new Error("Invalid folder id");
+    await getPool().query(`UPDATE user_tokens SET default_add_folder_id = $2 WHERE clerk_user_id = $1`, [clerkUserId, fid]);
 }
 export async function getWantedSample(limit = 24, excludeIds = []) {
     // Distribute evenly across users: each user contributes at most ceil(limit/userCount) items
@@ -1060,10 +1343,27 @@ export async function getInventoryPage(clerkUserId, page = 1, perPage = 24, filt
     const conditions = ["clerk_user_id = $1"];
     const params = [clerkUserId];
     let idx = 2;
+    let synonymsApplied = [];
     if (filters?.q) {
-        conditions.push(`(data::text ILIKE $${idx})`);
-        params.push(`%${filters.q}%`);
-        idx++;
+        const useSyn = filters.synonyms !== false;
+        if (useSyn) {
+            const { variants, applied } = expandWithSynonyms(filters.q);
+            const likeClauses = [`data::text ILIKE $${idx}`];
+            params.push(`%${filters.q}%`);
+            idx++;
+            for (const v of variants) {
+                likeClauses.push(`data::text ILIKE $${idx}`);
+                params.push(`%${v}%`);
+                idx++;
+            }
+            conditions.push(`(${likeClauses.join(" OR ")})`);
+            synonymsApplied = applied;
+        }
+        else {
+            conditions.push(`(data::text ILIKE $${idx})`);
+            params.push(`%${filters.q}%`);
+            idx++;
+        }
     }
     if (filters?.status) {
         conditions.push(`status = $${idx}`);
@@ -1077,10 +1377,18 @@ export async function getInventoryPage(clerkUserId, page = 1, perPage = 24, filt
     params.push(perPage, offset);
     const r = await getPool().query(`SELECT listing_id, discogs_release_id, data, status, price_value, price_currency, condition, sleeve_condition, posted_at
      FROM user_inventory WHERE ${where} ORDER BY posted_at DESC NULLS LAST LIMIT $${idx} OFFSET $${idx + 1}`, params);
-    return { items: r.rows, total };
+    return { items: r.rows, total, synonymsApplied: synonymsApplied.length ? synonymsApplied : undefined };
 }
 export async function getUserListsList(clerkUserId) {
-    const r = await getPool().query(`SELECT list_id, name, description, item_count, is_public, synced_at FROM user_lists WHERE clerk_user_id = $1 ORDER BY name`, [clerkUserId]);
+    const r = await getPool().query(`SELECT ul.list_id, ul.name, ul.description,
+            COUNT(uli.id)::int AS item_count,
+            ul.is_public, ul.synced_at
+     FROM user_lists ul
+     LEFT JOIN user_list_items uli
+       ON ul.clerk_user_id = uli.clerk_user_id AND ul.list_id = uli.list_id
+     WHERE ul.clerk_user_id = $1
+     GROUP BY ul.list_id, ul.name, ul.description, ul.is_public, ul.synced_at
+     ORDER BY ul.name`, [clerkUserId]);
     return r.rows;
 }
 // ── Lists ────────────────────────────────────────────────────────────────
@@ -1092,7 +1400,102 @@ export async function upsertUserLists(clerkUserId, lists) {
        DO UPDATE SET name = $3, description = $4, item_count = $5, is_public = $6, data = $7, synced_at = NOW()`, [clerkUserId, list.listId, list.name, list.description ?? null, list.itemCount ?? 0, list.isPublic ?? true, list.data ? JSON.stringify(list.data) : null]);
     }
 }
-// ── Orders ───────────────────────────────────────────────────────────────
+// ── List items ──────────────────────────────────────────────────────────
+export async function upsertListItems(clerkUserId, listId, items) {
+    if (!items.length)
+        return;
+    // Remove old items for this list, then insert fresh
+    await getPool().query(`DELETE FROM user_list_items WHERE clerk_user_id = $1 AND list_id = $2`, [clerkUserId, listId]);
+    for (const item of items) {
+        await getPool().query(`INSERT INTO user_list_items (clerk_user_id, list_id, discogs_id, entity_type, comment, data, synced_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW())
+       ON CONFLICT (clerk_user_id, list_id, discogs_id) DO UPDATE SET entity_type = $4, comment = $5, data = $6, synced_at = NOW()`, [clerkUserId, listId, item.discogsId, item.entityType ?? "release", item.comment ?? null, item.data ? JSON.stringify(item.data) : null]);
+    }
+}
+export async function getListItems(clerkUserId, listId) {
+    const r = await getPool().query(`SELECT discogs_id, entity_type, comment, data FROM user_list_items WHERE clerk_user_id = $1 AND list_id = $2 ORDER BY id`, [clerkUserId, listId]);
+    return r.rows;
+}
+/** Returns { discogsId → [{ listId, listName }] } for badge rendering */
+export async function getListMembership(clerkUserId) {
+    const r = await getPool().query(`SELECT li.discogs_id, li.list_id, l.name
+     FROM user_list_items li
+     JOIN user_lists l ON l.clerk_user_id = li.clerk_user_id AND l.list_id = li.list_id
+     WHERE li.clerk_user_id = $1`, [clerkUserId]);
+    const map = {};
+    for (const row of r.rows) {
+        if (!map[row.discogs_id])
+            map[row.discogs_id] = [];
+        map[row.discogs_id].push({ listId: row.list_id, listName: row.name });
+    }
+    return map;
+}
+export async function getInventoryIds(clerkUserId) {
+    const r = await getPool().query("SELECT DISTINCT discogs_release_id FROM user_inventory WHERE clerk_user_id = $1 AND discogs_release_id IS NOT NULL", [clerkUserId]);
+    return r.rows.map(row => row.discogs_release_id);
+}
+/**
+ * Returns a map of `releaseId → [InventoryListingSummary, ...]` for all of
+ * the user's cached marketplace listings. Used to hydrate the release-modal
+ * "Listed" tooltip and the inventory-link badges on cards without needing
+ * an extra round-trip.
+ */
+export async function getInventoryListingIdsByRelease(clerkUserId) {
+    const r = await getPool().query(`SELECT discogs_release_id, listing_id, status, price_value, price_currency,
+            condition, sleeve_condition, data, posted_at
+     FROM user_inventory
+     WHERE clerk_user_id = $1 AND discogs_release_id IS NOT NULL
+     ORDER BY posted_at DESC NULLS LAST`, [clerkUserId]);
+    const map = {};
+    for (const row of r.rows) {
+        const rid = Number(row.discogs_release_id);
+        if (!map[rid])
+            map[rid] = [];
+        // Pull comments and posted date out of the full listing JSON. The JSON
+        // blob is refreshed on every sync/write so it's the most reliable source,
+        // whereas the dedicated `posted_at` column can be stale if an earlier
+        // sync pass persisted a NULL or a touch-timestamp by mistake.
+        let comments = null;
+        let postedFromJson = null;
+        try {
+            const d = row.data;
+            if (d) {
+                const obj = typeof d === "string" ? JSON.parse(d) : d;
+                comments = obj?.comments ?? null;
+                if (obj?.posted)
+                    postedFromJson = String(obj.posted);
+            }
+        }
+        catch { }
+        const postedIso = postedFromJson
+            ? new Date(postedFromJson).toISOString()
+            : (row.posted_at ? new Date(row.posted_at).toISOString() : null);
+        map[rid].push({
+            id: Number(row.listing_id),
+            status: row.status ?? null,
+            price: row.price_value != null ? Number(row.price_value) : null,
+            currency: row.price_currency ?? null,
+            condition: row.condition ?? null,
+            sleeve: row.sleeve_condition ?? null,
+            comments,
+            posted_at: postedIso,
+        });
+    }
+    return map;
+}
+export async function getInventoryItem(clerkUserId, listingId) {
+    const r = await getPool().query(`SELECT listing_id, discogs_release_id, data, status, price_value, price_currency, condition, sleeve_condition, posted_at, synced_at
+     FROM user_inventory WHERE clerk_user_id = $1 AND listing_id = $2`, [clerkUserId, listingId]);
+    return r.rows[0] ?? null;
+}
+export async function deleteInventoryItem(clerkUserId, listingId) {
+    await getPool().query(`DELETE FROM user_inventory WHERE clerk_user_id = $1 AND listing_id = $2`, [clerkUserId, listingId]);
+}
+export async function getListItemStats(clerkUserId) {
+    const r = await getPool().query(`SELECT COUNT(*)::int AS total_items, COUNT(DISTINCT list_id)::int AS lists_with_items FROM user_list_items WHERE clerk_user_id = $1`, [clerkUserId]);
+    return { totalItems: r.rows[0]?.total_items ?? 0, listsWithItems: r.rows[0]?.lists_with_items ?? 0 };
+}
+// ── Orders (seller-side marketplace orders) ───────────────────────────────
 export async function upsertUserOrders(clerkUserId, orders) {
     for (const order of orders) {
         await getPool().query(`INSERT INTO user_orders (clerk_user_id, order_id, status, buyer_username, seller_username, total_value, total_currency, item_count, created_at, data, synced_at)
@@ -1100,6 +1503,74 @@ export async function upsertUserOrders(clerkUserId, orders) {
        ON CONFLICT (clerk_user_id, order_id)
        DO UPDATE SET status = $3, buyer_username = $4, seller_username = $5, total_value = $6, total_currency = $7, item_count = $8, created_at = $9, data = $10, synced_at = NOW()`, [clerkUserId, order.orderId, order.status ?? null, order.buyerUsername ?? null, order.sellerUsername ?? null, order.totalValue ?? null, order.totalCurrency ?? "USD", order.itemCount ?? 0, order.createdAt ?? null, order.data ? JSON.stringify(order.data) : null]);
     }
+}
+export async function updateOrdersSyncedAt(clerkUserId) {
+    await getPool().query("UPDATE user_tokens SET orders_synced_at = NOW() WHERE clerk_user_id = $1", [clerkUserId]);
+}
+export async function getOrdersCount(clerkUserId) {
+    const r = await getPool().query("SELECT COUNT(*)::int AS cnt FROM user_orders WHERE clerk_user_id = $1", [clerkUserId]);
+    return r.rows[0]?.cnt ?? 0;
+}
+export async function getUserOrdersPage(clerkUserId, page = 1, perPage = 25, filters) {
+    const conditions = ["clerk_user_id = $1"];
+    const params = [clerkUserId];
+    let idx = 2;
+    if (filters?.status) {
+        conditions.push(`status = $${idx}`);
+        params.push(filters.status);
+        idx++;
+    }
+    if (filters?.q) {
+        conditions.push(`(buyer_username ILIKE $${idx} OR order_id ILIKE $${idx} OR data::text ILIKE $${idx})`);
+        params.push(`%${filters.q}%`);
+        idx++;
+    }
+    const where = conditions.join(" AND ");
+    const countR = await getPool().query(`SELECT COUNT(*)::int AS cnt FROM user_orders WHERE ${where}`, params);
+    const total = countR.rows[0]?.cnt ?? 0;
+    const offset = (page - 1) * perPage;
+    params.push(perPage, offset);
+    const r = await getPool().query(`SELECT order_id, status, buyer_username, seller_username, total_value, total_currency, item_count, created_at, data, synced_at, viewed_at,
+            CASE
+              WHEN (data->>'last_activity') IS NULL THEN false
+              WHEN viewed_at IS NULL THEN true
+              WHEN (data->>'last_activity')::timestamptz > viewed_at THEN true
+              ELSE false
+            END AS has_new
+     FROM user_orders WHERE ${where} ORDER BY created_at DESC NULLS LAST LIMIT $${idx} OFFSET $${idx + 1}`, params);
+    return { items: r.rows, total };
+}
+export async function getUserOrder(clerkUserId, orderId) {
+    const r = await getPool().query(`SELECT order_id, status, buyer_username, seller_username, total_value, total_currency, item_count, created_at, data, synced_at, viewed_at
+     FROM user_orders WHERE clerk_user_id = $1 AND order_id = $2`, [clerkUserId, orderId]);
+    return r.rows[0] ?? null;
+}
+export async function markOrderViewed(clerkUserId, orderId) {
+    await getPool().query(`UPDATE user_orders SET viewed_at = NOW() WHERE clerk_user_id = $1 AND order_id = $2`, [clerkUserId, orderId]);
+}
+export async function getUnreadOrdersCount(clerkUserId) {
+    const r = await getPool().query(`SELECT COUNT(*)::int AS cnt FROM user_orders
+      WHERE clerk_user_id = $1
+        AND (data->>'last_activity') IS NOT NULL
+        AND (viewed_at IS NULL OR (data->>'last_activity')::timestamptz > viewed_at)`, [clerkUserId]);
+    return r.rows[0]?.cnt ?? 0;
+}
+export async function upsertOrderMessages(clerkUserId, orderId, messages) {
+    if (!messages.length)
+        return;
+    // Replace the whole thread for a given order (simpler than merging)
+    await getPool().query(`DELETE FROM user_order_messages WHERE clerk_user_id = $1 AND order_id = $2`, [clerkUserId, orderId]);
+    for (const m of messages) {
+        await getPool().query(`INSERT INTO user_order_messages (clerk_user_id, order_id, message_order, subject, message, from_user, ts, data, synced_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+       ON CONFLICT (clerk_user_id, order_id, message_order)
+       DO UPDATE SET subject = $4, message = $5, from_user = $6, ts = $7, data = $8, synced_at = NOW()`, [clerkUserId, orderId, m.order, m.subject ?? null, m.message ?? null, m.fromUser ?? null, m.ts ?? null, m.data ? JSON.stringify(m.data) : null]);
+    }
+}
+export async function getOrderMessages(clerkUserId, orderId) {
+    const r = await getPool().query(`SELECT message_order, subject, message, from_user, ts, data
+     FROM user_order_messages WHERE clerk_user_id = $1 AND order_id = $2 ORDER BY message_order ASC`, [clerkUserId, orderId]);
+    return r.rows;
 }
 export async function upsertFreshRelease(r) {
     await getPool().query(`INSERT INTO fresh_releases
@@ -1347,6 +1818,8 @@ export async function pruneAllStaleData() {
     const fld = await getPool().query(`DELETE FROM user_collection_folders WHERE synced_at < ${interval30d}`);
     // User inventory older than 30 days
     const inv = await getPool().query(`DELETE FROM user_inventory WHERE synced_at < ${interval30d}`);
+    // User list items older than 30 days
+    const lsti = await getPool().query(`DELETE FROM user_list_items WHERE synced_at < ${interval30d}`);
     // User lists older than 30 days
     const lst = await getPool().query(`DELETE FROM user_lists WHERE synced_at < ${interval30d}`);
     // User orders older than 30 days
@@ -1362,6 +1835,7 @@ export async function pruneAllStaleData() {
         wantlist: wl.rowCount ?? 0,
         folders: fld.rowCount ?? 0,
         inventory: inv.rowCount ?? 0,
+        listItems: lsti.rowCount ?? 0,
         lists: lst.rowCount ?? 0,
         orders: ord.rowCount ?? 0,
     };
@@ -1497,6 +1971,18 @@ export async function getApiRequestLog(opts) {
         where += " AND success = true";
     if (opts?.errorsOnly)
         where += " AND success = false";
+    if (opts?.scheduledOnly) {
+        // Match requests originating from scheduled/cron jobs. Services that
+        // are only called from scheduled jobs (rss, youtube, listenbrainz) plus
+        // specific context markers for other scheduled tasks.
+        where += ` AND (
+      service IN ('rss', 'youtube', 'listenbrainz')
+      OR context LIKE 'scheduled %'
+      OR context = 'profile-refresh'
+      OR context = 'price-update'
+      OR context LIKE 'extras: %'
+    )`;
+    }
     const r = await getPool().query(`SELECT * FROM api_request_log ${where} ORDER BY created_at DESC`, params);
     return { items: r.rows, total: r.rows.length };
 }
@@ -1512,6 +1998,8 @@ export async function getUserCollectionStats() {
       COALESCE(w.want_count, 0)::int AS wantlist_count,
       COALESCE(i.inv_count, 0)::int AS inventory_count,
       COALESCE(l.list_count, 0)::int AS list_count,
+      COALESCE(li.list_item_count, 0)::int AS list_item_count,
+      COALESCE(o.orders_count, 0)::int AS orders_count,
       c.oldest_added AS coll_oldest,
       c.newest_added AS coll_newest,
       c.top_genres,
@@ -1553,6 +2041,16 @@ export async function getUserCollectionStats() {
       FROM user_lists ul
       WHERE ul.clerk_user_id = u.clerk_user_id
     ) l ON true
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*)::int AS list_item_count
+      FROM user_list_items uli
+      WHERE uli.clerk_user_id = u.clerk_user_id
+    ) li ON true
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*)::int AS orders_count
+      FROM user_orders uo
+      WHERE uo.clerk_user_id = u.clerk_user_id
+    ) o ON true
     WHERE u.discogs_username IS NOT NULL
     ORDER BY c.coll_count DESC NULLS LAST
   `);
@@ -1562,6 +2060,8 @@ export async function getUserCollectionStats() {
       (SELECT COUNT(*)::int FROM user_collection) AS total_collection,
       (SELECT COUNT(*)::int FROM user_wantlist) AS total_wantlist,
       (SELECT COUNT(*)::int FROM user_inventory) AS total_inventory,
+      (SELECT COUNT(*)::int FROM user_orders) AS total_orders,
+      (SELECT COUNT(*)::int FROM user_list_items) AS total_list_items,
       (SELECT COUNT(DISTINCT discogs_release_id)::int FROM user_collection) AS unique_releases,
       (SELECT COUNT(DISTINCT discogs_release_id)::int FROM user_wantlist) AS unique_wants
   `);

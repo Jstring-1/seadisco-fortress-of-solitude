@@ -522,6 +522,17 @@ body {
 .pill:hover { border-color: var(--accent-dim); color: #bbb; }
 .pill.active { border-color: var(--accent); color: var(--accent); background: #1e1408; }
 
+/* ── Synonym expansion info bar ────────────────────────────────────────── */
+.cw-synonym-info {
+  font-size: 0.72rem;
+  color: #665a45;
+  text-align: center;
+  margin-top: 0.2rem;
+  line-height: 1.5;
+}
+.cw-synonym-info .syn-icon { color: var(--accent-dim); margin-right: 0.2rem; }
+.cw-synonym-info .syn-term { color: #8a7d68; font-style: italic; }
+
 /* ── Latest Drops / Fresh Releases ─────────────────────────────────────── */
 /* ─ Tag footer: persistent All button + active label ─ */
 .fresh-tag-footer {
@@ -3392,15 +3403,15 @@ body.modal-open  { overflow: hidden; }
 .badge-wantlist   { top: 22px;  background: #f0c95c; border-color: #f0c95c66; opacity: 0; transition: opacity 0.15s; cursor: pointer; }
 .badge-list       { top: 38px;  background: #a0ccf0; border-color: #a0ccf066; }
 .badge-inventory  { top: 54px;  background: #cda0f5; border-color: #cda0f566; }
-/* Favorite keeps its heart symbol instead of becoming a plain dot */
+/* Favorite: heart-shaped dot — same size as other badge dots */
 .badge-favorite {
   top: 70px; cursor: pointer; opacity: 0; transition: opacity 0.15s;
-  background: rgba(0,0,0,0.7); border-color: #ff80ab66;
-  color: #ff80ab; font-size: 0.6rem; text-indent: 0;
-  width: 14px; height: 14px; border-radius: 3px;
+  background: transparent; border-color: transparent;
+  color: #ff80ab; font-size: 10px; text-indent: 0; line-height: 1;
+  width: 10px; height: 10px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
 }
-.badge-favorite:hover { color: #ffaac8; }
+.badge-favorite:hover { color: #ffaac8; cursor: pointer; }
 /* Show C/W/♥ on hover or when active */
 .card:hover .badge-collection,
 .card:hover .badge-wantlist,
