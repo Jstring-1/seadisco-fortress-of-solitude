@@ -89,7 +89,7 @@ function restoreFilterState(tab) {
       if (el) el.value = state[id] || "";
     });
     const sortEl = document.getElementById("cw-sort");
-    if (sortEl && state["cw-sort"]) sortEl.value = state["cw-sort"];
+    if (sortEl) sortEl.value = state["cw-sort"] || "";
     if (state["cw-rtype"]) {
       const radio = document.querySelector(`input[name="cw-result-type"][value="${state["cw-rtype"]}"]`);
       if (radio) radio.checked = true;
@@ -916,7 +916,8 @@ function doCwSearch(page = 1) {
 
 function switchRecordsTab(tab, skipPush) {
   // Save outgoing tab's filter state before switching
-  if (_prevCwTab && _prevCwTab !== tab) saveFilterState(_prevCwTab);
+  const outgoing = _prevCwTab || _cwTab || "collection";
+  if (outgoing !== tab) saveFilterState(outgoing);
   _prevCwTab = tab;
   _cwTab = tab;
   // Update URL to reflect active sub-tab
@@ -948,7 +949,9 @@ function switchRecordsTab(tab, skipPush) {
     // Restore this tab's saved filter state (per-tab persistence)
     restoreFilterState(tab);
   }
-  restoreCwSynonyms();
+  // Note: restoreFilterState already handles per-tab synonym state (cw-syn key)
+  // so we only call restoreCwSynonyms on initial load, not on tab switch
+  updateSynonymToggleUI();
 
   if (pending) {
     delete window._pendingCwSearch;
