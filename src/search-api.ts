@@ -3447,8 +3447,7 @@ const ebayClientSecret = process.env.EBAY_CLIENT_SECRET ?? "";
 const ebayAffiliateCampaignId = process.env.EBAY_AFFILIATE_CAMPAIGN_ID ?? "";
 let ebayAccessToken    = "";
 let ebayTokenExpiry    = 0;
-const EBAY_SEARCH_LIMIT = 3000;
-const EBAY_CLICK_LIMIT  = 1500;
+const EBAY_USER_LIMIT = 4500;
 const MAX_USERS         = 50;
 
 async function getEbayToken(): Promise<string> {
@@ -3757,12 +3756,10 @@ function nextPacificMidnightIso(): string {
 
 app.get("/api/ebay/search/status", async (_req, res) => {
   try {
-    const { count, clickCount } = await getEbayRateCount();
-    const searchRemaining = Math.max(0, EBAY_SEARCH_LIMIT - count);
-    const clickRemaining = Math.max(0, EBAY_CLICK_LIMIT - clickCount);
+    const { count } = await getEbayRateCount();
+    const remaining = Math.max(0, EBAY_USER_LIMIT - count);
     res.json({
-      remaining: searchRemaining, limit: EBAY_SEARCH_LIMIT,
-      clickRemaining, clickLimit: EBAY_CLICK_LIMIT,
+      remaining, limit: EBAY_USER_LIMIT,
       resetsAt: nextPacificMidnightIso(),
     });
   } catch (e) {
@@ -3791,16 +3788,16 @@ app.get("/api/ebay/search", async (req, res) => {
         items: cached.results,
         total: cached.total,
         cached: true,
-        rateLimit: { remaining: Math.max(0, EBAY_SEARCH_LIMIT - count), limit: EBAY_SEARCH_LIMIT, resetsAt },
+        rateLimit: { remaining: Math.max(0, EBAY_USER_LIMIT - count), limit: EBAY_USER_LIMIT, resetsAt },
       });
     }
 
     // Check rate limit
     const { count } = await getEbayRateCount();
-    if (count >= EBAY_SEARCH_LIMIT) {
+    if (count >= EBAY_USER_LIMIT) {
       return res.status(429).json({
         error: "Daily eBay search limit reached",
-        rateLimit: { remaining: 0, limit: EBAY_SEARCH_LIMIT, resetsAt },
+        rateLimit: { remaining: 0, limit: EBAY_USER_LIMIT, resetsAt },
       });
     }
 
@@ -3856,10 +3853,105 @@ app.get("/api/ebay/search", async (req, res) => {
       items,
       total,
       cached: false,
-      rateLimit: { remaining: Math.max(0, EBAY_SEARCH_LIMIT - newCount), limit: EBAY_SEARCH_LIMIT, resetsAt },
+      rateLimit: { remaining: Math.max(0, EBAY_USER_LIMIT - newCount), limit: EBAY_USER_LIMIT, resetsAt },
     });
   } catch (e) {
     console.error("eBay live search error:", e);
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/ebay/gear/search — live eBay search for vintage gear (auctions)
+app.get("/api/ebay/gear/search", async (req, res) => {
+  const q = ((req.query.q as string) ?? "").trim();
+  if (q.length < 2) return res.status(400).json({ error: "Query must be at least 2 characters" });
+  if (q.length > 200) return res.status(400).json({ error: "Query too long" });
+
+  if (!ebayClientId || !ebayClientSecret) {
+    return res.status(503).json({ error: "eBay search not available" });
+  }
+
+  const queryKey = `gear:${q.toLowerCase()}`;
+  const resetsAt = nextPacificMidnightIso();
+
+  try {
+    // Check cache first — free, no counter increment
+    const cached = await getEbaySearchCache(queryKey);
+    if (cached) {
+      const { count } = await getEbayRateCount();
+      return res.json({
+        items: cached.results,
+        total: cached.total,
+        cached: true,
+        rateLimit: { remaining: Math.max(0, EBAY_USER_LIMIT - count), limit: EBAY_USER_LIMIT, resetsAt },
+      });
+    }
+
+    // Check rate limit
+    const { count } = await getEbayRateCount();
+    if (count >= EBAY_USER_LIMIT) {
+      return res.status(429).json({
+        error: "Daily eBay request limit reached",
+        rateLimit: { remaining: 0, limit: EBAY_USER_LIMIT, resetsAt },
+      });
+    }
+
+    // Increment counter and call eBay
+    const newCount = await incrementEbayRateCount();
+    const token = await getEbayToken();
+
+    const headers: Record<string, string> = {
+      "Authorization": `Bearer ${token}`,
+      "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
+    };
+    if (ebayAffiliateCampaignId) {
+      headers["X-EBAY-C-ENDUSERCTX"] = `affiliateCampaignId=${ebayAffiliateCampaignId}`;
+    }
+
+    const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&limit=50&sort=endingSoonest&filter=priceCurrency:USD,buyingOptions:{AUCTION}`;
+    const r = await loggedFetch("ebay", url, { headers, context: `gear live search: ${q}` });
+
+    if (!r.ok) {
+      console.error(`eBay gear live search failed: ${r.status}`);
+      return res.status(502).json({ error: "eBay search failed" });
+    }
+
+    const data = await r.json() as any;
+    const summaries: any[] = data.itemSummaries ?? [];
+
+    // Transform to match gear_listings field names
+    const items = summaries.map((s: any) => ({
+      item_id:          s.itemId,
+      title:            s.title ?? "",
+      price:            parseFloat(s.currentBidPrice?.value ?? s.price?.value ?? "0"),
+      currency:         s.currentBidPrice?.currency ?? s.price?.currency ?? "USD",
+      condition:        s.condition ?? "",
+      image_url:        s.image?.imageUrl ?? s.thumbnailImages?.[0]?.imageUrl ?? "",
+      item_url:         s.itemWebUrl ?? s.itemHref ?? "",
+      location_city:    s.itemLocation?.city ?? "",
+      location_state:   s.itemLocation?.stateOrProvince ?? "",
+      location_country: s.itemLocation?.country ?? "",
+      seller_username:  s.seller?.username ?? "",
+      seller_feedback:  s.seller?.feedbackScore ?? 0,
+      buying_options:   s.buyingOptions ?? [],
+      bid_count:        s.bidCount ?? 0,
+      item_end_date:    s.itemEndDate ?? null,
+      thumbnail_url:    (s.thumbnailImages ?? [])[0]?.imageUrl ?? "",
+    }));
+
+    const total = data.total ?? items.length;
+
+    // Cache results
+    await setEbaySearchCache(queryKey, items, total);
+
+    res.json({
+      items,
+      total,
+      cached: false,
+      rateLimit: { remaining: Math.max(0, EBAY_USER_LIMIT - newCount), limit: EBAY_USER_LIMIT, resetsAt },
+    });
+  } catch (e) {
+    console.error("eBay gear live search error:", e);
     res.status(500).json({ error: String(e) });
   }
 });
@@ -3872,11 +3964,11 @@ app.get("/api/ebay/item/:itemId", async (req, res) => {
 
   const resetsAt = nextPacificMidnightIso();
   try {
-    const { clickCount } = await getEbayRateCount();
-    if (clickCount >= EBAY_CLICK_LIMIT) {
+    const { count } = await getEbayRateCount();
+    if (count >= EBAY_USER_LIMIT) {
       return res.status(429).json({
-        error: "Daily detail view limit reached",
-        rateLimit: { clickRemaining: 0, clickLimit: EBAY_CLICK_LIMIT, resetsAt },
+        error: "Daily eBay request limit reached",
+        rateLimit: { remaining: 0, limit: EBAY_USER_LIMIT, resetsAt },
       });
     }
 
@@ -3913,7 +4005,7 @@ app.get("/api/ebay/item/:itemId", async (req, res) => {
       specifics,
       bidCount: d.bidCount ?? 0,
       itemUrl: d.itemWebUrl ?? "",
-      rateLimit: { clickRemaining: Math.max(0, EBAY_CLICK_LIMIT - newCount), clickLimit: EBAY_CLICK_LIMIT, resetsAt },
+      rateLimit: { remaining: Math.max(0, EBAY_USER_LIMIT - newCount), limit: EBAY_USER_LIMIT, resetsAt },
     });
   } catch (e) {
     console.error("eBay item detail error:", e);

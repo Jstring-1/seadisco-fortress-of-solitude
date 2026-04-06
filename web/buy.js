@@ -13,8 +13,6 @@ const BUY_PAGE_SIZE = 200;
 let _ebaySearchItems = [];
 let _ebayRateRemaining = null;
 let _ebayRateLimit = null;
-let _ebayClickRemaining = null;
-let _ebayClickLimit = null;
 let _ebayResetAt = null;
 let _ebayCountdownInterval = null;
 let _ebayExpiryInterval = null;
@@ -192,6 +190,14 @@ async function _fetchEbayDetail(itemId, overlay) {
       const link = overlay.querySelector(".buy-popup-ebay-link");
       if (link) link.href = d.itemUrl;
     }
+
+    // Update unified rate counter
+    if (d.rateLimit) {
+      _ebayRateRemaining = d.rateLimit.remaining;
+      _ebayRateLimit = d.rateLimit.limit;
+      if (d.rateLimit.resetsAt) _ebayResetAt = d.rateLimit.resetsAt;
+      updateEbayMeta();
+    }
   } catch {
     if (area) area.textContent = "";
   }
@@ -321,8 +327,6 @@ async function initEbaySearchStatus() {
       if (data.remaining == null) return;
       _ebayRateRemaining = data.remaining;
       _ebayRateLimit = data.limit;
-      _ebayClickRemaining = data.clickRemaining ?? null;
-      _ebayClickLimit = data.clickLimit ?? null;
       _ebayResetAt = data.resetsAt;
       updateEbayMeta();
       startEbayCountdown();
@@ -355,9 +359,7 @@ function greyExpiredCards() {
 }
 
 function updateEbayMeta() {
-  const el = document.getElementById("ebay-search-meta");
-  if (!el) return;
-  if (_ebayRateRemaining == null) { el.textContent = ""; return; }
+  if (_ebayRateRemaining == null) return;
 
   let countdown = "";
   if (_ebayResetAt) {
@@ -372,12 +374,11 @@ function updateEbayMeta() {
     }
   }
 
-  const limit = _ebayRateLimit || 3000;
-  let text = `${_ebayRateRemaining.toLocaleString()} / ${limit.toLocaleString()} searches`;
-  if (_ebayClickRemaining != null && _ebayClickLimit != null) {
-    text += ` · ${_ebayClickRemaining.toLocaleString()} / ${_ebayClickLimit.toLocaleString()} detail views`;
-  }
-  el.textContent = text + countdown;
+  const limit = _ebayRateLimit || 4500;
+  const text = `${_ebayRateRemaining.toLocaleString()} / ${limit.toLocaleString()} eBay requests` + countdown;
+
+  // Update all counter elements (vinyl + gear pages)
+  document.querySelectorAll(".ebay-rate-counter").forEach(el => { el.textContent = text; });
 }
 
 async function doEbaySearch() {
