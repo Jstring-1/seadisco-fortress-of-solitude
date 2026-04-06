@@ -301,8 +301,6 @@
       <button type="button" onclick="clearCwSearch()" title="Clear all filters" style="background:none;border:none;padding:0 0.4rem;font-size:1.2rem;color:#555;cursor:pointer;line-height:1;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
       <span style="color:#333;margin:0 0.25rem">|</span>
       <button type="button" id="cw-export-btn" onclick="_cwTab==='collection'?exportCollection():exportWantlist()" title="Download as CSV" style="background:none;border:none;padding:0;font-size:0.78rem;color:#555;cursor:pointer;white-space:nowrap;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">⬇ CSV</button>
-      <span style="color:#333;margin:0 0.25rem">|</span>
-      <label id="cw-synonyms-toggle" style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.78rem;color:#666;cursor:pointer;white-space:nowrap" title="Expand classical music synonyms (Symphony = Sinfonie, Symphonie, etc.)"><input type="checkbox" id="cw-syn-check" onchange="toggleCwSynonyms()" style="cursor:pointer;accent-color:var(--accent)"> Synonyms</label>
     </div>
     <div id="cw-advanced-panel" style="display:none;margin-top:0.5rem">
       <div style="font-size:0.72rem;color:#444;margin-bottom:0.4rem;line-height:1.6">Filters support operators: use <span style="color:#888">+</span> to require multiple terms, <span style="color:#888">|</span> for either/or, and <span style="color:#888">-</span> before a term to exclude it &nbsp;·&nbsp; e.g. Artist: <span style="color:#777">miles davis | coltrane</span> &nbsp; Label: <span style="color:#777">columbia + -legacy</span></div>
@@ -486,6 +484,7 @@
         <input type="text" class="site-form-field buy-search-field" placeholder="Filter Vinyl" oninput="onBuySearch(this.value)">
         <select class="site-form-field buy-sort" onchange="setBuySort(this.value)">
           <option value="ending">Ending Soonest</option>
+          <option value="bids">Most Bids</option>
           <option value="price_desc">Price: High → Low</option>
           <option value="price_asc">Price: Low → High</option>
           <option value="newest">Newly Listed</option>
@@ -529,6 +528,7 @@
         <input type="text" class="site-form-field gear-search-field" placeholder="Filter Gear" oninput="onGearSearch(this.value)">
         <select class="site-form-field gear-sort" onchange="setGearSort(this.value)">
           <option value="ending">Ending Soonest</option>
+          <option value="bids">Most Bids</option>
           <option value="price_desc">Price: High → Low</option>
           <option value="price_asc">Price: Low → High</option>
           <option value="newest">Newly Listed</option>

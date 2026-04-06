@@ -25,29 +25,7 @@ function restoreCwSort() {
   } catch {}
 }
 
-// ── Synonym toggle state ─────────────────────────────────────────────────
-let _cwSynonyms = false;
-function saveCwSynonyms() {
-  try { localStorage.setItem("cw-synonyms", _cwSynonyms ? "1" : "0"); } catch {}
-}
-function updateSynonymToggleUI() {
-  const chk = document.getElementById("cw-syn-check");
-  if (chk) chk.checked = _cwSynonyms;
-}
-function restoreCwSynonyms() {
-  try {
-    const v = localStorage.getItem("cw-synonyms");
-    if (v === "1") _cwSynonyms = true;
-    else if (v === "0") _cwSynonyms = false;
-    updateSynonymToggleUI();
-  } catch {}
-}
-function toggleCwSynonyms() {
-  const chk = document.getElementById("cw-syn-check");
-  _cwSynonyms = chk ? chk.checked : !_cwSynonyms;
-  saveCwSynonyms();
-  doCwSearch(1);
-}
+// ── Synonym info display (always on for collection pages) ────────────────
 function showSynonymInfo(synonymsApplied) {
   const el = document.getElementById("cw-synonym-info");
   if (!el) return;
@@ -74,7 +52,6 @@ function saveFilterState() {
   const rtype = document.querySelector('input[name="cw-result-type"]:checked')?.value ?? "";
   if (rtype) state["cw-rtype"] = rtype;
   if (_cwAdvOpen) state["cw-advOpen"] = "1";
-  if (_cwSynonyms) state["cw-syn"] = "1";
   try { localStorage.setItem("cw-filters", JSON.stringify(state)); } catch {}
 }
 
@@ -96,8 +73,6 @@ function restoreFilterState() {
     }
     if (state["cw-advOpen"]) toggleCwAdvanced(true);
     else toggleCwAdvanced(false);
-    _cwSynonyms = state["cw-syn"] === "1";
-    updateSynonymToggleUI();
   } catch {}
 }
 
@@ -943,7 +918,6 @@ function switchRecordsTab(tab, skipPush) {
     clearCwFilters();
   }
   // Filters persist across tabs — no need to restore on switch
-  updateSynonymToggleUI();
 
   if (pending) {
     delete window._pendingCwSearch;
@@ -1040,7 +1014,6 @@ async function loadInventoryTab(page = 1, filters) {
   try {
     let url = `/api/user/inventory?page=${page}&per_page=96`;
     if (f.q) url += `&q=${encodeURIComponent(f.q)}`;
-    if (!_cwSynonyms) url += `&synonyms=false`;
     const r = await apiFetch(url);
     const data = await r.json();
     const items = data.items ?? [];
@@ -1454,7 +1427,6 @@ async function loadCollectionTab(page = 1, filters) {
     const cwNotes = (document.getElementById("cw-notes")?.value ?? "").trim();
     if (cwNotes) url += `&notes=${encodeURIComponent(cwNotes)}`;
     if (cwSort) url += `&sort=${encodeURIComponent(cwSort)}`;
-    if (!_cwSynonyms) url += `&synonyms=false`;
     const r = await apiFetch(url);
     const data = await r.json();
     const items = data.items ?? [];
@@ -1505,7 +1477,6 @@ async function loadWantlistTab(page = 1, filters) {
     if (cwNotes) url += `&notes=${encodeURIComponent(cwNotes)}`;
     const cwSort = document.getElementById("cw-sort")?.value || "";
     if (cwSort) url += `&sort=${encodeURIComponent(cwSort)}`;
-    if (!_cwSynonyms) url += `&synonyms=false`;
     const r = await apiFetch(url);
     const data = await r.json();
     const items = data.items ?? [];
