@@ -3635,7 +3635,12 @@ async function fetchEbayVinylListings(): Promise<number> {
 
         if (!summaries.length) break;
 
-        const items = summaries.map((s: any) => ({
+        // Filter out non-12" records by title keywords
+        const NOT_12_RE = /\b(7["″''"]|7 inch|45 ?rpm|\b45\b|10["″''"]|10 inch|pic sleeve)\b/i;
+        const filtered = summaries.filter((s: any) => !NOT_12_RE.test(s.title ?? ""));
+        console.log(`eBay vinyl (offset ${offset}): filtered ${summaries.length - filtered.length} non-12" items`);
+
+        const items = filtered.map((s: any) => ({
           itemId:          s.itemId,
           title:           s.title ?? "",
           price:           parseFloat(s.currentBidPrice?.value ?? s.price?.value ?? "0"),
