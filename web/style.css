@@ -389,7 +389,7 @@ body {
 .nav-tab-bot[data-rtab="inventory"]:hover,
 .nav-tab-bot[data-rtab="inventory"].active   { color: #cda0f5; }
 .nav-tab-bot[data-rtab="favorites"]:hover,
-.nav-tab-bot[data-rtab="favorites"].active   { color: #ff80ab; }
+.nav-tab-bot[data-rtab="favorites"].active   { color: var(--accent); }
 /* ─ Auth popup ──────────────────────────────────────────────────────────── */
 /* ─ Hamburger (desktop: hidden) ────────────────────────────────────────── */
 #nav-hamburger {
@@ -3407,11 +3407,11 @@ body.modal-open  { overflow: hidden; }
 .badge-favorite {
   top: 70px; cursor: pointer; opacity: 0; transition: opacity 0.15s;
   background: transparent; border-color: transparent;
-  color: #ff80ab; font-size: 10px; text-indent: 0; line-height: 1;
-  width: 10px; height: 10px; border-radius: 50%;
+  color: var(--accent); font-size: 14px; text-indent: 0; line-height: 1;
+  width: 14px; height: 14px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
 }
-.badge-favorite:hover { color: #ffaac8; cursor: pointer; }
+.badge-favorite:hover { color: var(--accent2); cursor: pointer; }
 /* Show C/W/♥ on hover or when active */
 .card:hover .badge-collection,
 .card:hover .badge-wantlist,
@@ -3426,13 +3426,13 @@ body.modal-open  { overflow: hidden; }
 
 /* Favorite button in modal */
 .modal-act-btn.is-favorite {
-  background: #3a1a2a;
-  border-color: #5a2a3a;
-  color: #f06292;
+  background: #2a1a0e;
+  border-color: #5a3a1a;
+  color: var(--accent);
 }
 .modal-act-btn.is-favorite:hover {
-  background: #4a1f2f;
-  border-color: #6a3a4a;
+  background: #3a2210;
+  border-color: #6a4a2a;
 }
 
 /* ── Filters grid (main search + collection) ── */
@@ -3458,8 +3458,8 @@ body.modal-open  { overflow: hidden; }
 
 /* Main search: 3 columns desktop */
 .main-filters { grid-template-columns: repeat(3, 1fr); }
-/* Collection: auto-fill for flexible wrapping on desktop */
-.cw-filters { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+/* Collection: 3 columns on desktop */
+.cw-filters { grid-template-columns: repeat(3, 1fr); }
 
 /* ── Mobile: 2-col grid layouts for filter forms ── */
 @media (max-width: 640px) {

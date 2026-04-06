@@ -9,13 +9,11 @@ if (typeof doCwSearch === "undefined") window.doCwSearch = () => {};
 if (typeof toggleCwAdvanced === "undefined") window.toggleCwAdvanced = () => {};
 
 // Search user's collection from modal — navigates to My Records with a filter
-// Uses a pending search mechanism because switchView("records") calls
-// switchRecordsTab which calls clearCwFilters, wiping any pre-set values.
+// Uses a pending search mechanism: switchRecordsTab clears filters when
+// a pending search is present, then applies the requested field value.
 function searchCollectionFor(field, value) {
   closeModal();
-  // Store pending search — switchRecordsTab will pick it up after clearing
   window._pendingCwSearch = { field, value };
-  // Switch to records view (this clears filters then loads collection)
   if (typeof switchView === "function") switchView("records");
 }
 function openModal(event, id, type, discogsUrl) {
@@ -1770,7 +1768,7 @@ function renderMasterVersions() {
     if (inWant) badgeParts.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f0c95c;vertical-align:middle" title="In your wantlist"></span>`);
     if (inList) badgeParts.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a0ccf0;vertical-align:middle" title="${escHtml(listNames ? `In your list${window._listMembership[v.id].length > 1 ? "s" : ""}: ${listNames}` : "In one of your lists")}"></span>`);
     if (inInv)  badgeParts.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#cda0f5;vertical-align:middle" title="In your marketplace inventory"></span>`);
-    if (isFav)  badgeParts.push(`<span style="color:#ff80ab" title="Favorited">♥</span>`);
+    if (isFav)  badgeParts.push(`<span style="color:#ff6b35" title="Favorited">♥</span>`);
     const badge  = `<span>${badgeParts.length ? badgeParts.join("") : "&nbsp;"}</span>`;
     const fmtText = _mvGetDisplayFormat(v);
     const fmtCell = inCol
@@ -1891,7 +1889,7 @@ function renderSeriesReleases() {
     if (inWant) badges.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f0c95c;vertical-align:middle" title="In your wantlist"></span>`);
     if (inList) badges.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a0ccf0;vertical-align:middle" title="In a list"></span>`);
     if (inInv)  badges.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#cda0f5;vertical-align:middle" title="In your inventory"></span>`);
-    if (isFav)  badges.push(`<span style="color:#ff80ab">♥</span>`);
+    if (isFav)  badges.push(`<span style="color:#ff6b35">♥</span>`);
     const badge = badges.length ? badges.join(" ") : `<span style="display:inline-block;width:8px"></span>`;
 
     const thumbHtml = r.thumb

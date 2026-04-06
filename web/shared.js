@@ -274,7 +274,7 @@ function renderSharedHeader(opts) {
   };
 
   // Bottom-row tab — plain text, hover color matches the badge dot for that tab.
-  const colors = { collection: "#6ddf70", wantlist: "#f0c95c", lists: "#a0ccf0", inventory: "#cda0f5", favorites: "#ff80ab" };
+  const colors = { collection: "#6ddf70", wantlist: "#f0c95c", lists: "#a0ccf0", inventory: "#cda0f5", favorites: "#ff6b35" };
   const recTab = (label, rtab) => {
     const displayLabel = rtab === "favorites" ? `♥ ${label}` : label;
     if (isSPA) {
@@ -294,7 +294,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 2026.04.05k";
+  const SITE_VERSION = "build 2026.04.05l";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'https://seadisco.com' : '/'}" class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>

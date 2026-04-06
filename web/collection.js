@@ -30,19 +30,23 @@ let _cwSynonyms = true;
 function saveCwSynonyms() {
   try { localStorage.setItem("cw-synonyms", _cwSynonyms ? "1" : "0"); } catch {}
 }
+function updateSynonymToggleUI() {
+  const btn = document.getElementById("cw-synonyms-toggle");
+  if (btn) btn.classList.toggle("active", _cwSynonyms);
+  const chk = document.getElementById("cw-syn-check");
+  if (chk) chk.textContent = _cwSynonyms ? "✓" : "✗";
+}
 function restoreCwSynonyms() {
   try {
     const v = localStorage.getItem("cw-synonyms");
     if (v === "0") _cwSynonyms = false;
-    const btn = document.getElementById("cw-synonyms-toggle");
-    if (btn) btn.classList.toggle("active", _cwSynonyms);
+    updateSynonymToggleUI();
   } catch {}
 }
 function toggleCwSynonyms() {
   _cwSynonyms = !_cwSynonyms;
   saveCwSynonyms();
-  const btn = document.getElementById("cw-synonyms-toggle");
-  if (btn) btn.classList.toggle("active", _cwSynonyms);
+  updateSynonymToggleUI();
   doCwSearch(1);
 }
 function showSynonymInfo(synonymsApplied) {
@@ -54,6 +58,67 @@ function showSynonymInfo(synonymsApplied) {
   }
   el.innerHTML = `<span class="syn-icon">&#9835;</span> Also matching: <span class="syn-term">${synonymsApplied.join(" &middot; ")}</span>`;
   el.style.display = "block";
+}
+
+// ── Unified filter persistence across views ──────────────────────────────
+let _filtersRestored = false;
+const _cwFilterIds = ["cw-query","cw-artist","cw-release","cw-label","cw-year","cw-genre","cw-style","cw-format","cw-notes","cw-rating"];
+const _searchToCw = { "query":"cw-query", "f-artist":"cw-artist", "f-release":"cw-release", "f-label":"cw-label", "f-year":"cw-year", "f-format":"cw-format" };
+
+function saveFilterState() {
+  const state = {};
+  _cwFilterIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) state[id] = el.value || "";
+  });
+  const rtype = document.querySelector('input[name="cw-result-type"]:checked')?.value ?? "";
+  if (rtype) state["cw-rtype"] = rtype;
+  if (_cwAdvOpen) state["cw-advOpen"] = "1";
+  try { localStorage.setItem("saved-filters", JSON.stringify(state)); } catch {}
+}
+
+function restoreFilterState() {
+  if (_filtersRestored) return;
+  _filtersRestored = true;
+  try {
+    const state = JSON.parse(localStorage.getItem("saved-filters") || "{}");
+    _cwFilterIds.forEach(id => {
+      const el = document.getElementById(id);
+      if (el && state[id]) el.value = state[id];
+    });
+    if (state["cw-rtype"]) {
+      const radio = document.querySelector(`input[name="cw-result-type"][value="${state["cw-rtype"]}"]`);
+      if (radio) radio.checked = true;
+    }
+    if (state["cw-advOpen"]) toggleCwAdvanced(true);
+  } catch {}
+}
+
+function bridgeSearchToCw() {
+  // If all CW fields are empty, copy common fields from main search
+  const anySet = _cwFilterIds.some(id => (document.getElementById(id)?.value ?? "").trim());
+  if (anySet) return;
+  for (const [sId, cwId] of Object.entries(_searchToCw)) {
+    const src = document.getElementById(sId);
+    const dst = document.getElementById(cwId);
+    if (src && dst && src.value.trim()) {
+      dst.value = src.value;
+      if (cwId !== "cw-query") toggleCwAdvanced(true);
+    }
+  }
+}
+
+function bridgeCwToSearch() {
+  // If all search fields are empty, copy common fields from CW
+  const searchIds = Object.values(_searchToCw);
+  const anySet = searchIds.some(id => (document.getElementById(id)?.value ?? "").trim());
+  if (anySet) return;
+  const cwToSearch = Object.fromEntries(Object.entries(_searchToCw).map(([s, c]) => [c, s]));
+  for (const [cwId, sId] of Object.entries(cwToSearch)) {
+    const src = document.getElementById(cwId);
+    const dst = document.getElementById(sId);
+    if (src && dst && src.value.trim()) dst.value = src.value;
+  }
 }
 
 function renderCardFromBasicInfo(basicInfo, index) {
@@ -144,6 +209,7 @@ function showRecordSignIn(rtab) {
 
 function switchView(view, skipPushState = false) {
   document.getElementById("main-nav-tabs")?.classList.remove("mobile-open");
+  saveFilterState();
 
   // Highlight top row
   document.querySelectorAll(".nav-tab-top").forEach(btn =>
@@ -255,12 +321,14 @@ function switchView(view, skipPushState = false) {
     if (wantedWrap) wantedWrap.style.display = "none";
     document.getElementById("artist-alts").innerHTML = "";
     const ws1 = document.getElementById("random-records"); if (ws1) ws1.style.display = "none";
+    bridgeSearchToCw();
     switchRecordsTab(_cwTab || "collection", true);
   } else {
     if (searchView) searchView.style.display = "";
     if (mainForm) mainForm.style.display = "";
     if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
+    bridgeCwToSearch();
     setCwStatus("");
     // If we have previous search results, restore them instead of clearing
     if (window._lastResults && window._lastResults.length > 0) {
@@ -819,6 +887,7 @@ function swapSearchToMain() {
 }
 
 function doCwSearch(page = 1) {
+  saveFilterState();
   const filters = getCwFilters();
   _cwQuery = filters.q || "";
   if (_cwTab === "collection") {
@@ -836,7 +905,6 @@ function doCwSearch(page = 1) {
 
 function switchRecordsTab(tab, skipPush) {
   _cwTab = tab;
-  _cwQuery = "";
   // Update URL to reflect active sub-tab
   if (!skipPush) {
     const sort = document.getElementById("cw-sort")?.value || "";
@@ -848,18 +916,28 @@ function switchRecordsTab(tab, skipPush) {
   document.querySelectorAll(".nav-tab-bot").forEach(btn =>
     btn.classList.toggle("active", btn.dataset.rtab === tab)
   );
-  // Reset search
+
   const cwInput = document.getElementById("cw-query");
   const controlsRow = document.getElementById("cw-controls-row");
   const advPanel = document.getElementById("cw-advanced-panel");
   const folderCloud = document.getElementById("cw-folder-cloud");
   const exportBtn = document.getElementById("cw-export-btn");
 
-  clearCwFilters();
+  // Check for pending searches (from modal or swap) — these need a clean slate
+  const pending = window._pendingCwSearch;
+  const swap = window._pendingCwSwap;
+  const hasPending = pending || swap;
+
+  if (hasPending) {
+    clearCwFilters();
+  } else {
+    // First load: restore persisted filters from localStorage
+    // Subsequent tab switches: DOM fields retain their values naturally
+    restoreFilterState();
+    restoreCwSort();
+  }
   restoreCwSynonyms();
 
-  // Apply pending collection search from modal (searchCollectionFor sets this)
-  const pending = window._pendingCwSearch;
   if (pending) {
     delete window._pendingCwSearch;
     const el = document.getElementById(pending.field);
@@ -867,8 +945,6 @@ function switchRecordsTab(tab, skipPush) {
     if (pending.field !== "cw-query") toggleCwAdvanced(true);
   }
 
-  // Apply pending swap from main search (swapSearchToCollection sets this)
-  const swap = window._pendingCwSwap;
   if (swap) {
     delete window._pendingCwSwap;
     if (swap.q && cwInput) cwInput.value = swap.q;
@@ -893,40 +969,48 @@ function switchRecordsTab(tab, skipPush) {
     }
   }
 
-  const hasPending = pending || swap;
+  // Reset folder filter for non-collection tabs (folders are collection-specific)
+  if (tab !== "collection") {
+    _cwFolderId = 0;
+    document.querySelectorAll(".cw-folder-pill").forEach(p =>
+      p.classList.toggle("active", parseInt(p.dataset.folder) === 0)
+    );
+  }
+
+  _cwQuery = (cwInput?.value ?? "").trim();
 
   // Hide the inventory toolbar by default; loadInventoryTab will re-show it
   const invToolbar = document.getElementById("inventory-toolbar");
   if (invToolbar && tab !== "inventory") invToolbar.style.display = "none";
 
   if (tab === "collection") {
-    if (cwInput) { cwInput.placeholder = "Search your collection\u2026"; if (!hasPending) cwInput.value = ""; }
+    if (cwInput) cwInput.placeholder = "Search your collection\u2026";
     if (controlsRow) controlsRow.style.display = "";
     if (exportBtn) exportBtn.style.display = "";
     loadCwFacets("collection");
     loadCollectionFolders();
     loadCollectionTab(1);
   } else if (tab === "wantlist") {
-    if (cwInput) { cwInput.placeholder = "Search your wantlist\u2026"; cwInput.value = ""; }
+    if (cwInput) cwInput.placeholder = "Search your wantlist\u2026";
     if (controlsRow) controlsRow.style.display = "";
     if (exportBtn) exportBtn.style.display = "";
     if (folderCloud) folderCloud.style.display = "none";
     loadCwFacets("wantlist");
     loadWantlistTab(1);
   } else if (tab === "inventory") {
-    if (cwInput) { cwInput.placeholder = "Search your inventory\u2026"; cwInput.value = ""; }
+    if (cwInput) cwInput.placeholder = "Search your inventory\u2026";
     if (controlsRow) controlsRow.style.display = "none";
     if (advPanel) advPanel.style.display = "none";
     if (folderCloud) folderCloud.style.display = "none";
     loadInventoryTab(1);
   } else if (tab === "lists") {
-    if (cwInput) { cwInput.placeholder = "Search your lists\u2026"; cwInput.value = ""; }
+    if (cwInput) cwInput.placeholder = "Search your lists\u2026";
     if (controlsRow) controlsRow.style.display = "none";
     if (advPanel) advPanel.style.display = "none";
     if (folderCloud) folderCloud.style.display = "none";
     loadListsTab();
   } else if (tab === "favorites") {
-    if (cwInput) { cwInput.placeholder = "Search your favorites\u2026"; cwInput.value = ""; }
+    if (cwInput) cwInput.placeholder = "Search your favorites\u2026";
     if (controlsRow) controlsRow.style.display = "none";
     if (advPanel) advPanel.style.display = "none";
     if (folderCloud) folderCloud.style.display = "none";
