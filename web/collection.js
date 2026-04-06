@@ -25,6 +25,37 @@ function restoreCwSort() {
   } catch {}
 }
 
+// ── Synonym toggle state ─────────────────────────────────────────────────
+let _cwSynonyms = true;
+function saveCwSynonyms() {
+  try { localStorage.setItem("cw-synonyms", _cwSynonyms ? "1" : "0"); } catch {}
+}
+function restoreCwSynonyms() {
+  try {
+    const v = localStorage.getItem("cw-synonyms");
+    if (v === "0") _cwSynonyms = false;
+    const btn = document.getElementById("cw-synonyms-toggle");
+    if (btn) btn.classList.toggle("active", _cwSynonyms);
+  } catch {}
+}
+function toggleCwSynonyms() {
+  _cwSynonyms = !_cwSynonyms;
+  saveCwSynonyms();
+  const btn = document.getElementById("cw-synonyms-toggle");
+  if (btn) btn.classList.toggle("active", _cwSynonyms);
+  doCwSearch(1);
+}
+function showSynonymInfo(synonymsApplied) {
+  const el = document.getElementById("cw-synonym-info");
+  if (!el) return;
+  if (!synonymsApplied || !synonymsApplied.length) {
+    el.style.display = "none";
+    return;
+  }
+  el.innerHTML = `<span class="syn-icon">&#9835;</span> Also matching: <span class="syn-term">${synonymsApplied.join(" &middot; ")}</span>`;
+  el.style.display = "block";
+}
+
 function renderCardFromBasicInfo(basicInfo, index) {
   const artistName = (basicInfo.artists ?? []).map(a => a.name).join(", ");
   const labelStr   = (basicInfo.labels  ?? []).map(l => l.name).join(", ");
@@ -825,6 +856,7 @@ function switchRecordsTab(tab, skipPush) {
   const exportBtn = document.getElementById("cw-export-btn");
 
   clearCwFilters();
+  restoreCwSynonyms();
 
   // Apply pending collection search from modal (searchCollectionFor sets this)
   const pending = window._pendingCwSearch;
@@ -917,9 +949,11 @@ async function loadInventoryTab(page = 1, filters) {
   try {
     let url = `/api/user/inventory?page=${page}&per_page=96`;
     if (f.q) url += `&q=${encodeURIComponent(f.q)}`;
+    if (!_cwSynonyms) url += `&synonyms=false`;
     const r = await apiFetch(url);
     const data = await r.json();
     const items = data.items ?? [];
+    showSynonymInfo(data.synonymsApplied);
     if (!items.length) {
       setCwStatus("");
       document.getElementById("results").innerHTML = f.q
@@ -1329,9 +1363,11 @@ async function loadCollectionTab(page = 1, filters) {
     const cwNotes = (document.getElementById("cw-notes")?.value ?? "").trim();
     if (cwNotes) url += `&notes=${encodeURIComponent(cwNotes)}`;
     if (cwSort) url += `&sort=${encodeURIComponent(cwSort)}`;
+    if (!_cwSynonyms) url += `&synonyms=false`;
     const r = await apiFetch(url);
     const data = await r.json();
     const items = data.items ?? [];
+    showSynonymInfo(data.synonymsApplied);
     const hasFilter = Object.keys(f).length > 0 || cwRating || cwNotes;
     const filterDesc = Object.values(f).join(" + ");
     if (!items.length) {
@@ -1378,9 +1414,11 @@ async function loadWantlistTab(page = 1, filters) {
     if (cwNotes) url += `&notes=${encodeURIComponent(cwNotes)}`;
     const cwSort = document.getElementById("cw-sort")?.value || "";
     if (cwSort) url += `&sort=${encodeURIComponent(cwSort)}`;
+    if (!_cwSynonyms) url += `&synonyms=false`;
     const r = await apiFetch(url);
     const data = await r.json();
     const items = data.items ?? [];
+    showSynonymInfo(data.synonymsApplied);
     const hasFilter = Object.keys(f).length > 0 || cwRating || cwNotes;
     const filterDesc = Object.values(f).join(" + ");
     if (!items.length) {
@@ -1539,6 +1577,10 @@ async function triggerSync(type = "both") {
   }
 }
 
+// Promise that resolves once discogs IDs are loaded (or fails/times out).
+// Used by modal-from-URL to wait for badge data before rendering.
+window._discogsIdsReady = new Promise(r => { window._resolveDiscogsIds = r; });
+
 async function loadDiscogsIds() {
   try {
     const r = await apiFetch("/api/user/discogs-ids");
@@ -1565,6 +1607,7 @@ async function loadDiscogsIds() {
       }
     }
   } catch { /* ignore */ }
+  if (window._resolveDiscogsIds) window._resolveDiscogsIds();
   // Load random records for search page default
   if (typeof loadRandomRecords === "function") loadRandomRecords();
 }

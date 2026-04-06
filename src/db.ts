@@ -1,5 +1,6 @@
 import pg from "pg";
 const { Pool } = pg;
+import { expandWithSynonyms } from "./classical-synonyms.js";
 
 let pool: InstanceType<typeof Pool> | null = null;
 
@@ -1286,6 +1287,7 @@ export interface CwSearchFilters {
   ratingUnrated?: boolean; // true = show only unrated
   notes?: string;      // text search across notes JSONB
   sort?: string;
+  synonyms?: boolean;  // expand classical music synonyms (default true)
 }
 
 function cwOrderBy(sort?: string): string {
@@ -1338,10 +1340,64 @@ function parseFilterExpr(value: string, column: string, startIdx: number): { cla
   return { clause, params, nextIdx: idx };
 }
 
-function buildCwWhere(filters: CwSearchFilters, startIdx: number): { clause: string; params: any[] } {
+// Like parseFilterExpr but expands classical music synonyms on positive terms
+function parseFilterExprWithSynonyms(
+  value: string, column: string, startIdx: number
+): { clause: string; params: any[]; nextIdx: number; synonymsApplied: string[] } {
+  const orBranches = value.split(/\s*\|\s*/);
+  const orClauses: string[] = [];
+  const params: any[] = [];
+  const synonymsApplied: string[] = [];
+  let idx = startIdx;
+
+  for (const branch of orBranches) {
+    const terms = branch.split(/\s*\+\s*/);
+    const andClauses: string[] = [];
+    for (let term of terms) {
+      term = term.trim();
+      if (!term) continue;
+      if (term.startsWith("-") && term.length > 1) {
+        // NOT: exclude this term — do NOT expand synonyms for negations
+        andClauses.push(`${column} NOT ILIKE $${idx}`);
+        params.push(`%${term.slice(1).trim()}%`);
+        idx++;
+      } else {
+        // Positive term: expand with synonyms
+        const { variants, applied } = expandWithSynonyms(term);
+        const likeClauses = [`${column} ILIKE $${idx}`];
+        params.push(`%${term}%`);
+        idx++;
+        for (const variant of variants) {
+          likeClauses.push(`${column} ILIKE $${idx}`);
+          params.push(`%${variant}%`);
+          idx++;
+        }
+        if (applied.length) synonymsApplied.push(...applied);
+        andClauses.push(
+          likeClauses.length === 1 ? likeClauses[0] : `(${likeClauses.join(" OR ")})`
+        );
+      }
+    }
+    if (andClauses.length) {
+      orClauses.push(andClauses.length === 1 ? andClauses[0] : `(${andClauses.join(" AND ")})`);
+    }
+  }
+
+  const clause = orClauses.length === 0 ? ""
+    : orClauses.length === 1 ? orClauses[0]
+    : `(${orClauses.join(" OR ")})`;
+  return { clause, params, nextIdx: idx, synonymsApplied };
+}
+
+function buildCwWhere(filters: CwSearchFilters, startIdx: number): { clause: string; params: any[]; synonymsApplied: string[] } {
   const clauses: string[] = [];
   const allParams: any[] = [];
+  const allSynonyms: string[] = [];
   let idx = startIdx;
+  const useSynonyms = filters.synonyms !== false;
+
+  // Fields eligible for synonym expansion (q and release/title)
+  const synonymFields = new Set(["data::text", "data->>'title'"]);
 
   const fields: Array<[string | undefined, string]> = [
     [filters.q,       "data::text"],
@@ -1356,11 +1412,21 @@ function buildCwWhere(filters: CwSearchFilters, startIdx: number): { clause: str
 
   for (const [value, column] of fields) {
     if (!value) continue;
-    const { clause, params, nextIdx } = parseFilterExpr(value, column, idx);
-    if (clause) {
-      clauses.push(clause);
-      allParams.push(...params);
-      idx = nextIdx;
+    if (useSynonyms && synonymFields.has(column)) {
+      const { clause, params, nextIdx, synonymsApplied } = parseFilterExprWithSynonyms(value, column, idx);
+      if (clause) {
+        clauses.push(clause);
+        allParams.push(...params);
+        allSynonyms.push(...synonymsApplied);
+        idx = nextIdx;
+      }
+    } else {
+      const { clause, params, nextIdx } = parseFilterExpr(value, column, idx);
+      if (clause) {
+        clauses.push(clause);
+        allParams.push(...params);
+        idx = nextIdx;
+      }
     }
   }
 
@@ -1394,7 +1460,9 @@ function buildCwWhere(filters: CwSearchFilters, startIdx: number): { clause: str
     idx++;
   }
 
-  return { clause: clauses.length ? " AND " + clauses.join(" AND ") : "", params: allParams };
+  // Deduplicate synonym descriptions
+  const uniqueSynonyms = [...new Set(allSynonyms)];
+  return { clause: clauses.length ? " AND " + clauses.join(" AND ") : "", params: allParams, synonymsApplied: uniqueSynonyms };
 }
 
 export async function getCollectionPage(
@@ -1402,9 +1470,9 @@ export async function getCollectionPage(
   page: number,
   perPage: number,
   filters?: CwSearchFilters
-): Promise<{ items: any[]; total: number }> {
+): Promise<{ items: any[]; total: number; synonymsApplied?: string[] }> {
   const offset = (page - 1) * perPage;
-  const { clause: dataClause, params: dataFilterParams } = buildCwWhere(filters ?? {}, 4);
+  const { clause: dataClause, params: dataFilterParams, synonymsApplied } = buildCwWhere(filters ?? {}, 4);
   const { clause: countClause, params: countFilterParams } = buildCwWhere(filters ?? {}, 2);
   const orderBy = cwOrderBy(filters?.sort);
   // A release may have multiple instances (multiple copies owned). Collapse to one
@@ -1443,6 +1511,7 @@ export async function getCollectionPage(
       _instanceCount: r.instance_count ?? 1,
     })),
     total: countR.rows[0]?.total ?? 0,
+    synonymsApplied: synonymsApplied.length ? synonymsApplied : undefined,
   };
 }
 
@@ -1469,9 +1538,9 @@ export async function getWantlistPage(
   page: number,
   perPage: number,
   filters?: CwSearchFilters
-): Promise<{ items: any[]; total: number }> {
+): Promise<{ items: any[]; total: number; synonymsApplied?: string[] }> {
   const offset = (page - 1) * perPage;
-  const { clause: dataClause, params: dataFilterParams } = buildCwWhere(filters ?? {}, 4);
+  const { clause: dataClause, params: dataFilterParams, synonymsApplied } = buildCwWhere(filters ?? {}, 4);
   const { clause: countClause, params: countFilterParams } = buildCwWhere(filters ?? {}, 2);
   const orderBy = cwOrderBy(filters?.sort);
   const [dataR, countR] = await Promise.all([
@@ -1486,7 +1555,11 @@ export async function getWantlistPage(
       [clerkUserId, ...countFilterParams]
     ),
   ]);
-  return { items: dataR.rows.map(r => ({ ...r.data, _rating: r.rating ?? 0, _notes: r.notes ?? [] })), total: countR.rows[0]?.total ?? 0 };
+  return {
+    items: dataR.rows.map(r => ({ ...r.data, _rating: r.rating ?? 0, _notes: r.notes ?? [] })),
+    total: countR.rows[0]?.total ?? 0,
+    synonymsApplied: synonymsApplied.length ? synonymsApplied : undefined,
+  };
 }
 
 export async function getCollectionFacets(clerkUserId: string, genre?: string): Promise<{ genres: string[]; styles: string[] }> {
@@ -1700,13 +1773,27 @@ export async function getInventoryCount(clerkUserId: string): Promise<number> {
 
 export async function getInventoryPage(
   clerkUserId: string, page = 1, perPage = 24, filters?: Record<string, any>
-): Promise<{ items: any[]; total: number }> {
+): Promise<{ items: any[]; total: number; synonymsApplied?: string[] }> {
   const conditions = ["clerk_user_id = $1"];
   const params: any[] = [clerkUserId];
   let idx = 2;
+  let synonymsApplied: string[] = [];
   if (filters?.q) {
-    conditions.push(`(data::text ILIKE $${idx})`);
-    params.push(`%${filters.q}%`); idx++;
+    const useSyn = filters.synonyms !== false;
+    if (useSyn) {
+      const { variants, applied } = expandWithSynonyms(filters.q);
+      const likeClauses = [`data::text ILIKE $${idx}`];
+      params.push(`%${filters.q}%`); idx++;
+      for (const v of variants) {
+        likeClauses.push(`data::text ILIKE $${idx}`);
+        params.push(`%${v}%`); idx++;
+      }
+      conditions.push(`(${likeClauses.join(" OR ")})`);
+      synonymsApplied = applied;
+    } else {
+      conditions.push(`(data::text ILIKE $${idx})`);
+      params.push(`%${filters.q}%`); idx++;
+    }
   }
   if (filters?.status) {
     conditions.push(`status = $${idx}`);
@@ -1721,7 +1808,7 @@ export async function getInventoryPage(
     `SELECT listing_id, discogs_release_id, data, status, price_value, price_currency, condition, sleeve_condition, posted_at
      FROM user_inventory WHERE ${where} ORDER BY posted_at DESC NULLS LAST LIMIT $${idx} OFFSET $${idx + 1}`, params
   );
-  return { items: r.rows, total };
+  return { items: r.rows, total, synonymsApplied: synonymsApplied.length ? synonymsApplied : undefined };
 }
 
 export async function getUserListsList(clerkUserId: string): Promise<any[]> {
