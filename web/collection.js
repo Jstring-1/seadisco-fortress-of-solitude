@@ -60,12 +60,10 @@ function showSynonymInfo(synonymsApplied) {
 }
 
 // ── Per-tab filter persistence ───────────────────────────────────────────
-let _prevCwTab = null; // tracks which tab we're leaving (for saving)
 const _cwFilterIds = ["cw-query","cw-artist","cw-release","cw-label","cw-year","cw-genre","cw-style","cw-format","cw-notes","cw-rating"];
 const _searchToCw = { "query":"cw-query", "f-artist":"cw-artist", "f-release":"cw-release", "f-label":"cw-label", "f-year":"cw-year", "f-format":"cw-format" };
 
-function saveFilterState(tab) {
-  tab = tab || _cwTab || "collection";
+function saveFilterState() {
   const state = {};
   _cwFilterIds.forEach(id => {
     const el = document.getElementById(id);
@@ -77,13 +75,12 @@ function saveFilterState(tab) {
   if (rtype) state["cw-rtype"] = rtype;
   if (_cwAdvOpen) state["cw-advOpen"] = "1";
   if (_cwSynonyms) state["cw-syn"] = "1";
-  try { localStorage.setItem("cw-filters-" + tab, JSON.stringify(state)); } catch {}
+  try { localStorage.setItem("cw-filters", JSON.stringify(state)); } catch {}
 }
 
-function restoreFilterState(tab) {
-  tab = tab || _cwTab || "collection";
+function restoreFilterState() {
   try {
-    const state = JSON.parse(localStorage.getItem("cw-filters-" + tab) || "{}");
+    const state = JSON.parse(localStorage.getItem("cw-filters") || "{}");
     _cwFilterIds.forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = state[id] || "";
@@ -915,10 +912,8 @@ function doCwSearch(page = 1) {
 }
 
 function switchRecordsTab(tab, skipPush) {
-  // Save outgoing tab's filter state before switching
-  const outgoing = _prevCwTab || _cwTab || "collection";
-  if (outgoing !== tab) saveFilterState(outgoing);
-  _prevCwTab = tab;
+  // Filters are shared across collection/wantlist — just save current state
+  saveFilterState();
   _cwTab = tab;
   // Update URL to reflect active sub-tab
   if (!skipPush) {
@@ -945,12 +940,8 @@ function switchRecordsTab(tab, skipPush) {
 
   if (hasPending) {
     clearCwFilters();
-  } else {
-    // Restore this tab's saved filter state (per-tab persistence)
-    restoreFilterState(tab);
   }
-  // Note: restoreFilterState already handles per-tab synonym state (cw-syn key)
-  // so we only call restoreCwSynonyms on initial load, not on tab switch
+  // Filters persist across tabs — no need to restore on switch
   updateSynonymToggleUI();
 
   if (pending) {
