@@ -26,7 +26,7 @@ function restoreCwSort() {
 }
 
 // ── Synonym toggle state ─────────────────────────────────────────────────
-let _cwSynonyms = true;
+let _cwSynonyms = false;
 function saveCwSynonyms() {
   try { localStorage.setItem("cw-synonyms", _cwSynonyms ? "1" : "0"); } catch {}
 }
@@ -37,7 +37,8 @@ function updateSynonymToggleUI() {
 function restoreCwSynonyms() {
   try {
     const v = localStorage.getItem("cw-synonyms");
-    if (v === "0") _cwSynonyms = false;
+    if (v === "1") _cwSynonyms = true;
+    else if (v === "0") _cwSynonyms = false;
     updateSynonymToggleUI();
   } catch {}
 }
@@ -75,6 +76,7 @@ function saveFilterState(tab) {
   const rtype = document.querySelector('input[name="cw-result-type"]:checked')?.value ?? "";
   if (rtype) state["cw-rtype"] = rtype;
   if (_cwAdvOpen) state["cw-advOpen"] = "1";
+  if (_cwSynonyms) state["cw-syn"] = "1";
   try { localStorage.setItem("cw-filters-" + tab, JSON.stringify(state)); } catch {}
 }
 
@@ -97,6 +99,8 @@ function restoreFilterState(tab) {
     }
     if (state["cw-advOpen"]) toggleCwAdvanced(true);
     else toggleCwAdvanced(false);
+    _cwSynonyms = state["cw-syn"] === "1";
+    updateSynonymToggleUI();
   } catch {}
 }
 
