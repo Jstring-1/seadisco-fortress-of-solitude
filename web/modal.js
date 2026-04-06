@@ -903,9 +903,12 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         const titleEl = url
           ? `<a class="track-link" href="#" data-video="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" onclick="openVideo(event,'${url.replace(/'/g, "\\'")}')" title="Play this track">${escHtml(t.title || "")} ▶</a>${searchIcon}`
           : `${escHtml(t.title || "")}${ytIcon}${searchIcon}`;
+        const trackCredits = (t.extraartists ?? []).length
+          ? `<div class="track-credits">${t.extraartists.map(a => `${escHtml(a.name)} (${escHtml(a.role || "")})`).join(", ")}</div>`
+          : "";
         return `<div class="track">
           <span class="track-pos">${escHtml(t.position || "")}</span>
-          <span class="track-title">${titleEl}</span>
+          <span class="track-title">${titleEl}${trackCredits}</span>
           ${t.duration ? `<span class="track-dur">${escHtml(t.duration)}</span>` : ""}
         </div>`;
       }).join("")}
@@ -1763,10 +1766,10 @@ function renderMasterVersions() {
     const isFav  = window._favoriteKeys?.has(`release:${v.id}`);
     const listNames = inList ? (window._listMembership[v.id].map(l => l.name || l.title).filter(Boolean).join(", ")) : "";
     const badgeParts = [];
-    if (inCol)  badgeParts.push(`<span style="color:#6ddf70;font-weight:700" title="In your collection">C</span>`);
-    if (inWant) badgeParts.push(`<span style="color:#f0c95c;font-weight:700" title="In your wantlist">W</span>`);
-    if (inList) badgeParts.push(`<span style="color:#a0ccf0;font-weight:700" title="${escHtml(listNames ? `In your list${window._listMembership[v.id].length > 1 ? "s" : ""}: ${listNames}` : "In one of your lists")}">L</span>`);
-    if (inInv)  badgeParts.push(`<span style="color:#cda0f5;font-weight:700" title="In your marketplace inventory">I</span>`);
+    if (inCol)  badgeParts.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6ddf70;vertical-align:middle" title="In your collection"></span>`);
+    if (inWant) badgeParts.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f0c95c;vertical-align:middle" title="In your wantlist"></span>`);
+    if (inList) badgeParts.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a0ccf0;vertical-align:middle" title="${escHtml(listNames ? `In your list${window._listMembership[v.id].length > 1 ? "s" : ""}: ${listNames}` : "In one of your lists")}"></span>`);
+    if (inInv)  badgeParts.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#cda0f5;vertical-align:middle" title="In your marketplace inventory"></span>`);
     if (isFav)  badgeParts.push(`<span style="color:#ff80ab" title="Favorited">♥</span>`);
     const badge  = `<span>${badgeParts.length ? badgeParts.join("") : "&nbsp;"}</span>`;
     const fmtText = _mvGetDisplayFormat(v);
@@ -1884,12 +1887,12 @@ function renderSeriesReleases() {
     const inInv  = window._inventoryIds?.has(r.id);
     const isFav  = window._favoriteKeys?.has(`release:${r.id}`);
     const badges = [];
-    if (inCol)  badges.push(`<span style="color:#6ddf70;font-weight:700">C</span>`);
-    if (inWant) badges.push(`<span style="color:#f0c95c;font-weight:700">W</span>`);
-    if (inList) badges.push(`<span style="color:#a0ccf0;font-weight:700">L</span>`);
-    if (inInv)  badges.push(`<span style="color:#cda0f5;font-weight:700">I</span>`);
+    if (inCol)  badges.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6ddf70;vertical-align:middle" title="In your collection"></span>`);
+    if (inWant) badges.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f0c95c;vertical-align:middle" title="In your wantlist"></span>`);
+    if (inList) badges.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a0ccf0;vertical-align:middle" title="In a list"></span>`);
+    if (inInv)  badges.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#cda0f5;vertical-align:middle" title="In your inventory"></span>`);
     if (isFav)  badges.push(`<span style="color:#ff80ab">♥</span>`);
-    const badge = badges.length ? badges.join("") : `<span style="visibility:hidden">C</span>`;
+    const badge = badges.length ? badges.join(" ") : `<span style="display:inline-block;width:8px"></span>`;
 
     const thumbHtml = r.thumb
       ? `<img src="${r.thumb}" alt="" loading="lazy" />`

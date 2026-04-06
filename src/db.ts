@@ -1431,7 +1431,7 @@ export async function getCollectionPage(
       [clerkUserId, perPage, offset, ...dataFilterParams]
     ),
     getPool().query(
-      `SELECT COUNT(DISTINCT discogs_release_id)::int AS total FROM user_collection WHERE clerk_user_id = $1${countClause}`,
+      `SELECT COUNT(*)::int AS total FROM user_collection WHERE clerk_user_id = $1${countClause}`,
       [clerkUserId, ...countFilterParams]
     ),
   ]);
@@ -1726,7 +1726,15 @@ export async function getInventoryPage(
 
 export async function getUserListsList(clerkUserId: string): Promise<any[]> {
   const r = await getPool().query(
-    `SELECT list_id, name, description, item_count, is_public, synced_at FROM user_lists WHERE clerk_user_id = $1 ORDER BY name`,
+    `SELECT ul.list_id, ul.name, ul.description,
+            COUNT(uli.id)::int AS item_count,
+            ul.is_public, ul.synced_at
+     FROM user_lists ul
+     LEFT JOIN user_list_items uli
+       ON ul.clerk_user_id = uli.clerk_user_id AND ul.list_id = uli.list_id
+     WHERE ul.clerk_user_id = $1
+     GROUP BY ul.list_id, ul.name, ul.description, ul.is_public, ul.synced_at
+     ORDER BY ul.name`,
     [clerkUserId]
   );
   return r.rows;
@@ -2641,7 +2649,7 @@ export async function getUserCollectionStats(): Promise<{ users: any[]; global: 
       c.top_styles
     FROM user_tokens u
     LEFT JOIN LATERAL (
-      SELECT COUNT(DISTINCT discogs_release_id)::int AS coll_count,
+      SELECT COUNT(*)::int AS coll_count,
              MIN(added_at) AS oldest_added,
              MAX(added_at) AS newest_added,
              (SELECT array_agg(g ORDER BY cnt DESC) FROM (

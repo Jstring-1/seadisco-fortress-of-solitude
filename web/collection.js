@@ -1096,44 +1096,80 @@ function renderFavoritesTabGrid() {
   document.getElementById("pagination").style.display = "none";
 }
 
+// ── Lists table sort state ───────────────────────────────────────────
+let _listsSortCol = "name";
+let _listsSortAsc = true;
+let _listsFiltered = [];
+
 async function loadListsTab() {
   setActiveTab("lists");
   document.getElementById("blurb").style.display = "none";
   document.getElementById("results").innerHTML = renderSkeletonGrid(16);
   document.getElementById("pagination").style.display = "none";
   setCwStatus("");
+  _listsSortCol = "name";
+  _listsSortAsc = true;
   try {
     const r = await apiFetch("/api/user/lists");
     const data = await r.json();
     const lists = data.lists ?? [];
     const q = (document.getElementById("cw-query")?.value ?? "").trim().toLowerCase();
-    const filtered = q ? lists.filter(l => (l.name || "").toLowerCase().includes(q) || (l.description || "").toLowerCase().includes(q)) : lists;
-    if (!filtered.length) {
+    _listsFiltered = q ? lists.filter(l => (l.name || "").toLowerCase().includes(q) || (l.description || "").toLowerCase().includes(q)) : lists;
+    if (!_listsFiltered.length) {
       setCwStatus("");
       document.getElementById("results").innerHTML = lists.length
         ? renderEmptyState("\uD83D\uDD0D", `No lists matching "${q}"`, "Try a different search")
         : renderEmptyState("\uD83D\uDCCB", "No lists synced", "Your Discogs lists will appear here after syncing");
       return;
     }
-    setCwStatus(`${filtered.length} list${filtered.length !== 1 ? "s" : ""}`);
-    document.getElementById("results").innerHTML = `<div class="lists-grid">${filtered.map(renderListCard).join("")}</div>`;
+    setCwStatus(`${_listsFiltered.length} list${_listsFiltered.length !== 1 ? "s" : ""}`);
+    renderListsTable();
   } catch (e) {
     setCwStatus("Failed to load lists: " + e.message);
   }
 }
 
-function renderListCard(list) {
-  const name = escHtml(list.name || "Untitled");
-  const desc = escHtml(list.description || "");
-  const count = list.item_count ?? 0;
-  const vis = list.is_public ? "Public" : "Private";
-  return `<div class="list-card" onclick="openListDetail(${list.list_id},'${name.replace(/'/g, "\\'")}')">
-    <div class="list-card-name">${name}</div>
-    ${desc ? `<div class="list-card-desc">${desc}</div>` : ""}
-    <div class="list-card-meta">${count} item${count !== 1 ? "s" : ""} · ${vis}
-      <a href="https://www.discogs.com/lists/${list.list_id}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:#555;margin-left:0.4rem;font-size:0.7rem" title="View on Discogs">↗</a>
-    </div>
-  </div>`;
+function sortListsBy(col) {
+  if (_listsSortCol === col) { _listsSortAsc = !_listsSortAsc; }
+  else { _listsSortCol = col; _listsSortAsc = true; }
+  renderListsTable();
+}
+
+function renderListsTable() {
+  const sorted = [..._listsFiltered].sort((a, b) => {
+    let va, vb;
+    if (_listsSortCol === "name") { va = (a.name || "").toLowerCase(); vb = (b.name || "").toLowerCase(); }
+    else if (_listsSortCol === "items") { va = a.item_count ?? 0; vb = b.item_count ?? 0; }
+    else if (_listsSortCol === "visibility") { va = a.is_public ? "public" : "private"; vb = b.is_public ? "public" : "private"; }
+    else { va = ""; vb = ""; }
+    if (va < vb) return _listsSortAsc ? -1 : 1;
+    if (va > vb) return _listsSortAsc ? 1 : -1;
+    return 0;
+  });
+  const arrow = col => _listsSortCol === col ? (_listsSortAsc ? " \u25B2" : " \u25BC") : "";
+  const rows = sorted.map(list => {
+    const name = escHtml(list.name || "Untitled");
+    const safeName = name.replace(/'/g, "\\'");
+    const desc = escHtml(list.description || "");
+    const truncDesc = desc.length > 80 ? desc.slice(0, 77) + "..." : desc;
+    const count = list.item_count ?? 0;
+    const vis = list.is_public ? "Public" : "Private";
+    return `<tr class="lists-table-row" onclick="openListDetail(${list.list_id},'${safeName}')">
+      <td class="lists-td-name">${name} <a href="https://www.discogs.com/lists/${list.list_id}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="lists-ext-link" title="View on Discogs">\u2197</a></td>
+      <td class="lists-td-items">${count}</td>
+      <td class="lists-td-vis">${vis}</td>
+      <td class="lists-td-desc" title="${desc}">${truncDesc}</td>
+    </tr>`;
+  }).join("");
+  document.getElementById("results").innerHTML = `<div class="lists-table-wrap"><table class="lists-table">
+    <thead><tr>
+      <th class="lists-th-sortable" onclick="sortListsBy('name')">Name${arrow("name")}</th>
+      <th class="lists-th-sortable lists-th-items" onclick="sortListsBy('items')">Items${arrow("items")}</th>
+      <th class="lists-th-sortable" onclick="sortListsBy('visibility')">Visibility${arrow("visibility")}</th>
+      <th>Description</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table></div>`;
 }
 
 // ── List detail view — show items inside a specific list ──────────────
