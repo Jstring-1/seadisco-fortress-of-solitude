@@ -662,11 +662,17 @@ function renderCard(item, index) {
   // C/W/F always shown (dimmed when inactive); L/I only when active
   let badges = "";
   const releaseId = item.id;
+  const isReleaseOrMaster = type === "release" || type === "master";
   const inCol = releaseId && type === "release" && window._collectionIds?.has(releaseId);
   const inWant = releaseId && type === "release" && window._wantlistIds?.has(releaseId);
-  if (releaseId && type === "release") {
-    badges += `<span class="card-badge badge-collection${inCol ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleCollectionFromCard(this,${releaseId})" title="${inCol ? "Remove from collection" : "Add to collection"}">C</span>`;
-    badges += `<span class="card-badge badge-wantlist${inWant ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleWantlistFromCard(this,${releaseId})" title="${inWant ? "Remove from wantlist" : "Add to wantlist"}">W</span>`;
+  if (releaseId && isReleaseOrMaster) {
+    if (type === "release") {
+      badges += `<span class="card-badge badge-collection${inCol ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleCollectionFromCard(this,${releaseId})" title="${inCol ? "Remove from collection" : "Add to collection"}">C</span>`;
+      badges += `<span class="card-badge badge-wantlist${inWant ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleWantlistFromCard(this,${releaseId})" title="${inWant ? "Remove from wantlist" : "Add to wantlist"}">W</span>`;
+    } else {
+      badges += `<span class="card-badge badge-collection" onclick="event.preventDefault();event.stopPropagation();openModal(event,'${releaseId}','master','')" title="Open to add a version to collection">C</span>`;
+      badges += `<span class="card-badge badge-wantlist" onclick="event.preventDefault();event.stopPropagation();openModal(event,'${releaseId}','master','')" title="Open to add a version to wantlist">W</span>`;
+    }
     const lists = window._listMembership?.[releaseId];
     if (lists?.length) {
       const names = lists.map(l => l.listName).join(", ");
