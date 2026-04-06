@@ -6,7 +6,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, upsertGearListings, updateGearDetail, getGearNeedingDetail, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getEbayRateCount, incrementEbayRateCount, getEbaySearchCache, setEbaySearchCache, pruneEbaySearchCache } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, upsertGearListings, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getEbayRateCount, incrementEbayRateCount, getEbaySearchCache, setEbaySearchCache, pruneEbaySearchCache } from "./db.js";
 import { startFreshSyncSchedule, runFreshSync } from "./sync-fresh-releases.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sharedToken = process.env.DISCOGS_TOKEN ?? "";
@@ -3842,7 +3842,7 @@ const ebayClientSecret = process.env.EBAY_CLIENT_SECRET ?? "";
 const ebayAffiliateCampaignId = process.env.EBAY_AFFILIATE_CAMPAIGN_ID ?? "";
 let ebayAccessToken = "";
 let ebayTokenExpiry = 0;
-const EBAY_USER_LIMIT = 2000;
+const EBAY_USER_LIMIT = 4900;
 async function getEbayToken() {
     if (ebayAccessToken && Date.now() < ebayTokenExpiry - 60000)
         return ebayAccessToken;
@@ -3943,78 +3943,19 @@ async function fetchEbayGearListings() {
     }
     return totalUpserted;
 }
-async function fetchGearDetails() {
-    if (!ebayClientId || !ebayClientSecret)
-        return 0;
-    let detailed = 0;
-    try {
-        const token = await getEbayToken();
-        const items = await getGearNeedingDetail(50);
-        if (!items.length)
-            return 0;
-        console.log(`Fetching details for ${items.length} gear listings…`);
-        for (const item of items) {
-            try {
-                const r = await loggedFetch("ebay", `https://api.ebay.com/buy/browse/v1/item/${item.itemId}`, {
-                    headers: { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" },
-                    context: `gear detail: ${item.itemId}`,
-                });
-                if (!r.ok) {
-                    console.error(`eBay getItem ${item.itemId} failed: ${r.status}`);
-                    // Mark as detailed on permanent errors (404/410) to stop retrying
-                    if (r.status === 404 || r.status === 410) {
-                        await updateGearDetail(item.itemId, "", [], {});
-                    }
-                    continue;
-                }
-                const d = await r.json();
-                const detailHtml = d.description ?? "";
-                const allImages = (d.additionalImages ?? []).map((img) => img.imageUrl).filter(Boolean);
-                if (d.image?.imageUrl)
-                    allImages.unshift(d.image.imageUrl);
-                const specifics = {};
-                for (const nv of (d.localizedAspects ?? [])) {
-                    if (nv.name && nv.value)
-                        specifics[nv.name] = nv.value;
-                }
-                await updateGearDetail(item.itemId, detailHtml, allImages, specifics);
-                detailed++;
-                // ~17 seconds between calls to stay well within 5000/day
-                await new Promise(r => setTimeout(r, 2000));
-            }
-            catch (err) {
-                console.error(`eBay detail ${item.itemId} error:`, err);
-            }
-        }
-        await logGearFetch("item_detail", detailed);
-        console.log(`eBay detail fetch complete: ${detailed} items detailed`);
-    }
-    catch (err) {
-        console.error("eBay detail fetch failed:", err);
-        await logGearFetch("item_detail", detailed, String(err));
-    }
-    return detailed;
-}
-// Schedule: gear search at :55, detail worker at :25 (30min offset)
+// Schedule: gear search every 4 hours
 function startGearSchedule() {
     if (!ebayClientId || !ebayClientSecret) {
         console.log("eBay gear schedule not started — no credentials");
         return;
     }
-    // Hourly gear search at :50 past the hour (anchored to 4:50 AM Pacific)
-    const msSearch = msUntilPacific(4, 50, 1);
-    console.log(`[gear] Next search in ${Math.round(msSearch / 60000)}min, then every 1h`);
+    // Gear search at :50 past the hour, every 4 hours (anchored to 4:50 AM Pacific)
+    const msSearch = msUntilPacific(4, 50, 4);
+    console.log(`[gear] Next search in ${Math.round(msSearch / 60000)}min, then every 4h`);
     setTimeout(() => {
         fetchEbayGearListings();
-        setInterval(() => fetchEbayGearListings(), 60 * 60 * 1000);
+        setInterval(() => fetchEbayGearListings(), 4 * 60 * 60 * 1000);
     }, msSearch);
-    // Detail worker every 30min at :55 past the hour (anchored to 4:55 AM Pacific)
-    const msDetail = msUntilPacific(4, 55, 1);
-    console.log(`[gear-detail] Next detail fetch in ${Math.round(msDetail / 60000)}min, then every 30min`);
-    setTimeout(() => {
-        fetchGearDetails();
-        setInterval(() => fetchGearDetails(), 30 * 60 * 1000);
-    }, msDetail);
 }
 // GET /api/gear — public gear listings
 app.get("/api/gear", async (_req, res) => {
@@ -4057,7 +3998,7 @@ app.post("/api/admin/gear/fetch", express.json(), async (req, res) => {
         return;
     }
     res.json({ ok: true, started: true });
-    fetchEbayGearListings().then(() => fetchGearDetails());
+    fetchEbayGearListings();
 });
 // ── Vinyl LP listings (eBay 12" records) ────────────────────────────────
 async function fetchEbayVinylListings() {
@@ -4135,18 +4076,18 @@ async function fetchEbayVinylListings() {
     }
     return totalUpserted;
 }
-// Schedule: vinyl search at :20 past the hour (staggered from gear at :50)
+// Schedule: vinyl search every 4 hours (staggered 2h from gear)
 function startVinylSchedule() {
     if (!ebayClientId || !ebayClientSecret) {
         console.log("eBay vinyl schedule not started — no credentials");
         return;
     }
-    // Hourly vinyl search at :20 past the hour (anchored to 5:20 AM Pacific — 30min offset from gear)
-    const msSearch = msUntilPacific(5, 20, 1);
-    console.log(`[vinyl] Next search in ${Math.round(msSearch / 60000)}min, then every 1h`);
+    // Vinyl search at :20 past the hour, every 4 hours (anchored to 6:20 AM Pacific — 2h offset from gear)
+    const msSearch = msUntilPacific(6, 20, 4);
+    console.log(`[vinyl] Next search in ${Math.round(msSearch / 60000)}min, then every 4h`);
     setTimeout(() => {
         fetchEbayVinylListings();
-        setInterval(() => fetchEbayVinylListings(), 60 * 60 * 1000);
+        setInterval(() => fetchEbayVinylListings(), 4 * 60 * 60 * 1000);
     }, msSearch);
 }
 // GET /api/vinyl — public vinyl listings
