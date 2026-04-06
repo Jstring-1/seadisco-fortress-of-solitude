@@ -138,9 +138,7 @@ function _openEbayPopup(item) {
 async function _fetchEbayDetail(itemId, overlay) {
   const area = overlay.querySelector(".buy-popup-detail-area");
   try {
-    console.log("[ebay detail] fetching:", itemId);
     const r = await fetch(`/api/ebay/item/${encodeURIComponent(itemId)}`);
-    console.log("[ebay detail] response:", r.status);
     if (!overlay.isConnected) return; // popup was closed
     if (r.status === 429) {
       if (area) area.textContent = "Daily eBay request limit reached.";
@@ -152,8 +150,6 @@ async function _fetchEbayDetail(itemId, overlay) {
       return;
     }
     const d = await r.json();
-    console.log("[ebay detail] data:", { specs: Object.keys(d.specifics || {}), hasDesc: !!d.description, images: (d.allImages || []).length, seller: d.seller, remaining: d.rateLimit?.remaining });
-
     // Update bid count if fresher
     if (d.bidCount != null) {
       const bidsEl = overlay.querySelector(".buy-popup-price span");
