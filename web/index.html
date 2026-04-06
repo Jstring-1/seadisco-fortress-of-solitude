@@ -31,7 +31,7 @@
   <link rel="preconnect" href="https://i.ebayimg.com" />
   <link rel="dns-prefetch" href="https://clerk.seadisco.com" />
   <link rel="dns-prefetch" href="https://api.anthropic.com" />
-  <link rel="stylesheet" href="/style.css?v=20260406a" />
+  <link rel="stylesheet" href="/style.css?v=20260406b" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -64,7 +64,7 @@
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260406a"></script>
+<script src="/shared.js?v=20260406b"></script>
 <script>renderSharedHeader({ spa: true, active: "search" });</script>
 <div id="search-view">
 
@@ -467,7 +467,7 @@
       <button class="pill active" onclick="doEbaySearch()">Search eBay</button>
       <button class="pill" onclick="clearEbaySearch()" id="ebay-clear-btn" style="display:none">Clear</button>
     </div>
-    <div id="ebay-search-meta" style="font-size:0.72rem;color:#555;margin-top:0.3rem"></div>
+    <div class="ebay-rate-counter" style="font-size:0.72rem;color:#555;margin-top:0.3rem"></div>
   </div>
   <div id="ebay-search-results" class="card-grid content-area" style="display:none"></div>
   <div id="ebay-search-status" style="display:none;text-align:center;padding:1rem;color:#888;font-size:0.85rem"></div>
@@ -501,9 +501,24 @@
 </div>
 
 <div id="gear-view" style="display:none">
+  <!-- Live eBay Gear Search -->
+  <div class="ebay-live-search content-area">
+    <div class="ebay-search-bar">
+      <input type="text" id="gear-ebay-search-input" class="site-form-field buy-search-field"
+             placeholder="Search eBay for gear…"
+             onkeydown="if(event.key==='Enter')doGearEbaySearch()" />
+      <button class="pill active" onclick="doGearEbaySearch()">Search eBay</button>
+      <button class="pill" onclick="clearGearEbaySearch()" id="gear-ebay-clear-btn" style="display:none">Clear</button>
+    </div>
+    <div class="ebay-rate-counter" style="font-size:0.72rem;color:#555;margin-top:0.3rem"></div>
+  </div>
+  <div id="gear-ebay-search-results" class="card-grid content-area" style="display:none"></div>
+  <div id="gear-ebay-search-status" style="display:none;text-align:center;padding:1rem;color:#888;font-size:0.85rem"></div>
+
   <div class="gear-header content-area">
     <div class="gear-controls">
       <div class="gear-price-pills">
+        <button class="pill buy-refresh-btn" onclick="refreshGearListings()" title="Refresh — remove ended auctions">↻</button>
         <span class="pill gear-price-pill active" data-min="0" onclick="setGearPriceFilter(0)">All</span>
         <span class="pill gear-price-pill" data-min="100" onclick="setGearPriceFilter(100)">$100+</span>
         <span class="pill gear-price-pill" data-min="200" onclick="setGearPriceFilter(200)">$200+</span>
@@ -775,18 +790,18 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script src="/utils.js?v=20260406a"></script>
-<script src="/search.js?v=20260406a"></script>
-<script src="/collection.js?v=20260406a"></script>
-<script src="/buy.js?v=20260406a"></script>
-<script src="/app.js?v=20260406a"></script>
+<script src="/utils.js?v=20260406b"></script>
+<script src="/search.js?v=20260406b"></script>
+<script src="/collection.js?v=20260406b"></script>
+<script src="/buy.js?v=20260406b"></script>
+<script src="/app.js?v=20260406b"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/modal.js?v=20260406a"></script>
-<script defer src="/inventory-editor.js?v=20260406a"></script>
-<script defer src="/drops.js?v=20260406a"></script>
-<script defer src="/live.js?v=20260406a"></script>
-<script defer src="/gear.js?v=20260406a"></script>
-<script defer src="/feed.js?v=20260406a"></script>
+<script defer src="/modal.js?v=20260406b"></script>
+<script defer src="/inventory-editor.js?v=20260406b"></script>
+<script defer src="/drops.js?v=20260406b"></script>
+<script defer src="/live.js?v=20260406b"></script>
+<script defer src="/gear.js?v=20260406b"></script>
+<script defer src="/feed.js?v=20260406b"></script>
 
 </body>
 </html>

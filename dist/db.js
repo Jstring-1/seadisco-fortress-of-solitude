@@ -1850,9 +1850,10 @@ export async function logVinylFetch(fetchType, itemCount, error) {
 export async function getEbayRateCount() {
     const r = await getPool().query(`SELECT * FROM ebay_rate_limit WHERE id = 1`);
     if (!r.rows.length)
-        return { count: 0, clickCount: 0, resetDate: new Date().toISOString().slice(0, 10) };
+        return { count: 0, resetDate: new Date().toISOString().slice(0, 10) };
     const row = r.rows[0];
-    const clickCount = row.click_count ?? 0;
+    // Unified counter: call_count tracks ALL eBay API calls (searches + detail views)
+    const totalCount = (row.call_count ?? 0) + (row.click_count ?? 0);
     // Auto-reset if stored date is before today (Pacific)
     const todayPacific = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" }))
         .toISOString().slice(0, 10);
@@ -1863,9 +1864,9 @@ export async function getEbayRateCount() {
         catch {
             await getPool().query(`UPDATE ebay_rate_limit SET call_count = 0, reset_date = $1 WHERE id = 1`, [todayPacific]);
         }
-        return { count: 0, clickCount: 0, resetDate: todayPacific };
+        return { count: 0, resetDate: todayPacific };
     }
-    return { count: row.call_count, clickCount, resetDate: row.reset_date };
+    return { count: totalCount, resetDate: row.reset_date };
 }
 export async function incrementEbayRateCount() {
     const r = await getPool().query(`
@@ -1876,10 +1877,11 @@ export async function incrementEbayRateCount() {
         END,
         reset_date = (NOW() AT TIME ZONE 'America/Los_Angeles')::date
     WHERE id = 1
-    RETURNING call_count
+    RETURNING call_count + click_count AS total_count
   `);
-    return r.rows[0]?.call_count ?? 0;
+    return r.rows[0]?.total_count ?? 0;
 }
+// incrementEbayClickCount kept for backward compat — unified counter returned via getEbayRateCount
 export async function incrementEbayClickCount() {
     const r = await getPool().query(`
     UPDATE ebay_rate_limit
@@ -1889,9 +1891,9 @@ export async function incrementEbayClickCount() {
         END,
         reset_date = (NOW() AT TIME ZONE 'America/Los_Angeles')::date
     WHERE id = 1
-    RETURNING click_count
+    RETURNING call_count + click_count AS total_count
   `);
-    return r.rows[0]?.click_count ?? 0;
+    return r.rows[0]?.total_count ?? 0;
 }
 export async function getEbaySearchCache(queryKey) {
     const r = await getPool().query(`SELECT results_json, total_results, cached_at
