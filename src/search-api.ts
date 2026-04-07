@@ -6,7 +6,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, upsertGearListings, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getEbayRateCount, incrementEbayRateCount, incrementEbayClickCount, getEbaySearchCache, setEbaySearchCache, pruneEbaySearchCache, getTableRowCounts } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, upsertGearListings, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getEbayRateCount, incrementEbayRateCount, incrementEbayClickCount, getEbaySearchCache, setEbaySearchCache, pruneEbaySearchCache, getTableRowCounts, updateListingFromDetail } from "./db.js";
 import { startFreshSyncSchedule, runFreshSync } from "./sync-fresh-releases.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -4111,23 +4111,41 @@ app.get("/api/ebay/item/:itemId", async (req, res) => {
       if (nv.name && nv.value) specifics[nv.name] = nv.value;
     }
 
+    const detailPrice = parseFloat(d.currentBidPrice?.value ?? d.price?.value ?? "0");
+    const detailCurrency = d.currentBidPrice?.currency ?? d.price?.currency ?? "USD";
+    const detailCondition = d.condition ?? d.conditionDescription ?? "";
+    const detailSeller = d.seller?.username ?? "";
+    const detailSellerFeedback = d.seller?.feedbackScore ?? 0;
+    const detailSellerFeedbackPercent = d.seller?.feedbackPercentage ?? "";
+    const detailBidCount = d.bidCount ?? 0;
+    const detailEndDate = d.itemEndDate ?? "";
+
     res.json({
       description: d.description ?? "",
       allImages,
       specifics,
-      bidCount: d.bidCount ?? 0,
+      bidCount: detailBidCount,
       itemUrl: d.itemWebUrl ?? "",
-      condition: d.condition ?? d.conditionDescription ?? "",
+      condition: detailCondition,
       conditionDescription: d.conditionDescription ?? "",
-      seller: d.seller?.username ?? "",
-      sellerFeedback: d.seller?.feedbackScore ?? 0,
-      sellerFeedbackPercent: d.seller?.feedbackPercentage ?? "",
-      price: parseFloat(d.currentBidPrice?.value ?? d.price?.value ?? "0"),
-      currency: d.currentBidPrice?.currency ?? d.price?.currency ?? "USD",
+      seller: detailSeller,
+      sellerFeedback: detailSellerFeedback,
+      sellerFeedbackPercent: detailSellerFeedbackPercent,
+      price: detailPrice,
+      currency: detailCurrency,
       location: [d.itemLocation?.city, d.itemLocation?.stateOrProvince, d.itemLocation?.country].filter(Boolean).join(", "),
-      itemEndDate: d.itemEndDate ?? "",
+      itemEndDate: detailEndDate,
       rateLimit: { remaining: Math.max(0, EBAY_USER_LIMIT - newCount), limit: EBAY_USER_LIMIT, resetsAt },
     });
+
+    // Fire-and-forget: write fresh price/bids/detail back to DB
+    updateListingFromDetail(itemId, {
+      price: detailPrice, currency: detailCurrency, bidCount: detailBidCount,
+      condition: detailCondition, description: d.description ?? "",
+      allImages, specifics, seller: detailSeller,
+      sellerFeedback: detailSellerFeedback, sellerFeedbackPercent: detailSellerFeedbackPercent,
+      itemEndDate: detailEndDate,
+    }).catch(() => {});
   } catch (e) {
     console.error("eBay item detail error:", e);
     res.status(500).json({ error: String(e) });

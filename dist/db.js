@@ -1729,13 +1729,35 @@ export async function upsertGearListings(items) {
 export async function updateGearDetail(itemId, detailHtml, allImages, itemSpecifics) {
     await getPool().query(`UPDATE gear_listings SET detail_html=$2, all_images=$3, item_specifics=$4, detailed_at=NOW() WHERE item_id=$1`, [itemId, detailHtml, allImages, JSON.stringify(itemSpecifics)]);
 }
+/** Update price, bid count, detail, and images for a listing in both tables (fire-and-forget). */
+export async function updateListingFromDetail(itemId, data) {
+    const specificsJson = JSON.stringify(data.specifics ?? {});
+    const sql = (table) => `
+    UPDATE ${table} SET
+      price = $2, currency = $3, bid_count = $4, condition = $5,
+      detail_html = $6, all_images = $7, item_specifics = $8,
+      seller_username = $9, seller_feedback = $10,
+      item_end_date = CASE WHEN $11::text != '' THEN $11::timestamptz ELSE item_end_date END,
+      detailed_at = NOW()
+    WHERE item_id = $1`;
+    const params = [
+        itemId, data.price, data.currency, data.bidCount, data.condition,
+        data.description, data.allImages, specificsJson,
+        data.seller, data.sellerFeedback,
+        data.itemEndDate || null,
+    ];
+    await Promise.all([
+        getPool().query(sql("vinyl_listings"), params).catch(() => { }),
+        getPool().query(sql("gear_listings"), params).catch(() => { }),
+    ]);
+}
 export async function getGearNeedingDetail(limit = 20) {
     const r = await getPool().query(`SELECT item_id, price FROM gear_listings
      WHERE detailed_at IS NULL AND NOT expired
      ORDER BY bid_count DESC, price DESC LIMIT $1`, [limit]);
     return r.rows.map(row => ({ itemId: row.item_id, price: row.price }));
 }
-export async function getGearListings(minPrice = 0, limit = 200, offset = 0, sort = "bids", q = "") {
+export async function getGearListings(minPrice = 0, limit = 200, offset = 0, sort = "ending", q = "") {
     const params = [minPrice];
     let where = `WHERE price >= $1 AND NOT expired
     AND (condition IS NULL OR condition NOT ILIKE '%for parts%')
@@ -1748,10 +1770,10 @@ export async function getGearListings(minPrice = 0, limit = 200, offset = 0, sor
     const total = countR.rows[0]?.cnt ?? 0;
     const orderMap = {
         bids: "bid_count DESC, price DESC",
-        price_desc: "price DESC",
-        price_asc: "price ASC",
+        price_desc: "price DESC, item_end_date ASC NULLS LAST",
+        price_asc: "price ASC, item_end_date ASC NULLS LAST",
         ending: "item_end_date ASC NULLS LAST",
-        newest: "fetched_at DESC",
+        newest: "item_end_date DESC NULLS LAST",
     };
     const orderBy = orderMap[sort] ?? orderMap.bids;
     const r = await getPool().query(`SELECT item_id, title, price, currency, condition, image_url, item_url,
@@ -1768,7 +1790,7 @@ export async function getGearListings(minPrice = 0, limit = 200, offset = 0, sor
 }
 export async function markExpiredGearListings() {
     const r = await getPool().query(`UPDATE gear_listings SET expired = true
-     WHERE NOT expired AND fetched_at < NOW() - INTERVAL '3 days'`);
+     WHERE NOT expired AND (item_end_date IS NOT NULL AND item_end_date < NOW())`);
     return r.rowCount ?? 0;
 }
 // ── Vinyl listings (eBay 12" LP auctions) ─────────────────────────────────
@@ -1799,7 +1821,8 @@ export async function upsertVinylListings(items) {
 export async function getVinylListings(minPrice = 0, limit = 200, offset = 0, sort = "ending", q = "") {
     const params = [minPrice];
     let where = `WHERE price >= $1 AND NOT expired
-    AND (item_end_date IS NULL OR item_end_date > NOW())`;
+    AND (item_end_date IS NULL OR item_end_date > NOW())
+    AND title !~* '(7["″\\'']|7 inch|45 ?rpm|\\y45\\y|10["″\\'']|10 inch|pic sleeve)'`;
     if (q.trim()) {
         params.push(`%${q.trim()}%`);
         where += ` AND title ILIKE $${params.length}`;
@@ -1808,10 +1831,10 @@ export async function getVinylListings(minPrice = 0, limit = 200, offset = 0, so
     const total = countR.rows[0]?.cnt ?? 0;
     const orderMap = {
         bids: "bid_count DESC, price DESC",
-        price_desc: "price DESC",
-        price_asc: "price ASC",
+        price_desc: "price DESC, item_end_date ASC NULLS LAST",
+        price_asc: "price ASC, item_end_date ASC NULLS LAST",
         ending: "item_end_date ASC NULLS LAST",
-        newest: "fetched_at DESC",
+        newest: "item_end_date DESC NULLS LAST",
     };
     const orderBy = orderMap[sort] ?? orderMap.ending;
     const r = await getPool().query(`SELECT item_id, title, price, currency, condition, image_url, item_url,
@@ -1828,7 +1851,7 @@ export async function getVinylListings(minPrice = 0, limit = 200, offset = 0, so
 }
 export async function markExpiredVinylListings() {
     const r = await getPool().query(`UPDATE vinyl_listings SET expired = true
-     WHERE NOT expired AND fetched_at < NOW() - INTERVAL '3 days'`);
+     WHERE NOT expired AND (item_end_date IS NOT NULL AND item_end_date < NOW())`);
     return r.rowCount ?? 0;
 }
 export async function getVinylStats() {
@@ -2216,4 +2239,27 @@ export async function getApiRequestStats(hours = 24) {
     ORDER BY total_requests DESC
   `, [hours]);
     return r.rows;
+}
+// ── Table row counts (admin dashboard) ───────────────────────────────────
+export async function getTableRowCounts() {
+    const tables = [
+        'user_tokens', 'user_collection', 'user_collection_folders', 'user_wantlist',
+        'user_inventory', 'user_lists', 'user_list_items', 'user_orders', 'user_order_messages',
+        'user_favorites', 'saved_searches', 'feedback',
+        'vinyl_listings', 'gear_listings', 'vinyl_fetch_log', 'gear_fetch_log',
+        'ebay_rate_limit', 'ebay_search_cache',
+        'fresh_releases', 'feed_articles', 'live_events',
+        'release_cache', 'price_cache', 'price_history', 'price_alerts', 'triggered_alerts',
+        'api_request_log', 'oauth_request_tokens',
+    ];
+    const counts = await Promise.all(tables.map(async (t) => {
+        try {
+            const r = await getPool().query(`SELECT COUNT(*)::int AS cnt FROM ${t}`);
+            return { table: t, rows: r.rows[0]?.cnt ?? 0 };
+        }
+        catch {
+            return { table: t, rows: -1 };
+        }
+    }));
+    return counts;
 }

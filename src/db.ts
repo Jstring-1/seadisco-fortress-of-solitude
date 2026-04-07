@@ -2340,6 +2340,34 @@ export async function updateGearDetail(itemId: string, detailHtml: string, allIm
   );
 }
 
+/** Update price, bid count, detail, and images for a listing in both tables (fire-and-forget). */
+export async function updateListingFromDetail(itemId: string, data: {
+  price: number; currency: string; bidCount: number; condition: string;
+  description: string; allImages: string[]; specifics: object;
+  seller: string; sellerFeedback: number; sellerFeedbackPercent: string;
+  itemEndDate: string;
+}): Promise<void> {
+  const specificsJson = JSON.stringify(data.specifics ?? {});
+  const sql = (table: string) => `
+    UPDATE ${table} SET
+      price = $2, currency = $3, bid_count = $4, condition = $5,
+      detail_html = $6, all_images = $7, item_specifics = $8,
+      seller_username = $9, seller_feedback = $10,
+      item_end_date = CASE WHEN $11::text != '' THEN $11::timestamptz ELSE item_end_date END,
+      detailed_at = NOW()
+    WHERE item_id = $1`;
+  const params = [
+    itemId, data.price, data.currency, data.bidCount, data.condition,
+    data.description, data.allImages, specificsJson,
+    data.seller, data.sellerFeedback,
+    data.itemEndDate || null,
+  ];
+  await Promise.all([
+    getPool().query(sql("vinyl_listings"), params).catch(() => {}),
+    getPool().query(sql("gear_listings"), params).catch(() => {}),
+  ]);
+}
+
 export async function getGearNeedingDetail(limit: number = 20): Promise<Array<{ itemId: string; price: number }>> {
   const r = await getPool().query(
     `SELECT item_id, price FROM gear_listings
