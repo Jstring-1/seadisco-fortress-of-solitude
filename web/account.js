@@ -465,6 +465,15 @@ function initAccountView() {
   } else if (clerk) {
     showSignInWidget(clerk);
   } else {
-    // Auth not ready yet — loading section stays visible
+    // Auth not ready yet — wait for Clerk to become available, then retry
+    const poll = setInterval(() => {
+      const c = window._clerk;
+      if (!c) return;
+      clearInterval(poll);
+      if (c.user) handleSignedIn(c);
+      else showSignInWidget(c);
+    }, 150);
+    // Stop polling after 10 seconds to avoid leaking
+    setTimeout(() => clearInterval(poll), 10000);
   }
 }

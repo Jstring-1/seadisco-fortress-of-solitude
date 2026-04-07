@@ -284,9 +284,9 @@ function renderSharedHeader(opts) {
     return `<a class="nav-tab-bot" href="${href}" data-rtab="${rtab}">${displayLabel}</a>`;
   };
 
-  // Auth tab (top row, rightmost)
+  // Auth tab (top row, rightmost) — uses <button> in SPA like all other tabs
   const authTab = isSPA
-    ? `<a class="nav-tab-top nav-auth-tab" href="/?view=account" data-view="account" onclick="switchView('account');return false;" id="nav-auth-tab">Sign In</a>`
+    ? `<button class="nav-tab-top nav-auth-tab" data-view="account" onclick="switchView('account')" id="nav-auth-tab">Sign In</button>`
     : `<a class="nav-tab-top nav-auth-tab" href="/?view=account" id="nav-auth-tab">Sign In</a>`;
 
   const header = document.getElementById("site-header");
@@ -294,7 +294,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260407a";
+  const SITE_VERSION = "build 20260407b";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'https://seadisco.com' : '/'}" class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>

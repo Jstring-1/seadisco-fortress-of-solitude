@@ -1,4 +1,37 @@
 // ── Buy tab — eBay 12" vinyl LP auctions ──────────────────────────────
+
+/** Close buy popup and search main for a term (used by vinyl popup links) */
+function searchFromBuyPopup(event, query) {
+  event.preventDefault();
+  const overlay = event.target.closest(".buy-popup-overlay");
+  if (overlay) overlay.remove();
+  if (typeof switchView === "function") switchView("search");
+  if (typeof clearForm === "function") clearForm();
+  const qField = document.getElementById("f-query");
+  if (qField) qField.value = query;
+  if (typeof doSearch === "function") doSearch(1);
+}
+/** Close buy popup and search artist field (used by vinyl popup artist links) */
+function searchArtistFromBuyPopup(event, el) {
+  event.preventDefault();
+  const overlay = event.target.closest(".buy-popup-overlay");
+  if (overlay) overlay.remove();
+  if (typeof switchView === "function") switchView("search");
+  if (typeof clearForm === "function") clearForm();
+  const artistField = document.getElementById("f-artist");
+  if (artistField) artistField.value = el.dataset.artist;
+  if (typeof toggleAdvanced === "function") toggleAdvanced(true);
+  if (typeof doSearch === "function") doSearch(1);
+}
+/** Close buy popup and search collection (used by vinyl popup ⌕ icons) */
+function searchCollectionFromBuyPopup(event, field, value) {
+  event.preventDefault();
+  const overlay = event.target.closest(".buy-popup-overlay");
+  if (overlay) overlay.remove();
+  window._pendingCwSearch = { field, value };
+  if (typeof switchView === "function") switchView("records");
+}
+
 let _buyItems = [];
 let _buyTotal = 0;
 let _buyMinPrice = 0;
@@ -83,18 +116,19 @@ function _openEbayPopup(item, opts) {
 
   const thumbImg = item.image_url || (item.all_images && item.all_images.length ? item.all_images[0] : "");
 
-  // For vinyl: try to extract artist/title from eBay listing title for search links
-  let searchLinks = "";
+  // For vinyl: parse artist/title from eBay listing title for search links (matching album popup style)
+  let vinylArtist = "";
+  let vinylTitle = "";
   if (isVinyl) {
     const raw = item.title || "";
-    // Common eBay title patterns: "Artist - Album Title LP", "Artist – Title Vinyl"
-    const searchQ = raw.replace(/\b(LP|12"|vinyl|record|sealed|rare|original|pressing|reissue|remastered|gatefold|limited|edition)\b/gi, "").replace(/[-–—]+/g, " ").replace(/\s{2,}/g, " ").trim();
-    if (searchQ) {
-      const enc = encodeURIComponent(searchQ);
-      searchLinks = `<div style="margin-top:0.5rem">
-        <a class="buy-popup-search-link" href="/?q=${enc}" target="_blank" title="Search SeaDisco">&#128269; Search SeaDisco</a>
-        <a class="buy-popup-search-link" href="https://www.discogs.com/search/?q=${enc}&type=release" target="_blank" rel="noopener" title="Search Discogs">&#128269; Search Discogs</a>
-      </div>`;
+    // Common eBay patterns: "Artist - Album Title LP", "Artist – Title Vinyl"
+    const dashMatch = raw.match(/^(.+?)\s*[-–—]\s*(.+)$/);
+    if (dashMatch) {
+      vinylArtist = dashMatch[1].replace(/\b(NEW|SEALED|RARE|LIMITED)\b/gi, "").trim();
+      vinylTitle = dashMatch[2].replace(/\b(LP|12"|7"|vinyl|record|sealed|rare|original|pressing|reissue|remastered|gatefold|limited|edition|new|mint)\b/gi, "").replace(/\s{2,}/g, " ").trim();
+    } else {
+      // No dash separator — use whole cleaned title
+      vinylTitle = raw.replace(/\b(LP|12"|7"|vinyl|record|sealed|rare|original|pressing|reissue|remastered|gatefold|limited|edition|new|mint)\b/gi, "").replace(/\s{2,}/g, " ").trim();
     }
   }
 
@@ -102,18 +136,32 @@ function _openEbayPopup(item, opts) {
   overlay.className = "buy-popup-overlay";
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 
+  // Build artist/title search links (vinyl only, matching album popup style)
+  let artistLine = "";
+  let titleLine = escHtml(item.title);
+  if (isVinyl && (vinylArtist || vinylTitle)) {
+    if (vinylArtist) {
+      const safeArtist = vinylArtist.replace(/'/g, "\\'");
+      artistLine = `<div class="album-artist" style="font-size:0.75rem;margin-bottom:0.25rem"><a href="#" class="modal-artist-link" data-artist="${escHtml(vinylArtist)}" onclick="searchArtistFromBuyPopup(event,this)" title="Search for ${escHtml(vinylArtist)}">${escHtml(vinylArtist)}</a> <a href="#" class="album-title-search" onclick="searchCollectionFromBuyPopup(event,'cw-artist','${escHtml(safeArtist)}')" title="Search your collection for ${escHtml(vinylArtist)}">⌕</a></div>`;
+    }
+    if (vinylTitle) {
+      const safeTitle = vinylTitle.replace(/'/g, "\\'");
+      titleLine = `<a href="#" class="modal-title-link" onclick="searchFromBuyPopup(event,'${escHtml(safeTitle)}')" title="Search SeaDisco for ${escHtml(vinylTitle)}">${escHtml(item.title)}</a> <a href="#" class="album-title-search" onclick="searchCollectionFromBuyPopup(event,'cw-release','${escHtml(safeTitle)}')" title="Search your collection for ${escHtml(vinylTitle)}">⌕</a>`;
+    }
+  }
+
   // Show minimal loading state — image + title + spinner
   overlay.innerHTML = `<div class="buy-popup">
     <button class="buy-popup-close" onclick="this.closest('.buy-popup-overlay').remove()">✕</button>
     ${thumbImg ? `<img class="buy-popup-main-img" src="${escHtml(thumbImg)}" onerror="this.style.display='none'">` : ""}
     <div class="buy-popup-body">
-      <h3 class="buy-popup-title">${escHtml(item.title)}</h3>
+      ${artistLine}
+      <h3 class="buy-popup-title">${titleLine}</h3>
       <div class="buy-popup-loading" style="text-align:center;padding:1.5rem 0;color:#666;font-size:0.85rem">
         <div class="ebay-spinner"></div>
         Loading live data from eBay…
       </div>
       <a class="buy-popup-ebay-link" href="${escHtml(item.item_url)}" target="_blank" rel="noopener">View on eBay →</a>
-      ${searchLinks}
     </div>
   </div>`;
 

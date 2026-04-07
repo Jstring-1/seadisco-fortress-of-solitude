@@ -150,9 +150,7 @@ function addNavTab(view) {
     const authTab = document.getElementById("nav-auth-tab");
     if (authTab) {
       authTab.textContent = "Account";
-      authTab.href = "/?view=account";
       authTab.title = "";
-      authTab.onclick = function(e) { e.preventDefault(); switchView("account"); };
     }
   }
 }
