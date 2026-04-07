@@ -225,6 +225,12 @@ app.set("trust proxy", 1); // trust exactly 1 hop (Railway's reverse proxy)
 // Gzip/brotli compression for all responses
 app.use(compression());
 
+// Redirect old /account URL to SPA view so existing links/bookmarks still work
+app.get("/account", (req, res) => {
+  const qs = req.url.includes("?") ? "&" + req.url.split("?")[1] : "";
+  res.redirect(301, `/?view=account${qs}`);
+});
+
 // Cache headers for static assets (versioned files get long cache, HTML short)
 app.use(express.static(path.join(__dirname, "../web"), {
   extensions: ["html"],
@@ -435,18 +441,18 @@ app.get("/api/auth/discogs/callback", async (req, res) => {
   const oauthToken = req.query.oauth_token as string;
   const oauthVerifier = req.query.oauth_verifier as string;
   if (!oauthToken || !oauthVerifier) {
-    res.status(400).send("Missing OAuth parameters. <a href='/account'>Return to account</a>"); return;
+    res.status(400).send("Missing OAuth parameters. <a href='/?view=account'>Return to account</a>"); return;
   }
   try {
     // Look up the request token secret and clerk user ID
     const stored = await getOAuthRequestToken(oauthToken);
     if (!stored) {
-      res.status(400).send("OAuth session expired. <a href='/account'>Try again</a>"); return;
+      res.status(400).send("OAuth session expired. <a href='/?view=account'>Try again</a>"); return;
     }
     // Validate CSRF state cookie
     const cookieState = (req.cookies as Record<string, string>)?.oauth_state;
     if (stored.csrfState && (!cookieState || cookieState !== stored.csrfState)) {
-      res.status(403).send("State mismatch — possible CSRF. <a href='/account'>Try again</a>"); return;
+      res.status(403).send("State mismatch — possible CSRF. <a href='/?view=account'>Try again</a>"); return;
     }
     res.clearCookie("oauth_state");
     // Step 3: Exchange for access token
@@ -463,14 +469,14 @@ app.get("/api/auth/discogs/callback", async (req, res) => {
     });
     if (!atRes.ok) {
       console.error("OAuth access token failed:", atRes.status);
-      res.status(500).send("Failed to complete OAuth. <a href='/account'>Try again</a>"); return;
+      res.status(500).send("Failed to complete OAuth. <a href='/?view=account'>Try again</a>"); return;
     }
     const body = await atRes.text();
     const params = new URLSearchParams(body);
     const accessToken = params.get("oauth_token") ?? "";
     const accessSecret = params.get("oauth_token_secret") ?? "";
     if (!accessToken || !accessSecret) {
-      res.status(500).send("Invalid access token response. <a href='/account'>Try again</a>"); return;
+      res.status(500).send("Invalid access token response. <a href='/?view=account'>Try again</a>"); return;
     }
     // Clean up request token
     await deleteOAuthRequestToken(oauthToken);
@@ -524,11 +530,11 @@ app.get("/api/auth/discogs/callback", async (req, res) => {
       console.error("OAuth profile fetch error:", (e as Error)?.message);
     }
 
-    // Redirect back to account page
-    res.redirect("/account?oauth=success");
+    // Redirect back to account view in SPA
+    res.redirect("/?view=account&oauth=success");
   } catch (e) {
     console.error("OAuth callback error:", (e as Error)?.message);
-    res.status(500).send("OAuth error. <a href='/account'>Try again</a>");
+    res.status(500).send("OAuth error. <a href='/?view=account'>Try again</a>");
   }
 });
 

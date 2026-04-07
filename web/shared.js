@@ -286,8 +286,8 @@ function renderSharedHeader(opts) {
 
   // Auth tab (top row, rightmost)
   const authTab = isSPA
-    ? `<a class="nav-tab-top nav-auth-tab" href="/account" data-view="auth" id="nav-auth-tab">Sign In</a>`
-    : `<a class="nav-tab-top nav-auth-tab" href="/account" id="nav-auth-tab">Sign In</a>`;
+    ? `<a class="nav-tab-top nav-auth-tab" href="/?view=account" data-view="account" onclick="switchView('account');return false;" id="nav-auth-tab">Sign In</a>`
+    : `<a class="nav-tab-top nav-auth-tab" href="/?view=account" id="nav-auth-tab">Sign In</a>`;
 
   const header = document.getElementById("site-header");
   if (!header) return;
@@ -363,17 +363,17 @@ function renderSharedFooter(opts) {
       <div class="footer-col">
         <h4>Your Music</h4>
         ${isSPA
-          ? `<a href="/account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='collection';switchView('records')}">Collection</a>
-             <a href="/account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='wantlist';switchView('records')}">Wantlist</a>
-             <a href="/account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='inventory';switchView('records')}">Inventory</a>
-             <a href="/account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='lists';switchView('records')}">Lists</a>
-             <a href="/account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='favorites';switchView('records')}">Favorites</a>`
-          : `<a href="/account">Collection</a>
-             <a href="/account">Wantlist</a>
-             <a href="/account">Inventory</a>
-             <a href="/account">Lists</a>
-             <a href="/account">Favorites</a>`}
-        <a href="/account">Account</a>
+          ? `<a href="/?view=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='collection';switchView('records')}">Collection</a>
+             <a href="/?view=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='wantlist';switchView('records')}">Wantlist</a>
+             <a href="/?view=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='inventory';switchView('records')}">Inventory</a>
+             <a href="/?view=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='lists';switchView('records')}">Lists</a>
+             <a href="/?view=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='favorites';switchView('records')}">Favorites</a>`
+          : `<a href="/?view=account">Collection</a>
+             <a href="/?view=account">Wantlist</a>
+             <a href="/?view=account">Inventory</a>
+             <a href="/?view=account">Lists</a>
+             <a href="/?view=account">Favorites</a>`}
+        ${isSPA ? `<a href="/?view=account" onclick="switchView('account');return false;">Account</a>` : `<a href="/?view=account">Account</a>`}
       </div>
       <div class="footer-col">
         <h4>About</h4>
