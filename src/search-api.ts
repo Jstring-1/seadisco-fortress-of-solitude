@@ -3578,6 +3578,8 @@ app.get("/api/gear", async (_req, res) => {
     res.setHeader("Cache-Control", "public, max-age=60");
     const { items, total } = await getGearListings(minPrice, limit, offset, sort, q);
     res.json({ items, total });
+    // Fire-and-forget: refresh prices/bids in background (throttled to 1 call per 5 min)
+    refreshGearPrices(sort).catch(() => {});
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
@@ -3704,6 +3706,97 @@ function startVinylSchedule() {
   }, msSearch);
 }
 
+// ── Price/bid refresh — one eBay search per page load, throttled ────────────
+const REFRESH_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes between refreshes per type
+let _lastVinylRefresh = 0;
+let _lastGearRefresh  = 0;
+
+function mapSortToEbay(sort: string): string {
+  if (sort === "newest")     return "newlyListed";
+  if (sort === "price_asc")  return "price";
+  if (sort === "price_desc") return "-price";
+  return "endingSoonest"; // default for "ending" and "bids"
+}
+
+async function refreshVinylPrices(sort: string): Promise<void> {
+  const now = Date.now();
+  if (now - _lastVinylRefresh < REFRESH_COOLDOWN_MS) return;
+  if (!ebayClientId || !ebayClientSecret) return;
+  _lastVinylRefresh = now;
+  try {
+    const token = await getEbayToken();
+    const ebaySort = mapSortToEbay(sort);
+    const baseFilter = `price:[10..],priceCurrency:USD,buyingOptions:{AUCTION}`;
+    const aspectFilter = `aspect_filter=categoryId:176985,Record%20Size:12%22`;
+    const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?category_ids=176985&limit=200&sort=${ebaySort}&filter=${baseFilter}&${aspectFilter}`;
+    const r = await loggedFetch("ebay", url, {
+      headers: { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" },
+      context: `vinyl refresh (${ebaySort})`,
+    });
+    if (!r.ok) return;
+    const data = await r.json() as any;
+    const summaries: any[] = data.itemSummaries ?? [];
+    if (!summaries.length) return;
+    const NOT_12_RE = /\b(7["″''"]|7 inch|45 ?rpm|\b45\b|10["″''"]|10 inch|pic sleeve)\b/i;
+    const items = summaries.filter((s: any) => !NOT_12_RE.test(s.title ?? "")).map((s: any) => ({
+      itemId: s.itemId, title: s.title ?? "",
+      price: parseFloat(s.currentBidPrice?.value ?? s.price?.value ?? "0"),
+      currency: s.currentBidPrice?.currency ?? s.price?.currency ?? "USD",
+      condition: s.condition ?? s.conditionId ?? "",
+      imageUrl: s.image?.imageUrl ?? "", itemUrl: s.itemWebUrl ?? "",
+      locationCity: s.itemLocation?.city ?? "", locationState: s.itemLocation?.stateOrProvince ?? "",
+      locationCountry: s.itemLocation?.country ?? "",
+      sellerUsername: s.seller?.username ?? "", sellerFeedback: s.seller?.feedbackScore ?? 0,
+      buyingOptions: s.buyingOptions ?? [], bidCount: s.bidCount ?? 0,
+      categories: (s.categories ?? []).map((c: any) => c.categoryId),
+      categoryNames: (s.categories ?? []).map((c: any) => c.categoryName),
+      itemEndDate: s.itemEndDate ?? null,
+      thumbnailUrl: (s.thumbnailImages ?? [])[0]?.imageUrl ?? "", rawSummary: s,
+    }));
+    const n = await upsertVinylListings(items);
+    console.log(`[vinyl refresh] updated ${n} items (sort=${ebaySort})`);
+  } catch (err) { console.error("[vinyl refresh] error:", err); }
+}
+
+async function refreshGearPrices(sort: string): Promise<void> {
+  const now = Date.now();
+  if (now - _lastGearRefresh < REFRESH_COOLDOWN_MS) return;
+  if (!ebayClientId || !ebayClientSecret) return;
+  _lastGearRefresh = now;
+  try {
+    const token = await getEbayToken();
+    const ebaySort = mapSortToEbay(sort);
+    // Use the first gear query as the refresh query — most general
+    const query = GEAR_SEARCH_QUERIES[0] || "vintage receiver";
+    const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&limit=200&sort=${ebaySort}&filter=price:[50..],priceCurrency:USD,buyingOptions:{AUCTION}`;
+    const r = await loggedFetch("ebay", url, {
+      headers: { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" },
+      context: `gear refresh (${ebaySort})`,
+    });
+    if (!r.ok) return;
+    const data = await r.json() as any;
+    const summaries: any[] = data.itemSummaries ?? [];
+    if (!summaries.length) return;
+    const items = summaries.map((s: any) => ({
+      itemId: s.itemId, title: s.title ?? "",
+      price: parseFloat(s.currentBidPrice?.value ?? s.price?.value ?? "0"),
+      currency: s.currentBidPrice?.currency ?? s.price?.currency ?? "USD",
+      condition: s.condition ?? s.conditionId ?? "",
+      imageUrl: s.image?.imageUrl ?? "", itemUrl: s.itemWebUrl ?? "",
+      locationCity: s.itemLocation?.city ?? "", locationState: s.itemLocation?.stateOrProvince ?? "",
+      locationCountry: s.itemLocation?.country ?? "",
+      sellerUsername: s.seller?.username ?? "", sellerFeedback: s.seller?.feedbackScore ?? 0,
+      buyingOptions: s.buyingOptions ?? [], bidCount: s.bidCount ?? 0,
+      categories: (s.categories ?? []).map((c: any) => c.categoryId),
+      categoryNames: (s.categories ?? []).map((c: any) => c.categoryName),
+      itemEndDate: s.itemEndDate ?? null,
+      thumbnailUrl: (s.thumbnailImages ?? [])[0]?.imageUrl ?? "", rawSummary: s,
+    }));
+    const n = await upsertGearListings(items);
+    console.log(`[gear refresh] updated ${n} items (sort=${ebaySort})`);
+  } catch (err) { console.error("[gear refresh] error:", err); }
+}
+
 // GET /api/vinyl — public vinyl listings
 app.get("/api/vinyl", async (_req, res) => {
   try {
@@ -3715,6 +3808,8 @@ app.get("/api/vinyl", async (_req, res) => {
     res.setHeader("Cache-Control", "public, max-age=60");
     const { items, total } = await getVinylListings(minPrice, limit, offset, sort, q);
     res.json({ items, total });
+    // Fire-and-forget: refresh prices/bids in background (throttled to 1 call per 5 min)
+    refreshVinylPrices(sort).catch(() => {});
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
