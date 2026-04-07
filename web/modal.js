@@ -476,7 +476,20 @@ function _createYTPlayer(id) {
       onStateChange: function(e) {
         if (session !== _ytSession) return;   // player was destroyed/recreated
         // YT.PlayerState: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
-        if (e.data === 1) { _ytHasPlayed = true; updatePlayerStatus("playing"); window._ytRetried = false; }
+        if (e.data === 1) {
+          _ytHasPlayed = true; updatePlayerStatus("playing"); window._ytRetried = false;
+          // If no track meta (e.g. loaded from URL param), grab title from YT player
+          const meta = (window._videoQueueMeta ?? [])[window._videoQueueIndex ?? 0];
+          if (!meta || (!meta.track && !meta.album && !meta.artist)) {
+            try {
+              const vd = ytPlayer.getVideoData?.();
+              if (vd?.title) {
+                const titleEl = document.getElementById("mini-player-title");
+                if (titleEl) titleEl.innerHTML = `<span class="vt-track">${escHtml(vd.title)}</span>`;
+              }
+            } catch {}
+          }
+        }
         else if (e.data === 2) updatePlayerStatus("paused");
         else if (e.data === 3) updatePlayerStatus("buffering");
         else if (e.data === 0) {
@@ -538,14 +551,18 @@ function updateVideoNavButtons() {
   if (miniNext) miniNext.disabled = idx >= queue.length - 1;
   if (titleEl) {
     const meta = (window._videoQueueMeta ?? [])[idx];
-    if (meta) {
+    if (meta && (meta.track || meta.album || meta.artist)) {
       const parts = [];
       if (meta.track)  parts.push(`<span class="vt-track">${escHtml(meta.track)}</span>`);
       if (meta.album)  parts.push(`<span>${escHtml(meta.album)}</span>`);
       if (meta.artist) parts.push(`<span>${escHtml(meta.artist)}</span>`);
       titleEl.innerHTML = parts.join(`<span class="vt-sep">·</span>`);
     } else {
-      titleEl.innerHTML = "Playing";
+      // No meta — try to get title from YT player, otherwise leave as-is (onStateChange will fill it)
+      try {
+        const vd = ytPlayer?.getVideoData?.();
+        if (vd?.title) titleEl.innerHTML = `<span class="vt-track">${escHtml(vd.title)}</span>`;
+      } catch {}
     }
   }
   // Show/hide album + share buttons based on whether we have a release to reopen
