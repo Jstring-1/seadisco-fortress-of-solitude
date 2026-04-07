@@ -1189,10 +1189,11 @@ a.fresh-card-search-link:hover {
   position: absolute; top: 0.5rem; right: 0.5rem; background: rgba(0,0,0,0.6);
   color: #fff; border: none; border-radius: 50%; width: 28px; height: 28px;
   font-size: 1rem; cursor: pointer; z-index: 2; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
 }
 .buy-popup-close:hover { background: rgba(0,0,0,0.85); }
 .buy-popup-main-img {
-  width: 100%; max-height: 350px; object-fit: contain; background: #111;
+  width: 100%; max-height: 560px; object-fit: contain; background: #111;
   border-radius: 10px 10px 0 0;
 }
 .buy-popup-gallery {

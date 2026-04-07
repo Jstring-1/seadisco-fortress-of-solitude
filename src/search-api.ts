@@ -3972,9 +3972,8 @@ app.get("/api/ebay/gear/search", async (req, res) => {
 });
 
 // GET /api/ebay/item/:itemId — fetch full item details (description, images, specs)
+// Public — no auth required so vinyl/gear popup detail works for all visitors
 app.get("/api/ebay/item/:itemId", async (req, res) => {
-  const userId = await getClerkUserId(req);
-  if (!userId) return res.status(401).json({ error: "Sign in to view item details" });
 
   const itemId = req.params.itemId;
   if (!itemId || !/^v1\|/.test(itemId)) return res.status(400).json({ error: "Invalid item ID" });

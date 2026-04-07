@@ -6,7 +6,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, upsertGearListings, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getEbayRateCount, incrementEbayRateCount, incrementEbayClickCount, getEbaySearchCache, setEbaySearchCache, pruneEbaySearchCache } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, upsertGearListings, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getEbayRateCount, incrementEbayRateCount, incrementEbayClickCount, getEbaySearchCache, setEbaySearchCache, pruneEbaySearchCache, getTableRowCounts } from "./db.js";
 import { startFreshSyncSchedule, runFreshSync } from "./sync-fresh-releases.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sharedToken = process.env.DISCOGS_TOKEN ?? "";
@@ -3899,7 +3899,7 @@ const ebayAffiliateCampaignId = process.env.EBAY_AFFILIATE_CAMPAIGN_ID ?? "";
 let ebayAccessToken = "";
 let ebayTokenExpiry = 0;
 const EBAY_USER_LIMIT = 4500;
-const MAX_USERS = 50;
+const MAX_USERS = 25;
 async function getEbayToken() {
     if (ebayAccessToken && Date.now() < ebayTokenExpiry - 60000)
         return ebayAccessToken;
@@ -3927,11 +3927,12 @@ const GEAR_SEARCH_QUERIES = [
     "vintage receiver",
     "vintage amplifier",
     "vintage turntable",
-    "vintage speakers hifi",
-    "vintage tape deck reel",
-    "hifi separates amplifier",
-    "tube amplifier audio",
-    "vintage preamp audio",
+    "vintage speakers",
+];
+const VINYL_KEYWORD_QUERIES = [
+    "rare",
+    "vintage",
+    "original",
 ];
 async function fetchEbayGearListings() {
     if (!ebayClientId || !ebayClientSecret) {
@@ -3944,8 +3945,8 @@ async function fetchEbayGearListings() {
         const token = await getEbayToken();
         for (const query of GEAR_SEARCH_QUERIES) {
             try {
-                // Auctions only, sorted by ending soonest (most active)
-                const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&limit=200&sort=endingSoonest&filter=price:[50..],priceCurrency:USD,buyingOptions:{AUCTION}`;
+                // Auctions only, sorted by newly listed (accumulate over time)
+                const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&limit=200&sort=newlyListed&filter=price:[50..],priceCurrency:USD,buyingOptions:{AUCTION}`;
                 const r = await loggedFetch("ebay", url, {
                     headers: { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" },
                     context: `gear search: ${query}`,
@@ -4000,29 +4001,29 @@ async function fetchEbayGearListings() {
     }
     return totalUpserted;
 }
-// Schedule: gear search every 4 hours
+// Schedule: gear search every 23 minutes (4 calls/cycle × ~62 cycles/day = 248 calls, staggered 11min from vinyl)
 function startGearSchedule() {
     if (!ebayClientId || !ebayClientSecret) {
         console.log("eBay gear schedule not started — no credentials");
         return;
     }
-    // Gear search at :50 past the hour, every 4 hours (anchored to 4:50 AM Pacific)
-    const msSearch = msUntilPacific(4, 50, 4);
-    console.log(`[gear] Next search in ${Math.round(msSearch / 60000)}min, then every 4h`);
+    // Gear search at :31 past (11min offset from vinyl's :20), every 23 min
+    const msSearch = msUntilPacific(6, 31, 1);
+    console.log(`[gear] Next search in ${Math.round(msSearch / 60000)}min, then every 23min`);
     setTimeout(() => {
         fetchEbayGearListings();
-        setInterval(() => fetchEbayGearListings(), 4 * 60 * 60 * 1000);
+        setInterval(() => fetchEbayGearListings(), 23 * 60 * 1000);
     }, msSearch);
 }
 // GET /api/gear — public gear listings
 app.get("/api/gear", async (_req, res) => {
     try {
         const minPrice = parseFloat(_req.query.min_price) || 0;
-        const sort = _req.query.sort || "bids";
+        const sort = _req.query.sort || "ending";
         const q = _req.query.q || "";
         const limit = Math.min(parseInt(_req.query.limit) || 200, 500);
         const offset = parseInt(_req.query.offset) || 0;
-        res.setHeader("Cache-Control", "public, max-age=300"); // 5 min
+        res.setHeader("Cache-Control", "public, max-age=60");
         const { items, total } = await getGearListings(minPrice, limit, offset, sort, q);
         res.json({ items, total });
     }
@@ -4065,67 +4066,80 @@ async function fetchEbayVinylListings() {
     }
     console.log("Starting eBay vinyl fetch…");
     let totalUpserted = 0;
+    const NOT_12_RE = /\b(7["″''"]|7 inch|45 ?rpm|\b45\b|10["″''"]|10 inch|pic sleeve)\b/i;
+    const mapSummaries = (summaries) => {
+        const filtered = summaries.filter((s) => !NOT_12_RE.test(s.title ?? ""));
+        if (filtered.length < summaries.length) {
+            console.log(`  filtered ${summaries.length - filtered.length} non-12" items`);
+        }
+        return filtered.map((s) => ({
+            itemId: s.itemId,
+            title: s.title ?? "",
+            price: parseFloat(s.currentBidPrice?.value ?? s.price?.value ?? "0"),
+            currency: s.currentBidPrice?.currency ?? s.price?.currency ?? "USD",
+            condition: s.condition ?? s.conditionId ?? "",
+            imageUrl: s.image?.imageUrl ?? "",
+            itemUrl: s.itemWebUrl ?? "",
+            locationCity: s.itemLocation?.city ?? "",
+            locationState: s.itemLocation?.stateOrProvince ?? "",
+            locationCountry: s.itemLocation?.country ?? "",
+            sellerUsername: s.seller?.username ?? "",
+            sellerFeedback: s.seller?.feedbackScore ?? 0,
+            buyingOptions: s.buyingOptions ?? [],
+            bidCount: s.bidCount ?? 0,
+            categories: (s.categories ?? []).map((c) => c.categoryId),
+            categoryNames: (s.categories ?? []).map((c) => c.categoryName),
+            itemEndDate: s.itemEndDate ?? null,
+            thumbnailUrl: (s.thumbnailImages ?? [])[0]?.imageUrl ?? "",
+            rawSummary: s,
+        }));
+    };
     try {
         const token = await getEbayToken();
-        const baseUrl = `https://api.ebay.com/buy/browse/v1/item_summary/search?category_ids=176985&limit=200&sort=endingSoonest&filter=price:[10..],priceCurrency:USD,buyingOptions:{AUCTION}&aspect_filter=categoryId:176985,Record%20Size:12%22`;
-        // Paginate through up to 5000 results (25 pages × 200)
-        for (let offset = 0; offset < 5000; offset += 200) {
+        const headers = { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" };
+        const baseFilter = `price:[10..],priceCurrency:USD,buyingOptions:{AUCTION}`;
+        const aspectFilter = `aspect_filter=categoryId:176985,Record%20Size:12%22`;
+        // 1) Category-wide newest (no keyword)
+        const catUrl = `https://api.ebay.com/buy/browse/v1/item_summary/search?category_ids=176985&limit=200&sort=newlyListed&filter=${baseFilter}&${aspectFilter}`;
+        try {
+            const r = await loggedFetch("ebay", catUrl, { headers, context: "vinyl: category" });
+            if (r.ok) {
+                const data = await r.json();
+                const summaries = data.itemSummaries ?? [];
+                console.log(`eBay vinyl (category): ${summaries.length} results`);
+                if (summaries.length)
+                    totalUpserted += await upsertVinylListings(mapSummaries(summaries));
+            }
+        }
+        catch (err) {
+            console.error("eBay vinyl (category) error:", err);
+        }
+        // 2) Keyword searches within the vinyl category — DB dedupes via ON CONFLICT
+        for (const keyword of VINYL_KEYWORD_QUERIES) {
             try {
-                const url = offset > 0 ? `${baseUrl}&offset=${offset}` : baseUrl;
-                const r = await loggedFetch("ebay", url, {
-                    headers: { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" },
-                    context: `vinyl search: 12in LP (offset ${offset})`,
-                });
+                await new Promise(r => setTimeout(r, 1000)); // pace
+                const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(keyword)}&category_ids=176985&limit=200&sort=newlyListed&filter=${baseFilter}&${aspectFilter}`;
+                const r = await loggedFetch("ebay", url, { headers, context: `vinyl: ${keyword}` });
                 if (!r.ok) {
-                    console.error(`eBay vinyl search (offset ${offset}) failed: ${r.status}`);
-                    break;
+                    console.error(`eBay vinyl "${keyword}" failed: ${r.status}`);
+                    continue;
                 }
                 const data = await r.json();
                 const summaries = data.itemSummaries ?? [];
-                const ebayTotal = data.total ?? 0;
-                console.log(`eBay vinyl (offset ${offset}): ${summaries.length} results (${ebayTotal} total available)`);
-                if (!summaries.length)
-                    break;
-                const items = summaries.map((s) => ({
-                    itemId: s.itemId,
-                    title: s.title ?? "",
-                    price: parseFloat(s.currentBidPrice?.value ?? s.price?.value ?? "0"),
-                    currency: s.currentBidPrice?.currency ?? s.price?.currency ?? "USD",
-                    condition: s.condition ?? s.conditionId ?? "",
-                    imageUrl: s.image?.imageUrl ?? "",
-                    itemUrl: s.itemWebUrl ?? "",
-                    locationCity: s.itemLocation?.city ?? "",
-                    locationState: s.itemLocation?.stateOrProvince ?? "",
-                    locationCountry: s.itemLocation?.country ?? "",
-                    sellerUsername: s.seller?.username ?? "",
-                    sellerFeedback: s.seller?.feedbackScore ?? 0,
-                    buyingOptions: s.buyingOptions ?? [],
-                    bidCount: s.bidCount ?? 0,
-                    categories: (s.categories ?? []).map((c) => c.categoryId),
-                    categoryNames: (s.categories ?? []).map((c) => c.categoryName),
-                    itemEndDate: s.itemEndDate ?? null,
-                    thumbnailUrl: (s.thumbnailImages ?? [])[0]?.imageUrl ?? "",
-                    rawSummary: s,
-                }));
-                const count = await upsertVinylListings(items);
-                totalUpserted += count;
-                // Stop if we've fetched all available results
-                if (offset + summaries.length >= ebayTotal)
-                    break;
-                // Pace requests
-                await new Promise(r => setTimeout(r, 1000));
+                console.log(`eBay vinyl "${keyword}": ${summaries.length} results`);
+                if (summaries.length)
+                    totalUpserted += await upsertVinylListings(mapSummaries(summaries));
             }
             catch (err) {
-                console.error(`eBay vinyl search (offset ${offset}) error:`, err);
-                break;
+                console.error(`eBay vinyl "${keyword}" error:`, err);
             }
         }
-        // Mark old listings as expired
+        // Mark ended listings as expired
         const expired = await markExpiredVinylListings();
         if (expired)
             console.log(`Marked ${expired} vinyl listings as expired`);
         await logVinylFetch("browse_search", totalUpserted);
-        console.log(`eBay vinyl fetch complete: ${totalUpserted} items upserted`);
+        console.log(`eBay vinyl fetch complete: ${totalUpserted} items upserted (4 calls)`);
     }
     catch (err) {
         console.error("eBay vinyl fetch failed:", err);
@@ -4133,18 +4147,17 @@ async function fetchEbayVinylListings() {
     }
     return totalUpserted;
 }
-// Schedule: vinyl search every 4 hours (staggered 2h from gear)
+// Schedule: vinyl search every 23 minutes (4 calls/cycle × ~62 cycles/day = 248 calls, ~50k items/day)
 function startVinylSchedule() {
     if (!ebayClientId || !ebayClientSecret) {
         console.log("eBay vinyl schedule not started — no credentials");
         return;
     }
-    // Vinyl search at :20 past the hour, every 2 hours
-    const msSearch = msUntilPacific(6, 20, 2);
-    console.log(`[vinyl] Next search in ${Math.round(msSearch / 60000)}min, then every 2h`);
+    const msSearch = msUntilPacific(6, 20, 1);
+    console.log(`[vinyl] Next search in ${Math.round(msSearch / 60000)}min, then every 23min`);
     setTimeout(() => {
         fetchEbayVinylListings();
-        setInterval(() => fetchEbayVinylListings(), 2 * 60 * 60 * 1000);
+        setInterval(() => fetchEbayVinylListings(), 23 * 60 * 1000);
     }, msSearch);
 }
 // GET /api/vinyl — public vinyl listings
@@ -4155,7 +4168,7 @@ app.get("/api/vinyl", async (_req, res) => {
         const q = _req.query.q || "";
         const limit = Math.min(parseInt(_req.query.limit) || 200, 500);
         const offset = parseInt(_req.query.offset) || 0;
-        res.setHeader("Cache-Control", "public, max-age=300");
+        res.setHeader("Cache-Control", "public, max-age=60");
         const { items, total } = await getVinylListings(minPrice, limit, offset, sort, q);
         res.json({ items, total });
     }
@@ -4209,6 +4222,9 @@ function nextPacificMidnightIso() {
 }
 app.get("/api/ebay/search/status", async (_req, res) => {
     try {
+        const userId = await getClerkUserId(_req);
+        if (!userId)
+            return res.status(401).json({ error: "Sign in to use eBay search" });
         const { count } = await getEbayRateCount();
         const remaining = Math.max(0, EBAY_USER_LIMIT - count);
         res.json({
@@ -4221,6 +4237,9 @@ app.get("/api/ebay/search/status", async (_req, res) => {
     }
 });
 app.get("/api/ebay/search", async (req, res) => {
+    const userId = await getClerkUserId(req);
+    if (!userId)
+        return res.status(401).json({ error: "Sign in to use eBay search" });
     const q = (req.query.q ?? "").trim();
     if (q.length < 2)
         return res.status(400).json({ error: "Query must be at least 2 characters" });
@@ -4305,6 +4324,9 @@ app.get("/api/ebay/search", async (req, res) => {
 });
 // GET /api/ebay/gear/search — live eBay search for vintage gear (auctions)
 app.get("/api/ebay/gear/search", async (req, res) => {
+    const userId = await getClerkUserId(req);
+    if (!userId)
+        return res.status(401).json({ error: "Sign in to use eBay search" });
     const q = (req.query.q ?? "").trim();
     if (q.length < 2)
         return res.status(400).json({ error: "Query must be at least 2 characters" });
@@ -4388,6 +4410,7 @@ app.get("/api/ebay/gear/search", async (req, res) => {
     }
 });
 // GET /api/ebay/item/:itemId — fetch full item details (description, images, specs)
+// Public — no auth required so vinyl/gear popup detail works for all visitors
 app.get("/api/ebay/item/:itemId", async (req, res) => {
     const itemId = req.params.itemId;
     if (!itemId || !/^v1\|/.test(itemId))
@@ -4855,6 +4878,23 @@ app.post("/api/admin/price-update", express.json(), async (req, res) => {
     }
     res.json({ ok: true, message: "Price update started" });
     runPriceUpdate();
+});
+// GET /api/admin/db-stats — row counts for all tables
+app.get("/api/admin/db-stats", async (req, res) => {
+    const userId = await getClerkUserId(req);
+    const adminId = process.env.ADMIN_CLERK_ID ?? "";
+    if (!userId || !adminId || userId !== adminId) {
+        res.status(403).json({ error: "Forbidden" });
+        return;
+    }
+    try {
+        const tables = await getTableRowCounts();
+        const totalRows = tables.reduce((sum, t) => sum + (t.rows > 0 ? t.rows : 0), 0);
+        res.json({ tables, totalRows });
+    }
+    catch (err) {
+        res.status(500).json({ error: String(err) });
+    }
 });
 // Helper: ms until the next occurrence of HH:MM Pacific, repeating every intervalH hours
 function msUntilPacific(hour, minute, intervalH) {
