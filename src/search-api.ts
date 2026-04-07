@@ -3761,6 +3761,8 @@ function nextPacificMidnightIso(): string {
 
 app.get("/api/ebay/search/status", async (_req, res) => {
   try {
+    const userId = await getClerkUserId(_req);
+    if (!userId) return res.status(401).json({ error: "Sign in to use eBay search" });
     const { count } = await getEbayRateCount();
     const remaining = Math.max(0, EBAY_USER_LIMIT - count);
     res.json({
@@ -3773,6 +3775,9 @@ app.get("/api/ebay/search/status", async (_req, res) => {
 });
 
 app.get("/api/ebay/search", async (req, res) => {
+  const userId = await getClerkUserId(req);
+  if (!userId) return res.status(401).json({ error: "Sign in to use eBay search" });
+
   const q = ((req.query.q as string) ?? "").trim();
   if (q.length < 2) return res.status(400).json({ error: "Query must be at least 2 characters" });
   if (q.length > 200) return res.status(400).json({ error: "Query too long" });
@@ -3868,6 +3873,9 @@ app.get("/api/ebay/search", async (req, res) => {
 
 // GET /api/ebay/gear/search — live eBay search for vintage gear (auctions)
 app.get("/api/ebay/gear/search", async (req, res) => {
+  const userId = await getClerkUserId(req);
+  if (!userId) return res.status(401).json({ error: "Sign in to use eBay search" });
+
   const q = ((req.query.q as string) ?? "").trim();
   if (q.length < 2) return res.status(400).json({ error: "Query must be at least 2 characters" });
   if (q.length > 200) return res.status(400).json({ error: "Query too long" });
@@ -3963,6 +3971,9 @@ app.get("/api/ebay/gear/search", async (req, res) => {
 
 // GET /api/ebay/item/:itemId — fetch full item details (description, images, specs)
 app.get("/api/ebay/item/:itemId", async (req, res) => {
+  const userId = await getClerkUserId(req);
+  if (!userId) return res.status(401).json({ error: "Sign in to view item details" });
+
   const itemId = req.params.itemId;
   if (!itemId || !/^v1\|/.test(itemId)) return res.status(400).json({ error: "Invalid item ID" });
   if (!ebayClientId || !ebayClientSecret) return res.status(503).json({ error: "eBay not available" });
