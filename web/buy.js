@@ -95,7 +95,7 @@ function renderBuyCard(item, idx) {
   return `<div class="card buy-card card-animate${expired ? ' card-expired' : ''}" onclick="event.stopPropagation();openBuyPopup(${idx})" role="button" tabindex="0" style="--i:${Math.min(idx, 20)};cursor:pointer;-webkit-tap-highlight-color:transparent"${endMs ? ` data-end="${endMs}"` : ""} title="${escHtml(item.title)}">
     <div class="card-thumb-wrap" style="pointer-events:none">${img}</div>
     <div class="card-body" style="pointer-events:none">
-      <div class="card-title">${escHtml(item.title.length > 65 ? item.title.slice(0, 63) + "…" : item.title)}</div>
+      <div class="card-title">${escHtml(item.title)}</div>
       ${artistLabel ? `<div class="card-sub" style="color:#aaa">${escHtml(artistLabel)}</div>` : ""}
       <div class="buy-price">${priceStr}</div>
       <div class="card-sub buy-bids">${escHtml(bidStr)}</div>
@@ -612,7 +612,7 @@ function renderEbayCard(item, idx) {
   return `<div class="card buy-card card-animate${expired ? ' card-expired' : ''}" onclick="event.stopPropagation();openEbaySearchPopup(${idx})" role="button" tabindex="0" style="--i:${Math.min(idx, 20)};cursor:pointer;-webkit-tap-highlight-color:transparent"${endMs ? ` data-end="${endMs}"` : ""} title="${escHtml(item.title)}">
     <div class="card-thumb-wrap" style="pointer-events:none">${img}</div>
     <div class="card-body" style="pointer-events:none">
-      <div class="card-title">${escHtml(item.title.length > 65 ? item.title.slice(0, 63) + "…" : item.title)}</div>
+      <div class="card-title">${escHtml(item.title)}</div>
       <div class="buy-price">${priceStr}</div>
       <div class="card-sub buy-bids">${escHtml(bidStr)}</div>
       ${conditionShow ? `<div class="card-meta">${escHtml(conditionShow)}</div>` : ""}
