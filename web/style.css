@@ -1224,6 +1224,17 @@ a.fresh-card-search-link:hover {
   font-size: 0.82rem; font-weight: 600;
 }
 .buy-popup-ebay-link:hover { background: #5ab0e8; }
+.buy-popup-search-link {
+  display: inline-block; margin-top: 0.4rem; margin-right: 0.5rem;
+  font-size: 0.78rem; color: var(--accent); text-decoration: none; cursor: pointer;
+}
+.buy-popup-search-link:hover { text-decoration: underline; color: #fff; }
+.ebay-spinner {
+  width: 24px; height: 24px; margin: 0 auto 0.5rem;
+  border: 3px solid #333; border-top-color: var(--accent);
+  border-radius: 50%; animation: ebay-spin 0.7s linear infinite;
+}
+@keyframes ebay-spin { to { transform: rotate(360deg); } }
 
 /* ── Feed tab ── */
 .feed-header { margin-bottom: 0.75rem; }
