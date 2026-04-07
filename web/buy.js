@@ -391,7 +391,7 @@ function loadMoreBuy() {
 async function initEbaySearchStatus() {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const r = await fetch("/api/ebay/search/status");
+      const r = await apiFetch("/api/ebay/search/status");
       if (r.status === 401) return; // not signed in — skip silently, bars stay hidden
       if (!r.ok) { if (!attempt) { await new Promise(r => setTimeout(r, 2000)); continue; } return; }
       // Signed in — show the live search bars
