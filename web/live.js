@@ -102,7 +102,7 @@ async function doLiveSearch(append = false) {
     // Update URL for sharing
     if (!append) {
       const u = new URLSearchParams();
-      u.set("view", "live");
+      u.set("v", "live");
       if (artist) u.set("la", artist);
       if (city)   u.set("lc", city);
       if (genre)  u.set("lg", genre);
