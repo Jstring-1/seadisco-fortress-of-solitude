@@ -4064,15 +4064,15 @@ app.post("/api/ebay/deletion", (_req, res) => {
 // ── Feed: RSS + YouTube ─────────────────────────────────────────────────
 const RSS_FEEDS: Array<{ name: string; url: string; category: string }> = [
   // Record collecting & vinyl culture
-  { name: "Discogs Blog", url: "https://blog.discogs.com/en/feed/", category: "news" },
-  { name: "The Vinyl Factory", url: "https://thevinylfactory.com/feed/", category: "news" },
-  { name: "Modern Vinyl", url: "https://modern-vinyl.com/feed/", category: "news" },
-  { name: "Analog Planet", url: "https://www.analogplanet.com/feed/", category: "gear" },
+  { name: "Long Live Vinyl", url: "https://longlivevinyl.net/feed/", category: "news" },
+  // Audiophile & gear
+  { name: "What Hi-Fi?", url: "https://www.whathifi.com/feeds.xml", category: "gear" },
+  { name: "Stereophile", url: "https://www.stereophile.com/rss.xml", category: "gear" },
+  { name: "Head-Fi", url: "https://www.head-fi.org/forums/-/index.rss", category: "gear" },
   // Music reviews & news
   { name: "Pitchfork", url: "https://pitchfork.com/feed/feed-album-reviews/rss", category: "reviews" },
   { name: "Bandcamp Daily", url: "https://daily.bandcamp.com/feed", category: "reviews" },
   { name: "Aquarium Drunkard", url: "https://aquariumdrunkard.com/feed/", category: "news" },
-  { name: "The Quietus", url: "https://thequietus.com/feed", category: "reviews" },
   { name: "BrooklynVegan", url: "https://www.brooklynvegan.com/feed/", category: "news" },
   { name: "Stereogum", url: "https://www.stereogum.com/feed/", category: "news" },
 ];

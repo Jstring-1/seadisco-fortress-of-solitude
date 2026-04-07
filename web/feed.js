@@ -10,16 +10,16 @@ const FEED_PAGE_SIZE = 50;
 
 const FEED_SOURCE_URLS = {
   // Record collecting & vinyl culture
-  "Discogs Blog": "https://blog.discogs.com/en",
-  "The Vinyl Factory": "https://thevinylfactory.com",
-  "Modern Vinyl": "https://modern-vinyl.com",
-  "Analog Planet": "https://www.analogplanet.com",
+  "Long Live Vinyl": "https://longlivevinyl.net",
+  // Audiophile & gear
+  "What Hi-Fi?": "https://www.whathifi.com",
+  "Stereophile": "https://www.stereophile.com",
+  "Head-Fi": "https://www.head-fi.org",
   // Music reviews & news
   "Pitchfork": "https://pitchfork.com",
   "Bandcamp Daily": "https://daily.bandcamp.com",
   "Stereogum": "https://www.stereogum.com",
   "Aquarium Drunkard": "https://aquariumdrunkard.com",
-  "The Quietus": "https://thequietus.com",
   "BrooklynVegan": "https://www.brooklynvegan.com",
   // YouTube — vinyl & collecting
   "Vinyl Eyezz": "https://www.youtube.com/@VinylEyezz",
@@ -29,6 +29,7 @@ const FEED_SOURCE_URLS = {
   "In Groove": "https://www.youtube.com/@InGrooveVinyl",
   // YouTube — gear & reviews
   "Techmoan": "https://www.youtube.com/@Techmoan",
+  "Analog Planet": "https://www.youtube.com/@AnalogPlanet",
   "KEXP": "https://www.youtube.com/@kaboretv",
   "Tiny Desk (NPR)": "https://www.youtube.com/@nprmusic",
   "The Needle Drop": "https://www.youtube.com/@theneedledrop",
