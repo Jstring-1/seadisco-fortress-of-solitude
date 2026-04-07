@@ -3571,7 +3571,7 @@ function startGearSchedule() {
 app.get("/api/gear", async (_req, res) => {
   try {
     const minPrice = parseFloat(_req.query.min_price as string) || 0;
-    const sort     = (_req.query.sort as string) || "bids";
+    const sort     = (_req.query.sort as string) || "ending";
     const q        = (_req.query.q as string) || "";
     const limit    = Math.min(parseInt(_req.query.limit as string) || 200, 500);
     const offset   = parseInt(_req.query.offset as string) || 0;
