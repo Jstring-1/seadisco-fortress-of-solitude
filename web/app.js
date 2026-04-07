@@ -15,7 +15,9 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
 (async function () {
   const p = new URLSearchParams(location.search);
   const view = p.get("view");
-  if (view === "drops" || view === "live" || view === "buy" || view === "gear" || view === "feed" || view === "info" || view === "privacy" || view === "terms") {
+  if (view === "account") {
+    switchView("account", true);
+  } else if (view === "drops" || view === "live" || view === "buy" || view === "gear" || view === "feed" || view === "info" || view === "privacy" || view === "terms") {
     switchView(view, true);
     // Restore live search from shared URL
     if (view === "live" && (p.get("la") || p.get("lc") || p.get("lg"))) {
@@ -108,7 +110,7 @@ window.addEventListener("popstate", () => {
     if (sort) { const el = document.getElementById("cw-sort"); if (el) el.value = sort; }
     switchView("records", true); return;
   }
-  if (view === "drops" || view === "live" || view === "buy" || view === "gear" || view === "feed" || view === "records" || view === "info" || view === "privacy" || view === "terms" || view === "wanted") {
+  if (view === "drops" || view === "live" || view === "buy" || view === "gear" || view === "feed" || view === "records" || view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account") {
     if (view === "records") {
       _cwTab = p.get("tab") || "collection";
       const sort = p.get("sort");
@@ -173,6 +175,10 @@ async function applyAuthState(clerk) {
   }
 
   if (clerk.user) {
+    // Notify account.js so the account view can update if it's active
+    if (typeof handleSignedIn === "function" && document.getElementById("account-view")?.style.display !== "none") {
+      handleSignedIn(clerk);
+    }
     addNavTab("wanted");
     try {
       const tokenCheck = await apiFetch("/api/user/token");

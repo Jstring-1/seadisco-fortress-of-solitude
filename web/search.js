@@ -312,7 +312,7 @@ async function doSearch(page = 1, skipPushState = false) {
         document.getElementById("results").innerHTML =
           `<div class="empty-state"><div class="empty-state-icon">🔑</div>` +
           `<div class="empty-state-title">Sign in to search</div>` +
-          `<div class="empty-state-subtitle"><a href="/account" style="color:var(--accent)">Create a free account</a> and add your Discogs token to start discovering music.</div></div>`;
+          `<div class="empty-state-subtitle"><a href="/?view=account" onclick="switchView('account');return false;" style="color:var(--accent)">Create a free account</a> and add your Discogs token to start discovering music.</div></div>`;
         return;
       }
       if (errData.error === "rate_limited") {
@@ -320,7 +320,7 @@ async function doSearch(page = 1, skipPushState = false) {
         document.getElementById("results").innerHTML =
           `<div class="empty-state"><div class="empty-state-icon">✨</div>` +
           `<div class="empty-state-title">You've used your free searches for today</div>` +
-          `<div class="empty-state-subtitle"><a href="/account" style="color:var(--accent)">Sign in with a free account</a> and connect your Discogs token for unlimited searches, collection sync, favorites, and more.</div></div>`;
+          `<div class="empty-state-subtitle"><a href="/?view=account" onclick="switchView('account');return false;" style="color:var(--accent)">Sign in with a free account</a> and connect your Discogs token for unlimited searches, collection sync, favorites, and more.</div></div>`;
         return;
       }
     }

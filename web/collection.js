@@ -150,9 +150,9 @@ function addNavTab(view) {
     const authTab = document.getElementById("nav-auth-tab");
     if (authTab) {
       authTab.textContent = "Account";
-      authTab.href = "/account";
+      authTab.href = "/?view=account";
       authTab.title = "";
-      authTab.onclick = null;
+      authTab.onclick = function(e) { e.preventDefault(); switchView("account"); };
     }
   }
 }
@@ -181,7 +181,7 @@ function showRecordSignIn(rtab) {
   };
   const grid = document.getElementById("results");
   grid.innerHTML = renderEmptyState("🔒", msgs[rtab] || "Sign in to continue",
-    `<a href="/account" style="color:var(--accent);text-decoration:none">Sign in or create an account →</a>`);
+    `<a href="/?view=account" onclick="switchView('account');return false;" style="color:var(--accent);text-decoration:none">Sign in or create an account →</a>`);
   document.getElementById("pagination").style.display = "none";
   const blurb = document.getElementById("blurb"); if (blurb) blurb.style.display = "none";
   if (typeof setCwStatus === "function") setCwStatus("");
@@ -211,19 +211,20 @@ function switchView(view, skipPushState = false) {
   const infoView    = document.getElementById("info-view");
   const privacyView = document.getElementById("privacy-view");
   const termsView   = document.getElementById("terms-view");
+  const accountView = document.getElementById("account-view");
   if (!skipPushState) {
     if (view === "records") {
       const tab = _cwTab || "collection";
       const url = tab === "collection" ? "?view=records" : `?view=records&tab=${tab}`;
       history.pushState({ view, tab }, "", url);
-    } else if (view === "drops" || view === "live" || view === "buy" || view === "gear" || view === "feed" || view === "info" || view === "privacy" || view === "terms" || view === "wanted") {
+    } else if (view === "drops" || view === "live" || view === "buy" || view === "gear" || view === "feed" || view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account") {
       history.pushState({ view }, "", "?view=" + view);
     } else {
       history.pushState({}, "", location.pathname);
     }
   }
   if (typeof gtag === "function") {
-    const titles = { drops: "Drops", live: "Live", buy: "Buy", gear: "Gear", feed: "Feed", info: "Info", privacy: "Privacy Policy", terms: "Terms of Service", records: "My Records", wanted: "Wants", search: "Search" };
+    const titles = { drops: "Drops", live: "Live", buy: "Buy", gear: "Gear", feed: "Feed", info: "Info", privacy: "Privacy Policy", terms: "Terms of Service", records: "My Records", wanted: "Wants", search: "Search", account: "Account" };
     gtag("event", "page_view", {
       page_location: window.location.href,
       page_path:     window.location.pathname + window.location.search,
@@ -239,6 +240,7 @@ function switchView(view, skipPushState = false) {
   if (infoView)    infoView.style.display    = "none";
   if (privacyView) privacyView.style.display = "none";
   if (termsView)   termsView.style.display   = "none";
+  if (accountView) accountView.style.display = "none";
 
   const mainForm    = document.getElementById("main-search-form");
   const recordsWrap = document.getElementById("records-wrap");
@@ -291,6 +293,12 @@ function switchView(view, skipPushState = false) {
     if (mainForm) mainForm.style.display = "none";
     if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
+  } else if (view === "account") {
+    if (accountView) accountView.style.display = "block";
+    if (mainForm) mainForm.style.display = "none";
+    if (recordsWrap) recordsWrap.style.display = "none";
+    if (wantedWrap) wantedWrap.style.display = "none";
+    if (typeof initAccountView === "function") initAccountView();
   } else if (view === "wanted") {
     if (searchView) searchView.style.display = "";
     if (mainForm) mainForm.style.display = "none";
