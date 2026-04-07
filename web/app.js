@@ -290,33 +290,51 @@ authReadyPromise.then(() => {
     );
   }
 
-  // Buy (Vinyl) filter
+  // Buy (Vinyl) local DB filter — NOT the live eBay search
   const buyBar = document.querySelector(".buy-right-controls");
   if (buyBar) {
     buildSavedSearchUI("buy",
       () => {
-        const q = document.querySelector(".buy-search-field")?.value?.trim();
-        return q ? { q } : {};
+        const params = {};
+        const q = document.getElementById("buy-filter-field")?.value?.trim();
+        if (q) params.q = q;
+        const sort = document.querySelector(".buy-sort")?.value;
+        if (sort && sort !== "ending") params.sort = sort;
+        const activePrice = document.querySelector(".buy-price-pill.active");
+        const minPrice = activePrice ? parseInt(activePrice.dataset.min) : 0;
+        if (minPrice > 0) params.min_price = minPrice;
+        return params;
       },
       (p) => {
-        const el = document.querySelector(".buy-search-field");
-        if (el) { el.value = p.q || ""; el.dispatchEvent(new Event("input")); }
+        const filterEl = document.getElementById("buy-filter-field");
+        if (filterEl) { filterEl.value = p.q || ""; onBuySearch(p.q || ""); }
+        if (p.sort) { const sel = document.querySelector(".buy-sort"); if (sel) { sel.value = p.sort; setBuySort(p.sort); } }
+        if (p.min_price) { setBuyPriceFilter(p.min_price); } else { setBuyPriceFilter(0); }
       },
       buyBar
     );
   }
 
-  // Gear filter
+  // Gear local DB filter — NOT the live eBay search
   const gearBar = document.querySelector(".gear-right-controls");
   if (gearBar) {
     buildSavedSearchUI("gear",
       () => {
+        const params = {};
         const q = document.querySelector(".gear-search-field")?.value?.trim();
-        return q ? { q } : {};
+        if (q) params.q = q;
+        const sort = document.querySelector(".gear-sort")?.value;
+        if (sort && sort !== "bids") params.sort = sort;
+        const activePrice = document.querySelector(".gear-price-pill.active");
+        const minPrice = activePrice ? parseInt(activePrice.dataset.min) : 0;
+        if (minPrice > 0) params.min_price = minPrice;
+        return params;
       },
       (p) => {
-        const el = document.querySelector(".gear-search-field");
-        if (el) { el.value = p.q || ""; el.dispatchEvent(new Event("input")); }
+        const filterEl = document.querySelector(".gear-search-field");
+        if (filterEl) { filterEl.value = p.q || ""; onGearSearch(p.q || ""); }
+        if (p.sort) { const sel = document.querySelector(".gear-sort"); if (sel) { sel.value = p.sort; setGearSort(p.sort); } }
+        if (p.min_price) { setGearPriceFilter(p.min_price); } else { setGearPriceFilter(0); }
       },
       gearBar
     );

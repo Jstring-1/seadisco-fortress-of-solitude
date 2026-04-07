@@ -513,11 +513,16 @@ async function saveCurrentSearch(view) {
   if (!wrap?._getParams) return;
   const params = wrap._getParams();
   // Build a short label from the params
+  const sortLabels = { ending: "Ending Soonest", bids: "Most Bids", price_desc: "Price ↓", price_asc: "Price ↑", newest: "Newly Listed" };
   const parts = [];
   for (const [k, v] of Object.entries(params)) {
-    if (v && k !== "page" && k !== "per_page") parts.push(String(v));
+    if (!v || k === "page" || k === "per_page") continue;
+    if (k === "sort") parts.push(sortLabels[v] || v);
+    else if (k === "min_price") parts.push(`$${v}+`);
+    else parts.push(String(v));
   }
   const label = parts.join(" · ").slice(0, 200) || "Untitled";
+  if (Object.keys(params).length === 0) { showToast("Nothing to save — set a filter first", "error"); return; }
   try {
     const r = await apiFetch("/api/user/saved-searches", {
       method: "POST",

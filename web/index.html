@@ -481,7 +481,7 @@
         <span class="pill buy-price-pill" data-min="250" onclick="setBuyPriceFilter(250)">$250+</span>
       </div>
       <div class="buy-right-controls">
-        <input type="text" class="site-form-field buy-search-field" placeholder="Filter Vinyl" oninput="onBuySearch(this.value)">
+        <input type="text" id="buy-filter-field" class="site-form-field buy-search-field" placeholder="Filter Vinyl" oninput="onBuySearch(this.value)">
         <select class="site-form-field buy-sort" onchange="setBuySort(this.value)">
           <option value="ending">Ending Soonest</option>
           <option value="bids">Most Bids</option>
