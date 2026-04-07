@@ -199,10 +199,7 @@ initAuth({
   onReady: () => _authReady(),
 });
 
-// ── Service Worker registration ──────────────────────────────────────────
-if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("/sw.js").catch(() => {});
-}
+// Service worker removed — no sw.js exists
 
 // ── Saved search UI init (after auth ready) ─────────────────────────────
 authReadyPromise.then(() => {
