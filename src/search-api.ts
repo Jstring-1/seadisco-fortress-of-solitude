@@ -3475,11 +3475,13 @@ const GEAR_SEARCH_QUERIES = [
   "vintage receiver",
   "vintage amplifier",
   "vintage turntable",
-  "vintage speakers hifi",
-  "vintage tape deck reel",
-  "hifi separates amplifier",
-  "tube amplifier audio",
-  "vintage preamp audio",
+  "vintage speakers",
+];
+
+const VINYL_KEYWORD_QUERIES = [
+  "rare",
+  "vintage",
+  "original",
 ];
 
 async function fetchEbayGearListings(): Promise<number> {
@@ -3550,18 +3552,18 @@ async function fetchEbayGearListings(): Promise<number> {
   return totalUpserted;
 }
 
-// Schedule: gear search every hour (staggered 30min from vinyl)
+// Schedule: gear search every 23 minutes (4 calls/cycle × ~62 cycles/day = 248 calls, staggered 11min from vinyl)
 function startGearSchedule() {
   if (!ebayClientId || !ebayClientSecret) {
     console.log("eBay gear schedule not started — no credentials");
     return;
   }
-  // Gear search at :50 past the hour, every hour
-  const msSearch = msUntilPacific(4, 50, 1);
-  console.log(`[gear] Next search in ${Math.round(msSearch / 60000)}min, then every 1h`);
+  // Gear search at :31 past (11min offset from vinyl's :20), every 23 min
+  const msSearch = msUntilPacific(6, 31, 1);
+  console.log(`[gear] Next search in ${Math.round(msSearch / 60000)}min, then every 23min`);
   setTimeout(() => {
     fetchEbayGearListings();
-    setInterval(() => fetchEbayGearListings(), 1 * 60 * 60 * 1000);
+    setInterval(() => fetchEbayGearListings(), 23 * 60 * 1000);
   }, msSearch);
 }
 
@@ -3612,74 +3614,75 @@ async function fetchEbayVinylListings(): Promise<number> {
   }
   console.log("Starting eBay vinyl fetch…");
   let totalUpserted = 0;
+
+  const NOT_12_RE = /\b(7["″''"]|7 inch|45 ?rpm|\b45\b|10["″''"]|10 inch|pic sleeve)\b/i;
+
+  const mapSummaries = (summaries: any[]) => {
+    const filtered = summaries.filter((s: any) => !NOT_12_RE.test(s.title ?? ""));
+    if (filtered.length < summaries.length) {
+      console.log(`  filtered ${summaries.length - filtered.length} non-12" items`);
+    }
+    return filtered.map((s: any) => ({
+      itemId:          s.itemId,
+      title:           s.title ?? "",
+      price:           parseFloat(s.currentBidPrice?.value ?? s.price?.value ?? "0"),
+      currency:        s.currentBidPrice?.currency ?? s.price?.currency ?? "USD",
+      condition:       s.condition ?? s.conditionId ?? "",
+      imageUrl:        s.image?.imageUrl ?? "",
+      itemUrl:         s.itemWebUrl ?? "",
+      locationCity:    s.itemLocation?.city ?? "",
+      locationState:   s.itemLocation?.stateOrProvince ?? "",
+      locationCountry: s.itemLocation?.country ?? "",
+      sellerUsername:  s.seller?.username ?? "",
+      sellerFeedback:  s.seller?.feedbackScore ?? 0,
+      buyingOptions:   s.buyingOptions ?? [],
+      bidCount:        s.bidCount ?? 0,
+      categories:      (s.categories ?? []).map((c: any) => c.categoryId),
+      categoryNames:   (s.categories ?? []).map((c: any) => c.categoryName),
+      itemEndDate:     s.itemEndDate ?? null,
+      thumbnailUrl:    (s.thumbnailImages ?? [])[0]?.imageUrl ?? "",
+      rawSummary:      s,
+    }));
+  };
+
   try {
     const token = await getEbayToken();
-    const baseUrl = `https://api.ebay.com/buy/browse/v1/item_summary/search?category_ids=176985&limit=200&sort=newlyListed&filter=price:[10..],priceCurrency:USD,buyingOptions:{AUCTION}&aspect_filter=categoryId:176985,Record%20Size:12%22`;
+    const headers = { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" };
+    const baseFilter = `price:[10..],priceCurrency:USD,buyingOptions:{AUCTION}`;
+    const aspectFilter = `aspect_filter=categoryId:176985,Record%20Size:12%22`;
 
-    // Paginate through up to 5000 results (25 pages × 200)
-    for (let offset = 0; offset < 5000; offset += 200) {
-      try {
-        const url = offset > 0 ? `${baseUrl}&offset=${offset}` : baseUrl;
-        const r = await loggedFetch("ebay", url, {
-          headers: { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" },
-          context: `vinyl search: 12in LP (offset ${offset})`,
-        });
-        if (!r.ok) {
-          console.error(`eBay vinyl search (offset ${offset}) failed: ${r.status}`);
-          break;
-        }
+    // 1) Category-wide newest (no keyword)
+    const catUrl = `https://api.ebay.com/buy/browse/v1/item_summary/search?category_ids=176985&limit=200&sort=newlyListed&filter=${baseFilter}&${aspectFilter}`;
+    try {
+      const r = await loggedFetch("ebay", catUrl, { headers, context: "vinyl: category" });
+      if (r.ok) {
         const data = await r.json() as any;
         const summaries: any[] = data.itemSummaries ?? [];
-        const ebayTotal = data.total ?? 0;
-        console.log(`eBay vinyl (offset ${offset}): ${summaries.length} results (${ebayTotal} total available)`);
-
-        if (!summaries.length) break;
-
-        // Filter out non-12" records by title keywords
-        const NOT_12_RE = /\b(7["″''"]|7 inch|45 ?rpm|\b45\b|10["″''"]|10 inch|pic sleeve)\b/i;
-        const filtered = summaries.filter((s: any) => !NOT_12_RE.test(s.title ?? ""));
-        console.log(`eBay vinyl (offset ${offset}): filtered ${summaries.length - filtered.length} non-12" items`);
-
-        const items = filtered.map((s: any) => ({
-          itemId:          s.itemId,
-          title:           s.title ?? "",
-          price:           parseFloat(s.currentBidPrice?.value ?? s.price?.value ?? "0"),
-          currency:        s.currentBidPrice?.currency ?? s.price?.currency ?? "USD",
-          condition:       s.condition ?? s.conditionId ?? "",
-          imageUrl:        s.image?.imageUrl ?? "",
-          itemUrl:         s.itemWebUrl ?? "",
-          locationCity:    s.itemLocation?.city ?? "",
-          locationState:   s.itemLocation?.stateOrProvince ?? "",
-          locationCountry: s.itemLocation?.country ?? "",
-          sellerUsername:  s.seller?.username ?? "",
-          sellerFeedback:  s.seller?.feedbackScore ?? 0,
-          buyingOptions:   s.buyingOptions ?? [],
-          bidCount:        s.bidCount ?? 0,
-          categories:      (s.categories ?? []).map((c: any) => c.categoryId),
-          categoryNames:   (s.categories ?? []).map((c: any) => c.categoryName),
-          itemEndDate:     s.itemEndDate ?? null,
-          thumbnailUrl:    (s.thumbnailImages ?? [])[0]?.imageUrl ?? "",
-          rawSummary:      s,
-        }));
-
-        const count = await upsertVinylListings(items);
-        totalUpserted += count;
-
-        // Stop if we've fetched all available results
-        if (offset + summaries.length >= ebayTotal) break;
-        // Pace requests
-        await new Promise(r => setTimeout(r, 1000));
-      } catch (err) {
-        console.error(`eBay vinyl search (offset ${offset}) error:`, err);
-        break;
+        console.log(`eBay vinyl (category): ${summaries.length} results`);
+        if (summaries.length) totalUpserted += await upsertVinylListings(mapSummaries(summaries));
       }
+    } catch (err) { console.error("eBay vinyl (category) error:", err); }
+
+    // 2) Keyword searches within the vinyl category — DB dedupes via ON CONFLICT
+    for (const keyword of VINYL_KEYWORD_QUERIES) {
+      try {
+        await new Promise(r => setTimeout(r, 1000)); // pace
+        const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(keyword)}&category_ids=176985&limit=200&sort=newlyListed&filter=${baseFilter}&${aspectFilter}`;
+        const r = await loggedFetch("ebay", url, { headers, context: `vinyl: ${keyword}` });
+        if (!r.ok) { console.error(`eBay vinyl "${keyword}" failed: ${r.status}`); continue; }
+        const data = await r.json() as any;
+        const summaries: any[] = data.itemSummaries ?? [];
+        console.log(`eBay vinyl "${keyword}": ${summaries.length} results`);
+        if (summaries.length) totalUpserted += await upsertVinylListings(mapSummaries(summaries));
+      } catch (err) { console.error(`eBay vinyl "${keyword}" error:`, err); }
     }
-    // Mark old listings as expired
+
+    // Mark ended listings as expired
     const expired = await markExpiredVinylListings();
     if (expired) console.log(`Marked ${expired} vinyl listings as expired`);
 
     await logVinylFetch("browse_search", totalUpserted);
-    console.log(`eBay vinyl fetch complete: ${totalUpserted} items upserted`);
+    console.log(`eBay vinyl fetch complete: ${totalUpserted} items upserted (4 calls)`);
   } catch (err) {
     console.error("eBay vinyl fetch failed:", err);
     await logVinylFetch("browse_search", totalUpserted, String(err));
@@ -3687,18 +3690,17 @@ async function fetchEbayVinylListings(): Promise<number> {
   return totalUpserted;
 }
 
-// Schedule: vinyl search every hour
+// Schedule: vinyl search every 23 minutes (4 calls/cycle × ~62 cycles/day = 248 calls, ~50k items/day)
 function startVinylSchedule() {
   if (!ebayClientId || !ebayClientSecret) {
     console.log("eBay vinyl schedule not started — no credentials");
     return;
   }
-  // Vinyl search at :20 past the hour, every hour
   const msSearch = msUntilPacific(6, 20, 1);
-  console.log(`[vinyl] Next search in ${Math.round(msSearch / 60000)}min, then every 1h`);
+  console.log(`[vinyl] Next search in ${Math.round(msSearch / 60000)}min, then every 23min`);
   setTimeout(() => {
     fetchEbayVinylListings();
-    setInterval(() => fetchEbayVinylListings(), 1 * 60 * 60 * 1000);
+    setInterval(() => fetchEbayVinylListings(), 23 * 60 * 1000);
   }, msSearch);
 }
 
