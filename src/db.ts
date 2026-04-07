@@ -595,6 +595,22 @@ export async function getFavorites(clerkUserId: string, limit: number = 100, off
   return r.rows;
 }
 
+/** Random favorites from all users, deduplicated by discogs_id+entity_type */
+export async function getRandomPublicFavorites(limit: number = 48): Promise<any[]> {
+  const r = await getPool().query(
+    `SELECT DISTINCT ON (discogs_id, entity_type) discogs_id, entity_type, data, created_at
+     FROM user_favorites
+     ORDER BY discogs_id, entity_type, created_at DESC`
+  );
+  // Shuffle in JS and take the requested limit
+  const rows = r.rows;
+  for (let i = rows.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [rows[i], rows[j]] = [rows[j], rows[i]];
+  }
+  return rows.slice(0, limit);
+}
+
 export async function addFavorite(clerkUserId: string, discogsId: number, entityType: string, data: object): Promise<void> {
   await getPool().query(
     `INSERT INTO user_favorites (clerk_user_id, discogs_id, entity_type, data)
