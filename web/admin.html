@@ -6,12 +6,12 @@
   <title>SeaDisco — Admin</title>
   <meta name="robots" content="noindex, nofollow" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
-  <link rel="stylesheet" href="/style.css?v=20260406h" />
+  <link rel="stylesheet" href="/style.css?v=20260406i" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260406h"></script>
+<script src="/shared.js?v=20260406i"></script>
 <script>renderSharedHeader({ hideRecords: true });</script>
 
 <main>
@@ -53,22 +53,39 @@
         <div id="feedback-list" style="font-size:0.85rem;color:var(--muted)">Loading...</div>
       </div>
 
+      <!-- Section nav tabs -->
+      <div class="admin-tab-bar">
+        <button class="admin-tab active" onclick="switchAdminTab('collection-stats')">Collection Stats</button>
+        <button class="admin-tab" onclick="switchAdminTab('sync-status')">User Sync</button>
+        <button class="admin-tab" onclick="switchAdminTab('api-log')">API Log</button>
+        <button class="admin-tab" onclick="switchAdminTab('db-stats')">Database</button>
+      </div>
+
       <!-- Collection Stats -->
-      <div class="admin-section admin-section-a">
-        <h2 style="margin-bottom:0.5rem">Collection Stats</h2>
+      <div class="admin-tab-panel" id="panel-collection-stats">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
+          <h2 style="margin:0">Collection Stats</h2>
+          <button class="admin-refresh-btn" onclick="loadCollectionStats()" title="Refresh">&#8635;</button>
+        </div>
         <div id="collection-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
       </div>
 
       <!-- User Sync Status -->
-      <div class="admin-section admin-section-b">
-        <h2 style="margin-bottom:0.5rem">User Sync Status</h2>
+      <div class="admin-tab-panel" id="panel-sync-status" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
+          <h2 style="margin:0">User Sync Status</h2>
+          <button class="admin-refresh-btn" onclick="loadAdminSyncStatus()" title="Refresh">&#8635;</button>
+        </div>
         <div id="admin-fresh-stats" style="font-size:0.8rem;color:#555;margin-bottom:0.75rem"></div>
         <div id="admin-sync-status-list" style="font-size:0.83rem;color:var(--muted)">Loading...</div>
       </div>
 
       <!-- API Request Log -->
-      <div class="admin-section admin-section-b">
-        <h2 style="margin-bottom:0.5rem">API Request Log <span id="api-log-range-label" style="font-size:0.75rem;color:var(--muted);font-weight:400">(24h)</span></h2>
+      <div class="admin-tab-panel" id="panel-api-log" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
+          <h2 style="margin:0">API Request Log <span id="api-log-range-label" style="font-size:0.75rem;color:var(--muted);font-weight:400">(24h)</span></h2>
+          <button class="admin-refresh-btn" onclick="loadApiLog()" title="Refresh">&#8635;</button>
+        </div>
         <div id="api-stats-summary" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem"></div>
         <div style="margin-bottom:0.5rem;display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center">
           <select id="api-log-filter" onchange="loadApiLog()" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:#1a1510;color:var(--text);border:1px solid var(--border);border-radius:4px">
@@ -95,8 +112,11 @@
       </div>
 
       <!-- Database Stats -->
-      <div class="admin-section admin-section-a">
-        <h2 style="margin-bottom:0.5rem">Database</h2>
+      <div class="admin-tab-panel" id="panel-db-stats" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
+          <h2 style="margin:0">Database</h2>
+          <button class="admin-refresh-btn" onclick="loadDbStats()" title="Refresh">&#8635;</button>
+        </div>
         <div id="db-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
       </div>
 
@@ -154,13 +174,35 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script src="/modal.js?v=20260406h"></script>
+<script src="/modal.js?v=20260406i"></script>
 
 <footer></footer>
 <script>renderSharedFooter();</script>
 
 <script>
 let clerk = null;
+
+const _adminTabLoaders = {
+  'collection-stats': () => loadCollectionStats(),
+  'sync-status': () => loadAdminSyncStatus(),
+  'api-log': () => loadApiLog(),
+  'db-stats': () => loadDbStats(),
+};
+const _adminTabLoaded = {};
+
+function switchAdminTab(tabId) {
+  document.querySelectorAll('.admin-tab-panel').forEach(p => p.style.display = 'none');
+  document.querySelectorAll('.admin-tab').forEach(b => b.classList.remove('active'));
+  const panel = document.getElementById('panel-' + tabId);
+  if (panel) panel.style.display = '';
+  const tabs = document.querySelectorAll('.admin-tab');
+  tabs.forEach(b => { if (b.getAttribute('onclick')?.includes(tabId)) b.classList.add('active'); });
+  // Lazy-load data on first visit
+  if (!_adminTabLoaded[tabId] && _adminTabLoaders[tabId]) {
+    _adminTabLoaded[tabId] = true;
+    _adminTabLoaders[tabId]();
+  }
+}
 
 function showDenied() {
   document.getElementById("loading-section").style.display = "none";
@@ -179,10 +221,9 @@ async function verifyAdmin(c) {
     document.getElementById("admin-content").style.display = "block";
 
     renderFeedback(items);
-    loadAdminSyncStatus();
-    loadApiLog();
+    // Load the default visible tab (collection stats)
+    _adminTabLoaded['collection-stats'] = true;
     loadCollectionStats();
-    loadDbStats();
     checkKillStatus();
   } catch { showDenied(); }
 }
