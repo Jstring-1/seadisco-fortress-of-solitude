@@ -261,8 +261,37 @@ async function _fetchEbayDetail(itemId, overlay) {
       if (d.rateLimit.resetsAt) _ebayResetAt = d.rateLimit.resetsAt;
       updateEbayMeta();
     }
+
+    // Update in-memory item and visible card with fresh price/bids
+    _updateItemInMemory(itemId, d);
   } catch {
     if (area) area.textContent = "";
+  }
+}
+
+function _updateItemInMemory(itemId, detail) {
+  for (const list of [_buyItems, (window._gearItems || [])]) {
+    const item = list.find(i => (i.item_id || i.ebay_item_id) === itemId);
+    if (!item) continue;
+    if (detail.price > 0)        item.price = detail.price;
+    if (detail.currency)         item.currency = detail.currency;
+    if (detail.bidCount != null)  item.bid_count = detail.bidCount;
+    if (detail.condition)        item.condition = detail.condition;
+    if (detail.allImages?.length) item.all_images = detail.allImages;
+    if (detail.itemEndDate)      item.item_end_date = detail.itemEndDate;
+    // Refresh the visible card
+    const idx = list.indexOf(item);
+    const isBuy = list === _buyItems;
+    const gridId = isBuy ? "buy-results" : "gear-results";
+    const grid = document.getElementById(gridId);
+    if (grid && idx >= 0 && grid.children[idx]) {
+      const renderFn = isBuy ? renderBuyCard : (typeof renderGearCard === "function" ? renderGearCard : null);
+      if (renderFn) {
+        const tmp = document.createElement("div");
+        tmp.innerHTML = renderFn(item, idx);
+        grid.children[idx].replaceWith(tmp.firstElementChild);
+      }
+    }
   }
 }
 
