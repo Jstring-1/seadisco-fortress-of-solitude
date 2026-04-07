@@ -52,7 +52,7 @@ function renderGearCard(item, idx) {
   return `<div class="card gear-card card-animate${expired ? ' card-expired' : ''}" onclick="event.stopPropagation();openGearPopup(${idx})" role="button" tabindex="0" style="--i:${Math.min(idx, 20)};cursor:pointer;-webkit-tap-highlight-color:transparent"${endMs ? ` data-end="${endMs}"` : ""} title="${escHtml(item.title)}">
     <div class="card-thumb-wrap" style="pointer-events:none">${img}</div>
     <div class="card-body" style="pointer-events:none">
-      <div class="card-title">${escHtml(item.title.length > 65 ? item.title.slice(0, 63) + "…" : item.title)}</div>
+      <div class="card-title">${escHtml(item.title)}</div>
       <div class="gear-price">${priceStr}</div>
       <div class="card-sub gear-bids">${escHtml(bidStr)}</div>
       ${conditionShow ? `<div class="card-meta">${escHtml(conditionShow)}</div>` : ""}
@@ -233,7 +233,7 @@ function renderGearEbayCard(item, idx) {
   return `<div class="card gear-card card-animate${expired ? ' card-expired' : ''}" onclick="event.stopPropagation();openGearEbaySearchPopup(${idx})" role="button" tabindex="0" style="--i:${Math.min(idx, 20)};cursor:pointer;-webkit-tap-highlight-color:transparent"${endMs ? ` data-end="${endMs}"` : ""} title="${escHtml(item.title)}">
     <div class="card-thumb-wrap" style="pointer-events:none">${img}</div>
     <div class="card-body" style="pointer-events:none">
-      <div class="card-title">${escHtml(item.title.length > 65 ? item.title.slice(0, 63) + "…" : item.title)}</div>
+      <div class="card-title">${escHtml(item.title)}</div>
       <div class="gear-price">${priceStr}</div>
       <div class="card-sub gear-bids">${escHtml(bidStr)}</div>
       ${conditionShow ? `<div class="card-meta">${escHtml(conditionShow)}</div>` : ""}
