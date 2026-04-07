@@ -186,6 +186,8 @@ async function applyAuthState(clerk) {
     } catch { /* token check optional */ }
     // Load favorite IDs + collection/wantlist IDs for all signed-in users
     await loadDiscogsIds();                   // calls loadRandomRecords inside
+    // Re-init eBay search bars now that auth is ready (may have been skipped due to 401 race)
+    if (typeof initEbaySearchStatus === "function") initEbaySearchStatus();
   } else {
     // Signed-out: resolve the IDs promise immediately so URL modals don't wait
     if (window._resolveDiscogsIds) window._resolveDiscogsIds();
