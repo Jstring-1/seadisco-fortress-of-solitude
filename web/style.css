@@ -95,7 +95,7 @@ html { overflow-x: hidden; }
 
   /* Card body — tighter padding on small cards */
   .card-body { padding: 0.5rem 0.6rem 0.6rem; }
-  .card-title { font-size: 0.8rem; }
+  .card-title { font-size: 0.76rem; }
 
   /* Collection controls row — allow wrapping */
   #cw-controls-row { flex-wrap: wrap !important; row-gap: 0.3rem !important; }
@@ -1152,7 +1152,7 @@ a.fresh-card-search-link:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 16px rgba(0,0,0,0.3);
 }
-.buy-card .card-title, .gear-card .card-title { font-size: 0.78rem; -webkit-line-clamp: unset; }
+.buy-card .card-title, .gear-card .card-title { -webkit-line-clamp: unset; }
 .buy-price {
   font-size: 0.88rem;
   font-weight: 700;
@@ -3021,7 +3021,7 @@ body.modal-open  { overflow: hidden; }
 }
 
 .card-title {
-  font-size: 0.875rem;
+  font-size: 0.78rem;
   font-weight: 600;
   line-height: 1.35;
   color: var(--fg);
