@@ -116,6 +116,12 @@ function onGearSearch(val) {
   }, 350);
 }
 
+function clearGearFilter() {
+  const el = document.querySelector(".gear-search-field");
+  if (el) { el.value = ""; el.focus(); }
+  onGearSearch("");
+}
+
 async function loadGearListings(append = false, bustCache = false) {
   if (_gearLoading) return;
   _gearLoading = true;

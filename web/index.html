@@ -481,7 +481,10 @@
         <span class="pill buy-price-pill" data-min="250" onclick="setBuyPriceFilter(250)">$250+</span>
       </div>
       <div class="buy-right-controls">
-        <input type="text" id="buy-filter-field" class="site-form-field buy-search-field" placeholder="Filter Vinyl" oninput="onBuySearch(this.value)">
+        <span class="filter-field-wrap">
+          <input type="text" id="buy-filter-field" class="site-form-field buy-search-field" placeholder="Filter Vinyl" oninput="onBuySearch(this.value)">
+          <button class="filter-clear-x" onclick="clearBuyFilter()" title="Clear filter">&times;</button>
+        </span>
         <select class="site-form-field buy-sort" onchange="setBuySort(this.value)">
           <option value="ending">Ending Soonest</option>
           <option value="bids">Most Bids</option>
@@ -525,7 +528,10 @@
         <span class="pill gear-price-pill" data-min="1000" onclick="setGearPriceFilter(1000)">$1,000+</span>
       </div>
       <div class="gear-right-controls">
-        <input type="text" class="site-form-field gear-search-field" placeholder="Filter Gear" oninput="onGearSearch(this.value)">
+        <span class="filter-field-wrap">
+          <input type="text" class="site-form-field gear-search-field" placeholder="Filter Gear" oninput="onGearSearch(this.value)">
+          <button class="filter-clear-x" onclick="clearGearFilter()" title="Clear filter">&times;</button>
+        </span>
         <select class="site-form-field gear-sort" onchange="setGearSort(this.value)">
           <option value="ending">Ending Soonest</option>
           <option value="bids">Most Bids</option>
