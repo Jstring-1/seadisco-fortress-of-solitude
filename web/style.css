@@ -3589,6 +3589,30 @@ body.modal-open  { overflow: hidden; }
 #signed-out-section { display: none; }
 .user-email { color: #aaa; font-size: 0.85rem; margin-bottom: 1.2rem; }
 .section-divider { border: none; border-top: 1px solid #333; margin: 1.5rem 0; }
+
+/* ── Admin tab bar ── */
+.admin-tab-bar {
+  display: flex; gap: 0; margin: 1rem 0 0; border-bottom: 1px solid #2e2518;
+}
+.admin-tab {
+  padding: 0.45rem 1rem; font-size: 0.78rem; font-weight: 600;
+  background: none; border: 1px solid transparent; border-bottom: none;
+  color: #888; cursor: pointer; border-radius: 6px 6px 0 0;
+  transition: color 0.15s, background 0.15s;
+}
+.admin-tab:hover { color: var(--fg); background: rgba(255,255,255,0.03); }
+.admin-tab.active {
+  color: var(--accent); background: #1a1510;
+  border-color: #2e2518; margin-bottom: -1px; padding-bottom: calc(0.45rem + 1px);
+}
+.admin-tab-panel { padding: 1rem 0; }
+.admin-refresh-btn {
+  background: none; border: 1px solid #333; border-radius: 4px;
+  color: #888; font-size: 1rem; cursor: pointer; padding: 0.1rem 0.4rem;
+  line-height: 1; transition: color 0.15s, border-color 0.15s;
+}
+.admin-refresh-btn:hover { color: var(--accent); border-color: var(--accent); }
+
 .admin-pool-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
