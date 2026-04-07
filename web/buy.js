@@ -120,28 +120,30 @@ function _openEbayPopup(item, opts) {
   overlay.className = "buy-popup-overlay";
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 
-  // Show minimal loading state — image + title + spinner
+  // Show popup shell — spinner only for signed-in users (who get live eBay data)
+  const willFetchLive = !!window._clerk?.user && !!(item.item_id || item.ebay_item_id);
   overlay.innerHTML = `<div class="buy-popup">
     <button class="buy-popup-close" onclick="this.closest('.buy-popup-overlay').remove()">✕</button>
     ${thumbImg ? `<img class="buy-popup-main-img" src="${escHtml(thumbImg)}" onerror="this.style.display='none'">` : ""}
     <div class="buy-popup-body">
       <h3 class="buy-popup-title">${escHtml(item.title)}</h3>
-      <div class="buy-popup-loading" style="text-align:center;padding:1.5rem 0;color:#666;font-size:0.85rem">
+      ${willFetchLive ? `<div class="buy-popup-loading" style="text-align:center;padding:1.5rem 0;color:#666;font-size:0.85rem">
         <div class="ebay-spinner"></div>
         Loading live data from eBay…
-      </div>
+      </div>` : ""}
       <a class="buy-popup-ebay-link" href="${escHtml(item.item_url)}" target="_blank" rel="noopener">View on eBay →</a>
     </div>
   </div>`;
 
   document.body.appendChild(overlay);
 
-  // Fetch live detail — replaces loading state with full info
+  // Only fetch live eBay detail for signed-in users (saves API calls)
+  const isSignedIn = !!window._clerk?.user;
   const itemId = item.item_id || item.ebay_item_id || "";
-  if (itemId) {
+  if (isSignedIn && itemId) {
     _fetchEbayDetail(itemId, overlay, item, opts);
   } else {
-    // No item ID — fall back to showing DB data immediately
+    // Signed-out or no item ID — show DB data immediately (no spinner)
     _populatePopupFromDb(overlay, item);
   }
 }
