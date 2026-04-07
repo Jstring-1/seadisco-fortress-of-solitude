@@ -268,7 +268,8 @@ function renderSharedHeader(opts) {
       const cls = view === active ? ' active' : '';
       return `<button class="nav-tab-top${cls}" data-view="${view}" onclick="switchView('${view}')">${label}</button>`;
     }
-    const href = view === "search" ? "/" : `/?view=${view}`;
+    const urlView = view === "buy" ? "vinyl" : view;
+    const href = view === "search" ? "/" : `/?v=${urlView}`;
     const cls = view === active ? ' class="nav-tab-top active"' : ' class="nav-tab-top"';
     return `<a${cls} href="${href}">${label}</a>`;
   };
@@ -280,21 +281,20 @@ function renderSharedHeader(opts) {
     if (isSPA) {
       return `<button class="nav-tab-bot nav-rec-disabled" data-rtab="${rtab}" onclick="showRecordSignIn('${rtab}')">${displayLabel}</button>`;
     }
-    const href = rtab === "collection" ? "/?view=records" : `/?view=records&tab=${rtab}`;
-    return `<a class="nav-tab-bot" href="${href}" data-rtab="${rtab}">${displayLabel}</a>`;
+    return `<a class="nav-tab-bot" href="/?v=${rtab}" data-rtab="${rtab}">${displayLabel}</a>`;
   };
 
   // Auth tab (top row, rightmost) — uses <button> in SPA like all other tabs
   const authTab = isSPA
     ? `<button class="nav-tab-top nav-auth-tab" data-view="account" onclick="switchView('account')" id="nav-auth-tab">Sign In</button>`
-    : `<a class="nav-tab-top nav-auth-tab" href="/?view=account" id="nav-auth-tab">Sign In</a>`;
+    : `<a class="nav-tab-top nav-auth-tab" href="/?v=account" id="nav-auth-tab">Sign In</a>`;
 
   const header = document.getElementById("site-header");
   if (!header) return;
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260407b";
+  const SITE_VERSION = "build 20260407c";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'https://seadisco.com' : '/'}" class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -343,7 +343,8 @@ function renderSharedFooter(opts) {
   const isSPA = opts?.spa;
   const link = (label, view) => {
     if (isSPA) return `<a href="javascript:void(0)" onclick="switchView('${view}')">${label}</a>`;
-    const href = view === "search" ? "/" : `/?view=${view}`;
+    const urlView = view === "buy" ? "vinyl" : view;
+    const href = view === "search" ? "/" : `/?v=${urlView}`;
     return `<a href="${href}">${label}</a>`;
   };
 
@@ -363,17 +364,17 @@ function renderSharedFooter(opts) {
       <div class="footer-col">
         <h4>Your Music</h4>
         ${isSPA
-          ? `<a href="/?view=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='collection';switchView('records')}">Collection</a>
-             <a href="/?view=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='wantlist';switchView('records')}">Wantlist</a>
-             <a href="/?view=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='inventory';switchView('records')}">Inventory</a>
-             <a href="/?view=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='lists';switchView('records')}">Lists</a>
-             <a href="/?view=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='favorites';switchView('records')}">Favorites</a>`
-          : `<a href="/?view=account">Collection</a>
-             <a href="/?view=account">Wantlist</a>
-             <a href="/?view=account">Inventory</a>
-             <a href="/?view=account">Lists</a>
-             <a href="/?view=account">Favorites</a>`}
-        ${isSPA ? `<a href="/?view=account" onclick="switchView('account');return false;">Account</a>` : `<a href="/?view=account">Account</a>`}
+          ? `<a href="/?v=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='collection';switchView('records')}">Collection</a>
+             <a href="/?v=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='wantlist';switchView('records')}">Wantlist</a>
+             <a href="/?v=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='inventory';switchView('records')}">Inventory</a>
+             <a href="/?v=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='lists';switchView('records')}">Lists</a>
+             <a href="/?v=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='favorites';switchView('records')}">Favorites</a>`
+          : `<a href="/?v=account">Collection</a>
+             <a href="/?v=account">Wantlist</a>
+             <a href="/?v=account">Inventory</a>
+             <a href="/?v=account">Lists</a>
+             <a href="/?v=account">Favorites</a>`}
+        ${isSPA ? `<a href="/?v=account" onclick="switchView('account');return false;">Account</a>` : `<a href="/?v=account">Account</a>`}
       </div>
       <div class="footer-col">
         <h4>About</h4>

@@ -16,8 +16,8 @@ function showSignInWidget(c) {
     }
   }).catch(() => {});
   c.mountSignUp(document.getElementById("clerk-sign-in"), {
-    afterSignInUrl: "/?view=account",
-    afterSignUpUrl: "/?view=account",
+    afterSignInUrl: "/?v=account",
+    afterSignUpUrl: "/?v=account",
     appearance: {
       baseTheme: undefined,
       variables: {
@@ -123,7 +123,7 @@ async function showAuthSection() {
   // Clean up OAuth success redirect param (UI is already refreshed above)
   const urlParams = new URLSearchParams(location.search);
   if (urlParams.get("oauth") === "success") {
-    history.replaceState({}, "", "/?view=account");
+    history.replaceState({}, "", "/?v=account");
   }
 }
 

@@ -54,43 +54,44 @@ function toggleAdvanced(forceOpen) {
 // ── URL state helpers ────────────────────────────────────────────────────
 function pushSearchState(q, artistRaw, release, year, label, genre, sort, resultType, page) {
   const p = new URLSearchParams();
-  if (q)          p.set("q",  q);
-  if (artistRaw)  p.set("ar", artistRaw);
-  if (release)    p.set("re", release);
-  if (year)       p.set("yr", year);
-  if (label)      p.set("lb", label);
-  if (genre)      p.set("gn", genre);
+  if (q)          p.set("q", q);
+  if (artistRaw)  p.set("a", artistRaw);
+  if (release)    p.set("e", release);
+  if (year)       p.set("y", year);
+  if (label)      p.set("l", label);
+  if (genre)      p.set("g", genre);
   const style  = document.getElementById("f-style")?.value ?? "";
   const format = document.getElementById("f-format")?.value ?? "";
-  if (style)      p.set("st", style);
-  if (format) p.set("fm", format);
+  if (style)      p.set("t", style);
+  if (format) p.set("f", format);
   const country = document.getElementById("f-country")?.value ?? "";
-  if (country) p.set("co", country);
-  if (sort)       p.set("sr", sort);
-  if (resultType) p.set("rt", resultType);
-  if (page > 1)   p.set("pg", String(page));
+  if (country) p.set("c", country);
+  if (sort)       p.set("s", sort);
+  if (resultType) p.set("r", resultType);
+  if (page > 1)   p.set("p", String(page));
   history.pushState({}, "", p.toString() ? "?" + p.toString() : location.pathname);
 }
 
 function restoreFromParams(p) {
+  // Support both new 1-letter and old 2-letter param names for backward compat
   document.getElementById("query").value     = p.get("q")  ?? "";
-  document.getElementById("f-artist").value  = p.get("ar") ?? "";
-  document.getElementById("f-release").value = p.get("re") ?? "";
-  document.getElementById("f-year").value    = p.get("yr") ?? "";
-  document.getElementById("f-label").value   = p.get("lb") ?? "";
-  document.getElementById("f-genre").value   = p.get("gn") ?? "";
+  document.getElementById("f-artist").value  = p.get("a") || p.get("ar") || "";
+  document.getElementById("f-release").value = p.get("e") || p.get("re") || "";
+  document.getElementById("f-year").value    = p.get("y") || p.get("yr") || "";
+  document.getElementById("f-label").value   = p.get("l") || p.get("lb") || "";
+  document.getElementById("f-genre").value   = p.get("g") || p.get("gn") || "";
   const sortEl = document.getElementById("f-sort");
-  sortEl.value = p.get("sr") ?? "";
+  sortEl.value = p.get("s") || p.get("sr") || "";
   if (!sortEl.value) sortEl.selectedIndex = 0;
-  document.getElementById("f-format").value  = p.get("fm") || "";
+  document.getElementById("f-format").value  = p.get("f") || p.get("fm") || "";
   const fCountry = document.getElementById("f-country");
-  if (fCountry) fCountry.value = p.get("co") ?? "";
+  if (fCountry) fCountry.value = p.get("c") || p.get("co") || "";
   populateStyles();
-  document.getElementById("f-style").value   = p.get("st") ?? "";
-  const rtype = p.get("rt") ?? "";
+  document.getElementById("f-style").value   = p.get("t") || p.get("st") || "";
+  const rtype = p.get("r") || p.get("rt") || "";
   const radio = document.querySelector(`input[name="result-type"][value="${rtype}"]`);
   if (radio) radio.checked = true;
-  const hasAdvanced = p.get("ar") || p.get("re") || p.get("yr") || p.get("lb") || p.get("gn") || p.get("st") || p.get("fm") || p.get("co");
+  const hasAdvanced = p.get("a") || p.get("ar") || p.get("e") || p.get("re") || p.get("y") || p.get("yr") || p.get("l") || p.get("lb") || p.get("g") || p.get("gn") || p.get("t") || p.get("st") || p.get("f") || p.get("fm") || p.get("c") || p.get("co");
   if (hasAdvanced) toggleAdvanced(true);
 }
 
@@ -312,7 +313,7 @@ async function doSearch(page = 1, skipPushState = false) {
         document.getElementById("results").innerHTML =
           `<div class="empty-state"><div class="empty-state-icon">🔑</div>` +
           `<div class="empty-state-title">Sign in to search</div>` +
-          `<div class="empty-state-subtitle"><a href="/?view=account" onclick="switchView('account');return false;" style="color:var(--accent)">Create a free account</a> and add your Discogs token to start discovering music.</div></div>`;
+          `<div class="empty-state-subtitle"><a href="/?v=account" onclick="switchView('account');return false;" style="color:var(--accent)">Create a free account</a> and add your Discogs token to start discovering music.</div></div>`;
         return;
       }
       if (errData.error === "rate_limited") {
@@ -320,7 +321,7 @@ async function doSearch(page = 1, skipPushState = false) {
         document.getElementById("results").innerHTML =
           `<div class="empty-state"><div class="empty-state-icon">✨</div>` +
           `<div class="empty-state-title">You've used your free searches for today</div>` +
-          `<div class="empty-state-subtitle"><a href="/?view=account" onclick="switchView('account');return false;" style="color:var(--accent)">Sign in with a free account</a> and connect your Discogs token for unlimited searches, collection sync, favorites, and more.</div></div>`;
+          `<div class="empty-state-subtitle"><a href="/?v=account" onclick="switchView('account');return false;" style="color:var(--accent)">Sign in with a free account</a> and connect your Discogs token for unlimited searches, collection sync, favorites, and more.</div></div>`;
         return;
       }
     }
@@ -1000,7 +1001,7 @@ async function loadRandomRecords(more) {
   }
 
   // Show the wrap if on search view with no search results
-  const view = new URLSearchParams(location.search).get("view") || "";
+  const view = new URLSearchParams(location.search).get("v") || new URLSearchParams(location.search).get("view") || "";
   const hasSearchResults = document.getElementById("results")?.children.length > 0;
   if ((!view || view === "search" || view === "find") && !hasSearchResults) {
     wrap.style.display = "";
