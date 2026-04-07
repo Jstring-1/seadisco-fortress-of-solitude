@@ -1114,6 +1114,26 @@ a.fresh-card-search-link:hover {
   gap: 0.4rem;
   align-items: center;
 }
+.filter-field-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+.filter-field-wrap input { padding-right: 1.6rem; }
+.filter-clear-x {
+  position: absolute;
+  right: 4px;
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+  display: none;
+}
+.filter-clear-x:hover { color: #ccc; }
+.filter-field-wrap input:not(:placeholder-shown) ~ .filter-clear-x { display: block; }
 .buy-search-field {
   width: 160px;
 }

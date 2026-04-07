@@ -309,6 +309,12 @@ function onBuySearch(val) {
   }, 350);
 }
 
+function clearBuyFilter() {
+  const el = document.getElementById("buy-filter-field");
+  if (el) { el.value = ""; el.focus(); }
+  onBuySearch("");
+}
+
 async function loadBuyListings(append = false, bustCache = false) {
   if (_buyLoading) return;
   _buyLoading = true;
