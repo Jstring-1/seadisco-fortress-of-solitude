@@ -389,9 +389,17 @@ function loadMoreBuy() {
 // ── Live eBay Search ────────────────────────────────────────────────
 
 async function initEbaySearchStatus() {
+  // Only fetch for logged-in users (endpoint requires auth)
+  if (!window._clerk?.user) return;
+  // Show the live search bars for signed-in users
+  const vinylWrap = document.getElementById("vinyl-ebay-search-wrap");
+  const gearWrap = document.getElementById("gear-ebay-search-wrap");
+  if (vinylWrap) vinylWrap.style.display = "";
+  if (gearWrap) gearWrap.style.display = "";
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const r = await fetch("/api/ebay/search/status");
+      if (r.status === 401) return; // not signed in — skip silently
       if (!r.ok) { if (!attempt) { await new Promise(r => setTimeout(r, 2000)); continue; } return; }
       const data = await r.json();
       if (data.remaining == null) return;
