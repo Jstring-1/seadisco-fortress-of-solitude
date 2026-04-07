@@ -3,10 +3,7 @@
   "short_name": "SeaDisco",
   "description": "Music discovery platform. Search Discogs, browse new drops, read music news, find concerts, shop vintage gear, and manage your vinyl collection.",
   "categories": ["music", "entertainment", "shopping"],
-  "icons": [
-    { "src": "/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png" }
-  ],
+  "icons": [],
   "theme_color": "#080706",
   "background_color": "#080706",
   "display": "standalone",
