@@ -11,16 +11,37 @@
 let _authReady;
 const authReadyPromise = new Promise(res => { _authReady = res; });
 
+// ── URL param helpers — read "v" with fallback to old "view" ─────────────
+function _getView(p) {
+  const v = p.get("v") || p.get("view") || "";
+  // Map URL names to internal view names
+  if (v === "vinyl") return "buy";                      // v=vinyl → switchView("buy")
+  // Flattened record tabs: v=collection|wantlist|lists|inventory|favorites → records
+  if (["collection","wantlist","lists","inventory","favorites"].includes(v)) return "records:" + v;
+  return v;
+}
+function _getPage(p) { return parseInt(p.get("p") || p.get("pg") || "1"); }
+function _hasSearch(p) { return p.get("q") || p.get("a") || p.get("ar") || p.get("e") || p.get("re") || p.get("y") || p.get("yr") || p.get("l") || p.get("lb") || p.get("g") || p.get("gn"); }
+
 // ── Restore from URL on page load ────────────────────────────────────────
 (async function () {
   const p = new URLSearchParams(location.search);
-  const view = p.get("view");
-  if (view === "account") {
+  const rawView = _getView(p);
+
+  // Handle flattened record tabs (records:collection, records:wantlist, etc.)
+  if (rawView.startsWith("records:")) {
+    const tab = rawView.split(":")[1];
+    await authReadyPromise;
+    _cwTab = tab;
+    const sort = p.get("s") || p.get("sort");
+    if (sort) { const el = document.getElementById("cw-sort"); if (el) el.value = sort; }
+    switchView("records", true);
+  } else if (rawView === "account") {
     switchView("account", true);
-  } else if (view === "drops" || view === "live" || view === "buy" || view === "gear" || view === "feed" || view === "info" || view === "privacy" || view === "terms") {
-    switchView(view, true);
+  } else if (rawView === "drops" || rawView === "live" || rawView === "buy" || rawView === "gear" || rawView === "feed" || rawView === "info" || rawView === "privacy" || rawView === "terms") {
+    switchView(rawView, true);
     // Restore live search from shared URL
-    if (view === "live" && (p.get("la") || p.get("lc") || p.get("lg"))) {
+    if (rawView === "live" && (p.get("la") || p.get("lc") || p.get("lg"))) {
       const la = document.getElementById("live-artist");
       const lc = document.getElementById("live-city");
       const lg = document.getElementById("live-genre");
@@ -29,21 +50,19 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
       if (lg) lg.value = p.get("lg") || "";
       doLiveSearch();
     }
-  } else if (view === "records" || view === "collection" || view === "wantlist" || view === "wanted") {
+  } else if (rawView === "records" || rawView === "wanted") {
     await authReadyPromise;
-    // Map old collection/wantlist URLs to records, restore sub-tab
-    const mappedView = view === "collection" || view === "wantlist" ? "records" : view;
-    if (mappedView === "records") {
-      const tab = p.get("tab") || (view === "wantlist" ? "wantlist" : "collection");
+    if (rawView === "records") {
+      const tab = p.get("tab") || "collection";
       _cwTab = tab;
-      const sort = p.get("sort");
+      const sort = p.get("s") || p.get("sort");
       if (sort) { const el = document.getElementById("cw-sort"); if (el) el.value = sort; }
     }
-    switchView(mappedView, true);
-  } else if (p.get("q") || p.get("ar") || p.get("re") || p.get("yr") || p.get("lb") || p.get("gn")) {
+    switchView(rawView, true);
+  } else if (_hasSearch(p)) {
     restoreFromParams(p);
     await authReadyPromise;
-    doSearch(parseInt(p.get("pg") ?? "1"), true);
+    doSearch(_getPage(p), true);
   }
   // Open album popup from URL (works even without a search query)
   // vp = video's source popup (fallback if op was cleared when modal closed during playback)
@@ -92,8 +111,7 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
   if (ctArtist) openConcertPopup(null, ctArtist);
 
   // Only load home defaults if no search is being restored
-  const hasSearch = p.get("q") || p.get("ar") || p.get("re") || p.get("yr") || p.get("lb") || p.get("gn");
-  if (!hasSearch) {
+  if (!_hasSearch(p)) {
     const deferLoad = (fn) => typeof requestIdleCallback === "function" ? requestIdleCallback(fn) : setTimeout(fn, 200);
     deferLoad(() => loadFreshReleases());
   }
@@ -102,26 +120,27 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
 // ── Browser back / forward ───────────────────────────────────────────────
 window.addEventListener("popstate", () => {
   const p = new URLSearchParams(location.search);
-  const view = p.get("view");
-  // Map old collection/wantlist URLs to records, restore sub-tab
-  if (view === "collection" || view === "wantlist") {
-    _cwTab = view === "wantlist" ? "wantlist" : "collection";
-    const sort = p.get("sort");
+  const rawView = _getView(p);
+
+  // Flattened record tabs
+  if (rawView.startsWith("records:")) {
+    _cwTab = rawView.split(":")[1];
+    const sort = p.get("s") || p.get("sort");
     if (sort) { const el = document.getElementById("cw-sort"); if (el) el.value = sort; }
     switchView("records", true); return;
   }
-  if (view === "drops" || view === "live" || view === "buy" || view === "gear" || view === "feed" || view === "records" || view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account") {
-    if (view === "records") {
+  if (rawView === "drops" || rawView === "live" || rawView === "buy" || rawView === "gear" || rawView === "feed" || rawView === "records" || rawView === "info" || rawView === "privacy" || rawView === "terms" || rawView === "wanted" || rawView === "account") {
+    if (rawView === "records") {
       _cwTab = p.get("tab") || "collection";
-      const sort = p.get("sort");
+      const sort = p.get("s") || p.get("sort");
       if (sort) { const el = document.getElementById("cw-sort"); if (el) el.value = sort; }
     }
-    switchView(view, true);
+    switchView(rawView, true);
   } else {
     switchView("search", true);
     restoreFromParams(p);
     if (p.toString()) {
-      doSearch(parseInt(p.get("pg") ?? "1"), true);
+      doSearch(_getPage(p), true);
     } else {
       document.getElementById("results").innerHTML = "";
       document.getElementById("blurb").style.display = "none";

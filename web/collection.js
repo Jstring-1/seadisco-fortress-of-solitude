@@ -179,7 +179,7 @@ function showRecordSignIn(rtab) {
   };
   const grid = document.getElementById("results");
   grid.innerHTML = renderEmptyState("🔒", msgs[rtab] || "Sign in to continue",
-    `<a href="/?view=account" onclick="switchView('account');return false;" style="color:var(--accent);text-decoration:none">Sign in or create an account →</a>`);
+    `<a href="/?v=account" onclick="switchView('account');return false;" style="color:var(--accent);text-decoration:none">Sign in or create an account →</a>`);
   document.getElementById("pagination").style.display = "none";
   const blurb = document.getElementById("blurb"); if (blurb) blurb.style.display = "none";
   if (typeof setCwStatus === "function") setCwStatus("");
@@ -213,16 +213,16 @@ function switchView(view, skipPushState = false) {
   if (!skipPushState) {
     if (view === "records") {
       const tab = _cwTab || "collection";
-      const url = tab === "collection" ? "?view=records" : `?view=records&tab=${tab}`;
-      history.pushState({ view, tab }, "", url);
+      history.pushState({ view, tab }, "", "?v=" + tab);
     } else if (view === "drops" || view === "live" || view === "buy" || view === "gear" || view === "feed" || view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account") {
-      history.pushState({ view }, "", "?view=" + view);
+      const urlView = view === "buy" ? "vinyl" : view;
+      history.pushState({ view }, "", "?v=" + urlView);
     } else {
       history.pushState({}, "", location.pathname);
     }
   }
   if (typeof gtag === "function") {
-    const titles = { drops: "Drops", live: "Live", buy: "Buy", gear: "Gear", feed: "Feed", info: "Info", privacy: "Privacy Policy", terms: "Terms of Service", records: "My Records", wanted: "Wants", search: "Search", account: "Account" };
+    const titles = { drops: "Drops", live: "Live", buy: "Vinyl", gear: "Gear", feed: "Feed", info: "Info", privacy: "Privacy Policy", terms: "Terms of Service", records: "My Records", wanted: "Wants", search: "Search", account: "Account" };
     gtag("event", "page_view", {
       page_location: window.location.href,
       page_path:     window.location.pathname + window.location.search,
@@ -897,11 +897,11 @@ function switchRecordsTab(tab, skipPush) {
   // Filters are shared across collection/wantlist — just save current state
   saveFilterState();
   _cwTab = tab;
-  // Update URL to reflect active sub-tab
+  // Update URL to reflect active sub-tab (flattened: v=collection, v=wantlist, etc.)
   if (!skipPush) {
     const sort = document.getElementById("cw-sort")?.value || "";
-    let url = tab === "collection" ? "?view=records" : `?view=records&tab=${tab}`;
-    if (sort) url += `&sort=${sort}`;
+    let url = `?v=${tab}`;
+    if (sort) url += `&s=${sort}`;
     history.pushState({ view: "records", tab }, "", url);
   }
   // Update nav bottom row active state
