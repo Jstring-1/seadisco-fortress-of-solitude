@@ -4494,35 +4494,42 @@ app.post("/api/ebay/deletion", (_req, res) => {
 });
 // ── Feed: RSS + YouTube ─────────────────────────────────────────────────
 const RSS_FEEDS = [
+    // Record collecting & vinyl culture
+    { name: "Discogs Blog", url: "https://blog.discogs.com/en/feed/", category: "news" },
+    { name: "The Vinyl Factory", url: "https://thevinylfactory.com/feed/", category: "news" },
+    { name: "Modern Vinyl", url: "https://modern-vinyl.com/feed/", category: "news" },
+    { name: "Analog Planet", url: "https://www.analogplanet.com/feed/", category: "gear" },
+    // Music reviews & news
     { name: "Pitchfork", url: "https://pitchfork.com/feed/feed-album-reviews/rss", category: "reviews" },
-    { name: "Pitchfork News", url: "https://pitchfork.com/feed/feed-news/rss", category: "news" },
     { name: "Bandcamp Daily", url: "https://daily.bandcamp.com/feed", category: "reviews" },
-    { name: "Stereogum", url: "https://www.stereogum.com/feed/", category: "news" },
     { name: "Aquarium Drunkard", url: "https://aquariumdrunkard.com/feed/", category: "news" },
     { name: "The Quietus", url: "https://thequietus.com/feed", category: "reviews" },
     { name: "BrooklynVegan", url: "https://www.brooklynvegan.com/feed/", category: "news" },
+    { name: "Stereogum", url: "https://www.stereogum.com/feed/", category: "news" },
 ];
 const YOUTUBE_CHANNELS = [
-    // Vinyl & collecting
+    // Vinyl collecting & crate digging
     { name: "Vinyl Eyezz", channelId: "UCYkG_jJ2L0clu-_fqFfWGbQ" },
     { name: "The Vinyl Guide", channelId: "UCdYYSNnFPIdMuiAaq0pSpTA" },
+    { name: "Vinyl Rewind", channelId: "UCpGhOGf56KAiQ9wBbNNUWzA" },
+    { name: "My Analog Journal", channelId: "UC97UUhIqCmqm1JuXY6swfKA" },
+    { name: "In Groove", channelId: "UCDXYKoEiWmFCYpEReNr4XFA" },
     // Gear & audiophile
     { name: "Techmoan", channelId: "UC5I2hjZYiW9gZPVkvzM8_Cw", category: "gear" },
     { name: "Analog Planet", channelId: "UCXnnKXr8oSTfZ7Y3R8CGAUQ", category: "gear" },
-    // Live sessions & performances
+    // Live sessions
     { name: "KEXP", channelId: "UC3I2GFN_F8WudD_2jUZbojA" },
     { name: "Tiny Desk (NPR)", channelId: "UC4eYXhJI4-7wSWc8UNRwD4A" },
-    { name: "COLORS", channelId: "UC2Qw1dzXDBAZPwS7zm37g8g" },
-    { name: "Audiotree", channelId: "UCelEMf7HHJgUy-6MJPClcXA" },
     // Reviews
     { name: "The Needle Drop", channelId: "UCt7fwAhXDy3oNFTAzF2o8Pw", category: "reviews" },
     { name: "Deep Cuts", channelId: "UCVBp4LmZjEBpzB-6VsFU4cQ", category: "reviews" },
 ];
-// Keyword searches for fresh music content
+// Keyword searches — vinyl & collecting focused
 const YOUTUBE_SEARCHES = [
-    { query: "official music video 2026", category: "video" },
-    { query: "new album review 2026", category: "reviews" },
+    { query: "vinyl record collection 2026", category: "video" },
     { query: "vinyl unboxing haul 2026", category: "video" },
+    { query: "crate digging vinyl records", category: "video" },
+    { query: "new vinyl reissue 2026", category: "news" },
 ];
 function decodeHtmlEntities(str) {
     return str
@@ -4739,7 +4746,7 @@ async function fetchAllFeedContent() {
     }
 }
 function startFeedSchedule() {
-    // Every 6 hours starting at 2:30 AM Pacific (YouTube quota: 13 calls × 100 = 1300 units × 4/day = 5200 < 10K limit)
+    // Every 6 hours starting at 2:30 AM Pacific (YouTube quota: 15 calls × 100 = 1500 units × 4/day = 6000 < 10K limit)
     const ms = msUntilPacific(2, 30, 6);
     console.log(`[feed] Next fetch in ${Math.round(ms / 60000)}min, then every 6h`);
     setTimeout(() => {
