@@ -969,7 +969,7 @@ async function loadRandomRecords(more) {
       _randomShown = 0;
       // Update section title
       const titleEl = document.getElementById("random-records-title");
-      if (titleEl) titleEl.textContent = isLoggedIn ? "Your Favorites" : "Featured Favorites";
+      if (titleEl) titleEl.textContent = isLoggedIn ? "Your Favorites" : "Community Favorites";
       // Apply current sort selection (defaults to added:desc which is
       // already the server order)
       _applyFavoritesSort();

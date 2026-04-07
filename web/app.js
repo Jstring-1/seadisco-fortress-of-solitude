@@ -114,6 +114,11 @@ function _hasSearch(p) { return p.get("q") || p.get("a") || p.get("ar") || p.get
   if (!_hasSearch(p)) {
     const deferLoad = (fn) => typeof requestIdleCallback === "function" ? requestIdleCallback(fn) : setTimeout(fn, 200);
     deferLoad(() => loadFreshReleases());
+    // Show community favorites for logged-out users on the home page
+    // (signed-in users get their own favorites via loadDiscogsIds → loadRandomRecords)
+    authReadyPromise.then(() => {
+      if (!window._clerk?.user) loadRandomRecords();
+    });
   }
 })();
 
