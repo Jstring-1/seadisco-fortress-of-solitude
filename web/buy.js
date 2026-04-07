@@ -116,36 +116,16 @@ function _openEbayPopup(item, opts) {
 
   const thumbImg = item.image_url || (item.all_images && item.all_images.length ? item.all_images[0] : "");
 
-  // For vinyl: get artist/release from item_specifics (eBay localizedAspects)
-  const specs = item.item_specifics ?? {};
-  const vinylArtist = isVinyl ? (specs.Artist || specs.artist || "") : "";
-  const vinylRelease = isVinyl ? (specs["Release Title"] || specs["Album/EP Name"] || "") : "";
-
   const overlay = document.createElement("div");
   overlay.className = "buy-popup-overlay";
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
-
-  // Build artist/release search links (vinyl only, matching album popup style)
-  let artistLine = "";
-  let titleLine = escHtml(item.title);
-  if (isVinyl && (vinylArtist || vinylRelease)) {
-    if (vinylArtist) {
-      const safeArtist = vinylArtist.replace(/'/g, "\\'");
-      artistLine = `<div class="album-artist" style="font-size:0.75rem;margin-bottom:0.25rem"><a href="#" class="modal-artist-link" data-artist="${escHtml(vinylArtist)}" onclick="searchArtistFromBuyPopup(event,this)" title="Search for ${escHtml(vinylArtist)}">${escHtml(vinylArtist)}</a> <a href="#" class="album-title-search" onclick="searchCollectionFromBuyPopup(event,'cw-artist','${escHtml(safeArtist)}')" title="Search your collection for ${escHtml(vinylArtist)}">⌕</a></div>`;
-    }
-    if (vinylRelease) {
-      const safeRelease = vinylRelease.replace(/'/g, "\\'");
-      titleLine = `<a href="#" class="modal-title-link" onclick="searchFromBuyPopup(event,'${escHtml(safeRelease)}')" title="Search SeaDisco for ${escHtml(vinylRelease)}">${escHtml(item.title)}</a> <a href="#" class="album-title-search" onclick="searchCollectionFromBuyPopup(event,'cw-release','${escHtml(safeRelease)}')" title="Search your collection for ${escHtml(vinylRelease)}">⌕</a>`;
-    }
-  }
 
   // Show minimal loading state — image + title + spinner
   overlay.innerHTML = `<div class="buy-popup">
     <button class="buy-popup-close" onclick="this.closest('.buy-popup-overlay').remove()">✕</button>
     ${thumbImg ? `<img class="buy-popup-main-img" src="${escHtml(thumbImg)}" onerror="this.style.display='none'">` : ""}
     <div class="buy-popup-body">
-      ${artistLine}
-      <h3 class="buy-popup-title">${titleLine}</h3>
+      <h3 class="buy-popup-title">${escHtml(item.title)}</h3>
       <div class="buy-popup-loading" style="text-align:center;padding:1.5rem 0;color:#666;font-size:0.85rem">
         <div class="ebay-spinner"></div>
         Loading live data from eBay…
@@ -232,12 +212,24 @@ async function _fetchEbayDetail(itemId, overlay, dbItem, opts) {
     if (location) metaHtml += `<div class="buy-popup-meta">Location: ${escHtml(location)}</div>`;
     if (seller) metaHtml += `<div class="buy-popup-meta">Seller: ${escHtml(seller)} ${escHtml(feedback)}</div>`;
 
-    // Specs
+    // Specs — make Artist and Release Title rows clickable with search links
     const specKeys = Object.keys(d.specifics || {}).filter(k => d.specifics[k]);
     if (specKeys.length) {
-      metaHtml += `<div class="buy-popup-specs">${specKeys.map(k =>
-        `<div class="buy-spec-row"><span class="buy-spec-label">${escHtml(k)}</span> <span>${escHtml(String(d.specifics[k]))}</span></div>`
-      ).join("")}</div>`;
+      const isVinyl = opts?.vinyl || false;
+      metaHtml += `<div class="buy-popup-specs">${specKeys.map(k => {
+        const val = String(d.specifics[k]);
+        const isArtistRow = isVinyl && /^artist$/i.test(k);
+        const isReleaseRow = isVinyl && /^(Release Title|Album\/EP Name)$/i.test(k);
+        if (isArtistRow) {
+          const safeA = val.replace(/'/g, "\\'");
+          return `<div class="buy-spec-row"><span class="buy-spec-label">${escHtml(k)}</span> <span><a href="#" class="modal-artist-link" data-artist="${escHtml(val)}" onclick="searchArtistFromBuyPopup(event,this)" title="Search for ${escHtml(val)}">${escHtml(val)}</a> <a href="#" class="album-title-search" onclick="searchCollectionFromBuyPopup(event,'cw-artist','${escHtml(safeA)}')" title="Search your collection for ${escHtml(val)}">⌕</a></span></div>`;
+        }
+        if (isReleaseRow) {
+          const safeR = val.replace(/'/g, "\\'");
+          return `<div class="buy-spec-row"><span class="buy-spec-label">${escHtml(k)}</span> <span><a href="#" class="modal-title-link" onclick="searchFromBuyPopup(event,'${escHtml(safeR)}')" title="Search SeaDisco for ${escHtml(val)}">${escHtml(val)}</a> <a href="#" class="album-title-search" onclick="searchCollectionFromBuyPopup(event,'cw-release','${escHtml(safeR)}')" title="Search your collection for ${escHtml(val)}">⌕</a></span></div>`;
+        }
+        return `<div class="buy-spec-row"><span class="buy-spec-label">${escHtml(k)}</span> <span>${escHtml(val)}</span></div>`;
+      }).join("")}</div>`;
     }
 
     // Description
@@ -251,26 +243,6 @@ async function _fetchEbayDetail(itemId, overlay, dbItem, opts) {
     if (ebayLink) {
       ebayLink.insertAdjacentHTML("beforebegin", metaHtml);
       if (itemUrl) ebayLink.href = itemUrl;
-    }
-
-    // Inject artist/title search links from live specifics if not already present
-    if (opts?.vinyl && d.specifics) {
-      const liveArtist = d.specifics.Artist || d.specifics.artist || "";
-      const liveRelease = d.specifics["Release Title"] || d.specifics["Album/EP Name"] || "";
-      const titleEl = overlay.querySelector(".buy-popup-title");
-      if (titleEl && (liveArtist || liveRelease)) {
-        // Add artist line if not already there
-        if (liveArtist && !overlay.querySelector(".modal-artist-link")) {
-          const safeA = liveArtist.replace(/'/g, "\\'");
-          titleEl.insertAdjacentHTML("beforebegin",
-            `<div class="album-artist" style="font-size:0.75rem;margin-bottom:0.25rem"><a href="#" class="modal-artist-link" data-artist="${escHtml(liveArtist)}" onclick="searchArtistFromBuyPopup(event,this)" title="Search for ${escHtml(liveArtist)}">${escHtml(liveArtist)}</a> <a href="#" class="album-title-search" onclick="searchCollectionFromBuyPopup(event,'cw-artist','${escHtml(safeA)}')" title="Search your collection for ${escHtml(liveArtist)}">⌕</a></div>`);
-        }
-        // Add title links if not already there
-        if (liveRelease && !titleEl.querySelector(".modal-title-link")) {
-          const safeR = liveRelease.replace(/'/g, "\\'");
-          titleEl.innerHTML = `<a href="#" class="modal-title-link" onclick="searchFromBuyPopup(event,'${escHtml(safeR)}')" title="Search SeaDisco for ${escHtml(liveRelease)}">${titleEl.innerHTML}</a> <a href="#" class="album-title-search" onclick="searchCollectionFromBuyPopup(event,'cw-release','${escHtml(safeR)}')" title="Search your collection for ${escHtml(liveRelease)}">⌕</a>`;
-        }
-      }
     }
 
     // Update rate counter
