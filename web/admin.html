@@ -59,8 +59,14 @@
         <div id="collection-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
       </div>
 
-      <!-- User Sync Status -->
+      <!-- Database Stats -->
       <div class="admin-section admin-section-b">
+        <h2 style="margin-bottom:0.5rem">Database</h2>
+        <div id="db-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
+      </div>
+
+      <!-- User Sync Status -->
+      <div class="admin-section admin-section-a">
         <h2 style="margin-bottom:0.5rem">User Sync Status</h2>
         <div id="admin-fresh-stats" style="font-size:0.8rem;color:#555;margin-bottom:0.75rem"></div>
         <div id="admin-sync-status-list" style="font-size:0.83rem;color:var(--muted)">Loading...</div>
@@ -176,6 +182,7 @@ async function verifyAdmin(c) {
     loadAdminSyncStatus();
     loadApiLog();
     loadCollectionStats();
+    loadDbStats();
     checkKillStatus();
   } catch { showDenied(); }
 }
@@ -417,6 +424,47 @@ async function adminExtrasFetch() {
     statusEl.textContent = "Extras sync started (inventory + lists + list items + seller orders) — running in background.";
   } catch { statusEl.textContent = "Extras fetch failed."; }
   finally { btn.disabled = false; btn.textContent = "Fetch Extras"; }
+}
+
+// ── Database Stats ────────────────────────────────────────────────────
+async function loadDbStats() {
+  const el = document.getElementById("db-stats");
+  try {
+    const r = await apiFetch("/api/admin/db-stats");
+    if (!r.ok) { el.textContent = "Could not load DB stats."; return; }
+    const { tables, totalRows } = await r.json();
+
+    const groups = [
+      { label: "Users & Auth", tables: ["user_tokens", "oauth_request_tokens"] },
+      { label: "Collection & Library", tables: ["user_collection", "user_collection_folders", "user_wantlist", "user_inventory", "user_lists", "user_list_items", "user_orders", "user_order_messages"] },
+      { label: "eBay Listings", tables: ["vinyl_listings", "gear_listings", "vinyl_fetch_log", "gear_fetch_log", "ebay_rate_limit", "ebay_search_cache"] },
+      { label: "Pricing", tables: ["price_cache", "price_history", "price_alerts", "triggered_alerts"] },
+      { label: "Content & Discovery", tables: ["fresh_releases", "feed_articles", "live_events", "release_cache"] },
+      { label: "User Features", tables: ["saved_searches", "user_favorites", "feedback"] },
+      { label: "System", tables: ["api_request_log"] },
+    ];
+
+    const countMap = {};
+    tables.forEach(t => countMap[t.table] = t.rows);
+
+    let html = `<div style="margin-bottom:0.6rem;font-weight:600;color:var(--fg)">${totalRows.toLocaleString()} total rows</div>`;
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:0.8rem">';
+    for (const g of groups) {
+      html += `<div style="background:#1a1510;border:1px solid #2e2518;border-radius:6px;padding:0.5rem 0.7rem">`;
+      html += `<div style="font-size:0.72rem;color:var(--accent);font-weight:600;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.5px">${g.label}</div>`;
+      for (const t of g.tables) {
+        const count = countMap[t] ?? -1;
+        const display = count < 0 ? "err" : count.toLocaleString();
+        const color = count < 0 ? "#c0392b" : count === 0 ? "#555" : "var(--fg)";
+        html += `<div style="display:flex;justify-content:space-between;padding:0.12rem 0;font-size:0.78rem"><span style="color:#888">${t}</span><span style="color:${color};font-weight:500">${display}</span></div>`;
+      }
+      html += `</div>`;
+    }
+    html += '</div>';
+    el.innerHTML = html;
+  } catch {
+    el.textContent = "Could not load DB stats.";
+  }
 }
 
 // ── API Request Log ───────────────────────────────────────────────────

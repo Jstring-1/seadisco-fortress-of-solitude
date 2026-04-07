@@ -2996,3 +2996,28 @@ export async function getApiRequestStats(hours: number = 24): Promise<any[]> {
   `, [hours]);
   return r.rows;
 }
+
+// ── Table row counts (admin dashboard) ───────────────────────────────────
+export async function getTableRowCounts(): Promise<Array<{ table: string; rows: number }>> {
+  const tables = [
+    'user_tokens', 'user_collection', 'user_collection_folders', 'user_wantlist',
+    'user_inventory', 'user_lists', 'user_list_items', 'user_orders', 'user_order_messages',
+    'user_favorites', 'saved_searches', 'feedback',
+    'vinyl_listings', 'gear_listings', 'vinyl_fetch_log', 'gear_fetch_log',
+    'ebay_rate_limit', 'ebay_search_cache',
+    'fresh_releases', 'feed_articles', 'live_events',
+    'release_cache', 'price_cache', 'price_history', 'price_alerts', 'triggered_alerts',
+    'api_request_log', 'oauth_request_tokens',
+  ];
+  const counts = await Promise.all(
+    tables.map(async (t) => {
+      try {
+        const r = await getPool().query(`SELECT COUNT(*)::int AS cnt FROM ${t}`);
+        return { table: t, rows: r.rows[0]?.cnt ?? 0 };
+      } catch {
+        return { table: t, rows: -1 };
+      }
+    })
+  );
+  return counts;
+}
