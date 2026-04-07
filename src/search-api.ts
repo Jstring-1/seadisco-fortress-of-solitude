@@ -3447,7 +3447,7 @@ const ebayClientSecret = process.env.EBAY_CLIENT_SECRET ?? "";
 const ebayAffiliateCampaignId = process.env.EBAY_AFFILIATE_CAMPAIGN_ID ?? "";
 let ebayAccessToken    = "";
 let ebayTokenExpiry    = 0;
-const EBAY_USER_LIMIT = 4500;
+const EBAY_USER_LIMIT = 3750;
 const MAX_USERS         = 25;
 
 async function getEbayToken(): Promise<string> {
