@@ -116,37 +116,26 @@ function _openEbayPopup(item, opts) {
 
   const thumbImg = item.image_url || (item.all_images && item.all_images.length ? item.all_images[0] : "");
 
-  // For vinyl: parse artist/title from eBay listing title for search links (matching album popup style)
-  let vinylArtist = "";
-  let vinylTitle = "";
-  if (isVinyl) {
-    const raw = item.title || "";
-    // Common eBay patterns: "Artist - Album Title LP", "Artist – Title Vinyl"
-    const dashMatch = raw.match(/^(.+?)\s*[-–—]\s*(.+)$/);
-    if (dashMatch) {
-      vinylArtist = dashMatch[1].replace(/\b(NEW|SEALED|RARE|LIMITED)\b/gi, "").trim();
-      vinylTitle = dashMatch[2].replace(/\b(LP|12"|7"|vinyl|record|sealed|rare|original|pressing|reissue|remastered|gatefold|limited|edition|new|mint)\b/gi, "").replace(/\s{2,}/g, " ").trim();
-    } else {
-      // No dash separator — use whole cleaned title
-      vinylTitle = raw.replace(/\b(LP|12"|7"|vinyl|record|sealed|rare|original|pressing|reissue|remastered|gatefold|limited|edition|new|mint)\b/gi, "").replace(/\s{2,}/g, " ").trim();
-    }
-  }
+  // For vinyl: get artist/release from item_specifics (eBay localizedAspects)
+  const specs = item.item_specifics ?? {};
+  const vinylArtist = isVinyl ? (specs.Artist || specs.artist || "") : "";
+  const vinylRelease = isVinyl ? (specs["Release Title"] || specs["Album/EP Name"] || "") : "";
 
   const overlay = document.createElement("div");
   overlay.className = "buy-popup-overlay";
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 
-  // Build artist/title search links (vinyl only, matching album popup style)
+  // Build artist/release search links (vinyl only, matching album popup style)
   let artistLine = "";
   let titleLine = escHtml(item.title);
-  if (isVinyl && (vinylArtist || vinylTitle)) {
+  if (isVinyl && (vinylArtist || vinylRelease)) {
     if (vinylArtist) {
       const safeArtist = vinylArtist.replace(/'/g, "\\'");
       artistLine = `<div class="album-artist" style="font-size:0.75rem;margin-bottom:0.25rem"><a href="#" class="modal-artist-link" data-artist="${escHtml(vinylArtist)}" onclick="searchArtistFromBuyPopup(event,this)" title="Search for ${escHtml(vinylArtist)}">${escHtml(vinylArtist)}</a> <a href="#" class="album-title-search" onclick="searchCollectionFromBuyPopup(event,'cw-artist','${escHtml(safeArtist)}')" title="Search your collection for ${escHtml(vinylArtist)}">⌕</a></div>`;
     }
-    if (vinylTitle) {
-      const safeTitle = vinylTitle.replace(/'/g, "\\'");
-      titleLine = `<a href="#" class="modal-title-link" onclick="searchFromBuyPopup(event,'${escHtml(safeTitle)}')" title="Search SeaDisco for ${escHtml(vinylTitle)}">${escHtml(item.title)}</a> <a href="#" class="album-title-search" onclick="searchCollectionFromBuyPopup(event,'cw-release','${escHtml(safeTitle)}')" title="Search your collection for ${escHtml(vinylTitle)}">⌕</a>`;
+    if (vinylRelease) {
+      const safeRelease = vinylRelease.replace(/'/g, "\\'");
+      titleLine = `<a href="#" class="modal-title-link" onclick="searchFromBuyPopup(event,'${escHtml(safeRelease)}')" title="Search SeaDisco for ${escHtml(vinylRelease)}">${escHtml(item.title)}</a> <a href="#" class="album-title-search" onclick="searchCollectionFromBuyPopup(event,'cw-release','${escHtml(safeRelease)}')" title="Search your collection for ${escHtml(vinylRelease)}">⌕</a>`;
     }
   }
 
@@ -170,14 +159,14 @@ function _openEbayPopup(item, opts) {
   // Fetch live detail — replaces loading state with full info
   const itemId = item.item_id || item.ebay_item_id || "";
   if (itemId) {
-    _fetchEbayDetail(itemId, overlay, item);
+    _fetchEbayDetail(itemId, overlay, item, opts);
   } else {
     // No item ID — fall back to showing DB data immediately
     _populatePopupFromDb(overlay, item);
   }
 }
 
-async function _fetchEbayDetail(itemId, overlay, dbItem) {
+async function _fetchEbayDetail(itemId, overlay, dbItem, opts) {
   const loadingEl = overlay.querySelector(".buy-popup-loading");
   try {
     const r = await fetch(`/api/ebay/item/${encodeURIComponent(itemId)}`);
@@ -262,6 +251,26 @@ async function _fetchEbayDetail(itemId, overlay, dbItem) {
     if (ebayLink) {
       ebayLink.insertAdjacentHTML("beforebegin", metaHtml);
       if (itemUrl) ebayLink.href = itemUrl;
+    }
+
+    // Inject artist/title search links from live specifics if not already present
+    if (opts?.vinyl && d.specifics) {
+      const liveArtist = d.specifics.Artist || d.specifics.artist || "";
+      const liveRelease = d.specifics["Release Title"] || d.specifics["Album/EP Name"] || "";
+      const titleEl = overlay.querySelector(".buy-popup-title");
+      if (titleEl && (liveArtist || liveRelease)) {
+        // Add artist line if not already there
+        if (liveArtist && !overlay.querySelector(".modal-artist-link")) {
+          const safeA = liveArtist.replace(/'/g, "\\'");
+          titleEl.insertAdjacentHTML("beforebegin",
+            `<div class="album-artist" style="font-size:0.75rem;margin-bottom:0.25rem"><a href="#" class="modal-artist-link" data-artist="${escHtml(liveArtist)}" onclick="searchArtistFromBuyPopup(event,this)" title="Search for ${escHtml(liveArtist)}">${escHtml(liveArtist)}</a> <a href="#" class="album-title-search" onclick="searchCollectionFromBuyPopup(event,'cw-artist','${escHtml(safeA)}')" title="Search your collection for ${escHtml(liveArtist)}">⌕</a></div>`);
+        }
+        // Add title links if not already there
+        if (liveRelease && !titleEl.querySelector(".modal-title-link")) {
+          const safeR = liveRelease.replace(/'/g, "\\'");
+          titleEl.innerHTML = `<a href="#" class="modal-title-link" onclick="searchFromBuyPopup(event,'${escHtml(safeR)}')" title="Search SeaDisco for ${escHtml(liveRelease)}">${titleEl.innerHTML}</a> <a href="#" class="album-title-search" onclick="searchCollectionFromBuyPopup(event,'cw-release','${escHtml(safeR)}')" title="Search your collection for ${escHtml(liveRelease)}">⌕</a>`;
+        }
+      }
     }
 
     // Update rate counter
