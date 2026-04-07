@@ -2350,7 +2350,7 @@ export async function getGearNeedingDetail(limit: number = 20): Promise<Array<{ 
   return r.rows.map(row => ({ itemId: row.item_id, price: row.price }));
 }
 
-export async function getGearListings(minPrice: number = 0, limit: number = 200, offset: number = 0, sort: string = "bids", q: string = ""): Promise<{ items: any[]; total: number }> {
+export async function getGearListings(minPrice: number = 0, limit: number = 200, offset: number = 0, sort: string = "ending", q: string = ""): Promise<{ items: any[]; total: number }> {
   const params: any[] = [minPrice];
   let where = `WHERE price >= $1 AND NOT expired
     AND (condition IS NULL OR condition NOT ILIKE '%for parts%')
