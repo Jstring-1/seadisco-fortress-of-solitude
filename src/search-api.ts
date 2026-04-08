@@ -3890,9 +3890,11 @@ app.get("/api/ebay/search", async (req, res) => {
   const resetsAt = nextPacificMidnightIso();
 
   try {
-    // Check cache first — free, no counter increment
+    // Check cache first — free, no counter increment.
+    // Only serve cached results if they actually have items; fall through
+    // to fresh fetch on empty cached results (prevents stale-empty stickiness)
     const cached = await getEbaySearchCache(queryKey);
-    if (cached) {
+    if (cached && cached.results && cached.results.length > 0) {
       const { count } = await getEbayRateCount();
       return res.json({
         items: cached.results,
@@ -3923,12 +3925,16 @@ app.get("/api/ebay/search", async (req, res) => {
       headers["X-EBAY-C-ENDUSERCTX"] = `affiliateCampaignId=${ebayAffiliateCampaignId}`;
     }
 
-    const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&category_ids=176985&limit=50&sort=endingSoonest&filter=priceCurrency:USD`;
+    // Broad vinyl-ish search — Music category (11233) covers Records (176985),
+    // CDs, Cassettes, etc. Don't over-constrain or users get zero results for
+    // common terms. Require AUCTION buying option so users see actual auctions.
+    const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&category_ids=176985&limit=50&sort=endingSoonest&filter=priceCurrency:USD,buyingOptions:{AUCTION}`;
     const r = await loggedFetch("ebay", url, { headers, context: `live search: ${q}` });
 
     if (!r.ok) {
-      console.error(`eBay live search failed: ${r.status}`);
-      return res.status(502).json({ error: "eBay search failed" });
+      const bodyText = await r.text().catch(() => "");
+      console.error(`eBay live search failed: ${r.status} ${bodyText.slice(0, 300)}`);
+      return res.status(502).json({ error: "eBay search failed", details: bodyText.slice(0, 200) });
     }
 
     const data = await r.json() as any;
@@ -3956,8 +3962,11 @@ app.get("/api/ebay/search", async (req, res) => {
 
     const total = data.total ?? items.length;
 
-    // Cache results
-    await setEbaySearchCache(queryKey, items, total);
+    // Cache results only if non-empty — prevents stale empty results from
+    // sticking for 30 minutes and denying the user a retry
+    if (items.length > 0) {
+      await setEbaySearchCache(queryKey, items, total);
+    }
 
     res.json({
       items,
@@ -3988,9 +3997,10 @@ app.get("/api/ebay/gear/search", async (req, res) => {
   const resetsAt = nextPacificMidnightIso();
 
   try {
-    // Check cache first — free, no counter increment
+    // Check cache first — free, no counter increment.
+    // Fall through to fresh fetch on empty cached results
     const cached = await getEbaySearchCache(queryKey);
-    if (cached) {
+    if (cached && cached.results && cached.results.length > 0) {
       const { count } = await getEbayRateCount();
       return res.json({
         items: cached.results,
@@ -4025,8 +4035,9 @@ app.get("/api/ebay/gear/search", async (req, res) => {
     const r = await loggedFetch("ebay", url, { headers, context: `gear live search: ${q}` });
 
     if (!r.ok) {
-      console.error(`eBay gear live search failed: ${r.status}`);
-      return res.status(502).json({ error: "eBay search failed" });
+      const bodyText = await r.text().catch(() => "");
+      console.error(`eBay gear live search failed: ${r.status} ${bodyText.slice(0, 300)}`);
+      return res.status(502).json({ error: "eBay search failed", details: bodyText.slice(0, 200) });
     }
 
     const data = await r.json() as any;
@@ -4054,8 +4065,10 @@ app.get("/api/ebay/gear/search", async (req, res) => {
 
     const total = data.total ?? items.length;
 
-    // Cache results
-    await setEbaySearchCache(queryKey, items, total);
+    // Cache results only if non-empty
+    if (items.length > 0) {
+      await setEbaySearchCache(queryKey, items, total);
+    }
 
     res.json({
       items,
