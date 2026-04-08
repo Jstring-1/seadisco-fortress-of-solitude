@@ -247,6 +247,7 @@ async function doGearEbaySearch() {
   const input = document.getElementById("gear-ebay-search-input");
   const q = (input?.value || "").trim();
   if (q.length < 2) { showToast("Enter at least 2 characters", "error"); return; }
+  if (typeof saveSearchHistory === "function") saveSearchHistory("gear-ebay");
 
   const resultsDiv = document.getElementById("gear-ebay-search-results");
   const statusDiv = document.getElementById("gear-ebay-search-status");

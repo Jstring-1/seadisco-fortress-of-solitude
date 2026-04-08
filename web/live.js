@@ -62,6 +62,7 @@ async function doLiveSearch(append = false) {
     document.getElementById("live-status").textContent = "Enter an artist, city, or pick a genre.";
     return;
   }
+  if (typeof saveSearchHistory === "function") saveSearchHistory("live");
 
   const statusEl  = document.getElementById("live-status");
   const resultsEl = document.getElementById("live-results");

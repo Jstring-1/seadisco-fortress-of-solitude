@@ -879,6 +879,7 @@ function swapSearchToMain() {
 
 function doCwSearch(page = 1) {
   saveFilterState();
+  if (page === 1 && typeof saveSearchHistory === "function") saveSearchHistory("cw");
   const filters = getCwFilters();
   _cwQuery = filters.q || "";
   if (_cwTab === "collection") {

@@ -136,6 +136,8 @@ async function doSearch(page = 1, skipPushState = false) {
     return;
   }
 
+  if (page === 1) saveSearchHistory("main");
+
   // Only switch view on first page — pagination should not reset the view/form
   if (page === 1) {
     switchView("search", true);
@@ -1216,3 +1218,123 @@ function searchBioArtist(event, el) {
   toggleAdvanced(true);
   doSearch(1);
 }
+
+// ── Search history dropdowns ─────────────────────────────────────────────
+// Per-field search history stored in localStorage. Each text input field
+// gets its own history keyed by element ID. Completely independent from
+// the bookmarked saved-searches feature.
+const _SH_KEY = "sd_search_history";
+const _SH_MAX = 50; // max entries per field
+let _shData = {};
+try { _shData = JSON.parse(localStorage.getItem(_SH_KEY) || "{}"); } catch { _shData = {}; }
+let _shActiveField = null;
+
+function _shSave() { localStorage.setItem(_SH_KEY, JSON.stringify(_shData)); }
+
+function _shAdd(fieldId, value) {
+  const v = (value ?? "").trim();
+  if (!v) return;
+  if (!_shData[fieldId]) _shData[fieldId] = [];
+  _shData[fieldId] = _shData[fieldId].filter(e => e !== v);
+  _shData[fieldId].unshift(v);
+  if (_shData[fieldId].length > _SH_MAX) _shData[fieldId] = _shData[fieldId].slice(0, _SH_MAX);
+  _shSave();
+}
+
+function _shRemove(fieldId, value) {
+  if (!_shData[fieldId]) return;
+  _shData[fieldId] = _shData[fieldId].filter(e => e !== value);
+  if (!_shData[fieldId].length) delete _shData[fieldId];
+  _shSave();
+}
+
+/** Record current values of all search fields for the given context */
+function saveSearchHistory(context) {
+  if (context === "main") {
+    _shAdd("query", document.getElementById("query")?.value);
+    if (document.getElementById("advanced-panel")?.dataset.open === "true") {
+      _shAdd("f-artist",  document.getElementById("f-artist")?.value);
+      _shAdd("f-release", document.getElementById("f-release")?.value);
+      _shAdd("f-label",   document.getElementById("f-label")?.value);
+      _shAdd("f-year",    document.getElementById("f-year")?.value);
+      _shAdd("f-country", document.getElementById("f-country")?.value);
+    }
+  } else if (context === "cw") {
+    _shAdd("cw-query",   document.getElementById("cw-query")?.value);
+    _shAdd("cw-artist",  document.getElementById("cw-artist")?.value);
+    _shAdd("cw-release", document.getElementById("cw-release")?.value);
+    _shAdd("cw-label",   document.getElementById("cw-label")?.value);
+    _shAdd("cw-year",    document.getElementById("cw-year")?.value);
+    _shAdd("cw-notes",   document.getElementById("cw-notes")?.value);
+  } else if (context === "live") {
+    _shAdd("live-artist", document.getElementById("live-artist")?.value);
+    _shAdd("live-city",   document.getElementById("live-city")?.value);
+  } else if (context === "ebay") {
+    _shAdd("ebay-search-input", document.getElementById("ebay-search-input")?.value);
+  } else if (context === "gear-ebay") {
+    _shAdd("gear-ebay-search-input", document.getElementById("gear-ebay-search-input")?.value);
+  }
+}
+
+function _shShow(field) {
+  _shHide();
+  const entries = _shData[field.id];
+  if (!entries?.length) return;
+  _shActiveField = field;
+
+  const drop = document.createElement("div");
+  drop.className = "sh-dropdown";
+  drop.id = "sh-dropdown";
+
+  entries.forEach(val => {
+    const row = document.createElement("div");
+    row.className = "sh-row";
+    const text = document.createElement("span");
+    text.className = "sh-text";
+    text.textContent = val;
+    text.onclick = () => { field.value = val; field.focus(); _shHide(); };
+    const del = document.createElement("span");
+    del.className = "sh-del";
+    del.textContent = "×";
+    del.title = "Remove from history";
+    del.onclick = (e) => {
+      e.stopPropagation();
+      _shRemove(field.id, val);
+      row.remove();
+      if (!drop.querySelector(".sh-row")) _shHide();
+    };
+    row.appendChild(text);
+    row.appendChild(del);
+    drop.appendChild(row);
+  });
+
+  const anchor = field.closest("label") || field.parentElement;
+  anchor.style.position = "relative";
+  anchor.appendChild(drop);
+}
+
+function _shHide() {
+  _shActiveField = null;
+  document.getElementById("sh-dropdown")?.remove();
+}
+
+const _shFieldIds = [
+  "query", "f-artist", "f-release", "f-label", "f-year", "f-country",
+  "cw-query", "cw-artist", "cw-release", "cw-label", "cw-year", "cw-notes",
+  "live-artist", "live-city",
+  "ebay-search-input", "gear-ebay-search-input",
+];
+
+function _shInit() {
+  _shFieldIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("focus", () => _shShow(el));
+    el.addEventListener("input", () => _shHide());
+  });
+  document.addEventListener("mousedown", (e) => {
+    if (_shActiveField && !e.target.closest("#sh-dropdown") && !e.target.closest("input")) _shHide();
+  });
+}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", _shInit);
+else _shInit();
