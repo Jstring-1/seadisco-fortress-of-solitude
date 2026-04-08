@@ -4409,12 +4409,17 @@ app.get("/api/ebay/search", async (req, res) => {
         return res.status(400).json({ error: "Query must be at least 2 characters" });
     if (q.length > 200)
         return res.status(400).json({ error: "Query too long" });
-    console.log(`[ebay-search] vinyl query="${q}" user=${userId}`);
+    // Pagination: eBay Browse API caps offset+limit at 10_000
+    const rawOffset = parseInt(req.query.offset ?? "0", 10);
+    const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? Math.min(rawOffset, 9950) : 0;
+    const PAGE_SIZE = 50;
+    console.log(`[ebay-search] vinyl query="${q}" offset=${offset} user=${userId}`);
     if (!ebayClientId || !ebayClientSecret) {
         console.error(`[ebay-search] eBay credentials not configured`);
         return res.status(503).json({ error: "eBay search not available" });
     }
-    const queryKey = q.toLowerCase();
+    // Include offset in cache key so each page caches independently
+    const queryKey = `${q.toLowerCase()}|o${offset}`;
     const resetsAt = nextPacificMidnightIso();
     try {
         // Check cache first — free, no counter increment.
@@ -4423,9 +4428,12 @@ app.get("/api/ebay/search", async (req, res) => {
         const cached = await getEbaySearchCache(queryKey);
         if (cached && cached.results && cached.results.length > 0) {
             const { count } = await getEbayRateCount();
+            const hasMore = offset + cached.results.length < cached.total && offset + PAGE_SIZE < 10000;
             return res.json({
                 items: cached.results,
                 total: cached.total,
+                offset,
+                hasMore,
                 cached: true,
                 rateLimit: { remaining: Math.max(0, EBAY_USER_LIMIT - count), limit: EBAY_USER_LIMIT, resetsAt },
             });
@@ -4453,8 +4461,9 @@ app.get("/api/ebay/search", async (req, res) => {
         // filter so results match what users expect on the Vinyl tab.
         const baseFilter = `priceCurrency:USD,buyingOptions:{AUCTION}`;
         const aspectFilter = `aspect_filter=categoryId:176985,Record%20Size:12%22`;
-        let url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&category_ids=176985&limit=50&sort=endingSoonest&filter=${baseFilter}&${aspectFilter}`;
-        let r = await loggedFetch("ebay", url, { headers, context: `live search: ${q}` });
+        const pag = `limit=${PAGE_SIZE}&offset=${offset}`;
+        let url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&category_ids=176985&${pag}&sort=endingSoonest&filter=${baseFilter}&${aspectFilter}`;
+        let r = await loggedFetch("ebay", url, { headers, context: `live search: ${q} offset=${offset}` });
         if (!r.ok) {
             const bodyText = await r.text().catch(() => "");
             console.error(`eBay live search failed: ${r.status} ${bodyText.slice(0, 300)}`);
@@ -4462,26 +4471,17 @@ app.get("/api/ebay/search", async (req, res) => {
         }
         let data = await r.json();
         let summaries = data.itemSummaries ?? [];
-        console.log(`eBay live search "${q}" (strict vinyl): ${summaries.length} results`);
-        // Fallback: if strict 12" vinyl filter returned zero, retry without the
-        // aspect filter so users aren't blocked by restrictive metadata matching
-        if (summaries.length === 0) {
-            url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&category_ids=176985&limit=50&sort=endingSoonest&filter=${baseFilter}`;
+        console.log(`eBay live search "${q}" offset=${offset} (strict vinyl): ${summaries.length} results`);
+        // Fallback: if strict 12" vinyl filter returned zero AND this is the
+        // first page, retry without the aspect filter so users aren't blocked by
+        // restrictive metadata matching. Never drop the vinyl category.
+        if (summaries.length === 0 && offset === 0) {
+            url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&category_ids=176985&${pag}&sort=endingSoonest&filter=${baseFilter}`;
             r = await loggedFetch("ebay", url, { headers, context: `live search fallback: ${q}` });
             if (r.ok) {
                 data = await r.json();
                 summaries = data.itemSummaries ?? [];
                 console.log(`eBay live search "${q}" (fallback, records cat): ${summaries.length} results`);
-            }
-        }
-        // Second fallback: if STILL zero, try with no category at all
-        if (summaries.length === 0) {
-            url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&limit=50&sort=endingSoonest&filter=${baseFilter}`;
-            r = await loggedFetch("ebay", url, { headers, context: `live search fallback2: ${q}` });
-            if (r.ok) {
-                data = await r.json();
-                summaries = data.itemSummaries ?? [];
-                console.log(`eBay live search "${q}" (fallback, no cat): ${summaries.length} results`);
             }
         }
         // Transform to match vinyl_listings field names
@@ -4504,6 +4504,8 @@ app.get("/api/ebay/search", async (req, res) => {
             thumbnail_url: (s.thumbnailImages ?? [])[0]?.imageUrl ?? "",
         }));
         const total = data.total ?? items.length;
+        // eBay Browse API hard-caps offset+limit at 10_000
+        const hasMore = (offset + items.length) < total && (offset + PAGE_SIZE) < 10000;
         // Cache results only if non-empty — prevents stale empty results from
         // sticking for 30 minutes and denying the user a retry
         if (items.length > 0) {
@@ -4512,6 +4514,8 @@ app.get("/api/ebay/search", async (req, res) => {
         res.json({
             items,
             total,
+            offset,
+            hasMore,
             cached: false,
             rateLimit: { remaining: Math.max(0, EBAY_USER_LIMIT - newCount), limit: EBAY_USER_LIMIT, resetsAt },
         });
@@ -4531,10 +4535,14 @@ app.get("/api/ebay/gear/search", async (req, res) => {
         return res.status(400).json({ error: "Query must be at least 2 characters" });
     if (q.length > 200)
         return res.status(400).json({ error: "Query too long" });
+    // Pagination: eBay Browse API caps offset+limit at 10_000
+    const rawOffset = parseInt(req.query.offset ?? "0", 10);
+    const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? Math.min(rawOffset, 9950) : 0;
+    const PAGE_SIZE = 50;
     if (!ebayClientId || !ebayClientSecret) {
         return res.status(503).json({ error: "eBay search not available" });
     }
-    const queryKey = `gear:${q.toLowerCase()}`;
+    const queryKey = `gear:${q.toLowerCase()}|o${offset}`;
     const resetsAt = nextPacificMidnightIso();
     try {
         // Check cache first — free, no counter increment.
@@ -4542,9 +4550,12 @@ app.get("/api/ebay/gear/search", async (req, res) => {
         const cached = await getEbaySearchCache(queryKey);
         if (cached && cached.results && cached.results.length > 0) {
             const { count } = await getEbayRateCount();
+            const hasMore = offset + cached.results.length < cached.total && offset + PAGE_SIZE < 10000;
             return res.json({
                 items: cached.results,
                 total: cached.total,
+                offset,
+                hasMore,
                 cached: true,
                 rateLimit: { remaining: Math.max(0, EBAY_USER_LIMIT - count), limit: EBAY_USER_LIMIT, resetsAt },
             });
@@ -4567,8 +4578,8 @@ app.get("/api/ebay/gear/search", async (req, res) => {
         if (ebayAffiliateCampaignId) {
             headers["X-EBAY-C-ENDUSERCTX"] = `affiliateCampaignId=${ebayAffiliateCampaignId}`;
         }
-        const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&limit=50&sort=endingSoonest&filter=priceCurrency:USD,buyingOptions:{AUCTION}`;
-        const r = await loggedFetch("ebay", url, { headers, context: `gear live search: ${q}` });
+        const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&limit=${PAGE_SIZE}&offset=${offset}&sort=endingSoonest&filter=priceCurrency:USD,buyingOptions:{AUCTION}`;
+        const r = await loggedFetch("ebay", url, { headers, context: `gear live search: ${q} offset=${offset}` });
         if (!r.ok) {
             const bodyText = await r.text().catch(() => "");
             console.error(`eBay gear live search failed: ${r.status} ${bodyText.slice(0, 300)}`);
@@ -4596,6 +4607,7 @@ app.get("/api/ebay/gear/search", async (req, res) => {
             thumbnail_url: (s.thumbnailImages ?? [])[0]?.imageUrl ?? "",
         }));
         const total = data.total ?? items.length;
+        const hasMore = (offset + items.length) < total && (offset + PAGE_SIZE) < 10000;
         // Cache results only if non-empty
         if (items.length > 0) {
             await setEbaySearchCache(queryKey, items, total);
@@ -4603,6 +4615,8 @@ app.get("/api/ebay/gear/search", async (req, res) => {
         res.json({
             items,
             total,
+            offset,
+            hasMore,
             cached: false,
             rateLimit: { remaining: Math.max(0, EBAY_USER_LIMIT - newCount), limit: EBAY_USER_LIMIT, resetsAt },
         });

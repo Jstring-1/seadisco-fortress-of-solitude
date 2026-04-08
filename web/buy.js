@@ -44,6 +44,11 @@ const BUY_PAGE_SIZE = 200;
 
 // ── Live eBay search state ──────────────────────────────────────────
 let _ebaySearchItems = [];
+let _ebaySearchQuery = "";
+let _ebaySearchOffset = 0;
+let _ebaySearchTotal = 0;
+let _ebaySearchHasMore = false;
+let _ebaySearchLoadingMore = false;
 let _ebayRateRemaining = null;
 let _ebayRateLimit = null;
 let _ebayResetAt = null;
@@ -527,6 +532,7 @@ async function doEbaySearch() {
   const resultsDiv = document.getElementById("ebay-search-results");
   const statusDiv = document.getElementById("ebay-search-status");
   const clearBtn = document.getElementById("ebay-clear-btn");
+  const loadMoreWrap = document.getElementById("ebay-load-more-wrap");
 
   // Hide the entire main vinyl grid layout (header + results + load more)
   // while showing live search results
@@ -539,9 +545,17 @@ async function doEbaySearch() {
   if (resultsDiv) { resultsDiv.style.display = ""; resultsDiv.innerHTML = renderSkeletonGrid(8); }
   if (statusDiv) { statusDiv.style.display = ""; statusDiv.textContent = `Searching eBay for "${q}"…`; }
   if (clearBtn) clearBtn.style.display = "";
+  if (loadMoreWrap) loadMoreWrap.style.display = "none";
+
+  // Reset pagination state for new query
+  _ebaySearchQuery = q;
+  _ebaySearchOffset = 0;
+  _ebaySearchItems = [];
+  _ebaySearchTotal = 0;
+  _ebaySearchHasMore = false;
 
   try {
-    const r = await apiFetch(`/api/ebay/search?q=${encodeURIComponent(q)}`);
+    const r = await apiFetch(`/api/ebay/search?q=${encodeURIComponent(q)}&offset=0`);
     const data = await r.json().catch(() => ({}));
 
     if (r.status === 429) {
@@ -574,6 +588,9 @@ async function doEbaySearch() {
     }
 
     _ebaySearchItems = data.items || [];
+    _ebaySearchTotal = data.total || 0;
+    _ebaySearchHasMore = !!data.hasMore;
+    _ebaySearchOffset = data.offset || 0;
 
     if (data.rateLimit) {
       _ebayRateRemaining = data.rateLimit.remaining;
@@ -590,11 +607,8 @@ async function doEbaySearch() {
     if (resultsDiv) {
       resultsDiv.innerHTML = _ebaySearchItems.map((item, idx) => renderEbayCard(item, idx)).join("");
     }
-    if (statusDiv) {
-      statusDiv.style.display = "";
-      const cachedTag = data.cached ? " · cached" : "";
-      statusDiv.textContent = `${data.total.toLocaleString()} results for "${q}"${cachedTag}`;
-    }
+    updateEbaySearchStatus();
+    updateEbayLoadMoreButton();
   } catch (e) {
     if (resultsDiv) resultsDiv.style.display = "none";
     if (statusDiv) { statusDiv.style.display = "none"; statusDiv.textContent = ""; }
@@ -602,6 +616,97 @@ async function doEbaySearch() {
     if (buyHeader) buyHeader.style.display = "";
     if (buyLoadMore) buyLoadMore.style.display = "";
     showToast("eBay search failed — please try again", "error");
+  }
+}
+
+function updateEbaySearchStatus(cached = false) {
+  const statusDiv = document.getElementById("ebay-search-status");
+  if (!statusDiv) return;
+  statusDiv.style.display = "";
+  const shown = _ebaySearchItems.length;
+  const total = _ebaySearchTotal;
+  const cap = Math.min(total, 10000);
+  const cachedTag = cached ? " · cached" : "";
+  statusDiv.textContent = `Showing ${shown.toLocaleString()} of ${total.toLocaleString()}${total > 10000 ? " (capped at 10,000)" : ""} results for "${_ebaySearchQuery}"${cachedTag}`;
+}
+
+function updateEbayLoadMoreButton() {
+  const wrap = document.getElementById("ebay-load-more-wrap");
+  const btn = document.getElementById("ebay-load-more");
+  if (!wrap || !btn) return;
+  if (_ebaySearchHasMore) {
+    wrap.style.display = "";
+    btn.disabled = false;
+    btn.textContent = "Load more";
+  } else {
+    wrap.style.display = "none";
+  }
+}
+
+async function loadMoreEbaySearch() {
+  if (_ebaySearchLoadingMore || !_ebaySearchHasMore || !_ebaySearchQuery) return;
+  _ebaySearchLoadingMore = true;
+
+  const btn = document.getElementById("ebay-load-more");
+  if (btn) { btn.disabled = true; btn.textContent = "Loading…"; }
+
+  const nextOffset = _ebaySearchOffset + 50;
+  try {
+    const r = await apiFetch(`/api/ebay/search?q=${encodeURIComponent(_ebaySearchQuery)}&offset=${nextOffset}`);
+    const data = await r.json().catch(() => ({}));
+
+    if (r.status === 429) {
+      showToast(data.error || "Daily search limit reached", "error");
+      if (data.rateLimit) {
+        _ebayRateRemaining = data.rateLimit.remaining;
+        _ebayResetAt = data.rateLimit.resetsAt;
+        updateEbayMeta();
+      }
+      _ebaySearchHasMore = false;
+      updateEbayLoadMoreButton();
+      return;
+    }
+
+    if (!r.ok) {
+      console.error("eBay load more error:", r.status, data);
+      showToast(`Load more failed: ${data.error || r.status}`, "error");
+      if (btn) { btn.disabled = false; btn.textContent = "Load more"; }
+      return;
+    }
+
+    const newItems = data.items || [];
+    if (data.rateLimit) {
+      _ebayRateRemaining = data.rateLimit.remaining;
+      _ebayResetAt = data.rateLimit.resetsAt;
+      updateEbayMeta();
+    }
+
+    if (!newItems.length) {
+      _ebaySearchHasMore = false;
+      updateEbayLoadMoreButton();
+      return;
+    }
+
+    const startIdx = _ebaySearchItems.length;
+    _ebaySearchItems = _ebaySearchItems.concat(newItems);
+    _ebaySearchOffset = data.offset || nextOffset;
+    _ebaySearchHasMore = !!data.hasMore;
+
+    // Append new cards to the grid
+    const resultsDiv = document.getElementById("ebay-search-results");
+    if (resultsDiv) {
+      const html = newItems.map((item, i) => renderEbayCard(item, startIdx + i)).join("");
+      resultsDiv.insertAdjacentHTML("beforeend", html);
+    }
+
+    updateEbaySearchStatus();
+    updateEbayLoadMoreButton();
+  } catch (e) {
+    console.error("loadMoreEbaySearch error:", e);
+    showToast("Load more failed — try again", "error");
+    if (btn) { btn.disabled = false; btn.textContent = "Load more"; }
+  } finally {
+    _ebaySearchLoadingMore = false;
   }
 }
 
@@ -662,12 +767,18 @@ function clearEbaySearch() {
   const resultsDiv = document.getElementById("ebay-search-results");
   const statusDiv = document.getElementById("ebay-search-status");
   const clearBtn = document.getElementById("ebay-clear-btn");
+  const loadMoreWrap = document.getElementById("ebay-load-more-wrap");
 
   if (input) input.value = "";
   if (resultsDiv) { resultsDiv.style.display = "none"; resultsDiv.innerHTML = ""; }
   if (statusDiv) { statusDiv.style.display = "none"; statusDiv.textContent = ""; }
   if (clearBtn) clearBtn.style.display = "none";
+  if (loadMoreWrap) loadMoreWrap.style.display = "none";
   _ebaySearchItems = [];
+  _ebaySearchQuery = "";
+  _ebaySearchOffset = 0;
+  _ebaySearchTotal = 0;
+  _ebaySearchHasMore = false;
   // Restore the full main vinyl grid layout (header + results + load more)
   const mainGrid = document.getElementById("buy-results");
   const buyHeader = document.querySelector("#buy-view .buy-header");

@@ -11,6 +11,11 @@ const GEAR_PAGE_SIZE = 200;
 
 // ── Live eBay gear search state ──────────────────────────────────────
 let _gearEbaySearchItems = [];
+let _gearEbaySearchQuery = "";
+let _gearEbaySearchOffset = 0;
+let _gearEbaySearchTotal = 0;
+let _gearEbaySearchHasMore = false;
+let _gearEbaySearchLoadingMore = false;
 
 function renderGearCard(item, idx) {
   const img = item.image_url
@@ -252,6 +257,7 @@ async function doGearEbaySearch() {
   const resultsDiv = document.getElementById("gear-ebay-search-results");
   const statusDiv = document.getElementById("gear-ebay-search-status");
   const clearBtn = document.getElementById("gear-ebay-clear-btn");
+  const loadMoreWrap = document.getElementById("gear-ebay-load-more-wrap");
 
   // Hide the entire main gear grid layout (header + results + load more)
   // while showing live search results
@@ -264,10 +270,18 @@ async function doGearEbaySearch() {
   if (resultsDiv) { resultsDiv.style.display = ""; resultsDiv.innerHTML = renderSkeletonGrid(8); }
   if (statusDiv) { statusDiv.style.display = ""; statusDiv.textContent = `Searching eBay for "${q}"…`; }
   if (clearBtn) clearBtn.style.display = "";
+  if (loadMoreWrap) loadMoreWrap.style.display = "none";
+
+  // Reset pagination state for new query
+  _gearEbaySearchQuery = q;
+  _gearEbaySearchOffset = 0;
+  _gearEbaySearchItems = [];
+  _gearEbaySearchTotal = 0;
+  _gearEbaySearchHasMore = false;
 
   try {
     // Use gear-specific eBay categories (vintage electronics: 175673, 14969, 48458, 71230, 67807)
-    const r = await apiFetch(`/api/ebay/gear/search?q=${encodeURIComponent(q)}`);
+    const r = await apiFetch(`/api/ebay/gear/search?q=${encodeURIComponent(q)}&offset=0`);
     const data = await r.json().catch(() => ({}));
 
     if (r.status === 429) {
@@ -300,6 +314,9 @@ async function doGearEbaySearch() {
     }
 
     _gearEbaySearchItems = data.items || [];
+    _gearEbaySearchTotal = data.total || 0;
+    _gearEbaySearchHasMore = !!data.hasMore;
+    _gearEbaySearchOffset = data.offset || 0;
 
     if (data.rateLimit) {
       _ebayRateRemaining = data.rateLimit.remaining;
@@ -317,11 +334,8 @@ async function doGearEbaySearch() {
     if (resultsDiv) {
       resultsDiv.innerHTML = _gearEbaySearchItems.map((item, idx) => renderGearEbayCard(item, idx)).join("");
     }
-    if (statusDiv) {
-      statusDiv.style.display = "";
-      const cachedTag = data.cached ? " · cached" : "";
-      statusDiv.textContent = `${data.total.toLocaleString()} results for "${q}"${cachedTag}`;
-    }
+    updateGearEbaySearchStatus();
+    updateGearEbayLoadMoreButton();
   } catch (e) {
     if (resultsDiv) resultsDiv.style.display = "none";
     if (statusDiv) { statusDiv.style.display = "none"; statusDiv.textContent = ""; }
@@ -332,17 +346,112 @@ async function doGearEbaySearch() {
   }
 }
 
+function updateGearEbaySearchStatus(cached = false) {
+  const statusDiv = document.getElementById("gear-ebay-search-status");
+  if (!statusDiv) return;
+  statusDiv.style.display = "";
+  const shown = _gearEbaySearchItems.length;
+  const total = _gearEbaySearchTotal;
+  const cachedTag = cached ? " · cached" : "";
+  statusDiv.textContent = `Showing ${shown.toLocaleString()} of ${total.toLocaleString()}${total > 10000 ? " (capped at 10,000)" : ""} results for "${_gearEbaySearchQuery}"${cachedTag}`;
+}
+
+function updateGearEbayLoadMoreButton() {
+  const wrap = document.getElementById("gear-ebay-load-more-wrap");
+  const btn = document.getElementById("gear-ebay-load-more");
+  if (!wrap || !btn) return;
+  if (_gearEbaySearchHasMore) {
+    wrap.style.display = "";
+    btn.disabled = false;
+    btn.textContent = "Load more";
+  } else {
+    wrap.style.display = "none";
+  }
+}
+
+async function loadMoreGearEbaySearch() {
+  if (_gearEbaySearchLoadingMore || !_gearEbaySearchHasMore || !_gearEbaySearchQuery) return;
+  _gearEbaySearchLoadingMore = true;
+
+  const btn = document.getElementById("gear-ebay-load-more");
+  if (btn) { btn.disabled = true; btn.textContent = "Loading…"; }
+
+  const nextOffset = _gearEbaySearchOffset + 50;
+  try {
+    const r = await apiFetch(`/api/ebay/gear/search?q=${encodeURIComponent(_gearEbaySearchQuery)}&offset=${nextOffset}`);
+    const data = await r.json().catch(() => ({}));
+
+    if (r.status === 429) {
+      showToast(data.error || "Daily eBay request limit reached", "error");
+      if (data.rateLimit) {
+        _ebayRateRemaining = data.rateLimit.remaining;
+        _ebayResetAt = data.rateLimit.resetsAt;
+        updateEbayMeta();
+      }
+      _gearEbaySearchHasMore = false;
+      updateGearEbayLoadMoreButton();
+      return;
+    }
+
+    if (!r.ok) {
+      console.error("eBay gear load more error:", r.status, data);
+      showToast(`Load more failed: ${data.error || r.status}`, "error");
+      if (btn) { btn.disabled = false; btn.textContent = "Load more"; }
+      return;
+    }
+
+    const newItems = data.items || [];
+    if (data.rateLimit) {
+      _ebayRateRemaining = data.rateLimit.remaining;
+      _ebayResetAt = data.rateLimit.resetsAt;
+      updateEbayMeta();
+    }
+
+    if (!newItems.length) {
+      _gearEbaySearchHasMore = false;
+      updateGearEbayLoadMoreButton();
+      return;
+    }
+
+    const startIdx = _gearEbaySearchItems.length;
+    _gearEbaySearchItems = _gearEbaySearchItems.concat(newItems);
+    _gearEbaySearchOffset = data.offset || nextOffset;
+    _gearEbaySearchHasMore = !!data.hasMore;
+
+    const resultsDiv = document.getElementById("gear-ebay-search-results");
+    if (resultsDiv) {
+      const html = newItems.map((item, i) => renderGearEbayCard(item, startIdx + i)).join("");
+      resultsDiv.insertAdjacentHTML("beforeend", html);
+    }
+
+    updateGearEbaySearchStatus();
+    updateGearEbayLoadMoreButton();
+  } catch (e) {
+    console.error("loadMoreGearEbaySearch error:", e);
+    showToast("Load more failed — try again", "error");
+    if (btn) { btn.disabled = false; btn.textContent = "Load more"; }
+  } finally {
+    _gearEbaySearchLoadingMore = false;
+  }
+}
+
 function clearGearEbaySearch() {
   const input = document.getElementById("gear-ebay-search-input");
   const resultsDiv = document.getElementById("gear-ebay-search-results");
   const statusDiv = document.getElementById("gear-ebay-search-status");
   const clearBtn = document.getElementById("gear-ebay-clear-btn");
+  const loadMoreWrap = document.getElementById("gear-ebay-load-more-wrap");
 
   if (input) input.value = "";
   if (resultsDiv) { resultsDiv.style.display = "none"; resultsDiv.innerHTML = ""; }
   if (statusDiv) { statusDiv.style.display = "none"; statusDiv.textContent = ""; }
   if (clearBtn) clearBtn.style.display = "none";
+  if (loadMoreWrap) loadMoreWrap.style.display = "none";
   _gearEbaySearchItems = [];
+  _gearEbaySearchQuery = "";
+  _gearEbaySearchOffset = 0;
+  _gearEbaySearchTotal = 0;
+  _gearEbaySearchHasMore = false;
   // Restore the full main gear grid layout (header + results + load more)
   const mainGrid = document.getElementById("gear-results");
   const gearHeader = document.querySelector("#gear-view .gear-header");
