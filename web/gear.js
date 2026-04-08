@@ -267,7 +267,7 @@ async function doGearEbaySearch() {
 
   try {
     // Use gear-specific eBay categories (vintage electronics: 175673, 14969, 48458, 71230, 67807)
-    const r = await fetch(`/api/ebay/gear/search?q=${encodeURIComponent(q)}`);
+    const r = await apiFetch(`/api/ebay/gear/search?q=${encodeURIComponent(q)}`);
     const data = await r.json().catch(() => ({}));
 
     if (r.status === 429) {
