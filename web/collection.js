@@ -39,7 +39,7 @@ function showSynonymInfo(synonymsApplied) {
 
 // ── Per-tab filter persistence ───────────────────────────────────────────
 const _cwFilterIds = ["cw-query","cw-artist","cw-release","cw-label","cw-year","cw-genre","cw-style","cw-format","cw-notes","cw-rating"];
-const _searchToCw = { "query":"cw-query", "f-artist":"cw-artist", "f-release":"cw-release", "f-label":"cw-label", "f-year":"cw-year", "f-format":"cw-format" };
+const _searchToCw = { "f-artist":"cw-artist", "f-release":"cw-release", "f-label":"cw-label", "f-year":"cw-year", "f-format":"cw-format" };
 
 function saveFilterState() {
   const state = {};
