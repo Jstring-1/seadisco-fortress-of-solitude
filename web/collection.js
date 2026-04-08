@@ -1683,6 +1683,13 @@ async function loadDiscogsIds() {
     }
   } catch { /* ignore */ }
   if (window._resolveDiscogsIds) window._resolveDiscogsIds();
+  // authReadyPromise now resolves before loadDiscogsIds completes (so the
+  // page can render faster), which means an in-progress search may have
+  // rendered cards without their collection/wantlist/favorite dots.
+  // Re-render once the IDs land so the badges appear without a user action.
+  if (window._lastResults && typeof renderResults === "function") {
+    try { renderResults(window._lastResults); } catch (e) { console.error("rerender after IDs:", e); }
+  }
   // Load random records for search page default
   if (typeof loadRandomRecords === "function") loadRandomRecords();
 }
