@@ -29,9 +29,16 @@
   <link rel="preconnect" href="https://api.discogs.com" />
   <link rel="preconnect" href="https://i.discogs.com" />
   <link rel="preconnect" href="https://i.ebayimg.com" />
-  <link rel="dns-prefetch" href="https://clerk.seadisco.com" />
+  <!-- Clerk CDN: full preconnect (not just DNS prefetch) so TLS handshake
+       overlaps with HTML parsing instead of happening after shared.js
+       starts loadClerkInstance() -->
+  <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <link rel="dns-prefetch" href="https://api.anthropic.com" />
-  <link rel="stylesheet" href="/style.css?v=20260408d" />
+  <!-- CLERK_SCRIPT_INJECT — server replaces this with a preloaded
+       <script async> tag for clerk-js so the bundle starts downloading
+       before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
+  <!--CLERK_SCRIPT_INJECT-->
+  <link rel="stylesheet" href="/style.css?v=20260408e" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -64,7 +71,7 @@
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260408d"></script>
+<script src="/shared.js?v=20260408e"></script>
 <script>renderSharedHeader({ spa: true, active: "search" });</script>
 <div id="search-view">
 
@@ -933,20 +940,20 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script src="/utils.js?v=20260408d"></script>
-<script src="/search.js?v=20260408d"></script>
-<script src="/buy.js?v=20260408d"></script>
-<script src="/gear.js?v=20260408d"></script>
-<script src="/drops.js?v=20260408d"></script>
-<script src="/live.js?v=20260408d"></script>
-<script src="/feed.js?v=20260408d"></script>
-<script src="/collection.js?v=20260408d"></script>
-<script src="/account.js?v=20260408d"></script>
-<script src="/orders.js?v=20260408d"></script>
-<script src="/app.js?v=20260408d"></script>
+<script src="/utils.js?v=20260408e"></script>
+<script src="/search.js?v=20260408e"></script>
+<script src="/buy.js?v=20260408e"></script>
+<script src="/gear.js?v=20260408e"></script>
+<script src="/drops.js?v=20260408e"></script>
+<script src="/live.js?v=20260408e"></script>
+<script src="/feed.js?v=20260408e"></script>
+<script src="/collection.js?v=20260408e"></script>
+<script src="/account.js?v=20260408e"></script>
+<script src="/orders.js?v=20260408e"></script>
+<script src="/app.js?v=20260408e"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/modal.js?v=20260408d"></script>
-<script defer src="/inventory-editor.js?v=20260408d"></script>
+<script defer src="/modal.js?v=20260408e"></script>
+<script defer src="/inventory-editor.js?v=20260408e"></script>
 
 </body>
 </html>

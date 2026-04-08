@@ -152,60 +152,90 @@ async function getSessionToken() {
 }
 
 async function loadClerkInstance() {
-  // Try cached config first, then fetch (saves a round-trip on repeat visits)
-  let pk = "";
-  try {
-    const cached = JSON.parse(localStorage.getItem("_clerkCfg") || "{}");
-    if (cached.pk && (Date.now() - (cached.ts || 0)) < 3600000) pk = cached.pk;
-  } catch {}
-  if (!pk) {
-    const cfg = await fetch("/api/config").then(r => r.json()).catch(() => ({}));
-    pk = cfg.clerkPublishableKey || "";
-    if (pk) try { localStorage.setItem("_clerkCfg", JSON.stringify({ pk, ts: Date.now() })); } catch {}
+  // Fast path: the server inlines a preloaded <script async> tag for
+  // clerk-js in <head> (via CLERK_SCRIPT_INJECT), so on most page loads
+  // window.Clerk is already defined or will appear within a few ms.
+  // Skip the /api/config round-trip + dynamic <script> creation.
+  let c = window.Clerk;
+  if (!c) {
+    // Wait briefly for the preloaded async script to finish downloading
+    for (let i = 0; i < 40 && !window.Clerk; i++) {
+      await new Promise(r => setTimeout(r, 25));
+    }
+    c = window.Clerk;
   }
-  if (!pk) return null;
 
-  const frontendApi = atob(pk.replace(/^pk_(test|live)_/, "")).replace(/\$$/, "");
-  await new Promise((resolve, reject) => {
-    const s = document.createElement("script");
-    s.src = `https://${frontendApi}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js`;
-    s.setAttribute("data-clerk-publishable-key", pk);
-    s.setAttribute("crossorigin", "anonymous");
-    s.onload = resolve; s.onerror = reject;
-    document.head.appendChild(s);
-  });
+  // Fallback: no preloaded script (e.g. dev, or template injection missing) —
+  // load Clerk the old dynamic way
+  if (!c) {
+    let pk = "";
+    try {
+      const cached = JSON.parse(localStorage.getItem("_clerkCfg") || "{}");
+      if (cached.pk && (Date.now() - (cached.ts || 0)) < 3600000) pk = cached.pk;
+    } catch {}
+    if (!pk) {
+      const cfg = await fetch("/api/config").then(r => r.json()).catch(() => ({}));
+      pk = cfg.clerkPublishableKey || "";
+      if (pk) try { localStorage.setItem("_clerkCfg", JSON.stringify({ pk, ts: Date.now() })); } catch {}
+    }
+    if (!pk) return null;
 
-  // Poll for window.Clerk to be defined (script may take time to initialize)
-  const c = await new Promise((resolve) => {
-    if (window.Clerk) { resolve(window.Clerk); return; }
-    let tries = 0;
-    const iv = setInterval(() => {
-      tries++;
-      if (window.Clerk) { clearInterval(iv); resolve(window.Clerk); }
-      else if (tries > 60) { clearInterval(iv); resolve(null); } // 3s timeout
-    }, 50);
-  });
-  if (!c) return null;
+    const frontendApi = atob(pk.replace(/^pk_(test|live)_/, "")).replace(/\$$/, "");
+    await new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = `https://${frontendApi}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js`;
+      s.setAttribute("data-clerk-publishable-key", pk);
+      s.setAttribute("crossorigin", "anonymous");
+      s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+
+    // Poll for window.Clerk to be defined (script may take time to initialize)
+    c = await new Promise((resolve) => {
+      if (window.Clerk) { resolve(window.Clerk); return; }
+      let tries = 0;
+      const iv = setInterval(() => {
+        tries++;
+        if (window.Clerk) { clearInterval(iv); resolve(window.Clerk); }
+        else if (tries > 60) { clearInterval(iv); resolve(null); } // 3s timeout
+      }, 50);
+    });
+    if (!c) return null;
+  }
+
   await c.load();
 
-  // Clerk.load() resolves before session hydration on many page loads.
-  // Poll for a valid token (proof that auth is fully ready) for up to 3s.
-  for (let i = 0; i < 15; i++) {
-    try {
-      if (c.user && c.session) {
-        const t = await c.session.getToken();
-        if (t) {
-          _cachedToken = t;
-          _cachedTokenAt = Date.now();
-          break; // fully ready
-        }
-      } else if (c.user === null && i >= 8) {
-        break; // confirmed not signed in (after 1.6s grace)
-      }
-    } catch { /* ignore */ }
-    await new Promise(r => setTimeout(r, 200));
+  // After c.load() resolves, Clerk has either hydrated the session or
+  // confirmed there isn't one. Only poll briefly if the state is still
+  // ambiguous (user === undefined). Previously we polled up to 3s on every
+  // load, which dominated page TTI — drop that to ~500ms max.
+  if (c.user === null) {
+    // Confirmed signed-out — no need to poll
+    return c;
   }
-
+  if (c.user && c.session) {
+    // Signed-in — warm the token cache but don't block more than 400ms
+    try {
+      const t = await Promise.race([
+        c.session.getToken(),
+        new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), 400)),
+      ]);
+      if (t) { _cachedToken = t; _cachedTokenAt = Date.now(); }
+    } catch { /* token will be refreshed on first apiFetch */ }
+    return c;
+  }
+  // Ambiguous state (user === undefined) — short poll, 500ms max
+  for (let i = 0; i < 5; i++) {
+    await new Promise(r => setTimeout(r, 100));
+    if (c.user === null) return c; // signed out
+    if (c.user && c.session) {
+      try {
+        const t = await c.session.getToken();
+        if (t) { _cachedToken = t; _cachedTokenAt = Date.now(); }
+      } catch {}
+      return c;
+    }
+  }
   return c;
 }
 
@@ -227,10 +257,16 @@ async function initAuth({ onSignedIn, onSignedOut, onError, onReady } = {}) {
 
     let _wasSignedIn = !!clerk.user;
 
+    // Resolve onReady IMMEDIATELY once the user state is known, so
+    // authReadyPromise unblocks and the page can render. Fire onSignedIn /
+    // onSignedOut in the background — their async work (token checks,
+    // loadDiscogsIds, etc.) shouldn't gate initial page rendering.
+    onReady?.(clerk);
+
     if (clerk.user) {
-      await onSignedIn?.(clerk);
+      Promise.resolve(onSignedIn?.(clerk)).catch(err => console.error("onSignedIn error:", err));
     } else {
-      await onSignedOut?.(clerk);
+      Promise.resolve(onSignedOut?.(clerk)).catch(err => console.error("onSignedOut error:", err));
     }
 
     // Listen for GENUINE auth state changes only.
@@ -247,7 +283,6 @@ async function initAuth({ onSignedIn, onSignedOut, onError, onReady } = {}) {
       }
     });
 
-    onReady?.(clerk);
     return clerk;
   } catch (err) {
     onError?.(err.message ?? String(err));
@@ -294,7 +329,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260408d";
+  const SITE_VERSION = "build 20260408e";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'https://seadisco.com' : '/'}" class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>

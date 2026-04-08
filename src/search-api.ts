@@ -2,6 +2,7 @@ import express from "express";
 import compression from "compression";
 import cookieParser from "cookie-parser";
 import crypto from "crypto";
+import fs from "fs";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
@@ -230,6 +231,50 @@ app.get("/account", (req, res) => {
   const qs = req.url.includes("?") ? "&" + req.url.split("?")[1] : "";
   res.redirect(301, `/?v=account${qs}`);
 });
+
+// ── HTML template cache with Clerk script preload injection ───────────────
+// Reads index.html/account.html/admin.html at startup and substitutes
+// <!--CLERK_SCRIPT_INJECT--> with a preloaded <script async> tag for
+// clerk-js. This lets the Clerk bundle start downloading before shared.js
+// even parses, saving ~300–500ms on cold page loads.
+const _htmlCache = new Map<string, string>();
+function _buildClerkInject(): string {
+  if (!authPk) return "";
+  try {
+    const host = Buffer.from(authPk.replace(/^pk_(test|live)_/, ""), "base64")
+      .toString("utf8")
+      .replace(/\$+$/, "");
+    if (!host || !/^[a-z0-9.-]+$/i.test(host)) return "";
+    return `<script async crossorigin="anonymous" data-clerk-publishable-key="${authPk}" src="https://${host}/npm/@clerk/clerk-js@latest/dist/clerk.browser.js" onload="window._clerkScriptReady=true"></script>`;
+  } catch { return ""; }
+}
+const _clerkInject = _buildClerkInject();
+function _loadHtmlTemplated(relPath: string): string | null {
+  const cached = _htmlCache.get(relPath);
+  if (cached) return cached;
+  try {
+    const full = path.join(__dirname, "../web", relPath);
+    let html = fs.readFileSync(full, "utf8");
+    html = html.replace(/<!--CLERK_SCRIPT_INJECT-->/g, _clerkInject);
+    _htmlCache.set(relPath, html);
+    return html;
+  } catch { return null; }
+}
+function _sendHtml(res: express.Response, relPath: string) {
+  const html = _loadHtmlTemplated(relPath);
+  if (!html) return false;
+  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(html);
+  return true;
+}
+
+// Serve the main HTML pages with Clerk script inlined in <head>.
+// Must come BEFORE express.static so the static handler doesn't intercept.
+app.get("/", (_req, res, next) => { if (!_sendHtml(res, "index.html")) next(); });
+app.get("/index.html", (_req, res, next) => { if (!_sendHtml(res, "index.html")) next(); });
+app.get("/account.html", (_req, res, next) => { if (!_sendHtml(res, "account.html")) next(); });
+app.get("/admin.html", (_req, res, next) => { if (!_sendHtml(res, "admin.html")) next(); });
 
 // Cache headers for static assets (versioned files get long cache, HTML short)
 app.use(express.static(path.join(__dirname, "../web"), {
