@@ -38,7 +38,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260408e" />
+  <link rel="stylesheet" href="/style.css?v=20260408f" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -71,7 +71,7 @@
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260408e"></script>
+<script src="/shared.js?v=20260408f"></script>
 <script>renderSharedHeader({ spa: true, active: "search" });</script>
 <div id="search-view">
 
@@ -476,6 +476,9 @@
   </div>
   <div id="ebay-search-results" class="card-grid content-area" style="display:none"></div>
   <div id="ebay-search-status" style="display:none;text-align:center;padding:1rem;color:#888;font-size:0.85rem"></div>
+  <div class="load-more-wrap" id="ebay-load-more-wrap" style="display:none">
+    <button id="ebay-load-more" class="load-more-btn" onclick="loadMoreEbaySearch()">Load more</button>
+  </div>
 
   <div class="buy-header content-area">
     <div class="buy-controls">
@@ -523,6 +526,9 @@
   </div>
   <div id="gear-ebay-search-results" class="card-grid content-area" style="display:none"></div>
   <div id="gear-ebay-search-status" style="display:none;text-align:center;padding:1rem;color:#888;font-size:0.85rem"></div>
+  <div class="load-more-wrap" id="gear-ebay-load-more-wrap" style="display:none">
+    <button id="gear-ebay-load-more" class="load-more-btn" onclick="loadMoreGearEbaySearch()">Load more</button>
+  </div>
 
   <div class="gear-header content-area">
     <div class="gear-controls">
@@ -940,20 +946,20 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script src="/utils.js?v=20260408e"></script>
-<script src="/search.js?v=20260408e"></script>
-<script src="/buy.js?v=20260408e"></script>
-<script src="/gear.js?v=20260408e"></script>
-<script src="/drops.js?v=20260408e"></script>
-<script src="/live.js?v=20260408e"></script>
-<script src="/feed.js?v=20260408e"></script>
-<script src="/collection.js?v=20260408e"></script>
-<script src="/account.js?v=20260408e"></script>
-<script src="/orders.js?v=20260408e"></script>
-<script src="/app.js?v=20260408e"></script>
+<script src="/utils.js?v=20260408f"></script>
+<script src="/search.js?v=20260408f"></script>
+<script src="/buy.js?v=20260408f"></script>
+<script src="/gear.js?v=20260408f"></script>
+<script src="/drops.js?v=20260408f"></script>
+<script src="/live.js?v=20260408f"></script>
+<script src="/feed.js?v=20260408f"></script>
+<script src="/collection.js?v=20260408f"></script>
+<script src="/account.js?v=20260408f"></script>
+<script src="/orders.js?v=20260408f"></script>
+<script src="/app.js?v=20260408f"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/modal.js?v=20260408e"></script>
-<script defer src="/inventory-editor.js?v=20260408e"></script>
+<script defer src="/modal.js?v=20260408f"></script>
+<script defer src="/inventory-editor.js?v=20260408f"></script>
 
 </body>
 </html>
