@@ -1068,11 +1068,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
 
   const closeFn = targetId === "version-info" ? "closeVersionPopup" : "closeModal";
   el.innerHTML = `
-    <div class="popup-top-bar" onclick="${closeFn}()" title="Click to close">
-      ${typeLabel ? `<span class="album-type-badge" style="cursor:pointer;user-select:none" onclick="event.stopPropagation();navigator.clipboard.writeText('${escHtml(String(releaseId))}');this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy ID">${escHtml(typeLabel)}</span>` : ""}
-      <button class="popup-share-inline" onclick="event.stopPropagation();sharePopup(this)" title="Copy share link">share</button>
-      <span class="popup-close-x">×</span>
-    </div>
+    <div class="popup-close-zone" onclick="${closeFn}()" title="Click to close"></div>
     <div class="album-header">
       ${img ? `<div class="album-cover-wrap">
         <img class="album-cover" src="${img}" alt="${escHtml(title)}" loading="lazy"
@@ -1084,6 +1080,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
       </div>`
              : `<div class="album-cover-placeholder">♪</div>`}
       <div class="album-meta">
+        ${typeLabel ? `<div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.3rem"><div class="album-type-badge" style="cursor:pointer;user-select:none" onclick="navigator.clipboard.writeText('${escHtml(String(releaseId))}');this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy ID">${escHtml(typeLabel)}</div><button class="popup-share-inline" onclick="sharePopup(this)" title="Copy share link">share</button></div>` : ""}
         <h2><a href="#" class="modal-title-link" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">${escHtml(title)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">⌕</a></h2>
         ${artists.length ? `<div class="album-artist">${artists.map(n => `<a href="#" class="modal-artist-link" data-artist="${escHtml(n)}" onclick="searchArtistFromModal(event,this)" title="Search for ${escHtml(n)}">${escHtml(n)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(n.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(n)}">⌕</a>`).join(", ")}</div>` : ""}
         ${detailRows ? `<div class="album-detail-grid">${detailRows}</div>` : ""}

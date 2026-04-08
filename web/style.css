@@ -2148,25 +2148,23 @@ body.modal-open  { overflow: hidden; }
   position: relative;
 }
 
-/* Popup top bar — type badge + share + close, clickable to dismiss */
-.popup-top-bar {
-  display: flex; align-items: center; gap: 0.5rem;
-  padding: 0.5rem 0.75rem; cursor: pointer;
-  position: sticky; top: 0; z-index: 2;
-  background: var(--bg); border-bottom: 1px solid var(--border);
+/* Empty close zone at top of popup — tap to dismiss (especially on mobile) */
+.popup-close-zone {
+  height: 1.5rem; cursor: pointer; position: relative;
 }
-.popup-top-bar:hover { background: #1a1714; }
+.popup-close-zone::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  width: 2rem; height: 4px; border-radius: 2px; background: #333;
+}
+.popup-close-zone:hover::after { background: var(--muted); }
+/* Inline share button next to type badge */
 .popup-share-inline {
   background: none; border: none; cursor: pointer;
   font-size: 0.72rem; color: var(--muted); padding: 0.15rem 0.4rem;
-  border-radius: 4px; letter-spacing: 0.03em; margin-left: 0.25rem;
+  border-radius: 4px; letter-spacing: 0.03em;
 }
 .popup-share-inline:hover { color: var(--accent); background: var(--surface); }
-.popup-close-x {
-  margin-left: auto; color: var(--muted); font-size: 1.4rem; line-height: 1;
-  padding: 0 0.2rem;
-}
-.popup-top-bar:hover .popup-close-x { color: var(--text); }
 
 /* Legacy popup share/close for concert + bio popups */
 .popup-share {
@@ -2307,7 +2305,7 @@ body.modal-open  { overflow: hidden; }
   border-radius: 3px;
   padding: 0.1rem 0.4rem;
   display: inline-block;
-  margin-bottom: 0;
+  margin-bottom: 0.1rem;
   position: relative;
   transition: color 0.15s;
 }
