@@ -3925,11 +3925,13 @@ app.get("/api/ebay/search", async (req, res) => {
       headers["X-EBAY-C-ENDUSERCTX"] = `affiliateCampaignId=${ebayAffiliateCampaignId}`;
     }
 
-    // Broad vinyl-ish search — Music category (11233) covers Records (176985),
-    // CDs, Cassettes, etc. Don't over-constrain or users get zero results for
-    // common terms. Require AUCTION buying option so users see actual auctions.
-    const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&category_ids=176985&limit=50&sort=endingSoonest&filter=priceCurrency:USD,buyingOptions:{AUCTION}`;
-    const r = await loggedFetch("ebay", url, { headers, context: `live search: ${q}` });
+    // Match the scheduled vinyl fetch URL shape exactly (proven working),
+    // but use user's query and sort by endingSoonest. Keep 12" record aspect
+    // filter so results match what users expect on the Vinyl tab.
+    const baseFilter = `priceCurrency:USD,buyingOptions:{AUCTION}`;
+    const aspectFilter = `aspect_filter=categoryId:176985,Record%20Size:12%22`;
+    let url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&category_ids=176985&limit=50&sort=endingSoonest&filter=${baseFilter}&${aspectFilter}`;
+    let r = await loggedFetch("ebay", url, { headers, context: `live search: ${q}` });
 
     if (!r.ok) {
       const bodyText = await r.text().catch(() => "");
@@ -3937,8 +3939,32 @@ app.get("/api/ebay/search", async (req, res) => {
       return res.status(502).json({ error: "eBay search failed", details: bodyText.slice(0, 200) });
     }
 
-    const data = await r.json() as any;
-    const summaries: any[] = data.itemSummaries ?? [];
+    let data = await r.json() as any;
+    let summaries: any[] = data.itemSummaries ?? [];
+    console.log(`eBay live search "${q}" (strict vinyl): ${summaries.length} results`);
+
+    // Fallback: if strict 12" vinyl filter returned zero, retry without the
+    // aspect filter so users aren't blocked by restrictive metadata matching
+    if (summaries.length === 0) {
+      url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&category_ids=176985&limit=50&sort=endingSoonest&filter=${baseFilter}`;
+      r = await loggedFetch("ebay", url, { headers, context: `live search fallback: ${q}` });
+      if (r.ok) {
+        data = await r.json() as any;
+        summaries = data.itemSummaries ?? [];
+        console.log(`eBay live search "${q}" (fallback, records cat): ${summaries.length} results`);
+      }
+    }
+
+    // Second fallback: if STILL zero, try with no category at all
+    if (summaries.length === 0) {
+      url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&limit=50&sort=endingSoonest&filter=${baseFilter}`;
+      r = await loggedFetch("ebay", url, { headers, context: `live search fallback2: ${q}` });
+      if (r.ok) {
+        data = await r.json() as any;
+        summaries = data.itemSummaries ?? [];
+        console.log(`eBay live search "${q}" (fallback, no cat): ${summaries.length} results`);
+      }
+    }
 
     // Transform to match vinyl_listings field names
     const items = summaries.map((s: any) => ({
