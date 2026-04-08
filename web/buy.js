@@ -49,6 +49,7 @@ let _ebayRateLimit = null;
 let _ebayResetAt = null;
 let _ebayCountdownInterval = null;
 let _ebayExpiryInterval = null;
+let _ebayResetRefreshing = false;
 
 function renderBuyCard(item, idx) {
   const img = item.image_url
@@ -502,6 +503,11 @@ function updateEbayMeta() {
       if (h > 0) countdown = ` · resets in ${h}h`;
       else if (m > 0) countdown = ` · resets in ${m}m`;
       else countdown = ` · resets in ${s}s`;
+    } else if (!_ebayResetRefreshing) {
+      // Reset time has passed — refetch fresh count from server
+      _ebayResetRefreshing = true;
+      initEbaySearchStatus().finally(() => { _ebayResetRefreshing = false; });
+      return;
     }
   }
 
@@ -522,9 +528,14 @@ async function doEbaySearch() {
   const statusDiv = document.getElementById("ebay-search-status");
   const clearBtn = document.getElementById("ebay-clear-btn");
 
-  // Hide the main vinyl grid while showing search results
+  // Hide the entire main vinyl grid layout (header + results + load more)
+  // while showing live search results
   const mainGrid = document.getElementById("buy-results");
+  const buyHeader = document.querySelector("#buy-view .buy-header");
+  const buyLoadMore = document.querySelector("#buy-view .load-more-wrap");
   if (mainGrid) mainGrid.style.display = "none";
+  if (buyHeader) buyHeader.style.display = "none";
+  if (buyLoadMore) buyLoadMore.style.display = "none";
   if (resultsDiv) { resultsDiv.style.display = ""; resultsDiv.innerHTML = renderSkeletonGrid(8); }
   if (statusDiv) { statusDiv.style.display = ""; statusDiv.textContent = `Searching eBay for "${q}"…`; }
   if (clearBtn) clearBtn.style.display = "";
@@ -557,6 +568,7 @@ async function doEbaySearch() {
 
     if (!_ebaySearchItems.length) {
       if (resultsDiv) resultsDiv.innerHTML = renderEmptyState("🔍", "No results", `No eBay listings found for "${escHtml(q)}"`);
+      if (statusDiv) { statusDiv.style.display = "none"; statusDiv.textContent = ""; }
       return;
     }
 
@@ -570,7 +582,10 @@ async function doEbaySearch() {
     }
   } catch (e) {
     if (resultsDiv) resultsDiv.style.display = "none";
+    if (statusDiv) { statusDiv.style.display = "none"; statusDiv.textContent = ""; }
     if (mainGrid) mainGrid.style.display = "";
+    if (buyHeader) buyHeader.style.display = "";
+    if (buyLoadMore) buyLoadMore.style.display = "";
     showToast("eBay search failed — please try again", "error");
   }
 }
@@ -638,7 +653,11 @@ function clearEbaySearch() {
   if (statusDiv) { statusDiv.style.display = "none"; statusDiv.textContent = ""; }
   if (clearBtn) clearBtn.style.display = "none";
   _ebaySearchItems = [];
-  // Restore the main vinyl grid
+  // Restore the full main vinyl grid layout (header + results + load more)
   const mainGrid = document.getElementById("buy-results");
+  const buyHeader = document.querySelector("#buy-view .buy-header");
+  const buyLoadMore = document.querySelector("#buy-view .load-more-wrap");
   if (mainGrid) mainGrid.style.display = "";
+  if (buyHeader) buyHeader.style.display = "";
+  if (buyLoadMore) buyLoadMore.style.display = "";
 }

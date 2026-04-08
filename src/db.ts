@@ -2549,15 +2549,17 @@ export async function logVinylFetch(fetchType: string, itemCount: number, error?
 
 // ── eBay live search rate limiting & cache ─────────────────────────────────
 export async function getEbayRateCount(): Promise<{ count: number; resetDate: string }> {
-  const r = await getPool().query(`SELECT * FROM ebay_rate_limit WHERE id = 1`);
+  const r = await getPool().query(`SELECT *, reset_date::text AS reset_date_str FROM ebay_rate_limit WHERE id = 1`);
   if (!r.rows.length) return { count: 0, resetDate: new Date().toISOString().slice(0, 10) };
   const row = r.rows[0];
   // Unified counter: call_count tracks ALL eBay API calls (searches + detail views)
   const totalCount = (row.call_count ?? 0) + (row.click_count ?? 0);
-  // Auto-reset if stored date is before today (Pacific)
+  // Auto-reset if stored date is before today (Pacific).
+  // Use ::text cast from SQL so comparison is string-to-string (both YYYY-MM-DD).
   const todayPacific = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Los_Angeles" }))
     .toISOString().slice(0, 10);
-  if (row.reset_date < todayPacific) {
+  const storedDate: string = row.reset_date_str;
+  if (storedDate < todayPacific) {
     try {
       await getPool().query(
         `UPDATE ebay_rate_limit SET call_count = 0, click_count = 0, reset_date = $1 WHERE id = 1`,
@@ -2571,7 +2573,7 @@ export async function getEbayRateCount(): Promise<{ count: number; resetDate: st
     }
     return { count: 0, resetDate: todayPacific };
   }
-  return { count: totalCount, resetDate: row.reset_date };
+  return { count: totalCount, resetDate: storedDate };
 }
 
 export async function incrementEbayRateCount(): Promise<number> {

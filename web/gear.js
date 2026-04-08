@@ -253,9 +253,14 @@ async function doGearEbaySearch() {
   const statusDiv = document.getElementById("gear-ebay-search-status");
   const clearBtn = document.getElementById("gear-ebay-clear-btn");
 
-  // Hide the main gear grid while showing search results
+  // Hide the entire main gear grid layout (header + results + load more)
+  // while showing live search results
   const mainGrid = document.getElementById("gear-results");
+  const gearHeader = document.querySelector("#gear-view .gear-header");
+  const gearLoadMore = document.querySelector("#gear-view .load-more-wrap");
   if (mainGrid) mainGrid.style.display = "none";
+  if (gearHeader) gearHeader.style.display = "none";
+  if (gearLoadMore) gearLoadMore.style.display = "none";
   if (resultsDiv) { resultsDiv.style.display = ""; resultsDiv.innerHTML = renderSkeletonGrid(8); }
   if (statusDiv) { statusDiv.style.display = ""; statusDiv.textContent = `Searching eBay for "${q}"…`; }
   if (clearBtn) clearBtn.style.display = "";
@@ -290,6 +295,7 @@ async function doGearEbaySearch() {
 
     if (!_gearEbaySearchItems.length) {
       if (resultsDiv) resultsDiv.innerHTML = renderEmptyState("🔍", "No results", `No eBay listings found for "${escHtml(q)}"`);
+      if (statusDiv) { statusDiv.style.display = "none"; statusDiv.textContent = ""; }
       return;
     }
 
@@ -303,7 +309,10 @@ async function doGearEbaySearch() {
     }
   } catch (e) {
     if (resultsDiv) resultsDiv.style.display = "none";
+    if (statusDiv) { statusDiv.style.display = "none"; statusDiv.textContent = ""; }
     if (mainGrid) mainGrid.style.display = "";
+    if (gearHeader) gearHeader.style.display = "";
+    if (gearLoadMore) gearLoadMore.style.display = "";
     showToast("eBay search failed — please try again", "error");
   }
 }
@@ -313,12 +322,17 @@ function clearGearEbaySearch() {
   const resultsDiv = document.getElementById("gear-ebay-search-results");
   const statusDiv = document.getElementById("gear-ebay-search-status");
   const clearBtn = document.getElementById("gear-ebay-clear-btn");
-  const mainGrid = document.getElementById("gear-results");
 
   if (input) input.value = "";
   if (resultsDiv) { resultsDiv.style.display = "none"; resultsDiv.innerHTML = ""; }
   if (statusDiv) { statusDiv.style.display = "none"; statusDiv.textContent = ""; }
   if (clearBtn) clearBtn.style.display = "none";
-  if (mainGrid) mainGrid.style.display = "";
   _gearEbaySearchItems = [];
+  // Restore the full main gear grid layout (header + results + load more)
+  const mainGrid = document.getElementById("gear-results");
+  const gearHeader = document.querySelector("#gear-view .gear-header");
+  const gearLoadMore = document.querySelector("#gear-view .load-more-wrap");
+  if (mainGrid) mainGrid.style.display = "";
+  if (gearHeader) gearHeader.style.display = "";
+  if (gearLoadMore) gearLoadMore.style.display = "";
 }
