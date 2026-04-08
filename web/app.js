@@ -32,10 +32,13 @@ function _hasSearch(p) { return p.get("q") || p.get("a") || p.get("ar") || p.get
   if (rawView.startsWith("records:")) {
     const tab = rawView.split(":")[1];
     await authReadyPromise;
-    _cwTab = tab;
-    const sort = p.get("s") || p.get("sort");
-    if (sort) { const el = document.getElementById("cw-sort"); if (el) el.value = sort; }
-    switchView("records", true);
+    if (!window._clerk?.user) { showToast("Sign in to view your " + tab, "error"); switchView("account", true); }
+    else {
+      _cwTab = tab;
+      const sort = p.get("s") || p.get("sort");
+      if (sort) { const el = document.getElementById("cw-sort"); if (el) el.value = sort; }
+      switchView("records", true);
+    }
   } else if (rawView === "account") {
     switchView("account", true);
   } else if (rawView === "drops" || rawView === "live" || rawView === "buy" || rawView === "gear" || rawView === "feed" || rawView === "info" || rawView === "privacy" || rawView === "terms") {
@@ -52,13 +55,16 @@ function _hasSearch(p) { return p.get("q") || p.get("a") || p.get("ar") || p.get
     }
   } else if (rawView === "records" || rawView === "wanted") {
     await authReadyPromise;
-    if (rawView === "records") {
-      const tab = p.get("tab") || "collection";
-      _cwTab = tab;
-      const sort = p.get("s") || p.get("sort");
-      if (sort) { const el = document.getElementById("cw-sort"); if (el) el.value = sort; }
+    if (!window._clerk?.user) { showToast("Sign in to view your records", "error"); switchView("account", true); }
+    else {
+      if (rawView === "records") {
+        const tab = p.get("tab") || "collection";
+        _cwTab = tab;
+        const sort = p.get("s") || p.get("sort");
+        if (sort) { const el = document.getElementById("cw-sort"); if (el) el.value = sort; }
+      }
+      switchView(rawView, true);
     }
-    switchView(rawView, true);
   } else if (_hasSearch(p)) {
     restoreFromParams(p);
     await authReadyPromise;
