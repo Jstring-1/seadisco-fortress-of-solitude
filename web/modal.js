@@ -978,9 +978,14 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
 
   el.innerHTML = `
     <div class="album-header">
-      ${img ? `<img class="album-cover" src="${img}" alt="${escHtml(title)}" loading="lazy"
-               onclick="openLightbox(${escHtml(JSON.stringify(allImages))},0)"
-               title="${allImages.length > 1 ? `View ${allImages.length} photos` : 'View photo'}" />`
+      ${img ? `<div class="album-cover-wrap">
+        <img class="album-cover" src="${img}" alt="${escHtml(title)}" loading="lazy"
+             onclick="openLightbox(${escHtml(JSON.stringify(allImages))},0)"
+             title="${allImages.length > 1 ? `View ${allImages.length} photos` : 'View photo'}" />
+        ${allImages.length > 1 ? `<div class="album-thumb-strip">${allImages.slice(1).map((u, i) =>
+          `<img src="${escHtml(u)}" loading="lazy" class="album-thumb" onclick="openLightbox(${escHtml(JSON.stringify(allImages))},${i + 1})" onerror="this.style.display='none'" title="Photo ${i + 2} of ${allImages.length}">`
+        ).join("")}</div>` : ""}
+      </div>`
              : `<div class="album-cover-placeholder">♪</div>`}
       <div class="album-meta">
         ${typeLabel ? `<div class="album-type-badge" style="cursor:pointer;user-select:none" onclick="navigator.clipboard.writeText('${escHtml(String(releaseId))}');this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy ID">${escHtml(typeLabel)}</div>` : ""}

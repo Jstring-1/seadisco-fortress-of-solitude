@@ -929,7 +929,7 @@
 <div id="lightbox-overlay" onclick="closeLightbox()">
   <button id="lightbox-close" onclick="closeLightbox()">×</button>
   <button id="lightbox-prev" onclick="lightboxStep(event,-1)">&#8249;</button>
-  <img id="lightbox-img" src="" alt="" onclick="event.stopPropagation()" />
+  <img id="lightbox-img" src="" alt="" onclick="event.stopPropagation();lightboxStep(event,1)" style="cursor:pointer" />
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8250;</button>
   <div id="lightbox-counter"></div>
 </div>
