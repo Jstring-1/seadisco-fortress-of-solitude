@@ -1066,9 +1066,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     notes    ? `<div class="album-notes"><div class="tracklist-heading" style="margin-top:0.5rem">Notes</div>${escHtml(notes)}</div>` : "",
   ].filter(Boolean).join("");
 
-  const closeFn = targetId === "version-info" ? "closeVersionPopup" : "closeModal";
   el.innerHTML = `
-    <div class="popup-close-zone" onclick="${closeFn}()" title="Click to close"></div>
     <div class="album-header">
       ${img ? `<div class="album-cover-wrap">
         <img class="album-cover" src="${img}" alt="${escHtml(title)}" loading="lazy"
