@@ -1311,6 +1311,11 @@ function _shShow(field) {
 
   const anchor = field.closest("label") || field.parentElement;
   anchor.style.position = "relative";
+  // Match the field's actual position and width so dropdown doesn't
+  // stretch across flex containers (e.g. .ebay-search-bar)
+  drop.style.left = field.offsetLeft + "px";
+  drop.style.top = (field.offsetTop + field.offsetHeight) + "px";
+  drop.style.width = field.offsetWidth + "px";
   anchor.appendChild(drop);
 }
 
