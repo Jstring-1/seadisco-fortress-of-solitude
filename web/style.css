@@ -2057,22 +2057,14 @@ body.modal-open  { overflow: hidden; }
   position: relative;
   box-shadow: 0 8px 40px rgba(0,0,0,0.7);
 }
-#version-close {
-  position: sticky;
-  top: 0.5rem;
-  float: right;
-  margin: 0.5rem 0.6rem 0 0;
-  background: none;
-  border: none;
-  color: var(--muted);
-  font-size: 1.5rem;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
-  z-index: 1;
+/* #modal-close still used by admin.html / account.html */
+#modal-close {
+  position: sticky; top: 0.5rem; float: right;
+  margin: 0.5rem 0.6rem 0 0; background: none; border: none;
+  color: var(--muted); font-size: 1.5rem; line-height: 1;
+  cursor: pointer; padding: 0.1rem 0.4rem; border-radius: 4px; z-index: 1;
 }
-#version-close:hover { color: var(--text); background: #2e2518; }
+#modal-close:hover { color: var(--text); background: #2e2518; }
 #version-info { overflow: hidden; }
 
 /* ── Series browser overlay ───────────────────────────────────────────── */
@@ -2156,23 +2148,27 @@ body.modal-open  { overflow: hidden; }
   position: relative;
 }
 
-#modal-close {
-  position: sticky;
-  top: 0.5rem;
-  float: right;
-  margin: 0.5rem 0.6rem 0 0;
-  background: none;
-  border: none;
-  color: var(--muted);
-  font-size: 1.5rem;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0.1rem 0.4rem;
-  border-radius: 4px;
-  z-index: 1;
+/* Popup top bar — type badge + share + close, clickable to dismiss */
+.popup-top-bar {
+  display: flex; align-items: center; gap: 0.5rem;
+  padding: 0.5rem 0.75rem; cursor: pointer;
+  position: sticky; top: 0; z-index: 2;
+  background: var(--bg); border-bottom: 1px solid var(--border);
 }
+.popup-top-bar:hover { background: #1a1714; }
+.popup-share-inline {
+  background: none; border: none; cursor: pointer;
+  font-size: 0.72rem; color: var(--muted); padding: 0.15rem 0.4rem;
+  border-radius: 4px; letter-spacing: 0.03em; margin-left: 0.25rem;
+}
+.popup-share-inline:hover { color: var(--accent); background: var(--surface); }
+.popup-close-x {
+  margin-left: auto; color: var(--muted); font-size: 1.4rem; line-height: 1;
+  padding: 0 0.2rem;
+}
+.popup-top-bar:hover .popup-close-x { color: var(--text); }
 
-#modal-close:hover { color: var(--text); background: #2e2518; }
+/* Legacy popup share/close for concert + bio popups */
 .popup-share {
   background: none; border: none; cursor: pointer;
   font-size: 0.72rem; color: var(--muted); padding: 0.2rem 0.5rem;
@@ -2311,7 +2307,7 @@ body.modal-open  { overflow: hidden; }
   border-radius: 3px;
   padding: 0.1rem 0.4rem;
   display: inline-block;
-  margin-bottom: 0.35rem;
+  margin-bottom: 0;
   position: relative;
   transition: color 0.15s;
 }
@@ -3058,6 +3054,16 @@ body.modal-open  { overflow: hidden; }
 }
 
 .card-visited { opacity: 0.5; }
+.link-visited { opacity: 0.45; }
+
+/* Version-list interactive dots */
+.mv-dots { display: inline-flex; gap: 3px; align-items: center; vertical-align: middle; }
+.mv-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: #2a2a2a; cursor: pointer; opacity: 0.35; transition: opacity 0.15s, background 0.15s;
+}
+.mv-dot.active { opacity: 1; }
+.mv-dot:hover { opacity: 0.85; }
 
 .card-sub {
   font-size: 0.75rem;
