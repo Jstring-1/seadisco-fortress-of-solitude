@@ -3073,17 +3073,19 @@ body.modal-open  { overflow: hidden; }
 
 /* Search history dropdown */
 .sh-dropdown {
-  position: absolute; left: 0; right: 0; top: 100%;
+  position: absolute; top: 100%;
   z-index: 120; max-height: 200px; overflow-y: auto;
   background: #1a1a1a; border: 1px solid #333; border-radius: 0 0 6px 6px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  text-align: left;
 }
 .sh-row {
   display: flex; align-items: center; padding: 0.35rem 0.6rem;
   cursor: pointer; font-size: 0.8rem; color: var(--fg);
+  text-align: left;
 }
 .sh-row:hover { background: #252525; }
-.sh-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sh-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
 .sh-del {
   flex-shrink: 0; color: #555; font-size: 1rem; padding: 0 0.2rem;
   margin-left: 0.4rem; cursor: pointer; line-height: 1;
