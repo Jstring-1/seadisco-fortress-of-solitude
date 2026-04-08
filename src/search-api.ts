@@ -3882,7 +3882,10 @@ app.get("/api/ebay/search", async (req, res) => {
   if (q.length < 2) return res.status(400).json({ error: "Query must be at least 2 characters" });
   if (q.length > 200) return res.status(400).json({ error: "Query too long" });
 
+  console.log(`[ebay-search] vinyl query="${q}" user=${userId}`);
+
   if (!ebayClientId || !ebayClientSecret) {
+    console.error(`[ebay-search] eBay credentials not configured`);
     return res.status(503).json({ error: "eBay search not available" });
   }
 

@@ -542,7 +542,7 @@ async function doEbaySearch() {
 
   try {
     const r = await fetch(`/api/ebay/search?q=${encodeURIComponent(q)}`);
-    const data = await r.json();
+    const data = await r.json().catch(() => ({}));
 
     if (r.status === 429) {
       if (resultsDiv) resultsDiv.style.display = "none";
@@ -555,6 +555,21 @@ async function doEbaySearch() {
         _ebayResetAt = data.rateLimit.resetsAt;
         updateEbayMeta();
       }
+      return;
+    }
+
+    // Surface real backend errors instead of silently showing "No results"
+    if (!r.ok) {
+      console.error("eBay search error:", r.status, data);
+      if (resultsDiv) {
+        resultsDiv.innerHTML = renderEmptyState(
+          "⚠️",
+          `eBay search error (${r.status})`,
+          data.error || data.details || `Unknown error — check server logs`
+        );
+      }
+      if (statusDiv) { statusDiv.style.display = "none"; statusDiv.textContent = ""; }
+      showToast(`eBay search failed: ${data.error || r.status}`, "error");
       return;
     }
 

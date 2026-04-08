@@ -268,7 +268,7 @@ async function doGearEbaySearch() {
   try {
     // Use gear-specific eBay categories (vintage electronics: 175673, 14969, 48458, 71230, 67807)
     const r = await fetch(`/api/ebay/gear/search?q=${encodeURIComponent(q)}`);
-    const data = await r.json();
+    const data = await r.json().catch(() => ({}));
 
     if (r.status === 429) {
       if (resultsDiv) resultsDiv.style.display = "none";
@@ -281,6 +281,21 @@ async function doGearEbaySearch() {
         _ebayResetAt = data.rateLimit.resetsAt;
         updateEbayMeta();
       }
+      return;
+    }
+
+    // Surface real backend errors instead of silently showing "No results"
+    if (!r.ok) {
+      console.error("eBay gear search error:", r.status, data);
+      if (resultsDiv) {
+        resultsDiv.innerHTML = renderEmptyState(
+          "⚠️",
+          `eBay search error (${r.status})`,
+          data.error || data.details || `Unknown error — check server logs`
+        );
+      }
+      if (statusDiv) { statusDiv.style.display = "none"; statusDiv.textContent = ""; }
+      showToast(`eBay search failed: ${data.error || r.status}`, "error");
       return;
     }
 
