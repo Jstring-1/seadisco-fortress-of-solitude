@@ -2150,7 +2150,8 @@ body.modal-open  { overflow: hidden; }
 
 /* Empty close zone at top of popup — tap to dismiss (especially on mobile) */
 .popup-close-zone {
-  height: 1.5rem; cursor: pointer; position: relative;
+  height: 1.5rem; cursor: pointer;
+  position: sticky; top: 0; z-index: 3; background: var(--surface);
 }
 .popup-close-zone::after {
   content: ""; position: absolute; left: 50%; top: 50%;
