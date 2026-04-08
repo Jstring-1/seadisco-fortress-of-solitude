@@ -1403,6 +1403,7 @@ function clearCwFilters() {
   document.querySelectorAll(".cw-folder-pill").forEach(p =>
     p.classList.toggle("active", parseInt(p.dataset.folder) === 0)
   );
+  if (typeof resetSelectHighlights === "function") resetSelectHighlights();
 }
 
 function setActiveTab(tab) {

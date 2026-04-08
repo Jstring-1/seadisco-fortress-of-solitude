@@ -111,6 +111,7 @@ function clearForm() {
   document.getElementById("search-ai-summary").textContent = "";
   document.getElementById("search-info-block").style.display = "none";
   window._lastResults = null;
+  if (typeof resetSelectHighlights === "function") resetSelectHighlights();
 }
 
 // ── Main search ──────────────────────────────────────────────────────────
@@ -1338,3 +1339,22 @@ function _shInit() {
 }
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", _shInit);
 else _shInit();
+
+// ── Active-field highlighting for selects ────────────────────────────────
+// Text inputs use CSS :not(:placeholder-shown). Selects need JS to toggle
+// .has-value when changed from default (first option).
+function _markSelectValue(sel) {
+  sel.classList.toggle("has-value", sel.selectedIndex > 0);
+}
+function _initSelectHighlights() {
+  document.querySelectorAll("#main-search-form select, #cw-advanced-panel select, #cw-controls-row select").forEach(sel => {
+    _markSelectValue(sel);
+    sel.addEventListener("change", () => _markSelectValue(sel));
+  });
+}
+/** Call after clearing form to reset select highlights */
+function resetSelectHighlights() {
+  document.querySelectorAll("select.has-value").forEach(sel => sel.classList.remove("has-value"));
+}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", _initSelectHighlights);
+else _initSelectHighlights();
