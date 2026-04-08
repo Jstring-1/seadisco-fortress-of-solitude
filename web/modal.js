@@ -29,16 +29,105 @@ function _markVisited(id) {
     _visited = new Set(arr.slice(arr.length - 500));
   }
   localStorage.setItem(_visitedKey, JSON.stringify([..._visited]));
-  // Mark all cards for this ID
+  // Mark all cards and version links for this ID
   document.querySelectorAll(`.card[onclick*="'${key}'"]`).forEach(el => el.classList.add("card-visited"));
+  document.querySelectorAll(`.catno-link[onclick*="${key}"]`).forEach(el => el.classList.add("link-visited"));
 }
-/** Apply visited state to all currently rendered cards */
+/** Apply visited state to all currently rendered cards and version links */
 function applyVisitedCards() {
   if (!_visited.size) return;
   document.querySelectorAll(".card[onclick]").forEach(el => {
     const m = el.getAttribute("onclick")?.match(/openModal\(event,'(\d+)'/);
     if (m && _visited.has(m[1])) el.classList.add("card-visited");
   });
+  document.querySelectorAll(".catno-link[onclick]").forEach(el => {
+    const m = el.getAttribute("onclick")?.match(/openVersionPopup\(event,(\d+)\)/);
+    if (m && _visited.has(m[1])) el.classList.add("link-visited");
+  });
+}
+
+// ── Version-list dot toggles (collection / wantlist / favorites) ──────────
+async function mvToggleCol(dot, id) {
+  const was = window._collectionIds?.has(id);
+  if (!window._collectionIds) window._collectionIds = new Set();
+  const token = window._clerk?.session ? await window._clerk.session.getToken() : null;
+  if (!token) { showToast("Sign in to manage your collection", "error"); return; }
+  if (was) window._collectionIds.delete(id); else window._collectionIds.add(id);
+  dot.style.background = was ? "" : "#6ddf70";
+  dot.title = was ? "Add to collection" : "In collection — click to remove";
+  dot.classList.toggle("active", !was);
+  refreshCardBadges?.(id);
+  try {
+    const r = await fetch(was ? "/api/user/collection/remove" : "/api/user/collection/add", {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify(was ? { releaseId: id, instanceId: null, folderId: 1 } : { releaseId: id })
+    }).then(r => r.json());
+    if (!r.ok && r.error) throw new Error(r.error);
+    showToast(was ? "Removed from collection" : "Added to collection");
+    const modalBtn = document.getElementById("modal-col-btn");
+    if (modalBtn) { modalBtn.classList.toggle("in-collection", !was); modalBtn.innerHTML = was ? "Collection" : "Collected"; }
+  } catch (e) {
+    if (was) window._collectionIds.add(id); else window._collectionIds.delete(id);
+    dot.style.background = was ? "#6ddf70" : "";
+    dot.title = was ? "In collection — click to remove" : "Add to collection";
+    dot.classList.toggle("active", was);
+    refreshCardBadges?.(id);
+    showToast(e.message || "Failed to update collection", "error");
+  }
+}
+
+async function mvToggleWant(dot, id) {
+  const was = window._wantlistIds?.has(id);
+  if (!window._wantlistIds) window._wantlistIds = new Set();
+  const token = window._clerk?.session ? await window._clerk.session.getToken() : null;
+  if (!token) { showToast("Sign in to manage your wantlist", "error"); return; }
+  if (was) window._wantlistIds.delete(id); else window._wantlistIds.add(id);
+  dot.style.background = was ? "" : "#f0c95c";
+  dot.title = was ? "Add to wantlist" : "In wantlist — click to remove";
+  dot.classList.toggle("active", !was);
+  refreshCardBadges?.(id);
+  try {
+    const r = await fetch(was ? "/api/user/wantlist/remove" : "/api/user/wantlist/add", {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ releaseId: id })
+    }).then(r => r.json());
+    if (!r.ok && r.error) throw new Error(r.error);
+    showToast(was ? "Removed from wantlist" : "Added to wantlist");
+    const modalBtn = document.getElementById("modal-want-btn");
+    if (modalBtn) { modalBtn.classList.toggle("in-wantlist", !was); modalBtn.innerHTML = was ? "Want" : "Wanted"; }
+  } catch (e) {
+    if (was) window._wantlistIds.add(id); else window._wantlistIds.delete(id);
+    dot.style.background = was ? "#f0c95c" : "";
+    dot.title = was ? "In wantlist — click to remove" : "Add to wantlist";
+    dot.classList.toggle("active", was);
+    refreshCardBadges?.(id);
+    showToast(e.message || "Failed to update wantlist", "error");
+  }
+}
+
+function mvToggleFav(dot, id) {
+  const key = `release:${id}`;
+  const was = window._favoriteKeys?.has(key);
+  if (!window._favoriteKeys) window._favoriteKeys = new Set();
+  if (was) window._favoriteKeys.delete(key); else window._favoriteKeys.add(key);
+  dot.style.background = was ? "" : "#ff6b35";
+  dot.title = was ? "Add to favorites" : "Favorited — click to remove";
+  dot.classList.toggle("active", !was);
+  refreshCardBadges?.(id);
+  const endpoint = was ? "/api/user/favorites/remove" : "/api/user/favorites/add";
+  const body = was
+    ? { discogsId: id, entityType: "release" }
+    : { discogsId: id, entityType: "release", data: { id, type: "release", title: "", uri: `/release/${id}` } };
+  apiFetch(endpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
+    .then(r => { if (!r.ok) throw new Error(); showToast(was ? "Removed from favorites" : "Added to favorites"); })
+    .catch(() => {
+      if (was) window._favoriteKeys.add(key); else window._favoriteKeys.delete(key);
+      dot.style.background = was ? "#ff6b35" : "";
+      dot.title = was ? "Favorited — click to remove" : "Add to favorites";
+      dot.classList.toggle("active", was);
+      refreshCardBadges?.(id);
+      showToast("Failed to update favorite", "error");
+    });
 }
 
 function openModal(event, id, type, discogsUrl) {
@@ -284,6 +373,7 @@ document.getElementById("modal-overlay").addEventListener("click", e => {
 // ── Version popup ─────────────────────────────────────────────────────────
 async function openVersionPopup(event, releaseId) {
   if (event) event.preventDefault();
+  _markVisited(releaseId);
   const overlay = document.getElementById("version-overlay");
   const info    = document.getElementById("version-info");
   const loading = document.getElementById("version-loading");
@@ -976,7 +1066,13 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     notes    ? `<div class="album-notes"><div class="tracklist-heading" style="margin-top:0.5rem">Notes</div>${escHtml(notes)}</div>` : "",
   ].filter(Boolean).join("");
 
+  const closeFn = targetId === "version-info" ? "closeVersionPopup" : "closeModal";
   el.innerHTML = `
+    <div class="popup-top-bar" onclick="${closeFn}()" title="Click to close">
+      ${typeLabel ? `<span class="album-type-badge" style="cursor:pointer;user-select:none" onclick="event.stopPropagation();navigator.clipboard.writeText('${escHtml(String(releaseId))}');this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy ID">${escHtml(typeLabel)}</span>` : ""}
+      <button class="popup-share-inline" onclick="event.stopPropagation();sharePopup(this)" title="Copy share link">share</button>
+      <span class="popup-close-x">×</span>
+    </div>
     <div class="album-header">
       ${img ? `<div class="album-cover-wrap">
         <img class="album-cover" src="${img}" alt="${escHtml(title)}" loading="lazy"
@@ -988,7 +1084,6 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
       </div>`
              : `<div class="album-cover-placeholder">♪</div>`}
       <div class="album-meta">
-        ${typeLabel ? `<div class="album-type-badge" style="cursor:pointer;user-select:none" onclick="navigator.clipboard.writeText('${escHtml(String(releaseId))}');this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy ID">${escHtml(typeLabel)}</div>` : ""}
         <h2><a href="#" class="modal-title-link" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">${escHtml(title)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">⌕</a></h2>
         ${artists.length ? `<div class="album-artist">${artists.map(n => `<a href="#" class="modal-artist-link" data-artist="${escHtml(n)}" onclick="searchArtistFromModal(event,this)" title="Search for ${escHtml(n)}">${escHtml(n)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(n.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(n)}">⌕</a>`).join(", ")}</div>` : ""}
         ${detailRows ? `<div class="album-detail-grid">${detailRows}</div>` : ""}
@@ -1817,13 +1912,13 @@ function renderMasterVersions() {
     const inInv  = window._inventoryIds?.has(v.id);
     const isFav  = window._favoriteKeys?.has(`release:${v.id}`);
     const listNames = inList ? (window._listMembership[v.id].map(l => l.name || l.title).filter(Boolean).join(", ")) : "";
-    const badgeParts = [];
-    if (inCol)  badgeParts.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6ddf70;vertical-align:middle" title="In your collection"></span>`);
-    if (inWant) badgeParts.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f0c95c;vertical-align:middle" title="In your wantlist"></span>`);
-    if (inList) badgeParts.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a0ccf0;vertical-align:middle" title="${escHtml(listNames ? `In your list${window._listMembership[v.id].length > 1 ? "s" : ""}: ${listNames}` : "In one of your lists")}"></span>`);
-    if (inInv)  badgeParts.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#cda0f5;vertical-align:middle" title="In your marketplace inventory"></span>`);
-    if (isFav)  badgeParts.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff6b35;vertical-align:middle;cursor:pointer" title="Favorited"></span>`);
-    const badge  = `<span>${badgeParts.length ? badgeParts.join("") : "&nbsp;"}</span>`;
+    const badge = `<span class="mv-dots">` +
+      `<span class="mv-dot${inCol ? ' active' : ''}" style="background:${inCol ? '#6ddf70' : ''}" onclick="event.preventDefault();event.stopPropagation();mvToggleCol(this,${v.id})" title="${inCol ? 'In collection — click to remove' : 'Add to collection'}"></span>` +
+      `<span class="mv-dot${inWant ? ' active' : ''}" style="background:${inWant ? '#f0c95c' : ''}" onclick="event.preventDefault();event.stopPropagation();mvToggleWant(this,${v.id})" title="${inWant ? 'In wantlist — click to remove' : 'Add to wantlist'}"></span>` +
+      `<span class="mv-dot${isFav ? ' active' : ''}" style="background:${isFav ? '#ff6b35' : ''}" onclick="event.preventDefault();event.stopPropagation();mvToggleFav(this,${v.id})" title="${isFav ? 'Favorited — click to remove' : 'Add to favorites'}"></span>` +
+      (inList ? `<span class="mv-dot active" style="background:#a0ccf0" title="${escHtml(listNames ? `In your list${window._listMembership[v.id].length > 1 ? "s" : ""}: ${listNames}` : "In one of your lists")}"></span>` : '') +
+      (inInv ? `<span class="mv-dot active" style="background:#cda0f5" title="In your inventory"></span>` : '') +
+      `</span>`;
     const fmtText = _mvGetDisplayFormat(v);
     const fmtCell = inCol
       ? `<span title="Click to view your copy / change folder"><a href="#" class="modal-internal-link mv-format-owned" onclick="event.preventDefault();event.stopPropagation();openInstancesPopover(event,${v.id})" style="color:#7ec87e">${escHtml(fmtText)}</a></span>`
@@ -1836,6 +1931,7 @@ function renderMasterVersions() {
       <span title="${escHtml(v.catno || "")}">${v.catno && v.catno !== "—" ? `<a href="#" class="modal-internal-link catno-link" onclick="openVersionPopup(event,${v.id})" title="Open this release">${escHtml(v.catno)}</a>` : `<span style="color:#7ec87e">—</span>`}</span>
       <span title="${escHtml(v.label ?? v.title ?? "")}">${(v.label) ? `<a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('f-label').value='${escHtml((v.label).replace(/'/g, "\\'"))}';toggleAdvanced(true);doSearch(1)" title="Search for ${escHtml(v.label)}" style="color:var(--fg)">${escHtml(v.label)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-label','${escHtml((v.label).replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(v.label)}" style="font-size:0.85em">⌕</a>` : `<span style="color:#888">${escHtml(v.title ?? "—")}</span>`}</span>`;
   }).join("");
+  applyVisitedCards();
 }
 
 // ── Series browser ────────────────────────────────────────────────────────
@@ -1938,13 +2034,13 @@ function renderSeriesReleases() {
     const inList = window._listMembership?.[r.id]?.length > 0;
     const inInv  = window._inventoryIds?.has(r.id);
     const isFav  = window._favoriteKeys?.has(`release:${r.id}`);
-    const badges = [];
-    if (inCol)  badges.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#6ddf70;vertical-align:middle" title="In your collection"></span>`);
-    if (inWant) badges.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f0c95c;vertical-align:middle" title="In your wantlist"></span>`);
-    if (inList) badges.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#a0ccf0;vertical-align:middle" title="In a list"></span>`);
-    if (inInv)  badges.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#cda0f5;vertical-align:middle" title="In your inventory"></span>`);
-    if (isFav)  badges.push(`<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#ff6b35;vertical-align:middle;cursor:pointer" title="Favorited"></span>`);
-    const badge = badges.length ? badges.join(" ") : `<span style="display:inline-block;width:8px"></span>`;
+    const badge = `<span class="mv-dots">` +
+      `<span class="mv-dot${inCol ? ' active' : ''}" style="background:${inCol ? '#6ddf70' : ''}" onclick="event.preventDefault();event.stopPropagation();mvToggleCol(this,${r.id})" title="${inCol ? 'In collection — click to remove' : 'Add to collection'}"></span>` +
+      `<span class="mv-dot${inWant ? ' active' : ''}" style="background:${inWant ? '#f0c95c' : ''}" onclick="event.preventDefault();event.stopPropagation();mvToggleWant(this,${r.id})" title="${inWant ? 'In wantlist — click to remove' : 'Add to wantlist'}"></span>` +
+      `<span class="mv-dot${isFav ? ' active' : ''}" style="background:${isFav ? '#ff6b35' : ''}" onclick="event.preventDefault();event.stopPropagation();mvToggleFav(this,${r.id})" title="${isFav ? 'Favorited — click to remove' : 'Add to favorites'}"></span>` +
+      (inList ? `<span class="mv-dot active" style="background:#a0ccf0" title="In a list"></span>` : '') +
+      (inInv ? `<span class="mv-dot active" style="background:#cda0f5" title="In your inventory"></span>` : '') +
+      `</span>`;
 
     const thumbHtml = r.thumb
       ? `<img src="${r.thumb}" alt="" loading="lazy" />`
@@ -1960,6 +2056,7 @@ function renderSeriesReleases() {
       <span style="color:#888">${escHtml(yearStr)}</span>
       <span style="color:#666" title="${escHtml(r.format)}">${escHtml(r.catno || r.format || "—")}</span>`;
   }).join("");
+  applyVisitedCards();
 }
 
 async function loadMasterVersions(event, masterId) {
