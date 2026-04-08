@@ -607,6 +607,7 @@ function renderResults(items, append = false) {
   }
   // Hide favorites section when showing search results
   const ws = document.getElementById("random-records"); if (ws) ws.style.display = "none";
+  if (typeof applyVisitedCards === "function") applyVisitedCards();
 }
 
 function renderCard(item, index) {
@@ -1006,6 +1007,7 @@ async function loadRandomRecords(more) {
   if ((!view || view === "search" || view === "find") && !hasSearchResults) {
     wrap.style.display = "";
   }
+  if (typeof applyVisitedCards === "function") applyVisitedCards();
 }
 
 function showRandomRecords() {

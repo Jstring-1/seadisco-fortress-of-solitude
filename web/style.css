@@ -3031,6 +3031,8 @@ body.modal-open  { overflow: hidden; }
   overflow: hidden;
 }
 
+.card-visited { opacity: 0.5; }
+
 .card-sub {
   font-size: 0.75rem;
   color: var(--muted);

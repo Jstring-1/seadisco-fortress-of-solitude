@@ -325,6 +325,7 @@ function switchView(view, skipPushState = false) {
       // Re-render saved search results and keep search info visible
       const grid = document.getElementById("results");
       grid.innerHTML = window._lastResults.map((item, i) => renderCard(item, i)).join("");
+      if (typeof applyVisitedCards === "function") applyVisitedCards();
       document.getElementById("pagination").style.display = "none";
       const ws = document.getElementById("random-records"); if (ws) ws.style.display = "none";
       const blurb = document.getElementById("blurb"); if (blurb) blurb.style.display = "none";
@@ -1197,6 +1198,7 @@ function renderFavoritesTabGrid() {
   }
   setCwStatus(`${items.length} favorite${items.length !== 1 ? "s" : ""}`);
   grid.innerHTML = items.map((item, i) => renderCard(item, i)).join("");
+  if (typeof applyVisitedCards === "function") applyVisitedCards();
   document.getElementById("pagination").style.display = "none";
 }
 
@@ -1449,6 +1451,7 @@ async function loadCollectionTab(page = 1, filters) {
     const prefix = hasFilter ? `${data.total} results for "${filterDesc}"` : `${data.total} items in collection`;
     setCwStatus(`${prefix} — page ${page} of ${data.pages}`);
     document.getElementById("results").innerHTML = items.map(renderCardFromBasicInfo).join("");
+    if (typeof applyVisitedCards === "function") applyVisitedCards();
     totalPages = data.pages;
     currentPage = page;
     renderCollectionPagination("collection");
@@ -1499,6 +1502,7 @@ async function loadWantlistTab(page = 1, filters) {
     const prefix = hasFilter ? `${data.total} results for "${filterDesc}"` : `${data.total} items in wantlist`;
     setCwStatus(`${prefix} — page ${page} of ${data.pages}`);
     document.getElementById("results").innerHTML = items.map(renderCardFromBasicInfo).join("");
+    if (typeof applyVisitedCards === "function") applyVisitedCards();
     totalPages = data.pages;
     currentPage = page;
     renderCollectionPagination("wantlist");
@@ -1553,6 +1557,7 @@ function renderWantedItems(items) {
   const q = (document.getElementById("wanted-q")?.value ?? "").trim();
   setStatus(q ? `${items.length} wanted items matching "${q}"` : `${items.length} random community wantlist items`);
   document.getElementById("results").innerHTML = items.map((item, i) => renderCardFromBasicInfo(item, i)).join("");
+  if (typeof applyVisitedCards === "function") applyVisitedCards();
 }
 
 function renderCollectionPagination(tab) {

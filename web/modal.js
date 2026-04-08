@@ -16,8 +16,34 @@ function searchCollectionFor(field, value) {
   window._pendingCwSearch = { field, value };
   if (typeof switchView === "function") switchView("records");
 }
+// ── Visited cards — dim releases the user has already opened ────────────
+const _visitedKey = "sd_visited";
+let _visited = new Set(JSON.parse(localStorage.getItem(_visitedKey) || "[]"));
+function _markVisited(id) {
+  const key = String(id);
+  if (_visited.has(key)) return;
+  _visited.add(key);
+  // Keep set bounded to last 500
+  if (_visited.size > 500) {
+    const arr = [..._visited];
+    _visited = new Set(arr.slice(arr.length - 500));
+  }
+  localStorage.setItem(_visitedKey, JSON.stringify([..._visited]));
+  // Mark all cards for this ID
+  document.querySelectorAll(`.card[onclick*="'${key}'"]`).forEach(el => el.classList.add("card-visited"));
+}
+/** Apply visited state to all currently rendered cards */
+function applyVisitedCards() {
+  if (!_visited.size) return;
+  document.querySelectorAll(".card[onclick]").forEach(el => {
+    const m = el.getAttribute("onclick")?.match(/openModal\(event,'(\d+)'/);
+    if (m && _visited.has(m[1])) el.classList.add("card-visited");
+  });
+}
+
 function openModal(event, id, type, discogsUrl) {
   if (event) event.preventDefault();
+  _markVisited(id);
   const u = new URL(window.location.href);
   u.searchParams.set("op", `${type}:${id}`);
   history.replaceState({}, "", u.toString());
