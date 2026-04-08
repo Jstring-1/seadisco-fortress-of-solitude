@@ -650,7 +650,7 @@ async function loadMoreEbaySearch() {
   const btn = document.getElementById("ebay-load-more");
   if (btn) { btn.disabled = true; btn.textContent = "Loading…"; }
 
-  const nextOffset = _ebaySearchOffset + 50;
+  const nextOffset = _ebaySearchOffset + 200;
   try {
     const r = await apiFetch(`/api/ebay/search?q=${encodeURIComponent(_ebaySearchQuery)}&offset=${nextOffset}`);
     const data = await r.json().catch(() => ({}));

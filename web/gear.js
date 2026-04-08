@@ -376,7 +376,7 @@ async function loadMoreGearEbaySearch() {
   const btn = document.getElementById("gear-ebay-load-more");
   if (btn) { btn.disabled = true; btn.textContent = "Loading…"; }
 
-  const nextOffset = _gearEbaySearchOffset + 50;
+  const nextOffset = _gearEbaySearchOffset + 200;
   try {
     const r = await apiFetch(`/api/ebay/gear/search?q=${encodeURIComponent(_gearEbaySearchQuery)}&offset=${nextOffset}`);
     const data = await r.json().catch(() => ({}));

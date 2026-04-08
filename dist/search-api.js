@@ -4409,10 +4409,10 @@ app.get("/api/ebay/search", async (req, res) => {
         return res.status(400).json({ error: "Query must be at least 2 characters" });
     if (q.length > 200)
         return res.status(400).json({ error: "Query too long" });
-    // Pagination: eBay Browse API caps offset+limit at 10_000
+    // Pagination: eBay Browse API allows limit up to 200 and caps offset+limit at 10_000
+    const PAGE_SIZE = 200;
     const rawOffset = parseInt(req.query.offset ?? "0", 10);
-    const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? Math.min(rawOffset, 9950) : 0;
-    const PAGE_SIZE = 50;
+    const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? Math.min(rawOffset, 10000 - PAGE_SIZE) : 0;
     console.log(`[ebay-search] vinyl query="${q}" offset=${offset} user=${userId}`);
     if (!ebayClientId || !ebayClientSecret) {
         console.error(`[ebay-search] eBay credentials not configured`);
@@ -4535,10 +4535,10 @@ app.get("/api/ebay/gear/search", async (req, res) => {
         return res.status(400).json({ error: "Query must be at least 2 characters" });
     if (q.length > 200)
         return res.status(400).json({ error: "Query too long" });
-    // Pagination: eBay Browse API caps offset+limit at 10_000
+    // Pagination: eBay Browse API allows limit up to 200 and caps offset+limit at 10_000
+    const PAGE_SIZE = 200;
     const rawOffset = parseInt(req.query.offset ?? "0", 10);
-    const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? Math.min(rawOffset, 9950) : 0;
-    const PAGE_SIZE = 50;
+    const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? Math.min(rawOffset, 10000 - PAGE_SIZE) : 0;
     if (!ebayClientId || !ebayClientSecret) {
         return res.status(503).json({ error: "eBay search not available" });
     }
