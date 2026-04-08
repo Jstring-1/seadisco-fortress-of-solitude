@@ -1293,7 +1293,7 @@ function _shShow(field) {
     const text = document.createElement("span");
     text.className = "sh-text";
     text.textContent = val;
-    text.onclick = () => { field.value = val; field.focus(); _shHide(); };
+    text.onclick = () => { field.value = val; field.dispatchEvent(new Event("input", { bubbles: true })); field.focus(); _shHide(); };
     const del = document.createElement("span");
     del.className = "sh-del";
     del.textContent = "×";
@@ -1347,7 +1347,7 @@ function _markSelectValue(sel) {
   sel.classList.toggle("has-value", sel.selectedIndex > 0);
 }
 function _initSelectHighlights() {
-  document.querySelectorAll("#main-search-form select, #cw-advanced-panel select, #cw-controls-row select").forEach(sel => {
+  document.querySelectorAll("select").forEach(sel => {
     _markSelectValue(sel);
     sel.addEventListener("change", () => _markSelectValue(sel));
   });
@@ -1355,6 +1355,10 @@ function _initSelectHighlights() {
 /** Call after clearing form to reset select highlights */
 function resetSelectHighlights() {
   document.querySelectorAll("select.has-value").forEach(sel => sel.classList.remove("has-value"));
+}
+/** Re-evaluate all selects (call after programmatically setting field values) */
+function refreshFieldHighlights() {
+  document.querySelectorAll("select").forEach(sel => _markSelectValue(sel));
 }
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", _initSelectHighlights);
 else _initSelectHighlights();

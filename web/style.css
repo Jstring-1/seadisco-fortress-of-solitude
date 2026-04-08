@@ -1727,11 +1727,10 @@ input[type="text"]:focus {
   border-color: var(--accent);
 }
 /* Highlight fields that have content */
-input[type="text"]:not(:placeholder-shown) {
-  background: #1a1710; border-color: #3a3020;
-}
+input[type="text"]:not(:placeholder-shown),
 select.has-value {
-  background: #1a1710; border-color: #3a3020;
+  background: #1e1508; border-color: #8b5a1b; color: var(--fg);
+  box-shadow: 0 0 5px rgba(180, 100, 20, 0.2);
 }
 
 select {
@@ -3270,10 +3269,12 @@ body.modal-open  { overflow: hidden; }
 .type-radios label:hover:has(input[value="label"])   { color: var(--type-label); }
 
 .type-radios label:has(input[value=""]:checked)       { color: var(--accent); }
-.type-radios label:has(input[value="master"]:checked)  { color: var(--type-master); }
-.type-radios label:has(input[value="release"]:checked) { color: var(--type-release); }
-.type-radios label:has(input[value="artist"]:checked)  { color: var(--type-artist); }
-.type-radios label:has(input[value="label"]:checked)   { color: var(--type-label); }
+.type-radios label:has(input[value="master"]:checked)  { color: var(--type-master); text-shadow: 0 0 6px var(--type-master); }
+.type-radios label:has(input[value="release"]:checked) { color: var(--type-release); text-shadow: 0 0 6px var(--type-release); }
+.type-radios label:has(input[value="artist"]:checked)  { color: var(--type-artist); text-shadow: 0 0 6px var(--type-artist); }
+.type-radios label:has(input[value="label"]:checked)   { color: var(--type-label); text-shadow: 0 0 6px var(--type-label); }
+.type-radios label:has(input[value="master+"]:checked) { color: var(--type-master); text-shadow: 0 0 6px var(--type-master); }
+.type-radios label:has(input[value="ai"]:checked)      { color: var(--accent); text-shadow: 0 0 6px var(--accent); }
 
 .type-radios input[value=""]       { accent-color: var(--accent); }
 .type-radios input[value="master"]  { accent-color: var(--type-master); }

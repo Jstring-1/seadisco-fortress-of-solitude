@@ -545,6 +545,7 @@ function applySavedSearch(view, id, sourceView) {
   const s = searches.find(x => x.id === id);
   if (!s || !wrap?._apply) return;
   wrap._apply(s.params);
+  if (typeof refreshFieldHighlights === "function") refreshFieldHighlights();
   // Close dropdown
   const dd = document.getElementById(`ss-dropdown-${view}`);
   if (dd) dd.style.display = "none";
