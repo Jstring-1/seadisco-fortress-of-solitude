@@ -2309,6 +2309,7 @@ body.modal-open  { overflow: hidden; }
   color: var(--accent);
 }
 
+#album-info .album-meta, #version-info .album-meta { min-width: 0; overflow-wrap: break-word; }
 #album-info .album-meta h2, #version-info .album-meta h2 {
   font-size: 1.05rem;
   font-weight: 700;
@@ -2382,6 +2383,13 @@ body.modal-open  { overflow: hidden; }
   grid-template-columns: 4.5rem 1fr;
   gap: 0.15rem 0.5rem;
   font-size: 0.78rem;
+  min-width: 0;
+}
+#album-info .album-detail-grid > span:nth-child(even),
+#version-info .album-detail-grid > span:nth-child(even) {
+  overflow-wrap: break-word;
+  word-break: break-word;
+  min-width: 0;
 }
 
 #album-info .detail-label, #version-info .detail-label {
