@@ -541,7 +541,7 @@ async function doEbaySearch() {
   if (clearBtn) clearBtn.style.display = "";
 
   try {
-    const r = await fetch(`/api/ebay/search?q=${encodeURIComponent(q)}`);
+    const r = await apiFetch(`/api/ebay/search?q=${encodeURIComponent(q)}`);
     const data = await r.json().catch(() => ({}));
 
     if (r.status === 429) {
