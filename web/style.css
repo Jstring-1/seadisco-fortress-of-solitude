@@ -1726,6 +1726,13 @@ input[type="text"] {
 input[type="text"]:focus {
   border-color: var(--accent);
 }
+/* Highlight fields that have content */
+input[type="text"]:not(:placeholder-shown) {
+  background: #1a1710; border-color: #3a3020;
+}
+select.has-value {
+  background: #1a1710; border-color: #3a3020;
+}
 
 select {
   background: var(--surface);
