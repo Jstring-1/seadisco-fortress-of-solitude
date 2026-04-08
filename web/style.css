@@ -326,6 +326,7 @@ body {
 .nav-row {
   display: flex;
 }
+.nav-row-top .nav-tab-top, .nav-row-bot .nav-tab-bot { flex: 1 1 0; }
 .nav-row-top {
   border-bottom: 1px solid var(--border);
 }
