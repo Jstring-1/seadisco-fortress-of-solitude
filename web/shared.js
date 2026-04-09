@@ -196,7 +196,10 @@ async function loadClerkInstance() {
     if (!c) return null;
   }
 
-  await c.load();
+  // Pass localization here — clerk-js applies it globally to every widget
+  // mounted afterward. Per-component `localization` on mountSignUp /
+  // openSignIn is silently ignored by the vanilla-JS SDK.
+  await c.load({ localization: SEADISCO_CLERK_LOCALIZATION });
 
   // After c.load() resolves, Clerk has either hydrated the session or
   // confirmed there isn't one. Only poll briefly if the state is still
@@ -318,6 +321,8 @@ const SEADISCO_CLERK_APPEARANCE = {
 // "Create your account" / "Sign up" is rewritten to nudge new visitors
 // toward the waitlist instead. Keys match Clerk's default localization
 // structure so any unspecified strings fall back to the English defaults.
+// NOTE: Clerk-js applies localization from the options passed to
+// Clerk.load(), not per-component mount calls — see loadClerkInstance().
 const SEADISCO_CLERK_LOCALIZATION = {
   signIn: {
     start: {
@@ -329,8 +334,8 @@ const SEADISCO_CLERK_LOCALIZATION = {
   },
   signUp: {
     start: {
-      title:      "Join the SeaDisco waitlist",
-      subtitle:   "SeaDisco is invite-only. Enter your email and we'll be in touch when a spot opens up.",
+      title:      "Join the waitlist",
+      subtitle:   "SeaDisco is invite-only — we'll be in touch when a spot opens up.",
       actionText: "Already approved?",
       actionLink: "Sign in",
     },
@@ -355,9 +360,11 @@ async function openSignInModal() {
       return;
     }
     if (typeof c.openSignIn === "function") {
+      // Localization is applied globally via Clerk.load() — see
+      // loadClerkInstance(). Per-component localization is ignored by the
+      // vanilla-JS SDK.
       c.openSignIn({
         appearance: SEADISCO_CLERK_APPEARANCE,
-        localization: SEADISCO_CLERK_LOCALIZATION,
         afterSignInUrl: location.pathname + location.search,
         afterSignUpUrl: location.pathname + location.search,
       });
@@ -411,7 +418,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260409f";
+  const SITE_VERSION = "build 20260409g";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'https://seadisco.com' : '/'}" class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
