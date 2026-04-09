@@ -1294,7 +1294,8 @@ async function loadModalInstanceData(releaseId) {
     ratingEl.dataset.rating = currentRating;
     ratingEl.style.opacity = "";
   }
-  renderMultiInstancePanel(rid, allInstances, instanceId);
+  await renderMultiInstancePanel(rid, allInstances, instanceId);
+  renderNotesPanel(rid);
 }
 
 // Open the (N) popover listing every instance the user owns of this release.
@@ -1594,6 +1595,231 @@ function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 }
 
+// ── Collection custom-field definitions cache ───────────────────────────
+//
+// Discogs lets each user define custom collection fields (the built-in
+// "Notes" field is itself one of them) with type `textarea` or `dropdown`.
+// Fetch them once per session and reuse.
+async function ensureCollectionFieldsLoaded() {
+  if (Array.isArray(window._collectionFieldDefs)) return window._collectionFieldDefs;
+  if (window._collectionFieldDefsPromise) return window._collectionFieldDefsPromise;
+  window._collectionFieldDefsPromise = (async () => {
+    try {
+      const r = await apiFetch("/api/user/collection/fields");
+      if (!r.ok) { window._collectionFieldDefs = []; return []; }
+      const data = await r.json();
+      const fields = Array.isArray(data?.fields) ? data.fields : [];
+      fields.sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
+      window._collectionFieldDefs = fields;
+      return fields;
+    } catch {
+      window._collectionFieldDefs = [];
+      return [];
+    } finally {
+      window._collectionFieldDefsPromise = null;
+    }
+  })();
+  return window._collectionFieldDefsPromise;
+}
+
+// Render the notes/fields editor panel below #modal-instances-panel (or
+// below #modal-actions when no instances panel exists). Shows:
+//   - Collection fields editor scoped to the active instance, if the user
+//     owns a copy of this release.
+//   - Wantlist notes editor, if the release is in the user's wantlist.
+// Both blocks can coexist.
+async function renderNotesPanel(releaseId) {
+  const rid = Number(releaseId);
+  if (!rid) return;
+  // Remove any existing editor (we re-render on instance switches / toggles)
+  const existing = document.getElementById("modal-notes-panel");
+  if (existing) existing.remove();
+
+  const actionsEl = document.getElementById("modal-actions");
+  if (!actionsEl || actionsEl.dataset.entityType && actionsEl.dataset.entityType !== "release") return;
+
+  const inCol = window._collectionIds?.has(rid);
+  const inWant = window._wantlistIds?.has(rid);
+  if (!inCol && !inWant) return;
+
+  const panel = document.createElement("div");
+  panel.id = "modal-notes-panel";
+  panel.className = "modal-notes-panel";
+  panel.innerHTML = `<div class="modal-notes-loading">Loading notes…</div>`;
+
+  const anchor = document.getElementById("modal-instances-panel") || actionsEl;
+  anchor.insertAdjacentElement("afterend", panel);
+
+  // Fetch the pieces in parallel.
+  const instanceId = Number(actionsEl.dataset.instanceId) || null;
+  const folderId = Number(actionsEl.dataset.folderId) || 1;
+
+  const tasks = [];
+  if (inCol) {
+    tasks.push(ensureCollectionFieldsLoaded());
+    tasks.push(
+      instanceId
+        ? apiFetch(`/api/user/collection/instances?releaseId=${rid}`).then(r => r.ok ? r.json() : null).catch(() => null)
+        : apiFetch(`/api/user/collection/instance?releaseId=${rid}`).then(r => r.ok ? r.json() : null).catch(() => null)
+    );
+  } else {
+    tasks.push(Promise.resolve([]));
+    tasks.push(Promise.resolve(null));
+  }
+  if (inWant) {
+    tasks.push(apiFetch(`/api/user/wantlist/item?releaseId=${rid}`).then(r => r.ok ? r.json() : null).catch(() => null));
+  } else {
+    tasks.push(Promise.resolve(null));
+  }
+
+  const [fieldDefs, colData, wantData] = await Promise.all(tasks);
+
+  // Resolve notes for the active collection instance.
+  let instanceNotes = [];
+  if (inCol && colData) {
+    if (Array.isArray(colData.instances)) {
+      const match = instanceId
+        ? colData.instances.find(i => Number(i.instance_id) === instanceId)
+        : colData.instances[0];
+      instanceNotes = Array.isArray(match?.notes) ? match.notes : [];
+    } else if (colData.found) {
+      instanceNotes = Array.isArray(colData.notes) ? colData.notes : [];
+    }
+  }
+  const notesByField = new Map();
+  for (const n of instanceNotes) {
+    if (n && n.field_id != null) notesByField.set(Number(n.field_id), n.value ?? "");
+  }
+
+  let html = "";
+
+  // Collection block
+  if (inCol) {
+    const fields = Array.isArray(fieldDefs) ? fieldDefs : [];
+    if (fields.length === 0) {
+      html += `<div class="modal-notes-block"><div class="modal-notes-empty">No collection fields defined on Discogs.</div></div>`;
+    } else {
+      const rows = fields.map(f => {
+        const fid = Number(f.id);
+        const cur = notesByField.get(fid) ?? "";
+        const label = escapeHtml(f.name || `Field ${fid}`);
+        if (f.type === "dropdown" && Array.isArray(f.options)) {
+          const opts = ['<option value=""></option>']
+            .concat(f.options.map(o => `<option value="${escapeHtml(o)}"${o === cur ? " selected" : ""}>${escapeHtml(o)}</option>`))
+            .join("");
+          return `<label class="modal-notes-row">
+            <span class="modal-notes-label">${label}</span>
+            <select class="modal-notes-input" data-field-id="${fid}" data-initial="${escapeHtml(cur)}" onchange="saveCollectionField(event,${rid},${fid})">${opts}</select>
+          </label>`;
+        }
+        const isTextarea = f.type === "textarea" || (cur && cur.length > 40);
+        const input = isTextarea
+          ? `<textarea class="modal-notes-input" rows="2" data-field-id="${fid}" data-initial="${escapeHtml(cur)}" onblur="saveCollectionField(event,${rid},${fid})" onkeydown="handleNotesKey(event,${rid},${fid},'collection')">${escapeHtml(cur)}</textarea>`
+          : `<input type="text" class="modal-notes-input" data-field-id="${fid}" data-initial="${escapeHtml(cur)}" value="${escapeHtml(cur)}" onblur="saveCollectionField(event,${rid},${fid})" onkeydown="handleNotesKey(event,${rid},${fid},'collection')" />`;
+        return `<label class="modal-notes-row">
+          <span class="modal-notes-label">${label}</span>
+          ${input}
+        </label>`;
+      }).join("");
+      html += `<div class="modal-notes-block">
+        <div class="modal-notes-title">Collection fields${instanceId ? ` <span class="modal-notes-hint">(this copy)</span>` : ""}</div>
+        ${rows}
+      </div>`;
+    }
+  }
+
+  // Wantlist block
+  if (inWant) {
+    const wantNotes = Array.isArray(wantData?.notes) ? wantData.notes : [];
+    const cur = wantNotes.find(n => n && n.field_id === 0)?.value ?? "";
+    html += `<div class="modal-notes-block">
+      <div class="modal-notes-title">Wantlist notes</div>
+      <label class="modal-notes-row">
+        <textarea class="modal-notes-input" rows="2" data-initial="${escapeHtml(cur)}" placeholder="Notes visible only to you" onblur="saveWantlistNotes(event,${rid})" onkeydown="handleNotesKey(event,${rid},0,'wantlist')">${escapeHtml(cur)}</textarea>
+      </label>
+    </div>`;
+  }
+
+  panel.innerHTML = html || `<div class="modal-notes-empty">No notes available.</div>`;
+}
+
+// Enter (without Shift) commits the edit by blurring the field, which
+// triggers the onblur save handler. Esc reverts to the initial value.
+function handleNotesKey(event, releaseId, fieldId, mode) {
+  if (event.key === "Enter" && !event.shiftKey && event.target.tagName !== "TEXTAREA") {
+    event.preventDefault();
+    event.target.blur();
+  } else if (event.key === "Enter" && !event.shiftKey && event.ctrlKey) {
+    event.preventDefault();
+    event.target.blur();
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    const initial = event.target.dataset.initial ?? "";
+    event.target.value = initial;
+    event.target.blur();
+  }
+}
+
+async function saveCollectionField(event, releaseId, fieldId) {
+  const el = event?.target;
+  if (!el) return;
+  const value = String(el.value ?? "");
+  const initial = el.dataset.initial ?? "";
+  if (value === initial) return; // no-op
+  const actionsEl = document.getElementById("modal-actions");
+  const instanceId = Number(actionsEl?.dataset.instanceId) || null;
+  const folderId = Number(actionsEl?.dataset.folderId) || 1;
+  if (!instanceId) { showToast?.("Add this release to your collection first", "error"); return; }
+  el.disabled = true;
+  try {
+    const r = await apiFetch("/api/user/collection/notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ releaseId: Number(releaseId), instanceId, folderId, fieldId: Number(fieldId), value }),
+    }).then(r => r.json());
+    if (r?.ok) {
+      el.dataset.initial = value;
+      showToast?.("Saved");
+    } else {
+      el.value = initial;
+      showToast?.(r?.error || "Failed to save", "error");
+    }
+  } catch {
+    el.value = initial;
+    showToast?.("Failed to save", "error");
+  } finally {
+    el.disabled = false;
+  }
+}
+
+async function saveWantlistNotes(event, releaseId) {
+  const el = event?.target;
+  if (!el) return;
+  const value = String(el.value ?? "");
+  const initial = el.dataset.initial ?? "";
+  if (value === initial) return;
+  el.disabled = true;
+  try {
+    const r = await apiFetch("/api/user/wantlist/notes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ releaseId: Number(releaseId), value }),
+    }).then(r => r.json());
+    if (r?.ok) {
+      el.dataset.initial = value;
+      showToast?.("Saved");
+    } else {
+      el.value = initial;
+      showToast?.(r?.error || "Failed to save", "error");
+    }
+  } catch {
+    el.value = initial;
+    showToast?.("Failed to save", "error");
+  } finally {
+    el.disabled = false;
+  }
+}
+
 // Full re-render of action buttons (used after toggle actions)
 // context: "version-info" for version popup, otherwise main modal
 function loadModalActions(releaseId, context) {
@@ -1639,6 +1865,9 @@ function loadModalActions(releaseId, context) {
     const invListings = (window._inventoryListingIds && window._inventoryListingIds[rid]) || [];
     if (inCol) loadModalInstanceData(rid);
     else if (invListings.length) renderMultiInstancePanel(rid, [], null);
+    // Wantlist-only: no instance data, but still render the notes panel
+    // so the user can edit wantlist notes.
+    if (!inCol && inWant) renderNotesPanel(rid);
   }
 }
 

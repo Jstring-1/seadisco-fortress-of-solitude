@@ -4,41 +4,32 @@
 function showSignInWidget(c) {
   document.getElementById("loading-section").style.display = "none";
   document.getElementById("signed-out-section").style.display = "block";
-  c.mountSignUp(document.getElementById("clerk-sign-in"), {
+  const mount = document.getElementById("clerk-sign-in");
+  // SeaDisco is invite-only — the account view mounts the sign-in form
+  // (not sign-up) so approved users can sign in. Visitors who aren't yet
+  // approved get redirected to the waitlist by the localization link.
+  const opts = {
     afterSignInUrl: "/?v=account",
     afterSignUpUrl: "/?v=account",
     appearance: {
-      baseTheme: undefined,
-      variables: {
-        colorBackground:        "#15120e",
-        colorInputBackground:   "#0e0c08",
-        colorInputText:         "#e8dcc8",
-        colorText:              "#e8dcc8",
-        colorTextSecondary:     "#a89880",
-        colorPrimary:           "#ff6b35",
-        colorDanger:            "#e05050",
-        colorNeutral:           "#a89880",
-        borderRadius:           "6px",
-        fontFamily:             "system-ui, -apple-system, sans-serif",
-      },
+      ...SEADISCO_CLERK_APPEARANCE,
       elements: {
-        card:               "background:#15120e; border:1px solid #2e2518; box-shadow:none;",
-        headerTitle:        "color:#e8dcc8;",
-        headerSubtitle:     "color:#8a7d6b;",
-        socialButtonsBlockButton: "background:#0e0c08; border:1px solid #2e2518; color:#e8dcc8;",
+        ...SEADISCO_CLERK_APPEARANCE.elements,
+        socialButtonsBlockButton:     "background:#0e0c08; border:1px solid #2e2518; color:#e8dcc8;",
         socialButtonsBlockButtonText: "color:#e8dcc8;",
-        dividerLine:        "background:#2e2518;",
-        dividerText:        "color:#8a7d6b;",
-        formFieldLabel:     "color:#8a7d6b;",
-        formFieldInput:     "background:#0e0c08; border:1px solid #2e2518; color:#e8dcc8;",
-        footerActionLink:   "color:#ff6b35;",
-        footer:             "display:none;",
-        footerAction:       "display:none;",
-        identityPreviewText: "color:#e8dcc8;",
-        identityPreviewEditButton: "color:#ff6b35;",
+        dividerLine:                  "background:#2e2518;",
+        dividerText:                  "color:#8a7d6b;",
+        identityPreviewText:          "color:#e8dcc8;",
+        identityPreviewEditButton:    "color:#ff6b35;",
       },
     },
-  });
+    localization: SEADISCO_CLERK_LOCALIZATION,
+  };
+  if (typeof c.mountSignIn === "function") {
+    c.mountSignIn(mount, opts);
+  } else if (typeof c.mountSignUp === "function") {
+    c.mountSignUp(mount, opts);
+  }
 }
 
 function handleSignedIn(c) {

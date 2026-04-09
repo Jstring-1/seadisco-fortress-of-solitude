@@ -201,6 +201,16 @@ export async function initDb() {
   await getPool().query(`CREATE INDEX IF NOT EXISTS user_list_items_user_idx ON user_list_items (clerk_user_id)`);
   await getPool().query(`CREATE INDEX IF NOT EXISTS user_list_items_release_idx ON user_list_items (clerk_user_id, discogs_id)`);
 
+  // Composite indexes for hot lookup paths.
+  // user_collection's primary unique key is (clerk_user_id, instance_id) so
+  // lookups by (clerk_user_id, discogs_release_id) — used by the badge /
+  // instance fetchers — need their own index.
+  await getPool().query(`CREATE INDEX IF NOT EXISTS user_collection_user_release_idx ON user_collection (clerk_user_id, discogs_release_id)`);
+  // user_inventory's unique key is (clerk_user_id, listing_id); lookups by
+  // (clerk_user_id, discogs_release_id) (getInventoryListingIdsByRelease)
+  // would otherwise scan.
+  await getPool().query(`CREATE INDEX IF NOT EXISTS user_inventory_user_release_idx ON user_inventory (clerk_user_id, discogs_release_id)`);
+
   // ── User orders (marketplace buy/sell history) ──────────────────────────
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS user_orders (
@@ -1145,6 +1155,29 @@ export async function updateCollectionNotes(
       [clerkUserId, releaseId, JSON.stringify(notes)]
     );
   }
+}
+
+export async function updateWantlistNotes(
+  clerkUserId: string,
+  releaseId: number,
+  notes: any[]
+): Promise<void> {
+  await getPool().query(
+    `UPDATE user_wantlist SET notes = $3 WHERE clerk_user_id = $1 AND discogs_release_id = $2`,
+    [clerkUserId, releaseId, JSON.stringify(notes)]
+  );
+}
+
+export async function getWantlistItem(
+  clerkUserId: string,
+  releaseId: number
+): Promise<{ rating: number; notes: any[] } | null> {
+  const r = await getPool().query(
+    `SELECT rating, notes FROM user_wantlist WHERE clerk_user_id = $1 AND discogs_release_id = $2`,
+    [clerkUserId, releaseId]
+  );
+  if (!r.rows.length) return null;
+  return { rating: r.rows[0].rating ?? 0, notes: r.rows[0].notes ?? [] };
 }
 
 // ── Phase 4: Price intelligence DB functions ─────────────────────────────
