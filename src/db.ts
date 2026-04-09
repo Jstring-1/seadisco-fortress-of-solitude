@@ -2409,13 +2409,11 @@ export async function getGearListings(minPrice: number = 0, limit: number = 200,
   );
   const total = countR.rows[0]?.cnt ?? 0;
   const orderMap: Record<string, string> = {
-    bids: "bid_count DESC, price DESC",
-    price_desc: "price DESC, item_end_date ASC NULLS LAST",
-    price_asc: "price ASC, item_end_date ASC NULLS LAST",
-    ending: "item_end_date ASC NULLS LAST",
-    newest: "item_end_date DESC NULLS LAST",
+    price_desc: "price DESC, fetched_at DESC",
+    price_asc: "price ASC, fetched_at DESC",
+    newest: "fetched_at DESC",
   };
-  const orderBy = orderMap[sort] ?? orderMap.bids;
+  const orderBy = orderMap[sort] ?? orderMap.price_desc;
   const r = await getPool().query(
     `SELECT item_id, title, price, currency, condition, image_url, item_url,
        location_city, location_state, location_country,
@@ -2494,13 +2492,11 @@ export async function getVinylListings(minPrice: number = 0, limit: number = 200
   );
   const total = countR.rows[0]?.cnt ?? 0;
   const orderMap: Record<string, string> = {
-    bids: "bid_count DESC, price DESC",
-    price_desc: "price DESC, item_end_date ASC NULLS LAST",
-    price_asc: "price ASC, item_end_date ASC NULLS LAST",
-    ending: "item_end_date ASC NULLS LAST",
-    newest: "item_end_date DESC NULLS LAST",
+    price_desc: "price DESC, fetched_at DESC",
+    price_asc: "price ASC, fetched_at DESC",
+    newest: "fetched_at DESC",
   };
-  const orderBy = orderMap[sort] ?? orderMap.ending;
+  const orderBy = orderMap[sort] ?? orderMap.price_desc;
   const r = await getPool().query(
     `SELECT item_id, title, price, currency, condition, image_url, item_url,
        location_city, location_state, location_country,

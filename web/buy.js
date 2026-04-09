@@ -63,9 +63,9 @@ function renderBuyCard(item, idx) {
   return `<div class="card buy-card card-animate" onclick="event.stopPropagation();openBuyPopup(${idx})" role="button" tabindex="0" style="--i:${Math.min(idx, 20)};cursor:pointer;-webkit-tap-highlight-color:transparent" title="${escHtml(item.title)}">
     <div class="card-thumb-wrap" style="pointer-events:none">${img}</div>
     <div class="card-body" style="pointer-events:none">
+      <div class="buy-price">${priceStr}</div>
       <div class="card-title">${escHtml(item.title)}</div>
       ${artistLabel ? `<div class="card-sub" style="color:#aaa">${escHtml(artistLabel)}</div>` : ""}
-      <div class="buy-price">${priceStr}</div>
       ${conditionShow ? `<div class="card-meta">${escHtml(conditionShow)}</div>` : ""}
       ${loc ? `<div class="card-meta">${escHtml(loc)}</div>` : ""}
     </div>
@@ -86,13 +86,19 @@ function _openEbayPopup(item, opts) {
   overlay.className = "buy-popup-overlay";
   overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
 
+  // For vinyl, make the title clickable to search SeaDisco for it
+  const safeTitle = String(item.title || "").replace(/'/g, "\\'");
+  const titleInner = isVinyl
+    ? `<a href="#" class="modal-title-link" onclick="searchFromBuyPopup(event,'${escHtml(safeTitle)}')" title="Search SeaDisco for this">${escHtml(item.title)}</a>`
+    : escHtml(item.title);
+
   // Show popup shell — spinner only for signed-in users (who get live eBay data)
   const willFetchLive = !!window._clerk?.user && !!(item.item_id || item.ebay_item_id);
   overlay.innerHTML = `<div class="buy-popup">
     <button class="buy-popup-close" onclick="this.closest('.buy-popup-overlay').remove()">✕</button>
     ${thumbImg ? `<img class="buy-popup-main-img" src="${escHtml(thumbImg)}" onerror="this.style.display='none'">` : ""}
     <div class="buy-popup-body">
-      <h3 class="buy-popup-title">${escHtml(item.title)}</h3>
+      <h3 class="buy-popup-title">${titleInner}</h3>
       ${willFetchLive ? `<div class="buy-popup-loading" style="text-align:center;padding:1.5rem 0;color:#666;font-size:0.85rem">
         <div class="ebay-spinner"></div>
         Loading live data from eBay…
@@ -134,12 +140,43 @@ async function _fetchEbayDetail(itemId, overlay, dbItem, opts) {
     const price = d.price > 0 ? d.price : parseFloat(dbItem.price);
     const currency = d.currency || dbItem.currency || "USD";
     const priceStr = price.toLocaleString("en-US", { style: "currency", currency });
+    const condition = d.condition || dbItem.condition || "";
     const condDesc = d.conditionDescription ? ` — ${d.conditionDescription}` : "";
     const location = d.location || [dbItem.location_city, dbItem.location_state, dbItem.location_country].filter(Boolean).join(", ");
     const seller = d.seller || dbItem.seller_name || dbItem.seller_username || "";
     const feedback = d.sellerFeedbackPercent ? `(${d.sellerFeedbackPercent}%)` : "";
     const allImages = d.allImages?.length ? d.allImages : (dbItem.all_images?.length ? dbItem.all_images : (dbItem.image_url ? [dbItem.image_url] : []));
     const itemUrl = d.itemUrl || dbItem.item_url || "";
+
+    // Shipping
+    const shippingFree = d.shippingFree === true;
+    const shippingCost = parseFloat(d.shippingCost ?? "0");
+    const shippingCur  = d.shippingCurrency || currency;
+    const shippingStr  = shippingFree
+      ? "Free shipping"
+      : (shippingCost > 0 ? `+${shippingCost.toLocaleString("en-US", { style: "currency", currency: shippingCur })} shipping` : "");
+
+    // Returns
+    const returnsAccepted = d.returnsAccepted === true;
+    const returnPeriod = d.returnPeriod || "";
+    const returnsStr = returnsAccepted
+      ? (returnPeriod ? `${returnPeriod} returns` : "Returns accepted")
+      : (d.returnsAccepted === false ? "No returns" : "");
+
+    // Stock
+    const qtyAvail = parseInt(d.quantityAvailable ?? "0");
+    const qtySold  = parseInt(d.quantitySold ?? "0");
+
+    // Listed date
+    const listedDate = d.itemCreationDate
+      ? new Date(d.itemCreationDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      : "";
+
+    // Top-rated badge
+    const topRated = d.topRatedBuyingExperience === true;
+
+    // Category path (e.g. "Music > Records > Rock")
+    const categoryPath = (d.categoryPath || "").replace(/\|/g, " › ");
 
     // Update main image
     let mainImg = overlay.querySelector(".buy-popup-main-img");
@@ -164,12 +201,28 @@ async function _fetchEbayDetail(itemId, overlay, dbItem, opts) {
       }
     }
 
-    // Build body content
+    // Price block — inserted BEFORE the title so it appears at the top of the popup body
+    const priceHtml = `<div class="buy-popup-price">${priceStr} <span style="font-size:0.78rem;font-weight:400;color:#aaa;margin-left:0.5rem">Buy Now</span>${shippingStr ? ` <span style="font-size:0.72rem;font-weight:400;color:#888;margin-left:0.4rem">${escHtml(shippingStr)}</span>` : ""}</div>`;
+
+    // Build body content (price already inserted above title; this goes after title)
     let metaHtml = "";
-    metaHtml += `<div class="buy-popup-price">${priceStr} <span style="font-size:0.78rem;font-weight:400;color:#aaa;margin-left:0.5rem">Buy Now</span></div>`;
+    if (d.subtitle) metaHtml += `<div class="buy-popup-subtitle" style="color:#bbb;font-size:0.82rem;margin-top:-0.2rem;margin-bottom:0.4rem">${escHtml(d.subtitle)}</div>`;
+    if (categoryPath) metaHtml += `<div class="buy-popup-meta" style="font-size:0.7rem;color:#667;letter-spacing:0.02em">${escHtml(categoryPath)}</div>`;
     if (condition) metaHtml += `<div class="buy-popup-meta">Condition: ${escHtml(condition)}${escHtml(condDesc)}</div>`;
+    if (returnsStr) metaHtml += `<div class="buy-popup-meta">${escHtml(returnsStr)}</div>`;
+    // Stock line — only if meaningful
+    if (qtyAvail > 1 || qtySold > 0) {
+      const stockParts = [];
+      if (qtyAvail > 1) stockParts.push(`${qtyAvail} available`);
+      if (qtySold > 0)  stockParts.push(`${qtySold} sold`);
+      metaHtml += `<div class="buy-popup-meta">${escHtml(stockParts.join(" · "))}</div>`;
+    }
     if (location) metaHtml += `<div class="buy-popup-meta">Location: ${escHtml(location)}</div>`;
-    if (seller) metaHtml += `<div class="buy-popup-meta">Seller: ${escHtml(seller)} ${escHtml(feedback)}</div>`;
+    if (seller) {
+      const topRatedBadge = topRated ? ` <span style="color:#daa520" title="eBay Top Rated Seller">⭐ Top Rated</span>` : "";
+      metaHtml += `<div class="buy-popup-meta">Seller: ${escHtml(seller)} ${escHtml(feedback)}${topRatedBadge}</div>`;
+    }
+    if (listedDate) metaHtml += `<div class="buy-popup-meta" style="color:#667;font-size:0.7rem">Listed ${escHtml(listedDate)}</div>`;
 
     // Specs — make Artist and Release Title rows clickable with search links
     const specKeys = Object.keys(d.specifics || {}).filter(k => d.specifics[k]);
@@ -198,6 +251,12 @@ async function _fetchEbayDetail(itemId, overlay, dbItem, opts) {
 
     // Replace loading state with full content
     if (loadingEl) loadingEl.remove();
+
+    // Insert price ABOVE the title
+    const titleEl = overlay.querySelector(".buy-popup-title");
+    if (titleEl) titleEl.insertAdjacentHTML("beforebegin", priceHtml);
+
+    // Insert rest of metadata BEFORE the "View on eBay" link (below the title)
     const ebayLink = overlay.querySelector(".buy-popup-ebay-link");
     if (ebayLink) {
       ebayLink.insertAdjacentHTML("beforebegin", metaHtml);
@@ -224,16 +283,23 @@ function _populatePopupFromDb(overlay, item, notice) {
     ? `(${item.seller_feedback_percent}%)`
     : (item.seller_feedback ? `(${item.seller_feedback.toLocaleString()} reviews)` : "");
 
-  let html = "";
-  html += `<div class="buy-popup-price">${priceStr} <span style="font-size:0.78rem;font-weight:400;color:#aaa;margin-left:0.5rem">Buy Now</span></div>`;
-  if (condition) html += `<div class="buy-popup-meta">Condition: ${escHtml(condition)}</div>`;
-  if (loc) html += `<div class="buy-popup-meta">Location: ${escHtml(loc)}</div>`;
-  if (seller) html += `<div class="buy-popup-meta">Seller: ${escHtml(seller)} ${feedback}</div>`;
-  if (notice) html += `<div style="color:#e88;font-size:0.78rem;margin-top:0.5rem">${escHtml(notice)}</div>`;
+  const priceHtml = `<div class="buy-popup-price">${priceStr} <span style="font-size:0.78rem;font-weight:400;color:#aaa;margin-left:0.5rem">Buy Now</span></div>`;
+
+  let metaHtml = "";
+  if (condition) metaHtml += `<div class="buy-popup-meta">Condition: ${escHtml(condition)}</div>`;
+  if (loc) metaHtml += `<div class="buy-popup-meta">Location: ${escHtml(loc)}</div>`;
+  if (seller) metaHtml += `<div class="buy-popup-meta">Seller: ${escHtml(seller)} ${feedback}</div>`;
+  if (notice) metaHtml += `<div style="color:#e88;font-size:0.78rem;margin-top:0.5rem">${escHtml(notice)}</div>`;
 
   if (loadingEl) loadingEl.remove();
+
+  // Price above title
+  const titleEl = overlay.querySelector(".buy-popup-title");
+  if (titleEl) titleEl.insertAdjacentHTML("beforebegin", priceHtml);
+
+  // Rest of meta below title, before ebay link
   const ebayLink = overlay.querySelector(".buy-popup-ebay-link");
-  if (ebayLink) ebayLink.insertAdjacentHTML("beforebegin", html);
+  if (ebayLink) ebayLink.insertAdjacentHTML("beforebegin", metaHtml);
 }
 
 function _updateItemInMemory(itemId, detail) {

@@ -3496,8 +3496,8 @@ const ebayAffiliateCampaignId = process.env.EBAY_AFFILIATE_CAMPAIGN_ID ?? "";
 let ebayAccessToken    = "";
 let ebayTokenExpiry    = 0;
 // Daily eBay Browse quota: 5,000 calls.
-// Reserved by scheduled sweeps: vinyl ~1,000/day + gear ~1,000/day ≈ 2,000.
-// Remaining ~3,000 is the user-triggered popup budget.
+// Reserved by scheduled sweeps: vinyl ~900/day (9×2×50) + gear ~900/day (6×3×50) ≈ 1,800.
+// Remaining ~3,200 is the user-triggered popup budget.
 const EBAY_USER_LIMIT = 3000;
 const MAX_USERS         = 25;
 
@@ -3523,16 +3523,23 @@ async function getEbayToken(): Promise<string> {
 }
 
 const GEAR_SEARCH_QUERIES = [
-  "vintage receiver",
-  "vintage amplifier",
   "vintage turntable",
+  "vintage record player",
   "vintage speakers",
+  "vintage receiver",
+  "vintage amp",
+  "vintage preamp",
 ];
 
 const VINYL_KEYWORD_QUERIES = [
   "rare",
-  "vintage",
+  "first pressing",
   "original",
+  "first press",
+  "bootleg",
+  "promo",
+  "promotional",
+  "white label",
 ];
 
 async function fetchEbayGearListings(): Promise<number> {
@@ -3545,8 +3552,8 @@ async function fetchEbayGearListings(): Promise<number> {
 
   // Fixed-price (Buy It Now) only, ≥$50. Sort omitted → eBay default (bestMatch).
   const baseFilter = `price:[50..],priceCurrency:USD,buyingOptions:{FIXED_PRICE}`;
-  // Paginate 5 pages deep per query: 4 queries × 5 pages = 20 calls per sweep
-  const PAGES = 5;
+  // Paginate 3 pages deep per query: 6 queries × 3 pages = 18 calls per sweep (~900/day)
+  const PAGES = 3;
   const LIMIT = 200;
 
   try {
@@ -3558,7 +3565,8 @@ async function fetchEbayGearListings(): Promise<number> {
         const offset = page * LIMIT;
         try {
           await new Promise(r => setTimeout(r, 1000)); // pace
-          const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&limit=${LIMIT}&offset=${offset}&filter=${baseFilter}`;
+          // category_ids=175673 = Vintage Electronics (Vintage Audio & Video)
+          const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&category_ids=175673&limit=${LIMIT}&offset=${offset}&filter=${baseFilter}`;
           const r = await loggedFetch("ebay", url, { headers, context: `gear ${query} p${page}` });
           if (!r.ok) { console.error(`eBay gear "${query}" p${page} failed: ${r.status}`); continue; }
           const data = await r.json() as any;
@@ -3630,7 +3638,7 @@ function startGearSchedule() {
 app.get("/api/gear", async (_req, res) => {
   try {
     const minPrice = parseFloat(_req.query.min_price as string) || 0;
-    const sort     = (_req.query.sort as string) || "ending";
+    const sort     = (_req.query.sort as string) || "price_desc";
     const q        = (_req.query.q as string) || "";
     const limit    = Math.min(parseInt(_req.query.limit as string) || 200, 500);
     const offset   = parseInt(_req.query.offset as string) || 0;
@@ -3719,9 +3727,9 @@ async function fetchEbayVinylListings(): Promise<number> {
       ...VINYL_KEYWORD_QUERIES.map(k => ({ label: k, qParam: `q=${encodeURIComponent(k)}&` })),
     ];
 
-    // Paginate 5 pages deep per query (offset 0, 200, 400, 600, 800)
-    // Total: 4 queries × 5 pages = 20 calls per sweep, up to 4,000 items/sweep
-    const PAGES = 5;
+    // Paginate 2 pages deep per query (offset 0, 200)
+    // Total: 9 queries × 2 pages = 18 calls per sweep (~900/day)
+    const PAGES = 2;
     const LIMIT = 200;
 
     for (const { label, qParam } of queries) {
@@ -3783,7 +3791,7 @@ async function refreshGearPrices(_sort: string): Promise<void> { /* no-op */ }
 app.get("/api/vinyl", async (_req, res) => {
   try {
     const minPrice = parseFloat(_req.query.min_price as string) || 0;
-    const sort     = (_req.query.sort as string) || "ending";
+    const sort     = (_req.query.sort as string) || "price_desc";
     const q        = (_req.query.q as string) || "";
     const limit    = Math.min(parseInt(_req.query.limit as string) || 200, 500);
     const offset   = parseInt(_req.query.offset as string) || 0;
@@ -3930,6 +3938,39 @@ app.get("/api/ebay/item/:itemId", async (req, res) => {
     const detailBidCount = d.bidCount ?? 0;
     const detailEndDate = d.itemEndDate ?? "";
 
+    // Shipping — first shipping option if present
+    const firstShip = Array.isArray(d.shippingOptions) ? d.shippingOptions[0] : null;
+    const shipCostObj = firstShip?.shippingCost;
+    const shipCostValue = parseFloat(shipCostObj?.value ?? "");
+    const shippingFree = firstShip ? (shipCostValue === 0 || firstShip.shippingCostType === "FREE") : false;
+    const shippingCost = Number.isFinite(shipCostValue) ? shipCostValue : 0;
+    const shippingCurrency = shipCostObj?.currency ?? detailCurrency;
+
+    // Return terms
+    const returnsAccepted = d.returnTerms?.returnsAccepted ?? null;
+    const returnPeriodVal = d.returnTerms?.returnPeriod?.value;
+    const returnPeriodUnit = (d.returnTerms?.returnPeriod?.unit ?? "").toLowerCase();
+    const returnPeriod = returnPeriodVal
+      ? `${returnPeriodVal} ${returnPeriodUnit}${returnPeriodVal > 1 && !returnPeriodUnit.endsWith("s") ? "s" : ""}`
+      : "";
+
+    // Stock — availability estimates
+    const firstAvail = Array.isArray(d.estimatedAvailabilities) ? d.estimatedAvailabilities[0] : null;
+    const quantityAvailable = firstAvail?.estimatedAvailableQuantity ?? null;
+    const quantitySold = firstAvail?.estimatedSoldQuantity ?? null;
+
+    // Top-rated seller badge
+    const topRatedBuyingExperience = d.topRatedBuyingExperience === true;
+
+    // Category path (pipe-delimited from eBay; frontend turns into breadcrumb)
+    const categoryPath = d.categoryPath ?? "";
+
+    // Listed on — item creation date
+    const itemCreationDate = d.itemCreationDate ?? "";
+
+    // Subtitle if present
+    const subtitle = d.subtitle ?? "";
+
     const payload = {
       description: d.description ?? "",
       allImages,
@@ -3945,6 +3986,18 @@ app.get("/api/ebay/item/:itemId", async (req, res) => {
       currency: detailCurrency,
       location: [d.itemLocation?.city, d.itemLocation?.stateOrProvince, d.itemLocation?.country].filter(Boolean).join(", "),
       itemEndDate: detailEndDate,
+      // Enriched popup fields
+      shippingFree,
+      shippingCost,
+      shippingCurrency,
+      returnsAccepted,
+      returnPeriod,
+      quantityAvailable,
+      quantitySold,
+      topRatedBuyingExperience,
+      categoryPath,
+      itemCreationDate,
+      subtitle,
     };
     _setCachedItemDetail(itemId, payload);
 
