@@ -200,28 +200,9 @@ function _applySplashVisibility(clerk) {
     const mount = document.getElementById("splash-waitlist-mount");
     if (mount && !mount.dataset.mounted) {
       mount.dataset.mounted = "1";
-      const appearance = {
-        variables: {
-          colorBackground:      "#15120e",
-          colorInputBackground: "#0e0c08",
-          colorInputText:       "#e8dcc8",
-          colorText:            "#e8dcc8",
-          colorTextSecondary:   "#a89880",
-          colorPrimary:         "#ff6b35",
-          colorDanger:          "#e05050",
-          colorNeutral:         "#a89880",
-          borderRadius:         "6px",
-          fontFamily:           "system-ui, -apple-system, sans-serif",
-        },
-        elements: {
-          card:                "background:#15120e; border:1px solid #2e2518; box-shadow:none;",
-          headerTitle:         "color:#e8dcc8;",
-          headerSubtitle:      "color:#8a7d6b;",
-          formFieldLabel:      "color:#8a7d6b;",
-          formFieldInput:      "background:#0e0c08; border:1px solid #2e2518; color:#e8dcc8;",
-          footerActionLink:    "color:#ff6b35;",
-        },
-      };
+      const appearance = (typeof SEADISCO_CLERK_APPEARANCE !== "undefined")
+        ? SEADISCO_CLERK_APPEARANCE
+        : undefined;
       try {
         if (typeof clerk.mountWaitlist === "function") {
           clerk.mountWaitlist(mount, { appearance });
@@ -237,13 +218,15 @@ function _applySplashVisibility(clerk) {
 
 async function applyAuthState(clerk) {
   // The header auth tab uses id="nav-auth-tab" (set in shared.js renderSharedHeader).
+  // It always invokes openSignInModal() — that helper opens the Clerk
+  // sign-in modal when signed-out and routes to /account when signed-in.
   const navBtn = document.getElementById("nav-auth-tab");
   if (navBtn) {
     if (clerk.user) {
       navBtn.textContent = "Account";
       navBtn.classList.remove("nav-signup-btn");
     } else {
-      navBtn.textContent = "Sign Up";
+      navBtn.textContent = "Sign In";
       navBtn.classList.add("nav-signup-btn");
     }
   }

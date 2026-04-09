@@ -179,7 +179,7 @@ function showRecordSignIn(rtab) {
   };
   const grid = document.getElementById("results");
   grid.innerHTML = renderEmptyState("🔒", msgs[rtab] || "Sign in to continue",
-    `<a href="/?v=account" onclick="switchView('account');return false;" style="color:var(--accent);text-decoration:none">Sign in or create an account →</a>`);
+    `<a href="javascript:void(0)" onclick="openSignInModal()" style="color:var(--accent);text-decoration:none">Sign in or create an account →</a>`);
   document.getElementById("pagination").style.display = "none";
   const blurb = document.getElementById("blurb"); if (blurb) blurb.style.display = "none";
   if (typeof setCwStatus === "function") setCwStatus("");

@@ -284,6 +284,68 @@ async function initAuth({ onSignedIn, onSignedOut, onError, onReady } = {}) {
   }
 }
 
+// ── Shared Clerk theme + sign-in modal helper ───────────────────────────
+// Dark amber theme matching the SeaDisco palette. Used by the splash
+// waitlist mount and the openSignInModal() helper so every Clerk widget
+// looks consistent.
+const SEADISCO_CLERK_APPEARANCE = {
+  variables: {
+    colorBackground:      "#15120e",
+    colorInputBackground: "#0e0c08",
+    colorInputText:       "#e8dcc8",
+    colorText:            "#e8dcc8",
+    colorTextSecondary:   "#a89880",
+    colorPrimary:         "#ff6b35",
+    colorDanger:          "#e05050",
+    colorNeutral:         "#a89880",
+    borderRadius:         "6px",
+    fontFamily:           "system-ui, -apple-system, sans-serif",
+  },
+  elements: {
+    card:             "background:#15120e; border:1px solid #2e2518; box-shadow:none;",
+    headerTitle:      "color:#e8dcc8;",
+    headerSubtitle:   "color:#8a7d6b;",
+    formFieldLabel:   "color:#8a7d6b;",
+    formFieldInput:   "background:#0e0c08; border:1px solid #2e2518; color:#e8dcc8;",
+    footerActionLink: "color:#ff6b35;",
+  },
+};
+
+// Open Clerk's sign-in modal overlay (no view change). If the user is
+// already signed in, route to the Account view instead. Falls back to
+// the legacy account view if Clerk's modal API is unavailable.
+async function openSignInModal() {
+  try {
+    const c = window._clerk || await loadClerkInstance();
+    if (!c) {
+      // Auth not configured — fall back to account view if SPA, else /account
+      if (typeof switchView === "function") switchView("account");
+      else location.href = "/?v=account";
+      return;
+    }
+    if (c.user) {
+      if (typeof switchView === "function") switchView("account");
+      else location.href = "/?v=account";
+      return;
+    }
+    if (typeof c.openSignIn === "function") {
+      c.openSignIn({
+        appearance: SEADISCO_CLERK_APPEARANCE,
+        afterSignInUrl: location.pathname + location.search,
+        afterSignUpUrl: location.pathname + location.search,
+      });
+    } else {
+      // Older Clerk build without modal support — fall back
+      if (typeof switchView === "function") switchView("account");
+      else location.href = "/?v=account";
+    }
+  } catch (e) {
+    console.error("[openSignInModal] failed:", e);
+    if (typeof switchView === "function") switchView("account");
+    else location.href = "/?v=account";
+  }
+}
+
 // ── Shared header injection ──────────────────────────────────────────────
 function renderSharedHeader(opts) {
   const isSPA = opts?.spa;
@@ -309,9 +371,12 @@ function renderSharedHeader(opts) {
     return `<a class="nav-tab-top" href="/?v=${rtab}" data-rtab="${rtab}">${label}</a>`;
   };
 
-  // Auth tab (rightmost)
+  // Auth tab (rightmost). Signed-out users get Clerk's modal sign-in
+  // overlay; signed-in users get routed to the Account view (handled
+  // inside openSignInModal). app.js applyAuthState updates the label
+  // between "Sign In" / "Account" based on auth state.
   const authTab = isSPA
-    ? `<button class="nav-tab-top nav-auth-tab" data-view="account" onclick="switchView('account')" id="nav-auth-tab">Sign In</button>`
+    ? `<button class="nav-tab-top nav-auth-tab" data-view="account" onclick="openSignInModal()" id="nav-auth-tab">Sign In</button>`
     : `<a class="nav-tab-top nav-auth-tab" href="/?v=account" id="nav-auth-tab">Sign In</a>`;
 
   const header = document.getElementById("site-header");
@@ -319,7 +384,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260408r";
+  const SITE_VERSION = "build 20260408s";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'https://seadisco.com' : '/'}" class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>

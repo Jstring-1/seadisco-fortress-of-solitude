@@ -37,7 +37,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260408r" />
+  <link rel="stylesheet" href="/style.css?v=20260408s" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -70,7 +70,7 @@
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260408r"></script>
+<script src="/shared.js?v=20260408s"></script>
 <script>renderSharedHeader({ spa: true, active: "search" });</script>
 <div id="search-view">
 
@@ -83,9 +83,12 @@
   <div id="splash-section" class="content-narrow" style="display:none;text-align:center;padding:2.5rem 1rem 1rem">
     <h1 style="font-size:1.6rem;margin:0 0 0.5rem;color:var(--accent);letter-spacing:0.02em">SeaDisco is invite-only</h1>
     <p style="font-size:0.95rem;color:#a89880;max-width:30rem;margin:0 auto 1.5rem;line-height:1.5">
-      A small, hand-built music discovery space. Join the waitlist below — when a spot opens up, we'll be in touch.
+      Join the waitlist below — when a spot opens up, we'll be in touch.
     </p>
-    <div id="splash-waitlist-mount" style="display:flex;justify-content:center;min-height:340px"></div>
+    <div id="splash-waitlist-mount" style="max-width:25rem;margin:0 auto;min-height:340px"></div>
+    <p style="font-size:0.85rem;color:#8a7d6b;margin:1.25rem auto 0">
+      Already approved? <a href="javascript:void(0)" onclick="openSignInModal()" style="color:var(--accent);text-decoration:none">Sign in</a>
+    </p>
   </div>
 
   <!-- Hidden by default; revealed by app.js applyAuthState() when signed-in.
@@ -765,15 +768,15 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script src="/utils.js?v=20260408r"></script>
-<script src="/search.js?v=20260408r"></script>
-<script src="/collection.js?v=20260408r"></script>
-<script src="/account.js?v=20260408r"></script>
-<script src="/orders.js?v=20260408r"></script>
-<script src="/app.js?v=20260408r"></script>
+<script src="/utils.js?v=20260408s"></script>
+<script src="/search.js?v=20260408s"></script>
+<script src="/collection.js?v=20260408s"></script>
+<script src="/account.js?v=20260408s"></script>
+<script src="/orders.js?v=20260408s"></script>
+<script src="/app.js?v=20260408s"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/modal.js?v=20260408r"></script>
-<script defer src="/inventory-editor.js?v=20260408r"></script>
+<script defer src="/modal.js?v=20260408s"></script>
+<script defer src="/inventory-editor.js?v=20260408s"></script>
 
 </body>
 </html>
