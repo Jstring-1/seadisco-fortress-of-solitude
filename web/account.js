@@ -4,17 +4,6 @@
 function showSignInWidget(c) {
   document.getElementById("loading-section").style.display = "none";
   document.getElementById("signed-out-section").style.display = "block";
-  // Show spots remaining
-  fetch("/api/user-count").then(r => r.json()).then(d => {
-    const el = document.getElementById("signed-out-spots");
-    if (el && d.count != null) {
-      const remaining = Math.max(0, d.limit - d.count);
-      el.textContent = remaining > 0
-        ? `Currently ${remaining} of ${d.limit} spots available.`
-        : `All ${d.limit} spots are currently taken. Check back later.`;
-      el.style.display = "";
-    }
-  }).catch(() => {});
   c.mountSignUp(document.getElementById("clerk-sign-in"), {
     afterSignInUrl: "/?v=account",
     afterSignUpUrl: "/?v=account",
@@ -72,8 +61,8 @@ async function showAuthSection() {
       document.getElementById("auth-section").innerHTML = `
         <div style="text-align:center;padding:2rem 1rem">
           <h2 style="color:#e8a020;margin-bottom:0.8rem">Account Hibernated</h2>
-          <p style="color:var(--muted);font-size:0.9rem;line-height:1.6;max-width:380px;margin:0 auto 1rem">${escHtml(err.message || "Your account is hibernated due to inactivity. All spots are currently full.")}</p>
-          <p style="color:#666;font-size:0.82rem">Your data is preserved. You'll be reactivated automatically when a spot opens up.</p>
+          <p style="color:var(--muted);font-size:0.9rem;line-height:1.6;max-width:380px;margin:0 auto 1rem">${escHtml(err.message || "Your account is hibernated due to inactivity.")}</p>
+          <p style="color:#666;font-size:0.82rem">Your data is preserved. Contact the admin to reactivate.</p>
           <div style="margin-top:1.5rem">
             <button onclick="signOut()" style="background:none;border:1px solid #444;color:#aaa;font-size:0.85rem;padding:0.4rem 1rem;border-radius:5px;cursor:pointer">Sign out</button>
           </div>

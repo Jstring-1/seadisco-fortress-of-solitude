@@ -7,20 +7,21 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, getRandomPublicFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, buildTasteProfile, getRecommendations, saveRecommendations, markRecommendationClicked, dismissRecommendation, getRecommendationStats, getAllRecommendationsForUser, AiRecommendation, TasteProfile } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, getRandomPublicFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData } from "./db.js";
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const sharedToken     = process.env.DISCOGS_TOKEN ?? "";
 const anthropicKey    = process.env.ANTHROPIC_API_KEY    ?? "";
 // Discogs OAuth 1.0a consumer credentials (register at discogs.com/settings/developers)
 const discogsConsumerKey    = process.env.DISCOGS_CONSUMER_KEY    ?? "";
 const discogsConsumerSecret = process.env.DISCOGS_CONSUMER_SECRET ?? "";
 // Publishable key sent to frontend via /api/config
 const authPk      = process.env.AUTH_PK ?? "";
-// Set REQUIRE_AUTH=true to require users to sign in and provide their own Discogs token
-const requireAuth = process.env.REQUIRE_AUTH === "true";
+// SeaDisco is invite-only — Clerk waitlist gates all sign-ups. Every API
+// endpoint that touches user data or external services requires a valid
+// Clerk session via requireUser(). The admin tab is additionally gated by
+// ADMIN_CLERK_ID. There is no shared/anonymous Discogs token fallback.
 
 
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
@@ -88,45 +89,6 @@ async function loggedFetch(service: string, url: string, init?: RequestInit & { 
   }
 }
 
-// Shared Discogs client (used as fallback when user has no personal token)
-const discogs = sharedToken ? new DiscogsClient(sharedToken) : null;
-
-// ── IP rate limiter for unauthenticated (shared-token) searches ───────────
-const UNAUTH_LIMIT     = 5;
-const LIMIT_WINDOW_MS  = 24 * 60 * 60 * 1000; // 24 hours
-const ipCounts = new Map<string, { count: number; resetAt: number }>();
-
-// IPs that bypass the rate limit and auth requirement entirely
-const IP_WHITELIST = new Set<string>([
-]);
-
-function clientIp(req: express.Request): string {
-  // Railway sets X-Forwarded-For with the real client IP as the first entry
-  const xff = (req.headers["x-forwarded-for"] as string ?? "").split(",")[0].trim();
-  const ip = xff || (req.ip ?? "unknown").replace(/^::ffff:/, "").trim();
-  return ip;
-}
-
-
-function checkRateLimit(ip: string): { allowed: boolean; remaining: number } {
-  if (IP_WHITELIST.has(ip)) return { allowed: true, remaining: UNAUTH_LIMIT };
-  const now = Date.now();
-  const entry = ipCounts.get(ip);
-  if (!entry || now > entry.resetAt) {
-    ipCounts.set(ip, { count: 1, resetAt: now + LIMIT_WINDOW_MS });
-    return { allowed: true, remaining: UNAUTH_LIMIT - 1 };
-  }
-  if (entry.count >= UNAUTH_LIMIT) return { allowed: false, remaining: 0 };
-  entry.count++;
-  return { allowed: true, remaining: UNAUTH_LIMIT - entry.count };
-}
-
-// Prune expired entries hourly to prevent memory growth
-setInterval(() => {
-  const now = Date.now();
-  for (const [ip, entry] of ipCounts) if (now > entry.resetAt) ipCounts.delete(ip);
-}, 60 * 60 * 1000);
-
 // ── Clerk JWT verification via JWKS ──────────────────────────────────────
 // Derive Clerk issuer URL from AUTH_PK (publishable key) so no extra env var is needed
 const clerkIssuer = (() => {
@@ -158,22 +120,22 @@ async function getClerkUserId(req: express.Request): Promise<string | null> {
   } catch { return null; }
 }
 
-// Resolve Discogs token: check OAuth first → PAT → shared token → null
-async function getTokenForRequest(req: express.Request, allowFallback = false): Promise<string | null> {
+/** Resolve a Discogs token for an authenticated request. OAuth → PAT → null.
+ *  No shared-token fallback — invite-only sites require every caller to have
+ *  brought their own auth. */
+async function getTokenForRequest(req: express.Request): Promise<string | null> {
   const userId = await getClerkUserId(req);
-  if (userId) {
-    const userToken = await getUserToken(userId);
-    if (userToken && userToken !== "__oauth__") return userToken;
-  }
-  // Fall back to shared token when auth is disabled OR when explicitly allowed (bio endpoints)
-  if (!requireAuth || allowFallback) return sharedToken || null;
+  if (!userId) return null;
+  const userToken = await getUserToken(userId);
+  if (userToken && userToken !== "__oauth__") return userToken;
   return null;
 }
 
-async function getDiscogsForRequest(req: express.Request, allowFallback = false): Promise<DiscogsClient | null> {
+async function getDiscogsForRequest(req: express.Request): Promise<DiscogsClient | null> {
   const userId = await getClerkUserId(req);
+  if (!userId) return null;
   // Check if user has OAuth credentials first
-  if (userId && discogsConsumerKey) {
+  if (discogsConsumerKey) {
     const oauth = await getOAuthCredentials(userId);
     if (oauth) {
       return new DiscogsClient({
@@ -185,10 +147,39 @@ async function getDiscogsForRequest(req: express.Request, allowFallback = false)
     }
   }
   // Fall back to PAT flow
-  const t = await getTokenForRequest(req, allowFallback);
+  const t = await getTokenForRequest(req);
   if (!t) return null;
-  if (t === sharedToken && discogs) return discogs;
   return new DiscogsClient(t);
+}
+
+/** Gate helper: returns the Clerk userId for a signed-in caller, or null
+ *  after sending a 401 response. Use at the top of every endpoint that
+ *  requires a logged-in user.
+ *
+ *    const userId = await requireUser(req, res);
+ *    if (!userId) return;
+ *
+ *  SeaDisco is invite-only via Clerk's waitlist — Clerk is the sole
+ *  gatekeeper of who has an account. Any valid Clerk session is allowed. */
+async function requireUser(req: express.Request, res: express.Response): Promise<string | null> {
+  const userId = await getClerkUserId(req);
+  if (!userId) {
+    res.status(401).json({ error: "auth_required", message: "Sign in to use SeaDisco." });
+    return null;
+  }
+  return userId;
+}
+
+/** Admin gate — same shape as requireUser but additionally checks
+ *  ADMIN_CLERK_ID. Returns the userId or null after sending 403. */
+async function requireAdmin(req: express.Request, res: express.Response): Promise<string | null> {
+  const userId = await getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) {
+    res.status(403).json({ error: "forbidden" });
+    return null;
+  }
+  return userId;
 }
 
 /** Build a DiscogsClient for a userId (outside of an HTTP request context).
@@ -319,16 +310,26 @@ app.use((_req, res, next) => {
 
 // ── Auth / account endpoints ──────────────────────────────────────────────
 
-// GET /api/config — public config for the frontend
+// GET /api/config — public config for the frontend (always invite-only)
 app.get("/api/config", (_req, res) => {
   res.setHeader("Cache-Control", "public, max-age=600"); // 10 min
-  res.json({ clerkPublishableKey: authPk, authEnabled: requireAuth });
+  res.json({ clerkPublishableKey: authPk, authEnabled: true });
 });
 
-// GET /api/user-count — public, returns active user count + limit
-app.get("/api/user-count", async (_req, res) => {
+// GET /api/me — returns whether the current Clerk session is the admin.
+// Used by the footer to reveal the Admin link only for the admin user.
+app.get("/api/me", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const userId = await getClerkUserId(req);
+  if (!userId) { res.json({ signedIn: false, isAdmin: false }); return; }
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  res.json({ signedIn: true, isAdmin: !!adminId && userId === adminId });
+});
+
+// GET /api/user-count — admin-only (cap is internal, never advertised)
+app.get("/api/user-count", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
   try {
-    res.setHeader("Cache-Control", "public, max-age=60");
     const count = await getActiveUserCount();
     res.json({ count, limit: MAX_USERS });
   } catch { res.json({ count: 0, limit: MAX_USERS }); }
@@ -1953,6 +1954,7 @@ app.get("/api/user/collection/instances", async (req, res) => {
 
 // GET /api/price-history/:releaseId — price history for sparklines
 app.get("/api/price-history/:releaseId", async (req, res) => {
+  if (!await requireUser(req, res)) return;
   const releaseId = parseInt(req.params.releaseId);
   if (!releaseId) { res.status(400).json({ error: "Invalid releaseId" }); return; }
   const days = Math.min(365, parseInt(req.query.days as string) || 90);
@@ -1966,6 +1968,7 @@ app.get("/api/price-history/:releaseId", async (req, res) => {
 
 // GET /api/price/:releaseId — current price from cache
 app.get("/api/price/:releaseId", async (req, res) => {
+  if (!await requireUser(req, res)) return;
   const releaseId = parseInt(req.params.releaseId);
   if (!releaseId) { res.status(400).json({ error: "Invalid releaseId" }); return; }
   try {
@@ -2031,9 +2034,12 @@ async function runPriceUpdate() {
     for (const releaseId of allIds) {
       if (_apiKillSwitch) break;
       try {
+        // NOTE: this background job is disabled in the boot block. Left in
+        // place as dead code in case we revive it later — would need to be
+        // rewritten to borrow an admin user's Discogs token rather than
+        // using a shared token (which no longer exists).
         const url = `https://api.discogs.com/marketplace/stats/${releaseId}?curr_abbr=USD`;
         const headers: Record<string, string> = { "User-Agent": "SeaDisco/1.0" };
-        if (sharedToken) headers["Authorization"] = `Discogs token=${sharedToken}`;
         const r = await loggedFetch("discogs", url, { headers, context: "price-update" });
         if (r.ok) {
           const data = await r.json() as any;
@@ -2146,29 +2152,8 @@ app.get("/api/user/random-records", async (req, res) => {
   }
 });
 
-// GET /api/public/featured-records — owner's random records for logged-out landing
-app.get("/api/public/featured-records", async (req, res) => {
-  const ownerId = process.env.ADMIN_CLERK_ID ?? "";
-  if (!ownerId) { res.json({ items: [] }); return; }
-  try {
-    const limit = Math.min(parseInt(req.query.limit as string) || 192, 300);
-    const rows = await getRandomRecords(ownerId, limit);
-    res.json({ items: rows });
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
-// GET /api/public/featured-favorites — random favorites from all users for logged-out landing page
-app.get("/api/public/featured-favorites", async (req, res) => {
-  try {
-    const limit = Math.min(parseInt(req.query.limit as string) || 48, 200);
-    const items = await getRandomPublicFavorites(limit);
-    res.json({ items });
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
+// (Removed: /api/public/featured-records and /api/public/featured-favorites
+//  — invite-only mode means no logged-out content surface.)
 
 // POST /api/user/favorites/add
 app.post("/api/user/favorites/add", express.json(), async (req, res) => {
@@ -2237,8 +2222,12 @@ app.post("/api/feedback", express.json(), async (req, res) => {
 
 // ── Admin rate limiter ──────────────────────────────────────────────────
 const adminRateCounts = new Map<string, { count: number; resetAt: number }>();
+function _clientIp(req: express.Request): string {
+  const xff = (req.headers["x-forwarded-for"] as string ?? "").split(",")[0].trim();
+  return (xff || (req.ip ?? "unknown")).replace(/^::ffff:/, "").trim();
+}
 app.use("/api/admin", (req, res, next) => {
-  const ip = clientIp(req);
+  const ip = _clientIp(req);
   const now = Date.now();
   const entry = adminRateCounts.get(ip);
   if (!entry || now > entry.resetAt) {
@@ -2428,6 +2417,26 @@ app.post("/api/admin/revoke-sessions", async (req, res) => {
   }
 });
 
+// POST /api/admin/purge-non-admin-users — wipe all per-user data EXCEPT the admin
+// Body: { confirm: "PURGE" }
+app.post("/api/admin/purge-non-admin-users", express.json(), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  if ((req.body?.confirm ?? "") !== "PURGE") {
+    res.status(400).json({ error: "confirm_required", message: "Body must include confirm: \"PURGE\"" });
+    return;
+  }
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  try {
+    const counts = await purgeNonAdminUserData(adminId);
+    const total = Object.values(counts).reduce((a, b) => a + (b > 0 ? b : 0), 0);
+    console.log(`[admin] purged non-admin user data: ${total} rows total`, counts);
+    res.json({ ok: true, total, counts });
+  } catch (err: any) {
+    console.error("purge-non-admin-users error:", err);
+    res.status(500).json({ error: String(err?.message ?? err) });
+  }
+});
+
 // GET /api/admin/collection-stats — per-user and global collection/wantlist stats
 app.get("/api/admin/collection-stats", async (req, res) => {
   const userId = await getClerkUserId(req);
@@ -2537,6 +2546,7 @@ Return ONLY a valid JSON object, no markdown, no explanation.`;
 
 // POST /api/result-quality — Claude gives a short phrase on result relevance
 app.post("/api/result-quality", express.json(), async (req, res) => {
+  if (!await requireUser(req, res)) return;
   if (!anthropicKey) { res.json({ phrase: null }); return; }
   const { query, titles } = req.body ?? {};
   if (!query || !Array.isArray(titles) || !titles.length) { res.json({ phrase: null }); return; }
@@ -2579,146 +2589,11 @@ In 4–7 words, give a single honest phrase describing how well these results ma
   }
 });
 
-// ── AI daily recommendations ──────────────────────────────────────────────
-
-// GET /api/recommendations — current user's daily picks (up to 16)
-app.get("/api/recommendations", async (req, res) => {
-  const userId = await getClerkUserId(req);
-  if (!userId) { res.status(401).json({ error: "no_token" }); return; }
-  try {
-    const items = await getRecommendations(userId, 16);
-    res.json({ items, count: items.length });
-  } catch (err) {
-    console.error("[recommendations] fetch error:", err);
-    res.status(500).json({ error: "Failed to load recommendations" });
-  }
-});
-
-// POST /api/recommendations/click — mark a rec as clicked (feedback signal)
-app.post("/api/recommendations/click", express.json(), async (req, res) => {
-  const userId = await getClerkUserId(req);
-  if (!userId) { res.status(401).json({ error: "no_token" }); return; }
-  const releaseId = Number(req.body?.releaseId);
-  if (!releaseId) { res.status(400).json({ error: "releaseId required" }); return; }
-  try {
-    await markRecommendationClicked(userId, releaseId);
-    res.json({ ok: true });
-  } catch (err) { res.status(500).json({ error: String(err) }); }
-});
-
-// POST /api/recommendations/dismiss — hide a rec from the strip
-app.post("/api/recommendations/dismiss", express.json(), async (req, res) => {
-  const userId = await getClerkUserId(req);
-  if (!userId) { res.status(401).json({ error: "no_token" }); return; }
-  const releaseId = Number(req.body?.releaseId);
-  if (!releaseId) { res.status(400).json({ error: "releaseId required" }); return; }
-  try {
-    await dismissRecommendation(userId, releaseId);
-    res.json({ ok: true });
-  } catch (err) { res.status(500).json({ error: String(err) }); }
-});
-
-// POST /api/recommendations/refresh — user-triggered regenerate (self only)
-// Rate limited to 1 call per 10 minutes per user via in-memory cache.
-const _recRefreshCache = new Map<string, number>();
-app.post("/api/recommendations/refresh", express.json(), async (req, res) => {
-  const userId = await getClerkUserId(req);
-  if (!userId) { res.status(401).json({ error: "no_token" }); return; }
-  if (!anthropicKey) { res.status(503).json({ error: "AI not configured" }); return; }
-
-  const last = _recRefreshCache.get(userId) ?? 0;
-  const cooldownMs = 10 * 60 * 1000;
-  if (Date.now() - last < cooldownMs) {
-    const waitMin = Math.ceil((cooldownMs - (Date.now() - last)) / 60000);
-    res.status(429).json({ error: `Please wait ${waitMin} more minute(s) before refreshing` });
-    return;
-  }
-  _recRefreshCache.set(userId, Date.now());
-
-  try {
-    const client = await getDiscogsClientForUser(userId);
-    if (!client) { res.status(400).json({ error: "No Discogs auth configured" }); return; }
-    const username = (await getDiscogsUsername(userId)) ?? "unknown";
-    // Respond immediately, run in background
-    res.json({ ok: true, message: "Generating fresh recommendations — refresh in ~30 seconds" });
-    generateRecommendationsForUser(userId, username, client).catch(err => {
-      console.error(`[ai-rec] user-refresh failed for ${username}:`, err);
-    });
-  } catch (err) {
-    console.error("[recommendations/refresh] error:", err);
-    res.status(500).json({ error: "Failed to start refresh" });
-  }
-});
-
-// POST /api/admin/generate-recommendations — admin trigger: all users or single user
-app.post("/api/admin/generate-recommendations", express.json(), async (req, res) => {
-  const userId = await getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
-  if (!anthropicKey) { res.status(503).json({ error: "AI not configured" }); return; }
-
-  const targetUsername = (req.body?.username as string | undefined)?.trim();
-
-  if (targetUsername) {
-    try {
-      const targetClerkId = await getClerkUserIdByUsername(targetUsername);
-      if (!targetClerkId) { res.status(404).json({ error: "User not found" }); return; }
-      const client = await getDiscogsClientForUser(targetClerkId);
-      if (!client) { res.status(400).json({ error: "User has no Discogs auth" }); return; }
-      res.json({ ok: true, message: `Generating recommendations for ${targetUsername}...` });
-      generateRecommendationsForUser(targetClerkId, targetUsername, client).catch(err => {
-        console.error(`[ai-rec] admin trigger failed for ${targetUsername}:`, err);
-      });
-    } catch (err) { res.status(500).json({ error: String(err) }); }
-    return;
-  }
-
-  // All users
-  const users = await getAllUsersForSync();
-  res.json({ ok: true, queued: users.length, mode: "all" });
-  (async () => {
-    for (const user of users) {
-      try {
-        const userClient = await getDiscogsClientForUser(user.clerkUserId);
-        if (!userClient) continue;
-        await generateRecommendationsForUser(user.clerkUserId, user.username, userClient);
-        await sleep(5000);
-      } catch (err) {
-        console.error(`[ai-rec] admin-all failed for ${user.username}:`, err);
-      }
-    }
-  })();
-});
-
-// GET /api/admin/recommendation-stats — per-user counts + last generated
-app.get("/api/admin/recommendation-stats", async (req, res) => {
-  const userId = await getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
-  try {
-    const stats = await getRecommendationStats();
-    res.json({ stats });
-  } catch (err) { res.status(500).json({ error: String(err) }); }
-});
-
-// GET /api/admin/user-recommendations?username=X — full rec list for one user
-// (includes dismissed items so the admin can audit what Claude returned)
-app.get("/api/admin/user-recommendations", async (req, res) => {
-  const userId = await getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
-  const username = (req.query.username as string | undefined)?.trim();
-  if (!username) { res.status(400).json({ error: "Missing username" }); return; }
-  try {
-    const targetClerkId = await getClerkUserIdByUsername(username);
-    if (!targetClerkId) { res.status(404).json({ error: "User not found" }); return; }
-    const items = await getAllRecommendationsForUser(targetClerkId);
-    res.json({ username, clerkUserId: targetClerkId, count: items.length, items });
-  } catch (err) { res.status(500).json({ error: String(err) }); }
-});
-
 // GET /search?q=pink+floyd&type=master&year=1973&page=1&per_page=10
 app.get("/search", async (req, res) => {
+  const userId = await requireUser(req, res);
+  if (!userId) return;
+
   const rawQ   = (req.query.q as string) ?? "";
   const artist = stripArtistSuffix(req.query.artist as string | undefined);
   const rawLabel = (req.query.label as string) ?? "";
@@ -2730,51 +2605,12 @@ app.get("/search", async (req, res) => {
   const searchLabel: string | undefined = rawLabel || undefined;
   const searchRelease: string | undefined = rawRelease || undefined;
 
-  const ip = clientIp(req);
-  const whitelisted = IP_WHITELIST.has(ip);
+  // Touch activity for the signed-in user
+  touchUserActivity(userId).catch(() => {});
 
-  const userId = await getClerkUserId(req);
-  const hasAuthHeader = !!req.headers.authorization?.startsWith("Bearer ");
-
-  // If the user sent a token but it failed verification, return 401 so the
-  // frontend can refresh the session and retry (instead of falling into the
-  // rate limiter and showing "free searches used up" to a signed-in user)
-  if (!userId && hasAuthHeader) {
-    res.status(401).json({ error: "session_expired", message: "Session expired. Please refresh the page." });
-    return;
-  }
-
-  const userToken = userId ? await getUserToken(userId) : null;
-  const usingSharedToken = !userToken;
-
-  // Touch activity for authenticated users
-  if (userId && userToken) touchUserActivity(userId).catch(() => {});
-
-  // Rate-limit unauthenticated users — allow 5 free searches/day via shared token
-  // Only count page 1 — pagination ("load more") shouldn't burn a search
-  const page = parseInt(req.query.page as string) || 1;
-  if (usingSharedToken && !whitelisted) {
-    if (!sharedToken) {
-      res.status(401).json({ error: "no_token", message: "Sign in and add your Discogs API token to search." });
-      return;
-    }
-    if (page <= 1) {
-      const { allowed, remaining } = checkRateLimit(ip);
-      if (!allowed) {
-        res.status(429).json({
-          error: "rate_limited",
-          message: `Free searches used up for today. Sign in and add your own Discogs token for unlimited searches.`,
-        });
-        return;
-      }
-      res.setHeader("X-RateLimit-Remaining", remaining);
-    }
-  }
-
-  // allowFallback=true for unauthenticated/whitelisted users — they passed the rate limit check above
-  const dc = await getDiscogsForRequest(req, usingSharedToken || whitelisted);
+  const dc = await getDiscogsForRequest(req);
   if (!dc) {
-    res.status(401).json({ error: "no_token", message: "Sign in and add your Discogs API token to search." });
+    res.status(401).json({ error: "no_token", message: "Connect your Discogs account in Account settings to search." });
     return;
   }
 
@@ -2803,8 +2639,9 @@ app.get("/search", async (req, res) => {
 
 // GET /release/:id
 app.get("/release/:id", async (req, res) => {
+  if (!await requireUser(req, res)) return;
   const id = parseInt(req.params.id, 10);
-  const dc = await getDiscogsForRequest(req, true);
+  const dc = await getDiscogsForRequest(req);
   if (!dc) { res.status(503).json({ error: "No Discogs token configured" }); return; }
   try {
     const result = await dc.getRelease(req.params.id);
@@ -2819,8 +2656,9 @@ app.get("/release/:id", async (req, res) => {
 
 // GET /master/:id
 app.get("/master/:id", async (req, res) => {
+  if (!await requireUser(req, res)) return;
   const id = parseInt(req.params.id, 10);
-  const dc = await getDiscogsForRequest(req, true);
+  const dc = await getDiscogsForRequest(req);
   if (!dc) { res.status(503).json({ error: "No Discogs token configured" }); return; }
   try {
     const result = await dc.getMasterRelease(req.params.id);
@@ -2835,7 +2673,8 @@ app.get("/master/:id", async (req, res) => {
 
 // GET /artist/:id
 app.get("/artist/:id", async (req, res) => {
-  const dc = await getDiscogsForRequest(req, true);
+  if (!await requireUser(req, res)) return;
+  const dc = await getDiscogsForRequest(req);
   if (!dc) { res.status(503).json({ error: "No Discogs token configured" }); return; }
   try {
     const result = await dc.getArtist(req.params.id);
@@ -2851,7 +2690,8 @@ const MB_UA = "DiscogsMCPSearch/1.0 ( search@sideman.pro )";
 // GET /artist-bio?name=Miles+Davis[&id=123456] — Discogs bio
 // If `id` is supplied the artist is fetched directly (no ambiguous name search).
 app.get("/artist-bio", async (req, res) => {
-  res.setHeader("Cache-Control", "public, max-age=3600"); // 1 hour
+  if (!await requireUser(req, res)) return;
+  res.setHeader("Cache-Control", "private, max-age=3600"); // 1 hour
   const nameRaw = req.query.name as string;
   const idParam = req.query.id ? parseInt(req.query.id as string, 10) : null;
 
@@ -2860,7 +2700,7 @@ app.get("/artist-bio", async (req, res) => {
     return;
   }
 
-  const dc = await getDiscogsForRequest(req, true);
+  const dc = await getDiscogsForRequest(req);
   if (!dc) { res.json({ profile: null }); return; }
 
   const mapNames = (arr: any[]) =>
@@ -2961,7 +2801,7 @@ app.get("/artist-bio", async (req, res) => {
 });
 
 // Helper: resolve Discogs ID tags in a profile string
-async function resolveDiscogsIds(profile: string, dc: DiscogsClient = discogs!): Promise<string> {
+async function resolveDiscogsIds(profile: string, dc: DiscogsClient): Promise<string> {
   const idPattern = /\[([rmal])=?(\d+)\]/g;
   const matches: { tag: string; type: string; id: string }[] = [];
   const seen = new Set<string>();
@@ -3002,14 +2842,15 @@ async function resolveDiscogsIds(profile: string, dc: DiscogsClient = discogs!):
 
 // GET /label-bio?name=Blue+Note — Discogs label profile
 app.get("/label-bio", async (req, res) => {
-  res.setHeader("Cache-Control", "public, max-age=3600"); // 1 hour
+  if (!await requireUser(req, res)) return;
+  res.setHeader("Cache-Control", "private, max-age=3600"); // 1 hour
   const name = req.query.name as string;
   if (!name || !name.trim()) {
     res.status(400).json({ error: "Missing required query parameter: name" });
     return;
   }
 
-  const dc = await getDiscogsForRequest(req, true);
+  const dc = await getDiscogsForRequest(req);
   if (!dc) { res.json({ profile: null }); return; }
 
   try {
@@ -3037,7 +2878,8 @@ app.get("/label-bio", async (req, res) => {
 
 // GET /genre-info?genre=Jazz — returns a factual AI-generated genre description
 app.get("/genre-info", async (req, res) => {
-  res.setHeader("Cache-Control", "public, max-age=86400"); // 24 hours
+  if (!await requireUser(req, res)) return;
+  res.setHeader("Cache-Control", "private, max-age=86400"); // 24 hours
   const genre = req.query.genre as string;
   if (!genre || !genre.trim()) {
     res.status(400).json({ error: "Missing required query parameter: genre" });
@@ -3074,10 +2916,11 @@ app.get("/genre-info", async (req, res) => {
 
 // GET /marketplace-stats/:id?type=release|master
 app.get("/marketplace-stats/:id", async (req, res) => {
-  res.setHeader("Cache-Control", "public, max-age=300"); // 5 min
+  if (!await requireUser(req, res)) return;
+  res.setHeader("Cache-Control", "private, max-age=300"); // 5 min
   const { id } = req.params;
   const type = (req.query.type as string) ?? "release";
-  const dc = await getDiscogsForRequest(req, true);
+  const dc = await getDiscogsForRequest(req);
   if (!dc) { res.json({ numForSale: 0, lowestPrice: null }); return; }
 
   try {
@@ -3116,9 +2959,10 @@ app.get("/marketplace-stats/:id", async (req, res) => {
 
 // GET /price-suggestions/:id — condition-based price estimates for a release
 app.get("/api/price-suggestions/:id", async (req, res) => {
-  res.setHeader("Cache-Control", "public, max-age=300");
+  if (!await requireUser(req, res)) return;
+  res.setHeader("Cache-Control", "private, max-age=300");
   const { id } = req.params;
-  const dc = await getDiscogsForRequest(req, true);
+  const dc = await getDiscogsForRequest(req);
   if (!dc) { res.status(503).json({ error: "No Discogs client" }); return; }
   try {
     const data = await dc.getPriceSuggestions(id);
@@ -3131,8 +2975,9 @@ app.get("/api/price-suggestions/:id", async (req, res) => {
 
 // GET /master-versions/:id — all pressings/versions of a master release
 app.get("/master-versions/:id", async (req, res) => {
+  if (!await requireUser(req, res)) return;
   const { id } = req.params;
-  const dc = await getDiscogsForRequest(req, true);
+  const dc = await getDiscogsForRequest(req);
   if (!dc) { res.json({ versions: [] }); return; }
   try {
     const data = await dc.getMasterVersions(id, { perPage: 100, sort: "released", sortOrder: "asc" }) as any;
@@ -3156,11 +3001,12 @@ app.get("/master-versions/:id", async (req, res) => {
 
 // GET /series-releases/:id — all releases in a Discogs series (series are label-type entities)
 app.get("/series-releases/:id", async (req, res) => {
+  if (!await requireUser(req, res)) return;
   const { id } = req.params;
-  const dc = await getDiscogsForRequest(req, true);
+  const dc = await getDiscogsForRequest(req);
   if (!dc) { res.json({ releases: [], name: "" }); return; }
   try {
-    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.setHeader("Cache-Control", "private, max-age=3600");
     // Fetch series info + first page of releases in parallel
     const [labelData, relData] = await Promise.all([
       dc.getLabel(id) as Promise<any>,
@@ -3545,226 +3391,6 @@ async function syncUserExtras(userId: string, username: string, client: DiscogsC
   return { inventory, lists, orders };
 }
 
-// ── AI recommendations (daily Claude-generated rare/collector picks) ─────
-// Compact taste profile → Claude (Sonnet) → grounded against Discogs search.
-// Runs once per day at ~03:30 Pacific per user. Cheap (~$0.02/user/day on Haiku).
-
-const AI_REC_MODEL         = "claude-haiku-4-5-20251001";
-const AI_REC_MIN_COLLECTION = 10;  // skip users with fewer than N items (not enough signal)
-const AI_REC_REQUEST_COUNT  = 12;  // ask Claude for N, store the ones that ground cleanly
-const AI_REC_TARGET_COUNT   = 8;   // aim for this many grounded picks per user
-
-function _buildRecommendationPrompt(profile: TasteProfile): string {
-  const fmt = (list: Array<{ name?: string; artist?: string; title?: string; count?: number; decade?: string; country?: string; year?: number | null }>) => list.map(x => {
-    if (x.decade) return `${x.decade} (${x.count})`;
-    if (x.country) return `${x.country} (${x.count})`;
-    if (x.artist && x.title) return `${x.artist} — ${x.title}${x.year ? ` (${x.year})` : ""}`;
-    return `${x.name}${x.count ? ` (${x.count})` : ""}`;
-  }).join(", ");
-
-  return `You are a vinyl record expert recommending rare, collectable, and high-end pressings to a collector based on their taste profile.
-
-═══ COLLECTOR TASTE PROFILE ═══
-Collection: ${profile.collectionCount} items · Wantlist: ${profile.wantlistCount} · Favorites: ${profile.favoritesCount}
-
-Top artists: ${fmt(profile.topArtists) || "(none)"}
-Top labels: ${fmt(profile.topLabels) || "(none)"}
-Top genres: ${fmt(profile.topGenres) || "(none)"}
-Top styles: ${fmt(profile.topStyles) || "(none)"}
-Era distribution: ${fmt(profile.decades) || "(none)"}
-Countries of origin: ${fmt(profile.countries) || "(none)"}
-
-Recent additions: ${fmt(profile.recentAdds.slice(0, 8)) || "(none)"}
-On their wantlist (what they're hunting): ${fmt(profile.topWantlist.slice(0, 8)) || "(none)"}
-Favorites (aspirational): ${fmt(profile.topFavorites.slice(0, 6)) || "(none)"}
-
-═══ RECOMMENDATION RULES ═══
-1. Do NOT recommend records they already own (listed above) or on their wantlist.
-2. Do NOT recommend common reissues unless they have genuine collector significance
-   (Speakers Corner, Analogue Productions, MoFi UHQR, Music Matters, Tone Poet, ERC, ORG, Pure Pleasure, Acoustic Sounds).
-3. PRIORITIZE: original first pressings, deadwax variants, Japanese OBI pressings (SMJ/ECPJ/GXF/EOP/SMX/SWX series),
-   UK Vertigo swirl, Blue Note NY labels, German Brain/ECM originals, audiophile labels, limited/numbered variants,
-   deep cuts from labels they already collect, adjacent artists with crossover appeal.
-4. Reach slightly outside their comfort zone — if they collect jazz, suggest one leftfield jazz-adjacent gem.
-5. Match their apparent tier: a collector of $400 mono originals gets different picks than a $20-reissue collector.
-6. The \`catno\` field is CRITICAL — you must give the exact catalog number of the specific pressing,
-   not just "any copy of this album". Include country and label for disambiguation.
-
-═══ OUTPUT FORMAT ═══
-Return EXACTLY ${AI_REC_REQUEST_COUNT} recommendations as a JSON array (no markdown, no code fences).
-Each item must have ALL of these fields:
-{
-  "artist": "Exact artist name as on the pressing",
-  "title": "Exact release title",
-  "year": 1973,
-  "catno": "SMJ-7236",
-  "country": "Japan",
-  "label": "CBS/Sony",
-  "reason": "One sentence on why this matches their taste (max 25 words)",
-  "tier": "rare" | "audiophile" | "collector" | "holy-grail",
-  "est_price_usd": 120
-}
-
-Return ONLY the JSON array. No preamble, no explanation, no markdown.`;
-}
-
-/** Call Claude to get recommendation candidates. Returns parsed array or throws. */
-async function _fetchRecommendationsFromClaude(profile: TasteProfile): Promise<any[]> {
-  if (!anthropicKey) throw new Error("ANTHROPIC_API_KEY not configured");
-  const prompt = _buildRecommendationPrompt(profile);
-  const r = await loggedFetch("anthropic", "https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": anthropicKey,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model: AI_REC_MODEL,
-      max_tokens: 3000,
-      messages: [{ role: "user", content: prompt }],
-    }),
-    context: "ai-recommendations",
-  });
-  const data = await r.json() as any;
-  if (!r.ok) throw new Error(`Anthropic error: ${data.error?.message ?? r.status}`);
-  let text = (data.content?.[0]?.text ?? "[]").trim();
-  text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-  // Claude sometimes wraps in {recommendations: [...]}
-  const parsed = JSON.parse(text);
-  return Array.isArray(parsed) ? parsed : (parsed.recommendations ?? parsed.items ?? []);
-}
-
-/** Ground a Claude suggestion against Discogs search. Returns the matched release or null. */
-async function _groundRecommendation(
-  client: DiscogsClient,
-  suggestion: any,
-  username: string,
-): Promise<any | null> {
-  // Build query params with progressive fallback: catno+artist → catno → artist+title → artist+title+year
-  const attempts: Array<Record<string, string>> = [];
-  if (suggestion.catno && suggestion.artist) {
-    attempts.push({ catno: suggestion.catno, artist: suggestion.artist, type: "release" });
-  }
-  if (suggestion.catno) {
-    attempts.push({ catno: suggestion.catno, type: "release" });
-  }
-  if (suggestion.artist && suggestion.title) {
-    const params: Record<string, string> = { artist: suggestion.artist, release_title: suggestion.title, type: "release" };
-    if (suggestion.year) params.year = String(suggestion.year);
-    if (suggestion.country) params.country = suggestion.country;
-    attempts.push(params);
-  }
-  if (suggestion.artist && suggestion.title) {
-    attempts.push({ artist: suggestion.artist, release_title: suggestion.title, type: "release" });
-  }
-
-  for (const params of attempts) {
-    try {
-      const qs = new URLSearchParams(params).toString();
-      const url = `https://api.discogs.com/database/search?${qs}&per_page=3`;
-      const r = await loggedFetch("discogs", url, {
-        headers: client.buildHeaders("GET", url),
-        context: `ai-rec-ground: ${username}`,
-      });
-      if (!r.ok) continue;
-      const data = await r.json() as any;
-      const first = (data.results ?? [])[0];
-      if (first && first.id) {
-        return first;
-      }
-    } catch { /* try next attempt */ }
-    await sleep(1100); // Discogs rate limit: 60/min authenticated
-  }
-  return null;
-}
-
-/** Run recommendation generation for a single user.
- *  Returns the number of grounded recommendations saved. */
-async function generateRecommendationsForUser(
-  clerkUserId: string,
-  username: string,
-  client: DiscogsClient,
-): Promise<{ saved: number; requested: number; skipped?: string }> {
-  const profile = await buildTasteProfile(clerkUserId);
-  if (profile.collectionCount < AI_REC_MIN_COLLECTION) {
-    return { saved: 0, requested: 0, skipped: `collection too small (${profile.collectionCount} < ${AI_REC_MIN_COLLECTION})` };
-  }
-
-  console.log(`[ai-rec] ${username}: building profile (${profile.collectionCount} collection, ${profile.wantlistCount} wantlist, ${profile.favoritesCount} favorites)`);
-  const suggestions = await _fetchRecommendationsFromClaude(profile);
-  console.log(`[ai-rec] ${username}: Claude returned ${suggestions.length} candidates`);
-
-  // Ownership/wantlist exclusion set (by release_id — we'll filter after grounding)
-  const excludedIds = new Set<number>([...profile.ownedReleaseIds, ...profile.wantedReleaseIds]);
-
-  const grounded: AiRecommendation[] = [];
-  for (const s of suggestions) {
-    if (grounded.length >= AI_REC_TARGET_COUNT) break;
-    const match = await _groundRecommendation(client, s, username);
-    if (!match) continue;
-    const releaseId = Number(match.id);
-    if (!releaseId || excludedIds.has(releaseId)) continue;
-    if (grounded.some(g => g.releaseId === releaseId)) continue; // dedupe within batch
-
-    grounded.push({
-      releaseId,
-      artist:     String(s.artist ?? "").slice(0, 500),
-      title:      String(s.title ?? match.title ?? "").slice(0, 500),
-      year:       s.year ? Number(s.year) : (match.year ? Number(match.year) : null),
-      catno:      s.catno ? String(s.catno).slice(0, 100) : null,
-      country:    s.country ? String(s.country).slice(0, 80) : null,
-      label:      s.label ? String(s.label).slice(0, 200) : null,
-      coverImage: match.cover_image ?? match.thumb ?? null,
-      reason:     String(s.reason ?? "").slice(0, 500),
-      tier:       ["rare","audiophile","collector","holy-grail"].includes(s.tier) ? s.tier : "collector",
-      estPriceUsd: s.est_price_usd != null && !isNaN(Number(s.est_price_usd)) ? Number(s.est_price_usd) : null,
-      data:       match, // full Discogs search result so the frontend can render the modal
-    });
-  }
-
-  if (grounded.length > 0) {
-    await saveRecommendations(clerkUserId, grounded);
-  }
-  console.log(`[ai-rec] ${username}: ${grounded.length}/${suggestions.length} grounded & saved`);
-  return { saved: grounded.length, requested: suggestions.length };
-}
-
-function startRecommendationSchedule() {
-  async function run() {
-    console.log("[ai-rec-schedule] Starting daily recommendation run");
-    const users = await getAllUsersForSync();
-    let success = 0, skipped = 0, failed = 0;
-    for (const user of users) {
-      try {
-        const userClient = await getDiscogsClientForUser(user.clerkUserId);
-        if (!userClient) { skipped++; continue; }
-        const result = await generateRecommendationsForUser(user.clerkUserId, user.username, userClient);
-        if (result.skipped) { skipped++; }
-        else if (result.saved > 0) { success++; }
-        else { failed++; }
-        await sleep(5000); // pace between users
-      } catch (err) {
-        console.error(`[ai-rec-schedule] ${user.username} error:`, err);
-        failed++;
-      }
-    }
-    console.log(`[ai-rec-schedule] Complete: ${success} success, ${skipped} skipped, ${failed} failed`);
-  }
-
-  function schedule() {
-    const ms = msUntilPacific(3, 30, 24); // 3:30 AM Pacific, every 24 hours
-    const hours = Math.round(ms / 3600000 * 10) / 10;
-    console.log(`[ai-rec-schedule] Next run in ${hours}h (3:30 AM Pacific, daily)`);
-    setTimeout(async () => {
-      try { await run(); } catch (e) { console.error("[ai-rec-schedule] fatal:", e); }
-      schedule();
-    }, ms);
-  }
-
-  schedule();
-}
-
 function startExtrasSyncSchedule() {
   function schedule() {
     const ms = msUntilPacific(0, 15, 6);
@@ -3801,7 +3427,6 @@ app.listen(PORT, "0.0.0.0", async () => {
 
     startDailySyncSchedule();
     startExtrasSyncSchedule();
-    if (anthropicKey) startRecommendationSchedule();
     // startPriceUpdateSchedule(); // disabled — not using pricing
   }
 });

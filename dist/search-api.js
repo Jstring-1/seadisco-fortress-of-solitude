@@ -7,17 +7,18 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, getRandomPublicFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData } from "./db.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const sharedToken = process.env.DISCOGS_TOKEN ?? "";
 const anthropicKey = process.env.ANTHROPIC_API_KEY ?? "";
 // Discogs OAuth 1.0a consumer credentials (register at discogs.com/settings/developers)
 const discogsConsumerKey = process.env.DISCOGS_CONSUMER_KEY ?? "";
 const discogsConsumerSecret = process.env.DISCOGS_CONSUMER_SECRET ?? "";
 // Publishable key sent to frontend via /api/config
 const authPk = process.env.AUTH_PK ?? "";
-// Set REQUIRE_AUTH=true to require users to sign in and provide their own Discogs token
-const requireAuth = process.env.REQUIRE_AUTH === "true";
+// SeaDisco is invite-only — Clerk waitlist gates all sign-ups. Every API
+// endpoint that touches user data or external services requires a valid
+// Clerk session via requireUser(). The admin tab is additionally gated by
+// ADMIN_CLERK_ID. There is no shared/anonymous Discogs token fallback.
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 // Shape the subset of Discogs profile fields we persist, so all three
 // setDiscogsProfile call sites stay in sync and every field the dashboard
@@ -80,41 +81,6 @@ async function loggedFetch(service, url, init) {
         throw err;
     }
 }
-// Shared Discogs client (used as fallback when user has no personal token)
-const discogs = sharedToken ? new DiscogsClient(sharedToken) : null;
-// ── IP rate limiter for unauthenticated (shared-token) searches ───────────
-const UNAUTH_LIMIT = 5;
-const LIMIT_WINDOW_MS = 24 * 60 * 60 * 1000; // 24 hours
-const ipCounts = new Map();
-// IPs that bypass the rate limit and auth requirement entirely
-const IP_WHITELIST = new Set([]);
-function clientIp(req) {
-    // Railway sets X-Forwarded-For with the real client IP as the first entry
-    const xff = (req.headers["x-forwarded-for"] ?? "").split(",")[0].trim();
-    const ip = xff || (req.ip ?? "unknown").replace(/^::ffff:/, "").trim();
-    return ip;
-}
-function checkRateLimit(ip) {
-    if (IP_WHITELIST.has(ip))
-        return { allowed: true, remaining: UNAUTH_LIMIT };
-    const now = Date.now();
-    const entry = ipCounts.get(ip);
-    if (!entry || now > entry.resetAt) {
-        ipCounts.set(ip, { count: 1, resetAt: now + LIMIT_WINDOW_MS });
-        return { allowed: true, remaining: UNAUTH_LIMIT - 1 };
-    }
-    if (entry.count >= UNAUTH_LIMIT)
-        return { allowed: false, remaining: 0 };
-    entry.count++;
-    return { allowed: true, remaining: UNAUTH_LIMIT - entry.count };
-}
-// Prune expired entries hourly to prevent memory growth
-setInterval(() => {
-    const now = Date.now();
-    for (const [ip, entry] of ipCounts)
-        if (now > entry.resetAt)
-            ipCounts.delete(ip);
-}, 60 * 60 * 1000);
 // ── Clerk JWT verification via JWKS ──────────────────────────────────────
 // Derive Clerk issuer URL from AUTH_PK (publishable key) so no extra env var is needed
 const clerkIssuer = (() => {
@@ -155,23 +121,24 @@ async function getClerkUserId(req) {
         return null;
     }
 }
-// Resolve Discogs token: check OAuth first → PAT → shared token → null
-async function getTokenForRequest(req, allowFallback = false) {
+/** Resolve a Discogs token for an authenticated request. OAuth → PAT → null.
+ *  No shared-token fallback — invite-only sites require every caller to have
+ *  brought their own auth. */
+async function getTokenForRequest(req) {
     const userId = await getClerkUserId(req);
-    if (userId) {
-        const userToken = await getUserToken(userId);
-        if (userToken && userToken !== "__oauth__")
-            return userToken;
-    }
-    // Fall back to shared token when auth is disabled OR when explicitly allowed (bio endpoints)
-    if (!requireAuth || allowFallback)
-        return sharedToken || null;
+    if (!userId)
+        return null;
+    const userToken = await getUserToken(userId);
+    if (userToken && userToken !== "__oauth__")
+        return userToken;
     return null;
 }
-async function getDiscogsForRequest(req, allowFallback = false) {
+async function getDiscogsForRequest(req) {
     const userId = await getClerkUserId(req);
+    if (!userId)
+        return null;
     // Check if user has OAuth credentials first
-    if (userId && discogsConsumerKey) {
+    if (discogsConsumerKey) {
         const oauth = await getOAuthCredentials(userId);
         if (oauth) {
             return new DiscogsClient({
@@ -183,12 +150,38 @@ async function getDiscogsForRequest(req, allowFallback = false) {
         }
     }
     // Fall back to PAT flow
-    const t = await getTokenForRequest(req, allowFallback);
+    const t = await getTokenForRequest(req);
     if (!t)
         return null;
-    if (t === sharedToken && discogs)
-        return discogs;
     return new DiscogsClient(t);
+}
+/** Gate helper: returns the Clerk userId for a signed-in caller, or null
+ *  after sending a 401 response. Use at the top of every endpoint that
+ *  requires a logged-in user.
+ *
+ *    const userId = await requireUser(req, res);
+ *    if (!userId) return;
+ *
+ *  SeaDisco is invite-only via Clerk's waitlist — Clerk is the sole
+ *  gatekeeper of who has an account. Any valid Clerk session is allowed. */
+async function requireUser(req, res) {
+    const userId = await getClerkUserId(req);
+    if (!userId) {
+        res.status(401).json({ error: "auth_required", message: "Sign in to use SeaDisco." });
+        return null;
+    }
+    return userId;
+}
+/** Admin gate — same shape as requireUser but additionally checks
+ *  ADMIN_CLERK_ID. Returns the userId or null after sending 403. */
+async function requireAdmin(req, res) {
+    const userId = await getClerkUserId(req);
+    const adminId = process.env.ADMIN_CLERK_ID ?? "";
+    if (!userId || !adminId || userId !== adminId) {
+        res.status(403).json({ error: "forbidden" });
+        return null;
+    }
+    return userId;
 }
 /** Build a DiscogsClient for a userId (outside of an HTTP request context).
  *  Checks OAuth first, then PAT. Returns null if user has no valid auth. */
@@ -325,15 +318,16 @@ app.use((_req, res, next) => {
     next();
 });
 // ── Auth / account endpoints ──────────────────────────────────────────────
-// GET /api/config — public config for the frontend
+// GET /api/config — public config for the frontend (always invite-only)
 app.get("/api/config", (_req, res) => {
     res.setHeader("Cache-Control", "public, max-age=600"); // 10 min
-    res.json({ clerkPublishableKey: authPk, authEnabled: requireAuth });
+    res.json({ clerkPublishableKey: authPk, authEnabled: true });
 });
-// GET /api/user-count — public, returns active user count + limit
-app.get("/api/user-count", async (_req, res) => {
+// GET /api/user-count — admin-only (cap is internal, never advertised)
+app.get("/api/user-count", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
     try {
-        res.setHeader("Cache-Control", "public, max-age=60");
         const count = await getActiveUserCount();
         res.json({ count, limit: MAX_USERS });
     }
@@ -2249,6 +2243,8 @@ app.get("/api/user/collection/instances", async (req, res) => {
 // ── Phase 4: Price Intelligence & Alerts ─────────────────────────────────
 // GET /api/price-history/:releaseId — price history for sparklines
 app.get("/api/price-history/:releaseId", async (req, res) => {
+    if (!await requireUser(req, res))
+        return;
     const releaseId = parseInt(req.params.releaseId);
     if (!releaseId) {
         res.status(400).json({ error: "Invalid releaseId" });
@@ -2265,6 +2261,8 @@ app.get("/api/price-history/:releaseId", async (req, res) => {
 });
 // GET /api/price/:releaseId — current price from cache
 app.get("/api/price/:releaseId", async (req, res) => {
+    if (!await requireUser(req, res))
+        return;
     const releaseId = parseInt(req.params.releaseId);
     if (!releaseId) {
         res.status(400).json({ error: "Invalid releaseId" });
@@ -2348,10 +2346,12 @@ async function runPriceUpdate() {
             if (_apiKillSwitch)
                 break;
             try {
+                // NOTE: this background job is disabled in the boot block. Left in
+                // place as dead code in case we revive it later — would need to be
+                // rewritten to borrow an admin user's Discogs token rather than
+                // using a shared token (which no longer exists).
                 const url = `https://api.discogs.com/marketplace/stats/${releaseId}?curr_abbr=USD`;
                 const headers = { "User-Agent": "SeaDisco/1.0" };
-                if (sharedToken)
-                    headers["Authorization"] = `Discogs token=${sharedToken}`;
                 const r = await loggedFetch("discogs", url, { headers, context: "price-update" });
                 if (r.ok) {
                     const data = await r.json();
@@ -2480,33 +2480,8 @@ app.get("/api/user/random-records", async (req, res) => {
         res.status(500).json({ error: String(e) });
     }
 });
-// GET /api/public/featured-records — owner's random records for logged-out landing
-app.get("/api/public/featured-records", async (req, res) => {
-    const ownerId = process.env.ADMIN_CLERK_ID ?? "";
-    if (!ownerId) {
-        res.json({ items: [] });
-        return;
-    }
-    try {
-        const limit = Math.min(parseInt(req.query.limit) || 192, 300);
-        const rows = await getRandomRecords(ownerId, limit);
-        res.json({ items: rows });
-    }
-    catch (e) {
-        res.status(500).json({ error: String(e) });
-    }
-});
-// GET /api/public/featured-favorites — random favorites from all users for logged-out landing page
-app.get("/api/public/featured-favorites", async (req, res) => {
-    try {
-        const limit = Math.min(parseInt(req.query.limit) || 48, 200);
-        const items = await getRandomPublicFavorites(limit);
-        res.json({ items });
-    }
-    catch (e) {
-        res.status(500).json({ error: String(e) });
-    }
-});
+// (Removed: /api/public/featured-records and /api/public/featured-favorites
+//  — invite-only mode means no logged-out content surface.)
 // POST /api/user/favorites/add
 app.post("/api/user/favorites/add", express.json(), async (req, res) => {
     const userId = await getClerkUserId(req);
@@ -2592,8 +2567,12 @@ app.post("/api/feedback", express.json(), async (req, res) => {
 });
 // ── Admin rate limiter ──────────────────────────────────────────────────
 const adminRateCounts = new Map();
+function _clientIp(req) {
+    const xff = (req.headers["x-forwarded-for"] ?? "").split(",")[0].trim();
+    return (xff || (req.ip ?? "unknown")).replace(/^::ffff:/, "").trim();
+}
 app.use("/api/admin", (req, res, next) => {
-    const ip = clientIp(req);
+    const ip = _clientIp(req);
     const now = Date.now();
     const entry = adminRateCounts.get(ip);
     if (!entry || now > entry.resetAt) {
@@ -2832,6 +2811,27 @@ app.post("/api/admin/revoke-sessions", async (req, res) => {
         res.status(500).json({ error: String(err) });
     }
 });
+// POST /api/admin/purge-non-admin-users — wipe all per-user data EXCEPT the admin
+// Body: { confirm: "PURGE" }
+app.post("/api/admin/purge-non-admin-users", express.json(), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    if ((req.body?.confirm ?? "") !== "PURGE") {
+        res.status(400).json({ error: "confirm_required", message: "Body must include confirm: \"PURGE\"" });
+        return;
+    }
+    const adminId = process.env.ADMIN_CLERK_ID ?? "";
+    try {
+        const counts = await purgeNonAdminUserData(adminId);
+        const total = Object.values(counts).reduce((a, b) => a + (b > 0 ? b : 0), 0);
+        console.log(`[admin] purged non-admin user data: ${total} rows total`, counts);
+        res.json({ ok: true, total, counts });
+    }
+    catch (err) {
+        console.error("purge-non-admin-users error:", err);
+        res.status(500).json({ error: String(err?.message ?? err) });
+    }
+});
 // GET /api/admin/collection-stats — per-user and global collection/wantlist stats
 app.get("/api/admin/collection-stats", async (req, res) => {
     const userId = await getClerkUserId(req);
@@ -2972,6 +2972,8 @@ Return ONLY a valid JSON object, no markdown, no explanation.`;
 });
 // POST /api/result-quality — Claude gives a short phrase on result relevance
 app.post("/api/result-quality", express.json(), async (req, res) => {
+    if (!await requireUser(req, res))
+        return;
     if (!anthropicKey) {
         res.json({ phrase: null });
         return;
@@ -3020,6 +3022,9 @@ In 4–7 words, give a single honest phrase describing how well these results ma
 });
 // GET /search?q=pink+floyd&type=master&year=1973&page=1&per_page=10
 app.get("/search", async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
     const rawQ = req.query.q ?? "";
     const artist = stripArtistSuffix(req.query.artist);
     const rawLabel = req.query.label ?? "";
@@ -3029,46 +3034,11 @@ app.get("/search", async (req, res) => {
     const searchArtist = artist || undefined;
     const searchLabel = rawLabel || undefined;
     const searchRelease = rawRelease || undefined;
-    const ip = clientIp(req);
-    const whitelisted = IP_WHITELIST.has(ip);
-    const userId = await getClerkUserId(req);
-    const hasAuthHeader = !!req.headers.authorization?.startsWith("Bearer ");
-    // If the user sent a token but it failed verification, return 401 so the
-    // frontend can refresh the session and retry (instead of falling into the
-    // rate limiter and showing "free searches used up" to a signed-in user)
-    if (!userId && hasAuthHeader) {
-        res.status(401).json({ error: "session_expired", message: "Session expired. Please refresh the page." });
-        return;
-    }
-    const userToken = userId ? await getUserToken(userId) : null;
-    const usingSharedToken = !userToken;
-    // Touch activity for authenticated users
-    if (userId && userToken)
-        touchUserActivity(userId).catch(() => { });
-    // Rate-limit unauthenticated users — allow 5 free searches/day via shared token
-    // Only count page 1 — pagination ("load more") shouldn't burn a search
-    const page = parseInt(req.query.page) || 1;
-    if (usingSharedToken && !whitelisted) {
-        if (!sharedToken) {
-            res.status(401).json({ error: "no_token", message: "Sign in and add your Discogs API token to search." });
-            return;
-        }
-        if (page <= 1) {
-            const { allowed, remaining } = checkRateLimit(ip);
-            if (!allowed) {
-                res.status(429).json({
-                    error: "rate_limited",
-                    message: `Free searches used up for today. Sign in and add your own Discogs token for unlimited searches.`,
-                });
-                return;
-            }
-            res.setHeader("X-RateLimit-Remaining", remaining);
-        }
-    }
-    // allowFallback=true for unauthenticated/whitelisted users — they passed the rate limit check above
-    const dc = await getDiscogsForRequest(req, usingSharedToken || whitelisted);
+    // Touch activity for the signed-in user
+    touchUserActivity(userId).catch(() => { });
+    const dc = await getDiscogsForRequest(req);
     if (!dc) {
-        res.status(401).json({ error: "no_token", message: "Sign in and add your Discogs API token to search." });
+        res.status(401).json({ error: "no_token", message: "Connect your Discogs account in Account settings to search." });
         return;
     }
     try {
@@ -3096,8 +3066,10 @@ app.get("/search", async (req, res) => {
 });
 // GET /release/:id
 app.get("/release/:id", async (req, res) => {
+    if (!await requireUser(req, res))
+        return;
     const id = parseInt(req.params.id, 10);
-    const dc = await getDiscogsForRequest(req, true);
+    const dc = await getDiscogsForRequest(req);
     if (!dc) {
         res.status(503).json({ error: "No Discogs token configured" });
         return;
@@ -3115,8 +3087,10 @@ app.get("/release/:id", async (req, res) => {
 });
 // GET /master/:id
 app.get("/master/:id", async (req, res) => {
+    if (!await requireUser(req, res))
+        return;
     const id = parseInt(req.params.id, 10);
-    const dc = await getDiscogsForRequest(req, true);
+    const dc = await getDiscogsForRequest(req);
     if (!dc) {
         res.status(503).json({ error: "No Discogs token configured" });
         return;
@@ -3134,7 +3108,9 @@ app.get("/master/:id", async (req, res) => {
 });
 // GET /artist/:id
 app.get("/artist/:id", async (req, res) => {
-    const dc = await getDiscogsForRequest(req, true);
+    if (!await requireUser(req, res))
+        return;
+    const dc = await getDiscogsForRequest(req);
     if (!dc) {
         res.status(503).json({ error: "No Discogs token configured" });
         return;
@@ -3152,14 +3128,16 @@ const MB_UA = "DiscogsMCPSearch/1.0 ( search@sideman.pro )";
 // GET /artist-bio?name=Miles+Davis[&id=123456] — Discogs bio
 // If `id` is supplied the artist is fetched directly (no ambiguous name search).
 app.get("/artist-bio", async (req, res) => {
-    res.setHeader("Cache-Control", "public, max-age=3600"); // 1 hour
+    if (!await requireUser(req, res))
+        return;
+    res.setHeader("Cache-Control", "private, max-age=3600"); // 1 hour
     const nameRaw = req.query.name;
     const idParam = req.query.id ? parseInt(req.query.id, 10) : null;
     if (!nameRaw || !nameRaw.trim()) {
         res.status(400).json({ error: "Missing required query parameter: name" });
         return;
     }
-    const dc = await getDiscogsForRequest(req, true);
+    const dc = await getDiscogsForRequest(req);
     if (!dc) {
         res.json({ profile: null });
         return;
@@ -3251,7 +3229,7 @@ app.get("/artist-bio", async (req, res) => {
     }
 });
 // Helper: resolve Discogs ID tags in a profile string
-async function resolveDiscogsIds(profile, dc = discogs) {
+async function resolveDiscogsIds(profile, dc) {
     const idPattern = /\[([rmal])=?(\d+)\]/g;
     const matches = [];
     const seen = new Set();
@@ -3295,13 +3273,15 @@ async function resolveDiscogsIds(profile, dc = discogs) {
 }
 // GET /label-bio?name=Blue+Note — Discogs label profile
 app.get("/label-bio", async (req, res) => {
-    res.setHeader("Cache-Control", "public, max-age=3600"); // 1 hour
+    if (!await requireUser(req, res))
+        return;
+    res.setHeader("Cache-Control", "private, max-age=3600"); // 1 hour
     const name = req.query.name;
     if (!name || !name.trim()) {
         res.status(400).json({ error: "Missing required query parameter: name" });
         return;
     }
-    const dc = await getDiscogsForRequest(req, true);
+    const dc = await getDiscogsForRequest(req);
     if (!dc) {
         res.json({ profile: null });
         return;
@@ -3335,7 +3315,9 @@ app.get("/label-bio", async (req, res) => {
 });
 // GET /genre-info?genre=Jazz — returns a factual AI-generated genre description
 app.get("/genre-info", async (req, res) => {
-    res.setHeader("Cache-Control", "public, max-age=86400"); // 24 hours
+    if (!await requireUser(req, res))
+        return;
+    res.setHeader("Cache-Control", "private, max-age=86400"); // 24 hours
     const genre = req.query.genre;
     if (!genre || !genre.trim()) {
         res.status(400).json({ error: "Missing required query parameter: genre" });
@@ -3374,10 +3356,12 @@ app.get("/genre-info", async (req, res) => {
 });
 // GET /marketplace-stats/:id?type=release|master
 app.get("/marketplace-stats/:id", async (req, res) => {
-    res.setHeader("Cache-Control", "public, max-age=300"); // 5 min
+    if (!await requireUser(req, res))
+        return;
+    res.setHeader("Cache-Control", "private, max-age=300"); // 5 min
     const { id } = req.params;
     const type = req.query.type ?? "release";
-    const dc = await getDiscogsForRequest(req, true);
+    const dc = await getDiscogsForRequest(req);
     if (!dc) {
         res.json({ numForSale: 0, lowestPrice: null });
         return;
@@ -3418,9 +3402,11 @@ app.get("/marketplace-stats/:id", async (req, res) => {
 });
 // GET /price-suggestions/:id — condition-based price estimates for a release
 app.get("/api/price-suggestions/:id", async (req, res) => {
-    res.setHeader("Cache-Control", "public, max-age=300");
+    if (!await requireUser(req, res))
+        return;
+    res.setHeader("Cache-Control", "private, max-age=300");
     const { id } = req.params;
-    const dc = await getDiscogsForRequest(req, true);
+    const dc = await getDiscogsForRequest(req);
     if (!dc) {
         res.status(503).json({ error: "No Discogs client" });
         return;
@@ -3436,8 +3422,10 @@ app.get("/api/price-suggestions/:id", async (req, res) => {
 });
 // GET /master-versions/:id — all pressings/versions of a master release
 app.get("/master-versions/:id", async (req, res) => {
+    if (!await requireUser(req, res))
+        return;
     const { id } = req.params;
-    const dc = await getDiscogsForRequest(req, true);
+    const dc = await getDiscogsForRequest(req);
     if (!dc) {
         res.json({ versions: [] });
         return;
@@ -3464,14 +3452,16 @@ app.get("/master-versions/:id", async (req, res) => {
 });
 // GET /series-releases/:id — all releases in a Discogs series (series are label-type entities)
 app.get("/series-releases/:id", async (req, res) => {
+    if (!await requireUser(req, res))
+        return;
     const { id } = req.params;
-    const dc = await getDiscogsForRequest(req, true);
+    const dc = await getDiscogsForRequest(req);
     if (!dc) {
         res.json({ releases: [], name: "" });
         return;
     }
     try {
-        res.setHeader("Cache-Control", "public, max-age=3600");
+        res.setHeader("Cache-Control", "private, max-age=3600");
         // Fetch series info + first page of releases in parallel
         const [labelData, relData] = await Promise.all([
             dc.getLabel(id),
