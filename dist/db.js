@@ -191,6 +191,21 @@ export async function initDb() {
     // (clerk_user_id, discogs_release_id) (getInventoryListingIdsByRelease)
     // would otherwise scan.
     await getPool().query(`CREATE INDEX IF NOT EXISTS user_inventory_user_release_idx ON user_inventory (clerk_user_id, discogs_release_id)`);
+    // ── Recent views (cross-device Recent strip on the search page) ─────────
+    // Stores the last N releases/masters the user opened in the modal, so the
+    // Recent strip survives browser clears and syncs between devices. Capped
+    // to RECENT_VIEWS_MAX rows per user via a trim after each upsert.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_recent_views (
+      clerk_user_id TEXT        NOT NULL,
+      discogs_id    INTEGER     NOT NULL,
+      entity_type   TEXT        NOT NULL DEFAULT 'release',
+      data          JSONB       NOT NULL,
+      opened_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (clerk_user_id, discogs_id, entity_type)
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS user_recent_views_user_time_idx ON user_recent_views (clerk_user_id, opened_at DESC)`);
     // ── User orders (marketplace buy/sell history) ──────────────────────────
     await getPool().query(`
     CREATE TABLE IF NOT EXISTS user_orders (
@@ -362,6 +377,7 @@ export async function purgeNonAdminUserData(adminClerkId) {
         "user_collection",
         "user_collection_folders",
         "user_favorites",
+        "user_recent_views",
         "saved_searches",
         "feedback",
         "oauth_request_tokens",
@@ -540,10 +556,12 @@ export async function deleteFeedback(id) {
 export async function deleteUserData(clerkUserId) {
     const tables = [
         "user_favorites",
+        "user_recent_views",
         "saved_searches",
         "price_alerts",
         "triggered_alerts",
         "feedback",
+        "user_order_messages",
         "user_orders",
         "user_list_items",
         "user_lists",
@@ -555,7 +573,10 @@ export async function deleteUserData(clerkUserId) {
         "user_tokens", // last — other tables may reference it
     ];
     for (const table of tables) {
-        await getPool().query(`DELETE FROM ${table} WHERE clerk_user_id = $1`, [clerkUserId]);
+        try {
+            await getPool().query(`DELETE FROM ${table} WHERE clerk_user_id = $1`, [clerkUserId]);
+        }
+        catch { /* table may not exist on fresh install */ }
     }
 }
 export async function getClerkUserIdByUsername(discogsUsername) {
@@ -851,6 +872,52 @@ export async function getWantlistItem(clerkUserId, releaseId) {
     if (!r.rows.length)
         return null;
     return { rating: r.rows[0].rating ?? 0, notes: r.rows[0].notes ?? [] };
+}
+// ── Recent views (cross-device Recent strip) ────────────────────────────
+// Per-user cap for the Recent strip. Matches the _HISTORY_MAX constant in
+// web/modal.js so the frontend and backend truncate at the same length.
+const RECENT_VIEWS_MAX = 120;
+export async function upsertRecentView(clerkUserId, discogsId, entityType, data) {
+    const pool = getPool();
+    await pool.query(`INSERT INTO user_recent_views (clerk_user_id, discogs_id, entity_type, data, opened_at)
+     VALUES ($1, $2, $3, $4, NOW())
+     ON CONFLICT (clerk_user_id, discogs_id, entity_type)
+     DO UPDATE SET data = EXCLUDED.data, opened_at = NOW()`, [clerkUserId, discogsId, entityType, JSON.stringify(data)]);
+    // Trim to last RECENT_VIEWS_MAX rows for this user. Cheap — the index on
+    // (clerk_user_id, opened_at DESC) makes the subquery a quick range scan.
+    await pool.query(`DELETE FROM user_recent_views
+     WHERE clerk_user_id = $1
+       AND (discogs_id, entity_type) NOT IN (
+         SELECT discogs_id, entity_type FROM user_recent_views
+         WHERE clerk_user_id = $1
+         ORDER BY opened_at DESC
+         LIMIT ${RECENT_VIEWS_MAX}
+       )`, [clerkUserId]);
+}
+export async function getRecentViews(clerkUserId, limit = RECENT_VIEWS_MAX) {
+    const capped = Math.min(Math.max(1, limit), RECENT_VIEWS_MAX);
+    const r = await getPool().query(`SELECT discogs_id, entity_type, data, opened_at
+     FROM user_recent_views
+     WHERE clerk_user_id = $1
+     ORDER BY opened_at DESC
+     LIMIT $2`, [clerkUserId, capped]);
+    return r.rows.map(row => ({
+        id: row.discogs_id,
+        type: row.entity_type,
+        data: row.data ?? {},
+        openedAt: row.opened_at,
+    }));
+}
+export async function deleteRecentView(clerkUserId, discogsId, entityType) {
+    if (entityType) {
+        await getPool().query(`DELETE FROM user_recent_views WHERE clerk_user_id = $1 AND discogs_id = $2 AND entity_type = $3`, [clerkUserId, discogsId, entityType]);
+    }
+    else {
+        await getPool().query(`DELETE FROM user_recent_views WHERE clerk_user_id = $1 AND discogs_id = $2`, [clerkUserId, discogsId]);
+    }
+}
+export async function clearRecentViews(clerkUserId) {
+    await getPool().query(`DELETE FROM user_recent_views WHERE clerk_user_id = $1`, [clerkUserId]);
 }
 // ── Phase 4: Price intelligence DB functions ─────────────────────────────
 export async function upsertPriceCache(releaseId, lowest, median, highest, numForSale, currency = "USD") {
