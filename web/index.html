@@ -37,7 +37,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260408m" />
+  <link rel="stylesheet" href="/style.css?v=20260408n" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -70,7 +70,7 @@
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260408m"></script>
+<script src="/shared.js?v=20260408n"></script>
 <script>renderSharedHeader({ spa: true, active: "search" });</script>
 <div id="search-view">
 
@@ -294,13 +294,13 @@
       <label class="sort-label" style="flex-shrink:0">
         Sort
         <select id="cw-sort" onchange="saveCwSort();doCwSearch(1)" style="font-size:0.78rem;padding:0.3rem 0.4rem;color-scheme:dark">
-          <option value="">Artist</option>
-          <option value="title">Title</option>
-          <option value="year">Year (Newest)</option>
-          <option value="year_asc">Year (Oldest)</option>
-          <option value="added">Added (Newest)</option>
-          <option value="added_asc">Added (Oldest)</option>
-          <option value="rating">Rating</option>
+          <option value="">Artist A→Z</option>
+          <option value="title">Title A→Z</option>
+          <option value="year">Year ↓</option>
+          <option value="year_asc">Year ↑</option>
+          <option value="added">Added ↓</option>
+          <option value="added_asc">Added ↑</option>
+          <option value="rating">Rating ↓</option>
         </select>
       </label>
       <span style="color:#333;margin:0 0.25rem">|</span>
@@ -401,8 +401,8 @@
         <label class="sort-label" style="flex-shrink:0">
           Sort
           <select id="favorites-sort" onchange="sortFavoritesGrid()" style="font-size:0.78rem;padding:0.3rem 0.4rem;color-scheme:dark">
-            <option value="added:desc">Recently opened</option>
-            <option value="added:asc">Oldest opened</option>
+            <option value="added:desc">Opened ↓</option>
+            <option value="added:asc">Opened ↑</option>
             <option value="year:desc">Year ↓</option>
             <option value="year:asc">Year ↑</option>
             <option value="title:asc">Title A→Z</option>
@@ -761,15 +761,15 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script src="/utils.js?v=20260408m"></script>
-<script src="/search.js?v=20260408m"></script>
-<script src="/collection.js?v=20260408m"></script>
-<script src="/account.js?v=20260408m"></script>
-<script src="/orders.js?v=20260408m"></script>
-<script src="/app.js?v=20260408m"></script>
+<script src="/utils.js?v=20260408n"></script>
+<script src="/search.js?v=20260408n"></script>
+<script src="/collection.js?v=20260408n"></script>
+<script src="/account.js?v=20260408n"></script>
+<script src="/orders.js?v=20260408n"></script>
+<script src="/app.js?v=20260408n"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/modal.js?v=20260408m"></script>
-<script defer src="/inventory-editor.js?v=20260408m"></script>
+<script defer src="/modal.js?v=20260408n"></script>
+<script defer src="/inventory-editor.js?v=20260408n"></script>
 
 </body>
 </html>
