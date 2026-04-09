@@ -387,7 +387,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260409c";
+  const SITE_VERSION = "build 20260409d";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'https://seadisco.com' : '/'}" class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -435,9 +435,11 @@ function renderSharedFooter(opts) {
 
   // Records-tab links: in SPA mode, route through switchView('records') with the
   // matching sub-tab. Outside the SPA, fall back to a query-string deep link.
+  // When signed out, mirror the navbar record-tab behavior: pop the in-page
+  // sign-in modal instead of trying to load a records view that requires auth.
   const recLink = (label, tab) => {
     if (isSPA) {
-      return `<a href="/?v=${tab}" onclick="event.preventDefault();_cwTab='${tab}';switchView('records')">${label}</a>`;
+      return `<a href="/?v=${tab}" onclick="event.preventDefault();if(!window._clerk?.user){openSignInModal();return false}_cwTab='${tab}';switchView('records');return false">${label}</a>`;
     }
     return `<a href="/?v=${tab}">${label}</a>`;
   };
@@ -458,7 +460,7 @@ function renderSharedFooter(opts) {
       <div class="footer-col">
         <h4>SeaDisco</h4>
         ${isSPA
-          ? `<a href="/?v=account" onclick="switchView('account');return false;">Account</a>`
+          ? `<a href="/?v=account" onclick="event.preventDefault();openSignInModal();return false;">Account</a>`
           : `<a href="/?v=account">Account</a>`}
         ${link("Info", "info")}
         ${link("Privacy Policy", "privacy")}
