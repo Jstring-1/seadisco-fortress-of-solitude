@@ -143,7 +143,7 @@ async function doSearch(page = 1, skipPushState = false) {
   if (page === 1) {
     switchView("search", true);
     setActiveTab("search");
-    // Hide favorites section when search results are incoming
+    // Hide the Recent strip when a search is running
     const ws = document.getElementById("random-records"); if (ws) ws.style.display = "none";
   }
 
@@ -860,14 +860,6 @@ let _randomAll = [];     // all fetched items (up to 192)
 let _randomShown = 0;    // how many currently rendered
 const _RANDOM_PAGE = 48;
 
-function _shuffle(arr) {
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
-}
-
 // Extract just the artist portion of a "Artist - Title" combined title
 function _favArtist(item) {
   const t = item.title ?? "";
@@ -909,43 +901,45 @@ function sortFavoritesGrid() {
   loadRandomRecords(true);
 }
 
-// Parse a row from the random-records API into a card-compatible item
-function _parseRandomRow(row) {
-  const d = row.data ?? {};
-  const basic = d.basic_information ?? d;
-  // Collection/wantlist items have basic_information; favorites have card data directly
-  if (d.basic_information) {
-    const labels = (basic.labels ?? []).map(l => l.name);
-    const formats = (basic.formats ?? []).map(f => f.name);
-    const title = basic.artists?.length
-      ? `${basic.artists.map(a => a.name).join(", ")} - ${basic.title}`
-      : basic.title || "Unknown";
-    return {
-      id: basic.id ?? row.rid,
-      type: "release",
-      title,
-      cover_image: basic.cover_image || basic.thumb || "",
-      uri: `/release/${basic.id ?? row.rid}`,
-      label: labels,
-      format: formats,
-      genre: basic.genres ?? [],
-      year: String(basic.year ?? ""),
-      country: basic.country ?? "",
-    };
-  }
-  // Favorites / list items store card-format data
-  return {
-    id: d.id ?? row.rid,
-    type: d.type ?? "release",
-    title: d.title || `Release ${row.rid}`,
-    cover_image: d.cover_image || d.thumb || "",
-    uri: d.uri || `/release/${row.rid}`,
-    label: d.label ?? [],
-    format: d.format ?? [],
-    genre: d.genre ?? [],
-    year: String(d.year ?? ""),
-    country: d.country ?? "",
-  };
+// ── Recent front-page strip (reads from localStorage sd_history) ────────
+// The #random-records section now shows the user's locally-tracked
+// browsing history (written by modal.js _recordHistory on every modal open).
+// No server fetch; re-renders on the sd-history-change event so newly
+// opened records appear immediately when the user returns to the search view.
+
+const _HISTORY_KEY = "sd_history";
+
+function _readHistory() {
+  try {
+    const raw = localStorage.getItem(_HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+
+function _writeHistory(arr) {
+  try { localStorage.setItem(_HISTORY_KEY, JSON.stringify(arr)); } catch { /* quota */ }
+}
+
+// Load history into _randomAll as card-compatible items
+function _loadHistoryIntoRandom() {
+  const hist = _readHistory();
+  _randomAll = hist
+    .filter(h => h && h.cover_image) // only items with a cover render cleanly
+    .map(h => ({
+      id: h.id,
+      type: h.type ?? "release",
+      title: h.title || `Release ${h.id}`,
+      cover_image: h.cover_image || "",
+      uri: h.uri || `/${h.type ?? "release"}/${h.id}`,
+      label: h.label ?? [],
+      format: h.format ?? [],
+      genre: h.genre ?? [],
+      year: String(h.year ?? ""),
+      country: h.country ?? "",
+      catno: h.catno ?? "",
+      _addedAt: h._openedAt ?? 0,
+    }));
+  _applyFavoritesSort();
 }
 
 async function loadRandomRecords(more) {
@@ -953,38 +947,31 @@ async function loadRandomRecords(more) {
   const wrap = document.getElementById("random-records");
   if (!grid || !wrap) return;
 
-  // First call: fetch user's favorites (or owner's for signed-out viewers)
+  // First call (or full reload): rebuild from localStorage history
   if (!more) {
-    try {
-      const isLoggedIn = !!window._clerk?.user;
-      const url = isLoggedIn ? "/api/user/favorites?limit=192" : "/api/public/featured-favorites?limit=192";
-      const r = isLoggedIn ? await apiFetch(url) : await fetch(url);
-      if (!r.ok) return;
-      const data = await r.json();
-      // Preserve added-at order from the server (most recent first). Only
-      // keep items with a cover image for a clean grid.
-      _randomAll = (data.items ?? [])
-        .map(row => {
-          const item = _parseRandomRow(row);
-          item._addedAt = row.created_at ? new Date(row.created_at).getTime() : 0;
-          return item;
-        })
-        .filter(it => it.cover_image);
-      _randomShown = 0;
-      // Update section title
-      const titleEl = document.getElementById("random-records-title");
-      if (titleEl) titleEl.textContent = isLoggedIn ? "Your Favorites" : "Community Favorites";
-      // Apply current sort selection (defaults to added:desc which is
-      // already the server order)
-      _applyFavoritesSort();
-    } catch { return; }
-    if (!_randomAll.length) return;
+    _loadHistoryIntoRandom();
+    _randomShown = 0;
+    // Update header title — always "Recent" now
+    const titleEl = document.getElementById("random-records-title");
+    if (titleEl) titleEl.textContent = "Recent";
+    if (!_randomAll.length) {
+      wrap.style.display = "none";
+      return;
+    }
   }
 
   // Render next page of 48
   const slice = _randomAll.slice(_randomShown, _randomShown + _RANDOM_PAGE);
   if (!slice.length) return;
-  const html = slice.map((item, i) => renderCard(item, _randomShown + i)).join("");
+  // Each card gets a small X overlay so the user can drop a single item
+  // from their local history without clearing everything.
+  const html = slice.map((item, i) => {
+    const card = renderCard(item, _randomShown + i);
+    const safeId = escHtml(String(item.id));
+    return `<div class="recent-wrap" data-hist-id="${safeId}">${card}` +
+      `<button class="recent-dismiss" onclick="removeFromHistory(event,'${safeId}')" title="Remove from history">✕</button>` +
+      `</div>`;
+  }).join("");
   grid.querySelector(".random-load-more")?.remove();
   if (more) {
     grid.insertAdjacentHTML("beforeend", html);
@@ -1016,12 +1003,44 @@ async function loadRandomRecords(more) {
 function showRandomRecords() {
   const wrap = document.getElementById("random-records");
   if (!wrap) return;
-  if (!_randomAll.length) {
-    loadRandomRecords();
-  } else {
-    wrap.style.display = "";
+  // Always rebuild from current history — cheap and guarantees freshness
+  loadRandomRecords();
+}
+
+/** Remove a single entry from history (X button on a card). */
+function removeFromHistory(ev, id) {
+  if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+  const hist = _readHistory().filter(h => String(h.id) !== String(id));
+  _writeHistory(hist);
+  // Optimistic DOM removal
+  const el = document.querySelector(`.recent-wrap[data-hist-id="${CSS.escape(String(id))}"]`);
+  if (el) el.remove();
+  // If grid is now empty, hide the whole strip
+  if (!hist.length) {
+    const wrap = document.getElementById("random-records");
+    if (wrap) wrap.style.display = "none";
   }
 }
+
+/** Clear-all button — drops all history after confirmation. */
+function clearRecentHistory() {
+  if (!confirm("Clear all recently opened releases?")) return;
+  _writeHistory([]);
+  _randomAll = [];
+  _randomShown = 0;
+  const wrap = document.getElementById("random-records");
+  if (wrap) wrap.style.display = "none";
+}
+
+// Re-render the strip whenever the history changes (modal opened elsewhere)
+window.addEventListener("sd-history-change", () => {
+  clearTimeout(window._recentReloadTimer);
+  window._recentReloadTimer = setTimeout(() => {
+    // Only re-render if the strip is currently visible on the search view
+    const wrap = document.getElementById("random-records");
+    if (wrap && wrap.style.display !== "none") loadRandomRecords();
+  }, 400);
+});
 
 function toggleFavoriteFromCard(btn, discogsId, entityType) {
   const key = `${entityType}:${discogsId}`;

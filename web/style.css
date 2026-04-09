@@ -2200,11 +2200,36 @@ body.modal-open  { overflow: hidden; }
   gap: 1rem;
 }
 
-/* ── Cover-only cards in random records grid ── */
-#random-records-grid .card .card-body { display: none; }
-#random-records-grid .card { border-radius: var(--radius); overflow: hidden; }
-#random-records-grid .card .card-thumb-wrap img { border-radius: 0; }
-#random-records-grid { gap: 0.5rem; }
+/* ── Recent history strip (front-page Recent cards) ── */
+/* Uses the standard .card-grid layout and the full card body, so cards
+   look identical to search results. Each card is wrapped in .recent-wrap
+   so we can overlay a small X button to drop a single item from history. */
+.recent-wrap {
+  position: relative;
+}
+.recent-dismiss {
+  position: absolute;
+  top: 0.3rem;
+  right: 0.3rem;
+  width: 1.3rem;
+  height: 1.3rem;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0,0,0,0.6);
+  color: #ddd;
+  cursor: pointer;
+  font-size: 0.75rem;
+  line-height: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+  z-index: 3;
+}
+.recent-wrap:hover .recent-dismiss { opacity: 1; }
+.recent-dismiss:hover { background: rgba(160, 30, 30, 0.85); color: #fff; }
 
 /* ── Results grid ── */
 #results {

@@ -8,12 +8,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260408j" />
+  <link rel="stylesheet" href="/style.css?v=20260408l" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260408j"></script>
+<script src="/shared.js?v=20260408l"></script>
 <script>renderSharedHeader({ hideRecords: true });</script>
 
 <main>
@@ -35,6 +35,7 @@
         <h2 style="margin-bottom:0.4rem">Actions</h2>
         <div style="display:flex;align-items:center;gap:0.7rem;flex-wrap:wrap">
           <button onclick="adminExtrasFetch()" id="admin-extras-fetch-btn" class="admin-btn admin-btn-extras">Fetch Extras</button>
+          <button onclick="adminGenerateRecs()" id="admin-gen-recs-btn" class="admin-btn admin-btn-extras">Generate Recs</button>
 
           <button onclick="adminSyncAll()" id="admin-sync-all-btn" class="admin-btn admin-btn-sync">Sync All</button>
           <button onclick="adminSyncStop()" id="admin-sync-stop-btn" class="admin-btn admin-btn-stop">Stop All</button>
@@ -56,6 +57,7 @@
         <button class="admin-tab" onclick="switchAdminTab('sync-status')">User Sync</button>
         <button class="admin-tab" onclick="switchAdminTab('api-log')">API Log</button>
         <button class="admin-tab" onclick="switchAdminTab('db-stats')">Database</button>
+        <button class="admin-tab" onclick="switchAdminTab('ai-recs')">AI Recs</button>
       </div>
 
       <!-- Collection Stats -->
@@ -106,6 +108,24 @@
           <button class="admin-refresh-btn" onclick="loadDbStats()" title="Refresh">&#8635;</button>
         </div>
         <div id="db-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
+      </div>
+
+      <!-- AI Recommendations (test view) -->
+      <div class="admin-tab-panel" id="panel-ai-recs" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
+          <h2 style="margin:0">AI Recommendations</h2>
+          <button class="admin-refresh-btn" onclick="loadAiRecStats()" title="Refresh">&#8635;</button>
+          <span style="font-size:0.72rem;color:var(--muted)">Daily job runs at 03:30 Pacific. Use <strong>Generate Recs</strong> above to trigger manually.</span>
+        </div>
+        <div id="ai-rec-stats" style="font-size:0.82rem;color:var(--muted);margin-bottom:0.8rem">Loading...</div>
+        <div id="ai-rec-detail" style="display:none;margin-top:0.5rem;border-top:1px solid #2e2518;padding-top:0.6rem">
+          <div style="display:flex;align-items:center;gap:0.5rem;margin-bottom:0.5rem">
+            <strong id="ai-rec-detail-username" style="color:var(--fg)"></strong>
+            <span id="ai-rec-detail-meta" style="font-size:0.72rem;color:var(--muted)"></span>
+            <button onclick="closeAiRecDetail()" style="margin-left:auto;background:none;border:1px solid var(--border);color:var(--muted);padding:0.2rem 0.55rem;border-radius:4px;cursor:pointer;font-size:0.7rem">Close</button>
+          </div>
+          <div id="ai-rec-detail-list" style="font-size:0.78rem;color:var(--muted)"></div>
+        </div>
       </div>
 
     </div>
@@ -162,7 +182,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script src="/modal.js?v=20260408j"></script>
+<script src="/modal.js?v=20260408l"></script>
 
 <footer></footer>
 <script>renderSharedFooter();</script>
@@ -175,6 +195,7 @@ const _adminTabLoaders = {
   'sync-status': () => loadAdminSyncStatus(),
   'api-log': () => loadApiLog(),
   'db-stats': () => loadDbStats(),
+  'ai-recs': () => loadAiRecStats(),
 };
 const _adminTabLoaded = {};
 
@@ -310,6 +331,151 @@ async function adminSyncAll() {
     loadAdminSyncStatus();
   } catch { statusEl.textContent = "Sync-all failed."; }
   finally { btn.disabled = false; btn.textContent = "Sync All"; }
+}
+
+async function adminGenerateRecs() {
+  const btn = document.getElementById("admin-gen-recs-btn");
+  const statusEl = document.getElementById("admin-action-status");
+  const targetUser = prompt("Generate recommendations for a specific username (leave blank for ALL users):");
+  if (targetUser === null) return; // canceled
+  btn.disabled = true; btn.textContent = "Queueing\u2026";
+  try {
+    const body = targetUser.trim() ? { username: targetUser.trim() } : {};
+    const r = await apiFetch("/api/admin/generate-recommendations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then(r => r.json());
+    if (r.error) {
+      statusEl.textContent = `Error: ${r.error}`;
+    } else if (r.message) {
+      statusEl.textContent = r.message;
+    } else {
+      statusEl.textContent = `Recommendation generation kicked off for ${r.queued} user${r.queued !== 1 ? "s" : ""}. Check server logs.`;
+    }
+  } catch (e) { statusEl.textContent = "Generate recs failed: " + e.message; }
+  finally { btn.disabled = false; btn.textContent = "Generate Recs"; }
+}
+
+// ── AI Recs admin panel ───────────────────────────────────────────────
+// Shows per-user stats (rec count, click/dismiss rate, last generated)
+// with a View button that fetches full recs for inspection — lets the
+// admin verify what Claude returned without exposing any UI to real users.
+
+function _recRelTime(iso) {
+  if (!iso) return "never";
+  const ms = Date.now() - new Date(iso).getTime();
+  const h = Math.floor(ms / 3600000);
+  if (h < 1) return "< 1h ago";
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
+
+async function loadAiRecStats() {
+  const el = document.getElementById("ai-rec-stats");
+  if (!el) return;
+  el.textContent = "Loading...";
+  try {
+    const r = await apiFetch("/api/admin/recommendation-stats");
+    if (!r.ok) { el.textContent = "Failed to load stats."; return; }
+    const data = await r.json();
+    const stats = data.stats || [];
+    if (!stats.length) {
+      el.innerHTML = `<p style="color:var(--muted)">No recommendations generated yet. Click <strong>Generate Recs</strong> above to create some.</p>`;
+      return;
+    }
+    const rows = stats.map(s => {
+      const name = s.username || `(clerk: ${s.clerkUserId.slice(0, 10)}\u2026)`;
+      const usernameAttr = s.username ? `onclick="viewUserRecs('${escHtml(s.username).replace(/'/g, "\\'")}')"` : "";
+      const cursor = s.username ? "cursor:pointer" : "";
+      const clickPct = s.count > 0 ? Math.round((s.clicked / s.count) * 100) : 0;
+      const dismPct = s.count > 0 ? Math.round((s.dismissed / s.count) * 100) : 0;
+      return `<tr style="border-bottom:1px solid #221d16">
+        <td style="padding:0.4rem 0.5rem;color:var(--fg);${cursor}" ${usernameAttr}>${escHtml(name)}</td>
+        <td style="padding:0.4rem 0.5rem;text-align:right">${s.count}</td>
+        <td style="padding:0.4rem 0.5rem;text-align:right;color:#7aa37a">${s.clicked} <span style="color:#555">(${clickPct}%)</span></td>
+        <td style="padding:0.4rem 0.5rem;text-align:right;color:#a37a7a">${s.dismissed} <span style="color:#555">(${dismPct}%)</span></td>
+        <td style="padding:0.4rem 0.5rem;text-align:right;color:var(--muted)">${_recRelTime(s.lastGenerated)}</td>
+        <td style="padding:0.4rem 0.5rem;text-align:right">
+          ${s.username
+            ? `<button onclick="viewUserRecs('${escHtml(s.username).replace(/'/g, "\\'")}')" style="background:none;border:1px solid var(--border);color:var(--muted);padding:0.2rem 0.55rem;border-radius:4px;cursor:pointer;font-size:0.7rem">View</button>`
+            : ""}
+        </td>
+      </tr>`;
+    }).join("");
+    el.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:0.8rem">
+      <thead><tr style="color:var(--muted);text-align:left;border-bottom:1px solid #2e2518">
+        <th style="padding:0.4rem 0.5rem;font-weight:600">User</th>
+        <th style="padding:0.4rem 0.5rem;text-align:right;font-weight:600">Count</th>
+        <th style="padding:0.4rem 0.5rem;text-align:right;font-weight:600">Clicked</th>
+        <th style="padding:0.4rem 0.5rem;text-align:right;font-weight:600">Dismissed</th>
+        <th style="padding:0.4rem 0.5rem;text-align:right;font-weight:600">Last gen</th>
+        <th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  } catch (e) {
+    el.textContent = "Error: " + e.message;
+  }
+}
+
+async function viewUserRecs(username) {
+  const wrap = document.getElementById("ai-rec-detail");
+  const list = document.getElementById("ai-rec-detail-list");
+  const titleEl = document.getElementById("ai-rec-detail-username");
+  const metaEl = document.getElementById("ai-rec-detail-meta");
+  if (!wrap || !list) return;
+  wrap.style.display = "";
+  titleEl.textContent = username;
+  metaEl.textContent = "Loading\u2026";
+  list.innerHTML = "";
+  try {
+    const r = await apiFetch(`/api/admin/user-recommendations?username=${encodeURIComponent(username)}`);
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      metaEl.textContent = "Error: " + (err.error || r.status);
+      return;
+    }
+    const data = await r.json();
+    const items = data.items || [];
+    metaEl.textContent = `${items.length} items`;
+    if (!items.length) {
+      list.innerHTML = `<p style="color:var(--muted)">No recommendations for this user. Generate some first.</p>`;
+      return;
+    }
+    const tierColor = { "rare": "#9d6b53", "audiophile": "#5a8a9e", "collector": "#b39142", "holy-grail": "#a34a5e" };
+    list.innerHTML = items.map(rec => {
+      const tc = tierColor[rec.tier] || "#777";
+      const price = rec.estPriceUsd ? `~$${Math.round(rec.estPriceUsd)}` : "";
+      const dLabel = rec.dismissed ? `<span style="color:#a37a7a;font-size:0.68rem;margin-left:0.4rem">(dismissed)</span>` : "";
+      const cLabel = rec.clicked ? `<span style="color:#7aa37a;font-size:0.68rem;margin-left:0.4rem">(clicked)</span>` : "";
+      const url = `https://www.discogs.com/release/${rec.releaseId}`;
+      const cover = rec.coverImage
+        ? `<img src="${escHtml(rec.coverImage)}" alt="" style="width:60px;height:60px;object-fit:cover;border-radius:4px;flex-shrink:0;background:#0a0a0a">`
+        : `<div style="width:60px;height:60px;background:#181410;border-radius:4px;flex-shrink:0"></div>`;
+      return `<div style="display:flex;gap:0.7rem;padding:0.55rem 0;border-bottom:1px solid #1e1a14">
+        ${cover}
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:0.4rem;flex-wrap:wrap">
+            <a href="${url}" target="_blank" rel="noopener" style="color:var(--fg);font-weight:600;font-size:0.85rem;text-decoration:none">${escHtml(rec.artist || "?")} — ${escHtml(rec.title || "?")}</a>
+            <span style="background:${tc};color:#fff;font-size:0.58rem;font-weight:700;letter-spacing:0.05em;padding:0.1rem 0.35rem;border-radius:2px;text-transform:uppercase">${escHtml(rec.tier || "pick")}${price ? " · " + price : ""}</span>
+            ${cLabel}${dLabel}
+          </div>
+          <div style="font-size:0.72rem;color:var(--muted);margin-top:0.15rem">
+            ${[rec.year, rec.country, rec.label, rec.catno].filter(Boolean).map(x => escHtml(String(x))).join(" · ")}
+          </div>
+          ${rec.reason ? `<div style="font-size:0.74rem;color:#888;margin-top:0.2rem;font-style:italic">${escHtml(rec.reason)}</div>` : ""}
+        </div>
+      </div>`;
+    }).join("");
+  } catch (e) {
+    metaEl.textContent = "Error: " + e.message;
+  }
+}
+
+function closeAiRecDetail() {
+  const wrap = document.getElementById("ai-rec-detail");
+  if (wrap) wrap.style.display = "none";
 }
 
 async function adminSyncUser(username) {
