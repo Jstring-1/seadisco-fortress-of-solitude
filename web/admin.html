@@ -8,13 +8,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260409a" />
+  <link rel="stylesheet" href="/style.css?v=20260409c" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260409a"></script>
-<script>renderSharedHeader({ hideRecords: true });</script>
+<script defer src="/shared.js?v=20260409c"></script>
+<script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
   <div class="account-box">
@@ -162,10 +162,10 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script src="/modal.js?v=20260409a"></script>
+<script defer src="/modal.js?v=20260409c"></script>
 
 <footer></footer>
-<script>renderSharedFooter();</script>
+<script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
 
 <script>
 let clerk = null;
@@ -630,14 +630,18 @@ async function loadCollectionStats() {
   } catch { el.textContent = "Could not load collection stats."; }
 }
 
-initAuth({
+// shared.js is now deferred, so wait for DOMContentLoaded before calling
+// initAuth (which lives in shared.js). Deferred scripts execute before DCL
+// in document order, so initAuth is guaranteed to be defined by the time
+// this listener fires.
+document.addEventListener("DOMContentLoaded", () => initAuth({
   onSignedIn: verifyAdmin,
   onSignedOut: showDenied,
   onError: (msg) => {
     document.getElementById("loading-section").innerHTML =
       `<p style="color:#e88">Failed to load auth: ${escHtml(msg)}</p>`;
   },
-});
+}));
 
 // ── User items popup (collection/wantlist viewer) ────────────────────
 let _adminItemsUser = "";

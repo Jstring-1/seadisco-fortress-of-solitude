@@ -239,16 +239,19 @@ async function applyAuthState(clerk) {
       handleSignedIn(clerk);
     }
     addNavTab("wanted");
-    try {
-      const tokenCheck = await apiFetch("/api/user/token");
-      if (tokenCheck.ok) {
+    // Fire token check in the background — it only reveals the
+    // collection/wantlist nav tabs and does not block anything visual.
+    // Waiting on it adds ~50-100ms to TTI for no user-visible benefit.
+    apiFetch("/api/user/token")
+      .then(async (tokenCheck) => {
+        if (!tokenCheck.ok) return;
         const tokenData = await tokenCheck.json();
         if (tokenData.hasToken) {
           addNavTab("collection");
           addNavTab("wantlist");
         }
-      }
-    } catch { /* token check optional */ }
+      })
+      .catch(() => { /* token check optional */ });
     // Load favorite IDs + collection/wantlist IDs for all signed-in users
     await loadDiscogsIds();                   // calls loadRandomRecords inside
   } else {

@@ -1288,7 +1288,7 @@ body.modal-open  { overflow: hidden; }
   position: relative;
   box-shadow: 0 8px 40px rgba(0,0,0,0.7);
 }
-/* #modal-close still used by admin.html / account.html */
+/* #modal-close still used by admin.html */
 #modal-close {
   position: sticky; top: 0.5rem; float: right;
   margin: 0.5rem 0.6rem 0 0; background: none; border: none;
@@ -2910,6 +2910,20 @@ body.modal-open  { overflow: hidden; }
 #clerk-sign-in { margin-top: 1rem; }
 #auth-section { display: none; }
 #signed-out-section { display: none; }
+
+/* Hide Clerk's built-in "Have an account? Sign in" footer links inside the
+   invite-only splash waitlist widget. Clerk's appearance.elements API only
+   sets inline styles that can lose specificity battles with its own CSS —
+   a real stylesheet rule with !important is reliable. The splash has its
+   own "Already approved? Sign in" link underneath that opens our in-page
+   modal via openSignInModal(), so the Clerk footer is redundant and leaks
+   users into Clerk's hosted pages. */
+#splash-waitlist-mount .cl-footer,
+#splash-waitlist-mount .cl-footerAction,
+#splash-waitlist-mount .cl-footerActionText,
+#splash-waitlist-mount .cl-footerActionLink {
+  display: none !important;
+}
 .user-email { color: #aaa; font-size: 0.85rem; margin-bottom: 1.2rem; }
 .section-divider { border: none; border-top: 1px solid #333; margin: 1.5rem 0; }
 
