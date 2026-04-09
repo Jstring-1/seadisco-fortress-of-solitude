@@ -1,7 +1,7 @@
 // ── Config ─────────────────────────────────────────────────────────────────
 // API, apiFetch(), escHtml() are now in shared.js
 
-// ── HTML strip helper (for eBay descriptions) ───────────────────────────
+// ── HTML strip helper ───────────────────────────────────────────────────
 function stripHtml(html) {
   const div = document.createElement("div");
   div.innerHTML = html;

@@ -135,7 +135,7 @@ function addNavTab(view) {
 
   if (view === "records") {
     // Enable all bottom-row record tabs
-    document.querySelectorAll("#nav-row-records .nav-tab-bot").forEach(el => {
+    document.querySelectorAll("#nav-row-records .nav-tab-top[data-rtab]").forEach(el => {
       el.classList.remove("nav-rec-disabled");
       el.removeAttribute("title");
       const rtab = el.dataset.rtab;
@@ -160,7 +160,7 @@ function showRecordSignIn(rtab) {
   document.getElementById("main-nav-tabs")?.classList.remove("mobile-open");
   // Highlight the clicked tab
   document.querySelectorAll(".nav-tab-top").forEach(b => b.classList.remove("active"));
-  document.querySelectorAll(".nav-tab-bot").forEach(b => b.classList.toggle("active", b.dataset.rtab === rtab));
+  document.querySelectorAll(".nav-tab-top[data-rtab]").forEach(b => b.classList.toggle("active", b.dataset.rtab === rtab));
 
   // Show search view with empty results
   const searchView = document.getElementById("search-view");
@@ -191,21 +191,17 @@ function switchView(view, skipPushState = false) {
   document.getElementById("main-nav-tabs")?.classList.remove("mobile-open");
   saveFilterState();
 
-  // Highlight top row
-  document.querySelectorAll(".nav-tab-top").forEach(btn =>
-    btn.classList.toggle("active", btn.dataset.view === view)
-  );
-  // Highlight bottom row — active when in records view
+  // Highlight nav — single row has both data-view and data-rtab tabs
   const isRecords = view === "records";
-  document.querySelectorAll(".nav-tab-bot").forEach(btn => {
-    btn.classList.toggle("active", isRecords && btn.dataset.rtab === (_cwTab || "collection"));
+  document.querySelectorAll(".nav-tab-top").forEach(btn => {
+    if (btn.dataset.rtab) {
+      // Record tab — active when in records view and matching the current sub-tab
+      btn.classList.toggle("active", isRecords && btn.dataset.rtab === (_cwTab || "collection"));
+    } else {
+      btn.classList.toggle("active", btn.dataset.view === view);
+    }
   });
   const searchView  = document.getElementById("search-view");
-  const dropsView   = document.getElementById("drops-view");
-  const liveView    = document.getElementById("live-view");
-  const buyView     = document.getElementById("buy-view");
-  const gearView    = document.getElementById("gear-view");
-  const feedView    = document.getElementById("feed-view");
   const infoView    = document.getElementById("info-view");
   const privacyView = document.getElementById("privacy-view");
   const termsView   = document.getElementById("terms-view");
@@ -214,15 +210,14 @@ function switchView(view, skipPushState = false) {
     if (view === "records") {
       const tab = _cwTab || "collection";
       history.pushState({ view, tab }, "", "?v=" + tab);
-    } else if (view === "drops" || view === "live" || view === "buy" || view === "gear" || view === "feed" || view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account") {
-      const urlView = view === "buy" ? "vinyl" : view;
-      history.pushState({ view }, "", "?v=" + urlView);
+    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account") {
+      history.pushState({ view }, "", "?v=" + view);
     } else {
       history.pushState({}, "", location.pathname);
     }
   }
   if (typeof gtag === "function") {
-    const titles = { drops: "Drops", live: "Live", buy: "Vinyl", gear: "Gear", feed: "Feed", info: "Info", privacy: "Privacy Policy", terms: "Terms of Service", records: "My Records", wanted: "Wants", search: "Search", account: "Account" };
+    const titles = { info: "Info", privacy: "Privacy Policy", terms: "Terms of Service", records: "My Records", wanted: "Wants", search: "Search", account: "Account" };
     gtag("event", "page_view", {
       page_location: window.location.href,
       page_path:     window.location.pathname + window.location.search,
@@ -230,11 +225,6 @@ function switchView(view, skipPushState = false) {
     });
   }
   if (searchView)  searchView.style.display  = "none";
-  if (dropsView)   dropsView.style.display   = "none";
-  if (liveView)    liveView.style.display    = "none";
-  if (buyView)     buyView.style.display      = "none";
-  if (gearView)    gearView.style.display    = "none";
-  if (feedView)    feedView.style.display    = "none";
   if (infoView)    infoView.style.display    = "none";
   if (privacyView) privacyView.style.display = "none";
   if (termsView)   termsView.style.display   = "none";
@@ -245,36 +235,7 @@ function switchView(view, skipPushState = false) {
   const cwInput     = document.getElementById("cw-query");
   const wantedWrap  = document.getElementById("wanted-search-wrap");
 
-  if (view === "buy") {
-    if (buyView) buyView.style.display = "block";
-    if (mainForm) mainForm.style.display = "none";
-    if (recordsWrap) recordsWrap.style.display = "none";
-    if (wantedWrap) wantedWrap.style.display = "none";
-    loadBuyListings();
-  } else if (view === "gear") {
-    if (gearView) gearView.style.display = "block";
-    if (mainForm) mainForm.style.display = "none";
-    if (recordsWrap) recordsWrap.style.display = "none";
-    if (wantedWrap) wantedWrap.style.display = "none";
-    loadGearListings();
-  } else if (view === "feed") {
-    if (feedView) feedView.style.display = "block";
-    if (mainForm) mainForm.style.display = "none";
-    if (recordsWrap) recordsWrap.style.display = "none";
-    if (wantedWrap) wantedWrap.style.display = "none";
-    loadFeedArticles();
-  } else if (view === "drops") {
-    if (dropsView) dropsView.style.display = "block";
-    if (mainForm) mainForm.style.display = "";
-    if (recordsWrap) recordsWrap.style.display = "none";
-    if (wantedWrap) wantedWrap.style.display = "none";
-  } else if (view === "live") {
-    if (liveView) liveView.style.display = "block";
-    if (mainForm) mainForm.style.display = "none";
-    if (recordsWrap) recordsWrap.style.display = "none";
-    if (typeof loadLiveRecentFeed === "function") loadLiveRecentFeed();
-    if (wantedWrap) wantedWrap.style.display = "none";
-  } else if (view === "info") {
+  if (view === "info") {
     if (infoView) infoView.style.display = "block";
     if (mainForm) mainForm.style.display = "";
     if (recordsWrap) recordsWrap.style.display = "none";
@@ -352,7 +313,7 @@ function switchView(view, skipPushState = false) {
   }
 
   // Animate the entering view
-  const shownId = { search: "search-view", drops: "drops-view", live: "live-view", buy: "buy-view", gear: "gear-view", feed: "feed-view", info: "info-view", privacy: "privacy-view", terms: "terms-view", records: "search-view", wanted: "search-view" }[view];
+  const shownId = { search: "search-view", info: "info-view", privacy: "privacy-view", terms: "terms-view", records: "search-view", wanted: "search-view" }[view];
   const shownEl = shownId && document.getElementById(shownId);
   if (shownEl) {
     shownEl.classList.remove("view-enter");
@@ -905,7 +866,7 @@ function switchRecordsTab(tab, skipPush) {
     history.pushState({ view: "records", tab }, "", url);
   }
   // Update nav bottom row active state
-  document.querySelectorAll(".nav-tab-bot").forEach(btn =>
+  document.querySelectorAll(".nav-tab-top[data-rtab]").forEach(btn =>
     btn.classList.toggle("active", btn.dataset.rtab === tab)
   );
 

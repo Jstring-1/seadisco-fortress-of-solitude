@@ -260,11 +260,7 @@ async function openConcertPopup(event, artistName) {
       } catch { return t; }
     };
 
-    const escArt = escHtml(artistName).replace(/'/g, "\\'");
-    const liveLink = typeof switchView === 'function'
-      ? ` <a href="#" onclick="event.preventDefault();closeConcertPopup();closeModal();document.getElementById('live-artist').value='${escArt}';switchView('live');doLiveSearch()" title="Search for live events on the Live tab" style="font-size:0.75rem;color:var(--accent);text-decoration:none;margin-left:0.5rem">Search on Live →</a>`
-      : '';
-    let html = `<div class="concert-artist-name">${escHtml(artistName)} — Upcoming Shows${liveLink}</div>`;
+    let html = `<div class="concert-artist-name">${escHtml(artistName)} — Upcoming Shows</div>`;
     html += `<div class="concert-list">`;
     for (const ev of events) {
       const googleQ = encodeURIComponent(`${artistName} ${ev.venue} ${ev.city} concert`);
@@ -874,6 +870,17 @@ document.addEventListener("keydown", e => {
   }
 });
 
+// ── eBay search link helper ──────────────────────────────────────────────
+// Builds a small colored eBay logo link that searches eBay Music for artist/title/catno.
+// `standalone` = true when rendered alone (no leading margin on the link).
+function renderEbayLink(artist, title, catno, standalone = false) {
+  const q = [artist, title, catno].filter(Boolean).join(" ").trim();
+  if (!q) return "";
+  const url = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(q)}&_sacat=11233`;
+  const ml = standalone ? "" : "margin-left:0.5rem;";
+  return `<a href="${url}" target="_blank" rel="noopener nofollow" title="Search eBay Music for: ${escHtml(q)}" style="text-decoration:none;${ml}font-size:0.72rem;font-weight:900;font-family:'Helvetica Neue',Arial,Helvetica,sans-serif;letter-spacing:-0.04em;font-style:italic;vertical-align:baseline"><span style="color:#e53238">e</span><span style="color:#0064d2">b</span><span style="color:#f5af02">a</span><span style="color:#86b817">y</span><span style="color:#666;font-weight:400;font-style:normal;margin-left:0.1em">↗</span></a>`;
+}
+
 // ── Album info panel ──────────────────────────────────────────────────────
 function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetId = "album-info") {
   const el = document.getElementById(targetId);
@@ -1111,10 +1118,12 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
               const estId = `price-est-${escHtml(String(stats.releaseId))}`;
               return `<div style="font-size:0.75rem;margin-top:0.2rem">
                 <a href="${sellUrl}" target="_blank" rel="noopener" title="Browse ${count} listings on Discogs marketplace" style="color:#888;text-decoration:none">(${count}) :: ${priceBar} ↗</a>
-                ${!isMaster ? `<a href="#" onclick="event.preventDefault();loadPriceEstimates('${escHtml(String(stats.releaseId))}','${estId}')" style="color:#555;text-decoration:none;margin-left:0.4rem;font-size:0.7rem" title="Show estimated prices by condition">(est)</a><div id="${estId}"></div>` : ""}
+                ${!isMaster ? `<a href="#" onclick="event.preventDefault();loadPriceEstimates('${escHtml(String(stats.releaseId))}','${estId}')" style="color:#555;text-decoration:none;margin-left:0.4rem;font-size:0.7rem" title="Show estimated prices by condition">(est)</a>${renderEbayLink(artists[0], title, catno)}<div id="${estId}"></div>` : renderEbayLink(artists[0], title, catno)}
               </div>`;
             })()
-          : (stats?.numForSale === 0 ? `<div style="font-size:0.75rem;color:#555;margin-top:0.2rem">Not currently available on Discogs marketplace</div>` : "")
+          : (stats?.numForSale === 0
+              ? `<div style="font-size:0.75rem;color:#555;margin-top:0.2rem">Not currently available on Discogs marketplace${renderEbayLink(artists[0], title, catno)}</div>`
+              : (artists.length || title ? `<div style="font-size:0.75rem;margin-top:0.2rem">${renderEbayLink(artists[0], title, catno, true)}</div>` : ""))
         }
         ${releaseId ? renderActionsImmediate(Number(releaseId), isMaster ? "master" : "release") : ""}
       </div>

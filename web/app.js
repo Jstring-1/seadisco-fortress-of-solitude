@@ -15,7 +15,6 @@ const authReadyPromise = new Promise(res => { _authReady = res; });
 function _getView(p) {
   const v = p.get("v") || p.get("view") || "";
   // Map URL names to internal view names
-  if (v === "vinyl") return "buy";                      // v=vinyl → switchView("buy")
   // Flattened record tabs: v=collection|wantlist|lists|inventory|favorites → records
   if (["collection","wantlist","lists","inventory","favorites"].includes(v)) return "records:" + v;
   return v;
@@ -41,18 +40,8 @@ function _hasSearch(p) { return p.get("q") || p.get("a") || p.get("ar") || p.get
     }
   } else if (rawView === "account") {
     switchView("account", true);
-  } else if (rawView === "drops" || rawView === "live" || rawView === "buy" || rawView === "gear" || rawView === "feed" || rawView === "info" || rawView === "privacy" || rawView === "terms") {
+  } else if (rawView === "info" || rawView === "privacy" || rawView === "terms") {
     switchView(rawView, true);
-    // Restore live search from shared URL
-    if (rawView === "live" && (p.get("la") || p.get("lc") || p.get("lg"))) {
-      const la = document.getElementById("live-artist");
-      const lc = document.getElementById("live-city");
-      const lg = document.getElementById("live-genre");
-      if (la) la.value = p.get("la") || "";
-      if (lc) lc.value = p.get("lc") || "";
-      if (lg) lg.value = p.get("lg") || "";
-      doLiveSearch();
-    }
   } else if (rawView === "records" || rawView === "wanted") {
     await authReadyPromise;
     if (!window._clerk?.user) { showToast("Sign in to view your records", "error"); switchView("account", true); }
@@ -118,8 +107,6 @@ function _hasSearch(p) { return p.get("q") || p.get("a") || p.get("ar") || p.get
 
   // Only load home defaults if no search is being restored
   if (!_hasSearch(p)) {
-    const deferLoad = (fn) => typeof requestIdleCallback === "function" ? requestIdleCallback(fn) : setTimeout(fn, 200);
-    deferLoad(() => loadFreshReleases());
     // Show community favorites for logged-out users on the home page
     // (signed-in users get their own favorites via loadDiscogsIds → loadRandomRecords)
     authReadyPromise.then(() => {
@@ -140,7 +127,7 @@ window.addEventListener("popstate", () => {
     if (sort) { const el = document.getElementById("cw-sort"); if (el) el.value = sort; }
     switchView("records", true); return;
   }
-  if (rawView === "drops" || rawView === "live" || rawView === "buy" || rawView === "gear" || rawView === "feed" || rawView === "records" || rawView === "info" || rawView === "privacy" || rawView === "terms" || rawView === "wanted" || rawView === "account") {
+  if (rawView === "records" || rawView === "info" || rawView === "privacy" || rawView === "terms" || rawView === "wanted" || rawView === "account") {
     if (rawView === "records") {
       _cwTab = p.get("tab") || "collection";
       const sort = p.get("s") || p.get("sort");
@@ -277,115 +264,6 @@ authReadyPromise.then(() => {
         doSearch(1);
       },
       searchRow
-    );
-  }
-
-  // Drops search
-  const dropsBar = document.querySelector(".fresh-tag-footer");
-  if (dropsBar) {
-    buildSavedSearchUI("drops",
-      () => {
-        const q = document.getElementById("fresh-tag-input")?.value?.trim();
-        return q ? { q } : {};
-      },
-      (p) => {
-        const el = document.getElementById("fresh-tag-input");
-        if (el) { el.value = p.q || ""; el.dispatchEvent(new Event("input")); }
-      },
-      dropsBar
-    );
-  }
-
-  // Live search
-  const liveForm = document.querySelector(".live-search-row");
-  if (liveForm) {
-    buildSavedSearchUI("live",
-      () => {
-        const params = {};
-        const a = document.getElementById("live-artist")?.value?.trim();
-        const c = document.getElementById("live-city")?.value?.trim();
-        const g = document.getElementById("live-genre")?.value;
-        if (a) params.artist = a;
-        if (c) params.city = c;
-        if (g) params.genre = g;
-        return params;
-      },
-      (p) => {
-        const a = document.getElementById("live-artist");
-        const c = document.getElementById("live-city");
-        const g = document.getElementById("live-genre");
-        if (a) a.value = p.artist || "";
-        if (c) c.value = p.city || "";
-        if (g) g.value = p.genre || "";
-        doLiveSearch();
-      },
-      liveForm
-    );
-  }
-
-  // Buy (Vinyl) local DB filter — NOT the live eBay search
-  const buyBar = document.querySelector(".buy-right-controls");
-  if (buyBar) {
-    buildSavedSearchUI("buy",
-      () => {
-        const params = {};
-        const q = document.getElementById("buy-filter-field")?.value?.trim();
-        if (q) params.q = q;
-        const sort = document.querySelector(".buy-sort")?.value;
-        if (sort && sort !== "price_desc") params.sort = sort;
-        const activePrice = document.querySelector(".buy-price-pill.active");
-        const minPrice = activePrice ? parseInt(activePrice.dataset.min) : 0;
-        if (minPrice > 0) params.min_price = minPrice;
-        return params;
-      },
-      (p) => {
-        const filterEl = document.getElementById("buy-filter-field");
-        if (filterEl) { filterEl.value = p.q || ""; onBuySearch(p.q || ""); }
-        if (p.sort) { const sel = document.querySelector(".buy-sort"); if (sel) { sel.value = p.sort; setBuySort(p.sort); } }
-        if (p.min_price) { setBuyPriceFilter(p.min_price); } else { setBuyPriceFilter(0); }
-      },
-      buyBar
-    );
-  }
-
-  // Gear local DB filter — NOT the live eBay search
-  const gearBar = document.querySelector(".gear-right-controls");
-  if (gearBar) {
-    buildSavedSearchUI("gear",
-      () => {
-        const params = {};
-        const q = document.querySelector(".gear-search-field")?.value?.trim();
-        if (q) params.q = q;
-        const sort = document.querySelector(".gear-sort")?.value;
-        if (sort && sort !== "price_desc") params.sort = sort;
-        const activePrice = document.querySelector(".gear-price-pill.active");
-        const minPrice = activePrice ? parseInt(activePrice.dataset.min) : 0;
-        if (minPrice > 0) params.min_price = minPrice;
-        return params;
-      },
-      (p) => {
-        const filterEl = document.querySelector(".gear-search-field");
-        if (filterEl) { filterEl.value = p.q || ""; onGearSearch(p.q || ""); }
-        if (p.sort) { const sel = document.querySelector(".gear-sort"); if (sel) { sel.value = p.sort; setGearSort(p.sort); } }
-        if (p.min_price) { setGearPriceFilter(p.min_price); } else { setGearPriceFilter(0); }
-      },
-      gearBar
-    );
-  }
-
-  // Feed filter
-  const feedBar = document.querySelector(".feed-right-controls");
-  if (feedBar) {
-    buildSavedSearchUI("feed",
-      () => {
-        const q = document.querySelector(".feed-search-field")?.value?.trim();
-        return q ? { q } : {};
-      },
-      (p) => {
-        const el = document.querySelector(".feed-search-field");
-        if (el) { el.value = p.q || ""; el.dispatchEvent(new Event("input")); }
-      },
-      feedBar
     );
   }
 

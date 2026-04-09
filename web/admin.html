@@ -8,12 +8,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260408i" />
+  <link rel="stylesheet" href="/style.css?v=20260408j" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260408i"></script>
+<script src="/shared.js?v=20260408j"></script>
 <script>renderSharedHeader({ hideRecords: true });</script>
 
 <main>
@@ -34,11 +34,6 @@
       <div class="admin-section admin-section-a">
         <h2 style="margin-bottom:0.4rem">Actions</h2>
         <div style="display:flex;align-items:center;gap:0.7rem;flex-wrap:wrap">
-          <button onclick="adminDropsFetch()" id="admin-drops-fetch-btn" class="admin-btn admin-btn-extras">Fetch Drops</button>
-          <button onclick="adminFeedFetch()" id="admin-feed-fetch-btn" class="admin-btn admin-btn-feed">Fetch Feed</button>
-          <button onclick="adminLiveFetch()" id="admin-live-fetch-btn" class="admin-btn admin-btn-live">Fetch Live</button>
-          <button onclick="adminVinylFetch()" id="admin-vinyl-fetch-btn" class="admin-btn admin-btn-vinyl">Fetch Vinyl</button>
-          <button onclick="adminGearFetch()" id="admin-gear-fetch-btn" class="admin-btn admin-btn-gear">Fetch Gear</button>
           <button onclick="adminExtrasFetch()" id="admin-extras-fetch-btn" class="admin-btn admin-btn-extras">Fetch Extras</button>
 
           <button onclick="adminSyncAll()" id="admin-sync-all-btn" class="admin-btn admin-btn-sync">Sync All</button>
@@ -78,7 +73,6 @@
           <h2 style="margin:0">User Sync Status</h2>
           <button class="admin-refresh-btn" onclick="loadAdminSyncStatus()" title="Refresh">&#8635;</button>
         </div>
-        <div id="admin-fresh-stats" style="font-size:0.8rem;color:#555;margin-bottom:0.75rem"></div>
         <div id="admin-sync-status-list" style="font-size:0.83rem;color:var(--muted)">Loading...</div>
       </div>
 
@@ -93,15 +87,7 @@
           <select id="api-log-filter" onchange="loadApiLog()" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:#1a1510;color:var(--text);border:1px solid var(--border);border-radius:4px">
             <option value="">All Services</option>
             <option value="discogs">Discogs</option>
-            <option value="ticketmaster">Ticketmaster</option>
-            <option value="ebay">eBay</option>
-            <option value="youtube">YouTube</option>
-            <option value="rss">RSS</option>
             <option value="anthropic">Anthropic</option>
-            <option value="bandsintown">Bandsintown</option>
-            <option value="listenbrainz">ListenBrainz</option>
-            <option value="coverartarchive">CoverArtArchive</option>
-            <option value="ip-api">IP Geolocation</option>
           </select>
           <select id="api-log-hours" onchange="loadApiLog()" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:#1a1510;color:var(--text);border:1px solid var(--border);border-radius:4px">
             <option value="24">Last 24 hours</option>
@@ -176,7 +162,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script src="/modal.js?v=20260408i"></script>
+<script src="/modal.js?v=20260408j"></script>
 
 <footer></footer>
 <script>renderSharedFooter();</script>
@@ -247,13 +233,7 @@ async function loadAdminSyncStatus() {
       el.textContent = "Could not load sync status.";
       return;
     }
-    const { users, freshStats } = await r.json();
-
-    const freshEl = document.getElementById("admin-fresh-stats");
-    if (freshEl && freshStats) {
-      const fmt = d => d ? new Date(d).toLocaleDateString("en-US", { month: "short", year: "numeric" }) : "\u2014";
-      freshEl.textContent = `Drops DB: ${(freshStats.count ?? 0).toLocaleString()} releases \u00b7 ${(freshStats.tagCount ?? 0).toLocaleString()} tags \u00b7 ${fmt(freshStats.oldest)} \u2013 ${fmt(freshStats.newest)}`;
-    }
+    const { users } = await r.json();
     _syncStatusLoaded = true;
     if (!users?.length) { el.textContent = "No users with Discogs tokens."; return; }
 
@@ -403,61 +383,6 @@ async function checkKillStatus() {
   } catch {}
 }
 
-async function adminVinylFetch() {
-  const btn = document.getElementById("admin-vinyl-fetch-btn");
-  const statusEl = document.getElementById("admin-action-status");
-  btn.disabled = true; btn.textContent = "Fetching\u2026";
-  try {
-    await apiFetch("/api/admin/vinyl/fetch", { method: "POST" }).then(r => r.json());
-    statusEl.textContent = "Vinyl fetch started — running in background.";
-  } catch { statusEl.textContent = "Vinyl fetch failed."; }
-  finally { btn.disabled = false; btn.textContent = "Fetch Vinyl"; }
-}
-
-async function adminGearFetch() {
-  const btn = document.getElementById("admin-gear-fetch-btn");
-  const statusEl = document.getElementById("admin-action-status");
-  btn.disabled = true; btn.textContent = "Fetching\u2026";
-  try {
-    const r = await apiFetch("/api/admin/gear/fetch", { method: "POST" }).then(r => r.json());
-    statusEl.textContent = r.message || "Gear fetch triggered.";
-  } catch { statusEl.textContent = "Gear fetch failed."; }
-  finally { btn.disabled = false; btn.textContent = "Fetch Gear"; }
-}
-
-async function adminFeedFetch() {
-  const btn = document.getElementById("admin-feed-fetch-btn");
-  const statusEl = document.getElementById("admin-action-status");
-  btn.disabled = true; btn.textContent = "Fetching\u2026";
-  try {
-    const r = await apiFetch("/api/admin/feed/fetch", { method: "POST" }).then(r => r.json());
-    statusEl.textContent = r.message || "Feed fetch triggered.";
-  } catch { statusEl.textContent = "Feed fetch failed."; }
-  finally { btn.disabled = false; btn.textContent = "Fetch Feed"; }
-}
-
-async function adminLiveFetch() {
-  const btn = document.getElementById("admin-live-fetch-btn");
-  const statusEl = document.getElementById("admin-action-status");
-  btn.disabled = true; btn.textContent = "Fetching\u2026";
-  try {
-    const r = await apiFetch("/api/admin/live/fetch", { method: "POST" }).then(r => r.json());
-    statusEl.textContent = r.count != null ? `Fetched ${r.count} live events.` : "Live events fetch triggered.";
-  } catch { statusEl.textContent = "Live events fetch failed."; }
-  finally { btn.disabled = false; btn.textContent = "Fetch Live"; }
-}
-
-async function adminDropsFetch() {
-  const btn = document.getElementById("admin-drops-fetch-btn");
-  const statusEl = document.getElementById("admin-action-status");
-  btn.disabled = true; btn.textContent = "Fetching\u2026";
-  try {
-    await apiFetch("/api/admin/drops/fetch", { method: "POST" }).then(r => r.json());
-    statusEl.textContent = "Drops fetch started — running in background.";
-  } catch { statusEl.textContent = "Drops fetch failed."; }
-  finally { btn.disabled = false; btn.textContent = "Fetch Drops"; }
-}
-
 async function adminExtrasFetch() {
   const btn = document.getElementById("admin-extras-fetch-btn");
   const statusEl = document.getElementById("admin-action-status");
@@ -480,10 +405,8 @@ async function loadDbStats() {
     const groups = [
       { label: "Users & Auth", tables: ["user_tokens", "oauth_request_tokens"] },
       { label: "Collection & Library", tables: ["user_collection", "user_collection_folders", "user_wantlist", "user_inventory", "user_lists", "user_list_items", "user_orders", "user_order_messages"] },
-      { label: "eBay Listings", tables: ["vinyl_listings", "gear_listings", "vinyl_fetch_log", "gear_fetch_log", "ebay_rate_limit", "ebay_search_cache"] },
       { label: "Pricing", tables: ["price_cache", "price_history", "price_alerts", "triggered_alerts"] },
-      { label: "Content & Discovery", tables: ["fresh_releases", "feed_articles", "live_events", "release_cache"] },
-      { label: "User Features", tables: ["saved_searches", "user_favorites", "feedback"] },
+      { label: "User Features", tables: ["saved_searches", "user_favorites", "feedback", "release_cache"] },
       { label: "System", tables: ["api_request_log"] },
     ];
 

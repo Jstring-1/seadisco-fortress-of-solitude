@@ -1267,9 +1267,6 @@ function saveSearchHistory(context) {
     _shAdd("cw-label",   document.getElementById("cw-label")?.value);
     _shAdd("cw-year",    document.getElementById("cw-year")?.value);
     _shAdd("cw-notes",   document.getElementById("cw-notes")?.value);
-  } else if (context === "live") {
-    _shAdd("live-artist", document.getElementById("live-artist")?.value);
-    _shAdd("live-city",   document.getElementById("live-city")?.value);
   }
 }
 
@@ -1323,7 +1320,6 @@ function _shHide() {
 const _shFieldIds = [
   "query", "f-artist", "f-release", "f-label", "f-year", "f-country",
   "cw-query", "cw-artist", "cw-release", "cw-label", "cw-year", "cw-notes",
-  "live-artist", "live-city",
 ];
 
 function _shInit() {
