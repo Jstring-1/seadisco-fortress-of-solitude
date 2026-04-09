@@ -37,7 +37,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260408o" />
+  <link rel="stylesheet" href="/style.css?v=20260408r" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -70,13 +70,28 @@
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260408o"></script>
+<script src="/shared.js?v=20260408r"></script>
 <script>renderSharedHeader({ spa: true, active: "search" });</script>
 <div id="search-view">
 
 <main>
   <span id="auth-status" style="display:none"></span>
-  <div id="main-search-form" class="content-narrow">
+
+  <!-- Invite-only splash for signed-out visitors. Hidden by default;
+       app.js / applyAuthState() shows this when no Clerk session is active
+       and hides #main-search-form / #results. -->
+  <div id="splash-section" class="content-narrow" style="display:none;text-align:center;padding:2.5rem 1rem 1rem">
+    <h1 style="font-size:1.6rem;margin:0 0 0.5rem;color:var(--accent);letter-spacing:0.02em">SeaDisco is invite-only</h1>
+    <p style="font-size:0.95rem;color:#a89880;max-width:30rem;margin:0 auto 1.5rem;line-height:1.5">
+      A small, hand-built music discovery space. Join the waitlist below — when a spot opens up, we'll be in touch.
+    </p>
+    <div id="splash-waitlist-mount" style="display:flex;justify-content:center;min-height:340px"></div>
+  </div>
+
+  <!-- Hidden by default; revealed by app.js applyAuthState() when signed-in.
+       Avoids a brief flash of the search form for signed-out users before
+       Clerk loads and the splash takes over. -->
+  <div id="main-search-form" class="content-narrow" style="display:none">
   <div class="search-row">
     <input type="text" id="query" placeholder="Search Discogs" autocomplete="off" />
     <button id="search-btn" onclick="doSearch(1)" style="flex-shrink:0">Search</button>
@@ -449,9 +464,6 @@
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Own multiple copies of the same release? SeaDisco tracks each copy separately. Cards show a small <strong style="color:#ccc">(N)</strong> badge when you own more than one — click it to pick an instance, and the popup scopes its rating, folder, and notes to that specific copy. Each copy can live in a different folder, carry its own rating, and have its own private notes.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0">Click the <strong style="color:#ccc">📁</strong> button above the Collection filters to manage your Discogs folders — create, rename, or delete folders, and bulk-move items between them. All folder changes sync back to Discogs in real time.</p>
 
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Account &amp; Limits</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Anonymous users are capped at <strong style="color:#ccc">5 searches/day</strong> on a shared token. Sign up free and connect your Discogs account — either via <strong style="color:#ccc">OAuth</strong> or by adding your own token (<strong style="color:#ccc">discogs.com → Settings → Developers</strong>) — for unlimited searches and full features.</p>
-
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Saved Searches</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">Save any search and re-run it with one click. Saved searches persist across sessions.</p>
 </div>
@@ -565,14 +577,6 @@
         <p style="color:#555;font-size:0.8rem;margin-bottom:0.8rem">
           SeaDisco never sees your Discogs password. The connection is a standard Discogs OAuth authorization,
           and you can disconnect anytime. Prefer a Personal Access Token? That option is still available after sign-in.
-        </p>
-        <p style="color:#e8a020;font-size:0.78rem;margin-bottom:0.5rem;line-height:1.6">
-          <strong>Registration is limited.</strong> SeaDisco has a small number of spots available.
-          <span id="signed-out-spots" style="display:none"></span>
-        </p>
-        <p style="color:#888;font-size:0.75rem;margin-bottom:1.4rem;line-height:1.5">
-          Accounts inactive for 6 months are automatically hibernated to free up spots for others.
-          Hibernated accounts can reactivate when a spot opens up — no data is deleted.
         </p>
         <div id="clerk-sign-in"></div>
       </div>
@@ -761,15 +765,15 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script src="/utils.js?v=20260408o"></script>
-<script src="/search.js?v=20260408o"></script>
-<script src="/collection.js?v=20260408o"></script>
-<script src="/account.js?v=20260408o"></script>
-<script src="/orders.js?v=20260408o"></script>
-<script src="/app.js?v=20260408o"></script>
+<script src="/utils.js?v=20260408r"></script>
+<script src="/search.js?v=20260408r"></script>
+<script src="/collection.js?v=20260408r"></script>
+<script src="/account.js?v=20260408r"></script>
+<script src="/orders.js?v=20260408r"></script>
+<script src="/app.js?v=20260408r"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/modal.js?v=20260408o"></script>
-<script defer src="/inventory-editor.js?v=20260408o"></script>
+<script defer src="/modal.js?v=20260408r"></script>
+<script defer src="/inventory-editor.js?v=20260408r"></script>
 
 </body>
 </html>

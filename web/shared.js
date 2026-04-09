@@ -319,7 +319,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260408o";
+  const SITE_VERSION = "build 20260408r";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'https://seadisco.com' : '/'}" class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -365,42 +365,61 @@ function renderSharedFooter(opts) {
     return `<a href="${href}">${label}</a>`;
   };
 
+  // Records-tab links: in SPA mode, route through switchView('records') with the
+  // matching sub-tab. Outside the SPA, fall back to a query-string deep link.
+  const recLink = (label, tab) => {
+    if (isSPA) {
+      return `<a href="/?v=${tab}" onclick="event.preventDefault();_cwTab='${tab}';switchView('records')">${label}</a>`;
+    }
+    return `<a href="/?v=${tab}">${label}</a>`;
+  };
+
   const footer = document.querySelector("footer");
   if (!footer) return;
   footer.innerHTML = `
     <div class="footer-grid">
       <div class="footer-col">
-        <h4>SeaDisco</h4>
+        <h4>Browse</h4>
         ${link("Search", "search")}
-        ${link("Info", "info")}
+        ${recLink("Collection", "collection")}
+        ${recLink("Wantlist", "wantlist")}
+        ${recLink("Inventory", "inventory")}
+        ${recLink("Lists", "lists")}
+        ${recLink("Favorites", "favorites")}
       </div>
       <div class="footer-col">
-        <h4>Your Music</h4>
+        <h4>SeaDisco</h4>
         ${isSPA
-          ? `<a href="/?v=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-top[data-rtab]:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='collection';switchView('records')}">Collection</a>
-             <a href="/?v=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-top[data-rtab]:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='wantlist';switchView('records')}">Wantlist</a>
-             <a href="/?v=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-top[data-rtab]:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='inventory';switchView('records')}">Inventory</a>
-             <a href="/?v=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-top[data-rtab]:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='lists';switchView('records')}">Lists</a>
-             <a href="/?v=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-top[data-rtab]:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='favorites';switchView('records')}">Favorites</a>`
-          : `<a href="/?v=account">Collection</a>
-             <a href="/?v=account">Wantlist</a>
-             <a href="/?v=account">Inventory</a>
-             <a href="/?v=account">Lists</a>
-             <a href="/?v=account">Favorites</a>`}
-        ${isSPA ? `<a href="/?v=account" onclick="switchView('account');return false;">Account</a>` : `<a href="/?v=account">Account</a>`}
-      </div>
-      <div class="footer-col">
-        <h4>About</h4>
+          ? `<a href="/?v=account" onclick="switchView('account');return false;">Account</a>`
+          : `<a href="/?v=account">Account</a>`}
+        ${link("Info", "info")}
         ${link("Privacy Policy", "privacy")}
         ${link("Terms of Service", "terms")}
+        <a id="footer-admin-link" href="/admin" style="display:none">Admin</a>
       </div>
     </div>
     <div style="color:#555;font-style:italic;margin-bottom:0.3rem">DISCLAIMER: AI be funky sometimes</div>
     <div>Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Discogs</a> and <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Claude</a></div>
-    <div style="margin-top:0.3rem">&copy; 2026 SeaDisco <span id="footer-user-count" style="color:#555;font-size:0.8em"></span> &nbsp;&middot;&nbsp; Music data courtesy of Discogs API &nbsp;&middot;&nbsp; Not affiliated with Discogs &nbsp;&middot;&nbsp; Jimmy Witherfork Strikes Again</div>`;
-  // Fetch user count for footer
-  fetch("/api/user-count").then(r => r.json()).then(d => {
-    const el = document.getElementById("footer-user-count");
-    if (el && d.count != null) el.textContent = `${d.count}/${d.limit}`;
-  }).catch(() => {});
+    <div style="margin-top:0.3rem">&copy; 2026 SeaDisco &nbsp;&middot;&nbsp; Music data courtesy of Discogs API &nbsp;&middot;&nbsp; Not affiliated with Discogs &nbsp;&middot;&nbsp; Jimmy Witherfork Strikes Again</div>`;
+
+  // Reveal the Admin link only when /api/me confirms the current Clerk session
+  // is the admin user. The endpoint returns { signedIn, isAdmin } based on
+  // the server-side ADMIN_CLERK_ID env var, so it's not spoofable from the
+  // client. We must wait for Clerk to load before calling — otherwise the
+  // bearer token isn't attached and even the admin would be reported as
+  // signed-out. Failures are silent (link stays hidden).
+  (async () => {
+    try {
+      // Wait for Clerk so apiFetch can attach the bearer token. loadClerkInstance
+      // is idempotent and returns the cached instance after first call.
+      await loadClerkInstance();
+      const res = await apiFetch("/api/me");
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data?.isAdmin) {
+        const a = document.getElementById("footer-admin-link");
+        if (a) a.style.display = "";
+      }
+    } catch { /* hidden by default — fine */ }
+  })();
 }

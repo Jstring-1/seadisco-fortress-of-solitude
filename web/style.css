@@ -982,6 +982,11 @@ button {
   padding: 0 1rem;
   box-sizing: border-box;
   transition: background 0.15s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  line-height: 1;
 }
 
 button:hover:not(.nav-tab-top) { background: var(--accent2); }
@@ -3234,6 +3239,10 @@ footer {
 }
 .inv-new-btn,
 .inv-refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
   padding: 0.4rem 0.85rem;
   border: 1px solid var(--border, #444);
   background: var(--bg-elevated, #1e1e1e);
@@ -3241,6 +3250,8 @@ footer {
   border-radius: 6px;
   cursor: pointer;
   font-size: 0.9rem;
+  line-height: 1;
+  text-align: center;
 }
 .inv-new-btn {
   background: var(--accent, #2e7d32);

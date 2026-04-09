@@ -230,6 +230,22 @@ function switchView(view, skipPushState = false) {
   if (termsView)   termsView.style.display   = "none";
   if (accountView) accountView.style.display = "none";
 
+  // Invite-only splash: only show on the home/search view, never on
+  // info / privacy / terms / records / account / wanted views.
+  const _splashEl = document.getElementById("splash-section");
+  if (_splashEl) {
+    const _signedIn = !!window._clerk?.user;
+    _splashEl.style.display = (view === "" || view === "search") && !_signedIn ? "block" : "none";
+  }
+
+  // Inventory toolbar (+ New listing / Refresh) is rendered as a sibling of
+  // #results, so it leaks into other views unless we explicitly hide it on
+  // any top-level view change away from the inventory sub-tab.
+  const _invToolbar = document.getElementById("inventory-toolbar");
+  if (_invToolbar && (view !== "records" || _cwTab !== "inventory")) {
+    _invToolbar.style.display = "none";
+  }
+
   const mainForm    = document.getElementById("main-search-form");
   const recordsWrap = document.getElementById("records-wrap");
   const cwInput     = document.getElementById("cw-query");
@@ -237,7 +253,7 @@ function switchView(view, skipPushState = false) {
 
   if (view === "info") {
     if (infoView) infoView.style.display = "block";
-    if (mainForm) mainForm.style.display = "";
+    if (mainForm) mainForm.style.display = "none";
     if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
   } else if (view === "privacy") {
@@ -274,7 +290,8 @@ function switchView(view, skipPushState = false) {
     switchRecordsTab(_cwTab || "collection", true);
   } else {
     if (searchView) searchView.style.display = "";
-    if (mainForm) mainForm.style.display = "";
+    // Invite-only: hide the search form for signed-out users (splash takes its place)
+    if (mainForm) mainForm.style.display = window._clerk?.user ? "" : "none";
     if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
     bridgeCwToSearch();

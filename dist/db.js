@@ -335,6 +335,50 @@ export async function initDb() {
     )
   `);
     await getPool().query(`CREATE INDEX IF NOT EXISTS user_favorites_user_idx ON user_favorites (clerk_user_id, created_at DESC)`);
+    // The legacy ai_recommendations table is no longer created. To drop the
+    // existing data on a deployed instance, run manually:
+    //   DROP TABLE IF EXISTS ai_recommendations CASCADE;
+}
+// ── Invite-only purge: nuke all per-user data for non-admin clerk_user_ids ──
+//
+// Used when SeaDisco is locked down to a single admin (or invite-only mode).
+// Pass the admin's clerk_user_id to keep their rows intact and wipe everyone
+// else from every per-user table. Returns row counts per table.
+export async function purgeNonAdminUserData(adminClerkId) {
+    if (!adminClerkId)
+        throw new Error("adminClerkId required");
+    // Per-user tables, ordered with FK-children first (triggered_alerts → price_alerts).
+    const tables = [
+        "triggered_alerts",
+        "price_alerts",
+        "user_order_messages",
+        "user_orders",
+        "user_list_items",
+        "user_lists",
+        "user_inventory",
+        "user_wantlist",
+        "user_collection",
+        "user_collection_folders",
+        "user_favorites",
+        "saved_searches",
+        "feedback",
+        "oauth_request_tokens",
+        "user_tokens", // delete last so foreign references (if any) are gone
+    ];
+    const counts = {};
+    const pool = getPool();
+    for (const table of tables) {
+        try {
+            const r = await pool.query(`DELETE FROM ${table} WHERE clerk_user_id <> $1`, [adminClerkId]);
+            counts[table] = r.rowCount ?? 0;
+        }
+        catch (e) {
+            // Table might not exist on a fresh install — record and continue
+            counts[table] = -1;
+            console.warn(`[purgeNonAdminUserData] ${table}: ${e?.message ?? e}`);
+        }
+    }
+    return counts;
 }
 // ── Saved searches ──────────────────────────────────────────────────────
 export async function getSavedSearches(clerkUserId, view) {

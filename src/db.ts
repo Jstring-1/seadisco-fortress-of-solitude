@@ -353,30 +353,52 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS user_favorites_user_idx ON user_favorites (clerk_user_id, created_at DESC)`);
 
-  // ── AI recommendations (daily Claude-generated rare/collector picks) ────
-  await getPool().query(`
-    CREATE TABLE IF NOT EXISTS ai_recommendations (
-      id              SERIAL PRIMARY KEY,
-      clerk_user_id   TEXT NOT NULL,
-      release_id      INTEGER NOT NULL,
-      artist          TEXT,
-      title           TEXT,
-      year            INTEGER,
-      catno           TEXT,
-      country         TEXT,
-      label           TEXT,
-      cover_image     TEXT,
-      reason          TEXT,
-      tier            TEXT,
-      est_price_usd   NUMERIC(10,2),
-      data            JSONB,
-      generated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      clicked         BOOLEAN DEFAULT FALSE,
-      dismissed       BOOLEAN DEFAULT FALSE,
-      UNIQUE(clerk_user_id, release_id)
-    )
-  `);
-  await getPool().query(`CREATE INDEX IF NOT EXISTS ai_recommendations_user_idx ON ai_recommendations (clerk_user_id, generated_at DESC)`);
+  // The legacy ai_recommendations table is no longer created. To drop the
+  // existing data on a deployed instance, run manually:
+  //   DROP TABLE IF EXISTS ai_recommendations CASCADE;
+}
+
+// ── Invite-only purge: nuke all per-user data for non-admin clerk_user_ids ──
+//
+// Used when SeaDisco is locked down to a single admin (or invite-only mode).
+// Pass the admin's clerk_user_id to keep their rows intact and wipe everyone
+// else from every per-user table. Returns row counts per table.
+export async function purgeNonAdminUserData(adminClerkId: string): Promise<Record<string, number>> {
+  if (!adminClerkId) throw new Error("adminClerkId required");
+  // Per-user tables, ordered with FK-children first (triggered_alerts → price_alerts).
+  const tables = [
+    "triggered_alerts",
+    "price_alerts",
+    "user_order_messages",
+    "user_orders",
+    "user_list_items",
+    "user_lists",
+    "user_inventory",
+    "user_wantlist",
+    "user_collection",
+    "user_collection_folders",
+    "user_favorites",
+    "saved_searches",
+    "feedback",
+    "oauth_request_tokens",
+    "user_tokens", // delete last so foreign references (if any) are gone
+  ];
+  const counts: Record<string, number> = {};
+  const pool = getPool();
+  for (const table of tables) {
+    try {
+      const r = await pool.query(
+        `DELETE FROM ${table} WHERE clerk_user_id <> $1`,
+        [adminClerkId]
+      );
+      counts[table] = r.rowCount ?? 0;
+    } catch (e: any) {
+      // Table might not exist on a fresh install — record and continue
+      counts[table] = -1;
+      console.warn(`[purgeNonAdminUserData] ${table}: ${e?.message ?? e}`);
+    }
+  }
+  return counts;
 }
 
 // ── Saved searches ──────────────────────────────────────────────────────
@@ -483,258 +505,6 @@ export async function getAllFavoriteCounts(): Promise<Map<string, number>> {
   const map = new Map<string, number>();
   for (const row of r.rows) map.set(row.clerk_user_id, row.count);
   return map;
-}
-
-// ── AI recommendations ────────────────────────────────────────────────────
-
-/** Lightweight collector taste profile used to prompt Claude for recommendations. */
-export interface TasteProfile {
-  collectionCount: number;
-  wantlistCount: number;
-  favoritesCount: number;
-  topArtists: Array<{ name: string; count: number }>;
-  topLabels: Array<{ name: string; count: number }>;
-  topGenres: Array<{ name: string; count: number }>;
-  topStyles: Array<{ name: string; count: number }>;
-  decades: Array<{ decade: string; count: number }>;
-  countries: Array<{ country: string; count: number }>;
-  recentAdds: Array<{ artist: string; title: string; year: number | null }>;
-  topWantlist: Array<{ artist: string; title: string; year: number | null }>;
-  topFavorites: Array<{ artist: string; title: string; year: number | null }>;
-  ownedReleaseIds: number[];
-  wantedReleaseIds: number[];
-}
-
-/** Build a taste profile from a user's collection, wantlist, and favorites.
- *  Capped to keep Claude prompts small and cheap. */
-export async function buildTasteProfile(clerkUserId: string): Promise<TasteProfile> {
-  const pool = getPool();
-  const [
-    countsR, topArtistsR, topLabelsR, topGenresR, topStylesR,
-    decadesR, countriesR, recentAddsR, topWantlistR, topFavoritesR,
-    ownedIdsR, wantedIdsR,
-  ] = await Promise.all([
-    pool.query(
-      `SELECT
-        (SELECT COUNT(*)::int FROM user_collection WHERE clerk_user_id = $1) AS collection_count,
-        (SELECT COUNT(*)::int FROM user_wantlist  WHERE clerk_user_id = $1) AS wantlist_count,
-        (SELECT COUNT(*)::int FROM user_favorites WHERE clerk_user_id = $1) AS favorites_count`,
-      [clerkUserId]
-    ),
-    pool.query(
-      `SELECT LOWER(data->'artists'->0->>'name') AS name, COUNT(*)::int AS c
-       FROM user_collection WHERE clerk_user_id = $1 AND data->'artists'->0->>'name' IS NOT NULL
-       GROUP BY LOWER(data->'artists'->0->>'name')
-       ORDER BY c DESC LIMIT 15`,
-      [clerkUserId]
-    ),
-    pool.query(
-      `SELECT LOWER(data->'labels'->0->>'name') AS name, COUNT(*)::int AS c
-       FROM user_collection WHERE clerk_user_id = $1 AND data->'labels'->0->>'name' IS NOT NULL
-       GROUP BY LOWER(data->'labels'->0->>'name')
-       ORDER BY c DESC LIMIT 10`,
-      [clerkUserId]
-    ),
-    pool.query(
-      `SELECT LOWER(g) AS name, COUNT(*)::int AS c
-       FROM user_collection, jsonb_array_elements_text(data->'genres') AS g
-       WHERE clerk_user_id = $1
-       GROUP BY LOWER(g) ORDER BY c DESC LIMIT 8`,
-      [clerkUserId]
-    ),
-    pool.query(
-      `SELECT LOWER(s) AS name, COUNT(*)::int AS c
-       FROM user_collection, jsonb_array_elements_text(data->'styles') AS s
-       WHERE clerk_user_id = $1
-       GROUP BY LOWER(s) ORDER BY c DESC LIMIT 12`,
-      [clerkUserId]
-    ),
-    pool.query(
-      `SELECT CASE
-          WHEN (data->>'year')::int < 1950 THEN 'pre-1950'
-          WHEN (data->>'year')::int < 1960 THEN '1950s'
-          WHEN (data->>'year')::int < 1970 THEN '1960s'
-          WHEN (data->>'year')::int < 1980 THEN '1970s'
-          WHEN (data->>'year')::int < 1990 THEN '1980s'
-          WHEN (data->>'year')::int < 2000 THEN '1990s'
-          WHEN (data->>'year')::int < 2010 THEN '2000s'
-          ELSE '2010s+'
-        END AS decade, COUNT(*)::int AS c
-       FROM user_collection
-       WHERE clerk_user_id = $1 AND data->>'year' ~ '^\\d+$' AND (data->>'year')::int > 0
-       GROUP BY decade ORDER BY c DESC`,
-      [clerkUserId]
-    ),
-    pool.query(
-      `SELECT data->>'country' AS country, COUNT(*)::int AS c
-       FROM user_collection WHERE clerk_user_id = $1 AND data->>'country' IS NOT NULL
-       GROUP BY data->>'country' ORDER BY c DESC LIMIT 6`,
-      [clerkUserId]
-    ),
-    pool.query(
-      `SELECT data->'artists'->0->>'name' AS artist,
-              data->>'title' AS title,
-              NULLIF(data->>'year','')::int AS year
-       FROM user_collection WHERE clerk_user_id = $1
-       ORDER BY added_at DESC NULLS LAST LIMIT 15`,
-      [clerkUserId]
-    ),
-    pool.query(
-      `SELECT data->'artists'->0->>'name' AS artist,
-              data->>'title' AS title,
-              NULLIF(data->>'year','')::int AS year
-       FROM user_wantlist WHERE clerk_user_id = $1
-       ORDER BY added_at DESC NULLS LAST LIMIT 15`,
-      [clerkUserId]
-    ),
-    pool.query(
-      `SELECT data->'artists'->0->>'name' AS artist,
-              COALESCE(data->>'title', data->>'name') AS title,
-              NULLIF(data->>'year','')::int AS year
-       FROM user_favorites
-       WHERE clerk_user_id = $1 AND entity_type = 'release'
-       ORDER BY created_at DESC LIMIT 10`,
-      [clerkUserId]
-    ),
-    pool.query(
-      `SELECT DISTINCT discogs_release_id AS id FROM user_collection WHERE clerk_user_id = $1`,
-      [clerkUserId]
-    ),
-    pool.query(
-      `SELECT discogs_release_id AS id FROM user_wantlist WHERE clerk_user_id = $1`,
-      [clerkUserId]
-    ),
-  ]);
-
-  const c = countsR.rows[0] ?? {};
-  return {
-    collectionCount:  c.collection_count ?? 0,
-    wantlistCount:    c.wantlist_count   ?? 0,
-    favoritesCount:   c.favorites_count  ?? 0,
-    topArtists:       topArtistsR.rows.map(r => ({ name: r.name, count: r.c })).filter(r => r.name),
-    topLabels:        topLabelsR.rows.map(r => ({ name: r.name, count: r.c })).filter(r => r.name),
-    topGenres:        topGenresR.rows.map(r => ({ name: r.name, count: r.c })).filter(r => r.name),
-    topStyles:        topStylesR.rows.map(r => ({ name: r.name, count: r.c })).filter(r => r.name),
-    decades:          decadesR.rows.map(r => ({ decade: r.decade, count: r.c })),
-    countries:        countriesR.rows.map(r => ({ country: r.country, count: r.c })).filter(r => r.country),
-    recentAdds:       recentAddsR.rows.map(r => ({ artist: r.artist ?? "", title: r.title ?? "", year: r.year ?? null })).filter(r => r.artist && r.title),
-    topWantlist:      topWantlistR.rows.map(r => ({ artist: r.artist ?? "", title: r.title ?? "", year: r.year ?? null })).filter(r => r.artist && r.title),
-    topFavorites:     topFavoritesR.rows.map(r => ({ artist: r.artist ?? "", title: r.title ?? "", year: r.year ?? null })).filter(r => r.artist && r.title),
-    ownedReleaseIds:  ownedIdsR.rows.map(r => r.id as number).filter(Boolean),
-    wantedReleaseIds: wantedIdsR.rows.map(r => r.id as number).filter(Boolean),
-  };
-}
-
-/** Structured recommendation record stored in ai_recommendations. */
-export interface AiRecommendation {
-  releaseId:    number;
-  artist:       string;
-  title:        string;
-  year:         number | null;
-  catno:        string | null;
-  country:      string | null;
-  label:        string | null;
-  coverImage:   string | null;
-  reason:       string;
-  tier:         string;
-  estPriceUsd:  number | null;
-  data:         object | null;
-}
-
-/** Get all non-dismissed recommendations for a user (most recent batch first). */
-export async function getRecommendations(clerkUserId: string, limit: number = 16): Promise<any[]> {
-  const r = await getPool().query(
-    `SELECT release_id as "releaseId", artist, title, year, catno, country, label,
-            cover_image as "coverImage", reason, tier, est_price_usd as "estPriceUsd",
-            data, generated_at as "generatedAt", clicked, dismissed
-     FROM ai_recommendations
-     WHERE clerk_user_id = $1 AND NOT dismissed
-     ORDER BY generated_at DESC, id DESC
-     LIMIT $2`,
-    [clerkUserId, limit]
-  );
-  return r.rows;
-}
-
-/** Replace a user's recommendation set with a fresh batch (delete old, insert new). */
-export async function saveRecommendations(clerkUserId: string, recs: AiRecommendation[]): Promise<number> {
-  const pool = getPool();
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-    await client.query(`DELETE FROM ai_recommendations WHERE clerk_user_id = $1`, [clerkUserId]);
-    for (const rec of recs) {
-      await client.query(
-        `INSERT INTO ai_recommendations
-           (clerk_user_id, release_id, artist, title, year, catno, country, label,
-            cover_image, reason, tier, est_price_usd, data, generated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, NOW())
-         ON CONFLICT (clerk_user_id, release_id) DO UPDATE SET
-           artist = EXCLUDED.artist, title = EXCLUDED.title, year = EXCLUDED.year,
-           catno = EXCLUDED.catno, country = EXCLUDED.country, label = EXCLUDED.label,
-           cover_image = EXCLUDED.cover_image, reason = EXCLUDED.reason, tier = EXCLUDED.tier,
-           est_price_usd = EXCLUDED.est_price_usd, data = EXCLUDED.data,
-           generated_at = NOW(), dismissed = FALSE`,
-        [
-          clerkUserId, rec.releaseId, rec.artist, rec.title, rec.year,
-          rec.catno, rec.country, rec.label, rec.coverImage, rec.reason,
-          rec.tier, rec.estPriceUsd, rec.data ? JSON.stringify(rec.data) : null,
-        ]
-      );
-    }
-    await client.query("COMMIT");
-    return recs.length;
-  } catch (err) {
-    await client.query("ROLLBACK");
-    throw err;
-  } finally {
-    client.release();
-  }
-}
-
-export async function markRecommendationClicked(clerkUserId: string, releaseId: number): Promise<void> {
-  await getPool().query(
-    `UPDATE ai_recommendations SET clicked = TRUE WHERE clerk_user_id = $1 AND release_id = $2`,
-    [clerkUserId, releaseId]
-  );
-}
-
-export async function dismissRecommendation(clerkUserId: string, releaseId: number): Promise<void> {
-  await getPool().query(
-    `UPDATE ai_recommendations SET dismissed = TRUE WHERE clerk_user_id = $1 AND release_id = $2`,
-    [clerkUserId, releaseId]
-  );
-}
-
-/** Admin: return per-user counts + last generation time (joined with discogs_username). */
-export async function getRecommendationStats(): Promise<Array<{ clerkUserId: string; username: string | null; count: number; clicked: number; dismissed: number; lastGenerated: Date | null }>> {
-  const r = await getPool().query(
-    `SELECT ar.clerk_user_id AS "clerkUserId",
-            ut.discogs_username AS "username",
-            COUNT(*)::int AS count,
-            COUNT(*) FILTER (WHERE ar.clicked)::int AS clicked,
-            COUNT(*) FILTER (WHERE ar.dismissed)::int AS dismissed,
-            MAX(ar.generated_at) AS "lastGenerated"
-     FROM ai_recommendations ar
-     LEFT JOIN user_tokens ut ON ut.clerk_user_id = ar.clerk_user_id
-     GROUP BY ar.clerk_user_id, ut.discogs_username
-     ORDER BY "lastGenerated" DESC NULLS LAST`
-  );
-  return r.rows;
-}
-
-/** Admin: return all recommendations for a user (including dismissed) for testing/preview. */
-export async function getAllRecommendationsForUser(clerkUserId: string): Promise<any[]> {
-  const r = await getPool().query(
-    `SELECT release_id as "releaseId", artist, title, year, catno, country, label,
-            cover_image as "coverImage", reason, tier, est_price_usd as "estPriceUsd",
-            data, generated_at as "generatedAt", clicked, dismissed
-     FROM ai_recommendations
-     WHERE clerk_user_id = $1
-     ORDER BY generated_at DESC, id DESC`,
-    [clerkUserId]
-  );
-  return r.rows;
 }
 
 export async function getAllUsersSyncStatus(): Promise<Array<{
@@ -2532,7 +2302,7 @@ export async function getTableRowCounts(): Promise<Array<{ table: string; rows: 
   const tables = [
     'user_tokens', 'user_collection', 'user_collection_folders', 'user_wantlist',
     'user_inventory', 'user_lists', 'user_list_items', 'user_orders', 'user_order_messages',
-    'user_favorites', 'saved_searches', 'feedback', 'ai_recommendations',
+    'user_favorites', 'saved_searches', 'feedback',
     'release_cache', 'price_cache', 'price_history', 'price_alerts', 'triggered_alerts',
     'api_request_log', 'oauth_request_tokens',
   ];

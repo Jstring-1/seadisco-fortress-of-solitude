@@ -105,14 +105,9 @@ function _hasSearch(p) { return p.get("q") || p.get("a") || p.get("ar") || p.get
   const ctArtist = p.get("ct");
   if (ctArtist) openConcertPopup(null, ctArtist);
 
-  // Only load home defaults if no search is being restored
-  if (!_hasSearch(p)) {
-    // Show community favorites for logged-out users on the home page
-    // (signed-in users get their own favorites via loadDiscogsIds → loadRandomRecords)
-    authReadyPromise.then(() => {
-      if (!window._clerk?.user) loadRandomRecords();
-    });
-  }
+  // Invite-only mode: signed-out users see only the splash on the home view,
+  // so we no longer pre-load community records here. Signed-in users still
+  // get their own random records via loadDiscogsIds → loadRandomRecords.
 })();
 
 // ── Browser back / forward ───────────────────────────────────────────────
@@ -179,8 +174,70 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
 });
 
 // ── Clerk auth init ──────────────────────────────────────────────────────
+function _applySplashVisibility(clerk) {
+  // Invite-only mode: when there's no Clerk session, hide the search UI
+  // entirely and show the waitlist splash inline. Info / privacy / terms
+  // pages remain reachable via the header nav.
+  const splash = document.getElementById("splash-section");
+  const form   = document.getElementById("main-search-form");
+  const results = document.getElementById("results");
+  const random = document.getElementById("random-records");
+  const pagination = document.getElementById("pagination");
+  const searchInfo = document.getElementById("search-info-block");
+  if (!splash) return;
+
+  if (clerk.user) {
+    splash.style.display = "none";
+    if (form) form.style.display = "";
+  } else {
+    if (form) form.style.display = "none";
+    if (results) results.innerHTML = "";
+    if (random) random.style.display = "none";
+    if (pagination) pagination.style.display = "none";
+    if (searchInfo) searchInfo.style.display = "none";
+    splash.style.display = "block";
+    // Mount Clerk waitlist (preferred) or fall back to sign-up widget.
+    const mount = document.getElementById("splash-waitlist-mount");
+    if (mount && !mount.dataset.mounted) {
+      mount.dataset.mounted = "1";
+      const appearance = {
+        variables: {
+          colorBackground:      "#15120e",
+          colorInputBackground: "#0e0c08",
+          colorInputText:       "#e8dcc8",
+          colorText:            "#e8dcc8",
+          colorTextSecondary:   "#a89880",
+          colorPrimary:         "#ff6b35",
+          colorDanger:          "#e05050",
+          colorNeutral:         "#a89880",
+          borderRadius:         "6px",
+          fontFamily:           "system-ui, -apple-system, sans-serif",
+        },
+        elements: {
+          card:                "background:#15120e; border:1px solid #2e2518; box-shadow:none;",
+          headerTitle:         "color:#e8dcc8;",
+          headerSubtitle:      "color:#8a7d6b;",
+          formFieldLabel:      "color:#8a7d6b;",
+          formFieldInput:      "background:#0e0c08; border:1px solid #2e2518; color:#e8dcc8;",
+          footerActionLink:    "color:#ff6b35;",
+        },
+      };
+      try {
+        if (typeof clerk.mountWaitlist === "function") {
+          clerk.mountWaitlist(mount, { appearance });
+        } else if (typeof clerk.mountSignUp === "function") {
+          clerk.mountSignUp(mount, { appearance });
+        }
+      } catch (e) {
+        console.error("[splash] Clerk mount failed:", e);
+      }
+    }
+  }
+}
+
 async function applyAuthState(clerk) {
-  const navBtn = document.getElementById("nav-auth-btn");
+  // The header auth tab uses id="nav-auth-tab" (set in shared.js renderSharedHeader).
+  const navBtn = document.getElementById("nav-auth-tab");
   if (navBtn) {
     if (clerk.user) {
       navBtn.textContent = "Account";
@@ -190,6 +247,8 @@ async function applyAuthState(clerk) {
       navBtn.classList.add("nav-signup-btn");
     }
   }
+
+  _applySplashVisibility(clerk);
 
   if (clerk.user) {
     // Notify account.js so the account view can update if it's active
@@ -213,7 +272,6 @@ async function applyAuthState(clerk) {
     // Signed-out: resolve the IDs promise immediately so URL modals don't wait
     if (window._resolveDiscogsIds) window._resolveDiscogsIds();
   }
-  // Signed-out: do not show Featured Favorites on the home page
 }
 
 initAuth({
