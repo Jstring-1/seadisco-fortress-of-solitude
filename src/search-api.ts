@@ -1093,12 +1093,19 @@ app.delete("/api/user/inventory/:listingId", async (req, res) => {
       headers: ctx.client.buildHeaders("DELETE", url),
       context: "inventory-delete",
     });
-    if (!r.ok && r.status !== 204) {
+    // Treat 404 as "already gone" — the listing was deleted on Discogs
+    // (manually, expired, or already removed in a prior call) but our
+    // local cache still had a stale row. Sync local state and report
+    // success so the UI can move on instead of leaving a phantom row.
+    let alreadyGone = false;
+    if (r.status === 404) {
+      alreadyGone = true;
+    } else if (!r.ok && r.status !== 204) {
       const text = await r.text();
       res.status(r.status).json({ error: `Discogs error: ${text}` }); return;
     }
     await deleteInventoryItem(ctx.userId, listingId);
-    res.json({ ok: true });
+    res.json({ ok: true, alreadyGone });
   } catch (e) {
     res.status(500).json({ error: String(e) });
   }
