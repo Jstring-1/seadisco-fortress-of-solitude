@@ -151,13 +151,6 @@ export async function initDb() {
   `);
     await getPool().query(`ALTER TABLE user_inventory ALTER COLUMN listing_id TYPE BIGINT`);
     await getPool().query(`ALTER TABLE user_tokens ADD COLUMN IF NOT EXISTS inventory_synced_at TIMESTAMP`);
-    // ── Live events: add new columns for richer TM data ─────────────────────
-    await getPool().query(`ALTER TABLE live_events ADD COLUMN IF NOT EXISTS venue_url TEXT`);
-    await getPool().query(`ALTER TABLE live_events ADD COLUMN IF NOT EXISTS image_url TEXT`);
-    await getPool().query(`ALTER TABLE live_events ADD COLUMN IF NOT EXISTS price_min NUMERIC`);
-    await getPool().query(`ALTER TABLE live_events ADD COLUMN IF NOT EXISTS price_max NUMERIC`);
-    await getPool().query(`ALTER TABLE live_events ADD COLUMN IF NOT EXISTS currency TEXT`);
-    await getPool().query(`ALTER TABLE live_events ADD COLUMN IF NOT EXISTS status TEXT`);
     // ── User lists (curated Discogs lists) ───────────────────────────────────
     await getPool().query(`
     CREATE TABLE IF NOT EXISTS user_lists (

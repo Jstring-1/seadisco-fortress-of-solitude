@@ -3,7 +3,7 @@
 //   1. utils.js    — config, helpers, escHtml, bio markup, relations
 //   2. search.js   — doSearch, AI search, cards, pagination, artist nav
 //   3. collection.js — switchView, collection/wantlist/wants, sync, nav
-//   4. modal.js    — album popup, concerts, lightbox, video, bio, versions
+//   4. modal.js    — album popup, lightbox, video, bio, versions
 //   5. drops.js    — fresh releases, tag cloud, genre filter, drop card popup
 //   6. app.js      — auth, URL restore, event wiring (this file)
 
@@ -76,9 +76,7 @@ function _hasSearch(p) { return p.get("q") || p.get("a") || p.get("ar") || p.get
       ]);
       const versionParam = p.get("vr");
       idsOrTimeout.then(() => {
-        try {
-          openModal(null, pId, pType, pUrl);
-        } catch (e) { console.error("[op] openModal error:", e); }
+        try { openModal(null, pId, pType, pUrl); } catch {}
         // Open version popup after modal has had time to load
         if (versionParam) setTimeout(() => openVersionPopup(null, versionParam), 1400);
       });
@@ -102,8 +100,6 @@ function _hasSearch(p) { return p.get("q") || p.get("a") || p.get("ar") || p.get
       setTimeout(() => openVideo(null, playUrl), 300);
     }
   }
-  const ctArtist = p.get("ct");
-  if (ctArtist) openConcertPopup(null, ctArtist);
 
   // Invite-only mode: signed-out users see only the splash on the home view,
   // so we no longer pre-load community records here. Signed-in users still

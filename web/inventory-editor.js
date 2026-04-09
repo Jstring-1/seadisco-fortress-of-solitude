@@ -18,10 +18,6 @@ function _invFlagScopeIssue() {
   if (typeof renderMarketplaceScopeBanner === "function") renderMarketplaceScopeBanner();
 }
 
-function _escInv(s) {
-  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
-
 function _invShortTitle(data) {
   const rel = data?.release || {};
   const artist = rel.artist || rel.description || "";
@@ -107,7 +103,7 @@ async function openInventoryEditor(opts = {}) {
       <h2 class="inv-editor-title">${mode === "edit" ? "Edit listing" : "New listing"}</h2>
       <div class="inv-editor-release">
         ${releaseId
-          ? `<div class="inv-editor-release-name">${_escInv(releaseTitle || `Release ${releaseId}`)}</div>
+          ? `<div class="inv-editor-release-name">${escHtml(releaseTitle || `Release ${releaseId}`)}</div>
              <div class="inv-editor-release-id">Discogs release ID: <strong>${releaseId}</strong></div>`
           : `<label class="inv-editor-label">Release
                <input type="text" id="inv-release-search" placeholder="Search by artist + title, or paste a release ID / URL" autocomplete="off"/>
@@ -135,23 +131,23 @@ async function openInventoryEditor(opts = {}) {
           <select id="inv-status">${INV_STATUSES.map(s => `<option${s === (prefill.status || "For Sale") ? " selected" : ""}>${s}</option>`).join("")}</select>
         </label>
         <label class="inv-editor-label inv-editor-wide">Comments
-          <textarea id="inv-comments" rows="3" placeholder="Any condition notes, extras, etc.">${_escInv(prefill.comments || "")}</textarea>
+          <textarea id="inv-comments" rows="3" placeholder="Any condition notes, extras, etc.">${escHtml(prefill.comments || "")}</textarea>
         </label>
         <label class="inv-editor-label inv-editor-checkbox">
           <input type="checkbox" id="inv-allow-offers" ${prefill.allowOffers ? "checked" : ""}/>
           Allow offers
         </label>
         <label class="inv-editor-label">Location
-          <input type="text" id="inv-location" value="${_escInv(prefill.location || "")}" placeholder="Shelf / bin"/>
+          <input type="text" id="inv-location" value="${escHtml(prefill.location || "")}" placeholder="Shelf / bin"/>
         </label>
         <label class="inv-editor-label">Weight (grams, or "auto")
-          <input type="text" id="inv-weight" value="${_escInv(prefill.weight ?? "")}" placeholder="auto"/>
+          <input type="text" id="inv-weight" value="${escHtml(prefill.weight ?? "")}" placeholder="auto"/>
         </label>
         <label class="inv-editor-label">Format quantity
-          <input type="number" min="1" id="inv-format-qty" value="${_escInv(prefill.formatQuantity ?? "")}"/>
+          <input type="number" min="1" id="inv-format-qty" value="${escHtml(prefill.formatQuantity ?? "")}"/>
         </label>
         <label class="inv-editor-label">External ID
-          <input type="text" id="inv-external-id" value="${_escInv(prefill.externalId || "")}"/>
+          <input type="text" id="inv-external-id" value="${escHtml(prefill.externalId || "")}"/>
         </label>
       </div>
 
@@ -230,8 +226,8 @@ function _invRenderReleaseResults(results) {
     return `<div class="inv-release-result" onclick="_invPickRelease(JSON.parse(decodeURIComponent('${payload}')))">
       ${thumb ? `<img src="${thumb}" alt=""/>` : `<div class="inv-release-thumb-ph"></div>`}
       <div class="inv-release-info">
-        <div class="inv-release-title">${_escInv(title)}</div>
-        <div class="inv-release-meta">${_escInv(meta)} · #${id}</div>
+        <div class="inv-release-title">${escHtml(title)}</div>
+        <div class="inv-release-meta">${escHtml(meta)} · #${id}</div>
       </div>
     </div>`;
   }).join("");
@@ -247,7 +243,7 @@ function _invPickRelease(release) {
   const box = document.getElementById("inv-release-results");
   if (box) { box.style.display = "none"; box.innerHTML = ""; }
   const chosen = document.getElementById("inv-release-chosen");
-  if (chosen) { chosen.style.display = "block"; chosen.innerHTML = `Selected: <strong>${_escInv(release.title || "")}</strong> (#${release.id})`; }
+  if (chosen) { chosen.style.display = "block"; chosen.innerHTML = `Selected: <strong>${escHtml(release.title || "")}</strong> (#${release.id})`; }
 }
 
 // In-modal delete confirmation. Returns a Promise<boolean>.
@@ -263,8 +259,8 @@ function _invConfirmDelete(context) {
     if (existing) existing.remove();
     const ov = document.createElement("div");
     ov.id = "inv-confirm-overlay";
-    const title = context?.title ? _escInv(context.title) : "this listing";
-    const price = context?.price ? ` for <strong>${_escInv(context.price)}</strong>` : "";
+    const title = context?.title ? escHtml(context.title) : "this listing";
+    const price = context?.price ? ` for <strong>${escHtml(context.price)}</strong>` : "";
     ov.innerHTML = `
       <div id="inv-confirm-panel" role="dialog" aria-modal="true" aria-labelledby="inv-confirm-heading">
         <h3 id="inv-confirm-heading" style="margin:0 0 0.5rem 0">Delete this listing?</h3>
@@ -426,7 +422,7 @@ async function _invGetPriceSuggestions() {
     const s = j.suggestions || {};
     const rows = Object.entries(s).map(([cond, v]) => {
       const val = v?.value ? `${v.currency || "USD"} ${Number(v.value).toFixed(2)}` : "—";
-      return `<div class="inv-ps-row"><span>${_escInv(cond)}</span><strong>${val}</strong></div>`;
+      return `<div class="inv-ps-row"><span>${escHtml(cond)}</span><strong>${val}</strong></div>`;
     }).join("");
     box.innerHTML = rows || "No suggestions for this release";
   } catch (e) {
