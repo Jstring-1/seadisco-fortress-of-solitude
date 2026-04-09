@@ -33,6 +33,40 @@ function _markVisited(id) {
   document.querySelectorAll(`.card[onclick*="'${key}'"]`).forEach(el => el.classList.add("card-visited"));
   document.querySelectorAll(`.catno-link[onclick*="${key}"]`).forEach(el => el.classList.add("link-visited"));
 }
+
+// ── Recent history — richer record of opened releases for the Recent feed ──
+const _historyKey = "sd_history";
+const _HISTORY_MAX = 120;
+function _recordHistory(id, type) {
+  if (!id || !type) return;
+  try {
+    const entry = (typeof itemCache !== "undefined" ? itemCache.get(String(id)) : null);
+    // Store a compact card-shaped snapshot so the Recent feed can render
+    // without re-fetching. Fall back to minimal data if not in cache.
+    const item = entry ? {
+      id,
+      type,
+      title: entry.title || "",
+      cover_image: entry.cover_image || entry.thumb || "",
+      uri: entry.uri || `/${type}/${id}`,
+      label: entry.label ?? [],
+      format: entry.format ?? [],
+      genre: entry.genre ?? [],
+      year: entry.year || "",
+      country: entry.country || "",
+      catno: entry.catno || "",
+    } : { id, type, title: "", cover_image: "", uri: `/${type}/${id}` };
+    const raw = localStorage.getItem(_historyKey);
+    let hist = raw ? JSON.parse(raw) : [];
+    // Remove any existing entry for this id (bubble to front)
+    hist = hist.filter(h => String(h.id) !== String(id));
+    hist.unshift({ ...item, _openedAt: Date.now() });
+    if (hist.length > _HISTORY_MAX) hist = hist.slice(0, _HISTORY_MAX);
+    localStorage.setItem(_historyKey, JSON.stringify(hist));
+    // Notify any listeners (e.g. the Recent strip on the search page)
+    window.dispatchEvent(new CustomEvent("sd-history-change"));
+  } catch { /* storage quota or parse error — silently ignore */ }
+}
 /** Apply visited state to all currently rendered cards and version links */
 function applyVisitedCards() {
   if (!_visited.size) return;
@@ -133,6 +167,7 @@ function mvToggleFav(dot, id) {
 function openModal(event, id, type, discogsUrl) {
   if (event) event.preventDefault();
   _markVisited(id);
+  _recordHistory(id, type);
   const u = new URL(window.location.href);
   u.searchParams.set("op", `${type}:${id}`);
   history.replaceState({}, "", u.toString());

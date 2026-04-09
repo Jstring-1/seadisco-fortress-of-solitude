@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, getRandomPublicFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, getRandomPublicFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, buildTasteProfile, getRecommendations, saveRecommendations, markRecommendationClicked, dismissRecommendation, getRecommendationStats, getAllRecommendationsForUser, AiRecommendation, TasteProfile } from "./db.js";
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -2579,6 +2579,144 @@ In 4–7 words, give a single honest phrase describing how well these results ma
   }
 });
 
+// ── AI daily recommendations ──────────────────────────────────────────────
+
+// GET /api/recommendations — current user's daily picks (up to 16)
+app.get("/api/recommendations", async (req, res) => {
+  const userId = await getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "no_token" }); return; }
+  try {
+    const items = await getRecommendations(userId, 16);
+    res.json({ items, count: items.length });
+  } catch (err) {
+    console.error("[recommendations] fetch error:", err);
+    res.status(500).json({ error: "Failed to load recommendations" });
+  }
+});
+
+// POST /api/recommendations/click — mark a rec as clicked (feedback signal)
+app.post("/api/recommendations/click", express.json(), async (req, res) => {
+  const userId = await getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "no_token" }); return; }
+  const releaseId = Number(req.body?.releaseId);
+  if (!releaseId) { res.status(400).json({ error: "releaseId required" }); return; }
+  try {
+    await markRecommendationClicked(userId, releaseId);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: String(err) }); }
+});
+
+// POST /api/recommendations/dismiss — hide a rec from the strip
+app.post("/api/recommendations/dismiss", express.json(), async (req, res) => {
+  const userId = await getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "no_token" }); return; }
+  const releaseId = Number(req.body?.releaseId);
+  if (!releaseId) { res.status(400).json({ error: "releaseId required" }); return; }
+  try {
+    await dismissRecommendation(userId, releaseId);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: String(err) }); }
+});
+
+// POST /api/recommendations/refresh — user-triggered regenerate (self only)
+// Rate limited to 1 call per 10 minutes per user via in-memory cache.
+const _recRefreshCache = new Map<string, number>();
+app.post("/api/recommendations/refresh", express.json(), async (req, res) => {
+  const userId = await getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "no_token" }); return; }
+  if (!anthropicKey) { res.status(503).json({ error: "AI not configured" }); return; }
+
+  const last = _recRefreshCache.get(userId) ?? 0;
+  const cooldownMs = 10 * 60 * 1000;
+  if (Date.now() - last < cooldownMs) {
+    const waitMin = Math.ceil((cooldownMs - (Date.now() - last)) / 60000);
+    res.status(429).json({ error: `Please wait ${waitMin} more minute(s) before refreshing` });
+    return;
+  }
+  _recRefreshCache.set(userId, Date.now());
+
+  try {
+    const client = await getDiscogsClientForUser(userId);
+    if (!client) { res.status(400).json({ error: "No Discogs auth configured" }); return; }
+    const username = (await getDiscogsUsername(userId)) ?? "unknown";
+    // Respond immediately, run in background
+    res.json({ ok: true, message: "Generating fresh recommendations — refresh in ~30 seconds" });
+    generateRecommendationsForUser(userId, username, client).catch(err => {
+      console.error(`[ai-rec] user-refresh failed for ${username}:`, err);
+    });
+  } catch (err) {
+    console.error("[recommendations/refresh] error:", err);
+    res.status(500).json({ error: "Failed to start refresh" });
+  }
+});
+
+// POST /api/admin/generate-recommendations — admin trigger: all users or single user
+app.post("/api/admin/generate-recommendations", express.json(), async (req, res) => {
+  const userId = await getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!anthropicKey) { res.status(503).json({ error: "AI not configured" }); return; }
+
+  const targetUsername = (req.body?.username as string | undefined)?.trim();
+
+  if (targetUsername) {
+    try {
+      const targetClerkId = await getClerkUserIdByUsername(targetUsername);
+      if (!targetClerkId) { res.status(404).json({ error: "User not found" }); return; }
+      const client = await getDiscogsClientForUser(targetClerkId);
+      if (!client) { res.status(400).json({ error: "User has no Discogs auth" }); return; }
+      res.json({ ok: true, message: `Generating recommendations for ${targetUsername}...` });
+      generateRecommendationsForUser(targetClerkId, targetUsername, client).catch(err => {
+        console.error(`[ai-rec] admin trigger failed for ${targetUsername}:`, err);
+      });
+    } catch (err) { res.status(500).json({ error: String(err) }); }
+    return;
+  }
+
+  // All users
+  const users = await getAllUsersForSync();
+  res.json({ ok: true, queued: users.length, mode: "all" });
+  (async () => {
+    for (const user of users) {
+      try {
+        const userClient = await getDiscogsClientForUser(user.clerkUserId);
+        if (!userClient) continue;
+        await generateRecommendationsForUser(user.clerkUserId, user.username, userClient);
+        await sleep(5000);
+      } catch (err) {
+        console.error(`[ai-rec] admin-all failed for ${user.username}:`, err);
+      }
+    }
+  })();
+});
+
+// GET /api/admin/recommendation-stats — per-user counts + last generated
+app.get("/api/admin/recommendation-stats", async (req, res) => {
+  const userId = await getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  try {
+    const stats = await getRecommendationStats();
+    res.json({ stats });
+  } catch (err) { res.status(500).json({ error: String(err) }); }
+});
+
+// GET /api/admin/user-recommendations?username=X — full rec list for one user
+// (includes dismissed items so the admin can audit what Claude returned)
+app.get("/api/admin/user-recommendations", async (req, res) => {
+  const userId = await getClerkUserId(req);
+  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  const username = (req.query.username as string | undefined)?.trim();
+  if (!username) { res.status(400).json({ error: "Missing username" }); return; }
+  try {
+    const targetClerkId = await getClerkUserIdByUsername(username);
+    if (!targetClerkId) { res.status(404).json({ error: "User not found" }); return; }
+    const items = await getAllRecommendationsForUser(targetClerkId);
+    res.json({ username, clerkUserId: targetClerkId, count: items.length, items });
+  } catch (err) { res.status(500).json({ error: String(err) }); }
+});
+
 // GET /search?q=pink+floyd&type=master&year=1973&page=1&per_page=10
 app.get("/search", async (req, res) => {
   const rawQ   = (req.query.q as string) ?? "";
@@ -3407,6 +3545,226 @@ async function syncUserExtras(userId: string, username: string, client: DiscogsC
   return { inventory, lists, orders };
 }
 
+// ── AI recommendations (daily Claude-generated rare/collector picks) ─────
+// Compact taste profile → Claude (Sonnet) → grounded against Discogs search.
+// Runs once per day at ~03:30 Pacific per user. Cheap (~$0.02/user/day on Haiku).
+
+const AI_REC_MODEL         = "claude-haiku-4-5-20251001";
+const AI_REC_MIN_COLLECTION = 10;  // skip users with fewer than N items (not enough signal)
+const AI_REC_REQUEST_COUNT  = 12;  // ask Claude for N, store the ones that ground cleanly
+const AI_REC_TARGET_COUNT   = 8;   // aim for this many grounded picks per user
+
+function _buildRecommendationPrompt(profile: TasteProfile): string {
+  const fmt = (list: Array<{ name?: string; artist?: string; title?: string; count?: number; decade?: string; country?: string; year?: number | null }>) => list.map(x => {
+    if (x.decade) return `${x.decade} (${x.count})`;
+    if (x.country) return `${x.country} (${x.count})`;
+    if (x.artist && x.title) return `${x.artist} — ${x.title}${x.year ? ` (${x.year})` : ""}`;
+    return `${x.name}${x.count ? ` (${x.count})` : ""}`;
+  }).join(", ");
+
+  return `You are a vinyl record expert recommending rare, collectable, and high-end pressings to a collector based on their taste profile.
+
+═══ COLLECTOR TASTE PROFILE ═══
+Collection: ${profile.collectionCount} items · Wantlist: ${profile.wantlistCount} · Favorites: ${profile.favoritesCount}
+
+Top artists: ${fmt(profile.topArtists) || "(none)"}
+Top labels: ${fmt(profile.topLabels) || "(none)"}
+Top genres: ${fmt(profile.topGenres) || "(none)"}
+Top styles: ${fmt(profile.topStyles) || "(none)"}
+Era distribution: ${fmt(profile.decades) || "(none)"}
+Countries of origin: ${fmt(profile.countries) || "(none)"}
+
+Recent additions: ${fmt(profile.recentAdds.slice(0, 8)) || "(none)"}
+On their wantlist (what they're hunting): ${fmt(profile.topWantlist.slice(0, 8)) || "(none)"}
+Favorites (aspirational): ${fmt(profile.topFavorites.slice(0, 6)) || "(none)"}
+
+═══ RECOMMENDATION RULES ═══
+1. Do NOT recommend records they already own (listed above) or on their wantlist.
+2. Do NOT recommend common reissues unless they have genuine collector significance
+   (Speakers Corner, Analogue Productions, MoFi UHQR, Music Matters, Tone Poet, ERC, ORG, Pure Pleasure, Acoustic Sounds).
+3. PRIORITIZE: original first pressings, deadwax variants, Japanese OBI pressings (SMJ/ECPJ/GXF/EOP/SMX/SWX series),
+   UK Vertigo swirl, Blue Note NY labels, German Brain/ECM originals, audiophile labels, limited/numbered variants,
+   deep cuts from labels they already collect, adjacent artists with crossover appeal.
+4. Reach slightly outside their comfort zone — if they collect jazz, suggest one leftfield jazz-adjacent gem.
+5. Match their apparent tier: a collector of $400 mono originals gets different picks than a $20-reissue collector.
+6. The \`catno\` field is CRITICAL — you must give the exact catalog number of the specific pressing,
+   not just "any copy of this album". Include country and label for disambiguation.
+
+═══ OUTPUT FORMAT ═══
+Return EXACTLY ${AI_REC_REQUEST_COUNT} recommendations as a JSON array (no markdown, no code fences).
+Each item must have ALL of these fields:
+{
+  "artist": "Exact artist name as on the pressing",
+  "title": "Exact release title",
+  "year": 1973,
+  "catno": "SMJ-7236",
+  "country": "Japan",
+  "label": "CBS/Sony",
+  "reason": "One sentence on why this matches their taste (max 25 words)",
+  "tier": "rare" | "audiophile" | "collector" | "holy-grail",
+  "est_price_usd": 120
+}
+
+Return ONLY the JSON array. No preamble, no explanation, no markdown.`;
+}
+
+/** Call Claude to get recommendation candidates. Returns parsed array or throws. */
+async function _fetchRecommendationsFromClaude(profile: TasteProfile): Promise<any[]> {
+  if (!anthropicKey) throw new Error("ANTHROPIC_API_KEY not configured");
+  const prompt = _buildRecommendationPrompt(profile);
+  const r = await loggedFetch("anthropic", "https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": anthropicKey,
+      "anthropic-version": "2023-06-01",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      model: AI_REC_MODEL,
+      max_tokens: 3000,
+      messages: [{ role: "user", content: prompt }],
+    }),
+    context: "ai-recommendations",
+  });
+  const data = await r.json() as any;
+  if (!r.ok) throw new Error(`Anthropic error: ${data.error?.message ?? r.status}`);
+  let text = (data.content?.[0]?.text ?? "[]").trim();
+  text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  // Claude sometimes wraps in {recommendations: [...]}
+  const parsed = JSON.parse(text);
+  return Array.isArray(parsed) ? parsed : (parsed.recommendations ?? parsed.items ?? []);
+}
+
+/** Ground a Claude suggestion against Discogs search. Returns the matched release or null. */
+async function _groundRecommendation(
+  client: DiscogsClient,
+  suggestion: any,
+  username: string,
+): Promise<any | null> {
+  // Build query params with progressive fallback: catno+artist → catno → artist+title → artist+title+year
+  const attempts: Array<Record<string, string>> = [];
+  if (suggestion.catno && suggestion.artist) {
+    attempts.push({ catno: suggestion.catno, artist: suggestion.artist, type: "release" });
+  }
+  if (suggestion.catno) {
+    attempts.push({ catno: suggestion.catno, type: "release" });
+  }
+  if (suggestion.artist && suggestion.title) {
+    const params: Record<string, string> = { artist: suggestion.artist, release_title: suggestion.title, type: "release" };
+    if (suggestion.year) params.year = String(suggestion.year);
+    if (suggestion.country) params.country = suggestion.country;
+    attempts.push(params);
+  }
+  if (suggestion.artist && suggestion.title) {
+    attempts.push({ artist: suggestion.artist, release_title: suggestion.title, type: "release" });
+  }
+
+  for (const params of attempts) {
+    try {
+      const qs = new URLSearchParams(params).toString();
+      const url = `https://api.discogs.com/database/search?${qs}&per_page=3`;
+      const r = await loggedFetch("discogs", url, {
+        headers: client.buildHeaders("GET", url),
+        context: `ai-rec-ground: ${username}`,
+      });
+      if (!r.ok) continue;
+      const data = await r.json() as any;
+      const first = (data.results ?? [])[0];
+      if (first && first.id) {
+        return first;
+      }
+    } catch { /* try next attempt */ }
+    await sleep(1100); // Discogs rate limit: 60/min authenticated
+  }
+  return null;
+}
+
+/** Run recommendation generation for a single user.
+ *  Returns the number of grounded recommendations saved. */
+async function generateRecommendationsForUser(
+  clerkUserId: string,
+  username: string,
+  client: DiscogsClient,
+): Promise<{ saved: number; requested: number; skipped?: string }> {
+  const profile = await buildTasteProfile(clerkUserId);
+  if (profile.collectionCount < AI_REC_MIN_COLLECTION) {
+    return { saved: 0, requested: 0, skipped: `collection too small (${profile.collectionCount} < ${AI_REC_MIN_COLLECTION})` };
+  }
+
+  console.log(`[ai-rec] ${username}: building profile (${profile.collectionCount} collection, ${profile.wantlistCount} wantlist, ${profile.favoritesCount} favorites)`);
+  const suggestions = await _fetchRecommendationsFromClaude(profile);
+  console.log(`[ai-rec] ${username}: Claude returned ${suggestions.length} candidates`);
+
+  // Ownership/wantlist exclusion set (by release_id — we'll filter after grounding)
+  const excludedIds = new Set<number>([...profile.ownedReleaseIds, ...profile.wantedReleaseIds]);
+
+  const grounded: AiRecommendation[] = [];
+  for (const s of suggestions) {
+    if (grounded.length >= AI_REC_TARGET_COUNT) break;
+    const match = await _groundRecommendation(client, s, username);
+    if (!match) continue;
+    const releaseId = Number(match.id);
+    if (!releaseId || excludedIds.has(releaseId)) continue;
+    if (grounded.some(g => g.releaseId === releaseId)) continue; // dedupe within batch
+
+    grounded.push({
+      releaseId,
+      artist:     String(s.artist ?? "").slice(0, 500),
+      title:      String(s.title ?? match.title ?? "").slice(0, 500),
+      year:       s.year ? Number(s.year) : (match.year ? Number(match.year) : null),
+      catno:      s.catno ? String(s.catno).slice(0, 100) : null,
+      country:    s.country ? String(s.country).slice(0, 80) : null,
+      label:      s.label ? String(s.label).slice(0, 200) : null,
+      coverImage: match.cover_image ?? match.thumb ?? null,
+      reason:     String(s.reason ?? "").slice(0, 500),
+      tier:       ["rare","audiophile","collector","holy-grail"].includes(s.tier) ? s.tier : "collector",
+      estPriceUsd: s.est_price_usd != null && !isNaN(Number(s.est_price_usd)) ? Number(s.est_price_usd) : null,
+      data:       match, // full Discogs search result so the frontend can render the modal
+    });
+  }
+
+  if (grounded.length > 0) {
+    await saveRecommendations(clerkUserId, grounded);
+  }
+  console.log(`[ai-rec] ${username}: ${grounded.length}/${suggestions.length} grounded & saved`);
+  return { saved: grounded.length, requested: suggestions.length };
+}
+
+function startRecommendationSchedule() {
+  async function run() {
+    console.log("[ai-rec-schedule] Starting daily recommendation run");
+    const users = await getAllUsersForSync();
+    let success = 0, skipped = 0, failed = 0;
+    for (const user of users) {
+      try {
+        const userClient = await getDiscogsClientForUser(user.clerkUserId);
+        if (!userClient) { skipped++; continue; }
+        const result = await generateRecommendationsForUser(user.clerkUserId, user.username, userClient);
+        if (result.skipped) { skipped++; }
+        else if (result.saved > 0) { success++; }
+        else { failed++; }
+        await sleep(5000); // pace between users
+      } catch (err) {
+        console.error(`[ai-rec-schedule] ${user.username} error:`, err);
+        failed++;
+      }
+    }
+    console.log(`[ai-rec-schedule] Complete: ${success} success, ${skipped} skipped, ${failed} failed`);
+  }
+
+  function schedule() {
+    const ms = msUntilPacific(3, 30, 24); // 3:30 AM Pacific, every 24 hours
+    const hours = Math.round(ms / 3600000 * 10) / 10;
+    console.log(`[ai-rec-schedule] Next run in ${hours}h (3:30 AM Pacific, daily)`);
+    setTimeout(async () => {
+      try { await run(); } catch (e) { console.error("[ai-rec-schedule] fatal:", e); }
+      schedule();
+    }, ms);
+  }
+
+  schedule();
+}
+
 function startExtrasSyncSchedule() {
   function schedule() {
     const ms = msUntilPacific(0, 15, 6);
@@ -3443,6 +3801,7 @@ app.listen(PORT, "0.0.0.0", async () => {
 
     startDailySyncSchedule();
     startExtrasSyncSchedule();
+    if (anthropicKey) startRecommendationSchedule();
     // startPriceUpdateSchedule(); // disabled — not using pricing
   }
 });
