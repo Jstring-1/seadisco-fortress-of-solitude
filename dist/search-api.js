@@ -323,6 +323,18 @@ app.get("/api/config", (_req, res) => {
     res.setHeader("Cache-Control", "public, max-age=600"); // 10 min
     res.json({ clerkPublishableKey: authPk, authEnabled: true });
 });
+// GET /api/me — returns whether the current Clerk session is the admin.
+// Used by the footer to reveal the Admin link only for the admin user.
+app.get("/api/me", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const userId = await getClerkUserId(req);
+    if (!userId) {
+        res.json({ signedIn: false, isAdmin: false });
+        return;
+    }
+    const adminId = process.env.ADMIN_CLERK_ID ?? "";
+    res.json({ signedIn: true, isAdmin: !!adminId && userId === adminId });
+});
 // GET /api/user-count — admin-only (cap is internal, never advertised)
 app.get("/api/user-count", async (req, res) => {
     if (!await requireAdmin(req, res))
@@ -1202,13 +1214,21 @@ app.delete("/api/user/inventory/:listingId", async (req, res) => {
             headers: ctx.client.buildHeaders("DELETE", url),
             context: "inventory-delete",
         });
-        if (!r.ok && r.status !== 204) {
+        // Treat 404 as "already gone" — the listing was deleted on Discogs
+        // (manually, expired, or already removed in a prior call) but our
+        // local cache still had a stale row. Sync local state and report
+        // success so the UI can move on instead of leaving a phantom row.
+        let alreadyGone = false;
+        if (r.status === 404) {
+            alreadyGone = true;
+        }
+        else if (!r.ok && r.status !== 204) {
             const text = await r.text();
             res.status(r.status).json({ error: `Discogs error: ${text}` });
             return;
         }
         await deleteInventoryItem(ctx.userId, listingId);
-        res.json({ ok: true });
+        res.json({ ok: true, alreadyGone });
     }
     catch (e) {
         res.status(500).json({ error: String(e) });
