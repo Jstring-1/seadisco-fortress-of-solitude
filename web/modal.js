@@ -35,15 +35,21 @@ function _markVisited(id) {
 }
 
 // ── Recent history — richer record of opened releases for the Recent feed ──
+//
+// Storage strategy: localStorage is a write-through cache for instant
+// render. Every modal open also fires a fire-and-forget POST to
+// /api/user/recent so the same list is available on another device (see
+// _hydrateHistoryFromServer() in search.js, which runs once per page load).
 const _historyKey = "sd_history";
 const _HISTORY_MAX = 120;
 function _recordHistory(id, type) {
   if (!id || !type) return;
+  let item;
   try {
     const entry = (typeof itemCache !== "undefined" ? itemCache.get(String(id)) : null);
     // Store a compact card-shaped snapshot so the Recent feed can render
     // without re-fetching. Fall back to minimal data if not in cache.
-    const item = entry ? {
+    item = entry ? {
       id,
       type,
       title: entry.title || "",
@@ -66,6 +72,18 @@ function _recordHistory(id, type) {
     // Notify any listeners (e.g. the Recent strip on the search page)
     window.dispatchEvent(new CustomEvent("sd-history-change"));
   } catch { /* storage quota or parse error — silently ignore */ }
+
+  // Mirror to server for cross-device sync. Fire-and-forget: any error is
+  // swallowed because the local cache already succeeded.
+  if (item && window._clerk?.user && typeof apiFetch === "function") {
+    try {
+      apiFetch("/api/user/recent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, type, data: item }),
+      }).catch(() => {});
+    } catch {}
+  }
 }
 /** Apply visited state to all currently rendered cards and version links */
 function applyVisitedCards() {

@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData } from "./db.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const anthropicKey = process.env.ANTHROPIC_API_KEY ?? "";
 // Discogs OAuth 1.0a consumer credentials (register at discogs.com/settings/developers)
@@ -2221,6 +2221,90 @@ app.get("/api/user/wantlist/item", async (req, res) => {
             return;
         }
         res.json({ found: true, rating: item.rating, notes: item.notes });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e) });
+    }
+});
+// ── Recent views (cross-device Recent strip) ────────────────────────────
+//
+// The frontend still writes localStorage immediately for instant UI, then
+// mirrors the same entry to the server here. On first search-view render
+// the GET below hydrates whichever device has the stalest local cache.
+// GET /api/user/recent — ordered list of the user's last opened releases
+app.get("/api/user/recent", async (req, res) => {
+    const userId = await getClerkUserId(req);
+    if (!userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const limit = Number(req.query.limit) || 120;
+    try {
+        const rows = await getRecentViews(userId, limit);
+        res.json({ items: rows });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e) });
+    }
+});
+// POST /api/user/recent — upsert a single recent view
+// Body: { id, type, data }
+app.post("/api/user/recent", express.json({ limit: "64kb" }), async (req, res) => {
+    const userId = await getClerkUserId(req);
+    if (!userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const { id, type = "release", data } = req.body ?? {};
+    const discogsId = Number(id);
+    if (!Number.isFinite(discogsId) || discogsId <= 0) {
+        res.status(400).json({ error: "id required" });
+        return;
+    }
+    const entity = String(type || "release").toLowerCase();
+    if (!["release", "master"].includes(entity)) {
+        res.status(400).json({ error: "type must be release or master" });
+        return;
+    }
+    try {
+        await upsertRecentView(userId, discogsId, entity, data && typeof data === "object" ? data : {});
+        res.json({ ok: true });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e) });
+    }
+});
+// DELETE /api/user/recent/:id — drop one entry
+app.delete("/api/user/recent/:id", async (req, res) => {
+    const userId = await getClerkUserId(req);
+    if (!userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    const discogsId = Number(req.params.id);
+    if (!discogsId) {
+        res.status(400).json({ error: "Invalid id" });
+        return;
+    }
+    const type = typeof req.query.type === "string" ? req.query.type : undefined;
+    try {
+        await deleteRecentView(userId, discogsId, type);
+        res.json({ ok: true });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e) });
+    }
+});
+// DELETE /api/user/recent — clear all entries for the current user
+app.delete("/api/user/recent", async (req, res) => {
+    const userId = await getClerkUserId(req);
+    if (!userId) {
+        res.status(401).json({ error: "Unauthorized" });
+        return;
+    }
+    try {
+        await clearRecentViews(userId);
+        res.json({ ok: true });
     }
     catch (e) {
         res.status(500).json({ error: String(e) });

@@ -893,13 +893,18 @@ function sortFavoritesGrid() {
   loadRandomRecords(true);
 }
 
-// ── Recent front-page strip (reads from localStorage sd_history) ────────
-// The #random-records section now shows the user's locally-tracked
-// browsing history (written by modal.js _recordHistory on every modal open).
-// No server fetch; re-renders on the sd-history-change event so newly
-// opened records appear immediately when the user returns to the search view.
+// ── Recent front-page strip ─────────────────────────────────────────────
+//
+// The #random-records section shows the user's browsing history as a
+// "Recent" grid. Storage is write-through: localStorage gives instant
+// render, and modal.js also POSTs each opened release to /api/user/recent
+// so the list syncs across devices. On first load of the search view we
+// fetch the server copy once and merge it in (server rows win on conflict
+// because they carry the authoritative opened_at timestamp).
 
 const _HISTORY_KEY = "sd_history";
+const _HISTORY_MAX_CLIENT = 120;
+let _historyHydrated = false;
 
 function _readHistory() {
   try {
@@ -911,6 +916,55 @@ function _readHistory() {
 function _writeHistory(arr) {
   try { localStorage.setItem(_HISTORY_KEY, JSON.stringify(arr)); } catch { /* quota */ }
 }
+
+// Fetch the server's Recent list and merge it with the local cache.
+// Runs at most once per page load; subsequent loadRandomRecords() calls
+// hit localStorage directly. Safe to call when signed out — just no-ops.
+async function _hydrateHistoryFromServer() {
+  if (_historyHydrated) return;
+  _historyHydrated = true;
+  if (!window._clerk?.user || typeof apiFetch !== "function") return;
+  try {
+    const r = await apiFetch("/api/user/recent?limit=120");
+    if (!r.ok) return;
+    const body = await r.json().catch(() => null);
+    const serverItems = Array.isArray(body?.items) ? body.items : [];
+    if (!serverItems.length) return;
+    // Server rows have shape { id, type, data, openedAt }. Flatten into the
+    // localStorage card shape and key by id for fast lookup.
+    const serverByKey = new Map();
+    for (const row of serverItems) {
+      const key = `${row.type || "release"}:${row.id}`;
+      serverByKey.set(key, {
+        ...(row.data || {}),
+        id: row.id,
+        type: row.type || "release",
+        _openedAt: row.openedAt ? new Date(row.openedAt).getTime() : Date.now(),
+      });
+    }
+    // Merge: start from the local cache (preserves entries the server
+    // hasn't acked yet, e.g. offline opens), then overwrite with server
+    // entries by key, then sort by opened_at desc.
+    const local = _readHistory();
+    const byKey = new Map();
+    for (const h of local) {
+      const key = `${h.type || "release"}:${h.id}`;
+      byKey.set(key, h);
+    }
+    for (const [k, v] of serverByKey) byKey.set(k, v);
+    const merged = Array.from(byKey.values())
+      .sort((a, b) => (b._openedAt || 0) - (a._openedAt || 0))
+      .slice(0, _HISTORY_MAX_CLIENT);
+    _writeHistory(merged);
+    window.dispatchEvent(new CustomEvent("sd-history-change"));
+  } catch { /* silent — the local cache still renders */ }
+}
+
+// Kick off hydration as soon as the user is signed in. The auth bootstrap
+// in app.js / shared.js dispatches a synthetic event when Clerk resolves;
+// falling back to a short delay keeps this resilient if that event
+// changes. Either way, each call early-returns after the first run.
+window.addEventListener("load", () => { setTimeout(_hydrateHistoryFromServer, 600); });
 
 // Load history into _randomAll as card-compatible items
 function _loadHistoryIntoRandom() {
@@ -1012,6 +1066,11 @@ function removeFromHistory(ev, id) {
     const wrap = document.getElementById("random-records");
     if (wrap) wrap.style.display = "none";
   }
+  // Mirror to server (fire-and-forget). Any error is ignored — the local
+  // cache already succeeded and next hydration will reconcile.
+  if (window._clerk?.user && typeof apiFetch === "function") {
+    try { apiFetch(`/api/user/recent/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {}); } catch {}
+  }
 }
 
 /** Clear-all button — drops all history after confirmation. */
@@ -1022,6 +1081,9 @@ function clearRecentHistory() {
   _randomShown = 0;
   const wrap = document.getElementById("random-records");
   if (wrap) wrap.style.display = "none";
+  if (window._clerk?.user && typeof apiFetch === "function") {
+    try { apiFetch("/api/user/recent", { method: "DELETE" }).catch(() => {}); } catch {}
+  }
 }
 
 // Re-render the strip whenever the history changes (modal opened elsewhere)
