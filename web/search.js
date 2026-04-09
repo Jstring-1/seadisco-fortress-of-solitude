@@ -1270,10 +1270,6 @@ function saveSearchHistory(context) {
   } else if (context === "live") {
     _shAdd("live-artist", document.getElementById("live-artist")?.value);
     _shAdd("live-city",   document.getElementById("live-city")?.value);
-  } else if (context === "ebay") {
-    _shAdd("ebay-search-input", document.getElementById("ebay-search-input")?.value);
-  } else if (context === "gear-ebay") {
-    _shAdd("gear-ebay-search-input", document.getElementById("gear-ebay-search-input")?.value);
   }
 }
 
@@ -1312,7 +1308,7 @@ function _shShow(field) {
   const anchor = field.closest("label") || field.parentElement;
   anchor.style.position = "relative";
   // Match the field's actual position and width so dropdown doesn't
-  // stretch across flex containers (e.g. .ebay-search-bar)
+  // stretch across flex containers
   drop.style.left = field.offsetLeft + "px";
   drop.style.top = (field.offsetTop + field.offsetHeight) + "px";
   drop.style.width = field.offsetWidth + "px";
@@ -1328,7 +1324,6 @@ const _shFieldIds = [
   "query", "f-artist", "f-release", "f-label", "f-year", "f-country",
   "cw-query", "cw-artist", "cw-release", "cw-label", "cw-year", "cw-notes",
   "live-artist", "live-city",
-  "ebay-search-input", "gear-ebay-search-input",
 ];
 
 function _shInit() {

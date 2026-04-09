@@ -1,4 +1,4 @@
-// ── Buy tab — eBay 12" vinyl LP auctions ──────────────────────────────
+// ── Buy tab — eBay 12" vinyl LP Buy-It-Now listings ───────────────────
 
 /** Close buy popup and search main for a term (used by vinyl popup links) */
 function searchFromBuyPopup(event, query) {
@@ -35,26 +35,12 @@ function searchCollectionFromBuyPopup(event, field, value) {
 let _buyItems = [];
 let _buyTotal = 0;
 let _buyMinPrice = 0;
-let _buySort = "ending";
+let _buySort = "price_desc";
 let _buyQuery = "";
 let _buyOffset = 0;
 let _buyLoading = false;
 let _buyDebounce = null;
 const BUY_PAGE_SIZE = 200;
-
-// ── Live eBay search state ──────────────────────────────────────────
-let _ebaySearchItems = [];
-let _ebaySearchQuery = "";
-let _ebaySearchOffset = 0;
-let _ebaySearchTotal = 0;
-let _ebaySearchHasMore = false;
-let _ebaySearchLoadingMore = false;
-let _ebayRateRemaining = null;
-let _ebayRateLimit = null;
-let _ebayResetAt = null;
-let _ebayCountdownInterval = null;
-let _ebayExpiryInterval = null;
-let _ebayResetRefreshing = false;
 
 function renderBuyCard(item, idx) {
   const img = item.image_url
@@ -67,47 +53,21 @@ function renderBuyCard(item, idx) {
   const condition = item.condition || "";
   const loc = [item.location_city, item.location_state].filter(Boolean).join(", ");
 
-  const bids = item.bid_count ?? 0;
-  const bidStr = bids > 0 ? `${bids}+ bid${bids !== 1 ? "s" : ""}` : "0 bids";
-
   const specifics = item.item_specifics ?? {};
   const artist = specifics.Artist || specifics.artist || "";
   const label = specifics["Record Label"] || specifics.Label || "";
   const artistLabel = [artist, label].filter(Boolean).join(" · ");
 
-  // Time remaining
-  let timeLeft = "";
-  let endingSoon = false;
-  if (item.item_end_date) {
-    const ms = new Date(item.item_end_date).getTime() - Date.now();
-    if (ms > 0) {
-      const hrs = Math.floor(ms / 3600000);
-      const mins = Math.floor((ms % 3600000) / 60000);
-      if (hrs >= 24) { const d = Math.floor(hrs / 24); timeLeft = `${d}d ${hrs % 24}h left`; }
-      else if (hrs > 0) timeLeft = `${hrs}h ${mins}m left`;
-      else if (mins > 0) timeLeft = `${mins}m left`;
-      else timeLeft = `<1m left`;
-      if (ms <= 900000) endingSoon = true; // ≤ 15 minutes
-    } else {
-      timeLeft = "ENDED";
-    }
-  }
-
   const conditionShow = condition && condition !== "Used" ? condition : "";
 
-  const endMs = item.item_end_date ? new Date(item.item_end_date).getTime() : 0;
-  const expired = endMs && endMs < Date.now();
-
-  return `<div class="card buy-card card-animate${expired ? ' card-expired' : ''}" onclick="event.stopPropagation();openBuyPopup(${idx})" role="button" tabindex="0" style="--i:${Math.min(idx, 20)};cursor:pointer;-webkit-tap-highlight-color:transparent"${endMs ? ` data-end="${endMs}"` : ""} title="${escHtml(item.title)}">
+  return `<div class="card buy-card card-animate" onclick="event.stopPropagation();openBuyPopup(${idx})" role="button" tabindex="0" style="--i:${Math.min(idx, 20)};cursor:pointer;-webkit-tap-highlight-color:transparent" title="${escHtml(item.title)}">
     <div class="card-thumb-wrap" style="pointer-events:none">${img}</div>
     <div class="card-body" style="pointer-events:none">
       <div class="card-title">${escHtml(item.title)}</div>
       ${artistLabel ? `<div class="card-sub" style="color:#aaa">${escHtml(artistLabel)}</div>` : ""}
       <div class="buy-price">${priceStr}</div>
-      <div class="card-sub buy-bids">${escHtml(bidStr)}</div>
       ${conditionShow ? `<div class="card-meta">${escHtml(conditionShow)}</div>` : ""}
       ${loc ? `<div class="card-meta">${escHtml(loc)}</div>` : ""}
-      ${timeLeft ? `<div class="card-meta buy-time-left${endingSoon ? ' ending-soon' : ''}">${timeLeft}</div>` : ""}
     </div>
   </div>`;
 }
@@ -174,14 +134,6 @@ async function _fetchEbayDetail(itemId, overlay, dbItem, opts) {
     const price = d.price > 0 ? d.price : parseFloat(dbItem.price);
     const currency = d.currency || dbItem.currency || "USD";
     const priceStr = price.toLocaleString("en-US", { style: "currency", currency });
-    const isAuction = (dbItem.buying_options ?? []).includes("AUCTION");
-    const buyType = isAuction
-      ? `Auction${d.bidCount > 0 ? ` · ${d.bidCount} bid${d.bidCount !== 1 ? "s" : ""}` : ""}`
-      : "Buy Now";
-    const endDate = (d.itemEndDate || dbItem.item_end_date)
-      ? new Date(d.itemEndDate || dbItem.item_end_date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
-      : "";
-    const condition = d.condition || dbItem.condition || "";
     const condDesc = d.conditionDescription ? ` — ${d.conditionDescription}` : "";
     const location = d.location || [dbItem.location_city, dbItem.location_state, dbItem.location_country].filter(Boolean).join(", ");
     const seller = d.seller || dbItem.seller_name || dbItem.seller_username || "";
@@ -214,8 +166,7 @@ async function _fetchEbayDetail(itemId, overlay, dbItem, opts) {
 
     // Build body content
     let metaHtml = "";
-    metaHtml += `<div class="buy-popup-price">${priceStr} <span style="font-size:0.78rem;font-weight:400;color:#aaa;margin-left:0.5rem">${escHtml(buyType)}</span></div>`;
-    if (endDate) metaHtml += `<div class="buy-popup-meta">Ends ${endDate}</div>`;
+    metaHtml += `<div class="buy-popup-price">${priceStr} <span style="font-size:0.78rem;font-weight:400;color:#aaa;margin-left:0.5rem">Buy Now</span></div>`;
     if (condition) metaHtml += `<div class="buy-popup-meta">Condition: ${escHtml(condition)}${escHtml(condDesc)}</div>`;
     if (location) metaHtml += `<div class="buy-popup-meta">Location: ${escHtml(location)}</div>`;
     if (seller) metaHtml += `<div class="buy-popup-meta">Seller: ${escHtml(seller)} ${escHtml(feedback)}</div>`;
@@ -253,14 +204,6 @@ async function _fetchEbayDetail(itemId, overlay, dbItem, opts) {
       if (itemUrl) ebayLink.href = itemUrl;
     }
 
-    // Update rate counter
-    if (d.rateLimit) {
-      _ebayRateRemaining = d.rateLimit.remaining;
-      _ebayRateLimit = d.rateLimit.limit;
-      if (d.rateLimit.resetsAt) _ebayResetAt = d.rateLimit.resetsAt;
-      updateEbayMeta();
-    }
-
     // Update in-memory item and visible card
     _updateItemInMemory(itemId, d);
   } catch {
@@ -274,13 +217,6 @@ function _populatePopupFromDb(overlay, item, notice) {
   const loadingEl = overlay.querySelector(".buy-popup-loading");
   const price = parseFloat(item.price);
   const priceStr = price.toLocaleString("en-US", { style: "currency", currency: item.currency || "USD" });
-  const isAuction = (item.buying_options ?? []).includes("AUCTION");
-  const buyType = isAuction
-    ? `Auction${item.bid_count > 0 ? ` · ${item.bid_count}+ bid${item.bid_count !== 1 ? "s" : ""}` : ""}`
-    : "Buy Now";
-  const endDate = item.item_end_date
-    ? new Date(item.item_end_date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
-    : "";
   const condition = item.condition || "";
   const loc = [item.location_city, item.location_state, item.location_country].filter(Boolean).join(", ");
   const seller = item.seller_name || item.seller_username || "";
@@ -289,8 +225,7 @@ function _populatePopupFromDb(overlay, item, notice) {
     : (item.seller_feedback ? `(${item.seller_feedback.toLocaleString()} reviews)` : "");
 
   let html = "";
-  html += `<div class="buy-popup-price">${priceStr} <span style="font-size:0.78rem;font-weight:400;color:#aaa;margin-left:0.5rem">${escHtml(buyType)}</span></div>`;
-  if (endDate) html += `<div class="buy-popup-meta">Ends ${endDate}</div>`;
+  html += `<div class="buy-popup-price">${priceStr} <span style="font-size:0.78rem;font-weight:400;color:#aaa;margin-left:0.5rem">Buy Now</span></div>`;
   if (condition) html += `<div class="buy-popup-meta">Condition: ${escHtml(condition)}</div>`;
   if (loc) html += `<div class="buy-popup-meta">Location: ${escHtml(loc)}</div>`;
   if (seller) html += `<div class="buy-popup-meta">Seller: ${escHtml(seller)} ${feedback}</div>`;
@@ -307,10 +242,8 @@ function _updateItemInMemory(itemId, detail) {
     if (!item) continue;
     if (detail.price > 0)        item.price = detail.price;
     if (detail.currency)         item.currency = detail.currency;
-    if (detail.bidCount != null)  item.bid_count = detail.bidCount;
     if (detail.condition)        item.condition = detail.condition;
     if (detail.allImages?.length) item.all_images = detail.allImages;
-    if (detail.itemEndDate)      item.item_end_date = detail.itemEndDate;
     // Refresh the visible card
     const idx = list.indexOf(item);
     const isBuy = list === _buyItems;
@@ -331,7 +264,7 @@ function renderBuyGrid() {
   const grid = document.getElementById("buy-results");
   if (!grid) return;
   if (!_buyItems.length) {
-    grid.innerHTML = `<div style="color:var(--muted);font-size:0.8rem;grid-column:1/-1;text-align:center;padding:2rem 0">No vinyl auctions available yet. Check back soon!</div>`;
+    grid.innerHTML = `<div style="color:var(--muted);font-size:0.8rem;grid-column:1/-1;text-align:center;padding:2rem 0">No vinyl listings available yet. Check back soon!</div>`;
     return;
   }
   grid.innerHTML = _buyItems.map((item, idx) => renderBuyCard(item, idx)).join("");
@@ -412,7 +345,7 @@ async function loadBuyListings(append = false, bustCache = false) {
     if (status) {
       if (!_buyItems.length) {
         status.textContent = "";
-        document.getElementById("buy-results").innerHTML = renderEmptyState("🎵", "No vinyl auctions found", "Try adjusting your filters or check back later");
+        document.getElementById("buy-results").innerHTML = renderEmptyState("🎵", "No vinyl listings found", "Try adjusting your filters or check back later");
       } else {
         const newest = newItems.reduce((max, i) => i.fetched_at > max ? i.fetched_at : max, "");
         let ago = "";
@@ -422,7 +355,7 @@ async function loadBuyListings(append = false, bustCache = false) {
           else if (mins < 60) ago = `${mins} minute${mins !== 1 ? "s" : ""} ago`;
           else { const hrs = Math.round(mins / 60); ago = `${hrs} hour${hrs !== 1 ? "s" : ""} ago`; }
         }
-        status.textContent = `${_buyTotal.toLocaleString()} auctions · showing ${_buyItems.length}` +
+        status.textContent = `${_buyTotal.toLocaleString()} listings · showing ${_buyItems.length}` +
           (ago ? ` · updated ${ago}` : "");
       }
     }
@@ -445,345 +378,4 @@ async function loadBuyListings(append = false, bustCache = false) {
 function loadMoreBuy() {
   _buyOffset += BUY_PAGE_SIZE;
   loadBuyListings(true);
-}
-
-// ── Live eBay Search ────────────────────────────────────────────────
-
-async function initEbaySearchStatus() {
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const r = await apiFetch("/api/ebay/search/status");
-      if (r.status === 401) return; // not signed in — skip silently, bars stay hidden
-      if (!r.ok) { if (!attempt) { await new Promise(r => setTimeout(r, 2000)); continue; } return; }
-      // Signed in — show the live search bars
-      const vinylWrap = document.getElementById("vinyl-ebay-search-wrap");
-      const gearWrap = document.getElementById("gear-ebay-search-wrap");
-      if (vinylWrap) vinylWrap.style.display = "";
-      if (gearWrap) gearWrap.style.display = "";
-      const data = await r.json();
-      if (data.remaining == null) return;
-      _ebayRateRemaining = data.remaining;
-      _ebayRateLimit = data.limit;
-      _ebayResetAt = data.resetsAt;
-      updateEbayMeta();
-      startEbayCountdown();
-      return;
-    } catch (e) {
-      if (!attempt) { await new Promise(r => setTimeout(r, 2000)); continue; }
-    }
-  }
-}
-
-function startEbayCountdown() {
-  if (_ebayCountdownInterval) clearInterval(_ebayCountdownInterval);
-  _ebayCountdownInterval = setInterval(updateEbayMeta, 1000);
-  // Check for expired cards every 30s
-  if (_ebayExpiryInterval) clearInterval(_ebayExpiryInterval);
-  _ebayExpiryInterval = setInterval(greyExpiredCards, 30000);
-  greyExpiredCards();
-}
-
-function greyExpiredCards() {
-  const now = Date.now();
-  document.querySelectorAll(".buy-card[data-end], .gear-card[data-end]").forEach(card => {
-    const end = parseInt(card.dataset.end);
-    if (end && end < now && !card.classList.contains("card-expired")) {
-      card.classList.add("card-expired");
-      const timeEl = card.querySelector(".buy-time-left, .gear-time-left");
-      if (timeEl) { timeEl.textContent = "ENDED"; timeEl.classList.remove("ending-soon"); }
-    }
-  });
-}
-
-function updateEbayMeta() {
-  if (_ebayRateRemaining == null) return;
-
-  let countdown = "";
-  if (_ebayResetAt) {
-    const ms = new Date(_ebayResetAt).getTime() - Date.now();
-    if (ms > 0) {
-      const h = Math.floor(ms / 3600000);
-      const m = Math.floor((ms % 3600000) / 60000);
-      const s = Math.floor((ms % 60000) / 1000);
-      if (h > 0) countdown = ` · resets in ${h}h`;
-      else if (m > 0) countdown = ` · resets in ${m}m`;
-      else countdown = ` · resets in ${s}s`;
-    } else if (!_ebayResetRefreshing) {
-      // Reset time has passed — refetch fresh count from server
-      _ebayResetRefreshing = true;
-      initEbaySearchStatus().finally(() => { _ebayResetRefreshing = false; });
-      return;
-    }
-  }
-
-  const limit = _ebayRateLimit || 4500;
-  const text = `${_ebayRateRemaining.toLocaleString()} / ${limit.toLocaleString()} eBay requests` + countdown;
-
-  // Update all counter elements (vinyl + gear pages)
-  document.querySelectorAll(".ebay-rate-counter").forEach(el => { el.textContent = text; });
-}
-
-async function doEbaySearch() {
-  const input = document.getElementById("ebay-search-input");
-  const q = (input?.value || "").trim();
-  if (q.length < 2) { showToast("Enter at least 2 characters", "error"); return; }
-  if (typeof saveSearchHistory === "function") saveSearchHistory("ebay");
-
-  const resultsDiv = document.getElementById("ebay-search-results");
-  const statusDiv = document.getElementById("ebay-search-status");
-  const clearBtn = document.getElementById("ebay-clear-btn");
-  const loadMoreWrap = document.getElementById("ebay-load-more-wrap");
-
-  // Hide the entire main vinyl grid layout (header + results + load more)
-  // while showing live search results
-  const mainGrid = document.getElementById("buy-results");
-  const buyHeader = document.querySelector("#buy-view .buy-header");
-  const buyLoadMore = document.querySelector("#buy-view .load-more-wrap");
-  if (mainGrid) mainGrid.style.display = "none";
-  if (buyHeader) buyHeader.style.display = "none";
-  if (buyLoadMore) buyLoadMore.style.display = "none";
-  if (resultsDiv) { resultsDiv.style.display = ""; resultsDiv.innerHTML = renderSkeletonGrid(8); }
-  if (statusDiv) { statusDiv.style.display = ""; statusDiv.textContent = `Searching eBay for "${q}"…`; }
-  if (clearBtn) clearBtn.style.display = "";
-  if (loadMoreWrap) loadMoreWrap.style.display = "none";
-
-  // Reset pagination state for new query
-  _ebaySearchQuery = q;
-  _ebaySearchOffset = 0;
-  _ebaySearchItems = [];
-  _ebaySearchTotal = 0;
-  _ebaySearchHasMore = false;
-
-  try {
-    const r = await apiFetch(`/api/ebay/search?q=${encodeURIComponent(q)}&offset=0`);
-    const data = await r.json().catch(() => ({}));
-
-    if (r.status === 429) {
-      if (resultsDiv) resultsDiv.style.display = "none";
-      if (statusDiv) {
-        statusDiv.style.display = "";
-        statusDiv.textContent = data.error || "Daily search limit reached. Try again after reset.";
-      }
-      if (data.rateLimit) {
-        _ebayRateRemaining = data.rateLimit.remaining;
-        _ebayResetAt = data.rateLimit.resetsAt;
-        updateEbayMeta();
-      }
-      return;
-    }
-
-    // Surface real backend errors instead of silently showing "No results"
-    if (!r.ok) {
-      console.error("eBay search error:", r.status, data);
-      if (resultsDiv) {
-        resultsDiv.innerHTML = renderEmptyState(
-          "⚠️",
-          `eBay search error (${r.status})`,
-          data.error || data.details || `Unknown error — check server logs`
-        );
-      }
-      if (statusDiv) { statusDiv.style.display = "none"; statusDiv.textContent = ""; }
-      showToast(`eBay search failed: ${data.error || r.status}`, "error");
-      return;
-    }
-
-    _ebaySearchItems = data.items || [];
-    _ebaySearchTotal = data.total || 0;
-    _ebaySearchHasMore = !!data.hasMore;
-    _ebaySearchOffset = data.offset || 0;
-
-    if (data.rateLimit) {
-      _ebayRateRemaining = data.rateLimit.remaining;
-      _ebayResetAt = data.rateLimit.resetsAt;
-      updateEbayMeta();
-    }
-
-    if (!_ebaySearchItems.length) {
-      if (resultsDiv) resultsDiv.innerHTML = renderEmptyState("🔍", "No results", `No eBay listings found for "${escHtml(q)}"`);
-      if (statusDiv) { statusDiv.style.display = "none"; statusDiv.textContent = ""; }
-      return;
-    }
-
-    if (resultsDiv) {
-      resultsDiv.innerHTML = _ebaySearchItems.map((item, idx) => renderEbayCard(item, idx)).join("");
-    }
-    updateEbaySearchStatus();
-    updateEbayLoadMoreButton();
-  } catch (e) {
-    if (resultsDiv) resultsDiv.style.display = "none";
-    if (statusDiv) { statusDiv.style.display = "none"; statusDiv.textContent = ""; }
-    if (mainGrid) mainGrid.style.display = "";
-    if (buyHeader) buyHeader.style.display = "";
-    if (buyLoadMore) buyLoadMore.style.display = "";
-    showToast("eBay search failed — please try again", "error");
-  }
-}
-
-function updateEbaySearchStatus(cached = false) {
-  const statusDiv = document.getElementById("ebay-search-status");
-  if (!statusDiv) return;
-  statusDiv.style.display = "";
-  const shown = _ebaySearchItems.length;
-  const total = _ebaySearchTotal;
-  const cap = Math.min(total, 10000);
-  const cachedTag = cached ? " · cached" : "";
-  statusDiv.textContent = `Showing ${shown.toLocaleString()} of ${total.toLocaleString()}${total > 10000 ? " (capped at 10,000)" : ""} results for "${_ebaySearchQuery}"${cachedTag}`;
-}
-
-function updateEbayLoadMoreButton() {
-  const wrap = document.getElementById("ebay-load-more-wrap");
-  const btn = document.getElementById("ebay-load-more");
-  if (!wrap || !btn) return;
-  if (_ebaySearchHasMore) {
-    wrap.style.display = "";
-    btn.disabled = false;
-    btn.textContent = "Load more";
-  } else {
-    wrap.style.display = "none";
-  }
-}
-
-async function loadMoreEbaySearch() {
-  if (_ebaySearchLoadingMore || !_ebaySearchHasMore || !_ebaySearchQuery) return;
-  _ebaySearchLoadingMore = true;
-
-  const btn = document.getElementById("ebay-load-more");
-  if (btn) { btn.disabled = true; btn.textContent = "Loading…"; }
-
-  const nextOffset = _ebaySearchOffset + 200;
-  try {
-    const r = await apiFetch(`/api/ebay/search?q=${encodeURIComponent(_ebaySearchQuery)}&offset=${nextOffset}`);
-    const data = await r.json().catch(() => ({}));
-
-    if (r.status === 429) {
-      showToast(data.error || "Daily search limit reached", "error");
-      if (data.rateLimit) {
-        _ebayRateRemaining = data.rateLimit.remaining;
-        _ebayResetAt = data.rateLimit.resetsAt;
-        updateEbayMeta();
-      }
-      _ebaySearchHasMore = false;
-      updateEbayLoadMoreButton();
-      return;
-    }
-
-    if (!r.ok) {
-      console.error("eBay load more error:", r.status, data);
-      showToast(`Load more failed: ${data.error || r.status}`, "error");
-      if (btn) { btn.disabled = false; btn.textContent = "Load more"; }
-      return;
-    }
-
-    const newItems = data.items || [];
-    if (data.rateLimit) {
-      _ebayRateRemaining = data.rateLimit.remaining;
-      _ebayResetAt = data.rateLimit.resetsAt;
-      updateEbayMeta();
-    }
-
-    if (!newItems.length) {
-      _ebaySearchHasMore = false;
-      updateEbayLoadMoreButton();
-      return;
-    }
-
-    const startIdx = _ebaySearchItems.length;
-    _ebaySearchItems = _ebaySearchItems.concat(newItems);
-    _ebaySearchOffset = data.offset || nextOffset;
-    _ebaySearchHasMore = !!data.hasMore;
-
-    // Append new cards to the grid
-    const resultsDiv = document.getElementById("ebay-search-results");
-    if (resultsDiv) {
-      const html = newItems.map((item, i) => renderEbayCard(item, startIdx + i)).join("");
-      resultsDiv.insertAdjacentHTML("beforeend", html);
-    }
-
-    updateEbaySearchStatus();
-    updateEbayLoadMoreButton();
-  } catch (e) {
-    console.error("loadMoreEbaySearch error:", e);
-    showToast("Load more failed — try again", "error");
-    if (btn) { btn.disabled = false; btn.textContent = "Load more"; }
-  } finally {
-    _ebaySearchLoadingMore = false;
-  }
-}
-
-function renderEbayCard(item, idx) {
-  const img = item.image_url
-    ? `<img src="${escHtml(item.image_url)}" alt="${escHtml(item.title)}" loading="lazy" onerror="this.style.display='none'">`
-    : `<div class="thumb-placeholder">🎵</div>`;
-
-  const price = parseFloat(item.price);
-  const priceStr = price.toLocaleString("en-US", { style: "currency", currency: item.currency || "USD" });
-
-  const condition = item.condition || "";
-  const loc = [item.location_city, item.location_state].filter(Boolean).join(", ");
-
-  const bids = item.bid_count ?? 0;
-  const bidStr = bids > 0 ? `${bids}+ bid${bids !== 1 ? "s" : ""}` : "0 bids";
-
-  let timeLeft = "";
-  let endingSoon = false;
-  if (item.item_end_date) {
-    const ms = new Date(item.item_end_date).getTime() - Date.now();
-    if (ms > 0) {
-      const hrs = Math.floor(ms / 3600000);
-      const mins = Math.floor((ms % 3600000) / 60000);
-      if (hrs >= 24) { const d = Math.floor(hrs / 24); timeLeft = `${d}d ${hrs % 24}h left`; }
-      else if (hrs > 0) timeLeft = `${hrs}h ${mins}m left`;
-      else if (mins > 0) timeLeft = `${mins}m left`;
-      else timeLeft = `<1m left`;
-      if (ms <= 900000) endingSoon = true;
-    } else {
-      timeLeft = "ENDED";
-    }
-  }
-
-  const conditionShow = condition && condition !== "Used" ? condition : "";
-  const endMs = item.item_end_date ? new Date(item.item_end_date).getTime() : 0;
-  const expired = endMs && endMs < Date.now();
-
-  return `<div class="card buy-card card-animate${expired ? ' card-expired' : ''}" onclick="event.stopPropagation();openEbaySearchPopup(${idx})" role="button" tabindex="0" style="--i:${Math.min(idx, 20)};cursor:pointer;-webkit-tap-highlight-color:transparent"${endMs ? ` data-end="${endMs}"` : ""} title="${escHtml(item.title)}">
-    <div class="card-thumb-wrap" style="pointer-events:none">${img}</div>
-    <div class="card-body" style="pointer-events:none">
-      <div class="card-title">${escHtml(item.title)}</div>
-      <div class="buy-price">${priceStr}</div>
-      <div class="card-sub buy-bids">${escHtml(bidStr)}</div>
-      ${conditionShow ? `<div class="card-meta">${escHtml(conditionShow)}</div>` : ""}
-      ${loc ? `<div class="card-meta">${escHtml(loc)}</div>` : ""}
-      ${timeLeft ? `<div class="card-meta buy-time-left${endingSoon ? ' ending-soon' : ''}">${timeLeft}</div>` : ""}
-    </div>
-  </div>`;
-}
-
-function openEbaySearchPopup(idx) {
-  _openEbayPopup(_ebaySearchItems[idx]);
-}
-
-function clearEbaySearch() {
-  const input = document.getElementById("ebay-search-input");
-  const resultsDiv = document.getElementById("ebay-search-results");
-  const statusDiv = document.getElementById("ebay-search-status");
-  const clearBtn = document.getElementById("ebay-clear-btn");
-  const loadMoreWrap = document.getElementById("ebay-load-more-wrap");
-
-  if (input) input.value = "";
-  if (resultsDiv) { resultsDiv.style.display = "none"; resultsDiv.innerHTML = ""; }
-  if (statusDiv) { statusDiv.style.display = "none"; statusDiv.textContent = ""; }
-  if (clearBtn) clearBtn.style.display = "none";
-  if (loadMoreWrap) loadMoreWrap.style.display = "none";
-  _ebaySearchItems = [];
-  _ebaySearchQuery = "";
-  _ebaySearchOffset = 0;
-  _ebaySearchTotal = 0;
-  _ebaySearchHasMore = false;
-  // Restore the full main vinyl grid layout (header + results + load more)
-  const mainGrid = document.getElementById("buy-results");
-  const buyHeader = document.querySelector("#buy-view .buy-header");
-  const buyLoadMore = document.querySelector("#buy-view .load-more-wrap");
-  if (mainGrid) mainGrid.style.display = "";
-  if (buyHeader) buyHeader.style.display = "";
-  if (buyLoadMore) buyLoadMore.style.display = "";
 }

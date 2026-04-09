@@ -251,14 +251,12 @@ function switchView(view, skipPushState = false) {
     if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
     loadBuyListings();
-    initEbaySearchStatus();
   } else if (view === "gear") {
     if (gearView) gearView.style.display = "block";
     if (mainForm) mainForm.style.display = "none";
     if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
     loadGearListings();
-    initEbaySearchStatus();
   } else if (view === "feed") {
     if (feedView) feedView.style.display = "block";
     if (mainForm) mainForm.style.display = "none";

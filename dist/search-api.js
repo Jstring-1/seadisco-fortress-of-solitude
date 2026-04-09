@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, upsertGearListings, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, getRandomPublicFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getEbayRateCount, incrementEbayRateCount, incrementEbayClickCount, getEbaySearchCache, setEbaySearchCache, pruneEbaySearchCache, getTableRowCounts, updateListingFromDetail } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getFreshReleases, searchFreshReleases, getFreshStats, getWantedItems, upsertGearListings, getGearListings, markExpiredGearListings, getGearStats, logGearFetch, upsertVinylListings, getVinylListings, markExpiredVinylListings, getVinylStats, logVinylFetch, resetAllSyncingStatuses, upsertFeedArticle, getFeedArticles, pruneFeedArticles, pruneAllStaleData, upsertLiveEvents, getLiveEvents, pruneLiveEvents, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, getExistingYouTubeUrls, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, getRandomPublicFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getEbayRateCount, incrementEbayClickCount, pruneEbaySearchCache, getTableRowCounts, updateListingFromDetail } from "./db.js";
 import { startFreshSyncSchedule, runFreshSync } from "./sync-fresh-releases.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const sharedToken = process.env.DISCOGS_TOKEN ?? "";
@@ -3954,7 +3954,10 @@ const ebayClientSecret = process.env.EBAY_CLIENT_SECRET ?? "";
 const ebayAffiliateCampaignId = process.env.EBAY_AFFILIATE_CAMPAIGN_ID ?? "";
 let ebayAccessToken = "";
 let ebayTokenExpiry = 0;
-const EBAY_USER_LIMIT = 3750;
+// Daily eBay Browse quota: 5,000 calls.
+// Reserved by scheduled sweeps: vinyl ~1,000/day + gear ~1,000/day ≈ 2,000.
+// Remaining ~3,000 is the user-triggered popup budget.
+const EBAY_USER_LIMIT = 3000;
 const MAX_USERS = 25;
 async function getEbayToken() {
     if (ebayAccessToken && Date.now() < ebayTokenExpiry - 60000)
@@ -3997,51 +4000,59 @@ async function fetchEbayGearListings() {
     }
     console.log("Starting eBay gear fetch…");
     let totalUpserted = 0;
+    // Fixed-price (Buy It Now) only, ≥$50. Sort omitted → eBay default (bestMatch).
+    const baseFilter = `price:[50..],priceCurrency:USD,buyingOptions:{FIXED_PRICE}`;
+    // Paginate 5 pages deep per query: 4 queries × 5 pages = 20 calls per sweep
+    const PAGES = 5;
+    const LIMIT = 200;
     try {
         const token = await getEbayToken();
+        const headers = { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" };
         for (const query of GEAR_SEARCH_QUERIES) {
-            try {
-                // Auctions only, sorted by newly listed (accumulate over time)
-                const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&limit=200&sort=newlyListed&filter=price:[50..],priceCurrency:USD,buyingOptions:{AUCTION}`;
-                const r = await loggedFetch("ebay", url, {
-                    headers: { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" },
-                    context: `gear search: ${query}`,
-                });
-                if (!r.ok) {
-                    console.error(`eBay search "${query}" failed: ${r.status}`);
-                    continue;
+            for (let page = 0; page < PAGES; page++) {
+                const offset = page * LIMIT;
+                try {
+                    await new Promise(r => setTimeout(r, 1000)); // pace
+                    const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&limit=${LIMIT}&offset=${offset}&filter=${baseFilter}`;
+                    const r = await loggedFetch("ebay", url, { headers, context: `gear ${query} p${page}` });
+                    if (!r.ok) {
+                        console.error(`eBay gear "${query}" p${page} failed: ${r.status}`);
+                        continue;
+                    }
+                    const data = await r.json();
+                    const summaries = data.itemSummaries ?? [];
+                    console.log(`eBay gear "${query}" p${page} (offset ${offset}): ${summaries.length} results`);
+                    if (summaries.length) {
+                        const items = summaries.map((s) => ({
+                            itemId: s.itemId,
+                            title: s.title ?? "",
+                            price: parseFloat(s.currentBidPrice?.value ?? s.price?.value ?? "0"),
+                            currency: s.currentBidPrice?.currency ?? s.price?.currency ?? "USD",
+                            condition: s.condition ?? s.conditionId ?? "",
+                            imageUrl: s.image?.imageUrl ?? "",
+                            itemUrl: s.itemWebUrl ?? "",
+                            locationCity: s.itemLocation?.city ?? "",
+                            locationState: s.itemLocation?.stateOrProvince ?? "",
+                            locationCountry: s.itemLocation?.country ?? "",
+                            sellerUsername: s.seller?.username ?? "",
+                            sellerFeedback: s.seller?.feedbackScore ?? 0,
+                            buyingOptions: s.buyingOptions ?? [],
+                            bidCount: s.bidCount ?? 0,
+                            categories: (s.categories ?? []).map((c) => c.categoryId),
+                            categoryNames: (s.categories ?? []).map((c) => c.categoryName),
+                            itemEndDate: s.itemEndDate ?? null,
+                            thumbnailUrl: (s.thumbnailImages ?? [])[0]?.imageUrl ?? "",
+                            rawSummary: s,
+                        }));
+                        totalUpserted += await upsertGearListings(items);
+                    }
+                    // Short-circuit if we got fewer than a full page
+                    if (summaries.length < LIMIT)
+                        break;
                 }
-                const data = await r.json();
-                const summaries = data.itemSummaries ?? [];
-                console.log(`eBay "${query}": ${summaries.length} results`);
-                const items = summaries.map((s) => ({
-                    itemId: s.itemId,
-                    title: s.title ?? "",
-                    price: parseFloat(s.currentBidPrice?.value ?? s.price?.value ?? "0"),
-                    currency: s.currentBidPrice?.currency ?? s.price?.currency ?? "USD",
-                    condition: s.condition ?? s.conditionId ?? "",
-                    imageUrl: s.image?.imageUrl ?? "",
-                    itemUrl: s.itemWebUrl ?? "",
-                    locationCity: s.itemLocation?.city ?? "",
-                    locationState: s.itemLocation?.stateOrProvince ?? "",
-                    locationCountry: s.itemLocation?.country ?? "",
-                    sellerUsername: s.seller?.username ?? "",
-                    sellerFeedback: s.seller?.feedbackScore ?? 0,
-                    buyingOptions: s.buyingOptions ?? [],
-                    bidCount: s.bidCount ?? 0,
-                    categories: (s.categories ?? []).map((c) => c.categoryId),
-                    categoryNames: (s.categories ?? []).map((c) => c.categoryName),
-                    itemEndDate: s.itemEndDate ?? null,
-                    thumbnailUrl: (s.thumbnailImages ?? [])[0]?.imageUrl ?? "",
-                    rawSummary: s,
-                }));
-                const count = await upsertGearListings(items);
-                totalUpserted += count;
-                // Pace requests to avoid rate limiting
-                await new Promise(r => setTimeout(r, 1000));
-            }
-            catch (err) {
-                console.error(`eBay search "${query}" error:`, err);
+                catch (err) {
+                    console.error(`eBay gear "${query}" p${page} error:`, err);
+                }
             }
         }
         // Mark old listings as expired
@@ -4049,7 +4060,7 @@ async function fetchEbayGearListings() {
         if (expired)
             console.log(`Marked ${expired} gear listings as expired`);
         await logGearFetch("browse_search", totalUpserted);
-        console.log(`eBay gear fetch complete: ${totalUpserted} items upserted`);
+        console.log(`eBay gear fetch complete: ${totalUpserted} items upserted (up to 20 calls)`);
     }
     catch (err) {
         console.error("eBay gear fetch failed:", err);
@@ -4057,18 +4068,19 @@ async function fetchEbayGearListings() {
     }
     return totalUpserted;
 }
-// Schedule: gear search every 23 minutes (4 calls/cycle × ~62 cycles/day = 248 calls, staggered 11min from vinyl)
+// Schedule: gear fetch every 29 minutes, staggered from vinyl.
+// Budget: 4 queries × 5 pages = 20 calls/sweep × ~50 sweeps/day ≈ 1,000 calls/day
 function startGearSchedule() {
     if (!ebayClientId || !ebayClientSecret) {
         console.log("eBay gear schedule not started — no credentials");
         return;
     }
-    // Gear search at :31 past (11min offset from vinyl's :20), every 23 min
-    const msSearch = msUntilPacific(6, 31, 1);
-    console.log(`[gear] Next search in ${Math.round(msSearch / 60000)}min, then every 23min`);
+    // Gear fetch at :34 past (offset from vinyl's :20), every 29 min
+    const msSearch = msUntilPacific(6, 34, 1);
+    console.log(`[gear] Next fetch in ${Math.round(msSearch / 60000)}min, then every 29min`);
     setTimeout(() => {
         fetchEbayGearListings();
-        setInterval(() => fetchEbayGearListings(), 23 * 60 * 1000);
+        setInterval(() => fetchEbayGearListings(), 29 * 60 * 1000);
     }, msSearch);
 }
 // GET /api/gear — public gear listings
@@ -4155,41 +4167,43 @@ async function fetchEbayVinylListings() {
     try {
         const token = await getEbayToken();
         const headers = { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" };
-        const baseFilter = `price:[10..],priceCurrency:USD,buyingOptions:{AUCTION}`;
+        // Fixed-price (Buy It Now) only, ≥$10. Sort omitted → eBay default (bestMatch).
+        const baseFilter = `price:[10..],priceCurrency:USD,buyingOptions:{FIXED_PRICE}`;
         const aspectFilter = `aspect_filter=categoryId:176985,Record%20Size:12%22`;
-        // 1) Category-wide newest (no keyword)
-        const catUrl = `https://api.ebay.com/buy/browse/v1/item_summary/search?category_ids=176985&limit=200&sort=newlyListed&filter=${baseFilter}&${aspectFilter}`;
-        try {
-            const r = await loggedFetch("ebay", catUrl, { headers, context: "vinyl: category" });
-            if (r.ok) {
-                const data = await r.json();
-                const summaries = data.itemSummaries ?? [];
-                console.log(`eBay vinyl (category): ${summaries.length} results`);
-                if (summaries.length)
-                    totalUpserted += await upsertVinylListings(mapSummaries(summaries));
-            }
-        }
-        catch (err) {
-            console.error("eBay vinyl (category) error:", err);
-        }
-        // 2) Keyword searches within the vinyl category — DB dedupes via ON CONFLICT
-        for (const keyword of VINYL_KEYWORD_QUERIES) {
-            try {
-                await new Promise(r => setTimeout(r, 1000)); // pace
-                const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(keyword)}&category_ids=176985&limit=200&sort=newlyListed&filter=${baseFilter}&${aspectFilter}`;
-                const r = await loggedFetch("ebay", url, { headers, context: `vinyl: ${keyword}` });
-                if (!r.ok) {
-                    console.error(`eBay vinyl "${keyword}" failed: ${r.status}`);
-                    continue;
+        // Build query list: category-wide (no q=) + keyword queries
+        const queries = [
+            { label: "category", qParam: "" },
+            ...VINYL_KEYWORD_QUERIES.map(k => ({ label: k, qParam: `q=${encodeURIComponent(k)}&` })),
+        ];
+        // Paginate 5 pages deep per query (offset 0, 200, 400, 600, 800)
+        // Total: 4 queries × 5 pages = 20 calls per sweep, up to 4,000 items/sweep
+        const PAGES = 5;
+        const LIMIT = 200;
+        for (const { label, qParam } of queries) {
+            for (let page = 0; page < PAGES; page++) {
+                const offset = page * LIMIT;
+                try {
+                    if (page > 0 || label !== "category") {
+                        await new Promise(r => setTimeout(r, 1000)); // pace
+                    }
+                    const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?${qParam}category_ids=176985&limit=${LIMIT}&offset=${offset}&filter=${baseFilter}&${aspectFilter}`;
+                    const r = await loggedFetch("ebay", url, { headers, context: `vinyl ${label} p${page}` });
+                    if (!r.ok) {
+                        console.error(`eBay vinyl "${label}" p${page} failed: ${r.status}`);
+                        continue;
+                    }
+                    const data = await r.json();
+                    const summaries = data.itemSummaries ?? [];
+                    console.log(`eBay vinyl ${label} p${page} (offset ${offset}): ${summaries.length} results`);
+                    if (summaries.length)
+                        totalUpserted += await upsertVinylListings(mapSummaries(summaries));
+                    // Short-circuit if we got fewer than a full page (no more results)
+                    if (summaries.length < LIMIT)
+                        break;
                 }
-                const data = await r.json();
-                const summaries = data.itemSummaries ?? [];
-                console.log(`eBay vinyl "${keyword}": ${summaries.length} results`);
-                if (summaries.length)
-                    totalUpserted += await upsertVinylListings(mapSummaries(summaries));
-            }
-            catch (err) {
-                console.error(`eBay vinyl "${keyword}" error:`, err);
+                catch (err) {
+                    console.error(`eBay vinyl "${label}" p${page} error:`, err);
+                }
             }
         }
         // Mark ended listings as expired
@@ -4197,7 +4211,7 @@ async function fetchEbayVinylListings() {
         if (expired)
             console.log(`Marked ${expired} vinyl listings as expired`);
         await logVinylFetch("browse_search", totalUpserted);
-        console.log(`eBay vinyl fetch complete: ${totalUpserted} items upserted (4 calls)`);
+        console.log(`eBay vinyl fetch complete: ${totalUpserted} items upserted (up to 20 calls)`);
     }
     catch (err) {
         console.error("eBay vinyl fetch failed:", err);
@@ -4205,123 +4219,26 @@ async function fetchEbayVinylListings() {
     }
     return totalUpserted;
 }
-// Schedule: vinyl search every 23 minutes (4 calls/cycle × ~62 cycles/day = 248 calls, ~50k items/day)
+// Schedule: vinyl fetch every 29 minutes.
+// Budget: 4 queries × 5 pages = 20 calls/sweep × ~50 sweeps/day ≈ 1,000 calls/day
 function startVinylSchedule() {
     if (!ebayClientId || !ebayClientSecret) {
         console.log("eBay vinyl schedule not started — no credentials");
         return;
     }
     const msSearch = msUntilPacific(6, 20, 1);
-    console.log(`[vinyl] Next search in ${Math.round(msSearch / 60000)}min, then every 23min`);
+    console.log(`[vinyl] Next fetch in ${Math.round(msSearch / 60000)}min, then every 29min`);
     setTimeout(() => {
         fetchEbayVinylListings();
-        setInterval(() => fetchEbayVinylListings(), 23 * 60 * 1000);
+        setInterval(() => fetchEbayVinylListings(), 29 * 60 * 1000);
     }, msSearch);
 }
-// ── Price/bid refresh — one eBay search per page load, throttled ────────────
-const REFRESH_COOLDOWN_MS = 5 * 60 * 1000; // 5 minutes between refreshes per type
-let _lastVinylRefresh = 0;
-let _lastGearRefresh = 0;
-function mapSortToEbay(sort) {
-    if (sort === "newest")
-        return "newlyListed";
-    if (sort === "price_asc")
-        return "price";
-    if (sort === "price_desc")
-        return "-price";
-    return "endingSoonest"; // default for "ending" and "bids"
-}
-async function refreshVinylPrices(sort) {
-    const now = Date.now();
-    if (now - _lastVinylRefresh < REFRESH_COOLDOWN_MS)
-        return;
-    if (!ebayClientId || !ebayClientSecret)
-        return;
-    _lastVinylRefresh = now;
-    try {
-        const token = await getEbayToken();
-        const ebaySort = mapSortToEbay(sort);
-        const baseFilter = `price:[10..],priceCurrency:USD,buyingOptions:{AUCTION}`;
-        const aspectFilter = `aspect_filter=categoryId:176985,Record%20Size:12%22`;
-        const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?category_ids=176985&limit=200&sort=${ebaySort}&filter=${baseFilter}&${aspectFilter}`;
-        const r = await loggedFetch("ebay", url, {
-            headers: { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" },
-            context: `vinyl refresh (${ebaySort})`,
-        });
-        if (!r.ok)
-            return;
-        const data = await r.json();
-        const summaries = data.itemSummaries ?? [];
-        if (!summaries.length)
-            return;
-        const NOT_12_RE = /\b(7["″''"]|7 inch|45 ?rpm|\b45\b|10["″''"]|10 inch|pic sleeve)\b/i;
-        const items = summaries.filter((s) => !NOT_12_RE.test(s.title ?? "")).map((s) => ({
-            itemId: s.itemId, title: s.title ?? "",
-            price: parseFloat(s.currentBidPrice?.value ?? s.price?.value ?? "0"),
-            currency: s.currentBidPrice?.currency ?? s.price?.currency ?? "USD",
-            condition: s.condition ?? s.conditionId ?? "",
-            imageUrl: s.image?.imageUrl ?? "", itemUrl: s.itemWebUrl ?? "",
-            locationCity: s.itemLocation?.city ?? "", locationState: s.itemLocation?.stateOrProvince ?? "",
-            locationCountry: s.itemLocation?.country ?? "",
-            sellerUsername: s.seller?.username ?? "", sellerFeedback: s.seller?.feedbackScore ?? 0,
-            buyingOptions: s.buyingOptions ?? [], bidCount: s.bidCount ?? 0,
-            categories: (s.categories ?? []).map((c) => c.categoryId),
-            categoryNames: (s.categories ?? []).map((c) => c.categoryName),
-            itemEndDate: s.itemEndDate ?? null,
-            thumbnailUrl: (s.thumbnailImages ?? [])[0]?.imageUrl ?? "", rawSummary: s,
-        }));
-        const n = await upsertVinylListings(items);
-        console.log(`[vinyl refresh] updated ${n} items (sort=${ebaySort})`);
-    }
-    catch (err) {
-        console.error("[vinyl refresh] error:", err);
-    }
-}
-async function refreshGearPrices(sort) {
-    const now = Date.now();
-    if (now - _lastGearRefresh < REFRESH_COOLDOWN_MS)
-        return;
-    if (!ebayClientId || !ebayClientSecret)
-        return;
-    _lastGearRefresh = now;
-    try {
-        const token = await getEbayToken();
-        const ebaySort = mapSortToEbay(sort);
-        // Use the first gear query as the refresh query — most general
-        const query = GEAR_SEARCH_QUERIES[0] || "vintage receiver";
-        const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(query)}&limit=200&sort=${ebaySort}&filter=price:[50..],priceCurrency:USD,buyingOptions:{AUCTION}`;
-        const r = await loggedFetch("ebay", url, {
-            headers: { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" },
-            context: `gear refresh (${ebaySort})`,
-        });
-        if (!r.ok)
-            return;
-        const data = await r.json();
-        const summaries = data.itemSummaries ?? [];
-        if (!summaries.length)
-            return;
-        const items = summaries.map((s) => ({
-            itemId: s.itemId, title: s.title ?? "",
-            price: parseFloat(s.currentBidPrice?.value ?? s.price?.value ?? "0"),
-            currency: s.currentBidPrice?.currency ?? s.price?.currency ?? "USD",
-            condition: s.condition ?? s.conditionId ?? "",
-            imageUrl: s.image?.imageUrl ?? "", itemUrl: s.itemWebUrl ?? "",
-            locationCity: s.itemLocation?.city ?? "", locationState: s.itemLocation?.stateOrProvince ?? "",
-            locationCountry: s.itemLocation?.country ?? "",
-            sellerUsername: s.seller?.username ?? "", sellerFeedback: s.seller?.feedbackScore ?? 0,
-            buyingOptions: s.buyingOptions ?? [], bidCount: s.bidCount ?? 0,
-            categories: (s.categories ?? []).map((c) => c.categoryId),
-            categoryNames: (s.categories ?? []).map((c) => c.categoryName),
-            itemEndDate: s.itemEndDate ?? null,
-            thumbnailUrl: (s.thumbnailImages ?? [])[0]?.imageUrl ?? "", rawSummary: s,
-        }));
-        const n = await upsertGearListings(items);
-        console.log(`[gear refresh] updated ${n} items (sort=${ebaySort})`);
-    }
-    catch (err) {
-        console.error("[gear refresh] error:", err);
-    }
-}
+// ── Page-load refresh disabled ──────────────────────────────────────────
+// With fixed-price-only listings, prices barely change. The scheduled
+// background fetch (every 29 min) keeps the DB fresh enough, and disabling
+// page-load refresh preserves the full popup budget.
+async function refreshVinylPrices(_sort) { }
+async function refreshGearPrices(_sort) { }
 // GET /api/vinyl — public vinyl listings
 app.get("/api/vinyl", async (_req, res) => {
     try {
@@ -4384,248 +4301,31 @@ function nextPacificMidnightIso() {
     const utcMidnight = new Date(tomorrow.getTime() + pacificOffsetHours * 60 * 60 * 1000);
     return utcMidnight.toISOString();
 }
-app.get("/api/ebay/search/status", async (_req, res) => {
-    try {
-        const userId = await getClerkUserId(_req);
-        if (!userId)
-            return res.status(401).json({ error: "Sign in to use eBay search" });
-        const { count } = await getEbayRateCount();
-        const remaining = Math.max(0, EBAY_USER_LIMIT - count);
-        res.json({
-            remaining, limit: EBAY_USER_LIMIT,
-            resetsAt: nextPacificMidnightIso(),
-        });
+// ── Item-detail in-memory cache ────────────────────────────────────────
+// Keyed on itemId, 5-minute TTL. Cuts popup calls dramatically when
+// multiple users click the same item in quick succession.
+const ITEM_DETAIL_TTL_MS = 5 * 60 * 1000;
+const ITEM_DETAIL_CACHE_MAX = 500;
+const _itemDetailCache = new Map();
+function _getCachedItemDetail(itemId) {
+    const hit = _itemDetailCache.get(itemId);
+    if (!hit)
+        return null;
+    if (hit.expiresAt < Date.now()) {
+        _itemDetailCache.delete(itemId);
+        return null;
     }
-    catch (e) {
-        res.status(500).json({ error: String(e) });
+    return hit.payload;
+}
+function _setCachedItemDetail(itemId, payload) {
+    // Simple LRU trim: if at capacity, drop the oldest entry
+    if (_itemDetailCache.size >= ITEM_DETAIL_CACHE_MAX) {
+        const firstKey = _itemDetailCache.keys().next().value;
+        if (firstKey)
+            _itemDetailCache.delete(firstKey);
     }
-});
-app.get("/api/ebay/search", async (req, res) => {
-    const userId = await getClerkUserId(req);
-    if (!userId)
-        return res.status(401).json({ error: "Sign in to use eBay search" });
-    const q = (req.query.q ?? "").trim();
-    if (q.length < 2)
-        return res.status(400).json({ error: "Query must be at least 2 characters" });
-    if (q.length > 200)
-        return res.status(400).json({ error: "Query too long" });
-    // Pagination: eBay Browse API allows limit up to 200 and caps offset+limit at 10_000
-    const PAGE_SIZE = 200;
-    const rawOffset = parseInt(req.query.offset ?? "0", 10);
-    const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? Math.min(rawOffset, 10000 - PAGE_SIZE) : 0;
-    console.log(`[ebay-search] vinyl query="${q}" offset=${offset} user=${userId}`);
-    if (!ebayClientId || !ebayClientSecret) {
-        console.error(`[ebay-search] eBay credentials not configured`);
-        return res.status(503).json({ error: "eBay search not available" });
-    }
-    // Include offset in cache key so each page caches independently
-    const queryKey = `${q.toLowerCase()}|o${offset}`;
-    const resetsAt = nextPacificMidnightIso();
-    try {
-        // Check cache first — free, no counter increment.
-        // Only serve cached results if they actually have items; fall through
-        // to fresh fetch on empty cached results (prevents stale-empty stickiness)
-        const cached = await getEbaySearchCache(queryKey);
-        if (cached && cached.results && cached.results.length > 0) {
-            const { count } = await getEbayRateCount();
-            const hasMore = offset + cached.results.length < cached.total && offset + PAGE_SIZE < 10000;
-            return res.json({
-                items: cached.results,
-                total: cached.total,
-                offset,
-                hasMore,
-                cached: true,
-                rateLimit: { remaining: Math.max(0, EBAY_USER_LIMIT - count), limit: EBAY_USER_LIMIT, resetsAt },
-            });
-        }
-        // Check rate limit
-        const { count } = await getEbayRateCount();
-        if (count >= EBAY_USER_LIMIT) {
-            return res.status(429).json({
-                error: "Daily eBay search limit reached",
-                rateLimit: { remaining: 0, limit: EBAY_USER_LIMIT, resetsAt },
-            });
-        }
-        // Increment counter and call eBay
-        const newCount = await incrementEbayRateCount();
-        const token = await getEbayToken();
-        const headers = {
-            "Authorization": `Bearer ${token}`,
-            "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
-        };
-        if (ebayAffiliateCampaignId) {
-            headers["X-EBAY-C-ENDUSERCTX"] = `affiliateCampaignId=${ebayAffiliateCampaignId}`;
-        }
-        // Match the scheduled vinyl fetch URL shape exactly (proven working),
-        // but use user's query and sort by endingSoonest. Keep 12" record aspect
-        // filter so results match what users expect on the Vinyl tab.
-        const baseFilter = `priceCurrency:USD,buyingOptions:{AUCTION}`;
-        const aspectFilter = `aspect_filter=categoryId:176985,Record%20Size:12%22`;
-        const pag = `limit=${PAGE_SIZE}&offset=${offset}`;
-        let url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&category_ids=176985&${pag}&sort=endingSoonest&filter=${baseFilter}&${aspectFilter}`;
-        let r = await loggedFetch("ebay", url, { headers, context: `live search: ${q} offset=${offset}` });
-        if (!r.ok) {
-            const bodyText = await r.text().catch(() => "");
-            console.error(`eBay live search failed: ${r.status} ${bodyText.slice(0, 300)}`);
-            return res.status(502).json({ error: "eBay search failed", details: bodyText.slice(0, 200) });
-        }
-        let data = await r.json();
-        let summaries = data.itemSummaries ?? [];
-        console.log(`eBay live search "${q}" offset=${offset} (strict vinyl): ${summaries.length} results`);
-        // Fallback: if strict 12" vinyl filter returned zero AND this is the
-        // first page, retry without the aspect filter so users aren't blocked by
-        // restrictive metadata matching. Never drop the vinyl category.
-        if (summaries.length === 0 && offset === 0) {
-            url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&category_ids=176985&${pag}&sort=endingSoonest&filter=${baseFilter}`;
-            r = await loggedFetch("ebay", url, { headers, context: `live search fallback: ${q}` });
-            if (r.ok) {
-                data = await r.json();
-                summaries = data.itemSummaries ?? [];
-                console.log(`eBay live search "${q}" (fallback, records cat): ${summaries.length} results`);
-            }
-        }
-        // Transform to match vinyl_listings field names
-        const items = summaries.map((s) => ({
-            item_id: s.itemId,
-            title: s.title ?? "",
-            price: parseFloat(s.currentBidPrice?.value ?? s.price?.value ?? "0"),
-            currency: s.currentBidPrice?.currency ?? s.price?.currency ?? "USD",
-            condition: s.condition ?? "",
-            image_url: s.image?.imageUrl ?? s.thumbnailImages?.[0]?.imageUrl ?? "",
-            item_url: s.itemWebUrl ?? s.itemHref ?? "",
-            location_city: s.itemLocation?.city ?? "",
-            location_state: s.itemLocation?.stateOrProvince ?? "",
-            location_country: s.itemLocation?.country ?? "",
-            seller_username: s.seller?.username ?? "",
-            seller_feedback: s.seller?.feedbackScore ?? 0,
-            buying_options: s.buyingOptions ?? [],
-            bid_count: s.bidCount ?? 0,
-            item_end_date: s.itemEndDate ?? null,
-            thumbnail_url: (s.thumbnailImages ?? [])[0]?.imageUrl ?? "",
-        }));
-        const total = data.total ?? items.length;
-        // eBay Browse API hard-caps offset+limit at 10_000
-        const hasMore = (offset + items.length) < total && (offset + PAGE_SIZE) < 10000;
-        // Cache results only if non-empty — prevents stale empty results from
-        // sticking for 30 minutes and denying the user a retry
-        if (items.length > 0) {
-            await setEbaySearchCache(queryKey, items, total);
-        }
-        res.json({
-            items,
-            total,
-            offset,
-            hasMore,
-            cached: false,
-            rateLimit: { remaining: Math.max(0, EBAY_USER_LIMIT - newCount), limit: EBAY_USER_LIMIT, resetsAt },
-        });
-    }
-    catch (e) {
-        console.error("eBay live search error:", e);
-        res.status(500).json({ error: String(e) });
-    }
-});
-// GET /api/ebay/gear/search — live eBay search for vintage gear (auctions)
-app.get("/api/ebay/gear/search", async (req, res) => {
-    const userId = await getClerkUserId(req);
-    if (!userId)
-        return res.status(401).json({ error: "Sign in to use eBay search" });
-    const q = (req.query.q ?? "").trim();
-    if (q.length < 2)
-        return res.status(400).json({ error: "Query must be at least 2 characters" });
-    if (q.length > 200)
-        return res.status(400).json({ error: "Query too long" });
-    // Pagination: eBay Browse API allows limit up to 200 and caps offset+limit at 10_000
-    const PAGE_SIZE = 200;
-    const rawOffset = parseInt(req.query.offset ?? "0", 10);
-    const offset = Number.isFinite(rawOffset) && rawOffset >= 0 ? Math.min(rawOffset, 10000 - PAGE_SIZE) : 0;
-    if (!ebayClientId || !ebayClientSecret) {
-        return res.status(503).json({ error: "eBay search not available" });
-    }
-    const queryKey = `gear:${q.toLowerCase()}|o${offset}`;
-    const resetsAt = nextPacificMidnightIso();
-    try {
-        // Check cache first — free, no counter increment.
-        // Fall through to fresh fetch on empty cached results
-        const cached = await getEbaySearchCache(queryKey);
-        if (cached && cached.results && cached.results.length > 0) {
-            const { count } = await getEbayRateCount();
-            const hasMore = offset + cached.results.length < cached.total && offset + PAGE_SIZE < 10000;
-            return res.json({
-                items: cached.results,
-                total: cached.total,
-                offset,
-                hasMore,
-                cached: true,
-                rateLimit: { remaining: Math.max(0, EBAY_USER_LIMIT - count), limit: EBAY_USER_LIMIT, resetsAt },
-            });
-        }
-        // Check rate limit
-        const { count } = await getEbayRateCount();
-        if (count >= EBAY_USER_LIMIT) {
-            return res.status(429).json({
-                error: "Daily eBay request limit reached",
-                rateLimit: { remaining: 0, limit: EBAY_USER_LIMIT, resetsAt },
-            });
-        }
-        // Increment counter and call eBay
-        const newCount = await incrementEbayRateCount();
-        const token = await getEbayToken();
-        const headers = {
-            "Authorization": `Bearer ${token}`,
-            "X-EBAY-C-MARKETPLACE-ID": "EBAY_US",
-        };
-        if (ebayAffiliateCampaignId) {
-            headers["X-EBAY-C-ENDUSERCTX"] = `affiliateCampaignId=${ebayAffiliateCampaignId}`;
-        }
-        const url = `https://api.ebay.com/buy/browse/v1/item_summary/search?q=${encodeURIComponent(q)}&limit=${PAGE_SIZE}&offset=${offset}&sort=endingSoonest&filter=priceCurrency:USD,buyingOptions:{AUCTION}`;
-        const r = await loggedFetch("ebay", url, { headers, context: `gear live search: ${q} offset=${offset}` });
-        if (!r.ok) {
-            const bodyText = await r.text().catch(() => "");
-            console.error(`eBay gear live search failed: ${r.status} ${bodyText.slice(0, 300)}`);
-            return res.status(502).json({ error: "eBay search failed", details: bodyText.slice(0, 200) });
-        }
-        const data = await r.json();
-        const summaries = data.itemSummaries ?? [];
-        // Transform to match gear_listings field names
-        const items = summaries.map((s) => ({
-            item_id: s.itemId,
-            title: s.title ?? "",
-            price: parseFloat(s.currentBidPrice?.value ?? s.price?.value ?? "0"),
-            currency: s.currentBidPrice?.currency ?? s.price?.currency ?? "USD",
-            condition: s.condition ?? "",
-            image_url: s.image?.imageUrl ?? s.thumbnailImages?.[0]?.imageUrl ?? "",
-            item_url: s.itemWebUrl ?? s.itemHref ?? "",
-            location_city: s.itemLocation?.city ?? "",
-            location_state: s.itemLocation?.stateOrProvince ?? "",
-            location_country: s.itemLocation?.country ?? "",
-            seller_username: s.seller?.username ?? "",
-            seller_feedback: s.seller?.feedbackScore ?? 0,
-            buying_options: s.buyingOptions ?? [],
-            bid_count: s.bidCount ?? 0,
-            item_end_date: s.itemEndDate ?? null,
-            thumbnail_url: (s.thumbnailImages ?? [])[0]?.imageUrl ?? "",
-        }));
-        const total = data.total ?? items.length;
-        const hasMore = (offset + items.length) < total && (offset + PAGE_SIZE) < 10000;
-        // Cache results only if non-empty
-        if (items.length > 0) {
-            await setEbaySearchCache(queryKey, items, total);
-        }
-        res.json({
-            items,
-            total,
-            offset,
-            hasMore,
-            cached: false,
-            rateLimit: { remaining: Math.max(0, EBAY_USER_LIMIT - newCount), limit: EBAY_USER_LIMIT, resetsAt },
-        });
-    }
-    catch (e) {
-        console.error("eBay gear live search error:", e);
-        res.status(500).json({ error: String(e) });
-    }
-});
+    _itemDetailCache.set(itemId, { expiresAt: Date.now() + ITEM_DETAIL_TTL_MS, payload });
+}
 // GET /api/ebay/item/:itemId — fetch full item details (description, images, specs)
 // Public — no auth required so vinyl/gear popup detail works for all visitors
 app.get("/api/ebay/item/:itemId", async (req, res) => {
@@ -4635,6 +4335,16 @@ app.get("/api/ebay/item/:itemId", async (req, res) => {
     if (!ebayClientId || !ebayClientSecret)
         return res.status(503).json({ error: "eBay not available" });
     const resetsAt = nextPacificMidnightIso();
+    // In-memory cache (5 min TTL) — short-circuit before touching eBay quota
+    const cached = _getCachedItemDetail(itemId);
+    if (cached) {
+        const { count } = await getEbayRateCount();
+        return res.json({
+            ...cached,
+            cached: true,
+            rateLimit: { remaining: Math.max(0, EBAY_USER_LIMIT - count), limit: EBAY_USER_LIMIT, resetsAt },
+        });
+    }
     try {
         const { count } = await getEbayRateCount();
         if (count >= EBAY_USER_LIMIT) {
@@ -4676,7 +4386,7 @@ app.get("/api/ebay/item/:itemId", async (req, res) => {
         const detailSellerFeedbackPercent = d.seller?.feedbackPercentage ?? "";
         const detailBidCount = d.bidCount ?? 0;
         const detailEndDate = d.itemEndDate ?? "";
-        res.json({
+        const payload = {
             description: d.description ?? "",
             allImages,
             specifics,
@@ -4691,6 +4401,11 @@ app.get("/api/ebay/item/:itemId", async (req, res) => {
             currency: detailCurrency,
             location: [d.itemLocation?.city, d.itemLocation?.stateOrProvince, d.itemLocation?.country].filter(Boolean).join(", "),
             itemEndDate: detailEndDate,
+        };
+        _setCachedItemDetail(itemId, payload);
+        res.json({
+            ...payload,
+            cached: false,
             rateLimit: { remaining: Math.max(0, EBAY_USER_LIMIT - newCount), limit: EBAY_USER_LIMIT, resetsAt },
         });
         // Fire-and-forget: write fresh price/bids/detail back to DB

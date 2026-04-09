@@ -1066,20 +1066,8 @@ a.fresh-card-search-link:hover {
   color: #daa520;
   margin: 0.15rem 0;
 }
-.gear-bids {
-  color: #e8a020;
-  font-weight: 600;
-}
-.gear-time-left {
-  color: #cc6644;
-}
 
-/* ── Buy tab (vinyl auctions) ── */
-.ebay-live-search { margin-bottom: 1rem; padding-bottom: 0.75rem; text-align: center; }
-.ebay-search-bar { display: flex; gap: 0.5rem; align-items: center; flex-wrap: wrap; justify-content: center; }
-.ebay-search-bar .buy-search-field { flex: 0 1 400px; min-width: 180px; }
-.ebay-rate-counter { text-align: center; }
-.card-expired { opacity: 0.35; pointer-events: none; filter: grayscale(1); transition: opacity 0.5s, filter 0.5s; }
+/* ── Buy tab (vinyl Buy-It-Now listings) ── */
 
 .buy-header {
   margin-bottom: 0.75rem;
@@ -1159,21 +1147,6 @@ a.fresh-card-search-link:hover {
   font-weight: 700;
   color: #4a9eda;
   margin: 0.15rem 0;
-}
-.buy-bids {
-  color: #5ab0e8;
-  font-weight: 600;
-}
-.buy-time-left {
-  color: #cc6644;
-}
-.ending-soon {
-  color: #e05050 !important;
-  animation: pulse-red 1.2s ease-in-out infinite;
-}
-@keyframes pulse-red {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
 }
 
 /* Buy popup */
