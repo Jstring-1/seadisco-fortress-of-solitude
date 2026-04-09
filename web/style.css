@@ -1849,6 +1849,87 @@ body.modal-open  { overflow: hidden; }
   font-size: 0.72rem;
   color: var(--muted);
 }
+
+/* ── Notes & custom fields editor panel ──────────────────────────────── */
+.modal-notes-panel {
+  margin-top: 0.45rem;
+  padding: 0.5rem 0.7rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.72rem;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.modal-notes-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.modal-notes-block + .modal-notes-block {
+  border-top: 1px solid var(--border);
+  padding-top: 0.45rem;
+}
+.modal-notes-title {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.modal-notes-hint {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--muted);
+  font-size: 0.66rem;
+}
+.modal-notes-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+  font-size: 0.7rem;
+}
+.modal-notes-label {
+  flex: 0 0 7.5rem;
+  max-width: 7.5rem;
+  padding-top: 0.28rem;
+  color: var(--muted);
+  font-size: 0.68rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.modal-notes-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  padding: 0.28rem 0.45rem;
+  font: inherit;
+  font-size: 0.72rem;
+  resize: vertical;
+}
+.modal-notes-input:focus {
+  outline: none;
+  border-color: #6b4a18;
+  background: #1a1510;
+}
+.modal-notes-input:disabled { opacity: 0.5; }
+.modal-notes-empty,
+.modal-notes-loading {
+  font-size: 0.68rem;
+  color: var(--muted);
+  font-style: italic;
+}
+@media (max-width: 560px) {
+  .modal-notes-row { flex-direction: column; gap: 0.2rem; }
+  .modal-notes-label { flex: initial; max-width: none; padding-top: 0; }
+}
 .modal-instances-header {
   display: flex;
   justify-content: space-between;
@@ -2949,17 +3030,6 @@ body.modal-open  { overflow: hidden; }
   line-height: 1; transition: color 0.15s, border-color 0.15s;
 }
 .admin-refresh-btn:hover { color: var(--accent); border-color: var(--accent); }
-
-.admin-pool-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 1.5rem;
-}
-@media (max-width: 640px) {
-  .admin-pool-grid {
-    grid-template-columns: 1fr;
-  }
-}
 
 /* ── Load More ── */
 .load-more-wrap {

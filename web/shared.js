@@ -314,6 +314,29 @@ const SEADISCO_CLERK_APPEARANCE = {
   },
 };
 
+// SeaDisco is invite-only. Every Clerk widget that might otherwise say
+// "Create your account" / "Sign up" is rewritten to nudge new visitors
+// toward the waitlist instead. Keys match Clerk's default localization
+// structure so any unspecified strings fall back to the English defaults.
+const SEADISCO_CLERK_LOCALIZATION = {
+  signIn: {
+    start: {
+      title:      "Sign in to SeaDisco",
+      subtitle:   "Welcome back",
+      actionText: "Not approved yet?",
+      actionLink: "Join the waitlist",
+    },
+  },
+  signUp: {
+    start: {
+      title:      "Join the SeaDisco waitlist",
+      subtitle:   "SeaDisco is invite-only. Enter your email and we'll be in touch when a spot opens up.",
+      actionText: "Already approved?",
+      actionLink: "Sign in",
+    },
+  },
+};
+
 // Open Clerk's sign-in modal overlay (no view change). If the user is
 // already signed in, route to the Account view instead. Falls back to
 // the legacy account view if Clerk's modal API is unavailable.
@@ -334,6 +357,7 @@ async function openSignInModal() {
     if (typeof c.openSignIn === "function") {
       c.openSignIn({
         appearance: SEADISCO_CLERK_APPEARANCE,
+        localization: SEADISCO_CLERK_LOCALIZATION,
         afterSignInUrl: location.pathname + location.search,
         afterSignUpUrl: location.pathname + location.search,
       });
@@ -387,7 +411,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260409d";
+  const SITE_VERSION = "build 20260409f";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'https://seadisco.com' : '/'}" class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>

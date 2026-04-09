@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getPriceCache, getPriceHistory, getStaleReleaseIds, prunePriceHistory, getPriceStats, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData } from "./db.js";
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -18,6 +18,9 @@ const discogsConsumerKey    = process.env.DISCOGS_CONSUMER_KEY    ?? "";
 const discogsConsumerSecret = process.env.DISCOGS_CONSUMER_SECRET ?? "";
 // Publishable key sent to frontend via /api/config
 const authPk      = process.env.AUTH_PK ?? "";
+// Cached at boot — hot-path functions (requireAdmin + 20-odd admin routes)
+// previously re-read this env var per request.
+const ADMIN_CLERK_ID = process.env.ADMIN_CLERK_ID ?? "";
 // SeaDisco is invite-only — Clerk waitlist gates all sign-ups. Every API
 // endpoint that touches user data or external services requires a valid
 // Clerk session via requireUser(). The admin tab is additionally gated by
@@ -60,7 +63,6 @@ function _extractDiscogsProfile(profile: any): any {
 // ── Global API kill switch ──────────────────────────────────────────────
 const MAX_USERS         = 25;
 let _apiKillSwitch = false;
-let _lastPriceUpdate: Date | null = null;
 
 // ── Logged fetch: wraps fetch() and logs the request to api_request_log ──
 async function loggedFetch(service: string, url: string, init?: RequestInit & { context?: string }): Promise<Response> {
@@ -174,7 +176,7 @@ async function requireUser(req: express.Request, res: express.Response): Promise
  *  ADMIN_CLERK_ID. Returns the userId or null after sending 403. */
 async function requireAdmin(req: express.Request, res: express.Response): Promise<string | null> {
   const userId = await getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  const adminId = ADMIN_CLERK_ID;
   if (!userId || !adminId || userId !== adminId) {
     res.status(403).json({ error: "forbidden" });
     return null;
@@ -324,7 +326,7 @@ app.get("/api/me", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const userId = await getClerkUserId(req);
   if (!userId) { res.json({ signedIn: false, isAdmin: false }); return; }
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  const adminId = ADMIN_CLERK_ID;
   res.json({ signedIn: true, isAdmin: !!adminId && userId === adminId });
 });
 
@@ -1538,9 +1540,12 @@ function buildCsv(rows: any[], folderMap: Map<number, string> | null): string {
 async function requireUsernameAndToken(req: express.Request, res: express.Response): Promise<{ userId: string; username: string; client: DiscogsClient } | null> {
   const userId = await getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return null; }
-  const username = await getDiscogsUsername(userId);
+  // Username lookup and client construction are independent DB reads — run in parallel.
+  const [username, client] = await Promise.all([
+    getDiscogsUsername(userId),
+    getDiscogsClientForUser(userId),
+  ]);
   if (!username) { res.status(400).json({ error: "No Discogs username — connect your account first" }); return null; }
-  const client = await getDiscogsClientForUser(userId);
   if (!client) { res.status(400).json({ error: "No Discogs credentials — connect your account first" }); return null; }
   return { userId, username, client };
 }
@@ -1818,43 +1823,6 @@ app.post("/api/user/folders/delete", express.json(), async (req, res) => {
   }
 });
 
-// POST /api/user/folders/move-all — move every item from one folder to another
-app.post("/api/user/folders/move-all", express.json(), async (req, res) => {
-  const ctx = await requireUsernameAndToken(req, res);
-  if (!ctx) return;
-  const { fromFolderId, toFolderId } = req.body ?? {};
-  if (fromFolderId == null || toFolderId == null) { res.status(400).json({ error: "fromFolderId and toFolderId required" }); return; }
-  const from = Number(fromFolderId);
-  const to   = Number(toFolderId);
-  if (from === 0) { res.status(400).json({ error: "Cannot move items out of the virtual 'All' folder" }); return; }
-  if (from === to) { res.json({ ok: true, moved: 0 }); return; }
-  try {
-    const contents = await getFolderContents(ctx.userId, from);
-    if (contents.length > 150) {
-      res.status(400).json({ error: `This folder contains ${contents.length} items. For folders this large, please move items in smaller batches.` });
-      return;
-    }
-    let moved = 0;
-    for (let i = 0; i < contents.length; i++) {
-      const item = contents[i];
-      if (!item.instanceId) continue;
-      if (i > 0) await _sleep(DISCOGS_CALL_DELAY_MS);
-      const moveUrl = `https://api.discogs.com/users/${encodeURIComponent(ctx.username)}/collection/folders/${from}/releases/${item.releaseId}/instances/${item.instanceId}`;
-      const mr = await loggedFetch("discogs", moveUrl, {
-        method: "POST",
-        headers: { ...ctx.client.buildHeaders("POST", moveUrl), "Content-Type": "application/json" },
-        body: JSON.stringify({ folder_id: to }),
-        context: "folder-move-all",
-      });
-      if (mr.ok || mr.status === 204) moved++;
-    }
-    await moveAllCollectionItemsBetweenFolders(ctx.userId, from, to);
-    res.json({ ok: true, moved });
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
 // POST /api/user/collection/move — move item to different folder
 app.post("/api/user/collection/move", express.json(), async (req, res) => {
   const ctx = await requireUsernameAndToken(req, res);
@@ -1921,6 +1889,54 @@ app.get("/api/user/collection/fields", async (req, res) => {
   }
 });
 
+// POST /api/user/wantlist/notes — update notes on a wantlist item
+// Discogs stores a single free-text `notes` string on each wantlist item.
+// We mirror the collection notes shape locally as [{ field_id: 0, value }].
+app.post("/api/user/wantlist/notes", express.json(), async (req, res) => {
+  const ctx = await requireUsernameAndToken(req, res);
+  if (!ctx) return;
+  const { releaseId, value } = req.body ?? {};
+  if (!releaseId) { res.status(400).json({ error: "releaseId required" }); return; }
+  const text = String(value ?? "");
+  try {
+    const url = `https://api.discogs.com/users/${encodeURIComponent(ctx.username)}/wants/${releaseId}`;
+    // Preserve existing rating — POST overwrites the whole wantlist item.
+    const existing = await getWantlistItem(ctx.userId, Number(releaseId));
+    const body: any = { notes: text };
+    if (existing?.rating) body.rating = existing.rating;
+    const r = await loggedFetch("discogs", url, {
+      method: "POST",
+      headers: { ...ctx.client.buildHeaders("POST", url), "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      context: "wantlist-notes",
+    });
+    if (!r.ok && r.status !== 204) {
+      const txt = await r.text();
+      res.status(r.status).json({ error: `Discogs error: ${txt}` }); return;
+    }
+    const newNotes = text ? [{ field_id: 0, value: text }] : [];
+    await updateWantlistNotes(ctx.userId, Number(releaseId), newNotes);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
+// GET /api/user/wantlist/item — fetch local wantlist rating & notes for a release
+app.get("/api/user/wantlist/item", async (req, res) => {
+  const userId = await getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const releaseId = Number(req.query.releaseId);
+  if (!releaseId) { res.status(400).json({ error: "releaseId required" }); return; }
+  try {
+    const item = await getWantlistItem(userId, releaseId);
+    if (!item) { res.json({ found: false }); return; }
+    res.json({ found: true, rating: item.rating, notes: item.notes });
+  } catch (e) {
+    res.status(500).json({ error: String(e) });
+  }
+});
+
 // GET /api/user/collection/instance — get instance info for a release in the user's collection
 app.get("/api/user/collection/instance", async (req, res) => {
   const userId = await getClerkUserId(req);
@@ -1962,32 +1978,6 @@ app.get("/api/user/collection/instances", async (req, res) => {
 // ── Phase 4: Price Intelligence & Alerts ─────────────────────────────────
 
 // GET /api/price-history/:releaseId — price history for sparklines
-app.get("/api/price-history/:releaseId", async (req, res) => {
-  if (!await requireUser(req, res)) return;
-  const releaseId = parseInt(req.params.releaseId);
-  if (!releaseId) { res.status(400).json({ error: "Invalid releaseId" }); return; }
-  const days = Math.min(365, parseInt(req.query.days as string) || 90);
-  try {
-    const history = await getPriceHistory(releaseId, "USD", days);
-    res.json({ history });
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
-// GET /api/price/:releaseId — current price from cache
-app.get("/api/price/:releaseId", async (req, res) => {
-  if (!await requireUser(req, res)) return;
-  const releaseId = parseInt(req.params.releaseId);
-  if (!releaseId) { res.status(400).json({ error: "Invalid releaseId" }); return; }
-  try {
-    const price = await getPriceCache(releaseId);
-    res.json(price ?? { lowest: null, median: null, highest: null, numForSale: 0, fetchedAt: null });
-  } catch (e) {
-    res.status(500).json({ error: String(e) });
-  }
-});
-
 // ── Saved searches ──────────────────────────────────────────────────────
 
 // GET /api/user/saved-searches?view=search — list saved searches
@@ -2028,63 +2018,6 @@ app.delete("/api/user/saved-searches/:id", async (req, res) => {
     res.status(500).json({ error: String(e) });
   }
 });
-
-// ── Background price updater ─────────────────────────────────────────────
-async function runPriceUpdate() {
-  if (_apiKillSwitch) return;
-  _lastPriceUpdate = new Date();
-  console.log("[price-update] Starting background price update…");
-  try {
-    const allIds = await getStaleReleaseIds(200);
-    if (!allIds.length) { console.log("[price-update] No releases to update"); return; }
-    console.log(`[price-update] Updating ${allIds.length} releases`);
-
-    let updated = 0;
-    for (const releaseId of allIds) {
-      if (_apiKillSwitch) break;
-      try {
-        // NOTE: this background job is disabled in the boot block. Left in
-        // place as dead code in case we revive it later — would need to be
-        // rewritten to borrow an admin user's Discogs token rather than
-        // using a shared token (which no longer exists).
-        const url = `https://api.discogs.com/marketplace/stats/${releaseId}?curr_abbr=USD`;
-        const headers: Record<string, string> = { "User-Agent": "SeaDisco/1.0" };
-        const r = await loggedFetch("discogs", url, { headers, context: "price-update" });
-        if (r.ok) {
-          const data = await r.json() as any;
-          const lowest = data.lowest_price?.value ?? null;
-          const median = data.median_price?.value ?? null;
-          const highest = data.highest_price?.value ?? null;
-          const numForSale = data.num_for_sale ?? 0;
-          await upsertPriceCache(releaseId, lowest, median, highest, numForSale);
-          await appendPriceHistory(releaseId, lowest, median, highest, numForSale);
-          updated++;
-        } else if (r.status === 429) {
-          console.log("[price-update] Rate limited, pausing 60s");
-          await sleep(60000);
-        }
-        // Pace at ~1 req/sec to stay well within rate limits
-        await sleep(1100);
-      } catch (e) {
-        console.error(`[price-update] Error for ${releaseId}:`, e);
-      }
-    }
-    console.log(`[price-update] Done, updated ${updated}/${allIds.length} releases`);
-  } catch (e) {
-    console.error("[price-update] Error:", e);
-  }
-}
-
-function startPriceUpdateSchedule() {
-  // Run every 6 hours, starting 30 min after boot
-  const SIX_HOURS = 6 * 60 * 60 * 1000;
-  setTimeout(() => {
-    runPriceUpdate();
-    setInterval(runPriceUpdate, SIX_HOURS);
-  }, 30 * 60 * 1000);
-  // Also prune old price history daily
-  setInterval(() => { prunePriceHistory().catch(() => {}); }, 24 * 60 * 60 * 1000);
-}
 
 // GET /api/user/facets — distinct genres and styles from collection or wantlist
 app.get("/api/user/facets", async (req, res) => {
@@ -2248,7 +2181,7 @@ app.use("/api/admin", (req, res, next) => {
 // GET /api/admin/feedback — inbox, only for admin user
 app.get("/api/admin/feedback", async (req, res) => {
   const userId = await getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  const adminId = ADMIN_CLERK_ID;
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   const items = await getFeedback();
   res.json({ items });
@@ -2257,7 +2190,7 @@ app.get("/api/admin/feedback", async (req, res) => {
 // DELETE /api/admin/feedback/:id — delete a feedback item, admin only
 app.delete("/api/admin/feedback/:id", async (req, res) => {
   const userId = await getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  const adminId = ADMIN_CLERK_ID;
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   await deleteFeedback(parseInt(req.params.id));
   res.json({ ok: true });
@@ -2266,7 +2199,7 @@ app.delete("/api/admin/feedback/:id", async (req, res) => {
 // GET /api/admin/sync-status — per-user sync status, admin only
 app.get("/api/admin/sync-status", async (req, res) => {
   const userId = await getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  const adminId = ADMIN_CLERK_ID;
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   const [users, favCounts] = await Promise.all([getAllUsersSyncStatus(), getAllFavoriteCounts()]);
 
@@ -2312,7 +2245,7 @@ app.get("/api/admin/sync-status", async (req, res) => {
 // POST /api/admin/sync-all — trigger FULL background sync for all users, admin only
 app.post("/api/admin/sync-all", express.json(), async (req, res) => {
   const userId = await getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  const adminId = ADMIN_CLERK_ID;
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   _syncAbort = false; // clear any previous abort
   const users = await getAllUsersForSync();
@@ -2335,7 +2268,7 @@ app.post("/api/admin/sync-all", express.json(), async (req, res) => {
 // POST /api/admin/sync-user — trigger background sync for a single user, admin only
 app.post("/api/admin/sync-user", express.json(), async (req, res) => {
   const userId = await getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  const adminId = ADMIN_CLERK_ID;
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   const { username } = req.body as { username: string };
   if (!username) { res.status(400).json({ error: "username required" }); return; }
@@ -2358,7 +2291,7 @@ app.post("/api/admin/sync-user", express.json(), async (req, res) => {
 // POST /api/admin/sync-stop — abort all running syncs and reset statuses
 app.post("/api/admin/sync-stop", async (req, res) => {
   const userId = await getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  const adminId = ADMIN_CLERK_ID;
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   _syncAbort = true;
   const count = await resetAllSyncingStatuses();
@@ -2369,7 +2302,7 @@ app.post("/api/admin/sync-stop", async (req, res) => {
 // POST /api/admin/api-kill — toggle global API kill switch
 app.post("/api/admin/api-kill", async (req, res) => {
   const userId = await getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  const adminId = ADMIN_CLERK_ID;
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   const { enabled } = req.body ?? {};
   _apiKillSwitch = enabled !== undefined ? !!enabled : !_apiKillSwitch;
@@ -2380,7 +2313,7 @@ app.post("/api/admin/api-kill", async (req, res) => {
 // GET /api/admin/api-kill — check kill switch status
 app.get("/api/admin/api-kill", async (req, res) => {
   const userId = await getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  const adminId = ADMIN_CLERK_ID;
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   res.json({ killSwitch: _apiKillSwitch });
 });
@@ -2388,7 +2321,7 @@ app.get("/api/admin/api-kill", async (req, res) => {
 // POST /api/admin/revoke-sessions — log out all Clerk users except admin
 app.post("/api/admin/revoke-sessions", async (req, res) => {
   const userId = await getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  const adminId = ADMIN_CLERK_ID;
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
   if (!clerkSecret) { res.status(500).json({ error: "CLERK_SECRET_KEY not configured" }); return; }
@@ -2431,7 +2364,7 @@ app.post("/api/admin/purge-non-admin-users", express.json(), async (req, res) =>
     res.status(400).json({ error: "confirm_required", message: "Body must include confirm: \"PURGE\"" });
     return;
   }
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  const adminId = ADMIN_CLERK_ID;
   try {
     const counts = await purgeNonAdminUserData(adminId);
     const total = Object.values(counts).reduce((a, b) => a + (b > 0 ? b : 0), 0);
@@ -2446,7 +2379,7 @@ app.post("/api/admin/purge-non-admin-users", express.json(), async (req, res) =>
 // GET /api/admin/collection-stats — per-user and global collection/wantlist stats
 app.get("/api/admin/collection-stats", async (req, res) => {
   const userId = await getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  const adminId = ADMIN_CLERK_ID;
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   try {
     const stats = await getUserCollectionStats();
@@ -2459,7 +2392,7 @@ app.get("/api/admin/collection-stats", async (req, res) => {
 // GET /api/admin/user-items — view any user's collection or wantlist, admin only
 app.get("/api/admin/user-items", async (req, res) => {
   const userId = await getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  const adminId = ADMIN_CLERK_ID;
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   const username = (req.query.username as string ?? "").trim();
   const tab = (req.query.tab as string ?? "collection");
@@ -2479,7 +2412,7 @@ app.get("/api/admin/user-items", async (req, res) => {
 // GET /api/admin/user-favorites — view any user's favorites, admin only
 app.get("/api/admin/user-favorites", async (req, res) => {
   const userId = await getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  const adminId = ADMIN_CLERK_ID;
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   const username = (req.query.username as string ?? "").trim();
   if (!username) { res.status(400).json({ error: "username required" }); return; }
@@ -3039,7 +2972,7 @@ app.get("/series-releases/:id", async (req, res) => {
 // POST /api/admin/extras/fetch — manual trigger for inventory/lists sync
 app.post("/api/admin/extras/fetch", express.json(), async (req, res) => {
   const userId = await getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  const adminId = ADMIN_CLERK_ID;
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   res.json({ ok: true, message: "Extras sync started" });
   (async () => {
@@ -3062,7 +2995,7 @@ app.post("/api/admin/extras/fetch", express.json(), async (req, res) => {
 // GET /api/admin/api-log — view API request log (last 24h by default)
 app.get("/api/admin/api-log", async (req, res) => {
   const userId = await getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  const adminId = ADMIN_CLERK_ID;
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   const service = req.query.service as string | undefined;
   const errorsOnly = req.query.errors === "true";
@@ -3075,40 +3008,17 @@ app.get("/api/admin/api-log", async (req, res) => {
 // GET /api/admin/api-stats — 24h summary by service
 app.get("/api/admin/api-stats", async (req, res) => {
   const userId = await getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  const adminId = ADMIN_CLERK_ID;
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   const hours = Math.min(parseInt(req.query.hours as string) || 24, 168);
   const stats = await getApiRequestStats(hours);
   res.json({ stats });
 });
 
-// GET /api/admin/price-stats — price tracking stats, admin only
-app.get("/api/admin/price-stats", async (req, res) => {
-  const userId = await getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
-  try {
-    const stats = await getPriceStats();
-    res.json({ ...stats, lastPriceUpdate: _lastPriceUpdate });
-  } catch (err) {
-    console.error("[admin] price-stats error:", err);
-    res.status(500).json({ error: "Failed to get price stats" });
-  }
-});
-
-// POST /api/admin/price-update — trigger manual price update, admin only
-app.post("/api/admin/price-update", express.json(), async (req, res) => {
-  const userId = await getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
-  res.json({ ok: true, message: "Price update started" });
-  runPriceUpdate();
-});
-
 // GET /api/admin/db-stats — row counts for all tables
 app.get("/api/admin/db-stats", async (req, res) => {
   const userId = await getClerkUserId(req);
-  const adminId = process.env.ADMIN_CLERK_ID ?? "";
+  const adminId = ADMIN_CLERK_ID;
   if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
   try {
     const tables = await getTableRowCounts();
@@ -3433,6 +3343,5 @@ app.listen(PORT, "0.0.0.0", async () => {
 
     startDailySyncSchedule();
     startExtrasSyncSchedule();
-    // startPriceUpdateSchedule(); // disabled — not using pricing
   }
 });
