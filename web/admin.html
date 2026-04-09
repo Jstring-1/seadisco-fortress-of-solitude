@@ -8,12 +8,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260409g" />
+  <link rel="stylesheet" href="/style.css?v=20260409h" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260409g"></script>
+<script defer src="/shared.js?v=20260409h"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
@@ -141,13 +141,6 @@
     <div id="album-info"></div>
   </div>
 </div>
-<div id="concert-overlay">
-  <div id="concert-box">
-    <button id="concert-close" onclick="closeConcertPopup()">×</button>
-    <div id="concert-loading" style="padding:2rem;text-align:center;color:var(--muted)">Loading concerts…</div>
-    <div id="concert-info"></div>
-  </div>
-</div>
 <div id="bio-full-overlay">
   <div id="bio-full-box">
     <button id="bio-full-close" onclick="closeBioFull()">×</button>
@@ -162,7 +155,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260409g"></script>
+<script defer src="/modal.js?v=20260409h"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -473,11 +466,7 @@ async function loadApiLog() {
 
     const statsEl = document.getElementById("api-stats-summary");
     if (stats.length) {
-      const svcColors = {
-        discogs: "#7eb8da", ticketmaster: "#4fc3f7", ebay: "#e8d44d", youtube: "#ff6b6b",
-        rss: "#a0d468", anthropic: "#d4a0ff", bandsintown: "#ff9a76", listenbrainz: "#81c784",
-        coverartarchive: "#b0bec5", "ip-api": "#90a4ae"
-      };
+      const svcColors = { discogs: "#7eb8da", anthropic: "#d4a0ff" };
       statsEl.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:0.4rem 1.2rem">` + stats.map(s => {
         const failRate = s.total_requests ? Math.round((s.failures / s.total_requests) * 100) : 0;
         const failColor = failRate > 20 ? "#ff6b35" : failRate > 5 ? "#e8d44d" : "#6b8f71";
@@ -496,11 +485,7 @@ async function loadApiLog() {
     const listEl = document.getElementById("api-log-list");
     if (!items.length) { listEl.textContent = "No log entries found."; return; }
 
-    const svcColors = {
-      discogs: "#7eb8da", ticketmaster: "#4fc3f7", ebay: "#e8d44d", youtube: "#ff6b6b",
-      rss: "#a0d468", anthropic: "#d4a0ff", bandsintown: "#ff9a76", listenbrainz: "#81c784",
-      coverartarchive: "#b0bec5", "ip-api": "#90a4ae"
-    };
+    const svcColors = { discogs: "#7eb8da", anthropic: "#d4a0ff" };
 
     const rows = items.map(item => {
       const time = new Date(item.created_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" });

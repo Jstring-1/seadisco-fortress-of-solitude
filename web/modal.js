@@ -84,17 +84,17 @@ function applyVisitedCards() {
 async function mvToggleCol(dot, id) {
   const was = window._collectionIds?.has(id);
   if (!window._collectionIds) window._collectionIds = new Set();
-  const token = window._clerk?.session ? await window._clerk.session.getToken() : null;
-  if (!token) { showToast("Sign in to manage your collection", "error"); return; }
+  if (!window._clerk?.user) { showToast("Sign in to manage your collection", "error"); return; }
   if (was) window._collectionIds.delete(id); else window._collectionIds.add(id);
   dot.style.background = was ? "" : "#6ddf70";
   dot.title = was ? "Add to collection" : "In collection — click to remove";
   dot.classList.toggle("active", !was);
   refreshCardBadges?.(id);
   try {
-    const r = await fetch(was ? "/api/user/collection/remove" : "/api/user/collection/add", {
-      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify(was ? { releaseId: id, instanceId: null, folderId: 1 } : { releaseId: id })
+    const r = await apiFetch(was ? "/api/user/collection/remove" : "/api/user/collection/add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(was ? { releaseId: id, instanceId: null, folderId: 1 } : { releaseId: id }),
     }).then(r => r.json());
     if (!r.ok && r.error) throw new Error(r.error);
     showToast(was ? "Removed from collection" : "Added to collection");
@@ -113,17 +113,17 @@ async function mvToggleCol(dot, id) {
 async function mvToggleWant(dot, id) {
   const was = window._wantlistIds?.has(id);
   if (!window._wantlistIds) window._wantlistIds = new Set();
-  const token = window._clerk?.session ? await window._clerk.session.getToken() : null;
-  if (!token) { showToast("Sign in to manage your wantlist", "error"); return; }
+  if (!window._clerk?.user) { showToast("Sign in to manage your wantlist", "error"); return; }
   if (was) window._wantlistIds.delete(id); else window._wantlistIds.add(id);
   dot.style.background = was ? "" : "#f0c95c";
   dot.title = was ? "Add to wantlist" : "In wantlist — click to remove";
   dot.classList.toggle("active", !was);
   refreshCardBadges?.(id);
   try {
-    const r = await fetch(was ? "/api/user/wantlist/remove" : "/api/user/wantlist/add", {
-      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ releaseId: id })
+    const r = await apiFetch(was ? "/api/user/wantlist/remove" : "/api/user/wantlist/add", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ releaseId: id }),
     }).then(r => r.json());
     if (!r.ok && r.error) throw new Error(r.error);
     showToast(was ? "Removed from wantlist" : "Added to wantlist");
@@ -255,85 +255,6 @@ function filterCredits(input) {
     }
   });
 }
-
-// ── Concert popup ─────────────────────────────────────────────────────────
-async function openConcertPopup(event, artistName) {
-  if (event) event.preventDefault();
-  const overlay   = document.getElementById("concert-overlay");
-  const infoEl    = document.getElementById("concert-info");
-  const loadingEl = document.getElementById("concert-loading");
-  infoEl.innerHTML = "";
-  loadingEl.textContent = "Loading concerts…";
-  loadingEl.style.display = "block";
-  overlay.classList.add("open");
-
-  const u = new URL(window.location.href);
-  u.searchParams.set("ct", artistName);
-  history.pushState({}, "", u.toString());
-
-  try {
-    const data = await fetch(`/api/concerts/${encodeURIComponent(artistName)}`).then(r => r.json());
-    loadingEl.style.display = "none";
-    const events = data.events ?? [];
-
-    if (!events.length) {
-      infoEl.innerHTML = `<div class="concert-empty">No concert info found for ${escHtml(artistName)}</div>`;
-      return;
-    }
-
-    const fmtDate = (d) => {
-      if (!d) return "";
-      try { return new Date(d + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" }); }
-      catch { return d; }
-    };
-    const fmtTime = (t) => {
-      if (!t) return "";
-      try {
-        const [h, m] = t.split(":");
-        const hr = parseInt(h);
-        return `${hr > 12 ? hr - 12 : hr}:${m} ${hr >= 12 ? "PM" : "AM"}`;
-      } catch { return t; }
-    };
-
-    let html = `<div class="concert-artist-name">${escHtml(artistName)} — Upcoming Shows</div>`;
-    html += `<div class="concert-list">`;
-    for (const ev of events) {
-      const googleQ = encodeURIComponent(`${artistName} ${ev.venue} ${ev.city} concert`);
-      const googleUrl = `https://www.google.com/search?q=${googleQ}`;
-      const location = [ev.city, ev.region, ev.country].filter(Boolean).join(", ");
-      html += `<div class="concert-item">
-        <div class="concert-date">
-          ${escHtml(fmtDate(ev.date))}
-          ${ev.time ? `<span class="concert-time">${escHtml(fmtTime(ev.time))}</span>` : ""}
-        </div>
-        <div class="concert-details">
-          <div class="concert-event-name">${escHtml(ev.name)}</div>
-          <div class="concert-venue">
-            <a href="${googleUrl}" target="_blank" rel="noopener" title="Search Google for this venue">${escHtml(ev.venue)}</a>
-            ${location ? ` — ${escHtml(location)}` : ""}
-          </div>
-          <span class="concert-source">${escHtml(ev.source)}</span>
-        </div>
-      </div>`;
-    }
-    html += `</div>`;
-    infoEl.innerHTML = html;
-  } catch (err) {
-    loadingEl.style.display = "none";
-    infoEl.innerHTML = `<div class="concert-empty">Failed to load concert info.</div>`;
-  }
-}
-
-function closeConcertPopup() {
-  document.getElementById("concert-overlay").classList.remove("open");
-  const u = new URL(window.location.href);
-  u.searchParams.delete("ct");
-  history.replaceState({}, "", u.toString());
-}
-
-document.getElementById("concert-overlay").addEventListener("click", e => {
-  if (e.target === document.getElementById("concert-overlay")) closeConcertPopup();
-});
 
 // ── Image lightbox / carousel ─────────────────────────────────────────────
 let _lbImages = [], _lbIdx = 0;
@@ -898,7 +819,6 @@ function extractYouTubeId(url) {
 
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") {
-    closeConcertPopup();
     closeVideo();
     closeModal();
     closeBioFull();
@@ -1258,12 +1178,10 @@ async function loadModalInstanceData(releaseId) {
   let instanceId = null, folderId = 1, currentRating = 0;
   let allInstances = [];
   try {
-    const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
-    if (sessionToken) {
-      const headers = { Authorization: `Bearer ${sessionToken}` };
+    if (window._clerk?.user) {
       const [singleRes, allRes] = await Promise.all([
-        fetch(`/api/user/collection/instance?releaseId=${rid}`, { headers }).then(r => r.json()).catch(() => null),
-        fetch(`/api/user/collection/instances?releaseId=${rid}`, { headers }).then(r => r.json()).catch(() => null),
+        apiFetch(`/api/user/collection/instance?releaseId=${rid}`).then(r => r.ok ? r.json() : null).catch(() => null),
+        apiFetch(`/api/user/collection/instances?releaseId=${rid}`).then(r => r.ok ? r.json() : null).catch(() => null),
       ]);
       if (singleRes?.found) {
         instanceId = singleRes.instance_id;
@@ -1311,11 +1229,8 @@ async function openInstancesPopover(event, releaseId) {
   // Fetch instances
   let instances = [];
   try {
-    const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
-    if (!sessionToken) { showToast?.("Sign in to view your copies", "error"); return; }
-    const data = await fetch(`/api/user/collection/instances?releaseId=${rid}`, {
-      headers: { Authorization: `Bearer ${sessionToken}` }
-    }).then(r => r.json()).catch(() => null);
+    if (!window._clerk?.user) { showToast?.("Sign in to view your copies", "error"); return; }
+    const data = await apiFetch(`/api/user/collection/instances?releaseId=${rid}`).then(r => r.ok ? r.json() : null).catch(() => null);
     if (Array.isArray(data?.instances)) instances = data.instances;
   } catch {}
   if (!instances.length) return;
@@ -1341,7 +1256,7 @@ async function openInstancesPopover(event, releaseId) {
     const added = inst.added_at ? new Date(inst.added_at).toLocaleDateString() : "";
     const instId = Number(inst.instance_id ?? 0);
     return `<li class="instance-popover-row" data-instance-id="${instId}">
-      <span class="instance-popover-folder">${escapeHtml(folderName)}</span>
+      <span class="instance-popover-folder">${escHtml(folderName)}</span>
       <span class="instance-popover-rating">${rating}</span>
       ${added ? `<span class="instance-popover-added">${added}</span>` : ""}
     </li>`;
@@ -1445,17 +1360,17 @@ function renderSaleListingRow(l) {
   const posted = l.posted_at ? new Date(l.posted_at).toLocaleDateString() : "";
   return `<li class="modal-sale-row">
     <div class="modal-sale-row-top">
-      <span class="modal-sale-price">${escapeHtml(price)}</span>
-      <span class="modal-sale-status ${statusClass}">${escapeHtml(status || "—")}</span>
-      ${posted ? `<span class="modal-sale-date">${escapeHtml(posted)}</span>` : ""}
+      <span class="modal-sale-price">${escHtml(price)}</span>
+      <span class="modal-sale-status ${statusClass}">${escHtml(status || "—")}</span>
+      ${posted ? `<span class="modal-sale-date">${escHtml(posted)}</span>` : ""}
       <span style="flex:1"></span>
       <button type="button" class="modal-sale-edit" onclick="openInventoryEditor({mode:'edit',listingId:${id}})" title="Edit this listing">Edit</button>
     </div>
     <div class="modal-sale-row-cond">
-      <span><strong>Media:</strong> ${escapeHtml(cond)}</span>
-      <span><strong>Sleeve:</strong> ${escapeHtml(sleeve)}</span>
+      <span><strong>Media:</strong> ${escHtml(cond)}</span>
+      <span><strong>Sleeve:</strong> ${escHtml(sleeve)}</span>
     </div>
-    ${comments ? `<div class="modal-sale-row-notes">${escapeHtml(comments)}</div>` : ""}
+    ${comments ? `<div class="modal-sale-row-notes">${escHtml(comments)}</div>` : ""}
   </li>`;
 }
 
@@ -1506,10 +1421,10 @@ async function renderMultiInstancePanel(releaseId, instances, activeInstanceId) 
     const instId = Number(inst.instance_id ?? 0);
     const isActive = instId && instId === activeId;
     return `<li class="modal-instance-row${isActive ? " is-active" : ""}" data-instance-id="${instId}" title="Click to make this copy active">
-      <button type="button" class="modal-instance-folder modal-folder-chip" data-instance-id="${instId}" data-folder-id="${fid}" title="Click to move this copy to a different folder">${escapeHtml(folderName)}</button>
+      <button type="button" class="modal-instance-folder modal-folder-chip" data-instance-id="${instId}" data-folder-id="${fid}" title="Click to move this copy to a different folder">${escHtml(folderName)}</button>
       <span class="modal-instance-rating">${rating}</span>
       ${added ? `<span class="modal-instance-added">${added}</span>` : ""}
-      ${notesStr ? `<span class="modal-instance-notes">${escapeHtml(notesStr)}</span>` : ""}
+      ${notesStr ? `<span class="modal-instance-notes">${escHtml(notesStr)}</span>` : ""}
     </li>`;
   }).join("") : "";
 
@@ -1520,7 +1435,7 @@ async function renderMultiInstancePanel(releaseId, instances, activeInstanceId) 
     const fid = Number(inst.folder_id);
     const folderName = folderMap.get(fid) || `Folder ${fid}`;
     const instId = Number(inst.instance_id ?? 0);
-    singleFolderChip = ` in <button type="button" class="modal-folder-chip modal-folder-chip-inline" data-instance-id="${instId}" data-folder-id="${fid}" title="Click to move this copy to a different folder">${escapeHtml(folderName)}</button>`;
+    singleFolderChip = ` in <button type="button" class="modal-folder-chip modal-folder-chip-inline" data-instance-id="${instId}" data-folder-id="${fid}" title="Click to move this copy to a different folder">${escHtml(folderName)}</button>`;
   }
 
   const panel = document.createElement("div");
@@ -1589,10 +1504,6 @@ async function renderMultiInstancePanel(releaseId, instances, activeInstanceId) 
       loadModalInstanceData(releaseId);
     });
   });
-}
-
-function escapeHtml(s) {
-  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c]));
 }
 
 // ── Collection custom-field definitions cache ───────────────────────────
@@ -1702,20 +1613,20 @@ async function renderNotesPanel(releaseId) {
       const rows = fields.map(f => {
         const fid = Number(f.id);
         const cur = notesByField.get(fid) ?? "";
-        const label = escapeHtml(f.name || `Field ${fid}`);
+        const label = escHtml(f.name || `Field ${fid}`);
         if (f.type === "dropdown" && Array.isArray(f.options)) {
           const opts = ['<option value=""></option>']
-            .concat(f.options.map(o => `<option value="${escapeHtml(o)}"${o === cur ? " selected" : ""}>${escapeHtml(o)}</option>`))
+            .concat(f.options.map(o => `<option value="${escHtml(o)}"${o === cur ? " selected" : ""}>${escHtml(o)}</option>`))
             .join("");
           return `<label class="modal-notes-row">
             <span class="modal-notes-label">${label}</span>
-            <select class="modal-notes-input" data-field-id="${fid}" data-initial="${escapeHtml(cur)}" onchange="saveCollectionField(event,${rid},${fid})">${opts}</select>
+            <select class="modal-notes-input" data-field-id="${fid}" data-initial="${escHtml(cur)}" onchange="saveCollectionField(event,${rid},${fid})">${opts}</select>
           </label>`;
         }
         const isTextarea = f.type === "textarea" || (cur && cur.length > 40);
         const input = isTextarea
-          ? `<textarea class="modal-notes-input" rows="2" data-field-id="${fid}" data-initial="${escapeHtml(cur)}" onblur="saveCollectionField(event,${rid},${fid})" onkeydown="handleNotesKey(event,${rid},${fid},'collection')">${escapeHtml(cur)}</textarea>`
-          : `<input type="text" class="modal-notes-input" data-field-id="${fid}" data-initial="${escapeHtml(cur)}" value="${escapeHtml(cur)}" onblur="saveCollectionField(event,${rid},${fid})" onkeydown="handleNotesKey(event,${rid},${fid},'collection')" />`;
+          ? `<textarea class="modal-notes-input" rows="2" data-field-id="${fid}" data-initial="${escHtml(cur)}" onblur="saveCollectionField(event,${rid},${fid})" onkeydown="handleNotesKey(event,${rid},${fid},'collection')">${escHtml(cur)}</textarea>`
+          : `<input type="text" class="modal-notes-input" data-field-id="${fid}" data-initial="${escHtml(cur)}" value="${escHtml(cur)}" onblur="saveCollectionField(event,${rid},${fid})" onkeydown="handleNotesKey(event,${rid},${fid},'collection')" />`;
         return `<label class="modal-notes-row">
           <span class="modal-notes-label">${label}</span>
           ${input}
@@ -1735,7 +1646,7 @@ async function renderNotesPanel(releaseId) {
     html += `<div class="modal-notes-block">
       <div class="modal-notes-title">Wantlist notes</div>
       <label class="modal-notes-row">
-        <textarea class="modal-notes-input" rows="2" data-initial="${escapeHtml(cur)}" placeholder="Notes visible only to you" onblur="saveWantlistNotes(event,${rid})" onkeydown="handleNotesKey(event,${rid},0,'wantlist')">${escapeHtml(cur)}</textarea>
+        <textarea class="modal-notes-input" rows="2" data-initial="${escHtml(cur)}" placeholder="Notes visible only to you" onblur="saveWantlistNotes(event,${rid})" onkeydown="handleNotesKey(event,${rid},0,'wantlist')">${escHtml(cur)}</textarea>
       </label>
     </div>`;
   }
@@ -1903,8 +1814,7 @@ async function toggleCollection(releaseId) {
   if (btn) btn.disabled = true;
   const inCol = window._collectionIds?.has(releaseId);
   try {
-    const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
-    if (!sessionToken) { showToast("Sign in to manage your collection", "error"); return; }
+    if (!window._clerk?.user) { showToast("Sign in to manage your collection", "error"); return; }
 
     // Optimistic update
     if (inCol) {
@@ -1924,10 +1834,10 @@ async function toggleCollection(releaseId) {
       ? { releaseId, instanceId: Number(actionsEl?.dataset.instanceId) || null, folderId: Number(actionsEl?.dataset.folderId) || 1 }
       : { releaseId };
 
-    const r = await fetch(endpoint, {
+    const r = await apiFetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
-      body: JSON.stringify(body)
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
     }).then(r => r.json());
 
     if (!r.ok && r.error) {
@@ -1973,8 +1883,7 @@ async function toggleWantlist(releaseId) {
   if (btn) btn.disabled = true;
   const inWant = window._wantlistIds?.has(releaseId);
   try {
-    const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
-    if (!sessionToken) { showToast("Sign in to manage your wantlist", "error"); return; }
+    if (!window._clerk?.user) { showToast("Sign in to manage your wantlist", "error"); return; }
 
     // Optimistic update
     if (inWant) {
@@ -1989,10 +1898,10 @@ async function toggleWantlist(releaseId) {
     refreshCardBadges(releaseId);
 
     const endpoint = inWant ? "/api/user/wantlist/remove" : "/api/user/wantlist/add";
-    const r = await fetch(endpoint, {
+    const r = await apiFetch(endpoint, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
-      body: JSON.stringify({ releaseId })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ releaseId }),
     }).then(r => r.json());
 
     if (!r.ok && r.error) {
@@ -2030,18 +1939,17 @@ async function setRating(event, releaseId, rating) {
   clearTimeout(_ratingDebounce);
   _ratingDebounce = setTimeout(async () => {
     try {
-      const sessionToken = window._clerk?.session ? await window._clerk.session.getToken() : null;
-      if (!sessionToken) return;
+      if (!window._clerk?.user) return;
       const actionsEl = document.getElementById("modal-actions");
-      const r = await fetch("/api/user/collection/rating", {
+      const r = await apiFetch("/api/user/collection/rating", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${sessionToken}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           releaseId,
           instanceId: Number(actionsEl?.dataset.instanceId) || null,
           folderId: Number(actionsEl?.dataset.folderId) || 1,
-          rating
-        })
+          rating,
+        }),
       }).then(r => r.json());
       if (r.ok) showToast(`Rated ${rating}/5`);
     } catch { showToast("Failed to save rating", "error"); }

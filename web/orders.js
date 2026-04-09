@@ -36,10 +36,6 @@ function _validNextStatuses(current) {
 
 let _ordersState = { page: 1, perPage: 20, status: "", q: "" };
 
-function _escOrd(s) {
-  return String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
-
 function _statusChipClass(status) {
   const s = String(status || "").toLowerCase();
   if (s.includes("shipped")) return "ord-chip ord-chip-shipped";
@@ -87,7 +83,7 @@ async function _renderOrdersPage() {
   // Render filter pills once
   if (filtersEl && !filtersEl.dataset.ready) {
     const pills = ["", "New Order", "Payment Received", "In Progress", "Shipped", "Cancelled"]
-      .map(s => `<button class="ord-pill${s === _ordersState.status ? " ord-pill-active" : ""}" data-status="${_escOrd(s)}">${s || "All"}</button>`).join("");
+      .map(s => `<button class="ord-pill${s === _ordersState.status ? " ord-pill-active" : ""}" data-status="${escHtml(s)}">${s || "All"}</button>`).join("");
     filtersEl.innerHTML = pills + `<input type="text" id="orders-search" placeholder="Search buyer / title" style="margin-left:auto;padding:0.3rem 0.55rem;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:5px;font-size:0.85rem"/>`;
     filtersEl.dataset.ready = "1";
     filtersEl.querySelectorAll(".ord-pill").forEach(btn => {
@@ -117,25 +113,25 @@ async function _renderOrdersPage() {
       const total = it.total_value ? `${it.total_currency || ""} ${Number(it.total_value).toFixed(2)}` : "";
       const itemCount = it.item_count ?? (data.items?.length || 0);
       const hasNew = !!it.has_new;
-      const oid = _escOrd(it.order_id);
+      const oid = escHtml(it.order_id);
       return `<div class="ord-row${hasNew ? " ord-row-unread" : ""}" data-oid="${oid}">
         <div class="ord-row-clickarea" onclick="openOrderDetail('${oid}')">
           <div class="ord-row-main">
             ${hasNew ? `<span class="ord-unread-dot" title="New activity"></span>` : ""}
-            <span class="${_statusChipClass(it.status)}">${_escOrd(it.status || "—")}</span>
+            <span class="${_statusChipClass(it.status)}">${escHtml(it.status || "—")}</span>
             <strong class="ord-row-id">#${oid}</strong>
-            <span class="ord-row-buyer">${_escOrd(it.buyer_username || "")}</span>
+            <span class="ord-row-buyer">${escHtml(it.buyer_username || "")}</span>
           </div>
           <div class="ord-row-meta">
             <span>${itemCount} item${itemCount === 1 ? "" : "s"}</span>
-            <span>${_escOrd(total)}</span>
-            <span>${_escOrd(created)}</span>
+            <span>${escHtml(total)}</span>
+            <span>${escHtml(created)}</span>
           </div>
         </div>
         <div class="ord-row-quick">
           <button type="button" class="ord-quick-toggle" onclick="_ordToggleQuickReply('${oid}', event)" title="Quick reply">💬</button>
           <div class="ord-quick-panel" id="ord-quick-${oid}" style="display:none" onclick="event.stopPropagation()">
-            <textarea rows="2" placeholder="Quick reply to ${_escOrd(it.buyer_username || "buyer")}…"></textarea>
+            <textarea rows="2" placeholder="Quick reply to ${escHtml(it.buyer_username || "buyer")}…"></textarea>
             <div class="ord-quick-actions">
               <button type="button" onclick="_ordQuickCancel('${oid}')">Cancel</button>
               <button type="button" class="ord-btn-primary" onclick="_ordQuickSend('${oid}')">Send</button>
@@ -153,7 +149,7 @@ async function _renderOrdersPage() {
     </div>` : "";
     listEl.innerHTML = rows + pager;
   } catch (e) {
-    listEl.innerHTML = `<div style="color:#e88">Failed to load orders: ${_escOrd(e.message)}</div>`;
+    listEl.innerHTML = `<div style="color:#e88">Failed to load orders: ${escHtml(e.message)}</div>`;
   }
 }
 
@@ -258,11 +254,11 @@ async function openOrderDetail(orderId) {
       const rel = li.release || {};
       const thumb = rel.thumbnail || "";
       return `<div class="ord-detail-item">
-        ${thumb ? `<img src="${_escOrd(thumb)}" alt=""/>` : `<div class="ord-thumb-ph"></div>`}
+        ${thumb ? `<img src="${escHtml(thumb)}" alt=""/>` : `<div class="ord-thumb-ph"></div>`}
         <div class="ord-detail-item-body">
-          <div><strong>${_escOrd(rel.description || rel.title || ("Release " + (rel.id || "")))}</strong></div>
-          <div style="font-size:0.8rem;color:var(--muted)">${_escOrd(li.condition || "")} / ${_escOrd(li.sleeve_condition || "")}</div>
-          <div style="font-size:0.82rem">${_escOrd(li.price?.currency || "")} ${_escOrd(li.price?.value ?? "")}</div>
+          <div><strong>${escHtml(rel.description || rel.title || ("Release " + (rel.id || "")))}</strong></div>
+          <div style="font-size:0.8rem;color:var(--muted)">${escHtml(li.condition || "")} / ${escHtml(li.sleeve_condition || "")}</div>
+          <div style="font-size:0.82rem">${escHtml(li.price?.currency || "")} ${escHtml(li.price?.value ?? "")}</div>
         </div>
       </div>`;
     }).join("");
@@ -270,9 +266,9 @@ async function openOrderDetail(orderId) {
     const msgsHtml = (mJson.messages || []).map(m => {
       const when = m.ts ? new Date(m.ts).toLocaleString() : "";
       return `<div class="ord-msg">
-        <div class="ord-msg-head"><strong>${_escOrd(m.from_user || "")}</strong> <span>${_escOrd(when)}</span></div>
-        ${m.subject ? `<div class="ord-msg-subj">${_escOrd(m.subject)}</div>` : ""}
-        <div class="ord-msg-body">${_escOrd(m.message || "")}</div>
+        <div class="ord-msg-head"><strong>${escHtml(m.from_user || "")}</strong> <span>${escHtml(when)}</span></div>
+        ${m.subject ? `<div class="ord-msg-subj">${escHtml(m.subject)}</div>` : ""}
+        <div class="ord-msg-body">${escHtml(m.message || "")}</div>
       </div>`;
     }).join("") || `<div style="color:var(--muted);font-size:0.85rem">No messages yet.</div>`;
 
@@ -280,21 +276,21 @@ async function openOrderDetail(orderId) {
     const statusOptions = allowed.map(s => `<option${s === it.status ? " selected" : ""}>${s}</option>`).join("");
 
     document.getElementById("order-detail-body").innerHTML = `
-      <h2 style="margin:0 0 0.4rem 0">Order #${_escOrd(it.order_id)}</h2>
-      <div style="margin-bottom:0.8rem"><span class="${_statusChipClass(it.status)}">${_escOrd(it.status || "—")}</span></div>
+      <h2 style="margin:0 0 0.4rem 0">Order #${escHtml(it.order_id)}</h2>
+      <div style="margin-bottom:0.8rem"><span class="${_statusChipClass(it.status)}">${escHtml(it.status || "—")}</span></div>
 
       <div class="ord-detail-grid">
         <div>
           <div class="ord-detail-label">Buyer</div>
-          <div>${_escOrd(buyer.username || it.buyer_username || "")}</div>
+          <div>${escHtml(buyer.username || it.buyer_username || "")}</div>
         </div>
         <div>
           <div class="ord-detail-label">Total</div>
-          <div>${_escOrd(total)}</div>
+          <div>${escHtml(total)}</div>
         </div>
         <div class="ord-detail-wide">
           <div class="ord-detail-label">Shipping address</div>
-          <pre style="white-space:pre-wrap;margin:0;font-family:inherit;font-size:0.85rem">${_escOrd(typeof shipping === "string" ? shipping : JSON.stringify(shipping, null, 2))}</pre>
+          <pre style="white-space:pre-wrap;margin:0;font-family:inherit;font-size:0.85rem">${escHtml(typeof shipping === "string" ? shipping : JSON.stringify(shipping, null, 2))}</pre>
         </div>
       </div>
 
@@ -306,8 +302,8 @@ async function openOrderDetail(orderId) {
       <div class="ord-detail-section">
         <h3>Status</h3>
         <div style="display:flex;gap:0.5rem;align-items:center;flex-wrap:wrap">
-          <select id="ord-status-select" data-current-status="${_escOrd(it.status || "")}">${statusOptions}</select>
-          <button onclick="_ordChangeStatus('${_escOrd(it.order_id)}')" class="ord-btn-primary">Update status</button>
+          <select id="ord-status-select" data-current-status="${escHtml(it.status || "")}">${statusOptions}</select>
+          <button onclick="_ordChangeStatus('${escHtml(it.order_id)}')" class="ord-btn-primary">Update status</button>
         </div>
       </div>
 
@@ -316,7 +312,7 @@ async function openOrderDetail(orderId) {
         <div class="ord-msgs">${msgsHtml}</div>
         <textarea id="ord-new-msg" rows="3" placeholder="Write a message to the buyer…" style="width:100%;margin-top:0.5rem;padding:0.5rem;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:5px;font-family:inherit"></textarea>
         <div style="margin-top:0.4rem;text-align:right">
-          <button onclick="_ordSendMessage('${_escOrd(it.order_id)}')" class="ord-btn-primary">Send message</button>
+          <button onclick="_ordSendMessage('${escHtml(it.order_id)}')" class="ord-btn-primary">Send message</button>
         </div>
       </div>
     `;
@@ -328,7 +324,7 @@ async function openOrderDetail(orderId) {
     }
     _refreshUnreadBadge();
   } catch (e) {
-    document.getElementById("order-detail-body").innerHTML = `<div style="color:#e88;padding:1rem">Failed to load: ${_escOrd(String(e))}</div>`;
+    document.getElementById("order-detail-body").innerHTML = `<div style="color:#e88;padding:1rem">Failed to load: ${escHtml(String(e))}</div>`;
   }
 }
 

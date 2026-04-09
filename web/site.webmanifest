@@ -1,8 +1,8 @@
 {
   "name": "SeaDisco",
   "short_name": "SeaDisco",
-  "description": "Music discovery platform. Search Discogs, browse new drops, read music news, find concerts, shop vintage gear, and manage your vinyl collection.",
-  "categories": ["music", "entertainment", "shopping"],
+  "description": "Invite-only music discovery platform. Search Discogs, manage your collection, wantlist, and marketplace listings.",
+  "categories": ["music", "entertainment"],
   "icons": [],
   "theme_color": "#080706",
   "background_color": "#080706",
