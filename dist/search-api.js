@@ -4008,7 +4008,10 @@ async function fetchEbayGearListings() {
     console.log("Starting eBay gear fetch…");
     let totalUpserted = 0;
     // Fixed-price (Buy It Now) only, ≥$50. Sort omitted → eBay default (bestMatch).
-    const baseFilter = `price:[50..],priceCurrency:USD,buyingOptions:{FIXED_PRICE}`;
+    // Exclude "New" — conditionIds is an allowlist so we list all used IDs:
+    // 2000=Certified Refurb, 2500=Seller Refurb, 3000=Used, 4000=Very Good,
+    // 5000=Good, 6000=Acceptable, 7000=For parts
+    const baseFilter = `price:[50..],priceCurrency:USD,buyingOptions:{FIXED_PRICE},conditionIds:{2000|2500|3000|4000|5000|6000|7000}`;
     // Paginate 3 pages deep per query: 6 queries × 3 pages = 18 calls per sweep (~900/day)
     const PAGES = 3;
     const LIMIT = 200;
@@ -4176,7 +4179,8 @@ async function fetchEbayVinylListings() {
         const token = await getEbayToken();
         const headers = { "Authorization": `Bearer ${token}`, "X-EBAY-C-MARKETPLACE-ID": "EBAY_US" };
         // Fixed-price (Buy It Now) only, ≥$10. Sort omitted → eBay default (bestMatch).
-        const baseFilter = `price:[10..],priceCurrency:USD,buyingOptions:{FIXED_PRICE}`;
+        // Exclude "New" — conditionIds is an allowlist so we list all used IDs
+        const baseFilter = `price:[10..],priceCurrency:USD,buyingOptions:{FIXED_PRICE},conditionIds:{2000|2500|3000|4000|5000|6000|7000}`;
         const aspectFilter = `aspect_filter=categoryId:176985,Record%20Size:12%22`;
         // Build query list: category-wide (no q=) + keyword queries
         const queries = [
