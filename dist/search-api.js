@@ -216,7 +216,7 @@ app.get("/account", (req, res) => {
     res.redirect(301, `/?v=account${qs}`);
 });
 // ── HTML template cache with Clerk script preload injection ───────────────
-// Reads index.html/account.html/admin.html at startup and substitutes
+// Reads index.html/admin.html at startup and substitutes
 // <!--CLERK_SCRIPT_INJECT--> with a preloaded <script async> tag for
 // clerk-js. This lets the Clerk bundle start downloading before shared.js
 // even parses, saving ~300–500ms on cold page loads.
@@ -267,8 +267,9 @@ app.get("/", (_req, res, next) => { if (!_sendHtml(res, "index.html"))
     next(); });
 app.get("/index.html", (_req, res, next) => { if (!_sendHtml(res, "index.html"))
     next(); });
-app.get("/account.html", (_req, res, next) => { if (!_sendHtml(res, "account.html"))
-    next(); });
+// Legacy /account.html URL: the standalone account page was merged into the
+// SPA (see account.js). Redirect old bookmarks to the SPA account view.
+app.get("/account.html", (_req, res) => { res.redirect(301, "/?v=account"); });
 app.get("/admin.html", (_req, res, next) => { if (!_sendHtml(res, "admin.html"))
     next(); });
 // Cache headers for static assets (versioned files get long cache, HTML short)
@@ -2500,8 +2501,6 @@ app.get("/api/user/random-records", async (req, res) => {
         res.status(500).json({ error: String(e) });
     }
 });
-// (Removed: /api/public/featured-records and /api/public/featured-favorites
-//  — invite-only mode means no logged-out content surface.)
 // POST /api/user/favorites/add
 app.post("/api/user/favorites/add", express.json(), async (req, res) => {
     const userId = await getClerkUserId(req);

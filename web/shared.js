@@ -308,6 +308,9 @@ const SEADISCO_CLERK_APPEARANCE = {
     formFieldLabel:   "color:#8a7d6b;",
     formFieldInput:   "background:#0e0c08; border:1px solid #2e2518; color:#e8dcc8;",
     footerActionLink: "color:#ff6b35;",
+    // Note: Clerk's footer is hidden inside #splash-waitlist-mount via a
+    // real CSS rule in style.css (.cl-footer display:none). The appearance
+    // API's inline style approach doesn't beat Clerk's own CSS specificity.
   },
 };
 
@@ -384,7 +387,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260409a";
+  const SITE_VERSION = "build 20260409c";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'https://seadisco.com' : '/'}" class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
