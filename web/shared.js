@@ -45,13 +45,6 @@ function normP(raw) {
 }
 
 function searchLabel(raw) {
-  if (raw._type === "live") {
-    const parts = [];
-    if (raw.artist) parts.push(raw.artist);
-    if (raw.city)   parts.push(raw.city);
-    if (raw.genre)  parts.push(raw.genre);
-    return "\ud83c\udfa4 " + (parts.join(" \u00b7 ") || "Live search");
-  }
   const p = normP(raw);
   const parts = [];
   if (p.q && (!p.a || p.q.toLowerCase() !== p.a.toLowerCase())) parts.push(p.q);
@@ -297,29 +290,26 @@ function renderSharedHeader(opts) {
   const active = opts?.active || "";
   const hideRecords = opts?.hideRecords;
 
-  // Top-row tab (discover pages + auth)
+  // Nav tab helper — single row: Search, record tabs, Account
   const tab = (label, view) => {
     if (isSPA) {
       const cls = view === active ? ' active' : '';
       return `<button class="nav-tab-top${cls}" data-view="${view}" onclick="switchView('${view}')">${label}</button>`;
     }
-    const urlView = view === "buy" ? "vinyl" : view;
-    const href = view === "search" ? "/" : `/?v=${urlView}`;
+    const href = view === "search" ? "/" : `/?v=${view}`;
     const cls = view === active ? ' class="nav-tab-top active"' : ' class="nav-tab-top"';
     return `<a${cls} href="${href}">${label}</a>`;
   };
 
-  // Bottom-row tab — plain text, hover color matches the badge dot for that tab.
-  const colors = { collection: "#6ddf70", wantlist: "#f0c95c", lists: "#a0ccf0", inventory: "#cda0f5", favorites: "#ff6b35" };
+  // Record tab — starts disabled until signed in
   const recTab = (label, rtab) => {
-    const displayLabel = label;
     if (isSPA) {
-      return `<button class="nav-tab-bot nav-rec-disabled" data-rtab="${rtab}" onclick="showRecordSignIn('${rtab}')">${displayLabel}</button>`;
+      return `<button class="nav-tab-top nav-rec-disabled" data-rtab="${rtab}" onclick="showRecordSignIn('${rtab}')">${label}</button>`;
     }
-    return `<a class="nav-tab-bot" href="/?v=${rtab}" data-rtab="${rtab}">${displayLabel}</a>`;
+    return `<a class="nav-tab-top" href="/?v=${rtab}" data-rtab="${rtab}">${label}</a>`;
   };
 
-  // Auth tab (top row, rightmost) — uses <button> in SPA like all other tabs
+  // Auth tab (rightmost)
   const authTab = isSPA
     ? `<button class="nav-tab-top nav-auth-tab" data-view="account" onclick="switchView('account')" id="nav-auth-tab">Sign In</button>`
     : `<a class="nav-tab-top nav-auth-tab" href="/?v=account" id="nav-auth-tab">Sign In</a>`;
@@ -329,34 +319,27 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260408i";
+  const SITE_VERSION = "build 20260408j";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'https://seadisco.com' : '/'}" class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
       <div class="header-version" title="Current build">${SITE_VERSION}</div>
     </div>
-    ${isSPA ? '<h1 class="sr-only">SeaDisco — Music Discovery Platform: Search, News, Concerts, Gear &amp; Collection</h1>' : ''}
+    ${isSPA ? '<h1 class="sr-only">SeaDisco — Music Discovery Platform: Search &amp; Collection</h1>' : ''}
     <nav id="main-nav">
       <button id="nav-hamburger" onclick="toggleMobileNav()" aria-label="Open navigation">
         <span></span><span></span><span></span>
       </button>
       <div id="nav-tabs-wrap">
         <div id="main-nav-tabs">
-          <div class="nav-row nav-row-top">
+          <div class="nav-row nav-row-top" id="nav-row-records">
             ${tab("Search", "search")}
-            ${tab("Drops", "drops")}
-            ${tab("Feed", "feed")}
-            ${tab("Live", "live")}
-            ${tab("Vinyl", "buy")}
-            ${tab("Gear", "gear")}
-            ${authTab}
-          </div>
-          <div class="nav-row nav-row-bot" id="nav-row-records">
             ${recTab("Collection", "collection")}
             ${recTab("Wantlist", "wantlist")}
             ${recTab("Lists", "lists")}
             ${recTab("Inventory", "inventory")}
             ${recTab("Favorites", "favorites")}
+            ${authTab}
           </div>
         </div>
       </div>
@@ -378,8 +361,7 @@ function renderSharedFooter(opts) {
   const isSPA = opts?.spa;
   const link = (label, view) => {
     if (isSPA) return `<a href="javascript:void(0)" onclick="switchView('${view}')">${label}</a>`;
-    const urlView = view === "buy" ? "vinyl" : view;
-    const href = view === "search" ? "/" : `/?v=${urlView}`;
+    const href = view === "search" ? "/" : `/?v=${view}`;
     return `<a href="${href}">${label}</a>`;
   };
 
@@ -388,22 +370,18 @@ function renderSharedFooter(opts) {
   footer.innerHTML = `
     <div class="footer-grid">
       <div class="footer-col">
-        <h4>Discover</h4>
+        <h4>SeaDisco</h4>
         ${link("Search", "search")}
-        ${link("Drops", "drops")}
-        ${link("Feed", "feed")}
-        ${link("Live", "live")}
-        ${link("Vinyl", "buy")}
-        ${link("Gear", "gear")}
+        ${link("Info", "info")}
       </div>
       <div class="footer-col">
         <h4>Your Music</h4>
         ${isSPA
-          ? `<a href="/?v=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='collection';switchView('records')}">Collection</a>
-             <a href="/?v=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='wantlist';switchView('records')}">Wantlist</a>
-             <a href="/?v=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='inventory';switchView('records')}">Inventory</a>
-             <a href="/?v=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='lists';switchView('records')}">Lists</a>
-             <a href="/?v=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-bot:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='favorites';switchView('records')}">Favorites</a>`
+          ? `<a href="/?v=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-top[data-rtab]:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='collection';switchView('records')}">Collection</a>
+             <a href="/?v=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-top[data-rtab]:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='wantlist';switchView('records')}">Wantlist</a>
+             <a href="/?v=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-top[data-rtab]:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='inventory';switchView('records')}">Inventory</a>
+             <a href="/?v=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-top[data-rtab]:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='lists';switchView('records')}">Lists</a>
+             <a href="/?v=account" onclick="var t=document.querySelector('#nav-row-records .nav-tab-top[data-rtab]:not(.nav-rec-disabled)');if(t){event.preventDefault();_cwTab='favorites';switchView('records')}">Favorites</a>`
           : `<a href="/?v=account">Collection</a>
              <a href="/?v=account">Wantlist</a>
              <a href="/?v=account">Inventory</a>
@@ -413,13 +391,12 @@ function renderSharedFooter(opts) {
       </div>
       <div class="footer-col">
         <h4>About</h4>
-        ${link("Info", "info")}
         ${link("Privacy Policy", "privacy")}
         ${link("Terms of Service", "terms")}
       </div>
     </div>
     <div style="color:#555;font-style:italic;margin-bottom:0.3rem">DISCLAIMER: AI be funky sometimes</div>
-    <div>Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Discogs</a>, <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Claude</a>, and <a href="https://listenbrainz.org" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">ListenBrainz</a></div>
+    <div>Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Discogs</a> and <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Claude</a></div>
     <div style="margin-top:0.3rem">&copy; 2026 SeaDisco <span id="footer-user-count" style="color:#555;font-size:0.8em"></span> &nbsp;&middot;&nbsp; Music data courtesy of Discogs API &nbsp;&middot;&nbsp; Not affiliated with Discogs &nbsp;&middot;&nbsp; Jimmy Witherfork Strikes Again</div>`;
   // Fetch user count for footer
   fetch("/api/user-count").then(r => r.json()).then(d => {

@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SeaDisco — Music Discovery Platform | Search, News, Concerts, Gear &amp; Collection</title>
+  <title>SeaDisco — Music Discovery Platform | Search, Collection &amp; Wantlist</title>
   <meta name="description" content="SeaDisco — music discovery powered by Discogs. Search, manage your collection and wantlist, rate releases, and connect via OAuth." />
-  <meta name="keywords" content="discogs search, vinyl search, music discovery, new music releases, music news, concert finder, vintage audio gear, turntable, vinyl collection, wantlist, record search, jazz, blues, world music, audiophile, OAuth, Discogs OAuth" />
+  <meta name="keywords" content="discogs search, vinyl search, music discovery, vinyl collection, wantlist, record search, jazz, blues, world music, audiophile, OAuth, Discogs OAuth" />
   <meta name="robots" content="index, follow" />
   <link rel="canonical" href="https://seadisco.com/" />
 
@@ -13,13 +13,13 @@
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://seadisco.com/" />
   <meta property="og:title" content="SeaDisco — Music Discovery Platform" />
-  <meta property="og:description" content="Discover music your way. Search Discogs, manage your collection and wantlist, rate releases, browse vinyl and vintage audio gear listings, and discover new music." />
+  <meta property="og:description" content="Discover music your way. Search Discogs, manage your collection and wantlist, and rate releases." />
   <meta property="og:image" content="https://seadisco.com/seadisco-logo.png" />
 
   <!-- Twitter Card -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="SeaDisco — Music Discovery Platform" />
-  <meta name="twitter:description" content="Discover music your way. Search Discogs, manage your collection and wantlist, rate releases, browse vinyl and vintage audio gear listings, and discover new music." />
+  <meta name="twitter:description" content="Discover music your way. Search Discogs, manage your collection and wantlist, and rate releases." />
   <meta name="twitter:image" content="https://seadisco.com/seadisco-logo.png" />
 
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
@@ -28,7 +28,6 @@
   <meta name="theme-color" content="#080706">
   <link rel="preconnect" href="https://api.discogs.com" />
   <link rel="preconnect" href="https://i.discogs.com" />
-  <link rel="preconnect" href="https://i.ebayimg.com" />
   <!-- Clerk CDN: full preconnect (not just DNS prefetch) so TLS handshake
        overlaps with HTML parsing instead of happening after shared.js
        starts loadClerkInstance() -->
@@ -38,7 +37,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260408i" />
+  <link rel="stylesheet" href="/style.css?v=20260408j" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -59,7 +58,7 @@
     "applicationCategory": "MusicApplication",
     "operatingSystem": "Any",
     "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
-    "featureList": "Music Search, New Releases, Music News Feed, Concert Finder, Vintage Audio Gear Listings, Collection Sync, Wantlist Management, Ratings, OAuth Connection",
+    "featureList": "Music Search, Collection Sync, Wantlist Management, Ratings, OAuth Connection",
     "potentialAction": {
       "@type": "SearchAction",
       "target": "https://seadisco.com/?q={search_term_string}",
@@ -71,7 +70,7 @@
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260408i"></script>
+<script src="/shared.js?v=20260408j"></script>
 <script>renderSharedHeader({ spa: true, active: "search" });</script>
 <div id="search-view">
 
@@ -414,136 +413,6 @@
 </main>
 </div><!-- /search-view -->
 
-<div id="drops-view" style="display:none">
-  <div id="fresh-releases-section">
-    <div class="fresh-tag-footer">
-      <button class="pill fresh-all-btn active" id="fresh-all-btn" onclick="filterFreshByTag('')">All</button>
-      <select id="fresh-genre-select" class="fresh-filter-select" onchange="onFreshGenreChange()">
-        <option value="">Genre</option>
-      </select>
-      <select id="fresh-style-select" class="fresh-filter-select" onchange="filterFreshByGenreStyle()" style="display:none">
-        <option value="">Style</option>
-      </select>
-      <input id="fresh-tag-input" class="fresh-filter-input" type="text" placeholder="Search Latest Releases" oninput="debounceFreshSearch(this.value)" autocomplete="off" spellcheck="false">
-    </div>
-    <div class="fresh-tag-cloud-wrap"><div id="fresh-tag-cloud" class="fresh-tag-cloud"></div></div>
-    <div id="fresh-releases-grid" class="card-grid fresh-grid"></div>
-  </div>
-</div>
-<div id="live-view" class="content-narrow" style="display:none">
-  <div class="live-search-row">
-    <input type="text" id="live-artist" class="live-input" placeholder="Artist" autocomplete="off" onkeydown="if(event.key==='Enter')doLiveSearch()">
-    <input type="text" id="live-city" class="live-input" placeholder="City or Zip" autocomplete="off" onkeydown="if(event.key==='Enter')doLiveSearch()">
-    <select id="live-genre" class="live-select" onchange="doLiveSearch()">
-      <option value="">Any genre</option>
-      <option value="rock">Rock</option>
-      <option value="pop">Pop</option>
-      <option value="hip-hop/rap">Hip-Hop</option>
-      <option value="R&B">R&B</option>
-      <option value="electronic">Electronic</option>
-      <option value="country">Country</option>
-      <option value="jazz">Jazz</option>
-      <option value="classical">Classical</option>
-      <option value="metal">Metal</option>
-      <option value="folk">Folk</option>
-      <option value="reggae">Reggae</option>
-      <option value="latin">Latin</option>
-      <option value="blues">Blues</option>
-      <option value="punk">Punk</option>
-    </select>
-    <button class="live-search-btn" onclick="doLiveSearch()">Search</button>
-  </div>
-  <div id="live-upcoming" style="display:none;margin-bottom:1rem">
-    <div class="feed-label">Upcoming Events</div>
-    <div id="live-upcoming-list"></div>
-  </div>
-  <div id="live-heading" style="font-size:1.05rem;color:var(--fg);margin-bottom:0.25rem;display:none"></div>
-  <div id="live-status" style="font-size:0.78rem;color:#555;margin-bottom:0.5rem"></div>
-  <div id="live-results"></div>
-</div>
-
-<div id="buy-view" style="display:none">
-  <div class="buy-header content-area">
-    <div class="buy-controls">
-      <div class="buy-price-pills">
-        <span class="pill buy-price-pill active" data-min="0" onclick="setBuyPriceFilter(0)">All</span>
-        <span class="pill buy-price-pill" data-min="25" onclick="setBuyPriceFilter(25)">$25+</span>
-        <span class="pill buy-price-pill" data-min="50" onclick="setBuyPriceFilter(50)">$50+</span>
-        <span class="pill buy-price-pill" data-min="100" onclick="setBuyPriceFilter(100)">$100+</span>
-        <span class="pill buy-price-pill" data-min="250" onclick="setBuyPriceFilter(250)">$250+</span>
-      </div>
-      <div class="buy-right-controls">
-        <span class="filter-field-wrap">
-          <input type="text" id="buy-filter-field" class="site-form-field buy-search-field" placeholder="Filter Vinyl" oninput="onBuySearch(this.value)">
-          <button class="filter-clear-x" onclick="clearBuyFilter()" title="Clear filter">&times;</button>
-        </span>
-        <select class="site-form-field buy-sort" onchange="setBuySort(this.value)">
-          <option value="price_desc">Price: High → Low</option>
-          <option value="price_asc">Price: Low → High</option>
-          <option value="newest">Newly Listed</option>
-        </select>
-      </div>
-    </div>
-    <div id="buy-status" style="font-size:0.78rem;color:#555;margin-top:0.3rem"></div>
-  </div>
-  <div id="buy-results" class="card-grid content-area"></div>
-  <div class="load-more-wrap">
-    <button id="buy-load-more" class="load-more-btn" onclick="loadMoreBuy()" style="display:none">Load more</button>
-  </div>
-</div>
-
-<div id="gear-view" style="display:none">
-  <div class="gear-header content-area">
-    <div class="gear-controls">
-      <div class="gear-price-pills">
-        <span class="pill gear-price-pill active" data-min="0" onclick="setGearPriceFilter(0)">All</span>
-        <span class="pill gear-price-pill" data-min="100" onclick="setGearPriceFilter(100)">$100+</span>
-        <span class="pill gear-price-pill" data-min="200" onclick="setGearPriceFilter(200)">$200+</span>
-        <span class="pill gear-price-pill" data-min="500" onclick="setGearPriceFilter(500)">$500+</span>
-        <span class="pill gear-price-pill" data-min="1000" onclick="setGearPriceFilter(1000)">$1,000+</span>
-      </div>
-      <div class="gear-right-controls">
-        <span class="filter-field-wrap">
-          <input type="text" class="site-form-field gear-search-field" placeholder="Filter Gear" oninput="onGearSearch(this.value)">
-          <button class="filter-clear-x" onclick="clearGearFilter()" title="Clear filter">&times;</button>
-        </span>
-        <select class="site-form-field gear-sort" onchange="setGearSort(this.value)">
-          <option value="price_desc">Price: High → Low</option>
-          <option value="price_asc">Price: Low → High</option>
-          <option value="newest">Newly Listed</option>
-        </select>
-      </div>
-    </div>
-    <div id="gear-status" style="font-size:0.78rem;color:#555;margin-top:0.3rem"></div>
-  </div>
-  <div id="gear-results" class="card-grid content-area"></div>
-  <div class="load-more-wrap">
-    <button id="gear-load-more" class="load-more-btn" onclick="loadMoreGear()" style="display:none">Load more</button>
-  </div>
-</div>
-
-<div id="feed-view" style="display:none">
-  <div class="feed-header">
-    <div class="feed-controls">
-      <div class="feed-cat-pills">
-        <button class="pill feed-cat-pill active" data-cat="all" onclick="setFeedCategory('all')">All</button>
-        <button class="pill feed-cat-pill" data-cat="news" onclick="setFeedCategory('news')">News</button>
-        <button class="pill feed-cat-pill" data-cat="reviews" onclick="setFeedCategory('reviews')">Reviews</button>
-        <button class="pill feed-cat-pill" data-cat="gear" onclick="setFeedCategory('gear')">Gear</button>
-        <button class="pill feed-cat-pill" data-cat="video" onclick="setFeedCategory('video')">Video</button>
-      </div>
-      <div class="feed-right-controls">
-        <input type="text" class="site-form-field feed-search-field" placeholder="Filter Feed" oninput="onFeedSearch(this.value)">
-      </div>
-    </div>
-    <div id="feed-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.5rem"></div>
-  </div>
-  <div id="feed-results" class="feed-grid"></div>
-  <div class="load-more-wrap">
-    <button id="feed-load-more" class="load-more-btn" onclick="loadMoreFeed()" style="display:none">Load more</button>
-  </div>
-</div>
-
 <div id="info-view" class="content-narrow" style="display:none">
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">How SeaDisco Works</h2>
 
@@ -559,22 +428,6 @@
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Favorites</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Heart any album, artist, or label to add it to your favorites — from the card thumbnail (hover to reveal) or from the detail popup. Favorites are stored in your account and persist across sessions. View all your favorites in the Favorites tab under My Records.</p>
-
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Latest Drops</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">150 random picks from a rolling 3-month database of 20,000+ releases via <a href="https://listenbrainz.org" target="_blank" rel="noopener" style="color:#5a9aaa">ListenBrainz</a>/<a href="https://musicbrainz.org" target="_blank" rel="noopener" style="color:#5a9aaa">MusicBrainz</a>, refreshed every 6 hours. Filter by the tag cloud or genre dropdown, or search the full database by artist, title, or tag.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">Click any card to search Discogs — if matched, the full popup opens with alternatives. No match shows ListenBrainz info with clickable tags and a Google link.</p>
-
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Live</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">Search upcoming concerts and events by artist, city/zip code, or genre. Results pull from both <a href="https://www.ticketmaster.com" target="_blank" rel="noopener" style="color:#5a9aaa">Ticketmaster</a> and <a href="https://www.bandsintown.com" target="_blank" rel="noopener" style="color:#5a9aaa">Bandsintown</a>, merged and deduped. Artist searches include a Bandsintown photo when available. Each listing links to Google for tickets. Your last searched city is saved for convenience.</p>
-
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Feed</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">Music news, reviews, and videos from Pitchfork, Bandcamp Daily, Stereogum, The Quietus, Aquarium Drunkard, BrooklynVegan, and select YouTube channels. Updated every 4 hours. Filter by category — news, reviews, gear, or video — or search by keyword.</p>
-
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Vinyl</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">Browse Buy-It-Now eBay listings for 12″ vinyl LPs, refreshed every half hour. Filter by price tier and sort by price or newly listed. Each card shows the current price and condition — click through for full details or to buy on eBay.</p>
-
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Gear</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">Browse Buy-It-Now eBay listings for vintage hi-fi and audio equipment, refreshed every half hour. Filter by price tier and sort by price or newly listed. Each card shows the current price and condition — click through for full details or to buy on eBay.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">My Records</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Connect your Discogs account to sync your full collection, wantlist, inventory, and lists — any size. You can connect via <strong style="color:#ccc">OAuth</strong> (one-click authorization) or by pasting a <strong style="color:#ccc">Personal Access Token</strong>. Sync runs in the background and refreshes automatically each night.</p>
@@ -594,7 +447,7 @@
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Anonymous users are capped at <strong style="color:#ccc">5 searches/day</strong> on a shared token. Sign up free and connect your Discogs account — either via <strong style="color:#ccc">OAuth</strong> or by adding your own token (<strong style="color:#ccc">discogs.com → Settings → Developers</strong>) — for unlimited searches and full features.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Saved Searches</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">Save any search across all tabs — Discogs, Drops, Live, Vinyl, Gear, or Feed — and re-run it with one click. Saved searches persist across sessions.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">Save any search and re-run it with one click. Saved searches persist across sessions.</p>
 </div>
 
 <div id="privacy-view" class="content-narrow" style="display:none">
@@ -612,10 +465,6 @@
   <ul style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem;padding-left:1.2rem">
     <li><strong style="color:#ccc">Discogs</strong> — music database searches, collection syncing, and collection actions, using your personal API token or OAuth authorization</li>
     <li><strong style="color:#ccc">Clerk</strong> — authentication and account management</li>
-    <li><strong style="color:#ccc">Ticketmaster &amp; Bandsintown</strong> — live event data (no personal data is shared)</li>
-    <li><strong style="color:#ccc">eBay</strong> — vintage audio gear and vinyl record listings (no personal data is shared)</li>
-    <li><strong style="color:#ccc">ListenBrainz / MusicBrainz / CoverArtArchive</strong> — fresh release data and album artwork (no personal data is shared)</li>
-    <li><strong style="color:#ccc">YouTube</strong> — music video embeds and channel content in the feed (subject to Google's privacy policy)</li>
     <li><strong style="color:#ccc">Anthropic (Claude)</strong> — AI-powered search recommendations and genre descriptions; your search query text is sent to Anthropic's API when using AI features</li>
     <li><strong style="color:#ccc">Google Analytics</strong> — usage statistics including search terms to help us improve the site</li>
   </ul>
@@ -632,7 +481,7 @@
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Data Retention &amp; Deletion</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">User data (collection, wantlist, marketplace inventory, lists, list items, seller orders, order messages, and cached profile) is automatically purged after 30 days of inactivity or deleted on request. Your authentication tokens are retained for as long as your account exists.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Temporary operational data is also pruned automatically: expired gear listings, past live events, API logs, and feed article caches.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Temporary operational data is also pruned automatically: API logs and search caches.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0">You can delete your account at any time from the Account tab. Deleting your account <strong style="color:#ccc">permanently removes all of your data</strong> from our database, including your email, Discogs credentials, collection, wantlist, marketplace inventory, lists, list items, seller orders, order messages, favorites, saved searches, feedback, and profile data. Your Clerk authentication account is also deleted. This action is immediate and irreversible — there is no way to recover your data after deletion. Note that deleting your SeaDisco account does <strong style="color:#ccc">not</strong> alter anything on Discogs itself — your Discogs account, listings, and orders are untouched.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Cookies</h3>
@@ -650,7 +499,7 @@
   <p style="font-size:0.84rem;color:#aaa;margin:0">By using SeaDisco, you agree to these terms. If you don't agree, please don't use the site.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">What SeaDisco Is</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco is a music discovery tool that searches the Discogs database (including Masters+ mode for finding orphan releases), provides AI-powered recommendations (via Anthropic's Claude), aggregates live event listings, curates a music news feed, surfaces eBay vinyl and gear listings, and helps you browse and manage your vinyl collection, wantlist, favorites, lists, marketplace inventory, and seller orders. It is a personal project provided as-is.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco is a music discovery tool that searches the Discogs database (including Masters+ mode for finding orphan releases), provides AI-powered recommendations (via Anthropic's Claude), and helps you browse and manage your vinyl collection, wantlist, favorites, lists, marketplace inventory, and seller orders. It is a personal project provided as-is.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Marketplace Actions</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you use SeaDisco to create, edit, or delete a Discogs marketplace listing, to change the status of a seller order, or to send a message to a buyer, those actions are forwarded to Discogs and take effect immediately on your Discogs account. <strong style="color:#ccc">You are solely responsible for the listings you publish, the prices and conditions you set, the order statuses you change, and the messages you send.</strong> SeaDisco is a convenience interface to the Discogs marketplace — Discogs' own Seller Terms, fees, and refund/cancellation policies still apply, and your obligations to buyers are governed entirely by your agreement with Discogs.</p>
@@ -668,7 +517,7 @@
   </ul>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Third-Party Content</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">Search results, album artwork, AI recommendations, event listings, news articles, and videos are sourced from third parties (Discogs, Anthropic/Claude, Ticketmaster, Bandsintown, eBay, YouTube, ListenBrainz/MusicBrainz, CoverArtArchive, RSS feeds, etc.). SeaDisco does not own or control this content. All trademarks and copyrights belong to their respective owners. AI-generated content may be inaccurate.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">Search results, album artwork, and AI recommendations are sourced from third parties (Discogs, Anthropic/Claude). SeaDisco does not own or control this content. All trademarks and copyrights belong to their respective owners. AI-generated content may be inaccurate.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Availability &amp; Warranty</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco is provided "as is" without warranties of any kind. We don't guarantee uptime, accuracy of search results, or availability of any feature. The service may change or shut down at any time.</p>
@@ -699,7 +548,7 @@
           SeaDisco is powered by the Discogs music database. Free visitors get a handful of searches —
           sign in and connect your free Discogs account in one click to unlock
           <strong style="color:var(--accent)">your own unlimited search quota</strong>,
-          collection and wantlist syncing, ratings, folder management, and a curated music news feed.
+          collection and wantlist syncing, ratings, and folder management.
         </p>
         <p style="margin-bottom:0.6rem"><strong style="color:var(--text)">Here's all it takes:</strong></p>
         <ol style="color:var(--muted);font-size:0.9rem;line-height:1.9;padding-left:1.2rem;margin-bottom:1.2rem">
@@ -906,20 +755,15 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script src="/utils.js?v=20260408i"></script>
-<script src="/search.js?v=20260408i"></script>
-<script src="/buy.js?v=20260408i"></script>
-<script src="/gear.js?v=20260408i"></script>
-<script src="/drops.js?v=20260408i"></script>
-<script src="/live.js?v=20260408i"></script>
-<script src="/feed.js?v=20260408i"></script>
-<script src="/collection.js?v=20260408i"></script>
-<script src="/account.js?v=20260408i"></script>
-<script src="/orders.js?v=20260408i"></script>
-<script src="/app.js?v=20260408i"></script>
+<script src="/utils.js?v=20260408j"></script>
+<script src="/search.js?v=20260408j"></script>
+<script src="/collection.js?v=20260408j"></script>
+<script src="/account.js?v=20260408j"></script>
+<script src="/orders.js?v=20260408j"></script>
+<script src="/app.js?v=20260408j"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/modal.js?v=20260408i"></script>
-<script defer src="/inventory-editor.js?v=20260408i"></script>
+<script defer src="/modal.js?v=20260408j"></script>
+<script defer src="/inventory-editor.js?v=20260408j"></script>
 
 </body>
 </html>
