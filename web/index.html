@@ -37,7 +37,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260408l" />
+  <link rel="stylesheet" href="/style.css?v=20260408m" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -70,7 +70,7 @@
 <body>
 
 <header id="site-header"></header>
-<script src="/shared.js?v=20260408l"></script>
+<script src="/shared.js?v=20260408m"></script>
 <script>renderSharedHeader({ spa: true, active: "search" });</script>
 <div id="search-view">
 
@@ -397,18 +397,21 @@
   <div id="random-records" class="content-area" style="margin-top:0.5rem;display:none">
     <div id="random-records-header" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin:0 0 0.5rem 0;padding:0 0.15rem">
       <div id="random-records-title" style="font-size:0.78rem;color:var(--muted);letter-spacing:0.04em;text-transform:uppercase">Recent</div>
-      <div style="display:flex;align-items:center;gap:0.4rem">
-        <label for="favorites-sort" style="font-size:0.72rem;color:var(--muted)">Sort:</label>
-        <select id="favorites-sort" onchange="sortFavoritesGrid()">
-          <option value="added:desc">Recently opened</option>
-          <option value="added:asc">Oldest opened</option>
-          <option value="year:desc">Year ↓</option>
-          <option value="year:asc">Year ↑</option>
-          <option value="title:asc">Title A→Z</option>
-          <option value="title:desc">Title Z→A</option>
-          <option value="artist:asc">Artist A→Z</option>
-        </select>
-        <button id="recent-clear-btn" type="button" onclick="clearRecentHistory()" title="Clear all history" style="background:none;border:1px solid var(--border);color:var(--muted);padding:0.25rem 0.6rem;border-radius:var(--radius);cursor:pointer;font-size:0.72rem">Clear</button>
+      <div style="display:flex;align-items:center;gap:0.5rem;flex-shrink:0">
+        <label class="sort-label" style="flex-shrink:0">
+          Sort
+          <select id="favorites-sort" onchange="sortFavoritesGrid()" style="font-size:0.78rem;padding:0.3rem 0.4rem;color-scheme:dark">
+            <option value="added:desc">Recently opened</option>
+            <option value="added:asc">Oldest opened</option>
+            <option value="year:desc">Year ↓</option>
+            <option value="year:asc">Year ↑</option>
+            <option value="title:asc">Title A→Z</option>
+            <option value="title:desc">Title Z→A</option>
+            <option value="artist:asc">Artist A→Z</option>
+          </select>
+        </label>
+        <span style="color:#333">|</span>
+        <button id="recent-clear-btn" type="button" onclick="clearRecentHistory()" title="Clear all history" style="background:none;border:none;padding:0 0.4rem;font-size:0.78rem;color:#555;cursor:pointer;line-height:1;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">Clear</button>
       </div>
     </div>
     <div id="random-records-grid" class="card-grid"></div>
@@ -758,15 +761,15 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script src="/utils.js?v=20260408l"></script>
-<script src="/search.js?v=20260408l"></script>
-<script src="/collection.js?v=20260408l"></script>
-<script src="/account.js?v=20260408l"></script>
-<script src="/orders.js?v=20260408l"></script>
-<script src="/app.js?v=20260408l"></script>
+<script src="/utils.js?v=20260408m"></script>
+<script src="/search.js?v=20260408m"></script>
+<script src="/collection.js?v=20260408m"></script>
+<script src="/account.js?v=20260408m"></script>
+<script src="/orders.js?v=20260408m"></script>
+<script src="/app.js?v=20260408m"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/modal.js?v=20260408l"></script>
-<script defer src="/inventory-editor.js?v=20260408l"></script>
+<script defer src="/modal.js?v=20260408m"></script>
+<script defer src="/inventory-editor.js?v=20260408m"></script>
 
 </body>
 </html>
