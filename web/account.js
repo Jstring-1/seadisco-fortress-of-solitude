@@ -23,7 +23,6 @@ function showSignInWidget(c) {
         identityPreviewEditButton:    "color:#ff6b35;",
       },
     },
-    localization: SEADISCO_CLERK_LOCALIZATION,
   };
   if (typeof c.mountSignIn === "function") {
     c.mountSignIn(mount, opts);

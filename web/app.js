@@ -197,23 +197,20 @@ function _applySplashVisibility(clerk) {
     if (searchInfo) searchInfo.style.display = "none";
     splash.style.display = "block";
     // Mount Clerk waitlist (preferred) or fall back to sign-up widget.
-    // The waitlist widget handles its own copy; the sign-up fallback
-    // borrows the SeaDisco localization so it reads "Join the waitlist"
-    // rather than Clerk's default "Create your account".
+    // Localization is applied globally via Clerk.load() in shared.js so
+    // the sign-up fallback reads "Join the waitlist" rather than
+    // Clerk's default "Create your account".
     const mount = document.getElementById("splash-waitlist-mount");
     if (mount && !mount.dataset.mounted) {
       mount.dataset.mounted = "1";
       const appearance = (typeof SEADISCO_CLERK_APPEARANCE !== "undefined")
         ? SEADISCO_CLERK_APPEARANCE
         : undefined;
-      const localization = (typeof SEADISCO_CLERK_LOCALIZATION !== "undefined")
-        ? SEADISCO_CLERK_LOCALIZATION
-        : undefined;
       try {
         if (typeof clerk.mountWaitlist === "function") {
-          clerk.mountWaitlist(mount, { appearance, localization });
+          clerk.mountWaitlist(mount, { appearance });
         } else if (typeof clerk.mountSignUp === "function") {
-          clerk.mountSignUp(mount, { appearance, localization });
+          clerk.mountSignUp(mount, { appearance });
         }
       } catch (e) {
         console.error("[splash] Clerk mount failed:", e);
