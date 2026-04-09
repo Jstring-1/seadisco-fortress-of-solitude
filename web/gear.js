@@ -26,8 +26,8 @@ function renderGearCard(item, idx) {
   return `<div class="card gear-card card-animate" onclick="event.stopPropagation();openGearPopup(${idx})" role="button" tabindex="0" style="--i:${Math.min(idx, 20)};cursor:pointer;-webkit-tap-highlight-color:transparent" title="${escHtml(item.title)}">
     <div class="card-thumb-wrap" style="pointer-events:none">${img}</div>
     <div class="card-body" style="pointer-events:none">
-      <div class="card-title">${escHtml(item.title)}</div>
       <div class="gear-price">${priceStr}</div>
+      <div class="card-title">${escHtml(item.title)}</div>
       ${conditionShow ? `<div class="card-meta">${escHtml(conditionShow)}</div>` : ""}
       ${loc ? `<div class="card-meta">${escHtml(loc)}</div>` : ""}
     </div>

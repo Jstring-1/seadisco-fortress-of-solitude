@@ -332,7 +332,7 @@ authReadyPromise.then(() => {
         const q = document.getElementById("buy-filter-field")?.value?.trim();
         if (q) params.q = q;
         const sort = document.querySelector(".buy-sort")?.value;
-        if (sort && sort !== "ending") params.sort = sort;
+        if (sort && sort !== "price_desc") params.sort = sort;
         const activePrice = document.querySelector(".buy-price-pill.active");
         const minPrice = activePrice ? parseInt(activePrice.dataset.min) : 0;
         if (minPrice > 0) params.min_price = minPrice;
@@ -357,7 +357,7 @@ authReadyPromise.then(() => {
         const q = document.querySelector(".gear-search-field")?.value?.trim();
         if (q) params.q = q;
         const sort = document.querySelector(".gear-sort")?.value;
-        if (sort && sort !== "bids") params.sort = sort;
+        if (sort && sort !== "price_desc") params.sort = sort;
         const activePrice = document.querySelector(".gear-price-pill.active");
         const minPrice = activePrice ? parseInt(activePrice.dataset.min) : 0;
         if (minPrice > 0) params.min_price = minPrice;

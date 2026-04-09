@@ -513,7 +513,7 @@ async function saveCurrentSearch(view) {
   if (!wrap?._getParams) return;
   const params = wrap._getParams();
   // Build a short label from the params
-  const sortLabels = { ending: "Ending Soonest", bids: "Most Bids", price_desc: "Price ↓", price_asc: "Price ↑", newest: "Newly Listed" };
+  const sortLabels = { price_desc: "Price ↓", price_asc: "Price ↑", newest: "Newly Listed" };
   const parts = [];
   for (const [k, v] of Object.entries(params)) {
     if (!v || k === "page" || k === "per_page") continue;
