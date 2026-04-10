@@ -269,6 +269,8 @@ function _locRenderShell() {
                 <option value="date-desc">Year (newest)</option>
                 <option value="date-asc">Year (oldest)</option>
                 <option value="title">Title A–Z</option>
+                <option value="artist">Artist A–Z (page)</option>
+                <option value="artist-desc">Artist Z–A (page)</option>
               </select>
               <select id="loc-perpage" class="loc-perpage-select">
                 <option value="25">25</option>
@@ -366,15 +368,35 @@ async function _locRunSearch(params) {
   try {
     const body = await _locFetchSearch(params);
     _locLastResponse = body;
-    const results = Array.isArray(body?.results) ? body.results : [];
+    let results = Array.isArray(body?.results) ? body.results : [];
     if (!results.length) {
       statusEl.textContent = "No results.";
       grid.innerHTML = "";
       return;
     }
-    statusEl.textContent = body.pagination
+    // Client-side artist sort — LOC's `sb` API only supports relevance,
+    // date, and title, so artist-order is a local reshuffle of whatever
+    // the backend returned for this page. Label in the status line so
+    // the user knows it's page-scoped, not a global sort across pages.
+    let sortHint = "";
+    if (params.sort === "artist" || params.sort === "artist-desc") {
+      const key = (r) => {
+        const c = Array.isArray(r.contributors) && r.contributors.length ? r.contributors[0] : "";
+        // LOC contributor strings are already "last, first" — fine for sort.
+        return String(c || "").toLowerCase();
+      };
+      results = results.slice().sort((a, b) => {
+        const ka = key(a), kb = key(b);
+        if (!ka && !kb) return 0;
+        if (!ka) return 1;   // empties last
+        if (!kb) return -1;
+        return params.sort === "artist-desc" ? kb.localeCompare(ka) : ka.localeCompare(kb);
+      });
+      sortHint = " · sorted by artist (this page)";
+    }
+    statusEl.textContent = (body.pagination
       ? `${body.pagination.from}-${body.pagination.to} of ${body.pagination.total} results`
-      : `${results.length} results`;
+      : `${results.length} results`) + sortHint;
     grid.innerHTML = results.map(_locRenderCard).join("");
     _locRenderPagination(body.pagination);
   } catch (e) {
