@@ -32,6 +32,9 @@ let _locNowPlaying = null;
 // one track ends. Shape: { items: Track[], index: number, itemId: string,
 // itemTitle: string, itemImage: string }
 let _locQueue = null;
+// Monotonic counter used to serialize rapid _locPlay() calls so the
+// most recent call wins. Fixes AbortError when switching tracks fast.
+let _locPlayToken = 0;
 // Saved-tab filter state
 let _locSavedFilter = "";
 let _locSavedSort = "recent";  // recent | title | year-asc | year-desc
@@ -399,12 +402,20 @@ function _locRenderPagination(p) {
   `;
 }
 
-function _locGotoPage(n) {
+async function _locGotoPage(n) {
   if (!_locLastQuery) return;
   const next = { ..._locLastQuery, sp: String(Math.max(1, Number(n) || 1)) };
-  _locRunSearch(next);
-  // Scroll results into view
-  document.getElementById("loc-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  // Await the search so the scroll lands on the FRESH results, not the
+  // old ones. LOC uses true pagination (not load-more), so we always
+  // scroll back to the top of the results block when the page changes.
+  await _locRunSearch(next);
+  const el = document.getElementById("loc-results");
+  if (el) {
+    // Aim slightly above the grid so the "N-M of T" status line is
+    // visible, not clipped under whatever's at the very top.
+    const top = el.getBoundingClientRect().top + window.scrollY - 80;
+    window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+  }
 }
 
 // ── Result card renderer ────────────────────────────────────────────────
@@ -1057,12 +1068,17 @@ async function _locPlay(item) {
   const titleEl = document.getElementById("loc-audio-title");
   if (!bar || !audio) return;
 
+  // Each _locPlay call gets a monotonic token. If a newer call arrives
+  // while this one is still async-setting-up (fetching hls.js, etc.),
+  // this call aborts so the newest wins. Fixes the "playback fails when
+  // I click another track mid-play" AbortError race.
+  const myToken = ++_locPlayToken;
+  const isCurrent = () => myToken === _locPlayToken;
+
   // Stop any YouTube playback so we don't double-play
   try { if (typeof closeVideo === "function") closeVideo(); } catch {}
 
-  // Attach the auto-advance handler once per page load. The handler
-  // reads the current _locQueue state, so it works for both multi-track
-  // queues (advances) and single-track plays (no-op).
+  // Attach the auto-advance handler once per page load.
   if (!audio._locEndedBound) {
     audio.addEventListener("ended", _locOnTrackEnded);
     audio._locEndedBound = true;
@@ -1073,23 +1089,25 @@ async function _locPlay(item) {
   bar.classList.add("is-visible");
   _locUpdateQueueButtons();
 
-  // Tear down any prior hls.js instance
+  // Tear down any prior hls.js instance cleanly
   if (audio._hls) {
     try { audio._hls.destroy(); } catch {}
     audio._hls = null;
   }
-  audio.pause();
-  audio.removeAttribute("src");
-  audio.load();
+  // Pausing before switching src tells the browser "this is intentional,
+  // don't reject the in-flight play promise with AbortError". We swallow
+  // the pre-existing play promise separately below.
+  try { audio.pause(); } catch {}
 
   const isHls = item.streamType === "hls" || /\.m3u8(\?|$)/i.test(item.streamUrl);
   if (isHls) {
-    // Safari can play HLS natively; everywhere else needs hls.js
     if (audio.canPlayType("application/vnd.apple.mpegurl")) {
       audio.src = item.streamUrl;
     } else {
       try {
         const Hls = await _ensureHlsLoaded();
+        // A newer play() may have fired while hls.js was loading. Bail.
+        if (!isCurrent()) return;
         if (Hls.isSupported()) {
           const hls = new Hls();
           hls.loadSource(item.streamUrl);
@@ -1107,9 +1125,20 @@ async function _locPlay(item) {
   } else {
     audio.src = item.streamUrl;
   }
-  audio.play().catch(err => {
-    showToast?.("Playback failed: " + (err?.message || "unknown"), "error");
-  });
+
+  // Bail if a newer play() has arrived during the async src assignment.
+  if (!isCurrent()) return;
+
+  // play() returns a Promise that rejects with AbortError if the element
+  // is paused/re-sourced before it resolves. That's expected during rapid
+  // switching — we only surface NON-abort errors.
+  try {
+    await audio.play();
+  } catch (err) {
+    if (err?.name !== "AbortError") {
+      showToast?.("Playback failed: " + (err?.message || "unknown"), "error");
+    }
+  }
 }
 
 // Auto-advance: when the current track ends, play the next one in the

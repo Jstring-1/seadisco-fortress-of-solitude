@@ -310,11 +310,16 @@ async function requireUser(req: express.Request, res: express.Response): Promise
 }
 
 /** Admin gate — same shape as requireUser but additionally checks
- *  ADMIN_CLERK_ID. Returns the userId or null after sending 403. */
+ *  ADMIN_CLERK_ID. Returns 401 for missing/expired auth (so apiFetch
+ *  can retry with a fresh token) and 403 for valid auth that's not
+ *  the admin user. */
 async function requireAdmin(req: express.Request, res: express.Response): Promise<string | null> {
   const userId = await getClerkUserId(req);
-  const adminId = ADMIN_CLERK_ID;
-  if (!userId || !adminId || userId !== adminId) {
+  if (!userId) {
+    res.status(401).json({ error: "auth_required" });
+    return null;
+  }
+  if (!ADMIN_CLERK_ID || userId !== ADMIN_CLERK_ID) {
     res.status(403).json({ error: "forbidden" });
     return null;
   }
