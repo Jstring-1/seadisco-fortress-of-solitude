@@ -28,6 +28,10 @@ let _locSavedIds = null;
 let _locSavedItems = null;
 // Current playing audio item (for the audio bar)
 let _locNowPlaying = null;
+// Playback queue for multi-track LOC items — enables auto-advance when
+// one track ends. Shape: { items: Track[], index: number, itemId: string,
+// itemTitle: string, itemImage: string }
+let _locQueue = null;
 // Saved-tab filter state
 let _locSavedFilter = "";
 let _locSavedSort = "recent";  // recent | title | year-asc | year-desc
@@ -192,109 +196,41 @@ async function initLocView() {
 
   // Load saved IDs once so the ★ state is correct on first render
   _locLoadSavedIds();
-  // Load saved SEARCHES (not saves) once so the user sees their bookmarks
-  _locLoadSavedSearches();
+  // Mount the shared saved-search dropdown next to the submit button.
+  // Reuses buildSavedSearchUI() from utils.js so LOC bookmarks look and
+  // feel identical to the main search and collection bookmarks.
+  if (typeof buildSavedSearchUI === "function") {
+    const topRow = document.getElementById("loc-form-row-top");
+    if (topRow && !topRow.querySelector(".saved-search-wrap")) {
+      buildSavedSearchUI(
+        "loc",
+        () => _locReadFormParams(),  // getParams
+        (params) => {                // apply
+          const setVal = (elId, key) => {
+            const el = document.getElementById(elId);
+            if (el) el.value = params[key] ?? "";
+          };
+          setVal("loc-q",           "q");
+          setVal("loc-contributor", "contributor");
+          setVal("loc-subject",     "subject");
+          setVal("loc-location",    "location");
+          setVal("loc-language",    "language");
+          setVal("loc-partof",      "partof");
+          setVal("loc-start-date",  "start_date");
+          setVal("loc-end-date",    "end_date");
+          setVal("loc-sort",        "sort");
+          setVal("loc-perpage",     "c");
+          _locSwitchTab("search");
+          _locRunSearchFromForm({ resetPage: true });
+        },
+        topRow,
+      );
+    }
+  }
 
   // If the user linked straight to a saved tab (?v=loc&tab=saved), honor it
   const urlTab = new URLSearchParams(location.search).get("tab");
   _locSwitchTab(urlTab === "saved" ? "saved" : "search");
-}
-
-// ── Saved searches (bookmarks) ──────────────────────────────────────────
-
-let _locSavedSearches = [];
-
-async function _locLoadSavedSearches() {
-  try {
-    const r = await apiFetch("/api/user/saved-searches?view=loc");
-    if (!r.ok) return;
-    const body = await r.json();
-    _locSavedSearches = Array.isArray(body?.searches) ? body.searches : [];
-    _locRenderSavedSearchesRow();
-  } catch { /* silent */ }
-}
-
-function _locRenderSavedSearchesRow() {
-  const row = document.getElementById("loc-saved-searches-row");
-  if (!row) return;
-  if (!_locSavedSearches.length) {
-    row.style.display = "none";
-    row.innerHTML = "";
-    return;
-  }
-  row.style.display = "";
-  row.innerHTML = `
-    <span class="loc-saved-searches-label">Bookmarks:</span>
-    ${_locSavedSearches.map(s => `
-      <span class="loc-bookmark-chip">
-        <button type="button" class="loc-bookmark-restore" onclick="_locRestoreSavedSearch(${s.id})" title="Re-run this search">${escHtml(s.label)}</button>
-        <button type="button" class="loc-bookmark-delete" onclick="_locDeleteSavedSearch(${s.id})" title="Remove bookmark">×</button>
-      </span>
-    `).join("")}
-  `;
-}
-
-function _locRestoreSavedSearch(id) {
-  const entry = _locSavedSearches.find(s => s.id === id);
-  if (!entry) return;
-  const params = entry.params || {};
-  // Populate the form from the saved params
-  const setVal = (elId, key) => {
-    const el = document.getElementById(elId);
-    if (el) el.value = params[key] ?? "";
-  };
-  setVal("loc-q",           "q");
-  setVal("loc-contributor", "contributor");
-  setVal("loc-subject",     "subject");
-  setVal("loc-location",    "location");
-  setVal("loc-language",    "language");
-  setVal("loc-partof",      "partof");
-  setVal("loc-start-date",  "start_date");
-  setVal("loc-end-date",    "end_date");
-  setVal("loc-sort",        "sort");
-  setVal("loc-perpage",     "c");
-  _locSwitchTab("search");
-  _locRunSearchFromForm({ resetPage: true });
-}
-
-async function _locPromptSaveSearch() {
-  const params = _locReadFormParams();
-  const hasCriteria = !!(params.q || params.contributor || params.subject ||
-                         params.location || params.language || params.partof ||
-                         params.start_date || params.end_date);
-  if (!hasCriteria) {
-    showToast?.("Enter a keyword or filter first, then save.", "error");
-    return;
-  }
-  // Suggest a default label from the most distinctive field
-  const suggested = params.q || params.contributor || params.subject || params.partof || "LOC search";
-  const label = prompt("Bookmark label:", suggested);
-  if (!label || !label.trim()) return;
-  try {
-    const r = await apiFetch("/api/user/saved-searches", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ view: "loc", label: label.trim().slice(0, 100), params }),
-    });
-    if (!r.ok) throw new Error(`save failed (${r.status})`);
-    showToast?.("Bookmark saved");
-    await _locLoadSavedSearches();
-  } catch (e) {
-    showToast?.(e?.message || "Save failed", "error");
-  }
-}
-
-async function _locDeleteSavedSearch(id) {
-  if (!confirm("Remove this bookmark?")) return;
-  try {
-    const r = await apiFetch(`/api/user/saved-searches/${id}`, { method: "DELETE" });
-    if (!r.ok) throw new Error(`delete failed (${r.status})`);
-    _locSavedSearches = _locSavedSearches.filter(s => s.id !== id);
-    _locRenderSavedSearchesRow();
-    showToast?.("Bookmark removed");
-  } catch (e) {
-    showToast?.(e?.message || "Delete failed", "error");
-  }
 }
 
 function _locRenderShell() {
@@ -309,13 +245,11 @@ function _locRenderShell() {
     </div>
 
     <div class="loc-panel loc-panel-search">
-      <div id="loc-saved-searches-row" class="loc-saved-searches-row" style="display:none"></div>
-
       <form id="loc-search-form" class="loc-form" autocomplete="off">
-        <div class="loc-form-row">
+        <div class="loc-form-row" id="loc-form-row-top">
           <input type="text" id="loc-q" placeholder="Keyword (title, subject, or any text)" />
           <button type="submit" class="loc-submit" id="loc-submit-btn">Search</button>
-          <button type="button" class="loc-save-search-btn" id="loc-save-search-btn" onclick="_locPromptSaveSearch()" title="Save this search">★</button>
+          <!-- buildSavedSearchUI injects the bookmark dropdown here -->
         </div>
         <div class="loc-form-grid">
           <label><span>Contributor</span><input type="text" id="loc-contributor" placeholder="e.g. whiteman, paul" /></label>
@@ -647,26 +581,20 @@ function _locOpenInfoPopup(locId) {
         <ul class="loc-info-list">${notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul>
       </div>`
     : "";
-  // Speakers: each name is a clickable LOC search. Three magnifying-glass
-  // links after the text search other places:
-  //   🔍 LOC      — new LOC search for the name (re-runs /api/loc/search)
-  //   🔎 Discogs  — main Discogs search view (uses switchView + doSearch)
-  //   🔍 Collection — cw-query filter in the Collection view
-  const renderNameLinks = (name) => {
-    const n = esc(name);
-    const jsName = esc(name).replace(/'/g, "\\'");
-    return `<span class="loc-name-search" title="Search LOC for ${n}" onclick="_locSearchByName('${jsName}')">🔍<span class="loc-name-search-label">LOC</span></span>
-      <span class="loc-name-search" title="Search Discogs for ${n}" onclick="_locSearchDiscogsByName('${jsName}')">🔎<span class="loc-name-search-label">Discogs</span></span>
-      <span class="loc-name-search" title="Filter your Collection for ${n}" onclick="_locSearchCollectionByName('${jsName}')">🔍<span class="loc-name-search-label">Collection</span></span>`;
-  };
+  // Speakers: match the main-search album credits style — name is a
+  // link (clicks search LOC by contributor), followed by two compact
+  // magnifying-glass icons: 🔎 Discogs (main search), 🔍 Collection.
+  // The LOC glass is omitted because the name itself already searches
+  // LOC — it would be redundant. Entries are comma-separated inline
+  // like credits, not stacked.
   const speakersBlock = speakers.length
     ? `<div class="loc-info-section">
         <div class="loc-info-section-title">Speakers / participants</div>
-        <ul class="loc-info-list loc-speaker-list">${speakers.map(s => `
-          <li class="loc-speaker-row">
-            <span class="loc-speaker-name" onclick="_locSearchByName('${esc(s).replace(/'/g, "\\'")}')" title="Search LOC for ${esc(s)}">${esc(s)}</span>
-            <span class="loc-name-search-group">${renderNameLinks(s)}</span>
-          </li>`).join("")}</ul>
+        <div class="loc-speaker-credits">${speakers.map(s => {
+          const n = esc(s);
+          const jsName = n.replace(/'/g, "\\'");
+          return `<a href="#" class="credit-name loc-credit-name" onclick="event.preventDefault();_locSearchByName('${jsName}')" title="Search LOC for ${n}">${n}</a><a href="#" class="album-title-search loc-credit-discogs" onclick="event.preventDefault();_locSearchDiscogsByName('${jsName}')" title="Search Discogs for ${n}">⌕</a><a href="#" class="album-title-search loc-credit-collection" onclick="event.preventDefault();_locSearchCollectionByName('${jsName}')" title="Search your collection for ${n}">⌕</a>`;
+        }).join('<span class="credit-sep"> · </span>')}</div>
       </div>`
     : "";
   // Article body — podcast transcript / blurb. Shown inside a scrollable
@@ -725,24 +653,82 @@ function _locCloseInfoPopup() {
 
 function _locPlayFromInfo(locId) {
   const item = _locItemCache.get(locId);
-  if (item?.streamUrl) _locPlay(item);
+  if (!item) return;
+  // Multi-track items start a queue at track 0 so auto-advance works.
+  if (Array.isArray(item.tracks) && item.tracks.length >= 2) {
+    _locStartQueue(item, 0);
+  } else if (item.streamUrl) {
+    _locQueue = null;
+    _locUpdateQueueButtons();
+    _locPlay(item);
+  }
 }
 
-// Play a specific track from a multi-track LOC item. Builds a synthetic
-// play descriptor with the track-specific URL and title so the audio
-// bar shows the track name, not the item name.
+// Play a specific track from a multi-track LOC item. Starts a queue at
+// the clicked index so subsequent tracks auto-advance.
 function _locPlayTrack(locId, trackIndex) {
   const item = _locItemCache.get(locId);
   if (!item || !Array.isArray(item.tracks)) return;
-  const track = item.tracks[trackIndex];
+  _locStartQueue(item, trackIndex);
+}
+
+// Build a queue from a multi-track item and start playing at `index`.
+function _locStartQueue(item, index) {
+  const tracks = Array.isArray(item.tracks) ? item.tracks : [];
+  if (!tracks.length) return;
+  const safeIdx = Math.max(0, Math.min(index, tracks.length - 1));
+  _locQueue = {
+    items: tracks,
+    index: safeIdx,
+    itemId: item.id,
+    itemTitle: item.title || "Untitled",
+    itemImage: item.image || "",
+  };
+  _locPlayQueueCurrent();
+}
+
+// Play the current queue index — called by _locStartQueue, prev, next,
+// and the onended auto-advance handler.
+function _locPlayQueueCurrent() {
+  if (!_locQueue) return;
+  const track = _locQueue.items[_locQueue.index];
   if (!track?.url) return;
+  const total = _locQueue.items.length;
+  const pos   = _locQueue.index + 1;
+  const trackTitle = track.title
+    ? `${_locQueue.itemTitle} — ${track.title}`
+    : `${_locQueue.itemTitle} (${pos}/${total})`;
   _locPlay({
-    id: `${locId}#${trackIndex}`,
-    title: track.title ? `${item.title || "Untitled"} — ${track.title}` : `${item.title || "Untitled"} (track ${trackIndex + 1})`,
+    id: `${_locQueue.itemId}#${_locQueue.index}`,
+    title: trackTitle,
     streamUrl: track.url,
     streamType: track.streamType || "mp3",
-    image: item.image || "",
+    image: _locQueue.itemImage,
   });
+  _locUpdateQueueButtons();
+}
+
+function _locPlayNextInQueue() {
+  if (!_locQueue) return;
+  if (_locQueue.index + 1 >= _locQueue.items.length) return;
+  _locQueue.index++;
+  _locPlayQueueCurrent();
+}
+
+function _locPlayPrevInQueue() {
+  if (!_locQueue) return;
+  if (_locQueue.index <= 0) return;
+  _locQueue.index--;
+  _locPlayQueueCurrent();
+}
+
+function _locUpdateQueueButtons() {
+  const prev = document.getElementById("loc-audio-prev");
+  const next = document.getElementById("loc-audio-next");
+  if (!prev || !next) return;
+  const hasQueue = !!_locQueue && _locQueue.items.length >= 2;
+  prev.disabled = !hasQueue || _locQueue.index <= 0;
+  next.disabled = !hasQueue || _locQueue.index + 1 >= _locQueue.items.length;
 }
 
 // Speaker / participant name → new LOC search by contributor.
@@ -855,15 +841,8 @@ function _locReadCard(el) {
   };
 }
 
-function _locPlayFromCard(btn) {
-  const card = btn?.closest(".loc-card");
-  const item = _locReadCard(card);
-  if (!item?.streamUrl) return;
-  _locPlay(item);
-}
-
 async function _locToggleSaveFromCard(btn) {
-  const card = btn?.closest(".loc-card");
+  const card = btn?.closest(".loc-card, .card");
   if (!card) return;
   const locId = card.dataset.locId;
   if (!locId) return;
@@ -1081,9 +1060,18 @@ async function _locPlay(item) {
   // Stop any YouTube playback so we don't double-play
   try { if (typeof closeVideo === "function") closeVideo(); } catch {}
 
+  // Attach the auto-advance handler once per page load. The handler
+  // reads the current _locQueue state, so it works for both multi-track
+  // queues (advances) and single-track plays (no-op).
+  if (!audio._locEndedBound) {
+    audio.addEventListener("ended", _locOnTrackEnded);
+    audio._locEndedBound = true;
+  }
+
   _locNowPlaying = item;
   titleEl.textContent = item.title || "Playing…";
   bar.classList.add("is-visible");
+  _locUpdateQueueButtons();
 
   // Tear down any prior hls.js instance
   if (audio._hls) {
@@ -1124,6 +1112,37 @@ async function _locPlay(item) {
   });
 }
 
+// Auto-advance: when the current track ends, play the next one in the
+// queue if there is one. If we're at the end of the queue (or there's
+// no queue at all) just leave the bar in its paused state.
+function _locOnTrackEnded() {
+  if (!_locQueue) return;
+  if (_locQueue.index + 1 >= _locQueue.items.length) {
+    _locUpdateQueueButtons();
+    return;
+  }
+  _locQueue.index++;
+  _locPlayQueueCurrent();
+}
+
+// Clicking a card's ▶ overlay on a multi-track item should start the
+// full queue, not just track 1 + end. Update this path too.
+function _locPlayFromCard(btn) {
+  const card = btn?.closest(".loc-card, .card");
+  if (!card) return;
+  const locId = card.dataset.locId;
+  const item = locId ? _locItemCache.get(locId) : null;
+  if (item && Array.isArray(item.tracks) && item.tracks.length >= 2) {
+    _locStartQueue(item, 0);
+    return;
+  }
+  const readItem = _locReadCard(card);
+  if (!readItem?.streamUrl) return;
+  _locQueue = null;
+  _locUpdateQueueButtons();
+  _locPlay(readItem);
+}
+
 function _locClosePlayer() {
   const bar = document.getElementById("loc-audio-bar");
   const audio = document.getElementById("loc-audio");
@@ -1138,6 +1157,8 @@ function _locClosePlayer() {
   }
   if (bar) bar.classList.remove("is-visible");
   _locNowPlaying = null;
+  _locQueue = null;
+  _locUpdateQueueButtons();
 }
 
 // Close the info popup with Escape
@@ -1161,10 +1182,9 @@ window._locOpenInfoPopup        = _locOpenInfoPopup;
 window._locCloseInfoPopup       = _locCloseInfoPopup;
 window._locPlayFromInfo         = _locPlayFromInfo;
 window._locPlayTrack            = _locPlayTrack;
+window._locPlayNextInQueue      = _locPlayNextInQueue;
+window._locPlayPrevInQueue      = _locPlayPrevInQueue;
 window._locToggleSaveFromInfo   = _locToggleSaveFromInfo;
 window._locSearchByName         = _locSearchByName;
 window._locSearchDiscogsByName  = _locSearchDiscogsByName;
 window._locSearchCollectionByName = _locSearchCollectionByName;
-window._locPromptSaveSearch     = _locPromptSaveSearch;
-window._locRestoreSavedSearch   = _locRestoreSavedSearch;
-window._locDeleteSavedSearch    = _locDeleteSavedSearch;

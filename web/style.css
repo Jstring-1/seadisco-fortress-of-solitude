@@ -4565,6 +4565,24 @@ footer {
   border-radius: 4px;
 }
 .loc-audio-bar-close:hover { color: var(--text); border-color: var(--accent); }
+.loc-audio-bar-queue-nav {
+  display: flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+.loc-audio-bar-nav {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.35rem 0.6rem;
+  border-radius: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.loc-audio-bar-nav:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.loc-audio-bar-nav:disabled { opacity: 0.3; cursor: not-allowed; }
 
 /* ── LOC info popup overlay ───────────────────────────────────────── */
 .loc-info-overlay {
@@ -4796,112 +4814,23 @@ footer {
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Clickable speaker names + search-link buttons ──────────────── */
-.loc-speaker-list {
-  list-style: none;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
+/* ── Speakers / participants — mirrors .album-credits layout ─────── */
+.loc-speaker-credits {
+  padding: 0.25rem 0;
+  font-size: 0.82rem;
+  line-height: 1.7;
 }
-.loc-speaker-row {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-}
-.loc-speaker-name {
-  color: var(--text);
-  font-size: 0.88rem;
-  cursor: pointer;
-  text-decoration: underline;
-  text-decoration-style: dotted;
-  text-decoration-color: var(--muted);
-  text-underline-offset: 2px;
-}
-.loc-speaker-name:hover { color: var(--accent); }
-.loc-name-search-group {
-  display: inline-flex;
-  gap: 0.3rem;
-}
-.loc-name-search {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.2rem;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  padding: 0.15rem 0.4rem;
-  font-size: 0.7rem;
-  color: var(--muted);
-  cursor: pointer;
-  user-select: none;
-}
-.loc-name-search:hover { border-color: var(--accent); color: var(--accent); }
-.loc-name-search-label { font-weight: 500; }
+/* Use the same base credit-name color from the main search modal */
+.loc-credit-name { font-size: 0.88rem; }
+/* Discogs / Collection magnifying-glass icons get theme-adjacent colors
+   so you can tell them apart at a glance. Hover lights them up. */
+.loc-credit-discogs  { color: var(--accent-hi);  margin-left: 0.15rem; }
+.loc-credit-discogs:hover  { color: var(--accent); }
+.loc-credit-collection { color: var(--success); margin-left: 0.1rem; }
+.loc-credit-collection:hover { color: var(--accent); }
 
-/* ── Bookmarked LOC searches row ─────────────────────────────────── */
-.loc-saved-searches-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-bottom: 0.7rem;
-  padding: 0.55rem 0.8rem;
-  background: var(--bg-elevated);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-}
-.loc-saved-searches-label {
-  font-size: 0.72rem;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-right: 0.3rem;
-}
-.loc-bookmark-chip {
-  display: inline-flex;
-  align-items: center;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  overflow: hidden;
-}
-.loc-bookmark-restore {
-  background: none;
-  border: none;
-  color: var(--text);
-  font: inherit;
-  font-size: 0.76rem;
-  padding: 0.3rem 0.7rem;
-  cursor: pointer;
-}
-.loc-bookmark-restore:hover { color: var(--accent); }
-.loc-bookmark-delete {
-  background: none;
-  border: none;
-  border-left: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 0.85rem;
-  padding: 0.25rem 0.5rem;
-  cursor: pointer;
-  line-height: 1;
-}
-.loc-bookmark-delete:hover { color: var(--danger); }
-
-/* Save-search star button in the search row */
-.loc-save-search-btn {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--favorite);
-  font-size: 1.1rem;
-  padding: 0 0.85rem;
-  border-radius: 5px;
-  cursor: pointer;
-  height: auto;
-  line-height: normal;
-}
-.loc-save-search-btn:hover { border-color: var(--favorite); background: var(--accent-soft); }
+/* LOC reuses the shared .saved-search-wrap / .saved-search-dropdown
+   styles from the main search UI — no overrides needed. */
 .loc-info-meta {
   display: flex;
   flex-direction: column;

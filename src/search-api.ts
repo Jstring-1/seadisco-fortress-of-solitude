@@ -2170,37 +2170,89 @@ function _normalizeLocResult(r: any): any {
     : (Array.isArray(r.contributor) ? r.contributor.slice(0, 3) : []);
   const date = typeof r.date === "string" ? r.date : (Array.isArray(r.dates) ? r.dates[0] : "");
   const year = typeof date === "string" && date.length >= 4 ? date.slice(0, 4) : "";
-  const image = Array.isArray(r.image_url) && r.image_url.length ? String(r.image_url[0]).split("#")[0] : "";
-  // Audio URLs live in different fields depending on the collection:
-  //   - National Jukebox:              resources[].media   (mp3)
-  //   - NAVCC / main catalog / AFC:    resources[].audio   (mp3)
-  //   - Podcasts / AFC Folklife:       item.mp3_url        (mp3)
-  //   - Some newer items:              resources[].stream  (HLS .m3u8)
+  // Image coverage — LOC stores thumbnails in several places depending on
+  // the collection. Try each in order and skip LOC's generic type-icon
+  // SVG (`/static/images/original-format/...svg`), which is not a real
+  // cover and just clutters the grid.
+  const _pickImage = (): string => {
+    const isUseful = (u: string) => !!u && !/\/static\/images\/original-format\//i.test(u);
+    const clean = (u: string) => String(u).split("#")[0];
+    // 1. Top-level image_url array (most common for Jukebox)
+    if (Array.isArray(r.image_url)) {
+      for (const u of r.image_url) if (typeof u === "string" && isUseful(u)) return clean(u);
+    } else if (typeof r.image_url === "string" && isUseful(r.image_url)) {
+      return clean(r.image_url);
+    }
+    // 2. item.image_url nested (some collections bury it under `item`)
+    const itemImage = (r.item && typeof r.item === "object") ? r.item.image_url : null;
+    if (Array.isArray(itemImage)) {
+      for (const u of itemImage) if (typeof u === "string" && isUseful(u)) return clean(u);
+    } else if (typeof itemImage === "string" && isUseful(itemImage)) {
+      return clean(itemImage);
+    }
+    // 3. resources[].poster (video items have a poster frame)
+    if (Array.isArray(r.resources)) {
+      for (const res of r.resources) {
+        if (!res || typeof res !== "object") continue;
+        if (typeof res.poster === "string" && isUseful(res.poster)) {
+          // poster URLs sometimes start with // — add https:
+          return res.poster.startsWith("//") ? "https:" + clean(res.poster) : clean(res.poster);
+        }
+      }
+      // 4. resources[].image (but only if it's a real image, not the SVG icon)
+      for (const res of r.resources) {
+        if (!res || typeof res !== "object") continue;
+        if (typeof res.image === "string" && isUseful(res.image)) {
+          return res.image.startsWith("//") ? "https:" + clean(res.image) : clean(res.image);
+        }
+      }
+    }
+    return "";
+  };
+  const image = _pickImage();
+  // Audio URLs live in many different fields depending on the collection:
+  //   - National Jukebox:              resources[].media         (mp3)
+  //   - NAVCC / main catalog / AFC:    resources[].audio         (mp3)
+  //   - Podcasts / AFC Folklife:       item.mp3_url              (mp3)
+  //   - Video performances:            resources[].video         (mp4 — audio track plays in <audio>)
+  //   - Some newer items:              resources[].stream        (HLS .m3u8)
+  //   - Streamed video:                resources[].video_stream  (HLS)
   //
   // Items can contain multiple tracks — e.g. the Gerry Mulligan
   // autobiography has 31 audio resources in one item. We collect every
-  // playable track into `tracks[]` in their original order, and set
-  // `streamUrl` / `streamType` from the first one for the quick play
-  // button + backward compatibility.
+  // playable track into `tracks[]` in their original order.
   const itemObj = r.item && typeof r.item === "object" ? r.item : {};
   const tracks: Array<{ url: string; title: string; streamType: string; order: number; duration?: string }> = [];
   if (Array.isArray(r.resources)) {
     for (let i = 0; i < r.resources.length; i++) {
       const res = r.resources[i];
       if (!res || typeof res !== "object") continue;
-      // Pick the best playable URL from this resource
-      const url = (typeof res.media === "string" && res.media)   ? res.media
-                : (typeof res.audio === "string" && res.audio)   ? res.audio
-                : (typeof res.stream === "string" && res.stream) ? res.stream
+      // Pick the best playable URL from this resource. Prefer direct
+      // mp3/mp4 over HLS streams (native playback vs hls.js).
+      const url = (typeof res.media === "string"        && res.media)        ? res.media
+                : (typeof res.audio === "string"        && res.audio)        ? res.audio
+                : (typeof res.video === "string"        && res.video)        ? res.video
+                : (typeof res.stream === "string"       && res.stream)       ? res.stream
+                : (typeof res.video_stream === "string" && res.video_stream) ? res.video_stream
                 : "";
       if (!url) continue;
       const isHls = /\.m3u8($|\?)/i.test(url);
       const caption = typeof res.caption === "string" ? res.caption.trim()
                     : typeof res.resource_label === "string" ? res.resource_label.trim()
                     : "";
-      const duration = typeof res.duration === "string" ? res.duration
-                     : typeof res.duration === "number" ? String(res.duration)
-                     : "";
+      // Duration as HH:MM:SS when LOC gives us seconds.
+      let duration = "";
+      const rawDur = res.duration;
+      if (typeof rawDur === "number" && rawDur > 0) {
+        const h = Math.floor(rawDur / 3600);
+        const m = Math.floor((rawDur % 3600) / 60);
+        const s = Math.floor(rawDur % 60);
+        duration = h > 0
+          ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`
+          : `${m}:${String(s).padStart(2, "0")}`;
+      } else if (typeof rawDur === "string" && rawDur) {
+        duration = rawDur;
+      }
       tracks.push({
         url,
         title: caption,

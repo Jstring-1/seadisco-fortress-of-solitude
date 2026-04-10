@@ -40,7 +40,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260409p" />
+  <link rel="stylesheet" href="/style.css?v=20260409r" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -78,7 +78,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260409p"></script>
+<script defer src="/shared.js?v=20260409r"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search" }));</script>
 <div id="search-view">
 
@@ -743,6 +743,10 @@
     <span class="loc-audio-bar-icon">♪</span>
     <span id="loc-audio-title" class="loc-audio-bar-title">Not playing</span>
   </div>
+  <div class="loc-audio-bar-queue-nav">
+    <button type="button" id="loc-audio-prev" class="loc-audio-bar-nav" onclick="_locPlayPrevInQueue()" title="Previous track" disabled>◀◀</button>
+    <button type="button" id="loc-audio-next" class="loc-audio-bar-nav" onclick="_locPlayNextInQueue()" title="Next track" disabled>▶▶</button>
+  </div>
   <audio id="loc-audio" class="loc-audio" controls preload="none"></audio>
   <button type="button" id="loc-audio-close" class="loc-audio-bar-close" onclick="_locClosePlayer()" title="Close player">×</button>
 </div>
@@ -785,16 +789,16 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260409p"></script>
-<script defer src="/search.js?v=20260409p"></script>
-<script defer src="/collection.js?v=20260409p"></script>
-<script defer src="/account.js?v=20260409p"></script>
-<script defer src="/orders.js?v=20260409p"></script>
-<script defer src="/app.js?v=20260409p"></script>
+<script defer src="/utils.js?v=20260409r"></script>
+<script defer src="/search.js?v=20260409r"></script>
+<script defer src="/collection.js?v=20260409r"></script>
+<script defer src="/account.js?v=20260409r"></script>
+<script defer src="/orders.js?v=20260409r"></script>
+<script defer src="/app.js?v=20260409r"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/modal.js?v=20260409p"></script>
-<script defer src="/inventory-editor.js?v=20260409p"></script>
-<script defer src="/loc.js?v=20260409p"></script>
+<script defer src="/modal.js?v=20260409r"></script>
+<script defer src="/inventory-editor.js?v=20260409r"></script>
+<script defer src="/loc.js?v=20260409r"></script>
 
 </body>
 </html>
