@@ -666,6 +666,9 @@ function toggleMiniPlayer() {
 
 function openVideo(event, url) {
   if (event) { event.preventDefault(); event.stopPropagation(); }
+  // Starting YouTube playback should stop the LOC audio bar so we
+  // don't play both simultaneously. _locPlay already does the reverse.
+  try { if (typeof _locClosePlayer === "function") _locClosePlayer(); } catch {}
   ensureYTAPI();
   const id = extractYouTubeId(url);
   if (!id) { window.open(url, "_blank", "noopener"); return; }
