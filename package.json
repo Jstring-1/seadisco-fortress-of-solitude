@@ -7,9 +7,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "start": "node dist/search-api.js",
-    "start:web": "node dist/search-api.js",
-    "seed": "node scripts/seed-searches.js"
+    "start": "node dist/search-api.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",

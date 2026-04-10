@@ -457,14 +457,19 @@ function _locOpenInfoPopup(locId) {
   const saved = !!_locSavedIds?.has(item.id);
 
   const contributors = Array.isArray(item.contributors) ? item.contributors : [];
-  const genres       = Array.isArray(item.genres) ? item.genres : [];
-  const partof       = Array.isArray(item.partof)  ? item.partof  : [];
+  const genres       = Array.isArray(item.genres)       ? item.genres       : [];
+  const subjects     = Array.isArray(item.subjects)     ? item.subjects     : [];
+  const partof       = Array.isArray(item.partof)       ? item.partof       : [];
+  const otherTitles  = Array.isArray(item.otherTitles)  ? item.otherTitles  : [];
+  const description  = Array.isArray(item.description)  ? item.description  : [];
+  const notes        = Array.isArray(item.notes)        ? item.notes        : [];
+  const speakers     = Array.isArray(item.speakers)     ? item.speakers     : [];
   // Best-guess "primary collection" for the credit line. We pick the
   // most specific-looking entry (skip the generic wrapper collections
   // like "catalog" or "recorded sound research center" if we can).
   const primaryCollection = (() => {
     if (!partof.length) return "";
-    const preferred = partof.find(p => /jukebox|american folklife|gerry mulligan|occupational folklife/i.test(p));
+    const preferred = partof.find(p => /jukebox|american folklife|gerry mulligan|occupational folklife|folklife|mulligan|music division/i.test(p));
     if (preferred) return preferred;
     return partof[0];
   })();
@@ -472,11 +477,25 @@ function _locOpenInfoPopup(locId) {
     ["Contributor(s)", contributors.join(", ")],
     ["Year / date",    item.date || item.year || ""],
     ["Label",          item.label || ""],
+    ["Catalog #",      item.catalogNumber || ""],
+    ["Matrix #",       item.matrixNumber || ""],
+    ["Take #",         item.takeNumber || ""],
+    ["Call number",    item.callNumber || ""],
     ["Location",       item.location || ""],
+    ["Recording repository", item.repository || ""],
+    ["Medium",         item.medium || ""],
+    ["Media size",     item.mediaSize || ""],
+    ["Format",         item.format || ""],
+    ["Type",           item.itemType || ""],
+    ["Running time",   item.runningTime || ""],
     ["Audio type",     item.audioType || ""],
     ["Language",       item.language || ""],
     ["Genres",         genres.join(", ")],
+    ["Subjects",       subjects.slice(0, 8).join(", ")],
+    ["Other titles",   otherTitles.join(", ")],
+    ["Podcast series", item.podcastSeries || ""],
     ["Collection",     partof.slice(0, 3).join(" · ")],
+    ["Published",      item.createdPublished || ""],
     ["Rights",         item.rights || ""],
     ["Stream format",  item.streamType || (canPlay ? "mp3" : "—")],
   ].filter(([, v]) => v);
@@ -490,6 +509,37 @@ function _locOpenInfoPopup(locId) {
 
   const summaryHtml = item.summary
     ? `<div class="loc-info-summary">${esc(item.summary)}</div>`
+    : "";
+
+  // Free-form text blocks — description (from r.description), notes
+  // (from item.notes, usually release catalog info), speakers (podcast
+  // contributors as a pseudo-tracklist), and the full article (podcast
+  // transcript or blurb).
+  const descBlock = description.length
+    ? `<div class="loc-info-section">
+        <div class="loc-info-section-title">Description</div>
+        <ul class="loc-info-list">${description.map(d => `<li>${esc(d)}</li>`).join("")}</ul>
+      </div>`
+    : "";
+  const notesBlock = notes.length
+    ? `<div class="loc-info-section">
+        <div class="loc-info-section-title">Notes</div>
+        <ul class="loc-info-list">${notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul>
+      </div>`
+    : "";
+  const speakersBlock = speakers.length
+    ? `<div class="loc-info-section">
+        <div class="loc-info-section-title">Speakers / participants</div>
+        <ul class="loc-info-list loc-info-list-inline">${speakers.map(s => `<li>${esc(s)}</li>`).join("")}</ul>
+      </div>`
+    : "";
+  // Article body — podcast transcript / blurb. Shown inside a scrollable
+  // block so long transcripts don't blow the popup height.
+  const articleBlock = item.article
+    ? `<div class="loc-info-section">
+        <div class="loc-info-section-title">Article / transcript</div>
+        <div class="loc-info-article">${esc(item.article)}</div>
+      </div>`
     : "";
 
   const imgTag = item.image
@@ -519,6 +569,10 @@ function _locOpenInfoPopup(locId) {
       </div>
     </div>
     ${summaryHtml}
+    ${speakersBlock}
+    ${descBlock}
+    ${notesBlock}
+    ${articleBlock}
     <div class="loc-info-meta">${metaHtml}</div>
     <div class="loc-info-credit">
       <div class="loc-info-credit-label">Credit</div>
@@ -554,25 +608,9 @@ async function _locToggleSaveFromInfo(locId) {
           locId,
           title: item.title || "",
           streamUrl: item.streamUrl || "",
-          data: {
-            id: locId,
-            title: item.title || "",
-            contributors: item.contributors || [],
-            year: item.year || "",
-            date: item.date || "",
-            label: item.label || "",
-            location: item.location || "",
-            audioType: item.audioType || "",
-            language: item.language || "",
-            genres: item.genres || [],
-            rights: item.rights || "",
-            partof: item.partof || [],
-            summary: item.summary || "",
-            streamUrl: item.streamUrl || "",
-            streamType: item.streamType || "",
-            image: item.image || "",
-            url: item.url || locId,
-          },
+          // Spread the full cached item so every extended field is
+          // persisted — same pattern as the card-path save.
+          data: { ...item, id: locId },
         }),
       });
       if (!r.ok) throw new Error(`save failed (${r.status})`);
@@ -638,25 +676,18 @@ async function _locToggleSaveFromCard(btn) {
     if (saving) {
       // Prefer the full cached item (has contributors, rights, partof,
       // etc.) — fall back to just the card data attrs if cache is cold.
+      // We spread the full object so every extended field (subjects,
+      // description, notes, speakers, medium, call number, etc.) is
+      // carried into the Saved record automatically.
       const full = _locItemCache.get(locId) || {};
       const payload = {
         locId,
         title: card.dataset.title || full.title || "",
         streamUrl: card.dataset.stream || full.streamUrl || "",
         data: {
+          ...full,
           id: locId,
           title: card.dataset.title || full.title || "",
-          contributors: full.contributors || [],
-          year: full.year || "",
-          date: full.date || "",
-          label: full.label || "",
-          location: full.location || "",
-          audioType: full.audioType || "",
-          language: full.language || "",
-          genres: full.genres || [],
-          rights: full.rights || "",
-          partof: full.partof || [],
-          summary: full.summary || "",
           streamUrl: card.dataset.stream || full.streamUrl || "",
           streamType: card.dataset.streamType || full.streamType || "",
           image: card.dataset.image || full.image || "",

@@ -3,6 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Theme bootstrap — runs before stylesheet parses so no flash of
+       unstyled theme. Admin picks the theme in /admin → Theme tab. -->
+  <script>(function(){try{var t=localStorage.getItem("sd-theme");if(t&&/^[a-z0-9-]+$/.test(t))document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
   <title>SeaDisco — Music Discovery Platform | Search, Collection &amp; Wantlist</title>
   <meta name="description" content="SeaDisco — music discovery powered by Discogs. Search, manage your collection and wantlist, rate releases, and connect via OAuth." />
   <meta name="keywords" content="discogs search, vinyl search, music discovery, vinyl collection, wantlist, record search, jazz, blues, world music, audiophile, OAuth, Discogs OAuth" />
@@ -37,7 +40,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260409m" />
+  <link rel="stylesheet" href="/style.css?v=20260409n" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -75,7 +78,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260409m"></script>
+<script defer src="/shared.js?v=20260409n"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search" }));</script>
 <div id="search-view">
 
@@ -782,16 +785,16 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260409m"></script>
-<script defer src="/search.js?v=20260409m"></script>
-<script defer src="/collection.js?v=20260409m"></script>
-<script defer src="/account.js?v=20260409m"></script>
-<script defer src="/orders.js?v=20260409m"></script>
-<script defer src="/app.js?v=20260409m"></script>
+<script defer src="/utils.js?v=20260409n"></script>
+<script defer src="/search.js?v=20260409n"></script>
+<script defer src="/collection.js?v=20260409n"></script>
+<script defer src="/account.js?v=20260409n"></script>
+<script defer src="/orders.js?v=20260409n"></script>
+<script defer src="/app.js?v=20260409n"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/modal.js?v=20260409m"></script>
-<script defer src="/inventory-editor.js?v=20260409m"></script>
-<script defer src="/loc.js?v=20260409m"></script>
+<script defer src="/modal.js?v=20260409n"></script>
+<script defer src="/inventory-editor.js?v=20260409n"></script>
+<script defer src="/loc.js?v=20260409n"></script>
 
 </body>
 </html>
