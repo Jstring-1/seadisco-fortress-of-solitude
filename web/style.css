@@ -4121,105 +4121,42 @@ footer {
   min-height: 1.1rem;
 }
 
-.loc-results {
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-}
-.loc-card {
-  display: grid;
-  grid-template-columns: 72px 1fr auto;
-  gap: 0.75rem;
-  align-items: flex-start;
-  padding: 0.7rem 0.85rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-}
-.loc-card:hover { border-color: #4a3a20; }
-.loc-card-thumb {
-  width: 72px;
-  height: 72px;
-  object-fit: cover;
-  background: var(--bg);
-  border-radius: 4px;
-  flex-shrink: 0;
-}
-.loc-card-thumb-ph {
-  background: linear-gradient(135deg, #1a1510, #0e0c08);
-}
-.loc-card-body {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-}
-.loc-card-title {
-  font-size: 0.95rem;
-  color: var(--fg);
-  text-decoration: none;
-  font-weight: 600;
-  line-height: 1.25;
-  word-break: break-word;
-}
-.loc-card-title:hover { color: var(--accent); text-decoration: underline; }
-.loc-card-sub {
-  font-size: 0.78rem;
-  color: var(--text);
-  opacity: 0.85;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-.loc-card-meta,
-.loc-card-genre {
-  font-size: 0.72rem;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 1;
-  -webkit-box-orient: vertical;
-}
-.loc-card-summary {
-  font-size: 0.74rem;
-  color: var(--muted);
-  font-style: italic;
-  margin-top: 0.15rem;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.loc-card-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  align-items: center;
-}
-.loc-play-btn,
-.loc-save-btn {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
-  font: inherit;
-  font-size: 0.95rem;
-  width: 2.1rem;
-  height: 2.1rem;
+/* LOC cards now reuse the main .card grid layout. These rules only add
+   the LOC-specific thumb play overlay and badge colors. */
+.loc-results { min-height: 4rem; }
+
+.loc-thumb-play {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(0.9);
+  width: 3rem;
+  height: 3rem;
   border-radius: 50%;
-  cursor: pointer;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 1.3rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
+  opacity: 0;
+  transition: opacity 0.15s, transform 0.15s, background 0.15s;
+  cursor: pointer;
+  z-index: 3;
+  line-height: 1;
+  padding-left: 0.15rem;
 }
-.loc-play-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
-.loc-play-btn.is-disabled { opacity: 0.35; cursor: not-allowed; }
-.loc-save-btn { color: var(--muted); font-size: 1.1rem; }
-.loc-save-btn:hover { color: var(--accent-hi); border-color: var(--accent-hi); }
-.loc-save-btn.is-saved { color: var(--accent-hi); border-color: var(--accent-hi); }
+.card:hover .loc-thumb-play { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.loc-thumb-play:hover { background: var(--accent); color: #0e0c08; }
+
+/* Star badge inside the card-thumb-badges bar (same pattern as C/W/F) */
+.loc-save-badge,
+.loc-remove-badge {
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+.loc-save-badge.is-saved { color: var(--accent-hi); border-color: var(--accent-hi); }
+.loc-remove-badge:hover { color: #ff6b6b; border-color: #ff6b6b; }
 
 .loc-pagination {
   display: flex;
@@ -4260,13 +4197,14 @@ footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.7rem;
+  margin-bottom: 0.55rem;
 }
 .loc-saved-title {
   font-size: 0.9rem;
   color: var(--text);
   font-weight: 600;
 }
+.loc-saved-count { color: var(--muted); font-weight: 400; }
 .loc-refresh-btn {
   background: none;
   border: 1px solid var(--border);
@@ -4277,6 +4215,59 @@ footer {
   border-radius: 4px;
 }
 .loc-refresh-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+.loc-saved-toolbar {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
+}
+.loc-saved-filter-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 5px;
+  padding: 0.45rem 0.7rem;
+  font: inherit;
+  font-size: 0.82rem;
+}
+.loc-saved-filter-input:focus { outline: none; border-color: var(--accent); }
+.loc-saved-sort {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 5px;
+  padding: 0.45rem 0.55rem;
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.loc-saved-sort:focus { outline: none; border-color: var(--accent); }
+
+/* Trash icon shown in place of the ★ on Saved-tab cards. Uses the same
+   base size as .loc-save-btn so the card layout stays identical. */
+.loc-remove-btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.95rem;
+  width: 2.1rem;
+  height: 2.1rem;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  transition: color 0.12s, border-color 0.12s;
+}
+.loc-remove-btn:hover:not(:disabled) {
+  color: #ff6b6b;
+  border-color: #ff6b6b;
+}
+.loc-remove-btn:disabled { opacity: 0.35; cursor: wait; }
 
 /* ── LOC audio bar (fixed bottom) ───────────────────────────────────── */
 .loc-audio-bar {
@@ -4330,22 +4321,166 @@ footer {
 }
 .loc-audio-bar-close:hover { color: var(--text); border-color: var(--accent); }
 
+/* ── LOC info popup overlay ───────────────────────────────────────── */
+.loc-info-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 240;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+.loc-info-overlay.open { display: flex; }
+.loc-info-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  max-width: 640px;
+  width: 100%;
+  max-height: 86vh;
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 10px 50px rgba(0, 0, 0, 0.75);
+  padding: 1.1rem 1.2rem 1.3rem;
+}
+.loc-info-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.5rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0.15rem 0.55rem;
+  border-radius: 4px;
+  z-index: 2;
+}
+.loc-info-close:hover { color: var(--text); background: #2e2518; }
+.loc-info-head {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1rem;
+  padding-right: 2rem;
+}
+.loc-info-thumb {
+  width: 140px;
+  height: 140px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: var(--bg);
+  flex-shrink: 0;
+}
+.loc-info-thumb-ph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.5rem;
+  color: var(--muted);
+  background: linear-gradient(135deg, #1a1510, #0e0c08);
+}
+.loc-info-head-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+.loc-info-title {
+  font-size: 1.2rem;
+  color: var(--fg);
+  font-weight: 700;
+  line-height: 1.2;
+}
+.loc-info-artist {
+  font-size: 0.92rem;
+  color: var(--text);
+  opacity: 0.85;
+}
+.loc-info-actions {
+  display: flex;
+  gap: 0.4rem;
+  margin-top: 0.6rem;
+  flex-wrap: wrap;
+}
+.loc-info-btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.8rem;
+  padding: 0.45rem 0.9rem;
+  border-radius: 5px;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+.loc-info-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.loc-info-btn.is-disabled { opacity: 0.4; cursor: not-allowed; }
+.loc-info-btn-play {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #0e0c08;
+  font-weight: 700;
+}
+.loc-info-btn-play:hover:not(:disabled) { background: var(--accent2); color: #0e0c08; }
+.loc-info-btn-save.is-saved {
+  color: var(--accent-hi);
+  border-color: var(--accent-hi);
+}
+.loc-info-btn-loc {
+  color: var(--muted);
+}
+.loc-info-summary {
+  font-size: 0.85rem;
+  color: var(--text);
+  font-style: italic;
+  line-height: 1.5;
+  padding: 0.7rem 0.85rem;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  margin-bottom: 1rem;
+}
+.loc-info-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+}
+.loc-info-row {
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 0.6rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.loc-info-row:last-child { border-bottom: none; }
+.loc-info-key {
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding-top: 0.1rem;
+}
+.loc-info-val {
+  color: var(--text);
+  word-break: break-word;
+}
+
 @media (max-width: 640px) {
-  .loc-card {
-    grid-template-columns: 60px 1fr;
-    grid-template-areas: "thumb body" "actions actions";
-  }
-  .loc-card-thumb { grid-area: thumb; width: 60px; height: 60px; }
-  .loc-card-body { grid-area: body; }
-  .loc-card-actions {
-    grid-area: actions;
-    flex-direction: row;
-    justify-content: flex-start;
-    padding-top: 0.3rem;
-  }
   .loc-form-grid { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
   .loc-form-grid label { font-size: 0.62rem; }
   .loc-audio-bar { padding: 0.4rem 0.55rem; gap: 0.5rem; }
   .loc-audio-bar-info { flex: 0 0 auto; max-width: 40%; }
   .loc-audio-bar-title { font-size: 0.75rem; }
+  .loc-info-box { padding: 0.8rem; }
+  .loc-info-head { flex-direction: column; gap: 0.7rem; padding-right: 1.5rem; }
+  .loc-info-thumb { width: 100%; max-width: 200px; height: auto; aspect-ratio: 1; }
+  .loc-info-title { font-size: 1.05rem; }
+  .loc-info-row { grid-template-columns: 1fr; gap: 0.15rem; }
 }

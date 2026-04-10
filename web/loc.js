@@ -28,6 +28,10 @@ let _locSavedIds = null;
 let _locSavedItems = null;
 // Current playing audio item (for the audio bar)
 let _locNowPlaying = null;
+// Saved-tab filter state
+let _locSavedFilter = "";
+let _locSavedSort = "recent";  // recent | title | year-asc | year-desc
+let _locSavedFilterDebounce = null;
 
 // hls.js is lazy-loaded on first HLS play to save ~100KB for users who
 // never hit an HLS-only stream.
@@ -219,6 +223,14 @@ function _locRenderShell() {
           <label><span>Collection</span><input type="text" id="loc-partof" placeholder="e.g. national jukebox" /></label>
           <label><span>Year from</span><input type="text" id="loc-start-date" placeholder="1900" inputmode="numeric" maxlength="4" /></label>
           <label><span>Year to</span><input type="text" id="loc-end-date" placeholder="1930" inputmode="numeric" maxlength="4" /></label>
+          <label><span>Sort</span>
+            <select id="loc-sort" onchange="if(_locLastQuery)_locRunSearchFromForm({resetPage:true})">
+              <option value="relevance" selected>Relevance</option>
+              <option value="date-desc">Year (newest)</option>
+              <option value="date-asc">Year (oldest)</option>
+              <option value="title">Title A–Z</option>
+            </select>
+          </label>
           <label><span>Per page</span>
             <select id="loc-perpage">
               <option value="25">25</option>
@@ -229,16 +241,25 @@ function _locRenderShell() {
         </div>
       </form>
       <div id="loc-status" class="loc-status"></div>
-      <div id="loc-results" class="loc-results"></div>
+      <div id="loc-results" class="card-grid loc-results"></div>
       <div id="loc-pagination" class="loc-pagination"></div>
     </div>
 
     <div class="loc-panel loc-panel-saved" style="display:none">
       <div class="loc-saved-head">
-        <div class="loc-saved-title">Your saved LOC audio</div>
+        <div class="loc-saved-title">Your saved LOC audio <span class="loc-saved-count">(<span id="loc-saved-count">0</span>)</span></div>
         <button type="button" class="loc-refresh-btn" onclick="_locLoadSaved()" title="Refresh saved list">↻</button>
       </div>
-      <div id="loc-saved-list" class="loc-results"></div>
+      <div class="loc-saved-toolbar">
+        <input type="text" id="loc-saved-filter" class="loc-saved-filter-input" placeholder="Filter title, artist, label…" oninput="_locOnSavedFilterInput(this)" />
+        <select id="loc-saved-sort" class="loc-saved-sort" onchange="_locOnSavedSortChange(this)">
+          <option value="recent">Recently saved</option>
+          <option value="title">Title A–Z</option>
+          <option value="year-asc">Year (oldest first)</option>
+          <option value="year-desc">Year (newest first)</option>
+        </select>
+      </div>
+      <div id="loc-saved-list" class="card-grid loc-results"></div>
     </div>
   `;
 }
@@ -267,6 +288,7 @@ function _locReadFormParams() {
     partof:      val("loc-partof"),
     start_date:  val("loc-start-date"),
     end_date:    val("loc-end-date"),
+    sort:        val("loc-sort") || "relevance",
     c:           val("loc-perpage") || "100",
   };
 }
@@ -351,50 +373,208 @@ function _locGotoPage(n) {
 
 // ── Result card renderer ────────────────────────────────────────────────
 
-function _locRenderCard(item) {
+// Item cache by LOC id — lets the info popup look up the full item
+// without re-fetching. Populated in _locRunSearch and _locLoadSaved.
+const _locItemCache = new Map();
+
+function _locRenderCard(item, opts) {
   if (!item || !item.id) return "";
+  const savedTab = !!(opts && opts.savedTab);
   const saved = !!_locSavedIds?.has(item.id);
   const canPlay = !!item.streamUrl;
+  _locItemCache.set(item.id, item);
+
   const contributor = Array.isArray(item.contributors) && item.contributors.length
     ? item.contributors.join(", ")
     : "";
-  const subtitle = [contributor, item.year].filter(Boolean).join(" · ");
-  const metaLine = [item.label, item.location, item.audioType].filter(Boolean).join(" · ");
-  const genreLine = Array.isArray(item.genres) && item.genres.length
-    ? item.genres.slice(0, 4).join(", ")
-    : "";
-  // Safely escape every interpolated value
+  const label   = item.label   || "";
+  const location = item.location || "";
+  const metaParts = [item.year, location].filter(Boolean);
+
   const esc = (v) => escHtml(String(v ?? ""));
-  const idAttr = esc(item.id);
+  const idAttr  = esc(item.id);
   const titleSafe = esc(item.title || "Untitled");
-  const subSafe   = esc(subtitle);
-  const metaSafe  = esc(metaLine);
-  const genreSafe = esc(genreLine);
-  const summarySafe = esc(item.summary || "");
-  const urlSafe = esc(item.url || item.id);
-  const imgTag = item.image
-    ? `<img class="loc-card-thumb" src="${esc(item.image)}" alt="" loading="lazy"/>`
-    : `<div class="loc-card-thumb loc-card-thumb-ph"></div>`;
-  const playBtn = canPlay
-    ? `<button type="button" class="loc-play-btn" onclick="_locPlayFromCard(this)" title="Play"><span class="loc-play-icon">▶</span></button>`
-    : `<button type="button" class="loc-play-btn is-disabled" disabled title="No playable stream for this item">▶</button>`;
-  const saveBtn = `<button type="button" class="loc-save-btn${saved ? " is-saved" : ""}" onclick="_locToggleSaveFromCard(this)" title="${saved ? "Remove from Saved" : "Save to your list"}">${saved ? "★" : "☆"}</button>`;
+  const artistSafe = esc(contributor);
+  const labelSafe  = esc(label);
+  const metaSafe   = metaParts.map(esc).join(" · ");
+  const thumb = item.image
+    ? `<img src="${esc(item.image)}" alt="${titleSafe}" loading="lazy"/>`
+    : `<div class="thumb-placeholder">♪</div>`;
+
+  // Mirror the main search page's card layout so LOC results look like
+  // any other SeaDisco card. Click opens the info popup (not an external
+  // link) so the user can read the summary before playing.
+  //
+  // Top-right badge strip is a subset — only the ★ save toggle (or trash
+  // in the Saved tab). The play button is overlaid on the thumb so it's
+  // discoverable without opening the popup.
+  const actionBadge = savedTab
+    ? `<span class="card-badge loc-remove-badge" onclick="event.preventDefault();event.stopPropagation();_locRemoveSavedFromCard(this)" title="Remove from Saved">🗑</span>`
+    : `<span class="card-badge loc-save-badge${saved ? " is-saved" : ""}" onclick="event.preventDefault();event.stopPropagation();_locToggleSaveFromCard(this)" title="${saved ? "Remove from Saved" : "Save to your list"}">${saved ? "★" : "☆"}</span>`;
+  const playOverlay = canPlay
+    ? `<span class="loc-thumb-play" onclick="event.preventDefault();event.stopPropagation();_locPlayFromCard(this)" title="Play">▶</span>`
+    : "";
+
   return `
-    <div class="loc-card" data-loc-id="${idAttr}" data-title="${titleSafe}" data-stream="${esc(item.streamUrl || "")}" data-stream-type="${esc(item.streamType || "")}" data-image="${esc(item.image || "")}">
-      ${imgTag}
-      <div class="loc-card-body">
-        <a class="loc-card-title" href="${urlSafe}" target="_blank" rel="noopener" title="Open on loc.gov">${titleSafe}</a>
-        ${subSafe ? `<div class="loc-card-sub">${subSafe}</div>` : ""}
-        ${metaSafe ? `<div class="loc-card-meta">${metaSafe}</div>` : ""}
-        ${genreSafe ? `<div class="loc-card-genre">${genreSafe}</div>` : ""}
-        ${summarySafe ? `<div class="loc-card-summary">${summarySafe}</div>` : ""}
+    <a class="card card-type-loc card-animate" href="#" title="${titleSafe}" data-loc-id="${idAttr}" data-title="${titleSafe}" data-stream="${esc(item.streamUrl || "")}" data-stream-type="${esc(item.streamType || "")}" data-image="${esc(item.image || "")}" onclick="event.preventDefault();_locOpenInfoPopup('${idAttr.replace(/'/g, "\\'")}')">
+      <div class="card-thumb-wrap">
+        ${thumb}
+        ${playOverlay}
+        <div class="card-thumb-badges">${actionBadge}</div>
       </div>
-      <div class="loc-card-actions">
-        ${playBtn}
-        ${saveBtn}
+      <div class="card-body">
+        ${artistSafe ? `<div class="card-artist">${artistSafe}</div>` : ""}
+        <div class="card-title">${titleSafe}</div>
+        <div class="card-bottom">
+          ${labelSafe ? `<div class="card-sub">${labelSafe}</div>` : ""}
+          <div class="card-meta">${metaSafe}</div>
+        </div>
+      </div>
+    </a>
+  `;
+}
+
+// ── LOC info popup ──────────────────────────────────────────────────────
+//
+// Click any LOC card → full details panel with contributors, date,
+// location, label, genres, summary, and big Play / Save / Open-on-LOC
+// buttons. The popup reuses the existing shared modal overlay pattern
+// (see #loc-info-overlay in index.html).
+function _locOpenInfoPopup(locId) {
+  if (!locId) return;
+  const overlay = document.getElementById("loc-info-overlay");
+  const body    = document.getElementById("loc-info-body");
+  if (!overlay || !body) return;
+  const item = _locItemCache.get(locId);
+  if (!item) {
+    body.innerHTML = `<div class="loc-empty">Item no longer in cache.</div>`;
+    overlay.classList.add("open");
+    return;
+  }
+
+  const esc = (v) => escHtml(String(v ?? ""));
+  const canPlay = !!item.streamUrl;
+  const saved = !!_locSavedIds?.has(item.id);
+
+  const contributors = Array.isArray(item.contributors) ? item.contributors : [];
+  const genres       = Array.isArray(item.genres) ? item.genres : [];
+  const metaRows = [
+    ["Contributor(s)", contributors.join(", ")],
+    ["Year / date",    item.date || item.year || ""],
+    ["Label",          item.label || ""],
+    ["Location",       item.location || ""],
+    ["Audio type",     item.audioType || ""],
+    ["Language",       item.language || ""],
+    ["Genres",         genres.join(", ")],
+    ["Stream format",  item.streamType || (canPlay ? "mp3" : "—")],
+  ].filter(([, v]) => v);
+
+  const metaHtml = metaRows.map(([k, v]) => `
+    <div class="loc-info-row">
+      <span class="loc-info-key">${esc(k)}</span>
+      <span class="loc-info-val">${esc(v)}</span>
+    </div>
+  `).join("");
+
+  const summaryHtml = item.summary
+    ? `<div class="loc-info-summary">${esc(item.summary)}</div>`
+    : "";
+
+  const imgTag = item.image
+    ? `<img class="loc-info-thumb" src="${esc(item.image)}" alt=""/>`
+    : `<div class="loc-info-thumb loc-info-thumb-ph">♪</div>`;
+
+  const playBtn = canPlay
+    ? `<button type="button" class="loc-info-btn loc-info-btn-play" onclick="_locPlayFromInfo('${esc(item.id).replace(/'/g, "\\'")}')">▶ Play</button>`
+    : `<button type="button" class="loc-info-btn loc-info-btn-play is-disabled" disabled title="No playable stream">▶ No stream</button>`;
+  const saveBtn = `<button type="button" class="loc-info-btn loc-info-btn-save${saved ? " is-saved" : ""}" onclick="_locToggleSaveFromInfo('${esc(item.id).replace(/'/g, "\\'")}')">${saved ? "★ Saved" : "☆ Save"}</button>`;
+  const locLink = `<a class="loc-info-btn loc-info-btn-loc" href="${esc(item.url || item.id)}" target="_blank" rel="noopener">Open on loc.gov ↗</a>`;
+
+  body.innerHTML = `
+    <div class="loc-info-head">
+      ${imgTag}
+      <div class="loc-info-head-text">
+        <div class="loc-info-title">${esc(item.title || "Untitled")}</div>
+        ${contributors.length ? `<div class="loc-info-artist">${esc(contributors.join(", "))}</div>` : ""}
+        <div class="loc-info-actions">${playBtn}${saveBtn}${locLink}</div>
       </div>
     </div>
+    ${summaryHtml}
+    <div class="loc-info-meta">${metaHtml}</div>
   `;
+  overlay.classList.add("open");
+}
+
+function _locCloseInfoPopup() {
+  document.getElementById("loc-info-overlay")?.classList.remove("open");
+}
+
+function _locPlayFromInfo(locId) {
+  const item = _locItemCache.get(locId);
+  if (item?.streamUrl) _locPlay(item);
+}
+
+async function _locToggleSaveFromInfo(locId) {
+  const item = _locItemCache.get(locId);
+  if (!item) return;
+  // Reuse the toggle logic by constructing a temporary fake card and
+  // driving the existing handler. Simpler: inline the save/unsave here.
+  const saving = !_locSavedIds?.has(locId);
+  if (!_locSavedIds) _locSavedIds = new Set();
+  if (saving) _locSavedIds.add(locId); else _locSavedIds.delete(locId);
+  try {
+    if (saving) {
+      const r = await apiFetch("/api/user/loc-saves", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          locId,
+          title: item.title || "",
+          streamUrl: item.streamUrl || "",
+          data: {
+            id: locId,
+            title: item.title || "",
+            contributors: item.contributors || [],
+            year: item.year || "",
+            date: item.date || "",
+            label: item.label || "",
+            location: item.location || "",
+            audioType: item.audioType || "",
+            language: item.language || "",
+            genres: item.genres || [],
+            summary: item.summary || "",
+            streamUrl: item.streamUrl || "",
+            streamType: item.streamType || "",
+            image: item.image || "",
+            url: item.url || locId,
+          },
+        }),
+      });
+      if (!r.ok) throw new Error(`save failed (${r.status})`);
+      showToast?.("Saved to LOC list");
+    } else {
+      const r = await apiFetch("/api/user/loc-saves", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locId }),
+      });
+      if (!r.ok) throw new Error(`remove failed (${r.status})`);
+      showToast?.("Removed from Saved");
+      if (_locSavedItems) _locSavedItems = _locSavedItems.filter(i => i.id !== locId);
+      if (_locTab === "saved") _locRenderSavedGrid();
+    }
+    // Re-render the popup so the save button + card star reflect new state
+    _locOpenInfoPopup(locId);
+    // Also re-sync any on-page card for this id
+    document.querySelectorAll(`.card[data-loc-id="${CSS.escape(locId)}"] .loc-save-badge`).forEach(el => {
+      el.classList.toggle("is-saved", saving);
+      el.textContent = saving ? "★" : "☆";
+      el.title = saving ? "Remove from Saved" : "Save to your list";
+    });
+  } catch (e) {
+    if (saving) _locSavedIds.delete(locId); else _locSavedIds.add(locId);
+    showToast?.(e?.message || "Action failed", "error");
+  }
 }
 
 // Harvest data-* attributes from a card element into the shape the audio
@@ -458,11 +638,10 @@ async function _locToggleSaveFromCard(btn) {
       });
       if (!r.ok) throw new Error(`remove failed (${r.status})`);
       showToast?.("Removed from Saved");
-      // If the Saved tab is currently showing this card, drop it from the DOM too
-      if (_locTab === "saved") {
-        document.querySelectorAll(`.loc-panel-saved .loc-card[data-loc-id="${CSS.escape(locId)}"]`).forEach(el => el.remove());
-        if (_locSavedItems) _locSavedItems = _locSavedItems.filter(i => i.id !== locId);
-      }
+      // Keep the in-memory Saved list in sync so the Saved tab stays
+      // consistent when it's next shown (or re-rendered now).
+      if (_locSavedItems) _locSavedItems = _locSavedItems.filter(i => i.id !== locId);
+      if (_locTab === "saved") _locRenderSavedGrid();
     }
   } catch (e) {
     // Revert optimistic toggle
@@ -507,17 +686,113 @@ async function _locLoadSaved() {
       id:        row.locId,
       title:     row.title || row.data?.title || "",
       streamUrl: row.streamUrl || row.data?.streamUrl || "",
+      _savedAt:  row.savedAt ? new Date(row.savedAt).getTime() : 0,
     }));
     // Ensure the in-memory saved-ID set matches
     if (!_locSavedIds) _locSavedIds = new Set();
     for (const it of _locSavedItems) _locSavedIds.add(it.id);
-    if (!_locSavedItems.length) {
-      grid.innerHTML = `<div class="loc-empty">No saves yet. Tap the ☆ on any result to build your list.</div>`;
-      return;
-    }
-    grid.innerHTML = _locSavedItems.map(_locRenderCard).join("");
+    _locRenderSavedGrid();
   } catch (e) {
     grid.innerHTML = `<div class="loc-empty">Could not load saved items: ${escHtml(e?.message || "unknown error")}</div>`;
+  }
+}
+
+// Render the saved grid from the in-memory _locSavedItems list using the
+// current filter + sort state. Safe to call whenever filter/sort changes
+// without re-fetching from the server.
+function _locRenderSavedGrid() {
+  const grid = document.getElementById("loc-saved-list");
+  const countEl = document.getElementById("loc-saved-count");
+  if (!grid) return;
+  const items = Array.isArray(_locSavedItems) ? _locSavedItems : [];
+  if (countEl) countEl.textContent = String(items.length);
+
+  if (!items.length) {
+    grid.innerHTML = `<div class="loc-empty">No saves yet. Tap the ☆ on any result to build your list.</div>`;
+    return;
+  }
+
+  // Filter
+  const q = (_locSavedFilter || "").toLowerCase().trim();
+  let filtered = items;
+  if (q) {
+    filtered = items.filter(it => {
+      const hay = [
+        it.title,
+        Array.isArray(it.contributors) ? it.contributors.join(" ") : "",
+        it.label,
+        it.location,
+        Array.isArray(it.genres) ? it.genres.join(" ") : "",
+        it.year,
+      ].map(v => String(v ?? "").toLowerCase()).join(" | ");
+      return hay.includes(q);
+    });
+  }
+
+  // Sort — make a copy so we don't mutate the master list order
+  const sorted = filtered.slice();
+  switch (_locSavedSort) {
+    case "title":
+      sorted.sort((a, b) => String(a.title || "").localeCompare(String(b.title || "")));
+      break;
+    case "year-asc":
+      sorted.sort((a, b) => (parseInt(a.year) || 9999) - (parseInt(b.year) || 9999));
+      break;
+    case "year-desc":
+      sorted.sort((a, b) => (parseInt(b.year) || 0) - (parseInt(a.year) || 0));
+      break;
+    case "recent":
+    default:
+      sorted.sort((a, b) => (b._savedAt || 0) - (a._savedAt || 0));
+      break;
+  }
+
+  if (!sorted.length) {
+    grid.innerHTML = `<div class="loc-empty">No saved items match "${escHtml(q)}".</div>`;
+    return;
+  }
+  grid.innerHTML = sorted.map(it => _locRenderCard(it, { savedTab: true })).join("");
+}
+
+function _locOnSavedFilterInput(el) {
+  // Debounce keystrokes so typing fast doesn't thrash the DOM
+  clearTimeout(_locSavedFilterDebounce);
+  _locSavedFilterDebounce = setTimeout(() => {
+    _locSavedFilter = el.value || "";
+    _locRenderSavedGrid();
+  }, 160);
+}
+
+function _locOnSavedSortChange(el) {
+  _locSavedSort = el.value || "recent";
+  _locRenderSavedGrid();
+}
+
+// Explicit trash action from the Saved tab — asks for confirmation,
+// then deletes the item from the server and re-renders.
+async function _locRemoveSavedFromCard(btn) {
+  const card = btn?.closest(".loc-card");
+  if (!card) return;
+  const locId = card.dataset.locId;
+  const title = card.dataset.title || "this item";
+  if (!locId) return;
+  if (!confirm(`Remove "${title}" from your saved list?`)) return;
+  btn.disabled = true;
+  try {
+    const r = await apiFetch("/api/user/loc-saves", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locId }),
+    });
+    if (!r.ok) throw new Error(`remove failed (${r.status})`);
+    // Update state + re-render
+    if (_locSavedIds) _locSavedIds.delete(locId);
+    if (_locSavedItems) _locSavedItems = _locSavedItems.filter(it => it.id !== locId);
+    _locRenderSavedGrid();
+    showToast?.("Removed from Saved");
+  } catch (e) {
+    btn.disabled = false;
+    showToast?.(e?.message || "Remove failed", "error");
   }
 }
 
@@ -592,11 +867,24 @@ function _locClosePlayer() {
   _locNowPlaying = null;
 }
 
+// Close the info popup with Escape
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") _locCloseInfoPopup();
+});
+
 // Expose globals for inline onclick handlers
-window.initLocView         = initLocView;
-window._locSwitchTab       = _locSwitchTab;
-window._locPlayFromCard    = _locPlayFromCard;
-window._locToggleSaveFromCard = _locToggleSaveFromCard;
-window._locGotoPage        = _locGotoPage;
-window._locLoadSaved       = _locLoadSaved;
-window._locClosePlayer     = _locClosePlayer;
+window.initLocView              = initLocView;
+window._locSwitchTab            = _locSwitchTab;
+window._locPlayFromCard         = _locPlayFromCard;
+window._locToggleSaveFromCard   = _locToggleSaveFromCard;
+window._locRemoveSavedFromCard  = _locRemoveSavedFromCard;
+window._locOnSavedFilterInput   = _locOnSavedFilterInput;
+window._locOnSavedSortChange    = _locOnSavedSortChange;
+window._locGotoPage             = _locGotoPage;
+window._locLoadSaved            = _locLoadSaved;
+window._locClosePlayer          = _locClosePlayer;
+window._locRunSearchFromForm    = _locRunSearchFromForm;
+window._locOpenInfoPopup        = _locOpenInfoPopup;
+window._locCloseInfoPopup       = _locCloseInfoPopup;
+window._locPlayFromInfo         = _locPlayFromInfo;
+window._locToggleSaveFromInfo   = _locToggleSaveFromInfo;
