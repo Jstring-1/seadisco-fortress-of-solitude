@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData } from "./db.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const anthropicKey = process.env.ANTHROPIC_API_KEY ?? "";
 // Discogs OAuth 1.0a consumer credentials (register at discogs.com/settings/developers)
@@ -56,6 +56,105 @@ function _extractDiscogsProfile(profile) {
 // ── Global API kill switch ──────────────────────────────────────────────
 const MAX_USERS = 25;
 let _apiKillSwitch = false;
+// ── Token-bucket rate limiter (shared across all callers) ──────────────
+//
+// Used by the LOC proxy so a stampede of clicks from any signed-in user
+// can't take the whole site's LOC IP allowance down. Acquire blocks until
+// a slot is free, or rejects with `rate_limit_queue_full` if too many
+// callers are already waiting (so the client gets a fast 503 rather than
+// an indefinite hang).
+class RateLimiter {
+    max;
+    windowMs;
+    maxQueueDepth;
+    label;
+    slots = []; // Timestamps of recent completions, within windowMs
+    queue = []; // Resolvers waiting for a slot
+    draining = false;
+    constructor(max, windowMs, maxQueueDepth, label) {
+        this.max = max;
+        this.windowMs = windowMs;
+        this.maxQueueDepth = maxQueueDepth;
+        this.label = label;
+    }
+    async acquire() {
+        this.prune();
+        if (this.slots.length < this.max) {
+            this.slots.push(Date.now());
+            return;
+        }
+        if (this.queue.length >= this.maxQueueDepth) {
+            const e = new Error("rate_limit_queue_full");
+            e.code = "rate_limit_queue_full";
+            throw e;
+        }
+        await new Promise(resolve => {
+            this.queue.push(resolve);
+            this.scheduleDrain();
+        });
+    }
+    prune() {
+        const cutoff = Date.now() - this.windowMs;
+        while (this.slots.length && this.slots[0] < cutoff)
+            this.slots.shift();
+    }
+    scheduleDrain() {
+        if (this.draining)
+            return;
+        this.draining = true;
+        const tryDrain = () => {
+            this.prune();
+            while (this.queue.length && this.slots.length < this.max) {
+                const next = this.queue.shift();
+                this.slots.push(Date.now());
+                next();
+            }
+            if (this.queue.length) {
+                // Next opening = when the oldest slot falls out of the window
+                const now = Date.now();
+                const wait = Math.max(20, this.windowMs - (now - this.slots[0]) + 5);
+                setTimeout(tryDrain, wait);
+            }
+            else {
+                this.draining = false;
+            }
+        };
+        setTimeout(tryDrain, 20);
+    }
+}
+// LOC doesn't publish a hard rate limit but the docs strongly discourage
+// hammering — 20 requests/minute across all users is safely under any
+// reasonable threshold, and we cache every response for 6 hours so repeat
+// searches are free. Queue caps at 30 pending so worst-case tail latency
+// is bounded (queue full → fast 503 → client governor backs off).
+const locLimiter = new RateLimiter(20, 60_000, 30, "loc");
+// Simple in-memory LRU-ish cache for LOC search responses. Key is the
+// canonicalized query string; value is the raw body + timestamp.
+const _locCache = new Map();
+const LOC_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // 6 hours
+const LOC_CACHE_MAX = 200;
+function _locCacheGet(key) {
+    const entry = _locCache.get(key);
+    if (!entry)
+        return null;
+    if (Date.now() - entry.ts > LOC_CACHE_TTL_MS) {
+        _locCache.delete(key);
+        return null;
+    }
+    // Refresh LRU order
+    _locCache.delete(key);
+    _locCache.set(key, entry);
+    return entry.body;
+}
+function _locCacheSet(key, body) {
+    if (_locCache.size >= LOC_CACHE_MAX) {
+        // Drop oldest
+        const firstKey = _locCache.keys().next().value;
+        if (firstKey !== undefined)
+            _locCache.delete(firstKey);
+    }
+    _locCache.set(key, { ts: Date.now(), body });
+}
 // ── Logged fetch: wraps fetch() and logs the request to api_request_log ──
 async function loggedFetch(service, url, init) {
     if (_apiKillSwitch) {
@@ -2224,6 +2323,257 @@ app.get("/api/user/wantlist/item", async (req, res) => {
     }
     catch (e) {
         res.status(500).json({ error: String(e) });
+    }
+});
+// ── Library of Congress audio search + saves ───────────────────────────
+//
+// GET /api/loc/search is a rate-limited, cached proxy to loc.gov's JSON
+// search API. The frontend never calls loc.gov directly so (a) LOC-side
+// rate limits apply to the site as a whole rather than each user, and
+// (b) LOC responses are cached in memory for LOC_CACHE_TTL_MS so a user
+// paginating back and forth or two users searching the same thing hit
+// the cache instead of LOC.
+//
+// The save endpoints back the "Saved" tab inside the LOC view — a
+// durable, cross-device list the user curates by hitting the ★ on any
+// result card.
+// Whitelist of query params we forward to loc.gov. Everything else is
+// dropped so malformed / abusive params can't sneak through.
+const LOC_QUERY_PARAMS = new Set([
+    "q", "c", "sp", "fo", "at",
+    "contributor", "subject", "location", "language",
+    "start_date", "end_date", "dates",
+    "original_format", "online_format", "partof",
+]);
+// Build a LOC URL from the validated query params. We always target the
+// /audio/ endpoint since SeaDisco only surfaces audio.
+function _buildLocSearchUrl(req) {
+    const params = new URLSearchParams();
+    params.set("fo", "json");
+    // Cap per-page at 100 (LOC allows up to 1000 but we don't need it)
+    const perPage = Math.min(Math.max(1, Number(req.query.c) || 100), 100);
+    params.set("c", String(perPage));
+    const page = Math.max(1, Number(req.query.sp) || 1);
+    if (page > 1)
+        params.set("sp", String(page));
+    const q = typeof req.query.q === "string" ? req.query.q.trim() : "";
+    if (q)
+        params.set("q", q);
+    // Facet filters — build the `fa` param as pipe-delimited key:value pairs
+    const facets = [];
+    // Always restrict to online-playable audio so we don't surface items
+    // the user can't actually listen to.
+    facets.push("online-format:audio");
+    const facetMap = {
+        contributor: "contributor",
+        subject: "subject",
+        location: "location",
+        language: "language",
+        partof: "partof",
+    };
+    for (const [qp, facetKey] of Object.entries(facetMap)) {
+        const v = typeof req.query[qp] === "string" ? req.query[qp].trim() : "";
+        if (v)
+            facets.push(`${facetKey}:${v.toLowerCase()}`);
+    }
+    if (facets.length)
+        params.set("fa", facets.join("|"));
+    // Date range — LOC uses `dates=YYYY/YYYY`
+    const startDate = typeof req.query.start_date === "string" ? req.query.start_date.trim() : "";
+    const endDate = typeof req.query.end_date === "string" ? req.query.end_date.trim() : "";
+    if (/^\d{4}$/.test(startDate) || /^\d{4}$/.test(endDate)) {
+        const s = /^\d{4}$/.test(startDate) ? startDate : "1800";
+        const e = /^\d{4}$/.test(endDate) ? endDate : String(new Date().getFullYear());
+        params.set("dates", `${s}/${e}`);
+    }
+    const url = `https://www.loc.gov/audio/?${params.toString()}`;
+    // Cache key: deterministic on sorted params
+    const cacheKey = [...params.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => `${k}=${v}`).join("&");
+    return { url, cacheKey };
+}
+// Normalize a LOC result row into the compact card shape the frontend
+// renders. Defensive — LOC responses vary across collections.
+function _normalizeLocResult(r) {
+    if (!r || typeof r !== "object")
+        return null;
+    const id = typeof r.id === "string" ? r.id : (typeof r.url === "string" ? r.url : "");
+    if (!id)
+        return null;
+    const title = typeof r.title === "string" ? r.title : "";
+    const contributors = Array.isArray(r.contributor_primary) && r.contributor_primary.length
+        ? r.contributor_primary
+        : (Array.isArray(r.contributor) ? r.contributor.slice(0, 3) : []);
+    const date = typeof r.date === "string" ? r.date : (Array.isArray(r.dates) ? r.dates[0] : "");
+    const year = typeof date === "string" && date.length >= 4 ? date.slice(0, 4) : "";
+    const image = Array.isArray(r.image_url) && r.image_url.length ? String(r.image_url[0]).split("#")[0] : "";
+    // Audio URL lives in resources[].media (mp3) or resources[].stream (HLS)
+    let streamUrl = "";
+    let streamType = "";
+    if (Array.isArray(r.resources)) {
+        for (const res of r.resources) {
+            if (!res || typeof res !== "object")
+                continue;
+            if (typeof res.media === "string" && res.media) {
+                streamUrl = res.media;
+                streamType = res.media.includes(".m3u8") ? "hls" : "mp3";
+                break;
+            }
+            if (typeof res.stream === "string" && res.stream) {
+                streamUrl = res.stream;
+                streamType = "hls";
+                break;
+            }
+        }
+    }
+    const item = r.item && typeof r.item === "object" ? r.item : {};
+    return {
+        id,
+        title,
+        contributors,
+        date: String(date || ""),
+        year,
+        image,
+        streamUrl,
+        streamType,
+        label: item.recording_label ?? "",
+        location: item.recording_location ?? (Array.isArray(r.location) ? r.location[0] : ""),
+        summary: item.summary ?? "",
+        audioType: item.audio_type ?? "",
+        genres: Array.isArray(r.subject_genre) ? r.subject_genre : (Array.isArray(item.genre) ? item.genre : []),
+        language: Array.isArray(r.language) ? r.language[0] : (typeof item.language === "string" ? item.language : ""),
+        url: typeof r.url === "string" ? r.url : id,
+    };
+}
+// GET /api/loc/search — proxy with rate limiting and response caching
+app.get("/api/loc/search", async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    const { url, cacheKey } = _buildLocSearchUrl(req);
+    // Cache hit → return immediately, no LOC round trip, no rate-limit slot
+    const cached = _locCacheGet(cacheKey);
+    if (cached) {
+        res.setHeader("X-SeaDisco-Cache", "hit");
+        res.json(cached);
+        return;
+    }
+    // Cache miss → acquire a rate-limit slot (may queue or 503)
+    try {
+        await locLimiter.acquire();
+    }
+    catch (e) {
+        if (e?.code === "rate_limit_queue_full") {
+            res.status(503).json({ error: "rate_limited", message: "LOC API is busy, try again in a moment." });
+            return;
+        }
+        res.status(500).json({ error: String(e?.message ?? e) });
+        return;
+    }
+    try {
+        const r = await loggedFetch("loc", url, {
+            headers: { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "application/json" },
+            context: "loc-search",
+        });
+        if (r.status === 429) {
+            res.status(503).json({ error: "rate_limited", message: "LOC is currently rate-limiting — try again shortly." });
+            return;
+        }
+        if (!r.ok) {
+            res.status(502).json({ error: `LOC HTTP ${r.status}` });
+            return;
+        }
+        const ct = r.headers.get("content-type") ?? "";
+        if (!ct.includes("json")) {
+            // LOC sometimes serves an HTML CAPTCHA page on heavy load
+            res.status(502).json({ error: "LOC returned non-JSON (possible CAPTCHA). Try again later." });
+            return;
+        }
+        const body = await r.json();
+        const results = Array.isArray(body?.results) ? body.results.map(_normalizeLocResult).filter(Boolean) : [];
+        const pagination = body?.pagination && typeof body.pagination === "object" ? {
+            current: body.pagination.current ?? 1,
+            perpage: body.pagination.perpage ?? 100,
+            total: body.pagination.of ?? body.pagination.total ?? 0,
+            from: body.pagination.from ?? 0,
+            to: body.pagination.to ?? 0,
+            hasNext: !!body.pagination.next,
+            hasPrev: !!body.pagination.previous,
+        } : { current: 1, perpage: 100, total: results.length, from: 1, to: results.length, hasNext: false, hasPrev: false };
+        const payload = { results, pagination };
+        _locCacheSet(cacheKey, payload);
+        res.setHeader("X-SeaDisco-Cache", "miss");
+        res.json(payload);
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// GET /api/user/loc-saves — list the current user's saved LOC items
+app.get("/api/user/loc-saves", async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    try {
+        const items = await getLocSaves(userId);
+        res.json({ items });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// GET /api/user/loc-saves/ids — lightweight list of saved IDs (for toggling star state)
+app.get("/api/user/loc-saves/ids", async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    try {
+        const ids = await getLocSaveIds(userId);
+        res.json({ ids });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// POST /api/user/loc-saves — save an item
+// Body: { locId, title, streamUrl, data }
+app.post("/api/user/loc-saves", express.json({ limit: "64kb" }), async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    const { locId, title = null, streamUrl = null, data = {} } = req.body ?? {};
+    if (typeof locId !== "string" || !locId) {
+        res.status(400).json({ error: "locId required" });
+        return;
+    }
+    // Cap payload size (belt-and-braces; express.json already enforces limit)
+    try {
+        await saveLocItem(userId, locId, title ? String(title).slice(0, 500) : null, streamUrl ? String(streamUrl).slice(0, 2000) : null, data && typeof data === "object" ? data : {});
+        res.json({ ok: true });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// DELETE /api/user/loc-saves — remove a single save
+// Body: { locId }
+// (DELETE with a URL param was avoided because LOC IDs are full URLs with slashes)
+app.delete("/api/user/loc-saves", express.json(), async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    const locId = typeof req.body?.locId === "string"
+        ? req.body.locId
+        : (typeof req.query?.locId === "string" ? req.query.locId : "");
+    if (!locId) {
+        res.status(400).json({ error: "locId required" });
+        return;
+    }
+    try {
+        await deleteLocSave(userId, locId);
+        res.json({ ok: true });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
     }
 });
 // ── Recent views (cross-device Recent strip) ────────────────────────────

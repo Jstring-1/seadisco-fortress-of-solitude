@@ -206,6 +206,21 @@ export async function initDb() {
     )
   `);
     await getPool().query(`CREATE INDEX IF NOT EXISTS user_recent_views_user_time_idx ON user_recent_views (clerk_user_id, opened_at DESC)`);
+    // ── Library of Congress audio saves (LOC view) ───────────────────────────
+    // User's saved LOC audio items so they can build a personal listening
+    // list without going back through LOC search each time.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_loc_saves (
+      clerk_user_id TEXT        NOT NULL,
+      loc_id        TEXT        NOT NULL,   -- LOC's item URL (stable unique id)
+      title         TEXT,
+      stream_url    TEXT,                   -- primary playable audio URL
+      data          JSONB       NOT NULL,   -- full card snapshot
+      saved_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (clerk_user_id, loc_id)
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS user_loc_saves_user_time_idx ON user_loc_saves (clerk_user_id, saved_at DESC)`);
     // ── User orders (marketplace buy/sell history) ──────────────────────────
     await getPool().query(`
     CREATE TABLE IF NOT EXISTS user_orders (
@@ -378,6 +393,7 @@ export async function purgeNonAdminUserData(adminClerkId) {
         "user_collection_folders",
         "user_favorites",
         "user_recent_views",
+        "user_loc_saves",
         "saved_searches",
         "feedback",
         "oauth_request_tokens",
@@ -557,6 +573,7 @@ export async function deleteUserData(clerkUserId) {
     const tables = [
         "user_favorites",
         "user_recent_views",
+        "user_loc_saves",
         "saved_searches",
         "price_alerts",
         "triggered_alerts",
@@ -918,6 +935,36 @@ export async function deleteRecentView(clerkUserId, discogsId, entityType) {
 }
 export async function clearRecentViews(clerkUserId) {
     await getPool().query(`DELETE FROM user_recent_views WHERE clerk_user_id = $1`, [clerkUserId]);
+}
+// ── LOC audio saves ──────────────────────────────────────────────────────
+export async function saveLocItem(clerkUserId, locId, title, streamUrl, data) {
+    await getPool().query(`INSERT INTO user_loc_saves (clerk_user_id, loc_id, title, stream_url, data, saved_at)
+     VALUES ($1, $2, $3, $4, $5, NOW())
+     ON CONFLICT (clerk_user_id, loc_id)
+     DO UPDATE SET title = EXCLUDED.title, stream_url = EXCLUDED.stream_url,
+                   data = EXCLUDED.data, saved_at = NOW()`, [clerkUserId, locId, title, streamUrl, JSON.stringify(data)]);
+}
+export async function getLocSaves(clerkUserId, limit = 500) {
+    const capped = Math.min(Math.max(1, limit), 1000);
+    const r = await getPool().query(`SELECT loc_id, title, stream_url, data, saved_at
+     FROM user_loc_saves
+     WHERE clerk_user_id = $1
+     ORDER BY saved_at DESC
+     LIMIT $2`, [clerkUserId, capped]);
+    return r.rows.map(row => ({
+        locId: row.loc_id,
+        title: row.title,
+        streamUrl: row.stream_url,
+        data: row.data ?? {},
+        savedAt: row.saved_at,
+    }));
+}
+export async function deleteLocSave(clerkUserId, locId) {
+    await getPool().query(`DELETE FROM user_loc_saves WHERE clerk_user_id = $1 AND loc_id = $2`, [clerkUserId, locId]);
+}
+export async function getLocSaveIds(clerkUserId) {
+    const r = await getPool().query(`SELECT loc_id FROM user_loc_saves WHERE clerk_user_id = $1`, [clerkUserId]);
+    return r.rows.map(row => row.loc_id);
 }
 // ── Phase 4: Price intelligence DB functions ─────────────────────────────
 export async function upsertPriceCache(releaseId, lowest, median, highest, numForSale, currency = "USD") {
