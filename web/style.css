@@ -332,18 +332,18 @@ html { overflow-x: hidden; }
   --input-h:         28px;
 }
 
-/* ── Theme: Earthy Light (cream bg, dark brown text, maroon accents) ── */
+/* ── Theme: Earthy Light (sand bg, dark brown text, maroon accents) ── */
 :root[data-theme="earthy-light"] {
   color-scheme: light;
-  --bg:              #f5ede0;   /* warm cream */
-  --bg-elevated:     #ede1cd;
-  --bg-hover:        #e8dbc2;
-  --surface:         #f0e6d3;
-  --surface-raised:  #fbf4e3;
-  --surface-sunken:  #e8dbc2;
-  --border:          #d4c4a5;
-  --border-strong:   #b8a57f;
-  --border-soft:     #e0d2b3;
+  --bg:              #ebe0c4;   /* warm sand beige */
+  --bg-elevated:     #ddd0ac;   /* darker sand for hover */
+  --bg-hover:        #d4c69f;
+  --surface:         #efe5cb;   /* slightly lighter sand for cards */
+  --surface-raised:  #f5ecd3;   /* lightest, for modals */
+  --surface-sunken:  #ddd0ac;   /* darker, for inputs */
+  --border:          #c4b593;
+  --border-strong:   #a08f6a;
+  --border-soft:     #dccf9c;
   --fg:              #2e1f10;   /* dark brown */
   --text:            #3d2a18;
   --muted:           #6e5a3e;
@@ -354,19 +354,19 @@ html { overflow-x: hidden; }
   --accent-dim:      #5a1f1f;
   --accent2:         #a83636;
   --accent-hi:       #a6732a;
-  --accent-soft:     #f0dcdc;
+  --accent-soft:     #e8d8b8;   /* sand-tinted accent bg, not pink */
   --success:         #3d6b28;
-  --success-bg:      #d8e5c8;
+  --success-bg:      #d4deb4;
   --success-border:  #8aa868;
   --warning:         #8a6020;
-  --warning-bg:      #f0e0b8;
+  --warning-bg:      #ead8a8;
   --warning-border:  #c4a062;
   --danger:          #8a2828;
   --danger-bright:   #b03030;
-  --danger-bg:       #f0d8d8;
+  --danger-bg:       #e8ccc4;
   --danger-border:   #b87878;
   --inventory:       #8a4018;
-  --inventory-bg:    #f0dccc;
+  --inventory-bg:    #e8d4b8;
   --inventory-border:#c4865a;
   --favorite:        #a6732a;
   --link:            var(--accent);
