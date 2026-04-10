@@ -255,6 +255,10 @@ function _locRenderShell() {
         <div class="loc-form-row" id="loc-form-row-top">
           <input type="text" id="loc-q" placeholder="Keyword (title, subject, or any text)" />
           <button type="submit" class="loc-submit" id="loc-submit-btn">Search</button>
+          <label class="loc-playable-btn" title="Playable only — hide results with no audio stream">
+            <input type="checkbox" id="loc-playable" checked onchange="if(_locLastQuery)_locRunSearchFromForm({resetPage:true})" />
+            <span class="loc-playable-icon">♪</span>
+          </label>
           <!-- buildSavedSearchUI injects the bookmark dropdown here -->
         </div>
         <div class="loc-form-grid">
@@ -282,7 +286,6 @@ function _locRenderShell() {
               </select>
             </div>
           </label>
-          <label class="loc-form-check"><input type="checkbox" id="loc-playable" checked onchange="if(_locLastQuery)_locRunSearchFromForm({resetPage:true})" /><span>Playable only</span></label>
         </div>
       </form>
       <div id="loc-status" class="loc-status"></div>
@@ -382,6 +385,7 @@ async function _locRunSearch(params) {
     }
     // Hidden-count hint for the status line when playable filter is on
     const hiddenCount = body.pagination?.hiddenCount ?? 0;
+    const playableOn  = !!body.pagination?.playableOnly;
     const hiddenHint = hiddenCount > 0 ? ` (${hiddenCount} hidden — no stream)` : "";
 
     // Client-side artist sort — LOC's `sb` API only supports relevance,
@@ -404,9 +408,25 @@ async function _locRunSearch(params) {
       });
       sortHint = " · sorted by artist (this page)";
     }
-    statusEl.textContent = (body.pagination
-      ? `${body.pagination.from}-${body.pagination.to} of ${body.pagination.total} results`
-      : `${results.length} results`) + hiddenHint + sortHint;
+    // Status line — when the playable filter is active the LOC
+    // from-to-of-total numbers don't match what's on screen (LOC counts
+    // pre-filter; we show post-filter). Switch to a page-based summary
+    // so the count is honest. When the filter is off, show LOC's own
+    // "1-100 of 1501" phrasing since it matches exactly.
+    let statusText;
+    if (body.pagination) {
+      const p = body.pagination;
+      if (playableOn && hiddenCount > 0) {
+        const perPage = Number(p.perpage) || 100;
+        const totalPages = Math.max(1, Math.ceil((Number(p.total) || 0) / perPage));
+        statusText = `Page ${p.current} of ${totalPages} · ${results.length} playable${hiddenHint}`;
+      } else {
+        statusText = `${p.from}-${p.to} of ${p.total} results${hiddenHint}`;
+      }
+    } else {
+      statusText = `${results.length} results${hiddenHint}`;
+    }
+    statusEl.textContent = statusText + sortHint;
     grid.innerHTML = results.map(_locRenderCard).join("");
     _locRenderPagination(body.pagination);
     _locUpdatePlayingCard();  // re-apply .is-playing after grid re-render
