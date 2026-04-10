@@ -4092,6 +4092,12 @@ footer {
   color: var(--muted);
   letter-spacing: 0.03em;
   text-transform: uppercase;
+  min-width: 0;
+}
+.loc-form-grid label > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .loc-form-grid input,
 .loc-form-grid select {
@@ -4161,11 +4167,21 @@ footer {
   font-size: 0.78rem;
   color: var(--text);
   opacity: 0.85;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
 }
 .loc-card-meta,
 .loc-card-genre {
   font-size: 0.72rem;
   color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
 }
 .loc-card-summary {
   font-size: 0.74rem;
@@ -4327,7 +4343,8 @@ footer {
     justify-content: flex-start;
     padding-top: 0.3rem;
   }
-  .loc-form-grid { grid-template-columns: 1fr 1fr; }
+  .loc-form-grid { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
+  .loc-form-grid label { font-size: 0.62rem; }
   .loc-audio-bar { padding: 0.4rem 0.55rem; gap: 0.5rem; }
   .loc-audio-bar-info { flex: 0 0 auto; max-width: 40%; }
   .loc-audio-bar-title { font-size: 0.75rem; }

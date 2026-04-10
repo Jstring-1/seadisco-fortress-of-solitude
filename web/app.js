@@ -45,7 +45,7 @@ function _hasSearch(p) { return p.get("q") || p.get("a") || p.get("ar") || p.get
   } else if (rawView === "loc") {
     await authReadyPromise;
     if (!window._clerk?.user) { showToast("Sign in to browse LOC", "error"); switchView("account", true); }
-    else switchView("loc", true);
+    else switchView("loc", true);  // initLocView() does the admin check
   } else if (rawView === "records" || rawView === "wanted") {
     await authReadyPromise;
     if (!window._clerk?.user) { showToast("Sign in to view your records", "error"); switchView("account", true); }

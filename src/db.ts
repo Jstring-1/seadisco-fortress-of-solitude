@@ -1294,6 +1294,12 @@ export async function clearRecentViews(clerkUserId: string): Promise<void> {
 
 // ── LOC audio saves ──────────────────────────────────────────────────────
 
+// Hard cap on how many LOC items a single user can keep saved. Protects
+// the table from unbounded growth if someone mass-stars the entire
+// National Jukebox. At 1000 items the total JSONB is still well under
+// 10 MB per user.
+const LOC_SAVES_MAX_PER_USER = 1000;
+
 export async function saveLocItem(
   clerkUserId: string,
   locId: string,
@@ -1301,13 +1307,27 @@ export async function saveLocItem(
   streamUrl: string | null,
   data: object
 ): Promise<void> {
-  await getPool().query(
+  const pool = getPool();
+  await pool.query(
     `INSERT INTO user_loc_saves (clerk_user_id, loc_id, title, stream_url, data, saved_at)
      VALUES ($1, $2, $3, $4, $5, NOW())
      ON CONFLICT (clerk_user_id, loc_id)
      DO UPDATE SET title = EXCLUDED.title, stream_url = EXCLUDED.stream_url,
                    data = EXCLUDED.data, saved_at = NOW()`,
     [clerkUserId, locId, title, streamUrl, JSON.stringify(data)]
+  );
+  // Trim oldest rows if the user is above the cap. Uses the user+time
+  // index so the subquery is a cheap range scan.
+  await pool.query(
+    `DELETE FROM user_loc_saves
+     WHERE clerk_user_id = $1
+       AND loc_id NOT IN (
+         SELECT loc_id FROM user_loc_saves
+         WHERE clerk_user_id = $1
+         ORDER BY saved_at DESC
+         LIMIT ${LOC_SAVES_MAX_PER_USER}
+       )`,
+    [clerkUserId]
   );
 }
 

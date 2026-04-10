@@ -2029,12 +2029,16 @@ app.get("/api/user/wantlist/item", async (req, res) => {
 
 // ── Library of Congress audio search + saves ───────────────────────────
 //
+// ADMIN-ONLY feature. The LOC view is a personal listening workspace
+// for the site owner — not a tenant-facing tool. Every endpoint below
+// is gated with requireAdmin so even a signed-in non-admin who guesses
+// the URL gets a 403.
+//
 // GET /api/loc/search is a rate-limited, cached proxy to loc.gov's JSON
 // search API. The frontend never calls loc.gov directly so (a) LOC-side
 // rate limits apply to the site as a whole rather than each user, and
 // (b) LOC responses are cached in memory for LOC_CACHE_TTL_MS so a user
-// paginating back and forth or two users searching the same thing hit
-// the cache instead of LOC.
+// paginating back and forth repeatedly hits the cache instead of LOC.
 //
 // The save endpoints back the "Saved" tab inside the LOC view — a
 // durable, cross-device list the user curates by hitting the ★ on any
@@ -2148,7 +2152,8 @@ function _normalizeLocResult(r: any): any {
 
 // GET /api/loc/search — proxy with rate limiting and response caching
 app.get("/api/loc/search", async (req, res) => {
-  const userId = await requireUser(req, res);
+  // Admin-only: the LOC view is a personal workspace for the site owner.
+  const userId = await requireAdmin(req, res);
   if (!userId) return;
 
   const { url, cacheKey } = _buildLocSearchUrl(req);
@@ -2215,7 +2220,7 @@ app.get("/api/loc/search", async (req, res) => {
 
 // GET /api/user/loc-saves — list the current user's saved LOC items
 app.get("/api/user/loc-saves", async (req, res) => {
-  const userId = await requireUser(req, res);
+  const userId = await requireAdmin(req, res);
   if (!userId) return;
   try {
     const items = await getLocSaves(userId);
@@ -2227,7 +2232,7 @@ app.get("/api/user/loc-saves", async (req, res) => {
 
 // GET /api/user/loc-saves/ids — lightweight list of saved IDs (for toggling star state)
 app.get("/api/user/loc-saves/ids", async (req, res) => {
-  const userId = await requireUser(req, res);
+  const userId = await requireAdmin(req, res);
   if (!userId) return;
   try {
     const ids = await getLocSaveIds(userId);
@@ -2240,7 +2245,7 @@ app.get("/api/user/loc-saves/ids", async (req, res) => {
 // POST /api/user/loc-saves — save an item
 // Body: { locId, title, streamUrl, data }
 app.post("/api/user/loc-saves", express.json({ limit: "64kb" }), async (req, res) => {
-  const userId = await requireUser(req, res);
+  const userId = await requireAdmin(req, res);
   if (!userId) return;
   const { locId, title = null, streamUrl = null, data = {} } = req.body ?? {};
   if (typeof locId !== "string" || !locId) {
@@ -2261,7 +2266,7 @@ app.post("/api/user/loc-saves", express.json({ limit: "64kb" }), async (req, res
 // Body: { locId }
 // (DELETE with a URL param was avoided because LOC IDs are full URLs with slashes)
 app.delete("/api/user/loc-saves", express.json(), async (req, res) => {
-  const userId = await requireUser(req, res);
+  const userId = await requireAdmin(req, res);
   if (!userId) return;
   const locId = typeof req.body?.locId === "string"
     ? req.body.locId
