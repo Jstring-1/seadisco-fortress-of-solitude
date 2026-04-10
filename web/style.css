@@ -4390,6 +4390,19 @@ footer {
 }
 .loc-form-grid input:focus,
 .loc-form-grid select:focus { outline: none; border-color: var(--accent); }
+.loc-form-check {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  user-select: none;
+}
+.loc-form-check input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+}
 
 /* Sort + Per Page combined into one grid cell to save a row on desktop.
    On mobile the 2-col grid still holds because the cell behaves like any

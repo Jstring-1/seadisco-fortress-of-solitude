@@ -223,6 +223,9 @@ async function initLocView() {
           setVal("loc-end-date",    "end_date");
           setVal("loc-sort",        "sort");
           setVal("loc-perpage",     "c");
+          // Restore the playable checkbox (default ON if the saved param is missing)
+          const playableCb = document.getElementById("loc-playable");
+          if (playableCb) playableCb.checked = params.playable !== "0" && params.playable !== "false";
           _locSwitchTab("search");
           _locRunSearchFromForm({ resetPage: true });
         },
@@ -279,6 +282,7 @@ function _locRenderShell() {
               </select>
             </div>
           </label>
+          <label class="loc-form-check"><input type="checkbox" id="loc-playable" checked onchange="if(_locLastQuery)_locRunSearchFromForm({resetPage:true})" /><span>Playable only</span></label>
         </div>
       </form>
       <div id="loc-status" class="loc-status"></div>
@@ -320,6 +324,7 @@ function _locSwitchTab(tab) {
 
 function _locReadFormParams() {
   const val = (id) => (document.getElementById(id)?.value ?? "").trim();
+  const playable = document.getElementById("loc-playable")?.checked !== false;
   return {
     q:           val("loc-q"),
     contributor: val("loc-contributor"),
@@ -331,6 +336,7 @@ function _locReadFormParams() {
     end_date:    val("loc-end-date"),
     sort:        val("loc-sort") || "relevance",
     c:           val("loc-perpage") || "100",
+    playable:    playable ? "1" : "0",
   };
 }
 
@@ -374,6 +380,10 @@ async function _locRunSearch(params) {
       grid.innerHTML = "";
       return;
     }
+    // Hidden-count hint for the status line when playable filter is on
+    const hiddenCount = body.pagination?.hiddenCount ?? 0;
+    const hiddenHint = hiddenCount > 0 ? ` (${hiddenCount} hidden — no stream)` : "";
+
     // Client-side artist sort — LOC's `sb` API only supports relevance,
     // date, and title, so artist-order is a local reshuffle of whatever
     // the backend returned for this page. Label in the status line so
@@ -396,7 +406,7 @@ async function _locRunSearch(params) {
     }
     statusEl.textContent = (body.pagination
       ? `${body.pagination.from}-${body.pagination.to} of ${body.pagination.total} results`
-      : `${results.length} results`) + sortHint;
+      : `${results.length} results`) + hiddenHint + sortHint;
     grid.innerHTML = results.map(_locRenderCard).join("");
     _locRenderPagination(body.pagination);
     _locUpdatePlayingCard();  // re-apply .is-playing after grid re-render
