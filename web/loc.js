@@ -202,7 +202,7 @@ function _locRenderShell() {
   return `
     <div class="loc-header">
       <h2 class="loc-title">Library of Congress</h2>
-      <p class="loc-sub">Search digitized audio from the Library of Congress (National Jukebox and more). All content is public-domain or royalty-free.</p>
+      <p class="loc-sub">Search digitized audio from the Library of Congress. Audio and metadata courtesy of the <a href="https://www.loc.gov" target="_blank" rel="noopener" class="loc-attribution-link">Library of Congress</a>. Rights vary per item — see the info popup for each recording's <em>rights_advisory</em> note before reusing any clip.</p>
       <div class="loc-tabs">
         <button type="button" class="loc-tab loc-tab-search active" onclick="_locSwitchTab('search')">Search</button>
         <button type="button" class="loc-tab loc-tab-saved" onclick="_locSwitchTab('saved')">Saved</button>
@@ -223,20 +223,20 @@ function _locRenderShell() {
           <label><span>Collection</span><input type="text" id="loc-partof" placeholder="e.g. national jukebox" /></label>
           <label><span>Year from</span><input type="text" id="loc-start-date" placeholder="1900" inputmode="numeric" maxlength="4" /></label>
           <label><span>Year to</span><input type="text" id="loc-end-date" placeholder="1930" inputmode="numeric" maxlength="4" /></label>
-          <label><span>Sort</span>
-            <select id="loc-sort" onchange="if(_locLastQuery)_locRunSearchFromForm({resetPage:true})">
-              <option value="relevance" selected>Relevance</option>
-              <option value="date-desc">Year (newest)</option>
-              <option value="date-asc">Year (oldest)</option>
-              <option value="title">Title A–Z</option>
-            </select>
-          </label>
-          <label><span>Per page</span>
-            <select id="loc-perpage">
-              <option value="25">25</option>
-              <option value="50">50</option>
-              <option value="100" selected>100</option>
-            </select>
+          <label class="loc-form-split"><span>Sort &middot; Per page</span>
+            <div class="loc-form-split-row">
+              <select id="loc-sort" onchange="if(_locLastQuery)_locRunSearchFromForm({resetPage:true})">
+                <option value="relevance" selected>Relevance</option>
+                <option value="date-desc">Year (newest)</option>
+                <option value="date-asc">Year (oldest)</option>
+                <option value="title">Title A–Z</option>
+              </select>
+              <select id="loc-perpage" class="loc-perpage-select">
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100" selected>100</option>
+              </select>
+            </div>
           </label>
         </div>
       </form>
@@ -458,6 +458,16 @@ function _locOpenInfoPopup(locId) {
 
   const contributors = Array.isArray(item.contributors) ? item.contributors : [];
   const genres       = Array.isArray(item.genres) ? item.genres : [];
+  const partof       = Array.isArray(item.partof)  ? item.partof  : [];
+  // Best-guess "primary collection" for the credit line. We pick the
+  // most specific-looking entry (skip the generic wrapper collections
+  // like "catalog" or "recorded sound research center" if we can).
+  const primaryCollection = (() => {
+    if (!partof.length) return "";
+    const preferred = partof.find(p => /jukebox|american folklife|gerry mulligan|occupational folklife/i.test(p));
+    if (preferred) return preferred;
+    return partof[0];
+  })();
   const metaRows = [
     ["Contributor(s)", contributors.join(", ")],
     ["Year / date",    item.date || item.year || ""],
@@ -466,6 +476,8 @@ function _locOpenInfoPopup(locId) {
     ["Audio type",     item.audioType || ""],
     ["Language",       item.language || ""],
     ["Genres",         genres.join(", ")],
+    ["Collection",     partof.slice(0, 3).join(" · ")],
+    ["Rights",         item.rights || ""],
     ["Stream format",  item.streamType || (canPlay ? "mp3" : "—")],
   ].filter(([, v]) => v);
 
@@ -490,6 +502,13 @@ function _locOpenInfoPopup(locId) {
   const saveBtn = `<button type="button" class="loc-info-btn loc-info-btn-save${saved ? " is-saved" : ""}" onclick="_locToggleSaveFromInfo('${esc(item.id).replace(/'/g, "\\'")}')">${saved ? "★ Saved" : "☆ Save"}</button>`;
   const locLink = `<a class="loc-info-btn loc-info-btn-loc" href="${esc(item.url || item.id)}" target="_blank" rel="noopener">Open on loc.gov ↗</a>`;
 
+  // Credit line — "Library of Congress, [Collection name]." format from
+  // LOC's own attribution guidance. Shown as a muted footer so any future
+  // redistribution has the right citation on hand.
+  const creditLine = primaryCollection
+    ? `Library of Congress, ${primaryCollection.replace(/\b\w/g, (c) => c.toUpperCase())}.`
+    : `Library of Congress.`;
+
   body.innerHTML = `
     <div class="loc-info-head">
       ${imgTag}
@@ -501,6 +520,10 @@ function _locOpenInfoPopup(locId) {
     </div>
     ${summaryHtml}
     <div class="loc-info-meta">${metaHtml}</div>
+    <div class="loc-info-credit">
+      <div class="loc-info-credit-label">Credit</div>
+      <div class="loc-info-credit-text">${esc(creditLine)}</div>
+    </div>
   `;
   overlay.classList.add("open");
 }
@@ -542,6 +565,8 @@ async function _locToggleSaveFromInfo(locId) {
             audioType: item.audioType || "",
             language: item.language || "",
             genres: item.genres || [],
+            rights: item.rights || "",
+            partof: item.partof || [],
             summary: item.summary || "",
             streamUrl: item.streamUrl || "",
             streamType: item.streamType || "",
@@ -611,16 +636,31 @@ async function _locToggleSaveFromCard(btn) {
   if (saving) _locSavedIds.add(locId); else _locSavedIds.delete(locId);
   try {
     if (saving) {
+      // Prefer the full cached item (has contributors, rights, partof,
+      // etc.) — fall back to just the card data attrs if cache is cold.
+      const full = _locItemCache.get(locId) || {};
       const payload = {
         locId,
-        title: card.dataset.title || "",
-        streamUrl: card.dataset.stream || "",
+        title: card.dataset.title || full.title || "",
+        streamUrl: card.dataset.stream || full.streamUrl || "",
         data: {
           id: locId,
-          title: card.dataset.title || "",
-          streamUrl: card.dataset.stream || "",
-          streamType: card.dataset.streamType || "",
-          image: card.dataset.image || "",
+          title: card.dataset.title || full.title || "",
+          contributors: full.contributors || [],
+          year: full.year || "",
+          date: full.date || "",
+          label: full.label || "",
+          location: full.location || "",
+          audioType: full.audioType || "",
+          language: full.language || "",
+          genres: full.genres || [],
+          rights: full.rights || "",
+          partof: full.partof || [],
+          summary: full.summary || "",
+          streamUrl: card.dataset.stream || full.streamUrl || "",
+          streamType: card.dataset.streamType || full.streamType || "",
+          image: card.dataset.image || full.image || "",
+          url: full.url || locId,
         },
       };
       const r = await apiFetch("/api/user/loc-saves", {

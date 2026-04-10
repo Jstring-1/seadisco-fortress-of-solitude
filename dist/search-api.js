@@ -2508,6 +2508,19 @@ function _normalizeLocResult(r) {
         }
     }
     const item = r.item && typeof r.item === "object" ? r.item : {};
+    // Rights advisory — LOC's own note about what you can / can't do with
+    // the recording. Critical for attribution and any downstream reuse.
+    const rights = typeof item.rights_advisory === "string" ? item.rights_advisory
+        : Array.isArray(item.rights_advisory) ? item.rights_advisory.join(" ")
+            : typeof item.rights === "string" ? item.rights
+                : Array.isArray(item.rights) ? item.rights.join(" ")
+                    : "";
+    // Collection(s) the item belongs to — used for the credit line.
+    // `partof` can be an array of strings or an array of objects with a
+    // `title` property depending on the collection. Normalize to strings.
+    const partof = Array.isArray(r.partof)
+        ? r.partof.map((p) => typeof p === "string" ? p : (p?.title ?? "")).filter(Boolean)
+        : [];
     return {
         id,
         title,
@@ -2523,6 +2536,8 @@ function _normalizeLocResult(r) {
         audioType: item.audio_type ?? "",
         genres: Array.isArray(r.subject_genre) ? r.subject_genre : (Array.isArray(item.genre) ? item.genre : []),
         language: Array.isArray(r.language) ? r.language[0] : (typeof item.language === "string" ? item.language : ""),
+        rights,
+        partof,
         url: typeof r.url === "string" ? r.url : id,
     };
 }

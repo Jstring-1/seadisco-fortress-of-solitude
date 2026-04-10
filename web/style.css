@@ -965,7 +965,9 @@ select {
   font-size: 0.78rem;
   height: var(--input-h);
   padding: 0 0.5rem;
-  line-height: var(--input-h);
+  /* line-height intentionally omitted — native <select> elements center
+     text via the browser's own layout, and forcing line-height equal to
+     the box height clips the baseline on Chrome/Edge. */
   box-sizing: border-box;
   outline: none;
   cursor: pointer;
@@ -4110,9 +4112,23 @@ footer {
   font-size: 0.82rem;
   text-transform: none;
   letter-spacing: 0;
+  /* Override sitewide `select { height: var(--input-h) }` so padding
+     controls the box — otherwise the 28px fixed height clips text. */
+  height: auto;
+  line-height: normal;
 }
 .loc-form-grid input:focus,
 .loc-form-grid select:focus { outline: none; border-color: var(--accent); }
+
+/* Sort + Per Page combined into one grid cell to save a row on desktop.
+   On mobile the 2-col grid still holds because the cell behaves like any
+   other — the row flex inside keeps both selects on one line. */
+.loc-form-split-row {
+  display: flex;
+  gap: 0.4rem;
+}
+.loc-form-split-row select { flex: 1; min-width: 0; }
+.loc-form-split-row .loc-perpage-select { flex: 0 0 4rem; }
 
 .loc-status {
   font-size: 0.78rem;
@@ -4242,6 +4258,8 @@ footer {
   font: inherit;
   font-size: 0.78rem;
   cursor: pointer;
+  height: auto;
+  line-height: normal;
 }
 .loc-saved-sort:focus { outline: none; border-color: var(--accent); }
 
@@ -4471,6 +4489,30 @@ footer {
   color: var(--text);
   word-break: break-word;
 }
+.loc-info-credit {
+  margin-top: 1rem;
+  padding: 0.6rem 0.85rem;
+  background: var(--bg);
+  border: 1px dashed var(--border);
+  border-radius: 5px;
+}
+.loc-info-credit-label {
+  font-size: 0.65rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.2rem;
+}
+.loc-info-credit-text {
+  font-size: 0.8rem;
+  color: var(--text);
+  font-style: italic;
+}
+.loc-attribution-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+.loc-attribution-link:hover { text-decoration: underline; }
 
 @media (max-width: 640px) {
   .loc-form-grid { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
