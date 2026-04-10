@@ -2103,6 +2103,7 @@ const LOC_QUERY_PARAMS = new Set([
   "contributor", "subject", "location", "language",
   "start_date", "end_date", "dates",
   "original_format", "online_format", "partof",
+  "playable",  // SeaDisco-only: filter out results with no extractable stream
 ]);
 // LOC sort values we accept. Maps our UI key → LOC's `sb` param value.
 const LOC_SORT_MAP: Record<string, string> = {
@@ -2450,7 +2451,17 @@ app.get("/api/loc/search", async (req, res) => {
       return;
     }
     const body = await r.json() as any;
-    const results = Array.isArray(body?.results) ? body.results.map(_normalizeLocResult).filter(Boolean) : [];
+    const allNormalized = Array.isArray(body?.results) ? body.results.map(_normalizeLocResult).filter(Boolean) : [];
+    // Playable-only filter: when ?playable=1 (or not explicitly 0), drop
+    // items that have no extractable stream URL. LOC sometimes returns
+    // audio-format items where the mp3 lives behind a separate resource
+    // page we can't discover without another round-trip — hiding them
+    // here keeps the grid honest about what we can actually play.
+    const playableOnly = req.query.playable !== "0" && req.query.playable !== "false";
+    const results = playableOnly
+      ? allNormalized.filter((r: any) => r && typeof r.streamUrl === "string" && r.streamUrl.length > 0)
+      : allNormalized;
+    const hiddenCount = allNormalized.length - results.length;
     const pagination = body?.pagination && typeof body.pagination === "object" ? {
       current: body.pagination.current ?? 1,
       perpage: body.pagination.perpage ?? 100,
@@ -2459,7 +2470,9 @@ app.get("/api/loc/search", async (req, res) => {
       to:      body.pagination.to ?? 0,
       hasNext: !!body.pagination.next,
       hasPrev: !!body.pagination.previous,
-    } : { current: 1, perpage: 100, total: results.length, from: 1, to: results.length, hasNext: false, hasPrev: false };
+      hiddenCount,
+      playableOnly,
+    } : { current: 1, perpage: 100, total: results.length, from: 1, to: results.length, hasNext: false, hasPrev: false, hiddenCount, playableOnly };
 
     const payload = { results, pagination };
     _locCacheSet(cacheKey, payload);
