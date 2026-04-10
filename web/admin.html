@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260409o" />
+  <link rel="stylesheet" href="/style.css?v=20260409p" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260409o"></script>
+<script defer src="/shared.js?v=20260409p"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
@@ -132,7 +132,7 @@
           <select id="theme-select" onchange="applyThemeChoice(this.value)" style="min-width:200px">
             <option value="amber-dark">Amber Dark (default)</option>
             <option value="earthy-dark">Earthy Dark (green · maroon · burnt orange)</option>
-            <option value="earthy-light">Earthy Light (cream · dark brown · maroon)</option>
+            <option value="earthy-light">Earthy Light (sand · dark brown · maroon)</option>
             <option value="slate-dark">Slate Dark (cool steel · teal)</option>
             <option value="mossy-dark">Mossy Dark (deep forest · warm gold)</option>
           </select>
@@ -187,7 +187,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260409o"></script>
+<script defer src="/modal.js?v=20260409p"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -208,7 +208,7 @@ const _adminTabLoaders = {
 const _themes = [
   { id: "amber-dark",   label: "Amber Dark",   swatches: ["#080706", "#15120e", "#ff6b35", "#e8dcc8", "#e8d44d"] },
   { id: "earthy-dark",  label: "Earthy Dark",  swatches: ["#1a1612", "#221c17", "#c9571f", "#e8ddc4", "#5d8a4a"] },
-  { id: "earthy-light", label: "Earthy Light", swatches: ["#f5ede0", "#f0e6d3", "#8a2828", "#3d2a18", "#a6732a"] },
+  { id: "earthy-light", label: "Earthy Light", swatches: ["#ebe0c4", "#efe5cb", "#8a2828", "#3d2a18", "#a6732a"] },
   { id: "slate-dark",   label: "Slate Dark",   swatches: ["#0f1418", "#161c24", "#2fa8a0", "#c8d0dc", "#d4b84a"] },
   { id: "mossy-dark",   label: "Mossy Dark",   swatches: ["#0d140e", "#121c13", "#6b9248", "#c8d4b8", "#d4a843"] },
 ];
