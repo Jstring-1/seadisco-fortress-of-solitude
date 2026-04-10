@@ -399,6 +399,7 @@ async function _locRunSearch(params) {
       : `${results.length} results`) + sortHint;
     grid.innerHTML = results.map(_locRenderCard).join("");
     _locRenderPagination(body.pagination);
+    _locUpdatePlayingCard();  // re-apply .is-playing after grid re-render
   } catch (e) {
     statusEl.textContent = e?.message || "Search failed.";
     grid.innerHTML = "";
@@ -542,8 +543,10 @@ function _locOpenInfoPopup(locId) {
     if (preferred) return preferred;
     return partof[0];
   })();
+  // Contributors rendered separately in the header with clickable
+  // search magnifiers (see below), so omit from the meta grid to
+  // avoid duplication.
   const metaRows = [
-    ["Contributor(s)", contributors.join(", ")],
     ["Year / date",    item.date || item.year || ""],
     ["Label",          item.label || ""],
     ["Catalog #",      item.catalogNumber || ""],
@@ -656,12 +659,33 @@ function _locOpenInfoPopup(locId) {
     ? `Library of Congress, ${primaryCollection.replace(/\b\w/g, (c) => c.toUpperCase())}.`
     : `Library of Congress.`;
 
+  // Build clickable title + artist line with search magnifiers.
+  // Title click runs a new LOC keyword search; the ⌕ icons also search
+  // Discogs and the Collection. Contributors are split so each name
+  // gets its own clickable link + magnifiers (same pattern as the
+  // album-credits in the main search modal).
+  const titleRaw = item.title || "Untitled";
+  const titleJs  = esc(titleRaw).replace(/'/g, "\\'");
+  const titleEl  = `
+    <div class="loc-info-title">
+      <a href="#" class="loc-title-link" onclick="event.preventDefault();_locSearchByKeyword('${titleJs}')" title="Search LOC for this title">${esc(titleRaw)}</a>
+      <a href="#" class="album-title-search loc-credit-discogs" onclick="event.preventDefault();_locSearchDiscogsByName('${titleJs}')" title="Search Discogs for this title">⌕</a>
+      <a href="#" class="album-title-search loc-credit-collection" onclick="event.preventDefault();_locSearchCollectionByName('${titleJs}')" title="Search your collection for this title">⌕</a>
+    </div>`;
+  const artistEl = contributors.length
+    ? `<div class="loc-info-artist">${contributors.map(c => {
+        const n = esc(c);
+        const jsN = n.replace(/'/g, "\\'");
+        return `<a href="#" class="credit-name loc-credit-name" onclick="event.preventDefault();_locSearchByName('${jsN}')" title="Search LOC for ${n}">${n}</a><a href="#" class="album-title-search loc-credit-discogs" onclick="event.preventDefault();_locSearchDiscogsByName('${jsN}')" title="Search Discogs for ${n}">⌕</a><a href="#" class="album-title-search loc-credit-collection" onclick="event.preventDefault();_locSearchCollectionByName('${jsN}')" title="Search your collection for ${n}">⌕</a>`;
+      }).join('<span class="credit-sep"> · </span>')}</div>`
+    : "";
+
   body.innerHTML = `
     <div class="loc-info-head">
       ${imgTag}
       <div class="loc-info-head-text">
-        <div class="loc-info-title">${esc(item.title || "Untitled")}</div>
-        ${contributors.length ? `<div class="loc-info-artist">${esc(contributors.join(", "))}</div>` : ""}
+        ${titleEl}
+        ${artistEl}
         <div class="loc-info-actions">${playBtn}${saveBtn}${locLink}</div>
       </div>
     </div>
@@ -758,10 +782,71 @@ function _locPlayPrevInQueue() {
 function _locUpdateQueueButtons() {
   const prev = document.getElementById("loc-audio-prev");
   const next = document.getElementById("loc-audio-next");
-  if (!prev || !next) return;
-  const hasQueue = !!_locQueue && _locQueue.items.length >= 2;
-  prev.disabled = !hasQueue || _locQueue.index <= 0;
-  next.disabled = !hasQueue || _locQueue.index + 1 >= _locQueue.items.length;
+  if (prev && next) {
+    const hasQueue = !!_locQueue && _locQueue.items.length >= 2;
+    prev.disabled = !hasQueue || _locQueue.index <= 0;
+    next.disabled = !hasQueue || _locQueue.index + 1 >= _locQueue.items.length;
+  }
+  // Info / save buttons — enabled whenever something is playing
+  const info = document.getElementById("loc-audio-info");
+  const save = document.getElementById("loc-audio-save");
+  const baseId = _locCurrentBarItemId();
+  if (info) info.disabled = !baseId;
+  if (save) {
+    save.disabled = !baseId;
+    const isSaved = !!(baseId && _locSavedIds?.has(baseId));
+    save.classList.toggle("is-saved", isSaved);
+    save.textContent = isSaved ? "★" : "☆";
+    save.title = isSaved ? "Remove from Saved" : "Save this item";
+  }
+  _locUpdatePlayingCard();
+}
+
+// Figure out which LOC item is currently playing in the bar. Multi-track
+// plays use a synthetic id "{itemId}#{trackIndex}" so we strip the tail,
+// but queue state is the authoritative source when it's active.
+function _locCurrentBarItemId() {
+  if (_locQueue && _locQueue.itemId) return _locQueue.itemId;
+  if (_locNowPlaying && typeof _locNowPlaying.id === "string") {
+    const hash = _locNowPlaying.id.indexOf("#");
+    return hash >= 0 ? _locNowPlaying.id.slice(0, hash) : _locNowPlaying.id;
+  }
+  return "";
+}
+
+// Mark the card whose LOC id matches the currently-playing item with
+// .is-playing so the user can see where they are in the grid. Also
+// clears the class from every other card. Called whenever play state
+// changes (via _locUpdateQueueButtons).
+function _locUpdatePlayingCard() {
+  const baseId = _locCurrentBarItemId();
+  // Remove from anything that isn't the current item
+  document.querySelectorAll(".card.is-playing").forEach(el => {
+    if (el.dataset.locId !== baseId) el.classList.remove("is-playing");
+  });
+  if (!baseId) return;
+  // Add to every card matching the current item (could appear in both
+  // Search and Saved grids if they're rendered simultaneously)
+  document.querySelectorAll(`.card[data-loc-id="${CSS.escape(baseId)}"]`).forEach(el => {
+    el.classList.add("is-playing");
+  });
+}
+
+// Bar button: open the info popup for whatever is playing.
+function _locOpenFromBar() {
+  const id = _locCurrentBarItemId();
+  if (!id) return;
+  _locOpenInfoPopup(id);
+}
+
+// Bar button: toggle save for whatever is playing.
+async function _locToggleSaveFromBar() {
+  const id = _locCurrentBarItemId();
+  if (!id) return;
+  // Reuse the popup save path — it already handles the full item cache
+  // lookup, payload construction, and state sync across card + popup.
+  await _locToggleSaveFromInfo(id);
+  _locUpdateQueueButtons();
 }
 
 // Speaker / participant name → new LOC search by contributor.
@@ -774,6 +859,20 @@ function _locSearchByName(name) {
   const qEl           = document.getElementById("loc-q");
   if (contributorEl) contributorEl.value = name;
   if (qEl) qEl.value = "";
+  _locRunSearchFromForm({ resetPage: true });
+}
+
+// Title / keyword → new LOC search by `q`. Clears other filters so
+// it doesn't inherit the previous form state (which would be confusing
+// when you're chasing a specific title).
+function _locSearchByKeyword(q) {
+  if (!q) return;
+  _locCloseInfoPopup();
+  _locSwitchTab("search");
+  const fields = ["loc-q", "loc-contributor", "loc-subject", "loc-location", "loc-language", "loc-partof", "loc-start-date", "loc-end-date"];
+  fields.forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+  const qEl = document.getElementById("loc-q");
+  if (qEl) qEl.value = q;
   _locRunSearchFromForm({ resetPage: true });
 }
 
@@ -1037,6 +1136,7 @@ function _locRenderSavedGrid() {
     return;
   }
   grid.innerHTML = sorted.map(it => _locRenderCard(it, { savedTab: true })).join("");
+  _locUpdatePlayingCard();  // highlight the card currently in the bar
 }
 
 function _locOnSavedFilterInput(el) {
@@ -1235,7 +1335,10 @@ window._locPlayFromInfo         = _locPlayFromInfo;
 window._locPlayTrack            = _locPlayTrack;
 window._locPlayNextInQueue      = _locPlayNextInQueue;
 window._locPlayPrevInQueue      = _locPlayPrevInQueue;
+window._locOpenFromBar          = _locOpenFromBar;
+window._locToggleSaveFromBar    = _locToggleSaveFromBar;
 window._locToggleSaveFromInfo   = _locToggleSaveFromInfo;
 window._locSearchByName         = _locSearchByName;
+window._locSearchByKeyword      = _locSearchByKeyword;
 window._locSearchDiscogsByName  = _locSearchDiscogsByName;
 window._locSearchCollectionByName = _locSearchCollectionByName;
