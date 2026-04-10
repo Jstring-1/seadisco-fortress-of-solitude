@@ -3,17 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- Theme bootstrap — same as index.html. Must run before any paint. -->
+  <script>(function(){try{var t=localStorage.getItem("sd-theme");if(t&&/^[a-z0-9-]+$/.test(t))document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
   <title>SeaDisco — Admin</title>
   <meta name="robots" content="noindex, nofollow" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260409m" />
+  <link rel="stylesheet" href="/style.css?v=20260409n" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260409m"></script>
+<script defer src="/shared.js?v=20260409n"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
@@ -57,6 +59,7 @@
         <button class="admin-tab" onclick="switchAdminTab('api-log')">API Log</button>
         <button class="admin-tab" onclick="switchAdminTab('db-stats')">Database</button>
         <button class="admin-tab" onclick="switchAdminTab('loc-stats')">LOC</button>
+        <button class="admin-tab" onclick="switchAdminTab('theme')">Theme</button>
       </div>
 
       <!-- Collection Stats -->
@@ -118,6 +121,25 @@
         <div id="loc-stats-body" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
       </div>
 
+      <!-- Theme picker -->
+      <div class="admin-tab-panel" id="panel-theme" style="display:none">
+        <h2 style="margin:0 0 0.5rem">Theme</h2>
+        <p style="font-size:0.82rem;color:var(--muted);margin:0 0 1rem">
+          Theme is stored in your browser (localStorage, key <code>sd-theme</code>). Switching applies instantly site-wide.
+        </p>
+        <div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:1rem">
+          <label for="theme-select" style="font-size:0.82rem;color:var(--text);font-weight:600">Active theme:</label>
+          <select id="theme-select" onchange="applyThemeChoice(this.value)" style="min-width:200px">
+            <option value="amber-dark">Amber Dark (default)</option>
+            <option value="earthy-dark">Earthy Dark (green · maroon · burnt orange)</option>
+            <option value="earthy-light">Earthy Light (cream · dark brown · maroon)</option>
+            <option value="slate-dark">Slate Dark (cool steel · teal)</option>
+            <option value="mossy-dark">Mossy Dark (deep forest · warm gold)</option>
+          </select>
+        </div>
+        <div id="theme-preview" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:0.8rem"></div>
+      </div>
+
     </div>
   </div>
 </main>
@@ -165,7 +187,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260409m"></script>
+<script defer src="/modal.js?v=20260409n"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -179,7 +201,49 @@ const _adminTabLoaders = {
   'api-log': () => loadApiLog(),
   'db-stats': () => loadDbStats(),
   'loc-stats': () => loadLocStats(),
+  'theme': () => initThemePicker(),
 };
+
+// ── Theme picker ──────────────────────────────────────────────────────
+const _themes = [
+  { id: "amber-dark",   label: "Amber Dark",   swatches: ["#080706", "#15120e", "#ff6b35", "#e8dcc8", "#e8d44d"] },
+  { id: "earthy-dark",  label: "Earthy Dark",  swatches: ["#1a1612", "#221c17", "#c9571f", "#e8ddc4", "#5d8a4a"] },
+  { id: "earthy-light", label: "Earthy Light", swatches: ["#f5ede0", "#f0e6d3", "#8a2828", "#3d2a18", "#a6732a"] },
+  { id: "slate-dark",   label: "Slate Dark",   swatches: ["#0f1418", "#161c24", "#2fa8a0", "#c8d0dc", "#d4b84a"] },
+  { id: "mossy-dark",   label: "Mossy Dark",   swatches: ["#0d140e", "#121c13", "#6b9248", "#c8d4b8", "#d4a843"] },
+];
+
+function initThemePicker() {
+  const current = localStorage.getItem("sd-theme") || "amber-dark";
+  const select = document.getElementById("theme-select");
+  if (select) select.value = current;
+  const grid = document.getElementById("theme-preview");
+  if (!grid) return;
+  grid.innerHTML = _themes.map(t => {
+    const isActive = t.id === current;
+    const [bg, surface, accent, text, hi] = t.swatches;
+    return `
+      <div class="theme-preview-card${isActive ? " is-active" : ""}" onclick="applyThemeChoice('${t.id}')" style="cursor:pointer;border:2px solid ${isActive ? accent : "var(--border)"};border-radius:8px;padding:0.8rem;background:${bg};transition:border-color 0.15s">
+        <div style="color:${text};font-weight:700;font-size:0.92rem;margin-bottom:0.35rem">${t.label}${isActive ? " ✓" : ""}</div>
+        <div style="background:${surface};border:1px solid ${accent};border-radius:4px;padding:0.55rem;color:${text};font-size:0.78rem">
+          <div style="color:${accent};font-weight:600;font-size:0.82rem;margin-bottom:0.2rem">Sample header</div>
+          <div>Body text · <span style="color:${hi}">★ highlight</span></div>
+        </div>
+        <div style="display:flex;gap:0.25rem;margin-top:0.5rem">
+          ${t.swatches.map(c => `<span style="width:1.3rem;height:1.3rem;border-radius:50%;background:${c};border:1px solid rgba(0,0,0,0.3)"></span>`).join("")}
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function applyThemeChoice(themeId) {
+  if (!themeId || !_themes.find(t => t.id === themeId)) return;
+  try { localStorage.setItem("sd-theme", themeId); } catch {}
+  document.documentElement.setAttribute("data-theme", themeId);
+  // Re-render the preview grid so the active highlight moves
+  initThemePicker();
+}
 const _adminTabLoaded = {};
 
 function switchAdminTab(tabId) {

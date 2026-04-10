@@ -2174,13 +2174,14 @@ function _normalizeLocResult(r: any): any {
   // Audio URL lives in different fields depending on the collection:
   //   - National Jukebox:              resources[].media   (mp3)
   //   - NAVCC / main catalog / AFC:    resources[].audio   (mp3)
+  //   - Podcasts / AFC Folklife:       item.mp3_url        (mp3)
   //   - Some newer items:              resources[].stream  (HLS .m3u8)
-  // We check all three. The first hit wins, with a preference for mp3
-  // over HLS since mp3 plays natively without hls.js.
+  // First match wins, with a preference for mp3 over HLS since mp3
+  // plays natively without hls.js.
+  const itemObj = r.item && typeof r.item === "object" ? r.item : {};
   let streamUrl = "";
   let streamType = "";
   if (Array.isArray(r.resources)) {
-    // First pass: look for a direct mp3 (media or audio)
     for (const res of r.resources) {
       if (!res || typeof res !== "object") continue;
       const candidate = (typeof res.media === "string" && res.media) ? res.media
@@ -2192,7 +2193,6 @@ function _normalizeLocResult(r: any): any {
         break;
       }
     }
-    // Second pass: fall back to HLS stream if no direct file was found
     if (!streamUrl) {
       for (const res of r.resources) {
         if (!res || typeof res !== "object") continue;
@@ -2204,7 +2204,13 @@ function _normalizeLocResult(r: any): any {
       }
     }
   }
-  const item = r.item && typeof r.item === "object" ? r.item : {};
+  // Podcast fallback — item.mp3_url is where Folklife / podcast items
+  // keep their audio URL.
+  if (!streamUrl && typeof itemObj.mp3_url === "string" && itemObj.mp3_url) {
+    streamUrl = itemObj.mp3_url;
+    streamType = "mp3";
+  }
+  const item = itemObj;
   // Rights advisory — LOC's own note about what you can / can't do with
   // the recording. Critical for attribution and any downstream reuse.
   const rights = typeof item.rights_advisory === "string" ? item.rights_advisory
@@ -2218,6 +2224,24 @@ function _normalizeLocResult(r: any): any {
   const partof = Array.isArray(r.partof)
     ? r.partof.map((p: any) => typeof p === "string" ? p : (p?.title ?? "")).filter(Boolean)
     : [];
+  // Helper: coerce a "maybe-string, maybe-array, maybe-missing" field
+  // into a trimmed string array for display. Dedupes and drops blanks.
+  const toArr = (v: any): string[] => {
+    if (!v) return [];
+    const arr = Array.isArray(v) ? v : [v];
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const x of arr) {
+      const s = typeof x === "string" ? x.trim() : (x?.title ?? x?.name ?? "").trim();
+      if (s && !seen.has(s)) { seen.add(s); out.push(s); }
+    }
+    return out;
+  };
+
+  // Subjects — different from genres; often topic-level tags like
+  // "Blues (Music)" or "Folk songs--United States".
+  const subjects = toArr(item.subjects).length ? toArr(item.subjects) : toArr(r.subject);
+
   return {
     id,
     title,
@@ -2231,11 +2255,45 @@ function _normalizeLocResult(r: any): any {
     location: item.recording_location ?? (Array.isArray(r.location) ? r.location[0] : ""),
     summary: item.summary ?? "",
     audioType: item.audio_type ?? "",
-    genres: Array.isArray(r.subject_genre) ? r.subject_genre : (Array.isArray(item.genre) ? item.genre : []),
+    genres: toArr(r.subject_genre).length ? toArr(r.subject_genre) : toArr(item.genre),
     language: Array.isArray(r.language) ? r.language[0] : (typeof item.language === "string" ? item.language : ""),
     rights,
     partof,
     url: typeof r.url === "string" ? r.url : id,
+
+    // ── Extended metadata (rendered in the info popup) ──────────────
+    subjects,
+    otherTitles:         toArr(r.other_title),
+    description:         toArr(r.description),
+    notes:               toArr(item.notes),
+    medium:              typeof item.medium === "string" ? item.medium
+                         : Array.isArray(item.medium) ? item.medium.join(" · ") : "",
+    mediaSize:           typeof item.media_size === "string" ? item.media_size : "",
+    callNumber:          typeof item.call_number === "string" ? item.call_number
+                         : Array.isArray(item.call_number) ? item.call_number[0]
+                         : (typeof r.shelf_id === "string" ? r.shelf_id : ""),
+    catalogNumber:       item.recording_catalog_number ?? "",
+    matrixNumber:        item.recording_matrix_number ?? "",
+    takeNumber:          item.recording_take_number ?? "",
+    repository:          typeof item.recording_repository === "string" ? item.recording_repository
+                         : (typeof item.repository === "string" ? item.repository
+                         :  Array.isArray(item.repository) ? item.repository.join(" · ") : ""),
+    createdPublished:    Array.isArray(item.created_published) ? item.created_published.join(" · ")
+                         : (typeof item.created_published === "string" ? item.created_published : ""),
+    format:              Array.isArray(item.format) ? item.format.join(" · ")
+                         : (typeof item.format === "string" ? item.format : ""),
+    itemType:            Array.isArray(r.type) ? r.type.join(" · ")
+                         : (typeof r.type === "string" ? r.type : ""),
+
+    // ── Podcast-specific fields (AFC Folklife etc.) ────────────────
+    article:             typeof item.article === "string" ? item.article : "",
+    speakers:            toArr(item.speakers),
+    runningTime:         typeof item.running_time === "string" ? item.running_time
+                         : (typeof item.running_time === "number" ? String(item.running_time) : ""),
+    podcastSeries:       typeof item.podcast_series === "string" ? item.podcast_series
+                         : Array.isArray(item.podcast_series) ? item.podcast_series[0] : "",
+
+    accessRestricted:    r.access_restricted === true,
   };
 }
 

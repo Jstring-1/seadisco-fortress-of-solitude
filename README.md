@@ -1,71 +1,72 @@
-# discogs-mcp
+# SeaDisco
 
-A Model Context Protocol (MCP) server for the [Discogs API](https://www.discogs.com/developers/).
+An invite-only music-discovery web app built on top of the Discogs API. Search and browse releases, manage a Discogs collection / wantlist / inventory / seller orders in-place, get AI-powered search recommendations via Claude, and listen to public-domain audio from the Library of Congress.
 
-## Tools
+**Production:** https://seadisco.com (Railway, auto-deploys from `main`)
 
-| Tool | Description |
-|---|---|
-| `search_discogs` | Search releases, masters, artists, and labels |
-| `get_release` | Full details for a release by ID |
-| `get_master_release` | Master release details (canonical entry for a title) |
-| `get_master_versions` | All known pressings/versions of a master |
-| `get_artist` | Artist profile by ID |
-| `get_artist_releases` | List an artist's releases |
-| `get_label` | Record label details by ID |
-| `get_label_releases` | List a label's releases |
-| `get_marketplace_stats` | Current lowest price, median price, # for sale |
-| `get_price_suggestions` | Suggested price by condition (Mint, NM, VG+, etc.) |
+## Stack
 
-## Setup
+- **Backend:** Node 20+ / Express 4 / TypeScript (ESM)
+- **DB:** PostgreSQL via `pg` pool (Railway)
+- **Auth:** Clerk (waitlist-gated sign-up)
+- **Discogs:** OAuth 1.0a (full marketplace access) + Personal Access Token (read-only fallback)
+- **LOC:** `loc.gov` JSON API (admin-only view, rate-limited proxy)
+- **AI:** `@anthropic-ai/sdk` (search recommendations)
+- **Frontend:** Vanilla JS SPA in `web/`, no build step, cache-busted via `?v=YYYYMMDD{letter}` query params
 
-### 1. Install Node.js
-
-Download and install from https://nodejs.org (v20 LTS recommended).
-
-### 2. Get a Discogs Personal Access Token
-
-1. Log in at https://www.discogs.com
-2. Go to **Settings → Developers**
-3. Click **Generate new token**
-4. Copy the token
-
-### 3. Install dependencies and build
+## Build & run
 
 ```bash
-cd discogs-mcp
 npm install
-npm run build
+npm run build     # tsc → dist/
+npm start         # node dist/search-api.js (port 3001)
+npm run dev       # tsc --watch
 ```
 
-### 4. Add to Claude Desktop
+## Environment variables
 
-Edit your Claude Desktop config file:
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+Copy `.env.example` to `.env` and fill in:
 
-```json
-{
-  "mcpServers": {
-    "discogs": {
-      "command": "node",
-      "args": ["C:\\Users\\KJ-NoJesteringStudio\\Claude\\discogs-mcp\\dist\\index.js"],
-      "env": {
-        "DISCOGS_TOKEN": "your_token_here"
-      }
-    }
-  }
-}
+| Var | What |
+|---|---|
+| `APP_DB_URL` | Postgres connection string (Railway provides this) |
+| `AUTH_PK` | Clerk publishable key |
+| `CLERK_SECRET_KEY` | Clerk secret key (server-side JWT verification) |
+| `ADMIN_CLERK_ID` | Clerk user id of the admin — gates `/admin` and the LOC view |
+| `ANTHROPIC_API_KEY` | For AI search recommendations |
+| `DISCOGS_CONSUMER_KEY` | OAuth 1.0a consumer key (from discogs.com/settings/developers) |
+| `DISCOGS_CONSUMER_SECRET` | OAuth 1.0a consumer secret |
+
+Without these the server will boot in degraded mode — AI search, admin dashboard, and Discogs OAuth will be disabled.
+
+## Project layout
+
+```
+src/                TypeScript source (server + DB)
+  search-api.ts       Express app, all routes
+  db.ts               Postgres helpers and migrations
+  discogs-client.ts   OAuth 1.0a client wrapper
+  classical-synonyms.ts  Search query expansion lookup
+dist/               Compiled JS — committed so Railway runs from here
+web/                Static frontend served by Express
+  index.html          SPA shell
+  admin.html          Admin dashboard (gated by ADMIN_CLERK_ID)
+  shared.js           Header/footer, Clerk bootstrap, apiFetch wrapper
+  app.js              SPA bootstrap and routing
+  collection.js       switchView + collection/wantlist/inventory tabs
+  search.js           Discogs search UI
+  modal.js            Record detail modal
+  loc.js              Library of Congress view (admin-only)
+  account.js          Account view
+  orders.js           Seller orders
+  inventory-editor.js Marketplace listing CRUD
+  utils.js            Misc helpers
+  style.css           All styles
+.claude/
+  launch.json         Preview server config for Claude Code
+CLAUDE.md           Session-handoff doc for new Claude Code sessions
 ```
 
-Restart Claude Desktop and the Discogs tools will appear.
+## See also
 
-## Example usage
-
-Once connected, you can ask Claude things like:
-
-- *"Search Discogs for Pink Floyd's The Wall"*
-- *"Get marketplace stats for release 1954579 in USD"*
-- *"What are the price suggestions for release 249504?"*
-- *"List all versions of master release 5427"*
-- *"Show me releases by artist 45467"*
+`CLAUDE.md` has the live project context used when resuming work with Claude Code, including the current cache-bust version, deployment notes, known issues, and coding conventions.
