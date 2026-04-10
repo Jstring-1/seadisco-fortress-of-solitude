@@ -138,9 +138,35 @@ async function _locFetchSearch(params) {
 
 // ── View mount ──────────────────────────────────────────────────────────
 
-function initLocView() {
+async function initLocView() {
   const root = document.getElementById("loc-view");
   if (!root) return;
+
+  // Admin-only feature. shared.js sets window._isAdmin = true after
+  // /api/me confirms the current session. If that hasn't resolved yet,
+  // hit /api/me directly before rendering so a deep-link (?v=loc) can't
+  // briefly show the LOC UI to non-admins. Backend endpoints are also
+  // gated with requireAdmin — this is a layered defense.
+  if (!window._isAdmin) {
+    try {
+      const r = await apiFetch("/api/me");
+      if (r.ok) {
+        const data = await r.json();
+        if (data?.isAdmin) window._isAdmin = true;
+      }
+    } catch { /* fall through to deny */ }
+  }
+  if (!window._isAdmin) {
+    root.dataset.mounted = "1";
+    root.innerHTML = `
+      <div class="loc-empty" style="padding:3rem 1rem">
+        <div style="font-size:1rem;color:var(--text);margin-bottom:0.5rem">LOC is currently admin-only.</div>
+        <div style="font-size:0.82rem">This section is a personal workspace and isn't open to other accounts.</div>
+      </div>
+    `;
+    return;
+  }
+
   if (root.dataset.mounted === "1") {
     // Already rendered — just make sure the tab state is correct
     _locSwitchTab(_locTab);

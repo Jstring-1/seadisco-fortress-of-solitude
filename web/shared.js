@@ -418,7 +418,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260409j";
+  const SITE_VERSION = "build 20260409k";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'https://seadisco.com' : '/'}" class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -496,7 +496,7 @@ function renderSharedFooter(opts) {
         ${link("Info", "info")}
         ${link("Privacy Policy", "privacy")}
         ${link("Terms of Service", "terms")}
-        ${link("LOC", "loc")}
+        <a id="footer-loc-link" href="javascript:void(0)" onclick="switchView('loc')" style="display:none">LOC</a>
         <a id="footer-admin-link" href="/admin" style="display:none">Admin</a>
       </div>
     </div>
@@ -504,12 +504,10 @@ function renderSharedFooter(opts) {
     <div>Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Discogs</a> and <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Claude</a></div>
     <div style="margin-top:0.3rem">&copy; 2026 SeaDisco &nbsp;&middot;&nbsp; Music data courtesy of Discogs API &nbsp;&middot;&nbsp; Not affiliated with Discogs &nbsp;&middot;&nbsp; Jimmy Witherfork Strikes Again</div>`;
 
-  // Reveal the Admin link only when /api/me confirms the current Clerk session
-  // is the admin user. The endpoint returns { signedIn, isAdmin } based on
-  // the server-side ADMIN_CLERK_ID env var, so it's not spoofable from the
-  // client. We must wait for Clerk to load before calling — otherwise the
-  // bearer token isn't attached and even the admin would be reported as
-  // signed-out. Failures are silent (link stays hidden).
+  // Reveal admin-only footer links (Admin + LOC) when /api/me confirms the
+  // current Clerk session is the admin user. /api/me returns { signedIn,
+  // isAdmin } based on the server-side ADMIN_CLERK_ID env var, so it's not
+  // spoofable from the client. Failures are silent (links stay hidden).
   (async () => {
     try {
       // Wait for Clerk so apiFetch can attach the bearer token. loadClerkInstance
@@ -519,8 +517,11 @@ function renderSharedFooter(opts) {
       if (!res.ok) return;
       const data = await res.json();
       if (data?.isAdmin) {
-        const a = document.getElementById("footer-admin-link");
-        if (a) a.style.display = "";
+        window._isAdmin = true;
+        const adminA = document.getElementById("footer-admin-link");
+        if (adminA) adminA.style.display = "";
+        const locA = document.getElementById("footer-loc-link");
+        if (locA) locA.style.display = "";
       }
     } catch { /* hidden by default — fine */ }
   })();
