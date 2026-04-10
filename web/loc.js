@@ -192,10 +192,109 @@ async function initLocView() {
 
   // Load saved IDs once so the ★ state is correct on first render
   _locLoadSavedIds();
+  // Load saved SEARCHES (not saves) once so the user sees their bookmarks
+  _locLoadSavedSearches();
 
   // If the user linked straight to a saved tab (?v=loc&tab=saved), honor it
   const urlTab = new URLSearchParams(location.search).get("tab");
   _locSwitchTab(urlTab === "saved" ? "saved" : "search");
+}
+
+// ── Saved searches (bookmarks) ──────────────────────────────────────────
+
+let _locSavedSearches = [];
+
+async function _locLoadSavedSearches() {
+  try {
+    const r = await apiFetch("/api/user/saved-searches?view=loc");
+    if (!r.ok) return;
+    const body = await r.json();
+    _locSavedSearches = Array.isArray(body?.searches) ? body.searches : [];
+    _locRenderSavedSearchesRow();
+  } catch { /* silent */ }
+}
+
+function _locRenderSavedSearchesRow() {
+  const row = document.getElementById("loc-saved-searches-row");
+  if (!row) return;
+  if (!_locSavedSearches.length) {
+    row.style.display = "none";
+    row.innerHTML = "";
+    return;
+  }
+  row.style.display = "";
+  row.innerHTML = `
+    <span class="loc-saved-searches-label">Bookmarks:</span>
+    ${_locSavedSearches.map(s => `
+      <span class="loc-bookmark-chip">
+        <button type="button" class="loc-bookmark-restore" onclick="_locRestoreSavedSearch(${s.id})" title="Re-run this search">${escHtml(s.label)}</button>
+        <button type="button" class="loc-bookmark-delete" onclick="_locDeleteSavedSearch(${s.id})" title="Remove bookmark">×</button>
+      </span>
+    `).join("")}
+  `;
+}
+
+function _locRestoreSavedSearch(id) {
+  const entry = _locSavedSearches.find(s => s.id === id);
+  if (!entry) return;
+  const params = entry.params || {};
+  // Populate the form from the saved params
+  const setVal = (elId, key) => {
+    const el = document.getElementById(elId);
+    if (el) el.value = params[key] ?? "";
+  };
+  setVal("loc-q",           "q");
+  setVal("loc-contributor", "contributor");
+  setVal("loc-subject",     "subject");
+  setVal("loc-location",    "location");
+  setVal("loc-language",    "language");
+  setVal("loc-partof",      "partof");
+  setVal("loc-start-date",  "start_date");
+  setVal("loc-end-date",    "end_date");
+  setVal("loc-sort",        "sort");
+  setVal("loc-perpage",     "c");
+  _locSwitchTab("search");
+  _locRunSearchFromForm({ resetPage: true });
+}
+
+async function _locPromptSaveSearch() {
+  const params = _locReadFormParams();
+  const hasCriteria = !!(params.q || params.contributor || params.subject ||
+                         params.location || params.language || params.partof ||
+                         params.start_date || params.end_date);
+  if (!hasCriteria) {
+    showToast?.("Enter a keyword or filter first, then save.", "error");
+    return;
+  }
+  // Suggest a default label from the most distinctive field
+  const suggested = params.q || params.contributor || params.subject || params.partof || "LOC search";
+  const label = prompt("Bookmark label:", suggested);
+  if (!label || !label.trim()) return;
+  try {
+    const r = await apiFetch("/api/user/saved-searches", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ view: "loc", label: label.trim().slice(0, 100), params }),
+    });
+    if (!r.ok) throw new Error(`save failed (${r.status})`);
+    showToast?.("Bookmark saved");
+    await _locLoadSavedSearches();
+  } catch (e) {
+    showToast?.(e?.message || "Save failed", "error");
+  }
+}
+
+async function _locDeleteSavedSearch(id) {
+  if (!confirm("Remove this bookmark?")) return;
+  try {
+    const r = await apiFetch(`/api/user/saved-searches/${id}`, { method: "DELETE" });
+    if (!r.ok) throw new Error(`delete failed (${r.status})`);
+    _locSavedSearches = _locSavedSearches.filter(s => s.id !== id);
+    _locRenderSavedSearchesRow();
+    showToast?.("Bookmark removed");
+  } catch (e) {
+    showToast?.(e?.message || "Delete failed", "error");
+  }
 }
 
 function _locRenderShell() {
@@ -210,10 +309,13 @@ function _locRenderShell() {
     </div>
 
     <div class="loc-panel loc-panel-search">
+      <div id="loc-saved-searches-row" class="loc-saved-searches-row" style="display:none"></div>
+
       <form id="loc-search-form" class="loc-form" autocomplete="off">
         <div class="loc-form-row">
           <input type="text" id="loc-q" placeholder="Keyword (title, subject, or any text)" />
           <button type="submit" class="loc-submit" id="loc-submit-btn">Search</button>
+          <button type="button" class="loc-save-search-btn" id="loc-save-search-btn" onclick="_locPromptSaveSearch()" title="Save this search">★</button>
         </div>
         <div class="loc-form-grid">
           <label><span>Contributor</span><input type="text" id="loc-contributor" placeholder="e.g. whiteman, paul" /></label>
@@ -511,10 +613,28 @@ function _locOpenInfoPopup(locId) {
     ? `<div class="loc-info-summary">${esc(item.summary)}</div>`
     : "";
 
+  // Tracklist — items with 2+ audio files get a numbered, clickable list.
+  // Single-track items fall back to the header Play button.
+  const tracks = Array.isArray(item.tracks) ? item.tracks : [];
+  const trackListBlock = tracks.length >= 2
+    ? `<div class="loc-info-section">
+        <div class="loc-info-section-title">Tracks (${tracks.length})</div>
+        <ol class="loc-tracklist">${tracks.map((t, i) => {
+          const label = esc(t.title || `Track ${i + 1}`);
+          const dur = t.duration ? `<span class="loc-track-dur">${esc(t.duration)}</span>` : "";
+          return `<li class="loc-track-row">
+            <button type="button" class="loc-track-play" onclick="_locPlayTrack('${esc(item.id).replace(/'/g, "\\'")}',${i})" title="Play this track">▶</button>
+            <span class="loc-track-num">${i + 1}.</span>
+            <span class="loc-track-title">${label}</span>
+            ${dur}
+          </li>`;
+        }).join("")}</ol>
+      </div>`
+    : "";
+
   // Free-form text blocks — description (from r.description), notes
   // (from item.notes, usually release catalog info), speakers (podcast
-  // contributors as a pseudo-tracklist), and the full article (podcast
-  // transcript or blurb).
+  // contributors), and the full article (podcast transcript or blurb).
   const descBlock = description.length
     ? `<div class="loc-info-section">
         <div class="loc-info-section-title">Description</div>
@@ -527,10 +647,26 @@ function _locOpenInfoPopup(locId) {
         <ul class="loc-info-list">${notes.map(n => `<li>${esc(n)}</li>`).join("")}</ul>
       </div>`
     : "";
+  // Speakers: each name is a clickable LOC search. Three magnifying-glass
+  // links after the text search other places:
+  //   🔍 LOC      — new LOC search for the name (re-runs /api/loc/search)
+  //   🔎 Discogs  — main Discogs search view (uses switchView + doSearch)
+  //   🔍 Collection — cw-query filter in the Collection view
+  const renderNameLinks = (name) => {
+    const n = esc(name);
+    const jsName = esc(name).replace(/'/g, "\\'");
+    return `<span class="loc-name-search" title="Search LOC for ${n}" onclick="_locSearchByName('${jsName}')">🔍<span class="loc-name-search-label">LOC</span></span>
+      <span class="loc-name-search" title="Search Discogs for ${n}" onclick="_locSearchDiscogsByName('${jsName}')">🔎<span class="loc-name-search-label">Discogs</span></span>
+      <span class="loc-name-search" title="Filter your Collection for ${n}" onclick="_locSearchCollectionByName('${jsName}')">🔍<span class="loc-name-search-label">Collection</span></span>`;
+  };
   const speakersBlock = speakers.length
     ? `<div class="loc-info-section">
         <div class="loc-info-section-title">Speakers / participants</div>
-        <ul class="loc-info-list loc-info-list-inline">${speakers.map(s => `<li>${esc(s)}</li>`).join("")}</ul>
+        <ul class="loc-info-list loc-speaker-list">${speakers.map(s => `
+          <li class="loc-speaker-row">
+            <span class="loc-speaker-name" onclick="_locSearchByName('${esc(s).replace(/'/g, "\\'")}')" title="Search LOC for ${esc(s)}">${esc(s)}</span>
+            <span class="loc-name-search-group">${renderNameLinks(s)}</span>
+          </li>`).join("")}</ul>
       </div>`
     : "";
   // Article body — podcast transcript / blurb. Shown inside a scrollable
@@ -569,6 +705,7 @@ function _locOpenInfoPopup(locId) {
       </div>
     </div>
     ${summaryHtml}
+    ${trackListBlock}
     ${speakersBlock}
     ${descBlock}
     ${notesBlock}
@@ -589,6 +726,71 @@ function _locCloseInfoPopup() {
 function _locPlayFromInfo(locId) {
   const item = _locItemCache.get(locId);
   if (item?.streamUrl) _locPlay(item);
+}
+
+// Play a specific track from a multi-track LOC item. Builds a synthetic
+// play descriptor with the track-specific URL and title so the audio
+// bar shows the track name, not the item name.
+function _locPlayTrack(locId, trackIndex) {
+  const item = _locItemCache.get(locId);
+  if (!item || !Array.isArray(item.tracks)) return;
+  const track = item.tracks[trackIndex];
+  if (!track?.url) return;
+  _locPlay({
+    id: `${locId}#${trackIndex}`,
+    title: track.title ? `${item.title || "Untitled"} — ${track.title}` : `${item.title || "Untitled"} (track ${trackIndex + 1})`,
+    streamUrl: track.url,
+    streamType: track.streamType || "mp3",
+    image: item.image || "",
+  });
+}
+
+// Speaker / participant name → new LOC search by contributor.
+function _locSearchByName(name) {
+  if (!name) return;
+  _locCloseInfoPopup();
+  // Swap to the Search tab and populate the form
+  _locSwitchTab("search");
+  const contributorEl = document.getElementById("loc-contributor");
+  const qEl           = document.getElementById("loc-q");
+  if (contributorEl) contributorEl.value = name;
+  if (qEl) qEl.value = "";
+  _locRunSearchFromForm({ resetPage: true });
+}
+
+// Name → main Discogs search view. Uses the existing SPA search flow.
+function _locSearchDiscogsByName(name) {
+  if (!name) return;
+  _locCloseInfoPopup();
+  if (typeof switchView !== "function") { location.href = "/?q=" + encodeURIComponent(name); return; }
+  switchView("search");
+  // Populate the main search input and submit
+  setTimeout(() => {
+    const input = document.getElementById("query") || document.querySelector("#main-search-form input[name='q']") || document.querySelector("#main-search-form input[type='text']");
+    if (input) {
+      input.value = name;
+      input.form?.requestSubmit?.() || (typeof doSearch === "function" && doSearch(1));
+    } else if (typeof doSearch === "function") {
+      doSearch(1);
+    }
+  }, 50);
+}
+
+// Name → Collection filter view. Routes through records:collection with
+// the cw-query set to the name.
+function _locSearchCollectionByName(name) {
+  if (!name) return;
+  _locCloseInfoPopup();
+  if (typeof switchView !== "function") { location.href = "/?v=collection&q=" + encodeURIComponent(name); return; }
+  if (typeof window !== "undefined") window._cwTab = "collection";
+  switchView("records");
+  setTimeout(() => {
+    const cwInput = document.getElementById("cw-query");
+    if (cwInput) {
+      cwInput.value = name;
+      cwInput.dispatchEvent(new Event("input", { bubbles: true }));
+    }
+  }, 80);
 }
 
 async function _locToggleSaveFromInfo(locId) {
@@ -958,4 +1160,11 @@ window._locRunSearchFromForm    = _locRunSearchFromForm;
 window._locOpenInfoPopup        = _locOpenInfoPopup;
 window._locCloseInfoPopup       = _locCloseInfoPopup;
 window._locPlayFromInfo         = _locPlayFromInfo;
+window._locPlayTrack            = _locPlayTrack;
 window._locToggleSaveFromInfo   = _locToggleSaveFromInfo;
+window._locSearchByName         = _locSearchByName;
+window._locSearchDiscogsByName  = _locSearchDiscogsByName;
+window._locSearchCollectionByName = _locSearchCollectionByName;
+window._locPromptSaveSearch     = _locPromptSaveSearch;
+window._locRestoreSavedSearch   = _locRestoreSavedSearch;
+window._locDeleteSavedSearch    = _locDeleteSavedSearch;
