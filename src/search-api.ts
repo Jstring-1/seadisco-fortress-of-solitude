@@ -2171,45 +2171,59 @@ function _normalizeLocResult(r: any): any {
   const date = typeof r.date === "string" ? r.date : (Array.isArray(r.dates) ? r.dates[0] : "");
   const year = typeof date === "string" && date.length >= 4 ? date.slice(0, 4) : "";
   const image = Array.isArray(r.image_url) && r.image_url.length ? String(r.image_url[0]).split("#")[0] : "";
-  // Audio URL lives in different fields depending on the collection:
+  // Audio URLs live in different fields depending on the collection:
   //   - National Jukebox:              resources[].media   (mp3)
   //   - NAVCC / main catalog / AFC:    resources[].audio   (mp3)
   //   - Podcasts / AFC Folklife:       item.mp3_url        (mp3)
   //   - Some newer items:              resources[].stream  (HLS .m3u8)
-  // First match wins, with a preference for mp3 over HLS since mp3
-  // plays natively without hls.js.
+  //
+  // Items can contain multiple tracks — e.g. the Gerry Mulligan
+  // autobiography has 31 audio resources in one item. We collect every
+  // playable track into `tracks[]` in their original order, and set
+  // `streamUrl` / `streamType` from the first one for the quick play
+  // button + backward compatibility.
   const itemObj = r.item && typeof r.item === "object" ? r.item : {};
-  let streamUrl = "";
-  let streamType = "";
+  const tracks: Array<{ url: string; title: string; streamType: string; order: number; duration?: string }> = [];
   if (Array.isArray(r.resources)) {
-    for (const res of r.resources) {
+    for (let i = 0; i < r.resources.length; i++) {
+      const res = r.resources[i];
       if (!res || typeof res !== "object") continue;
-      const candidate = (typeof res.media === "string" && res.media) ? res.media
-                      : (typeof res.audio === "string" && res.audio) ? res.audio
-                      : "";
-      if (candidate) {
-        streamUrl = candidate;
-        streamType = /\.m3u8($|\?)/i.test(candidate) ? "hls" : "mp3";
-        break;
-      }
-    }
-    if (!streamUrl) {
-      for (const res of r.resources) {
-        if (!res || typeof res !== "object") continue;
-        if (typeof res.stream === "string" && res.stream) {
-          streamUrl = res.stream;
-          streamType = "hls";
-          break;
-        }
-      }
+      // Pick the best playable URL from this resource
+      const url = (typeof res.media === "string" && res.media)   ? res.media
+                : (typeof res.audio === "string" && res.audio)   ? res.audio
+                : (typeof res.stream === "string" && res.stream) ? res.stream
+                : "";
+      if (!url) continue;
+      const isHls = /\.m3u8($|\?)/i.test(url);
+      const caption = typeof res.caption === "string" ? res.caption.trim()
+                    : typeof res.resource_label === "string" ? res.resource_label.trim()
+                    : "";
+      const duration = typeof res.duration === "string" ? res.duration
+                     : typeof res.duration === "number" ? String(res.duration)
+                     : "";
+      tracks.push({
+        url,
+        title: caption,
+        streamType: isHls ? "hls" : "mp3",
+        order: typeof res.order === "number" ? res.order : i,
+        ...(duration ? { duration } : {}),
+      });
     }
   }
   // Podcast fallback — item.mp3_url is where Folklife / podcast items
-  // keep their audio URL.
-  if (!streamUrl && typeof itemObj.mp3_url === "string" && itemObj.mp3_url) {
-    streamUrl = itemObj.mp3_url;
-    streamType = "mp3";
+  // keep their audio URL, with no resources[] entry.
+  if (!tracks.length && typeof itemObj.mp3_url === "string" && itemObj.mp3_url) {
+    tracks.push({
+      url: itemObj.mp3_url,
+      title: "",
+      streamType: "mp3",
+      order: 0,
+    });
   }
+  // Sort by order so multi-track items play in LP sequence
+  tracks.sort((a, b) => a.order - b.order);
+  const streamUrl  = tracks[0]?.url ?? "";
+  const streamType = tracks[0]?.streamType ?? "";
   const item = itemObj;
   // Rights advisory — LOC's own note about what you can / can't do with
   // the recording. Critical for attribution and any downstream reuse.
@@ -2224,15 +2238,41 @@ function _normalizeLocResult(r: any): any {
   const partof = Array.isArray(r.partof)
     ? r.partof.map((p: any) => typeof p === "string" ? p : (p?.title ?? "")).filter(Boolean)
     : [];
+  // Helper: strip HTML tags and decode a few common entities so LOC's
+  // HTML-flavored description / notes / article fields render as plain
+  // text in the popup instead of leaking visible markup.
+  const stripHtml = (s: string): string => {
+    if (!s) return "";
+    return String(s)
+      // Convert block-level tags to paragraph breaks so the stripped
+      // text keeps its structure
+      .replace(/<\s*\/?(p|br|div|li|h[1-6]|tr)\s*\/?\s*>/gi, "\n")
+      // Drop every other tag entirely
+      .replace(/<[^>]*>/g, "")
+      // Decode common entities
+      .replace(/&nbsp;/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&apos;/g, "'")
+      // Collapse excess whitespace
+      .replace(/[ \t]+/g, " ")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+  };
   // Helper: coerce a "maybe-string, maybe-array, maybe-missing" field
   // into a trimmed string array for display. Dedupes and drops blanks.
+  // Applies HTML stripping so LOC markup doesn't leak to the UI.
   const toArr = (v: any): string[] => {
     if (!v) return [];
     const arr = Array.isArray(v) ? v : [v];
     const out: string[] = [];
     const seen = new Set<string>();
     for (const x of arr) {
-      const s = typeof x === "string" ? x.trim() : (x?.title ?? x?.name ?? "").trim();
+      const raw = typeof x === "string" ? x : (x?.title ?? x?.name ?? "");
+      const s = stripHtml(raw);
       if (s && !seen.has(s)) { seen.add(s); out.push(s); }
     }
     return out;
@@ -2251,9 +2291,11 @@ function _normalizeLocResult(r: any): any {
     image,
     streamUrl,
     streamType,
+    tracks,
+    trackCount: tracks.length,
     label: item.recording_label ?? "",
     location: item.recording_location ?? (Array.isArray(r.location) ? r.location[0] : ""),
-    summary: item.summary ?? "",
+    summary: stripHtml(item.summary ?? ""),
     audioType: item.audio_type ?? "",
     genres: toArr(r.subject_genre).length ? toArr(r.subject_genre) : toArr(item.genre),
     language: Array.isArray(r.language) ? r.language[0] : (typeof item.language === "string" ? item.language : ""),
@@ -2286,7 +2328,7 @@ function _normalizeLocResult(r: any): any {
                          : (typeof r.type === "string" ? r.type : ""),
 
     // ── Podcast-specific fields (AFC Folklife etc.) ────────────────
-    article:             typeof item.article === "string" ? item.article : "",
+    article:             stripHtml(typeof item.article === "string" ? item.article : ""),
     speakers:            toArr(item.speakers),
     runningTime:         typeof item.running_time === "string" ? item.running_time
                          : (typeof item.running_time === "number" ? String(item.running_time) : ""),
