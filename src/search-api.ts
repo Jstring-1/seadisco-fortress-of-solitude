@@ -97,6 +97,17 @@ class RateLimiter {
       this.scheduleDrain();
     });
   }
+  /** Current limiter state — for the admin stats panel. */
+  getStats(): { inWindow: number; queued: number; max: number; windowMs: number; maxQueueDepth: number } {
+    this.prune();
+    return {
+      inWindow: this.slots.length,
+      queued: this.queue.length,
+      max: this.max,
+      windowMs: this.windowMs,
+      maxQueueDepth: this.maxQueueDepth,
+    };
+  }
   private prune() {
     const cutoff = Date.now() - this.windowMs;
     while (this.slots.length && this.slots[0] < cutoff) this.slots.shift();
@@ -152,6 +163,42 @@ function _locCacheSet(key: string, body: any) {
     if (firstKey !== undefined) _locCache.delete(firstKey);
   }
   _locCache.set(key, { ts: Date.now(), body });
+}
+
+// Runtime LOC stats surfaced by GET /api/admin/loc-stats. Cumulative
+// counters since last process restart, plus a rolling 24h timestamp
+// deque so the admin dashboard can show requests per hour / per day.
+const _locStats = {
+  cacheHits:      0,
+  cacheMisses:    0,
+  failures:       0,
+  rateLimitHits:  0,          // how many times we hit 503/rate_limit_queue_full
+  lastRequestAt:  null as number | null,
+  lastFailureAt:  null as number | null,
+  lastFailureMsg: "" as string,
+  recentTs:       [] as number[],  // timestamps of every proxy hit in last 24h
+};
+const LOC_STATS_WINDOW_MS = 24 * 60 * 60 * 1000;
+function _locStatsPrune() {
+  const cutoff = Date.now() - LOC_STATS_WINDOW_MS;
+  while (_locStats.recentTs.length && _locStats.recentTs[0] < cutoff) _locStats.recentTs.shift();
+}
+function _locStatsRecord(kind: "hit" | "miss" | "failure" | "ratelimit", errorMsg?: string) {
+  const now = Date.now();
+  _locStats.lastRequestAt = now;
+  _locStats.recentTs.push(now);
+  if (kind === "hit")       _locStats.cacheHits++;
+  else if (kind === "miss") _locStats.cacheMisses++;
+  else if (kind === "failure") {
+    _locStats.failures++;
+    _locStats.lastFailureAt = now;
+    _locStats.lastFailureMsg = String(errorMsg ?? "").slice(0, 240);
+  } else if (kind === "ratelimit") {
+    _locStats.rateLimitHits++;
+    _locStats.lastFailureAt = now;
+    _locStats.lastFailureMsg = "rate limit queue full";
+  }
+  _locStatsPrune();
 }
 
 // ── Logged fetch: wraps fetch() and logs the request to api_request_log ──
@@ -2047,11 +2094,18 @@ app.get("/api/user/wantlist/item", async (req, res) => {
 // Whitelist of query params we forward to loc.gov. Everything else is
 // dropped so malformed / abusive params can't sneak through.
 const LOC_QUERY_PARAMS = new Set([
-  "q", "c", "sp", "fo", "at",
+  "q", "c", "sp", "fo", "at", "sb",
   "contributor", "subject", "location", "language",
   "start_date", "end_date", "dates",
   "original_format", "online_format", "partof",
 ]);
+// LOC sort values we accept. Maps our UI key → LOC's `sb` param value.
+const LOC_SORT_MAP: Record<string, string> = {
+  "relevance": "",               // default — LOC sorts by relevance when sb is absent
+  "date-asc":  "date",           // oldest first
+  "date-desc": "date_desc",      // newest first
+  "title":     "title_s",        // A–Z by title
+};
 
 // Build a LOC URL from the validated query params. We always target the
 // /audio/ endpoint since SeaDisco only surfaces audio.
@@ -2093,6 +2147,11 @@ function _buildLocSearchUrl(req: express.Request): { url: string; cacheKey: stri
     params.set("dates", `${s}/${e}`);
   }
 
+  // Sort — map our UI key to LOC's `sb` param
+  const sortKey = typeof req.query.sort === "string" ? req.query.sort.trim() : "";
+  const sbValue = LOC_SORT_MAP[sortKey];
+  if (sbValue) params.set("sb", sbValue);
+
   const url = `https://www.loc.gov/audio/?${params.toString()}`;
   // Cache key: deterministic on sorted params
   const cacheKey = [...params.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([k, v]) => `${k}=${v}`).join("&");
@@ -2112,21 +2171,36 @@ function _normalizeLocResult(r: any): any {
   const date = typeof r.date === "string" ? r.date : (Array.isArray(r.dates) ? r.dates[0] : "");
   const year = typeof date === "string" && date.length >= 4 ? date.slice(0, 4) : "";
   const image = Array.isArray(r.image_url) && r.image_url.length ? String(r.image_url[0]).split("#")[0] : "";
-  // Audio URL lives in resources[].media (mp3) or resources[].stream (HLS)
+  // Audio URL lives in different fields depending on the collection:
+  //   - National Jukebox:              resources[].media   (mp3)
+  //   - NAVCC / main catalog / AFC:    resources[].audio   (mp3)
+  //   - Some newer items:              resources[].stream  (HLS .m3u8)
+  // We check all three. The first hit wins, with a preference for mp3
+  // over HLS since mp3 plays natively without hls.js.
   let streamUrl = "";
   let streamType = "";
   if (Array.isArray(r.resources)) {
+    // First pass: look for a direct mp3 (media or audio)
     for (const res of r.resources) {
       if (!res || typeof res !== "object") continue;
-      if (typeof res.media === "string" && res.media) {
-        streamUrl = res.media;
-        streamType = res.media.includes(".m3u8") ? "hls" : "mp3";
+      const candidate = (typeof res.media === "string" && res.media) ? res.media
+                      : (typeof res.audio === "string" && res.audio) ? res.audio
+                      : "";
+      if (candidate) {
+        streamUrl = candidate;
+        streamType = /\.m3u8($|\?)/i.test(candidate) ? "hls" : "mp3";
         break;
       }
-      if (typeof res.stream === "string" && res.stream) {
-        streamUrl = res.stream;
-        streamType = "hls";
-        break;
+    }
+    // Second pass: fall back to HLS stream if no direct file was found
+    if (!streamUrl) {
+      for (const res of r.resources) {
+        if (!res || typeof res !== "object") continue;
+        if (typeof res.stream === "string" && res.stream) {
+          streamUrl = res.stream;
+          streamType = "hls";
+          break;
+        }
       }
     }
   }
@@ -2161,6 +2235,7 @@ app.get("/api/loc/search", async (req, res) => {
   // Cache hit → return immediately, no LOC round trip, no rate-limit slot
   const cached = _locCacheGet(cacheKey);
   if (cached) {
+    _locStatsRecord("hit");
     res.setHeader("X-SeaDisco-Cache", "hit");
     res.json(cached);
     return;
@@ -2171,9 +2246,11 @@ app.get("/api/loc/search", async (req, res) => {
     await locLimiter.acquire();
   } catch (e: any) {
     if (e?.code === "rate_limit_queue_full") {
+      _locStatsRecord("ratelimit");
       res.status(503).json({ error: "rate_limited", message: "LOC API is busy, try again in a moment." });
       return;
     }
+    _locStatsRecord("failure", e?.message);
     res.status(500).json({ error: String(e?.message ?? e) });
     return;
   }
@@ -2184,16 +2261,19 @@ app.get("/api/loc/search", async (req, res) => {
       context: "loc-search",
     });
     if (r.status === 429) {
+      _locStatsRecord("ratelimit");
       res.status(503).json({ error: "rate_limited", message: "LOC is currently rate-limiting — try again shortly." });
       return;
     }
     if (!r.ok) {
+      _locStatsRecord("failure", `HTTP ${r.status}`);
       res.status(502).json({ error: `LOC HTTP ${r.status}` });
       return;
     }
     const ct = r.headers.get("content-type") ?? "";
     if (!ct.includes("json")) {
       // LOC sometimes serves an HTML CAPTCHA page on heavy load
+      _locStatsRecord("failure", "non-JSON (CAPTCHA?)");
       res.status(502).json({ error: "LOC returned non-JSON (possible CAPTCHA). Try again later." });
       return;
     }
@@ -2211,9 +2291,11 @@ app.get("/api/loc/search", async (req, res) => {
 
     const payload = { results, pagination };
     _locCacheSet(cacheKey, payload);
+    _locStatsRecord("miss");
     res.setHeader("X-SeaDisco-Cache", "miss");
     res.json(payload);
   } catch (e: any) {
+    _locStatsRecord("failure", e?.message);
     res.status(500).json({ error: String(e?.message ?? e) });
   }
 });
@@ -2765,6 +2847,45 @@ app.post("/api/admin/revoke-sessions", async (req, res) => {
     console.error("revoke-sessions error:", err);
     res.status(500).json({ error: String(err) });
   }
+});
+
+// GET /api/admin/loc-stats — LOC proxy stats for the admin dashboard
+app.get("/api/admin/loc-stats", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  _locStatsPrune();
+  const now = Date.now();
+  const oneHourAgo = now - 60 * 60 * 1000;
+  const tenMinAgo  = now - 10 * 60 * 1000;
+  const requestsLastHour = _locStats.recentTs.filter(t => t >= oneHourAgo).length;
+  const requestsLastDay  = _locStats.recentTs.length;
+  const requestsLast10m  = _locStats.recentTs.filter(t => t >= tenMinAgo).length;
+  const totalLookups = _locStats.cacheHits + _locStats.cacheMisses;
+  const hitRatePct = totalLookups > 0 ? Math.round((_locStats.cacheHits / totalLookups) * 1000) / 10 : 0;
+  res.json({
+    cacheHits:       _locStats.cacheHits,
+    cacheMisses:     _locStats.cacheMisses,
+    hitRatePct,
+    cacheEntries:    _locCache.size,
+    cacheMax:        LOC_CACHE_MAX,
+    cacheTtlMs:      LOC_CACHE_TTL_MS,
+    failures:        _locStats.failures,
+    rateLimitHits:   _locStats.rateLimitHits,
+    lastRequestAt:   _locStats.lastRequestAt,
+    lastFailureAt:   _locStats.lastFailureAt,
+    lastFailureMsg:  _locStats.lastFailureMsg,
+    requestsLast10m,
+    requestsLastHour,
+    requestsLastDay,
+    rateLimiter:     locLimiter.getStats(),
+  });
+});
+
+// POST /api/admin/loc-cache/clear — wipe the in-memory LOC response cache
+app.post("/api/admin/loc-cache/clear", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const cleared = _locCache.size;
+  _locCache.clear();
+  res.json({ ok: true, cleared });
 });
 
 // POST /api/admin/purge-non-admin-users — wipe all per-user data EXCEPT the admin

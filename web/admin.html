@@ -8,12 +8,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260409k" />
+  <link rel="stylesheet" href="/style.css?v=20260409l" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260409k"></script>
+<script defer src="/shared.js?v=20260409l"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
@@ -56,6 +56,7 @@
         <button class="admin-tab" onclick="switchAdminTab('sync-status')">User Sync</button>
         <button class="admin-tab" onclick="switchAdminTab('api-log')">API Log</button>
         <button class="admin-tab" onclick="switchAdminTab('db-stats')">Database</button>
+        <button class="admin-tab" onclick="switchAdminTab('loc-stats')">LOC</button>
       </div>
 
       <!-- Collection Stats -->
@@ -108,6 +109,15 @@
         <div id="db-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
       </div>
 
+      <!-- LOC Stats -->
+      <div class="admin-tab-panel" id="panel-loc-stats" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
+          <h2 style="margin:0">Library of Congress proxy</h2>
+          <button class="admin-refresh-btn" onclick="loadLocStats()" title="Refresh">&#8635;</button>
+        </div>
+        <div id="loc-stats-body" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
+      </div>
+
     </div>
   </div>
 </main>
@@ -155,7 +165,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260409k"></script>
+<script defer src="/modal.js?v=20260409l"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -168,6 +178,7 @@ const _adminTabLoaders = {
   'sync-status': () => loadAdminSyncStatus(),
   'api-log': () => loadApiLog(),
   'db-stats': () => loadDbStats(),
+  'loc-stats': () => loadLocStats(),
 };
 const _adminTabLoaded = {};
 
@@ -399,7 +410,7 @@ async function loadDbStats() {
       { label: "Users & Auth", tables: ["user_tokens", "oauth_request_tokens"] },
       { label: "Collection & Library", tables: ["user_collection", "user_collection_folders", "user_wantlist", "user_inventory", "user_lists", "user_list_items", "user_orders", "user_order_messages"] },
       { label: "Pricing", tables: ["price_cache", "price_history", "price_alerts", "triggered_alerts"] },
-      { label: "User Features", tables: ["saved_searches", "user_favorites", "feedback", "release_cache"] },
+      { label: "User Features", tables: ["saved_searches", "user_favorites", "user_recent_views", "user_loc_saves", "feedback", "release_cache"] },
       { label: "System", tables: ["api_request_log"] },
     ];
 
@@ -423,6 +434,85 @@ async function loadDbStats() {
     el.innerHTML = html;
   } catch {
     el.textContent = "Could not load DB stats.";
+  }
+}
+
+// ── LOC Stats ─────────────────────────────────────────────────────────
+async function loadLocStats() {
+  const el = document.getElementById("loc-stats-body");
+  if (!el) return;
+  try {
+    const r = await apiFetch("/api/admin/loc-stats");
+    if (!r.ok) { el.textContent = "Could not load LOC stats."; return; }
+    const s = await r.json();
+    const rl = s.rateLimiter || {};
+    const fmtTime = (t) => t ? new Date(t).toLocaleString() : "—";
+    const fmtDur = (ms) => {
+      if (!ms) return "—";
+      const s = Math.floor(ms / 1000);
+      if (s < 60) return `${s}s`;
+      if (s < 3600) return `${Math.floor(s / 60)}m`;
+      return `${Math.floor(s / 3600)}h`;
+    };
+    const queueDepth = (rl.queued ?? 0);
+    const queuePct = rl.maxQueueDepth ? Math.round((queueDepth / rl.maxQueueDepth) * 100) : 0;
+    const windowPct = rl.max ? Math.round((rl.inWindow / rl.max) * 100) : 0;
+    const queueColor = queueDepth === 0 ? "#6b8f71" : queuePct > 60 ? "#ff6b35" : "#e8d44d";
+    const windowColor = windowPct > 80 ? "#ff6b35" : windowPct > 50 ? "#e8d44d" : "#6b8f71";
+    const failureColor = s.failures > 0 ? "#ff6b35" : "#555";
+    const rlColor = s.rateLimitHits > 0 ? "#ff6b35" : "#555";
+
+    el.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.8rem;margin-bottom:1rem">
+        <div style="background:#1a1510;border:1px solid #2e2518;border-radius:6px;padding:0.6rem 0.8rem">
+          <div style="font-size:0.68rem;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.3rem">Cache</div>
+          <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Hit rate</span><strong style="color:var(--fg)">${s.hitRatePct}%</strong></div>
+          <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Hits</span><strong style="color:#6b8f71">${s.cacheHits.toLocaleString()}</strong></div>
+          <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Misses</span><strong style="color:var(--fg)">${s.cacheMisses.toLocaleString()}</strong></div>
+          <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Entries</span><strong style="color:var(--fg)">${s.cacheEntries} / ${s.cacheMax}</strong></div>
+          <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">TTL</span><strong style="color:var(--fg)">${fmtDur(s.cacheTtlMs)}</strong></div>
+        </div>
+        <div style="background:#1a1510;border:1px solid #2e2518;border-radius:6px;padding:0.6rem 0.8rem">
+          <div style="font-size:0.68rem;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.3rem">Rate Limiter</div>
+          <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">In window</span><strong style="color:${windowColor}">${rl.inWindow ?? 0} / ${rl.max ?? 0}</strong></div>
+          <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Queue depth</span><strong style="color:${queueColor}">${queueDepth} / ${rl.maxQueueDepth ?? 0}</strong></div>
+          <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Window</span><strong style="color:var(--fg)">${fmtDur(rl.windowMs)}</strong></div>
+          <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">503s fired</span><strong style="color:${rlColor}">${s.rateLimitHits.toLocaleString()}</strong></div>
+        </div>
+        <div style="background:#1a1510;border:1px solid #2e2518;border-radius:6px;padding:0.6rem 0.8rem">
+          <div style="font-size:0.68rem;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.3rem">Traffic</div>
+          <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Last 10 min</span><strong style="color:var(--fg)">${s.requestsLast10m.toLocaleString()}</strong></div>
+          <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Last hour</span><strong style="color:var(--fg)">${s.requestsLastHour.toLocaleString()}</strong></div>
+          <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Last 24h</span><strong style="color:var(--fg)">${s.requestsLastDay.toLocaleString()}</strong></div>
+          <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Last request</span><strong style="color:var(--fg);font-size:0.72rem">${fmtTime(s.lastRequestAt)}</strong></div>
+        </div>
+        <div style="background:#1a1510;border:1px solid #2e2518;border-radius:6px;padding:0.6rem 0.8rem">
+          <div style="font-size:0.68rem;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.3rem">Failures</div>
+          <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Total</span><strong style="color:${failureColor}">${s.failures.toLocaleString()}</strong></div>
+          <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Last failure</span><strong style="color:var(--fg);font-size:0.72rem">${fmtTime(s.lastFailureAt)}</strong></div>
+          ${s.lastFailureMsg ? `<div style="font-size:0.72rem;color:#ff9470;margin-top:0.3rem;word-break:break-word">${escHtml(s.lastFailureMsg)}</div>` : ""}
+        </div>
+      </div>
+      <div style="display:flex;gap:0.5rem;align-items:center">
+        <button onclick="clearLocCache()" style="background:#2a1f18;border:1px solid #6b4a18;color:#e8a84a;font-size:0.78rem;padding:0.4rem 0.9rem;border-radius:5px;cursor:pointer">Clear response cache</button>
+        <span style="font-size:0.72rem;color:#666">Evicts all ${s.cacheEntries} cached search responses. Next searches re-hit loc.gov.</span>
+      </div>
+    `;
+  } catch (e) {
+    el.textContent = "Could not load LOC stats.";
+  }
+}
+
+async function clearLocCache() {
+  if (!confirm("Clear the LOC response cache? The next few searches will hit loc.gov directly until the cache warms up.")) return;
+  try {
+    const r = await apiFetch("/api/admin/loc-cache/clear", { method: "POST" });
+    if (!r.ok) { alert("Failed to clear cache."); return; }
+    const body = await r.json();
+    alert(`Cleared ${body.cleared} cached responses.`);
+    loadLocStats();
+  } catch {
+    alert("Failed to clear cache.");
   }
 }
 
