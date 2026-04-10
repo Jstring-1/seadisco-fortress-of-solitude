@@ -1531,7 +1531,19 @@ function renderWantedItems(items) {
 function renderCollectionPagination(tab) {
   const pag = document.getElementById("pagination");
   if (totalPages <= 1) { pag.style.display = "none"; return; }
-  const goTo = (p) => { window.scrollTo({top:0,behavior:'smooth'}); tab === "collection" ? loadCollectionTab(p) : loadWantlistTab(p); };
+  // Await the page load so we can scroll to the FRESHLY rendered results.
+  // Target the results container (offset slightly so the status line is
+  // visible), not the whole page — pagination is an in-place page swap,
+  // not a view change, so we shouldn't blow the user out to the header.
+  const goTo = async (p) => {
+    if (tab === "collection") await loadCollectionTab(p);
+    else                       await loadWantlistTab(p);
+    const el = document.getElementById("results");
+    if (el) {
+      const top = el.getBoundingClientRect().top + window.scrollY - 80;
+      window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+    }
+  };
 
   // Build page number list: 1 ... [cur-2 cur-1 cur cur+1 cur+2] ... last
   const pages = new Set();

@@ -2520,12 +2520,29 @@ body.modal-open  { overflow: hidden; }
 .card .thumb-placeholder {
   width: 100%;
   aspect-ratio: 1;
-  background: var(--surface);
+  background: linear-gradient(135deg, var(--surface-raised), var(--bg));
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--border);
-  font-size: 2.5rem;
+  color: var(--muted);
+  font-size: 2.8rem;
+  text-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
+  position: relative;
+}
+.card .thumb-placeholder::after {
+  content: "no image";
+  position: absolute;
+  bottom: 0.4rem;
+  right: 0.5rem;
+  font-size: 0.55rem;
+  color: var(--muted-dim);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-shadow: none;
+}
+/* Keep the LOC-card-type variant consistent even on light themes */
+.card-type-loc .thumb-placeholder {
+  background: linear-gradient(135deg, var(--bg-elevated), var(--surface-sunken));
 }
 
 .card-body {
