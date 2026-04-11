@@ -1646,6 +1646,8 @@ async function loadDiscogsIds() {
       window._inventoryListingIds = data.inventoryListingIds ?? {};  // { releaseId: [listingId1, ...] }
       window._listMembership = data.listMembership ?? {};  // { discogsId: [{listId, listName}] }
       window._collectionInstanceCounts = data.collectionInstanceCounts ?? {}; // { releaseId: count } for multi-copy releases
+      window._collectionMasterCounts = data.collectionMasterCounts ?? {};   // { masterId: distinctReleaseCount }
+      window._wantlistMasterCounts   = data.wantlistMasterCounts   ?? {};   // { masterId: distinctReleaseCount }
       window._defaultAddFolderId = Number(data.defaultAddFolderId) || 1;
       window._userCurrency = data.currency || "USD";
       const cb = document.getElementById("hide-owned");

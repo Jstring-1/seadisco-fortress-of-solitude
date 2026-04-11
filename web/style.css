@@ -3235,6 +3235,26 @@ button.wiki-link-btn:active {
 .badge-collection.is-active,
 .badge-wantlist.is-active,
 .badge-favorite.is-favorite { opacity: 1; }
+/* Master-card variants showing the count of owned versions inside the
+   dot. Slightly larger so a 1-2 digit number reads cleanly. The
+   negative margin-top keeps the bigger circle centered on the same
+   slot row as the standard 10px badges. */
+.card-badge.has-count {
+  width: 16px;
+  height: 16px;
+  font-size: 9px;
+  font-weight: 800;
+  font-family: system-ui, -apple-system, sans-serif;
+  text-indent: 0;
+  overflow: visible;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  color: #0a0a0a;
+  margin-top: -3px;
+  text-shadow: 0 0 1px rgba(255, 255, 255, 0.45);
+}
 /* Show inactive C/W/F on hover — only on devices that support hover (not touch) */
 @media (hover: hover) {
   .card:hover .badge-collection,
