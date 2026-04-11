@@ -1560,6 +1560,25 @@ async function ensureCollectionFieldsLoaded() {
 //     owns a copy of this release.
 //   - Wantlist notes editor, if the release is in the user's wantlist.
 // Both blocks can coexist.
+// Read/write the global collapsed state for the notes panel. Stored
+// in localStorage so toggling on one popup persists to every future
+// popup in every tab until the user flips it again.
+function _notesPanelIsCollapsed() {
+  try { return localStorage.getItem("sd-notes-collapsed") === "1"; } catch { return false; }
+}
+function _setNotesPanelCollapsed(collapsed) {
+  try { localStorage.setItem("sd-notes-collapsed", collapsed ? "1" : "0"); } catch {}
+}
+function toggleNotesPanel() {
+  const panel = document.getElementById("modal-notes-panel");
+  if (!panel) return;
+  const nowCollapsed = !panel.classList.contains("is-collapsed");
+  panel.classList.toggle("is-collapsed", nowCollapsed);
+  _setNotesPanelCollapsed(nowCollapsed);
+  const chev = panel.querySelector(".modal-notes-chev");
+  if (chev) chev.textContent = nowCollapsed ? "▸" : "▾";
+}
+
 async function renderNotesPanel(releaseId) {
   const rid = Number(releaseId);
   if (!rid) return;
@@ -1574,9 +1593,10 @@ async function renderNotesPanel(releaseId) {
   const inWant = window._wantlistIds?.has(rid);
   if (!inCol && !inWant) return;
 
+  const collapsed = _notesPanelIsCollapsed();
   const panel = document.createElement("div");
   panel.id = "modal-notes-panel";
-  panel.className = "modal-notes-panel";
+  panel.className = "modal-notes-panel" + (collapsed ? " is-collapsed" : "");
   panel.innerHTML = `<div class="modal-notes-loading">Loading notes…</div>`;
 
   const anchor = document.getElementById("modal-instances-panel") || actionsEl;
@@ -1672,7 +1692,20 @@ async function renderNotesPanel(releaseId) {
     </div>`;
   }
 
-  panel.innerHTML = html || `<div class="modal-notes-empty">No notes available.</div>`;
+  // Wrap the blocks in a collapsible body. The header is always
+  // visible and flips between ▾ (open) and ▸ (collapsed); clicking it
+  // toggles the body AND persists the choice site-wide.
+  const bodyHtml = html || `<div class="modal-notes-empty">No notes available.</div>`;
+  const headerLabel = (inCol && inWant) ? "Notes & fields"
+                    : inCol              ? "Collection fields"
+                    :                      "Wantlist notes";
+  panel.innerHTML = `
+    <button type="button" class="modal-notes-header" onclick="toggleNotesPanel()" title="Click to collapse or expand">
+      <span class="modal-notes-chev">${collapsed ? "▸" : "▾"}</span>
+      <span class="modal-notes-header-label">${escHtml(headerLabel)}</span>
+    </button>
+    <div class="modal-notes-body">${bodyHtml}</div>
+  `;
 }
 
 // Enter (without Shift) commits the edit by blurring the field, which

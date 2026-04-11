@@ -2032,6 +2032,43 @@ body.modal-open  { overflow: hidden; }
   flex-direction: column;
   gap: 0.45rem;
 }
+/* Clickable header above the notes/fields body. Full-width transparent
+   button so the whole row is a hit target. Chevron flips based on the
+   .is-collapsed state on the parent panel (persisted per user via
+   localStorage sd-notes-collapsed). */
+.modal-notes-header {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.15rem 0;
+  background: none;
+  border: none;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+}
+.modal-notes-header:hover { color: var(--accent); }
+.modal-notes-chev {
+  color: var(--muted);
+  font-size: 0.75rem;
+  width: 0.9rem;
+  display: inline-flex;
+  justify-content: center;
+}
+.modal-notes-header-label { flex: 1; }
+.modal-notes-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+.modal-notes-panel.is-collapsed .modal-notes-body { display: none; }
+.modal-notes-panel.is-collapsed { gap: 0; padding: 0.35rem 0.7rem; }
 .modal-notes-block {
   display: flex;
   flex-direction: column;
