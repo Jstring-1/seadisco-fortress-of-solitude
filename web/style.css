@@ -3206,12 +3206,14 @@ button.wiki-link-btn:active {
 }
 /* Colored dots instead of letter badges — cleaner at a glance and don't
    compete with text on the card. Each dot sits in a fixed slot on the
-   right edge so relative position conveys meaning (top=C, then W, L, I). */
+   right edge so relative position conveys meaning (top=C, then W, L, I).
+   All badges share the same 16px footprint so masters showing a count
+   sit perfectly aligned with plain release dots. */
 .card-badge {
   position: absolute;
   right: 0;
-  width: 10px;
-  height: 10px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   font-size: 0;
   overflow: hidden;
@@ -3219,15 +3221,16 @@ button.wiki-link-btn:active {
   border: 1.5px solid;
   box-shadow: 0 0 0 1px rgba(0,0,0,0.45);
   pointer-events: auto;
+  box-sizing: border-box;
 }
-/* Fixed slot positions */
-.badge-collection { top: 6px;   background: #6ddf70; border-color: #2a4a2b; opacity: 0; transition: opacity 0.15s; cursor: pointer; }
-.badge-wantlist   { top: 22px;  background: #f0c95c; border-color: #4a3e1e; opacity: 0; transition: opacity 0.15s; cursor: pointer; }
-.badge-list       { top: 38px;  background: #a0ccf0; border-color: #2a3a4a; }
-.badge-inventory  { top: 54px;  background: #cda0f5; border-color: #3a2a4a; }
+/* Fixed slot positions — 20px stride keeps the 16px dots from kissing. */
+.badge-collection { top: 4px;   background: #6ddf70; border-color: #2a4a2b; opacity: 0; transition: opacity 0.15s; cursor: pointer; }
+.badge-wantlist   { top: 24px;  background: #f0c95c; border-color: #4a3e1e; opacity: 0; transition: opacity 0.15s; cursor: pointer; }
+.badge-list       { top: 44px;  background: #a0ccf0; border-color: #2a3a4a; }
+.badge-inventory  { top: 64px;  background: #cda0f5; border-color: #3a2a4a; }
 /* Favorite: orange dot — same style as other badge dots */
 .badge-favorite {
-  top: 70px; cursor: pointer; opacity: 0; transition: opacity 0.15s;
+  top: 84px; cursor: pointer; opacity: 0; transition: opacity 0.15s;
   background: var(--accent); border-color: #4a2a12;
 }
 .badge-favorite:hover { background: var(--accent2); }
@@ -3236,12 +3239,8 @@ button.wiki-link-btn:active {
 .badge-wantlist.is-active,
 .badge-favorite.is-favorite { opacity: 1; }
 /* Master-card variants showing the count of owned versions inside the
-   dot. Slightly larger so a 1-2 digit number reads cleanly. The
-   negative margin-top keeps the bigger circle centered on the same
-   slot row as the standard 10px badges. */
+   dot. Same footprint as the base badge — only the text becomes visible. */
 .card-badge.has-count {
-  width: 16px;
-  height: 16px;
   font-size: 9px;
   font-weight: 800;
   font-family: system-ui, -apple-system, sans-serif;
@@ -3252,7 +3251,6 @@ button.wiki-link-btn:active {
   justify-content: center;
   line-height: 1;
   color: #0a0a0a;
-  margin-top: -3px;
   text-shadow: 0 0 1px rgba(255, 255, 255, 0.45);
 }
 /* Show inactive C/W/F on hover — only on devices that support hover (not touch) */
