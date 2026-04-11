@@ -119,7 +119,11 @@ async function doSearch(page = 1, skipPushState = false) {
   const q         = document.getElementById("query").value.trim();
   const advOpen   = document.getElementById("advanced-panel")?.dataset.open === "true";
   const artistRaw = advOpen ? document.getElementById("f-artist").value.trim() : "";
-  const artist    = artistRaw.replace(/\s*\(\d+\)$/, "");
+  // Pass the artist filter through verbatim — the Discogs disambiguator
+  // "(N)" is meaningful and dropping it merges results with other artists
+  // who share the base name. Both `artist` and `artistRaw` now refer to
+  // the same value; the second name is preserved for downstream readers.
+  const artist    = artistRaw;
   const release   = advOpen ? document.getElementById("f-release").value.trim() : "";
   const year      = advOpen ? document.getElementById("f-year").value.trim() : "";
   const label     = advOpen ? document.getElementById("f-label").value.trim() : "";
@@ -366,7 +370,10 @@ async function doSearch(page = 1, skipPushState = false) {
       }
 
       if (bioData?.name && !artistRaw && !release && !label && !genre && page === 1) {
-        const constrainedArtist = bioData.name.replace(/\s*\(\d+\)$/, "").trim();
+        // Keep the disambiguator on the constrained artist so the
+        // follow-up search hits the SAME artist whose bio we just
+        // fetched, not a same-named neighbor.
+        const constrainedArtist = bioData.name.trim();
         detectedArtist = constrainedArtist;
         try {
           if (isMasterPlus) {
