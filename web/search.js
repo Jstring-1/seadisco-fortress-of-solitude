@@ -1079,6 +1079,29 @@ function showRandomRecords() {
   loadRandomRecords();
 }
 
+// Logo / title click handler. Drops the user back on the search-home
+// view (Recent strip restored) without disturbing whatever's currently
+// playing in the LOC bar / YouTube mini-player. Form field values are
+// intentionally preserved and the Advanced section is collapsed so the
+// page reads as "fresh" without losing what the user typed.
+function goHome() {
+  try {
+    window._lastResults = null;  // forces switchView to take the "no results" branch and show Recent
+    if (typeof switchView === "function") {
+      switchView("search");
+    } else {
+      location.href = "/";
+      return;
+    }
+    // Collapse the advanced panel but keep its inputs filled
+    if (typeof toggleAdvanced === "function") toggleAdvanced(false);
+    // Scroll back to the top so the user lands on the search box
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } catch {
+    location.href = "/";
+  }
+}
+
 /** Remove a single entry from history (X button on a card). */
 function removeFromHistory(ev, id) {
   if (ev) { ev.preventDefault(); ev.stopPropagation(); }
