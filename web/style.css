@@ -1931,6 +1931,29 @@ button.wiki-link-btn:active {
   margin-right: 0.15em;
   transition: color 0.15s;
 }
+/* "(N ▶)" — playable count + start-from-first-track button shown
+   inline next to the Tracklist heading text. */
+.tracklist-playable {
+  font-size: 0.65rem;
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-left: 0.25rem;
+  font-weight: 400;
+}
+.tracklist-play-all {
+  display: inline-block;
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.7rem;
+  margin-left: 0.15rem;
+  cursor: pointer;
+  transition: color 0.15s, transform 0.15s;
+}
+.tracklist-play-all:hover {
+  color: var(--accent-hover);
+  transform: scale(1.2);
+}
 .tracklist-filter {
   flex: 1;
   max-width: 160px;
