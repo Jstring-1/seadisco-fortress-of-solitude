@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260410e" />
+  <link rel="stylesheet" href="/style.css?v=20260410f" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260410e"></script>
+<script defer src="/shared.js?v=20260410f"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
@@ -187,7 +187,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260410e"></script>
+<script defer src="/modal.js?v=20260410f"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -877,7 +877,7 @@ async function loadAdminItems() {
     if (!data.items?.length) { list.innerHTML = '<div style="color:var(--muted);padding:1rem;text-align:center">No items.</div>'; return; }
     list.innerHTML = data.items.map(item => {
       const title = item.title || item.basic_information?.title || "";
-      const artist = (item.artists?.[0]?.name || item.basic_information?.artists?.[0]?.name || "").replace(/ \(\d+\)$/, "");
+      const artist = item.artists?.[0]?.name || item.basic_information?.artists?.[0]?.name || "";
       const year = item.year || item.basic_information?.year || "";
       const thumb = item.thumb || item.basic_information?.thumb || "";
       const rating = item._rating || 0;
