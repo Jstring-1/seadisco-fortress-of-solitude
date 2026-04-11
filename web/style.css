@@ -2035,14 +2035,16 @@ body.modal-open  { overflow: hidden; }
 /* Clickable header above the notes/fields body. Full-width transparent
    button so the whole row is a hit target. Chevron flips based on the
    .is-collapsed state on the parent panel (persisted per user via
-   localStorage sd-notes-collapsed). */
+   localStorage sd-notes-collapsed). Hover just brightens a subtle
+   bottom border — no color shift, no background flash. */
 .modal-notes-header {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  padding: 0.15rem 0;
+  padding: 0.15rem 0 0.3rem;
   background: none;
   border: none;
+  border-bottom: 1px solid transparent;
   color: var(--text);
   font: inherit;
   font-size: 0.7rem;
@@ -2052,8 +2054,9 @@ body.modal-open  { overflow: hidden; }
   cursor: pointer;
   text-align: left;
   width: 100%;
+  transition: border-color 0.15s;
 }
-.modal-notes-header:hover { color: var(--accent); }
+.modal-notes-header:hover { border-bottom-color: var(--border-strong); }
 .modal-notes-chev {
   color: var(--muted);
   font-size: 0.75rem;
