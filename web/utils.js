@@ -76,6 +76,15 @@ function stripDiscogsMarkup(text) {
     .trim();
 }
 
+// Strip Discogs' " (N)" disambiguation suffix from an entity display
+// name. Discogs appends "(2)", "(3)", etc. when multiple artists or
+// labels share the same name. We want the clean name in the visible
+// UI, but callers should keep the original string for search queries
+// and data-* attributes so lookups still resolve the correct entity.
+function stripDupSuffix(name) {
+  return typeof name === "string" ? name.replace(/\s*\(\d+\)\s*$/, "") : name;
+}
+
 function renderBioMarkup(text) {
   if (!text) return '';
   text = text.replace(/\[l=([^\]]+)\]/g, '$1');
