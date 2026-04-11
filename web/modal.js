@@ -1079,11 +1079,20 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   ].filter(Boolean).join("");
 
   const tracks = (d.tracklist ?? []).filter(t => t.type_ !== "heading");
+  // Pre-compute playable count + first-playable URL so we can show
+  // them in the Tracklist heading. A track is "playable" when
+  // findVideo() returns a YouTube URL for its title.
+  const playableUrls = tracks.map(t => findVideo(t.title || "")).filter(Boolean);
+  const playableCount = playableUrls.length;
+  const firstPlayableUrl = playableUrls[0] || "";
+  const playableMeta = playableCount
+    ? `<span class="tracklist-playable">(${playableCount}${firstPlayableUrl ? ` <a href="#" class="tracklist-play-all" onclick="event.preventDefault();event.stopPropagation();openVideo(event,'${firstPlayableUrl.replace(/'/g, "\\'")}')" title="Play the first playable track">▶</a>` : ""})</span>`
+    : "";
   const tracklistOpen = localStorage.getItem("tracklist-open") !== "false";
   const trackHTML = tracks.length ? `
     <div class="album-tracklist">
       <div class="tracklist-header">
-        <div class="tracklist-heading tracklist-toggle" onclick="toggleTracklist(this)" title="Click to collapse/expand tracklist"><span class="tracklist-arrow">${tracklistOpen ? "▼" : "▶"}</span> Tracklist</div>
+        <div class="tracklist-heading tracklist-toggle" onclick="toggleTracklist(this)" title="Click to collapse/expand tracklist"><span class="tracklist-arrow">${tracklistOpen ? "▼" : "▶"}</span> Tracklist ${playableMeta}</div>
         <input type="text" class="tracklist-filter" placeholder="filter tracks…" oninput="filterTracks(this)" />
       </div>
       <div class="tracklist-body"${tracklistOpen ? "" : ' style="display:none"'}>
