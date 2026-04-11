@@ -849,12 +849,79 @@ document.addEventListener("keydown", e => {
 // ── eBay search link helper ──────────────────────────────────────────────
 // Builds a small colored eBay logo link that searches eBay Music for artist/title/catno.
 // `standalone` = true when rendered alone (no leading margin on the link).
-function renderEbayLink(artist, title, catno, standalone = false) {
+// The Wikipedia dropdown renders immediately after, sharing the same
+// artist/title + an optional label arg for the third Wikipedia search option.
+function renderEbayLink(artist, title, catno, standalone = false, label = "") {
   const q = [artist, title, catno].filter(Boolean).join(" ").trim();
   if (!q) return "";
   const url = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(q)}&_sacat=11233`;
   const ml = standalone ? "" : "margin-left:0.5rem;";
-  return `<a href="${url}" target="_blank" rel="noopener nofollow" title="Search eBay Music for: ${escHtml(q)}" style="text-decoration:none;${ml}font-size:0.72rem;font-weight:900;font-family:'Helvetica Neue',Arial,Helvetica,sans-serif;letter-spacing:-0.04em;font-style:italic;vertical-align:baseline"><span style="color:#e53238">e</span><span style="color:#0064d2">b</span><span style="color:#f5af02">a</span><span style="color:#86b817">y</span><span style="color:#666;font-weight:400;font-style:normal;margin-left:0.1em">↗</span></a>`;
+  const ebayLink = `<a href="${url}" target="_blank" rel="noopener nofollow" title="Search eBay Music for: ${escHtml(q)}" style="text-decoration:none;${ml}font-size:0.72rem;font-weight:900;font-family:'Helvetica Neue',Arial,Helvetica,sans-serif;letter-spacing:-0.04em;font-style:italic;vertical-align:baseline"><span style="color:#e53238">e</span><span style="color:#0064d2">b</span><span style="color:#f5af02">a</span><span style="color:#86b817">y</span><span style="color:#666;font-weight:400;font-style:normal;margin-left:0.1em">↗</span></a>`;
+  return ebayLink + renderWikipediaLink(artist, title, label);
+}
+
+// Wikipedia search dropdown — the button is a small serif "W" and
+// clicking it opens a 3-item menu with links that search Wikipedia for
+// the artist, album, or label. The label parameter is passed separately
+// because eBay doesn't care about it but Wikipedia does. Uses
+// Special:Search?search=X&go=Go so an exact match auto-redirects to
+// the article and otherwise shows search results.
+function renderWikipediaLink(artist, title, label) {
+  const items = [];
+  const wiki = (term) => `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(term)}&go=Go`;
+  if (artist) items.push({ key: "Artist", value: artist, url: wiki(artist) });
+  if (title)  items.push({ key: "Album",  value: title,  url: wiki(artist ? `${artist} ${title}` : title) });
+  if (label)  items.push({ key: "Label",  value: label,  url: wiki(`${label} record label`) });
+  if (!items.length) return "";
+  const menu = items.map(it => `
+    <a href="${it.url}" target="_blank" rel="noopener nofollow" class="wiki-menu-item">
+      <span class="wiki-menu-key">${escHtml(it.key)}</span>
+      <span class="wiki-menu-val">${escHtml(it.value)}</span>
+    </a>
+  `).join("");
+  return `<span class="wiki-link-wrap">
+    <button type="button" class="wiki-link-btn" onclick="toggleWikiMenu(event, this)" title="Search Wikipedia"><span class="wiki-w">W</span></button>
+    <div class="wiki-link-menu" hidden>${menu}</div>
+  </span>`;
+}
+
+// Toggle the Wikipedia menu next to the clicked button. Outside-click
+// handler is installed once per open and removed when the menu closes.
+function toggleWikiMenu(event, btn) {
+  event.preventDefault();
+  event.stopPropagation();
+  const wrap = btn.closest(".wiki-link-wrap");
+  if (!wrap) return;
+  const menu = wrap.querySelector(".wiki-link-menu");
+  if (!menu) return;
+  // Close any other open wiki menus first
+  document.querySelectorAll(".wiki-link-menu:not([hidden])").forEach(m => {
+    if (m !== menu) m.hidden = true;
+  });
+  const willOpen = menu.hidden;
+  menu.hidden = !willOpen;
+  if (willOpen) {
+    // Install a one-shot outside-click + Esc handler
+    const closeOnOutside = (ev) => {
+      if (!wrap.contains(ev.target)) {
+        menu.hidden = true;
+        document.removeEventListener("click", closeOnOutside, true);
+        document.removeEventListener("keydown", closeOnEsc);
+      }
+    };
+    const closeOnEsc = (ev) => {
+      if (ev.key === "Escape") {
+        menu.hidden = true;
+        document.removeEventListener("click", closeOnOutside, true);
+        document.removeEventListener("keydown", closeOnEsc);
+      }
+    };
+    // Use setTimeout so the current click doesn't immediately close it
+    setTimeout(() => {
+      document.addEventListener("click", closeOnOutside, true);
+      document.addEventListener("keydown", closeOnEsc);
+    }, 0);
+  }
 }
 
 // ── Album info panel ──────────────────────────────────────────────────────
@@ -1094,12 +1161,12 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
               const estId = `price-est-${escHtml(String(stats.releaseId))}`;
               return `<div style="font-size:0.75rem;margin-top:0.2rem">
                 <a href="${sellUrl}" target="_blank" rel="noopener" title="Browse ${count} listings on Discogs marketplace" style="color:#888;text-decoration:none">(${count}) :: ${priceBar} ↗</a>
-                ${!isMaster ? `<a href="#" onclick="event.preventDefault();loadPriceEstimates('${escHtml(String(stats.releaseId))}','${estId}')" style="color:#555;text-decoration:none;margin-left:0.4rem;font-size:0.7rem" title="Show estimated prices by condition">(est)</a>${renderEbayLink(artists[0], title, catno)}<div id="${estId}"></div>` : renderEbayLink(artists[0], title, catno)}
+                ${!isMaster ? `<a href="#" onclick="event.preventDefault();loadPriceEstimates('${escHtml(String(stats.releaseId))}','${estId}')" style="color:#555;text-decoration:none;margin-left:0.4rem;font-size:0.7rem" title="Show estimated prices by condition">(est)</a>${renderEbayLink(artists[0], title, catno, false, labelNames[0])}<div id="${estId}"></div>` : renderEbayLink(artists[0], title, catno, false, labelNames[0])}
               </div>`;
             })()
           : (stats?.numForSale === 0
-              ? `<div style="font-size:0.75rem;color:#555;margin-top:0.2rem">Not currently available on Discogs marketplace${renderEbayLink(artists[0], title, catno)}</div>`
-              : (artists.length || title ? `<div style="font-size:0.75rem;margin-top:0.2rem">${renderEbayLink(artists[0], title, catno, true)}</div>` : ""))
+              ? `<div style="font-size:0.75rem;color:#555;margin-top:0.2rem">Not currently available on Discogs marketplace${renderEbayLink(artists[0], title, catno, false, labelNames[0])}</div>`
+              : (artists.length || title ? `<div style="font-size:0.75rem;margin-top:0.2rem">${renderEbayLink(artists[0], title, catno, true, labelNames[0])}</div>` : ""))
         }
         ${releaseId ? renderActionsImmediate(Number(releaseId), isMaster ? "master" : "release") : ""}
       </div>
