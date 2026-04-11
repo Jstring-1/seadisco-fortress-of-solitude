@@ -1584,13 +1584,23 @@ body.modal-open  { overflow: hidden; }
   margin-left: 0.35rem;
   vertical-align: baseline;
 }
-.wiki-link-btn {
+.wiki-link-btn,
+.wiki-link-btn:hover,
+.wiki-link-btn:focus {
+  /* Override the sitewide `button` + `button:hover` rule so the W stays
+     a plain inline glyph with no filled background/rounded-corner look. */
   background: transparent;
   border: none;
+  border-radius: 0;
   padding: 0;
+  height: auto;
+  min-height: 0;
+  box-shadow: none;
+  outline: none;
+}
+.wiki-link-btn {
   cursor: pointer;
   font: inherit;
-  height: auto;
   line-height: 1;
   color: #eaeaea;
   vertical-align: baseline;

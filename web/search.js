@@ -616,8 +616,14 @@ function renderCard(item, index) {
     artist = title.slice(0, idx);
     title  = title.slice(idx + 3);
   }
+  // For standalone artist/label cards the title IS the entity name
+  if (type === "artist" || type === "label") {
+    title = stripDupSuffix(title);
+  } else if (artist) {
+    artist = stripDupSuffix(artist);
+  }
 
-  const label   = (item.label   ?? []).slice(0, 2).join(", ");
+  const label   = (item.label ?? []).slice(0, 2).map(stripDupSuffix).join(", ");
   const catno   = (type === "release" || type === "master") ? (item.catno ?? "") : "";
   const formats = (item.format  ?? []).slice(0, 3).join(" · ");
   const genre   = (item.genre   ?? []).slice(0, 1).join("");

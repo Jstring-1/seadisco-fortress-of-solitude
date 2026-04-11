@@ -874,7 +874,7 @@ function renderWikipediaLink(artist, title, label) {
   if (label)  items.push({ key: "Label",  value: label,  url: wiki(`${label} record label`) });
   if (!items.length) return "";
   const menu = items.map(it => `
-    <a href="${it.url}" target="_blank" rel="noopener nofollow" class="wiki-menu-item">
+    <a href="${it.url}" target="_blank" rel="noopener nofollow" class="wiki-menu-item" title="Search Wikipedia for ${escHtml(it.value)}">
       <span class="wiki-menu-key">${escHtml(it.key)}</span>
       <span class="wiki-menu-val">${escHtml(it.value)}</span>
     </a>
@@ -931,12 +931,18 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const rawTitle = d.title ?? searchResult.title ?? "";
   const title    = rawTitle.includes(" - ") && !d.title
                    ? rawTitle.slice(rawTitle.indexOf(" - ") + 3) : rawTitle;
-  const artistNames = (d.artists ?? []).map(a => a.name);
+  // Discogs appends " (N)" to artist/label names when multiple entities
+  // share a name. We strip for display but keep the original in
+  // artistNamesRaw / labelNamesRaw so data-* attributes and search
+  // lookups still resolve the correct entity.
+  const artistNamesRaw = (d.artists ?? []).map(a => a.name);
+  const artistNames = artistNamesRaw.map(stripDupSuffix);
   const artists  = artistNames.length ? artistNames
-                   : ((searchResult.title ?? "").split(" - ")[0] ? [(searchResult.title ?? "").split(" - ")[0]] : []);
+                   : ((searchResult.title ?? "").split(" - ")[0] ? [stripDupSuffix((searchResult.title ?? "").split(" - ")[0])] : []);
   const year     = d.year ?? searchResult.year ?? "";
-  const labelNames = (d.labels ?? []).map(l => l.name).slice(0, 2);
-  if (!labelNames.length) labelNames.push(...(searchResult.label ?? []).slice(0, 2));
+  const labelNamesRaw = (d.labels ?? []).map(l => l.name).slice(0, 2);
+  if (!labelNamesRaw.length) labelNamesRaw.push(...(searchResult.label ?? []).slice(0, 2));
+  const labelNames = labelNamesRaw.map(stripDupSuffix);
   const labels   = labelNames.join(", ");
   const genres   = [...(d.genres ?? []), ...(d.styles ?? [])].slice(0, 4).join(" · ");
   const country  = d.country ?? searchResult.country ?? "";
@@ -949,10 +955,11 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   ).join("; ") || (searchResult.format ?? []).join(" · ");
   const creditItems = (d.extraartists ?? [])
     .map(a => {
+      const displayName = stripDupSuffix(a.name);
       const nameEl = a.id
-        ? `<a href="#" class="modal-internal-link credit-name" data-alt-name="${escHtml(a.name)}" data-alt-id="${a.id}" onclick="selectAltArtist(event,this);closeModal()" title="Search for ${escHtml(a.name)}">${escHtml(a.name)}</a>`
-        : `<span class="credit-name">${escHtml(a.name)}</span>`;
-      const searchIcon = ` <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(a.name.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(a.name)}" style="font-size:1.1em">⌕</a>`;
+        ? `<a href="#" class="modal-internal-link credit-name" data-alt-name="${escHtml(a.name)}" data-alt-id="${a.id}" onclick="selectAltArtist(event,this);closeModal()" title="Search for ${escHtml(displayName)}">${escHtml(displayName)}</a>`
+        : `<span class="credit-name">${escHtml(displayName)}</span>`;
+      const searchIcon = ` <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(displayName.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(displayName)}" style="font-size:1.1em">⌕</a>`;
       return `<span class="credit-item">${nameEl}${searchIcon}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}</span>`;
     });
   const notes       = d.notes ? stripDiscogsMarkup(d.notes) : "";
@@ -1031,7 +1038,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     const t = c.entity_type_name;
     if (companyTypes.includes(t)) {
       if (!companyGroups[t]) companyGroups[t] = [];
-      companyGroups[t].push(c.name);
+      companyGroups[t].push(stripDupSuffix(c.name));
     }
   }
   const companyRows = companyTypes
@@ -1086,10 +1093,11 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
           : `${escHtml(t.title || "")}${ytIcon}${searchIcon}`;
         const trackCredits = (t.extraartists ?? []).length
           ? `<div class="track-credits">${t.extraartists.map(a => {
+              const displayName = stripDupSuffix(a.name);
               const nameEl = a.id
-                ? `<a href="#" class="modal-internal-link credit-name" data-alt-name="${escHtml(a.name)}" data-alt-id="${a.id}" onclick="selectAltArtist(event,this);closeModal()" title="Search for ${escHtml(a.name)}">${escHtml(a.name)}</a>`
-                : `<span class="credit-name">${escHtml(a.name)}</span>`;
-              const searchIcon = ` <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(a.name.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(a.name)}" style="font-size:1.1em">\u2315</a>`;
+                ? `<a href="#" class="modal-internal-link credit-name" data-alt-name="${escHtml(a.name)}" data-alt-id="${a.id}" onclick="selectAltArtist(event,this);closeModal()" title="Search for ${escHtml(displayName)}">${escHtml(displayName)}</a>`
+                : `<span class="credit-name">${escHtml(displayName)}</span>`;
+              const searchIcon = ` <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(displayName.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(displayName)}" style="font-size:1.1em">\u2315</a>`;
               return `${nameEl}${searchIcon}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}`;
             }).join(", ")}</div>`
           : "";
