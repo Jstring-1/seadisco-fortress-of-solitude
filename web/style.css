@@ -1584,12 +1584,18 @@ body.modal-open  { overflow: hidden; }
   margin-left: 0.35rem;
   vertical-align: baseline;
 }
-.wiki-link-btn,
-.wiki-link-btn:hover,
-.wiki-link-btn:focus {
-  /* Override the sitewide `button` + `button:hover` rule so the W stays
-     a plain inline glyph with no filled background/rounded-corner look. */
-  background: transparent;
+/* The sitewide `button:hover:not(.nav-tab-top)` rule has specificity
+   (0,2,1) which beats `.wiki-link-btn:hover` (0,2,0), so the orange
+   button background was bleeding through on hover even though we
+   wanted just the W glyph to change color. Prefix with `button` to
+   match specificity, force background transparent with !important to
+   defeat any leftover sitewide overrides, and disable transitions so
+   there's no flash mid-animation. */
+button.wiki-link-btn,
+button.wiki-link-btn:hover,
+button.wiki-link-btn:focus,
+button.wiki-link-btn:active {
+  background: transparent !important;
   border: none;
   border-radius: 0;
   padding: 0;
@@ -1597,6 +1603,7 @@ body.modal-open  { overflow: hidden; }
   min-height: 0;
   box-shadow: none;
   outline: none;
+  transition: none;
 }
 .wiki-link-btn {
   cursor: pointer;
@@ -1608,7 +1615,7 @@ body.modal-open  { overflow: hidden; }
 .wiki-link-btn .wiki-w {
   display: inline-block;
   font-family: "Linux Libertine", "Georgia", "Times New Roman", serif;
-  font-size: 0.98rem;
+  font-size: 0.82rem;
   font-weight: 400;
   line-height: 1;
   color: #eaeaea;

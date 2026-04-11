@@ -865,8 +865,14 @@ function renderEbayLink(artist, title, catno, standalone = false, label = "") {
 // the artist, album, or label. The label parameter is passed separately
 // because eBay doesn't care about it but Wikipedia does. Uses
 // Special:Search?search=X&go=Go so an exact match auto-redirects to
-// the article and otherwise shows search results.
+// the article and otherwise shows search results. Inputs are stripped
+// of Discogs' "(N)" disambiguation suffix — Wikipedia doesn't use those
+// markers and stripping them yields more accurate searches plus
+// cleaner display labels and tooltips.
 function renderWikipediaLink(artist, title, label) {
+  artist = stripDupSuffix(artist || "");
+  title  = stripDupSuffix(title  || "");
+  label  = stripDupSuffix(label  || "");
   const items = [];
   const wiki = (term) => `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(term)}&go=Go`;
   if (artist) items.push({ key: "Artist", value: artist, url: wiki(artist) });
