@@ -1874,6 +1874,58 @@ export async function getWantlistIds(clerkUserId: string): Promise<number[]> {
   return r.rows.map(row => row.discogs_release_id);
 }
 
+/**
+ * Returns master_id → distinct release count for the user's collection.
+ * Used to render the "N" inside C/W dot indicators on master-type
+ * search cards so the user can see at a glance "you already own 2
+ * pressings of this master". Releases without a master_id (orphans)
+ * are skipped. Multiple instances of the same release count as 1.
+ */
+export async function getCollectionMasterCounts(
+  clerkUserId: string
+): Promise<Record<number, number>> {
+  const r = await getPool().query(
+    `SELECT (data->>'master_id')::int AS master_id,
+            COUNT(DISTINCT discogs_release_id)::int AS n
+       FROM user_collection
+      WHERE clerk_user_id = $1
+        AND data ? 'master_id'
+        AND data->>'master_id' IS NOT NULL
+        AND data->>'master_id' <> '0'
+        AND data->>'master_id' <> ''
+      GROUP BY (data->>'master_id')::int`,
+    [clerkUserId]
+  );
+  const out: Record<number, number> = {};
+  for (const row of r.rows) {
+    if (row.master_id) out[row.master_id] = row.n;
+  }
+  return out;
+}
+
+/** Same as getCollectionMasterCounts but for the wantlist. */
+export async function getWantlistMasterCounts(
+  clerkUserId: string
+): Promise<Record<number, number>> {
+  const r = await getPool().query(
+    `SELECT (data->>'master_id')::int AS master_id,
+            COUNT(DISTINCT discogs_release_id)::int AS n
+       FROM user_wantlist
+      WHERE clerk_user_id = $1
+        AND data ? 'master_id'
+        AND data->>'master_id' IS NOT NULL
+        AND data->>'master_id' <> '0'
+        AND data->>'master_id' <> ''
+      GROUP BY (data->>'master_id')::int`,
+    [clerkUserId]
+  );
+  const out: Record<number, number> = {};
+  for (const row of r.rows) {
+    if (row.master_id) out[row.master_id] = row.n;
+  }
+  return out;
+}
+
 export async function updateCollectionSyncedAt(clerkUserId: string): Promise<void> {
   await getPool().query(
     "UPDATE user_tokens SET collection_synced_at = NOW() WHERE clerk_user_id = $1",

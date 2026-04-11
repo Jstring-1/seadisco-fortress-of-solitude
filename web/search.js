@@ -616,14 +616,11 @@ function renderCard(item, index) {
     artist = title.slice(0, idx);
     title  = title.slice(idx + 3);
   }
-  // For standalone artist/label cards the title IS the entity name
-  if (type === "artist" || type === "label") {
-    title = stripDupSuffix(title);
-  } else if (artist) {
-    artist = stripDupSuffix(artist);
-  }
+  // Keep Discogs' " (N)" disambiguator on cards too — both display and
+  // hover/title text — so clicking "Tommy Tucker (3)" leads to that
+  // exact artist's results instead of the merged base-name set.
 
-  const label   = (item.label ?? []).slice(0, 2).map(stripDupSuffix).join(", ");
+  const label   = (item.label ?? []).slice(0, 2).join(", ");
   const catno   = (type === "release" || type === "master") ? (item.catno ?? "") : "";
   const formats = (item.format  ?? []).slice(0, 3).join(" · ");
   const genre   = (item.genre   ?? []).slice(0, 1).join("");
@@ -657,7 +654,11 @@ function renderCard(item, index) {
       : `class="${typeClass}" href="${url}" title="${escHtml(fullTitle)}" target="_blank" rel="noopener"`;
 
   // ── Badge strip: fixed order — collection, wantlist, list, inventory, favorite
-  // C/W/F always shown (dimmed when inactive); L/I only when active
+  // C/W/F always shown (dimmed when inactive); L/I only when active.
+  // For master cards we show the count of distinct releases (versions)
+  // the user owns from this master inside the badge — pulled from the
+  // pre-built _collectionMasterCounts / _wantlistMasterCounts maps
+  // populated by loadDiscogsIds.
   let badges = "";
   const releaseId = item.id;
   const isReleaseOrMaster = type === "release" || type === "master";
@@ -668,8 +669,20 @@ function renderCard(item, index) {
       badges += `<span class="card-badge badge-collection${inCol ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleCollectionFromCard(this,${releaseId})" title="${inCol ? "Remove from collection" : "Add to collection"}">C</span>`;
       badges += `<span class="card-badge badge-wantlist${inWant ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleWantlistFromCard(this,${releaseId})" title="${inWant ? "Remove from wantlist" : "Add to wantlist"}">W</span>`;
     } else {
-      badges += `<span class="card-badge badge-collection" onclick="event.preventDefault();event.stopPropagation();openModal(event,'${releaseId}','master','')" title="Open to add a version to collection">C</span>`;
-      badges += `<span class="card-badge badge-wantlist" onclick="event.preventDefault();event.stopPropagation();openModal(event,'${releaseId}','master','')" title="Open to add a version to wantlist">W</span>`;
+      // Master — look up distinct-release count for this master
+      const colCount = Number(window._collectionMasterCounts?.[releaseId]) || 0;
+      const wantCount = Number(window._wantlistMasterCounts?.[releaseId]) || 0;
+      const colActive = colCount > 0;
+      const wantActive = wantCount > 0;
+      const colTitle = colActive
+        ? `${colCount} ${colCount === 1 ? "version" : "versions"} of this master in your collection — click to view pressings`
+        : "Open to add a version to collection";
+      const wantTitle = wantActive
+        ? `${wantCount} ${wantCount === 1 ? "version" : "versions"} of this master in your wantlist — click to view pressings`
+        : "Open to add a version to wantlist";
+      // When active, show the count number; otherwise show the C/W glyph.
+      badges += `<span class="card-badge badge-collection${colActive ? " is-active has-count" : ""}" onclick="event.preventDefault();event.stopPropagation();openModal(event,'${releaseId}','master','')" title="${colTitle}">${colActive ? colCount : "C"}</span>`;
+      badges += `<span class="card-badge badge-wantlist${wantActive ? " is-active has-count" : ""}" onclick="event.preventDefault();event.stopPropagation();openModal(event,'${releaseId}','master','')" title="${wantTitle}">${wantActive ? wantCount : "W"}</span>`;
     }
     const lists = window._listMembership?.[releaseId];
     if (lists?.length) {
