@@ -14,7 +14,7 @@
 // MusicBrainz endpoint:       https://musicbrainz.org/ws/2/  (JSON, 1 req/s)
 // Required header on both:    User-Agent (per Wikimedia/MetaBrainz policy)
 
-import { upsertBluesArtistByQid, listBluesArtists, updateBluesArtist } from "./db.js";
+import { upsertBluesArtistByQid, upsertBluesArtistByDiscogsId, listBluesArtists, updateBluesArtist } from "./db.js";
 import { DiscogsClient } from "./discogs-client.js";
 
 const WIKIDATA_ENDPOINT = "https://query.wikidata.org/sparql";
@@ -56,12 +56,14 @@ function _buildSeedSparql(): string {
 SELECT DISTINCT
   ?artist ?artistLabel
   (GROUP_CONCAT(DISTINCT ?aliasLbl;        separator="|") AS ?aliasesStr)
-  ?birth ?birthPlaceLabel
-  ?death ?deathPlaceLabel ?causeLabel
+  ?birth ?birthPlaceLabel ?birthAdminLabel ?birthCountryLabel
+  ?death ?deathPlaceLabel ?deathAdminLabel ?deathCountryLabel ?causeLabel
   (GROUP_CONCAT(DISTINCT ?genreLabel;      separator="|") AS ?genresStr)
   (GROUP_CONCAT(DISTINCT ?instrumentLabel; separator="|") AS ?instrumentsStr)
   (GROUP_CONCAT(DISTINCT ?labelLabel;      separator="|") AS ?labelsStr)
   (GROUP_CONCAT(DISTINCT ?hometownLabel;   separator="|") AS ?hometownsStr)
+  (GROUP_CONCAT(DISTINCT ?hometownAdminLabel;   separator="|") AS ?hometownAdminStr)
+  (GROUP_CONCAT(DISTINCT ?hometownCountryLabel; separator="|") AS ?hometownCountryStr)
   ?image ?wikipediaArticle ?mbid ?discogsId
 WHERE {
   VALUES ?genre { ${valuesClause} }
@@ -83,13 +85,37 @@ WHERE {
   }
   OPTIONAL { ?artist wdt:P569 ?birth .       }
   OPTIONAL { ?artist wdt:P570 ?death .       }
-  OPTIONAL { ?artist wdt:P19  ?birthPlace .  }
-  OPTIONAL { ?artist wdt:P20  ?deathPlace .  }
+  OPTIONAL {
+    ?artist wdt:P19  ?birthPlace .
+    # Walk up the admin chain to find a U.S. state (Q35657) ancestor.
+    # For US cities this lands at the state; for non-US, no match.
+    OPTIONAL {
+      ?birthPlace wdt:P131* ?birthAdmin .
+      ?birthAdmin wdt:P31 wd:Q35657 .
+    }
+    # Fallback: country, used only when there's no state-tagged ancestor.
+    OPTIONAL { ?birthPlace wdt:P17 ?birthCountry . }
+  }
+  OPTIONAL {
+    ?artist wdt:P20  ?deathPlace .
+    OPTIONAL {
+      ?deathPlace wdt:P131* ?deathAdmin .
+      ?deathAdmin wdt:P31 wd:Q35657 .
+    }
+    OPTIONAL { ?deathPlace wdt:P17 ?deathCountry . }
+  }
   OPTIONAL { ?artist wdt:P509 ?cause .       }
   OPTIONAL { ?artist wdt:P136 ?genreFilled . }
   OPTIONAL { ?artist wdt:P1303 ?instrument . }
   OPTIONAL { ?artist wdt:P264  ?label .      }
-  OPTIONAL { ?artist wdt:P551  ?hometown .   }
+  OPTIONAL {
+    ?artist wdt:P551  ?hometown .
+    OPTIONAL {
+      ?hometown wdt:P131* ?hometownAdmin .
+      ?hometownAdmin wdt:P31 wd:Q35657 .
+    }
+    OPTIONAL { ?hometown wdt:P17 ?hometownCountry . }
+  }
   OPTIONAL { ?artist wdt:P18   ?image .      }
   OPTIONAL { ?artist wdt:P434  ?mbid .       }
   OPTIONAL { ?artist wdt:P1953 ?discogsId .  }
@@ -102,38 +128,69 @@ WHERE {
     bd:serviceParam wikibase:language "en" .
     ?artist             rdfs:label    ?artistLabel .
     ?birthPlace         rdfs:label    ?birthPlaceLabel .
+    ?birthAdmin         rdfs:label    ?birthAdminLabel .
+    ?birthCountry       rdfs:label    ?birthCountryLabel .
     ?deathPlace         rdfs:label    ?deathPlaceLabel .
+    ?deathAdmin         rdfs:label    ?deathAdminLabel .
+    ?deathCountry       rdfs:label    ?deathCountryLabel .
     ?cause              rdfs:label    ?causeLabel .
     ?genreFilled        rdfs:label    ?genreLabel .
     ?instrument         rdfs:label    ?instrumentLabel .
     ?label              rdfs:label    ?labelLabel .
     ?hometown           rdfs:label    ?hometownLabel .
+    ?hometownAdmin      rdfs:label    ?hometownAdminLabel .
+    ?hometownCountry    rdfs:label    ?hometownCountryLabel .
   }
 }
-GROUP BY ?artist ?artistLabel ?birth ?birthPlaceLabel
-         ?death ?deathPlaceLabel ?causeLabel
+GROUP BY ?artist ?artistLabel
+         ?birth ?birthPlaceLabel ?birthAdminLabel ?birthCountryLabel
+         ?death ?deathPlaceLabel ?deathAdminLabel ?deathCountryLabel
+         ?causeLabel
          ?image ?wikipediaArticle ?mbid ?discogsId
 ORDER BY ?artistLabel
 `.trim();
 }
 
 interface SparqlBinding {
-  artist:           { value: string };
-  artistLabel?:     { value: string };
-  aliasesStr?:      { value: string };
-  birth?:           { value: string };
-  birthPlaceLabel?: { value: string };
-  death?:           { value: string };
-  deathPlaceLabel?: { value: string };
-  causeLabel?:      { value: string };
-  genresStr?:       { value: string };
-  instrumentsStr?:  { value: string };
-  labelsStr?:       { value: string };
-  hometownsStr?:    { value: string };
-  image?:           { value: string };
-  wikipediaArticle?: { value: string };
-  mbid?:            { value: string };
-  discogsId?:       { value: string };
+  artist:               { value: string };
+  artistLabel?:         { value: string };
+  aliasesStr?:          { value: string };
+  birth?:               { value: string };
+  birthPlaceLabel?:     { value: string };
+  birthAdminLabel?:     { value: string };
+  birthCountryLabel?:   { value: string };
+  death?:               { value: string };
+  deathPlaceLabel?:     { value: string };
+  deathAdminLabel?:     { value: string };
+  deathCountryLabel?:   { value: string };
+  causeLabel?:          { value: string };
+  genresStr?:           { value: string };
+  instrumentsStr?:      { value: string };
+  labelsStr?:           { value: string };
+  hometownsStr?:        { value: string };
+  hometownAdminStr?:    { value: string };
+  hometownCountryStr?:  { value: string };
+  image?:               { value: string };
+  wikipediaArticle?:    { value: string };
+  mbid?:                { value: string };
+  discogsId?:           { value: string };
+}
+
+/** Format "City, Region". Prefers a U.S. state when one was found via
+ *  the P131* walk; falls back to country otherwise. Avoids redundancy
+ *  when the city label already contains the region. */
+function _joinPlace(city?: string | null, state?: string | null, country?: string | null): string | null {
+  const c = (city ?? "").trim();
+  const s = (state ?? "").trim();
+  const co = (country ?? "").trim();
+  if (!c && !s && !co) return null;
+  // State takes precedence — that's what the user asked for.
+  const region = s || co;
+  if (!region) return c || null;
+  if (!c) return region;
+  if (c.toLowerCase() === region.toLowerCase()) return c;
+  if (c.toLowerCase().includes(region.toLowerCase())) return c;
+  return `${c}, ${region}`;
 }
 
 function _qidFromUri(uri: string): string {
@@ -203,6 +260,9 @@ export async function seedBluesArtistsFromWikidata(): Promise<SeedResult> {
     const qid = _qidFromUri(b.artist.value);
     const name = b.artistLabel?.value?.trim();
     if (!name) continue;
+    const hometownCity    = _firstPart(b.hometownsStr?.value);
+    const hometownAdmin   = _firstPart(b.hometownAdminStr?.value);
+    const hometownCountry = _firstPart(b.hometownCountryStr?.value);
     const record = {
       wikidata_qid: qid,
       musicbrainz_mbid: b.mbid?.value || null,
@@ -210,11 +270,11 @@ export async function seedBluesArtistsFromWikidata(): Promise<SeedResult> {
       name,
       aliases: _splitPipe(b.aliasesStr?.value),
       birth_date:  _yearOnly(b.birth?.value),
-      birth_place: b.birthPlaceLabel?.value || null,
+      birth_place: _joinPlace(b.birthPlaceLabel?.value, b.birthAdminLabel?.value, b.birthCountryLabel?.value),
       death_date:  _yearOnly(b.death?.value),
-      death_place: b.deathPlaceLabel?.value || null,
+      death_place: _joinPlace(b.deathPlaceLabel?.value, b.deathAdminLabel?.value, b.deathCountryLabel?.value),
       death_cause: b.causeLabel?.value || null,
-      hometown_region: _firstPart(b.hometownsStr?.value),
+      hometown_region: _joinPlace(hometownCity, hometownAdmin, hometownCountry),
       styles:      _splitPipe(b.genresStr?.value),
       instruments: _splitPipe(b.instrumentsStr?.value),
       associated_labels: _splitPipe(b.labelsStr?.value),
@@ -649,4 +709,178 @@ export async function enrichBluesArtistFromYouTube(id: number, apiKey: string): 
     enrichment_status: { ...status, yt: 1 },
   });
   return { added: newUrls };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Phase 1.5: Discogs year-walk seed
+// ─────────────────────────────────────────────────────────────────────────
+//
+// Walk genre=Blues releases year by year (descending), pull every artist
+// off the search results, and upsert by Discogs artist ID. Captures the
+// per-artist list of Discogs master/release IDs (Masters+) we found
+// them on so the row records exactly which 1923-1930 sides surfaced.
+//
+// Auth: admin's PAT/OAuth, 60 req/min limit, paced at 1.1s/request.
+// Genre noise: pre-1930 blues is sometimes filed under "Folk, World &
+// Country" or "Jazz" on Discogs, so we sweep those genres too — adds
+// maybe 200-300 extra rows the strict Blues-only filter misses.
+
+const DISCOGS_SEED_RATE_MS = 1100;
+const DISCOGS_PER_PAGE = 100;
+const DISCOGS_MAX_PAGES_PER_YEAR = 25;
+
+const DISCOGS_SEED_GENRES: Array<{ genre: string; style: string }> = [
+  { genre: "Blues",                  style: "" },
+  { genre: "Folk, World, & Country", style: "Country Blues" },
+  { genre: "Folk, World, & Country", style: "Delta Blues" },
+  { genre: "Jazz",                   style: "Classic Female Blues" },
+];
+
+interface DiscogsSearchResult {
+  id: number;
+  title: string;
+  year?: string;
+  master_id?: number;
+  type: string;
+  format?: string[];
+  label?: string[];
+  country?: string;
+  genre?: string[];
+  style?: string[];
+}
+
+/** Parse "Artist - Title" and return just the artist string. */
+function _artistFromSearchTitle(t: string): string | null {
+  if (!t) return null;
+  const i = t.indexOf(" - ");
+  if (i <= 0) return null;
+  return t.slice(0, i).trim() || null;
+}
+
+/** Strip Discogs disambiguator suffixes like "(2)" so we dedupe homonyms. */
+function _normaliseDiscogsName(s: string): string {
+  return s.replace(/\s*\(\d+\)\s*$/, "").trim();
+}
+
+export interface DiscogsSeedResult {
+  yearsScanned: number[];
+  rowsScanned: number;
+  uniqueArtists: number;
+  artistsCreated: number;
+  artistsMerged: number;
+  releasesAdded: number;
+  errors: Array<{ year: number; message: string }>;
+  durationMs: number;
+}
+
+/** Year-walk seed. Walks endYear..startYear descending, sweeps the
+ *  configured genre/style filters, accumulates artist→releases pairs,
+ *  resolves each artist name to a Discogs ID, then upserts. */
+export async function seedBluesArtistsFromDiscogs(
+  client: DiscogsClient,
+  opts: { startYear?: number; endYear?: number; perPage?: number; maxPages?: number; debug?: boolean } = {},
+): Promise<DiscogsSeedResult> {
+  const startYear = opts.startYear ?? 1923;
+  const endYear   = opts.endYear   ?? 1930;
+  const perPage   = opts.perPage   ?? DISCOGS_PER_PAGE;
+  const maxPages  = opts.maxPages  ?? DISCOGS_MAX_PAGES_PER_YEAR;
+  const debug     = !!opts.debug;
+  const start = Date.now();
+  const errors: DiscogsSeedResult["errors"] = [];
+
+  const years: number[] = [];
+  for (let y = endYear; y >= startYear; y--) years.push(y);
+
+  type Bucket = {
+    releases: Array<{ id: number; type: string; title: string; year?: number; label?: string }>;
+    styles: Set<string>;
+    labels: Set<string>;
+  };
+  const byName = new Map<string, Bucket>();
+  let rowsScanned = 0;
+
+  for (const year of years) {
+    for (const filter of DISCOGS_SEED_GENRES) {
+      for (let page = 1; page <= maxPages; page++) {
+        const params: Record<string, string> = {
+          type: "master",
+          year: String(year),
+          per_page: String(perPage),
+          page: String(page),
+          genre: filter.genre,
+        };
+        if (filter.style) params.style = filter.style;
+        let data: any;
+        try {
+          data = await (client as any).get("/database/search", params);
+        } catch (err: any) {
+          errors.push({ year, message: `${filter.genre}/${filter.style || "*"} p${page}: ${err?.message ?? String(err)}` });
+          break;
+        }
+        const results: DiscogsSearchResult[] = data?.results ?? [];
+        rowsScanned += results.length;
+        if (debug) console.log(`[discogs seed] ${year} ${filter.genre}/${filter.style || "*"} p${page} -> ${results.length} rows`);
+        for (const r of results) {
+          const credit = _artistFromSearchTitle(r.title);
+          if (!credit) continue;
+          const lc = credit.toLowerCase();
+          if (lc.includes("various") || lc === "unknown artist" || lc === "no artist") continue;
+          if (/[,&/]/.test(credit) && credit.split(/[,&/]/).length > 2) continue;
+          const key = _normaliseDiscogsName(credit);
+          if (!byName.has(key)) byName.set(key, { releases: [], styles: new Set(), labels: new Set() });
+          const b = byName.get(key)!;
+          const id = r.id;
+          const type = (r.type ?? "master") as string;
+          const yr = r.year ? parseInt(r.year, 10) : year;
+          const labelStr = Array.isArray(r.label) ? r.label[0] : (r.label as any) ?? "";
+          const idx = r.title.indexOf(" - ");
+          const titleOnly = idx > 0 ? r.title.slice(idx + 3) : r.title;
+          b.releases.push({ id, type, title: titleOnly, year: yr || undefined, label: labelStr || undefined });
+          for (const s of (r.style ?? [])) b.styles.add(s);
+          if (labelStr) b.labels.add(labelStr);
+        }
+        if (results.length < perPage) break;
+        await new Promise(res => setTimeout(res, DISCOGS_SEED_RATE_MS));
+      }
+    }
+  }
+
+  let artistsCreated = 0, artistsMerged = 0, releasesAdded = 0;
+  for (const [name, bucket] of byName.entries()) {
+    let artistId: number | null = null;
+    try {
+      const search: any = await (client as any).get("/database/search", {
+        q: name, type: "artist", per_page: "1",
+      });
+      artistId = search?.results?.[0]?.id ?? null;
+    } catch (err: any) {
+      errors.push({ year: -1, message: `artist lookup "${name}": ${err?.message ?? String(err)}` });
+    }
+    await new Promise(res => setTimeout(res, DISCOGS_SEED_RATE_MS));
+    if (!artistId) continue;
+    try {
+      const out = await upsertBluesArtistByDiscogsId({
+        discogs_id: artistId,
+        name,
+        discogs_releases: bucket.releases,
+        styles: Array.from(bucket.styles),
+        associated_labels: Array.from(bucket.labels),
+      });
+      if (out.created) artistsCreated++; else artistsMerged++;
+      releasesAdded += out.mergedCount;
+    } catch (err: any) {
+      errors.push({ year: -1, message: `upsert "${name}": ${err?.message ?? String(err)}` });
+    }
+  }
+
+  return {
+    yearsScanned: years,
+    rowsScanned,
+    uniqueArtists: byName.size,
+    artistsCreated,
+    artistsMerged,
+    releasesAdded,
+    errors,
+    durationMs: Date.now() - start,
+  };
 }

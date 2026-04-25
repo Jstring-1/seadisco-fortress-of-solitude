@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260412l" />
+  <link rel="stylesheet" href="/style.css?v=20260412m" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260412l"></script>
+<script defer src="/shared.js?v=20260412m"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
@@ -128,6 +128,7 @@
           <h2 style="margin:0">Pre-1930 Blues Artists</h2>
           <button class="admin-refresh-btn" onclick="bluesDbLoadList()" title="Refresh">&#8635;</button>
           <button class="admin-btn" onclick="bluesDbSeed()" id="blues-seed-btn" title="Pull seed list from Wikidata. Idempotent — manual edits are preserved.">Seed from Wikidata</button>
+          <button class="admin-btn" onclick="bluesDbSeedDiscogs()" id="blues-seed-discogs-btn" title="Walk Discogs releases by genre+year (1923-1930), upserting one row per artist with every Discogs master ID we find them on. ~30-60 minutes at 1 req/sec. Idempotent — re-runs merge new releases into existing rows.">Seed from Discogs</button>
           <button class="admin-btn" onclick="bluesDbEnrichMb(null)" id="blues-enrich-mb-btn" title="Fill first/last recording year + title from MusicBrainz for every row that has an MBID. Rate-limited 1 req/s — bulk pass can take 5–10 minutes.">Enrich from MB</button>
           <button class="admin-btn" onclick="bluesDbEnrichWiki(null)" id="blues-enrich-wiki-btn" title="Pull the Wikipedia lead paragraph into the notes field for any row with a wikipedia_suffix. Skips rows that already have notes.">Enrich notes (Wiki)</button>
           <button class="admin-btn" onclick="bluesDbEnrichDiscogs(null)" id="blues-enrich-discogs-btn" title="Look up missing Discogs IDs by artist name. Uses your admin Discogs token. ~3–5 min.">Enrich Discogs</button>
@@ -170,6 +171,7 @@
               <label style="grid-column:1/-1">Songs authored (comma-sep) <input name="songs_authored"></label>
               <label style="grid-column:1/-1">Collaborators (comma-sep) <input name="collaborators"></label>
               <label style="grid-column:1/-1">YouTube URLs (comma-sep) <input name="youtube_urls"></label>
+              <label style="grid-column:1/-1">Discogs masters/releases (JSON array — populated by "Seed from Discogs", edit cautiously) <textarea name="discogs_releases" rows="4" style="width:100%;font-family:monospace;font-size:0.78rem"></textarea></label>
               <label style="grid-column:1/-1">Photo URL <input name="photo_url"></label>
               <label style="grid-column:1/-1">Notes <textarea name="notes" rows="4" style="width:100%"></textarea></label>
               <div style="grid-column:1/-1;display:flex;gap:0.5rem;justify-content:flex-end;margin-top:0.5rem;flex-wrap:wrap">
@@ -252,7 +254,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260412l"></script>
+<script defer src="/modal.js?v=20260412m"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1026,6 +1028,7 @@ function bluesDbRenderList() {
   const rows = _bluesDbState.rows.map(r => {
     const styles = (Array.isArray(r.styles) ? r.styles : []).slice(0, 3).join(", ");
     const dates = fmtRange(r.birth_date, r.death_date);
+    const relCount = Array.isArray(r.discogs_releases) ? r.discogs_releases.length : 0;
     return `<tr>
       <td><a href="#" onclick="event.preventDefault();bluesDbOpenEditor(${r.id})" style="color:var(--accent)">${esc(r.name)}</a></td>
       <td>${esc(dates)}</td>
@@ -1033,6 +1036,7 @@ function bluesDbRenderList() {
       <td>${esc(styles)}</td>
       <td>${esc(r.wikidata_qid ?? "")}</td>
       <td>${r.discogs_id ? esc(r.discogs_id) : ""}</td>
+      <td style="text-align:right">${relCount || ""}</td>
     </tr>`;
   }).join("");
   list.innerHTML = `
@@ -1045,6 +1049,7 @@ function bluesDbRenderList() {
           <th style="padding:0.35rem 0.5rem">Styles</th>
           <th style="padding:0.35rem 0.5rem">QID</th>
           <th style="padding:0.35rem 0.5rem">Discogs</th>
+          <th style="padding:0.35rem 0.5rem;text-align:right" title="Discogs masters/releases">#</th>
         </tr>
       </thead>
       <tbody style="color:var(--text)">${rows}</tbody>
@@ -1094,6 +1099,31 @@ async function bluesDbSeed() {
     bluesDbLoadList();
   } catch (e) { alert("Seed failed: " + e); }
   finally { btn.disabled = false; btn.textContent = "Seed from Wikidata"; }
+}
+
+async function bluesDbSeedDiscogs() {
+  const btn = document.getElementById("blues-seed-discogs-btn");
+  if (!confirm("Walk Discogs blues releases 1923-1930?\n\nThis is the long pass — ~30-60 minutes at 1 req/sec. Uses your admin Discogs token. Idempotent: existing rows get new releases merged in, manual edits preserved.")) return;
+  btn.disabled = true; btn.textContent = "Walking Discogs… (long)";
+  try {
+    const r = await apiFetch("/api/admin/blues/seed-discogs", { method: "POST" });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert("Discogs seed failed: " + (err.error ?? r.status));
+      return;
+    }
+    const out = await r.json();
+    const summary = `Discogs seed done in ${(out.durationMs/60000).toFixed(1)} min:\n` +
+      `· scanned ${out.rowsScanned} release rows across ${out.yearsScanned?.length || 0} years\n` +
+      `· ${out.uniqueArtists} unique artists found\n` +
+      `· ${out.artistsCreated} new rows created · ${out.artistsMerged} existing rows merged\n` +
+      `· ${out.releasesAdded} releases added` +
+      (out.errors?.length ? `\n· ${out.errors.length} errors` : "");
+    alert(summary);
+    bluesDbLoadStats();
+    bluesDbLoadList();
+  } catch (e) { alert("Discogs seed failed: " + e); }
+  finally { btn.disabled = false; btn.textContent = "Seed from Discogs"; }
 }
 
 // MusicBrainz enrichment. id = null means bulk run across every row that
@@ -1232,8 +1262,14 @@ async function bluesDbOpenEditor(id) {
       for (const [k, v] of Object.entries(row)) {
         const el = form.elements.namedItem(k);
         if (!el) continue;
-        if (Array.isArray(v)) el.value = v.join(", ");
+        if (Array.isArray(v)) {
+          // Complex arrays (objects) → JSON in a textarea so they're
+          // editable. Plain string arrays → comma-separated for inputs.
+          const isComplex = v.length > 0 && typeof v[0] === "object" && v[0] !== null;
+          el.value = isComplex ? JSON.stringify(v, null, 2) : v.join(", ");
+        }
         else if (v == null) el.value = "";
+        else if (typeof v === "object") el.value = JSON.stringify(v, null, 2);
         else el.value = v;
       }
     } catch { alert("Error loading row."); return; }
