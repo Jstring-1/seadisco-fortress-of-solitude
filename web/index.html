@@ -40,7 +40,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260412e" />
+  <link rel="stylesheet" href="/style.css?v=20260412f" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -78,7 +78,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260412e"></script>
+<script defer src="/shared.js?v=20260412f"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search" }));</script>
 <div id="search-view">
 
@@ -135,7 +135,7 @@
         <option value="label:asc">Label A→Z</option>
       </select>
     </label>
-    <label id="hide-owned-label" style="display:flex;align-items:center;gap:0.3rem;font-size:0.78rem;color:#555;cursor:not-allowed;flex-shrink:0;user-select:none" title="Sign in and sync your collection to use this filter">
+    <label id="hide-owned-label" style="display:flex;align-items:center;gap:0.3rem;font-size:0.78rem;color:var(--muted);opacity:0.55;cursor:not-allowed;flex-shrink:0;user-select:none" title="Sign in and sync your collection to use this filter">
       <input type="checkbox" id="hide-owned" disabled style="accent-color:var(--accent);cursor:not-allowed;opacity:0.4"> Hide owned
     </label>
     <button type="button" id="clear-btn" onclick="clearForm()" title="Clear form" style="background:none;border:none;padding:0.3rem 0.5rem;font-size:1.5rem;color:#555;cursor:pointer;line-height:1;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
@@ -812,18 +812,18 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260412e"></script>
-<script defer src="/search.js?v=20260412e"></script>
-<script defer src="/collection.js?v=20260412e"></script>
-<script defer src="/account.js?v=20260412e"></script>
-<script defer src="/orders.js?v=20260412e"></script>
+<script defer src="/utils.js?v=20260412f"></script>
+<script defer src="/search.js?v=20260412f"></script>
+<script defer src="/collection.js?v=20260412f"></script>
+<script defer src="/account.js?v=20260412f"></script>
+<script defer src="/orders.js?v=20260412f"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260412e"></script>
-<script defer src="/app.js?v=20260412e"></script>
+<script defer src="/modal.js?v=20260412f"></script>
+<script defer src="/app.js?v=20260412f"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/inventory-editor.js?v=20260412e"></script>
-<script defer src="/loc.js?v=20260412e"></script>
+<script defer src="/inventory-editor.js?v=20260412f"></script>
+<script defer src="/loc.js?v=20260412f"></script>
 
 </body>
 </html>

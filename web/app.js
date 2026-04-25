@@ -196,6 +196,50 @@ window.addEventListener("popstate", () => {
   });
 });
 
+// ── Per-field × clear button ────────────────────────────────────────────
+// Wrap each text input in a relative span and append a small × button
+// that appears only when the input has text. Click clears the input,
+// dispatches an `input` event so any listeners (e.g. populateStyles)
+// still fire, and refocuses the field.
+function _attachInputClearButtons(ids) {
+  ids.forEach(id => {
+    const input = document.getElementById(id);
+    if (!input || input.dataset.hasClearBtn === "1") return;
+    input.dataset.hasClearBtn = "1";
+    let wrap = input.parentElement;
+    if (!wrap || !wrap.classList?.contains("input-clear-wrap")) {
+      const span = document.createElement("span");
+      span.className = "input-clear-wrap";
+      input.parentNode.insertBefore(span, input);
+      span.appendChild(input);
+      wrap = span;
+    }
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "input-clear-btn";
+    btn.title = "Clear field";
+    btn.tabIndex = -1;
+    btn.textContent = "×";
+    wrap.appendChild(btn);
+    const update = () => wrap.classList.toggle("has-text", !!input.value);
+    update();
+    input.addEventListener("input", update);
+    btn.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      input.value = "";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      input.focus();
+    });
+  });
+}
+_attachInputClearButtons([
+  // Main + advanced search form
+  "query", "f-artist", "f-release", "f-year", "f-label", "f-country",
+  // Collection / wantlist search panel
+  "cw-query", "cw-artist", "cw-release", "cw-year", "cw-label", "cw-notes",
+]);
+
 // ── Grey out advanced toggle when AI mode selected ───────────────────────
 document.querySelectorAll('input[name="result-type"]').forEach(radio => {
   radio.addEventListener("change", () => {
