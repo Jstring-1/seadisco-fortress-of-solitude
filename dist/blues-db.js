@@ -797,7 +797,10 @@ function _normaliseDiscogsName(s) {
 }
 /** Year-walk seed. Walks endYear..startYear descending, sweeps the
  *  configured genre/style filters, accumulates artist→releases pairs,
- *  resolves each artist name to a Discogs ID, then upserts. */
+ *  resolves each artist name to a Discogs ID, then upserts.
+ *
+ *  Pass `onProgress` to receive periodic updates — used by the
+ *  background-job runner to surface progress to the admin UI. */
 export async function seedBluesArtistsFromDiscogs(client, opts = {}) {
     // Walk 1900..1930 by default. Years before ~1920 will return very
     // few hits but cost nothing to scan (one empty search call each),
@@ -814,6 +817,23 @@ export async function seedBluesArtistsFromDiscogs(client, opts = {}) {
         years.push(y);
     const byName = new Map();
     let rowsScanned = 0;
+    let yearsScannedSoFar = 0;
+    const reportProgress = (phase, upsertsDone, upsertsTotal) => {
+        if (!opts.onProgress)
+            return;
+        try {
+            opts.onProgress({
+                phase,
+                yearsTotal: years.length,
+                yearsScannedSoFar,
+                rowsScannedSoFar: rowsScanned,
+                uniqueArtistsSoFar: byName.size,
+                upsertsTotal,
+                upsertsDone,
+            });
+        }
+        catch { /* never let a progress callback abort the seed */ }
+    };
     for (const year of years) {
         for (const filter of DISCOGS_SEED_GENRES) {
             for (let page = 1; page <= maxPages; page++) {
@@ -868,8 +888,12 @@ export async function seedBluesArtistsFromDiscogs(client, opts = {}) {
                 await new Promise(res => setTimeout(res, DISCOGS_SEED_RATE_MS));
             }
         }
+        yearsScannedSoFar++;
+        reportProgress("scanning", 0, byName.size);
     }
     let artistsCreated = 0, artistsMerged = 0, releasesAdded = 0;
+    let upsertsDone = 0;
+    reportProgress("upserting", 0, byName.size);
     for (const [name, bucket] of byName.entries()) {
         let artistId = null;
         try {
@@ -897,11 +921,16 @@ export async function seedBluesArtistsFromDiscogs(client, opts = {}) {
             else
                 artistsMerged++;
             releasesAdded += out.mergedCount;
+            upsertsDone++;
+            // Cheap report — every 10 upserts is plenty for a UI poll loop.
+            if (upsertsDone % 10 === 0)
+                reportProgress("upserting", upsertsDone, byName.size);
         }
         catch (err) {
             errors.push({ year: -1, message: `upsert "${name}": ${err?.message ?? String(err)}` });
         }
     }
+    reportProgress("done", upsertsDone, byName.size);
     return {
         yearsScanned: years,
         rowsScanned,
