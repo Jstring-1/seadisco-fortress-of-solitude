@@ -1520,10 +1520,12 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         const wikiW = t.title
           ? wikiIcon(t.title, t.title, trackArtist || "")
           : "";
-        // External YouTube search — restored to the end of the title row,
-        // after the wiki icon. Only shown when there's no in-app playable
-        // match, so it acts as a fallback rather than duplicate of ▶.
-        const ytSearchEnd = (t.title && !url)
+        // External YouTube search at the end of the title row. Shown for
+        // every track (even ones with an in-app ▶) because embedded
+        // playback sometimes fails or the video is unavailable in the
+        // user's region — a one-click fallback to a YouTube search keeps
+        // listening uninterrupted.
+        const ytSearchEnd = t.title
           ? ` <a class="track-yt-search-end" href="https://www.youtube.com/results?search_query=${ytQuery}" target="_blank" rel="noopener" title="Search on YouTube"><svg width="14" height="10" viewBox="0 0 16 11" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="11" rx="2.5" fill="#8a2a22"/><path d="M6.5 3L11 5.5L6.5 8V3Z" fill="#e8dcc8"/></svg></a>`
           : "";
         const trackCredits = (t.extraartists ?? []).length
