@@ -41,7 +41,7 @@ function _markVisited(id) {
 // /api/user/recent so the same list is available on another device (see
 // _hydrateHistoryFromServer() in search.js, which runs once per page load).
 const _historyKey = "sd_history";
-const _HISTORY_MAX = 120;
+const _HISTORY_MAX = 576;
 function _recordHistory(id, type) {
   if (!id || !type) return;
   let item;

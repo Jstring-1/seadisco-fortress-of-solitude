@@ -1049,7 +1049,7 @@ function sortFavoritesGrid() {
 // because they carry the authoritative opened_at timestamp).
 
 const _HISTORY_KEY = "sd_history";
-const _HISTORY_MAX_CLIENT = 120;
+const _HISTORY_MAX_CLIENT = 576;
 let _historyHydrated = false;
 
 function _readHistory() {
@@ -1071,7 +1071,7 @@ async function _hydrateHistoryFromServer() {
   _historyHydrated = true;
   if (!window._clerk?.user || typeof apiFetch !== "function") return;
   try {
-    const r = await apiFetch("/api/user/recent?limit=120");
+    const r = await apiFetch("/api/user/recent?limit=576");
     if (!r.ok) return;
     const body = await r.json().catch(() => null);
     const serverItems = Array.isArray(body?.items) ? body.items : [];
