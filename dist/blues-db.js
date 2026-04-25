@@ -837,26 +837,6 @@ const DISCOGS_MAX_PAGES_PER_YEAR = 25;
 const DISCOGS_SEED_GENRES = [
     { genre: "Blues", style: "" },
 ];
-// Minimum number of distinct primary-Blues masters an artist must show
-// up on across the whole seed window before we upsert them. Filters out
-// vaudeville/pop singers who got pulled in by a single Blues-tagged
-// compilation appearance. 2+ is a reasonable bar for pre-1930 blues
-// where most genuine artists left at least a pair of 78 sides.
-const DISCOGS_SEED_MIN_RELEASES = 2;
-// Allowlist of Discogs styles that confirm a master is genuinely a blues
-// record from the era. If a master's style array is non-empty and none
-// of its styles match this set, we reject it — that knocks out
-// Pop / Vaudeville / Jazz / Tin Pan Alley masters that got Blues added
-// to their genre list via later reissues on blues comps. Empty style
-// arrays are accepted (many obscure 1920s 78s have no style assigned).
-const BLUES_DISCOGS_STYLES = new Set([
-    "Country Blues", "Delta Blues", "Classic Female Blues", "Piedmont Blues",
-    "Chicago Blues", "Memphis Blues", "Texas Blues", "East Coast Blues",
-    "Electric Blues", "Modern Electric Blues", "Boogie Woogie",
-    "Hokum", "Jug Band", "Vaudeville Blues", "Harmonica Blues",
-    "Louisiana Blues", "Country Blues", "Blues Rock", "Soul-Blues",
-    "Detroit Blues", "Swamp Blues", "Jump Blues",
-]);
 /** Parse "Artist - Title" and return just the artist string. */
 function _artistFromSearchTitle(t) {
     if (!t)
@@ -938,20 +918,10 @@ export async function seedBluesArtistsFromDiscogs(client, opts = {}) {
                     // entry in the genre array). Discogs returns matches if Blues
                     // appears anywhere in the genre list, which lets comps and
                     // Pop/Jazz reissues with a secondary Blues tag through. Strict
-                    // primary-only knocks most Sophie Tucker / Al Jolson-style
-                    // false positives out.
+                    // primary-only knocks Sophie Tucker / Al Jolson-style false
+                    // positives out without over-filtering one-off legit artists.
                     const genres = Array.isArray(r.genre) ? r.genre : [];
                     if (genres[0] !== "Blues")
-                        continue;
-                    // If the master has any style tags, at least one must be in
-                    // the Blues family. This catches the case where Discogs's
-                    // master record absorbed a "Blues" genre tag from a reissue
-                    // on a blues compilation but the master's actual style list
-                    // says ["Pop", "Vaudeville"] — we want the master to look
-                    // like an era-correct blues record, not a record that became
-                    // associated with blues post-hoc.
-                    const masterStyles = Array.isArray(r.style) ? r.style : [];
-                    if (masterStyles.length > 0 && !masterStyles.some(s => BLUES_DISCOGS_STYLES.has(s)))
                         continue;
                     const credit = _artistFromSearchTitle(r.title);
                     if (!credit)
@@ -984,15 +954,6 @@ export async function seedBluesArtistsFromDiscogs(client, opts = {}) {
         }
         yearsScannedSoFar++;
         reportProgress("scanning", 0, byName.size);
-    }
-    // Drop artists we only saw on a single master across the whole seed
-    // window — that's almost always a one-off compilation feature credit,
-    // not a genuine blues recording artist. Cuts the bulk of remaining
-    // false positives at the price of losing some real one-off acts the
-    // admin can re-add by hand.
-    for (const [name, bucket] of [...byName.entries()]) {
-        if (bucket.releases.length < DISCOGS_SEED_MIN_RELEASES)
-            byName.delete(name);
     }
     let artistsCreated = 0, artistsMerged = 0, releasesAdded = 0;
     let upsertsDone = 0;
