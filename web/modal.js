@@ -1496,7 +1496,16 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
       ${tracks.map(t => {
         const url = findVideo(t.title || "");
         const trackArtist = artists.length ? artists[0] : "";
-        const ytQuery = encodeURIComponent(`${trackArtist} ${title} ${t.title || ""}`);
+        // YouTube search supports double-quoted exact-phrase matching too —
+        // quote artist + track so search results match the literal strings
+        // rather than a bag-of-words. Album title stays unquoted as light
+        // context for cases where the track title is generic.
+        const _ytArtistQ = trackArtist ? `"${trackArtist}"` : "";
+        const _ytTrackQ  = t.title ? `"${t.title}"` : "";
+        const _ytAlbumQ  = title || "";
+        const ytQuery = encodeURIComponent(
+          [_ytArtistQ, _ytTrackQ, _ytAlbumQ].filter(Boolean).join(" ")
+        );
         const trackSearchQ = ('"' + (t.title || '').trim() + '"').replace(/'/g, "\\'");
         // Play column: reserved width so rows align even with no playable URL.
         // Only the ▶ play button lives here now (no orange circle); the
