@@ -390,6 +390,193 @@ export async function initDb() {
   // The legacy ai_recommendations table is no longer created. To drop the
   // existing data on a deployed instance, run manually:
   //   DROP TABLE IF EXISTS ai_recommendations CASCADE;
+
+  // ── Pre-1930 blues artists database (admin-curated) ───────────────────
+  // Seeded from Wikidata SPARQL; enriched manually + via future jobs from
+  // MusicBrainz, Wikipedia, Discogs, YouTube. The wikidata_qid is the
+  // canonical key — re-running the seeder upserts on it.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS blues_artists (
+      id                       SERIAL PRIMARY KEY,
+      wikidata_qid             TEXT UNIQUE,
+      musicbrainz_mbid         TEXT UNIQUE,
+      discogs_id               INTEGER UNIQUE,
+      name                     TEXT NOT NULL,
+      aliases                  JSONB DEFAULT '[]'::jsonb,
+      birth_date               TEXT,
+      birth_place              TEXT,
+      death_date               TEXT,
+      death_place              TEXT,
+      death_cause              TEXT,
+      hometown_region          TEXT,
+      first_recording_year     INTEGER,
+      first_recording_title    TEXT,
+      last_recording_year      INTEGER,
+      last_recording_title     TEXT,
+      associated_labels        JSONB DEFAULT '[]'::jsonb,
+      styles                   JSONB DEFAULT '[]'::jsonb,
+      instruments              JSONB DEFAULT '[]'::jsonb,
+      songs_authored           JSONB DEFAULT '[]'::jsonb,
+      collaborators            JSONB DEFAULT '[]'::jsonb,
+      photo_url                TEXT,
+      wikipedia_suffix         TEXT,
+      youtube_urls             JSONB DEFAULT '[]'::jsonb,
+      notes                    TEXT,
+      enrichment_status        JSONB DEFAULT '{}'::jsonb,
+      date_added               TIMESTAMPTZ DEFAULT NOW(),
+      updated_at               TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS blues_artists_name_idx ON blues_artists (lower(name))`);
+}
+
+// ── Blues DB helpers (admin-only) ──────────────────────────────────────
+// Field whitelist used by upsert/update so the admin UI can't smuggle
+// arbitrary columns. Keep this list aligned with the table schema above.
+const _BLUES_FIELDS = [
+  "wikidata_qid", "musicbrainz_mbid", "discogs_id", "name",
+  "aliases", "birth_date", "birth_place", "death_date", "death_place",
+  "death_cause", "hometown_region",
+  "first_recording_year", "first_recording_title",
+  "last_recording_year",  "last_recording_title",
+  "associated_labels", "styles", "instruments",
+  "songs_authored", "collaborators",
+  "photo_url", "wikipedia_suffix", "youtube_urls", "notes",
+  "enrichment_status",
+] as const;
+const _BLUES_JSONB_FIELDS = new Set([
+  "aliases", "associated_labels", "styles", "instruments",
+  "songs_authored", "collaborators", "youtube_urls", "enrichment_status",
+]);
+const _BLUES_INT_FIELDS = new Set([
+  "discogs_id", "first_recording_year", "last_recording_year",
+]);
+
+function _coerceBluesValue(field: string, value: any): any {
+  if (value === undefined || value === null || value === "") return null;
+  if (_BLUES_JSONB_FIELDS.has(field)) {
+    if (Array.isArray(value) || typeof value === "object") return JSON.stringify(value);
+    if (typeof value === "string") {
+      // Tolerate comma-separated input from the admin UI for array fields.
+      try { JSON.parse(value); return value; }
+      catch {
+        const arr = value.split(",").map(s => s.trim()).filter(Boolean);
+        return JSON.stringify(arr);
+      }
+    }
+    return JSON.stringify(value);
+  }
+  if (_BLUES_INT_FIELDS.has(field)) {
+    const n = parseInt(String(value), 10);
+    return Number.isFinite(n) ? n : null;
+  }
+  return String(value);
+}
+
+export async function listBluesArtists(opts: { search?: string; limit?: number; offset?: number } = {}): Promise<{ rows: any[]; total: number }> {
+  const { search, limit = 50, offset = 0 } = opts;
+  const args: any[] = [];
+  let where = "";
+  if (search?.trim()) {
+    args.push(`%${search.trim().toLowerCase()}%`);
+    where = `WHERE lower(name) LIKE $1 OR lower(coalesce(birth_place,'')) LIKE $1 OR lower(coalesce(hometown_region,'')) LIKE $1`;
+  }
+  const countSql = `SELECT count(*)::int AS total FROM blues_artists ${where}`;
+  const totalRes = await getPool().query(countSql, args);
+  const total = totalRes.rows[0]?.total ?? 0;
+  args.push(limit, offset);
+  const sql = `
+    SELECT * FROM blues_artists
+    ${where}
+    ORDER BY lower(name) ASC
+    LIMIT $${args.length - 1} OFFSET $${args.length}
+  `;
+  const r = await getPool().query(sql, args);
+  return { rows: r.rows, total };
+}
+
+export async function getBluesArtist(id: number): Promise<any | null> {
+  const r = await getPool().query(`SELECT * FROM blues_artists WHERE id = $1`, [id]);
+  return r.rows[0] ?? null;
+}
+
+export async function deleteBluesArtist(id: number): Promise<void> {
+  await getPool().query(`DELETE FROM blues_artists WHERE id = $1`, [id]);
+}
+
+export async function upsertBluesArtistByQid(record: Record<string, any>): Promise<number> {
+  if (!record.wikidata_qid || !record.name) {
+    throw new Error("upsertBluesArtistByQid requires wikidata_qid and name");
+  }
+  const cols: string[] = [];
+  const vals: any[] = [];
+  const ph: string[] = [];
+  for (const f of _BLUES_FIELDS) {
+    if (!(f in record)) continue;
+    cols.push(f);
+    vals.push(_coerceBluesValue(f, (record as any)[f]));
+    ph.push(`$${vals.length}`);
+  }
+  // updated_at always bumped on upsert
+  cols.push("updated_at"); vals.push(new Date()); ph.push(`$${vals.length}`);
+  const updateSet = cols.filter(c => c !== "wikidata_qid").map(c => `${c} = EXCLUDED.${c}`).join(", ");
+  const sql = `
+    INSERT INTO blues_artists (${cols.join(", ")})
+    VALUES (${ph.join(", ")})
+    ON CONFLICT (wikidata_qid)
+    DO UPDATE SET ${updateSet}
+    RETURNING id
+  `;
+  const r = await getPool().query(sql, vals);
+  return r.rows[0].id;
+}
+
+export async function insertBluesArtist(record: Record<string, any>): Promise<number> {
+  if (!record.name) throw new Error("insertBluesArtist requires name");
+  const cols: string[] = [];
+  const vals: any[] = [];
+  const ph: string[] = [];
+  for (const f of _BLUES_FIELDS) {
+    if (!(f in record)) continue;
+    cols.push(f);
+    vals.push(_coerceBluesValue(f, (record as any)[f]));
+    ph.push(`$${vals.length}`);
+  }
+  const sql = `INSERT INTO blues_artists (${cols.join(", ")}) VALUES (${ph.join(", ")}) RETURNING id`;
+  const r = await getPool().query(sql, vals);
+  return r.rows[0].id;
+}
+
+export async function updateBluesArtist(id: number, record: Record<string, any>): Promise<void> {
+  const sets: string[] = [];
+  const vals: any[] = [];
+  for (const f of _BLUES_FIELDS) {
+    if (!(f in record)) continue;
+    vals.push(_coerceBluesValue(f, (record as any)[f]));
+    sets.push(`${f} = $${vals.length}`);
+  }
+  if (!sets.length) return;
+  vals.push(new Date()); sets.push(`updated_at = $${vals.length}`);
+  vals.push(id);
+  await getPool().query(
+    `UPDATE blues_artists SET ${sets.join(", ")} WHERE id = $${vals.length}`,
+    vals,
+  );
+}
+
+export async function getBluesStats(): Promise<{ total: number; lastSeed: string | null; lastUpdate: string | null }> {
+  const r = await getPool().query(`
+    SELECT
+      count(*)::int AS total,
+      max(date_added)  AS last_seed,
+      max(updated_at)  AS last_update
+    FROM blues_artists
+  `);
+  return {
+    total: r.rows[0]?.total ?? 0,
+    lastSeed: r.rows[0]?.last_seed ?? null,
+    lastUpdate: r.rows[0]?.last_update ?? null,
+  };
 }
 
 // ── Invite-only purge: nuke all per-user data for non-admin clerk_user_ids ──

@@ -7,7 +7,8 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats } from "./db.js";
+import { seedBluesArtistsFromWikidata } from "./blues-db.js";
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -3141,6 +3142,89 @@ app.get("/api/admin/user-favorites", async (req, res) => {
     const items = await getFavorites(clerkUserId, 100);
     res.json({ items, total: items.length });
   } catch (err) { res.status(500).json({ error: String(err) }); }
+});
+
+// ── Blues DB admin endpoints ─────────────────────────────────────────────
+// Curated database of pre-1930 blues artists. Admin-only. Phase 1 seeds
+// from Wikidata; admin can add / edit / delete rows manually for obscure
+// artists not on Wikidata or to correct mistakes.
+
+app.get("/api/admin/blues/stats", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try { res.json(await getBluesStats()); }
+  catch (err) { console.error("[blues stats]", err); res.status(500).json({ error: String(err) }); }
+});
+
+app.get("/api/admin/blues/list", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const search = (req.query.search as string ?? "").trim();
+  const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit ?? "50"), 10) || 50));
+  const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
+  try {
+    const out = await listBluesArtists({ search, limit, offset });
+    res.json({ ...out, limit, offset });
+  } catch (err) { console.error("[blues list]", err); res.status(500).json({ error: String(err) }); }
+});
+
+app.get("/api/admin/blues/:id", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "bad id" }); return; }
+  try {
+    const row = await getBluesArtist(id);
+    if (!row) { res.status(404).json({ error: "not found" }); return; }
+    res.json(row);
+  } catch (err) { console.error("[blues get]", err); res.status(500).json({ error: String(err) }); }
+});
+
+app.post("/api/admin/blues", express.json({ limit: "200kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const body = req.body ?? {};
+  if (!body.name?.trim()) { res.status(400).json({ error: "name required" }); return; }
+  try {
+    const id = await insertBluesArtist(body);
+    res.json({ ok: true, id });
+  } catch (err: any) {
+    console.error("[blues insert]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
+});
+
+app.put("/api/admin/blues/:id", express.json({ limit: "200kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "bad id" }); return; }
+  try {
+    await updateBluesArtist(id, req.body ?? {});
+    res.json({ ok: true });
+  } catch (err: any) {
+    console.error("[blues update]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
+});
+
+app.delete("/api/admin/blues/:id", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "bad id" }); return; }
+  try {
+    await deleteBluesArtist(id);
+    res.json({ ok: true });
+  } catch (err) { console.error("[blues delete]", err); res.status(500).json({ error: String(err) }); }
+});
+
+// Trigger the Wikidata seed. Returns a summary of fetched/upserted/errors.
+// Idempotent — re-running just refreshes the Wikidata-sourced fields and
+// leaves manual edits the admin made elsewhere alone.
+app.post("/api/admin/blues/seed", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const result = await seedBluesArtistsFromWikidata();
+    res.json({ ok: true, ...result });
+  } catch (err: any) {
+    console.error("[blues seed]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
 });
 
 // POST /api/ai-search — Claude music recommendations
