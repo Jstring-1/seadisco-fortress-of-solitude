@@ -686,6 +686,148 @@ export async function enrichBluesFromWikipedia(opts = {}) {
 // Phase 3b: Discogs ID confirmation
 // ─────────────────────────────────────────────────────────────────────────
 const DISCOGS_RATE_LIMIT_MS = 1100; // 60/min for authenticated traffic
+// ─────────────────────────────────────────────────────────────────────────
+// Phase 4: full Discogs artist enrichment — pulls /artists/:id for every
+// row in blues_artists with a discogs_id and stores everything useful:
+// the bio (profile), realname, aliases, namevariations, members, groups,
+// images and the external URLs array (Wikipedia, AllMusic, etc.).
+// ─────────────────────────────────────────────────────────────────────────
+/** Fetch the full Discogs artist record and merge its data into the
+ *  blues_artists row. Idempotent — array fields union, scalar fields
+ *  only fill blanks. The bio (Discogs `profile`) overwrites notes
+ *  unless `force === false` is set. */
+async function _enrichOneFromDiscogsArtist(client, row) {
+    const data = await client.get(`/artists/${row.discogs_id}`);
+    const patch = {};
+    // Bio. Discogs uses [b]/[i]/[url=…] BBCode-ish markup; we keep it
+    // raw (the existing notes field is a free-text string already).
+    if (typeof data.profile === "string" && data.profile.trim()) {
+        patch.notes = data.profile.trim();
+    }
+    // Aliases come from three Discogs sources: the explicit `aliases`
+    // array, the `namevariations` strings, and `realname`. Union them
+    // with what we already have and dedupe case-insensitively.
+    const existingAliases = Array.isArray(row.aliases) ? row.aliases : [];
+    const merged = [];
+    const seen = new Set();
+    const push = (s) => {
+        if (typeof s !== "string")
+            return;
+        const t = s.trim();
+        if (!t)
+            return;
+        const k = t.toLowerCase();
+        if (seen.has(k))
+            return;
+        seen.add(k);
+        merged.push(t);
+    };
+    for (const a of existingAliases)
+        push(a);
+    for (const a of (data.aliases ?? []))
+        push(a?.name);
+    for (const n of (data.namevariations ?? []))
+        push(n);
+    push(data.realname);
+    if (merged.length !== existingAliases.length)
+        patch.aliases = merged;
+    // Collaborators: members (for groups) + groups (for solo artists).
+    const existingCollabs = Array.isArray(row.collaborators) ? row.collaborators : [];
+    const collabSeen = new Set(existingCollabs.map((c) => typeof c === "string" ? c.toLowerCase() : (c?.name ?? "").toLowerCase()));
+    const collabs = [...existingCollabs];
+    for (const m of (data.members ?? [])) {
+        const k = (m?.name ?? "").toLowerCase();
+        if (k && !collabSeen.has(k)) {
+            collabs.push({ name: m.name, discogs_id: m.id ?? null, kind: "member" });
+            collabSeen.add(k);
+        }
+    }
+    for (const g of (data.groups ?? [])) {
+        const k = (g?.name ?? "").toLowerCase();
+        if (k && !collabSeen.has(k)) {
+            collabs.push({ name: g.name, discogs_id: g.id ?? null, kind: "group" });
+            collabSeen.add(k);
+        }
+    }
+    if (collabs.length !== existingCollabs.length)
+        patch.collaborators = collabs;
+    // First image → photo_url if blank. Discogs returns an array sorted
+    // by primary first; the `uri` field is the full-size CDN URL.
+    if (!row.photo_url && Array.isArray(data.images) && data.images[0]?.uri) {
+        patch.photo_url = data.images[0].uri;
+    }
+    // External URLs — store the full array so we can render them later.
+    // Wikipedia / AllMusic / SecondHandSongs / Wikipedia foreign-language
+    // links, etc. all show up here.
+    const urls = (data.urls ?? []).filter((u) => typeof u === "string" && u.trim());
+    if (urls.length) {
+        const existingUrls = Array.isArray(row.external_urls) ? row.external_urls : [];
+        const urlSet = new Set([...existingUrls, ...urls]);
+        if (urlSet.size !== existingUrls.length)
+            patch.external_urls = Array.from(urlSet);
+    }
+    // Mark this enrichment so we can skip-already-done in future passes.
+    const status = (row.enrichment_status && typeof row.enrichment_status === "object")
+        ? row.enrichment_status : {};
+    patch.enrichment_status = { ...status, discogs_full: 1, discogs_full_at: new Date().toISOString() };
+    return { patch, raw: data };
+}
+/** Walk every row that has a discogs_id and pull the full artist
+ *  record. Rate-limited 1.1s/req. ~3-5 min for 200 rows. */
+export async function enrichBluesFromDiscogsArtists(client, opts = {}) {
+    const start = Date.now();
+    const errors = [];
+    let attempted = 0, enriched = 0, skipped = 0;
+    const PAGE = 200;
+    let offset = 0;
+    let processed = 0;
+    const totalRowsRes = await listBluesArtists({ limit: 1, offset: 0 });
+    const total = opts.idFilter ? 1 : (opts.limit ?? totalRowsRes.total);
+    const reportProgress = (currentName) => {
+        if (!opts.onProgress)
+            return;
+        try {
+            opts.onProgress({ total, processed, enriched, skipped, errors: errors.length, currentName });
+        }
+        catch { /* swallow */ }
+    };
+    reportProgress();
+    outer: while (true) {
+        const { rows } = await listBluesArtists({ limit: PAGE, offset });
+        if (!rows.length)
+            break;
+        for (const row of rows) {
+            if (opts.idFilter && row.id !== opts.idFilter)
+                continue;
+            attempted++;
+            reportProgress(row.name);
+            if (!row.discogs_id) {
+                skipped++;
+                continue;
+            }
+            try {
+                const { patch } = await _enrichOneFromDiscogsArtist(client, row);
+                if (Object.keys(patch).length) {
+                    await updateBluesArtist(row.id, patch);
+                }
+                enriched++;
+            }
+            catch (err) {
+                errors.push({ id: row.id, message: err?.message ?? String(err) });
+            }
+            processed++;
+            reportProgress();
+            if (opts.limit && processed >= opts.limit)
+                break outer;
+            await new Promise(res => setTimeout(res, DISCOGS_RATE_LIMIT_MS));
+        }
+        if (opts.idFilter)
+            break;
+        offset += PAGE;
+    }
+    reportProgress();
+    return { attempted, enriched, skipped, errors, durationMs: Date.now() - start };
+}
 /** Search Discogs for an artist by name, return the top hit's ID.
  *  Uses an admin-supplied DiscogsClient (PAT or OAuth). */
 async function _searchDiscogsArtist(client, name) {
