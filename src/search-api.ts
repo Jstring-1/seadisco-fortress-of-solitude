@@ -3234,11 +3234,14 @@ Return ONLY a valid JSON object, no markdown, no explanation.`;
   }
 });
 
-// GET /api/wikipedia/lookup?q=X — fetch lead section + canonical URL for popup
+// GET /api/wikipedia/lookup?q=X[&full=1] — fetch a Wikipedia article for the
+// in-app popup. Default returns only the lead section (fast); pass full=1 to
+// load the entire article body so users can read it without leaving SeaDisco.
 app.get("/api/wikipedia/lookup", async (req, res) => {
   if (!await requireUser(req, res)) return;
   const q = ((req.query.q as string) ?? "").trim();
   if (!q) { res.status(400).json({ error: "Missing q" }); return; }
+  const full = req.query.full === "1" || req.query.full === "true";
   // Wikipedia API requires a descriptive User-Agent per their policy:
   // https://meta.wikimedia.org/wiki/User-Agent_policy
   // Without one, requests can be 403'd or rate-limited aggressively.
@@ -3255,9 +3258,21 @@ app.get("/api/wikipedia/lookup", async (req, res) => {
     const title = Array.isArray(sdata) && Array.isArray(sdata[1]) && sdata[1][0] ? sdata[1][0] : null;
     if (!title) { res.json({ found: false }); return; }
     const pageUrl = (Array.isArray(sdata[3]) && sdata[3][0]) ? sdata[3][0] : `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`;
-    // Step 2: fetch generous lead extract via action=query
-    const extractUrl = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=extracts|pageimages&exintro=1&piprop=thumbnail&pithumbsize=200&redirects=1&titles=${encodeURIComponent(title)}`;
-    const er = await loggedFetch("wikipedia", extractUrl, { context: "wiki extract", headers: wikiHeaders });
+    // Step 2: fetch the article body. The TextExtracts API gives clean
+    // paragraph HTML (no infoboxes/refs/edit-links). exintro=1 → lead only;
+    // omit it to get the full article body. Always pull the thumbnail too.
+    const extractParams = [
+      "action=query",
+      "format=json",
+      "prop=extracts|pageimages",
+      ...(full ? [] : ["exintro=1"]),
+      "piprop=thumbnail",
+      "pithumbsize=200",
+      "redirects=1",
+      `titles=${encodeURIComponent(title)}`,
+    ].join("&");
+    const extractUrl = `https://en.wikipedia.org/w/api.php?${extractParams}`;
+    const er = await loggedFetch("wikipedia", extractUrl, { context: full ? "wiki extract full" : "wiki extract", headers: wikiHeaders });
     if (!er.ok) { console.error("[wikipedia] extract HTTP", er.status); res.status(502).json({ error: "Wikipedia extract failed", status: er.status }); return; }
     const edata = await er.json() as any;
     const pages = edata?.query?.pages ?? {};
@@ -3266,7 +3281,7 @@ app.get("/api/wikipedia/lookup", async (req, res) => {
     const html = page?.extract ?? "";
     const thumbnail = page?.thumbnail?.source ?? null;
     const finalTitle = page?.title ?? title;
-    res.json({ found: !!html, title: finalTitle, url: pageUrl, html, thumbnail });
+    res.json({ found: !!html, title: finalTitle, url: pageUrl, html, thumbnail, full });
   } catch (err) {
     console.error("[wikipedia/lookup] error:", err);
     res.status(500).json({ error: "Wikipedia lookup failed" });

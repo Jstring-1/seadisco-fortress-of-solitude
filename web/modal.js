@@ -429,16 +429,19 @@ document.getElementById("bio-full-overlay").addEventListener("click", e => {
 // Opens a stacked popup over any underlying modal/version popup. Music keeps
 // playing. Closing returns to the underlying popup intact. In-article wiki
 // links are rewritten so they open the same internal popup instead of leaving.
-async function openWikiPopup(query) {
+async function openWikiPopup(query, opts = {}) {
   const q = String(query || "").trim();
   if (!q) return;
+  const full = !!opts.full;
   const overlay = document.getElementById("wiki-overlay");
   const loading = document.getElementById("wiki-loading");
   const content = document.getElementById("wiki-content");
   if (!overlay) return;
   overlay.classList.add("open");
   loading.style.display = "";
-  content.innerHTML = "";
+  // Preserve already-rendered content while expanding so the user sees a
+  // smooth transition from intro → full instead of a flash of empty popup.
+  if (!full) content.innerHTML = "";
   // Reflect in URL so the popup is shareable.
   try {
     const u = new URL(window.location.href);
@@ -446,7 +449,8 @@ async function openWikiPopup(query) {
     history.replaceState({}, "", u.toString());
   } catch {}
   try {
-    const r = await apiFetch(`/api/wikipedia/lookup?q=${encodeURIComponent(q)}`);
+    const url = `/api/wikipedia/lookup?q=${encodeURIComponent(q)}` + (full ? "&full=1" : "");
+    const r = await apiFetch(url);
     if (!r.ok) {
       content.innerHTML = `<div style="padding:1rem;color:var(--muted)">Wikipedia lookup failed.</div>`;
       loading.style.display = "none";
@@ -459,14 +463,24 @@ async function openWikiPopup(query) {
       return;
     }
     const thumb = data.thumbnail ? `<img src="${escHtml(data.thumbnail)}" alt="" style="float:right;max-width:140px;margin:0 0 0.5rem 1rem;border-radius:4px">` : "";
+    // Lead view shows a "Read full article" button that swaps the popup
+    // body for the entire article, in-place. Full view shows a "Show
+    // intro only" button to collapse back. No external Wikipedia links.
+    const safeQ = String(q).replace(/'/g, "\\'");
+    const toggleBtn = full
+      ? `<button type="button" class="wiki-load-full" onclick="openWikiPopup('${escHtml(safeQ)}', { full: false })">↑ Show intro only</button>`
+      : `<button type="button" class="wiki-load-full" onclick="openWikiPopup('${escHtml(safeQ)}', { full: true })">Read full article ↓</button>`;
     content.innerHTML = `
       <div class="wiki-header">
         <h2 style="margin:0 0 0.4rem 0">${escHtml(data.title)}</h2>
-        <a href="${escHtml(data.url)}" target="_blank" rel="noopener" class="wiki-read-full">Read full article on Wikipedia ↗</a>
+        ${toggleBtn}
       </div>
       <div class="wiki-extract">${thumb}${data.html}</div>
       <div class="wiki-footer">
-        <a href="${escHtml(data.url)}" target="_blank" rel="noopener">Continue reading on Wikipedia ↗</a>
+        ${full
+          ? `<button type="button" class="wiki-load-full" onclick="openWikiPopup('${escHtml(safeQ)}', { full: false })">↑ Show intro only</button>`
+          : `<button type="button" class="wiki-load-full" onclick="openWikiPopup('${escHtml(safeQ)}', { full: true })">Read full article ↓</button>`
+        }
       </div>`;
     // Rewrite in-article wiki links to use internal popup
     content.querySelectorAll(".wiki-extract a[href]").forEach(a => {
