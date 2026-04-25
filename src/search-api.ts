@@ -3158,7 +3158,12 @@ app.get("/api/admin/blues/stats", async (req, res) => {
 app.get("/api/admin/blues/list", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   const search = (req.query.search as string ?? "").trim();
-  const limit = Math.min(200, Math.max(1, parseInt(String(req.query.limit ?? "50"), 10) || 50));
+  // Admin tab now defaults to "show everything" (all=1 -> 100,000 cap).
+  // Explicit limit query param still works for callers that want paging.
+  const wantAll = req.query.all === "1" || req.query.all === "true";
+  const limit = wantAll
+    ? 100000
+    : Math.min(2000, Math.max(1, parseInt(String(req.query.limit ?? "50"), 10) || 50));
   const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
   const sort = (req.query.sort as string ?? "name").trim();
   const order = (req.query.order as string ?? "asc").trim();
