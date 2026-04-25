@@ -1225,7 +1225,8 @@ export async function getWantlistItem(clerkUserId, releaseId) {
 // ── Recent views (cross-device Recent strip) ────────────────────────────
 // Per-user cap for the Recent strip. Matches the _HISTORY_MAX constant in
 // web/modal.js so the frontend and backend truncate at the same length.
-const RECENT_VIEWS_MAX = 120;
+// 576 = 12 pages of 48 cards under the load-more pager.
+const RECENT_VIEWS_MAX = 576;
 export async function upsertRecentView(clerkUserId, discogsId, entityType, data) {
     const pool = getPool();
     await pool.query(`INSERT INTO user_recent_views (clerk_user_id, discogs_id, entity_type, data, opened_at)

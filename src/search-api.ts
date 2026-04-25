@@ -2558,7 +2558,7 @@ app.delete("/api/user/loc-saves", express.json(), async (req, res) => {
 app.get("/api/user/recent", async (req, res) => {
   const userId = await getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-  const limit = Number(req.query.limit) || 120;
+  const limit = Number(req.query.limit) || 576;
   try {
     const rows = await getRecentViews(userId, limit);
     res.json({ items: rows });
