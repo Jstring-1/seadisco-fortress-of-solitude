@@ -5285,6 +5285,49 @@ footer {
   border-bottom: 1px solid var(--border);
 }
 
+/* Wikipedia SPA page results list — each row is a clickable title plus
+   a snippet with Wikipedia's <span class="searchmatch"> highlighting. */
+.wiki-results-list { margin-top: 1rem; }
+.wiki-result {
+  padding: 0.7rem 0.2rem;
+  border-bottom: 1px solid var(--border);
+}
+.wiki-result:last-child { border-bottom: none; }
+.wiki-result-title {
+  display: inline-block;
+  color: var(--accent);
+  font-size: 1rem;
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px dotted var(--accent-dim);
+  margin-bottom: 0.2rem;
+  cursor: pointer;
+}
+.wiki-result-title:hover {
+  color: var(--accent2, var(--accent));
+  border-bottom-color: var(--accent2, var(--accent));
+}
+.wiki-result-snippet {
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.wiki-result-snippet .searchmatch {
+  color: var(--text);
+  font-weight: 600;
+  background: rgba(232,160,32,0.12);
+  padding: 0 2px;
+  border-radius: 2px;
+}
+.wiki-results-loading,
+.wiki-results-empty,
+.wiki-results-error {
+  padding: 1rem 0.2rem;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.wiki-results-error { color: #d27a6c; }
+
 /* Wikipedia SPA page — clean, themed search form. */
 .wiki-search-form {
   display: flex;

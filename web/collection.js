@@ -270,6 +270,20 @@ function switchView(view, skipPushState = false) {
     if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
     setTimeout(() => document.getElementById("wiki-view-q")?.focus(), 50);
+    // Restore search results from ?wq=… so the page is shareable. Wait
+    // for the auth promise so apiFetch attaches the Bearer token.
+    try {
+      const wq = new URLSearchParams(location.search).get("wq");
+      if (wq && typeof runWikiPageSearch === "function") {
+        const qInput = document.getElementById("wiki-view-q");
+        if (qInput) qInput.value = wq;
+        if (typeof authReadyPromise !== "undefined") {
+          authReadyPromise.then(() => { try { runWikiPageSearch(wq); } catch {} });
+        } else {
+          try { runWikiPageSearch(wq); } catch {}
+        }
+      }
+    } catch {}
   } else if (view === "wanted") {
     if (searchView) searchView.style.display = "";
     if (mainForm) mainForm.style.display = "none";

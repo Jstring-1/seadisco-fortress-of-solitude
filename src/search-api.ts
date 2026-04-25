@@ -3234,6 +3234,41 @@ Return ONLY a valid JSON object, no markdown, no explanation.`;
   }
 });
 
+// GET /api/wikipedia/search?q=X — list-style search for the wiki SPA page.
+// Returns up to 10 matching articles with title + HTML snippet. Each row
+// has Wikipedia's <span class="searchmatch"> highlighting around the
+// query terms so the page can render the snippets verbatim.
+app.get("/api/wikipedia/search", async (req, res) => {
+  if (!await requireUser(req, res)) return;
+  const q = ((req.query.q as string) ?? "").trim();
+  if (!q) { res.status(400).json({ error: "Missing q" }); return; }
+  const wikiHeaders = {
+    "User-Agent": "SeaDisco/1.0 (+https://seadisco.com; vinyl discovery app)",
+    "Accept": "application/json",
+  };
+  try {
+    const params = [
+      "action=query", "format=json", "list=search",
+      "srlimit=10", "srprop=snippet",
+      `srsearch=${encodeURIComponent(q)}`,
+    ].join("&");
+    const url = `https://en.wikipedia.org/w/api.php?${params}`;
+    const r = await loggedFetch("wikipedia", url, { context: "wiki search list", headers: wikiHeaders });
+    if (!r.ok) { console.error("[wikipedia/search] HTTP", r.status); res.status(502).json({ error: "Wikipedia search failed", status: r.status }); return; }
+    const data = await r.json() as any;
+    const rows = (data?.query?.search ?? []) as Array<{ title: string; snippet: string }>;
+    const results = rows.map(s => ({
+      title: s.title,
+      snippet: s.snippet ?? "",
+      url: `https://en.wikipedia.org/wiki/${encodeURIComponent((s.title || "").replace(/ /g, "_"))}`,
+    }));
+    res.json({ results });
+  } catch (err) {
+    console.error("[wikipedia/search] error:", err);
+    res.status(500).json({ error: "Wikipedia search failed" });
+  }
+});
+
 // GET /api/wikipedia/lookup?q=X[&full=1] — fetch a Wikipedia article for the
 // in-app popup. Default returns only the lead section (fast); pass full=1 to
 // load the entire article body so users can read it without leaving SeaDisco.
