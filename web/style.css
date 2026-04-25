@@ -5213,21 +5213,6 @@ footer {
   padding: 1.25rem 1.4rem 1.4rem;
 }
 
-#wiki-close {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.6rem;
-  background: none;
-  border: none;
-  color: var(--muted);
-  font-size: 1.4rem;
-  cursor: pointer;
-  padding: 0.1rem 0.4rem;
-  line-height: 1;
-  border-radius: 4px;
-  z-index: 2;
-}
-#wiki-close:hover { color: var(--text); background: var(--border); }
 
 .wiki-header { padding-right: 2rem; margin-bottom: 0.6rem; }
 .wiki-header h2 { color: var(--accent); font-size: 1.1rem; }
