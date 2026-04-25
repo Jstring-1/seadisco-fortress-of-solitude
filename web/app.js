@@ -80,8 +80,17 @@ function _hasSearch(p) { return p.get("q") || p.get("a") || p.get("ar") || p.get
   if (videoParam && typeof ensureYTAPI === "function") { try { ensureYTAPI(); } catch {} }
 
   // 2) Topmost: wiki popup (independent fetch, no DOM dependencies).
+  // Must wait for authReadyPromise — apiFetch needs the Clerk Bearer token
+  // attached or /api/wikipedia/lookup returns 401 (auth_required) and the
+  // popup shows "Wikipedia lookup failed". Open the empty overlay
+  // synchronously so the user sees something immediately, then await auth
+  // before the network call inside openWikiPopup.
   if (wkParam && typeof openWikiPopup === "function") {
-    setTimeout(() => { try { openWikiPopup(wkParam); } catch {} }, 0);
+    const wikiOverlay = document.getElementById("wiki-overlay");
+    if (wikiOverlay) wikiOverlay.classList.add("open");
+    authReadyPromise.then(() => {
+      try { openWikiPopup(wkParam); } catch {}
+    });
   }
 
   // 3) Release popup (vr) is the visible top of the modal stack — open
