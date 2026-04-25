@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260412p" />
+  <link rel="stylesheet" href="/style.css?v=20260412q" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260412p"></script>
+<script defer src="/shared.js?v=20260412q"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
@@ -127,12 +127,12 @@
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
           <h2 style="margin:0">Pre-1930 Blues Artists</h2>
           <button class="admin-refresh-btn" onclick="bluesDbLoadList()" title="Refresh">&#8635;</button>
-          <button class="admin-btn" onclick="bluesDbSeed()" id="blues-seed-btn" title="Pull seed list from Wikidata. Idempotent — manual edits are preserved.">Seed from Wikidata</button>
-          <button class="admin-btn" onclick="bluesDbSeedDiscogs()" id="blues-seed-discogs-btn" title="Walk Discogs releases by genre+year (1923-1930), upserting one row per artist with every Discogs master ID we find them on. ~30-60 minutes at 1 req/sec. Idempotent — re-runs merge new releases into existing rows.">Seed from Discogs</button>
-          <button class="admin-btn" onclick="bluesDbEnrichMb(null)" id="blues-enrich-mb-btn" title="Fill first/last recording year + title from MusicBrainz for every row that has an MBID. Rate-limited 1 req/s — bulk pass can take 5–10 minutes.">Enrich from MB</button>
-          <button class="admin-btn" onclick="bluesDbEnrichWiki(null)" id="blues-enrich-wiki-btn" title="Pull the Wikipedia lead paragraph into the notes field for any row with a wikipedia_suffix. Skips rows that already have notes.">Enrich notes (Wiki)</button>
+          <button class="admin-btn" onclick="bluesDbSeedDiscogs()" id="blues-seed-discogs-btn" title="Walk Discogs releases (genre=Blues, 1900-1930) and upsert one row per artist with every Discogs master ID we find them on. ~8-15 min at 1 req/sec. Idempotent — re-runs merge new releases into existing rows.">Seed from Discogs</button>
+          <button class="admin-btn" onclick="bluesDbEnrichMb(null)" id="blues-enrich-mb-btn" title="Fill first/last recording year + title from MusicBrainz. Looks up MBIDs by name when missing.">Enrich from MB</button>
+          <button class="admin-btn" onclick="bluesDbEnrichWiki(null)" id="blues-enrich-wiki-btn" title="Pull the Wikipedia lead paragraph into the notes field. Looks up the Wikipedia page by name when no suffix is set.">Enrich notes (Wiki)</button>
           <button class="admin-btn" onclick="bluesDbEnrichDiscogs(null)" id="blues-enrich-discogs-btn" title="Look up missing Discogs IDs by artist name. Uses your admin Discogs token. ~3–5 min.">Enrich Discogs</button>
           <button class="admin-btn" onclick="bluesDbOpenEditor(null)" title="Add a new artist row manually">+ Add artist</button>
+          <button class="admin-btn" onclick="bluesDbExportCsv()" id="blues-export-btn" title="Download every row as a CSV (UTF-8 with BOM, opens cleanly in Excel/Sheets).">Export CSV</button>
           <button class="admin-btn admin-btn-danger" onclick="bluesDbDeleteAll()" id="blues-delete-all-btn" title="Wipe every row in the blues_artists table. Two-step confirm. Use to clear a noisy seed before re-running.">Delete all</button>
           <span id="blues-stats" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
         </div>
@@ -255,7 +255,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260412p"></script>
+<script defer src="/modal.js?v=20260412q"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1019,7 +1019,7 @@ async function bluesDbLoadList() {
 function bluesDbRenderList() {
   const list = document.getElementById("blues-list");
   if (!_bluesDbState.rows.length) {
-    list.innerHTML = '<div style="padding:0.6rem;color:var(--muted)">No artists yet. Click <strong>Seed from Wikidata</strong> or <strong>+ Add artist</strong>.</div>';
+    list.innerHTML = '<div style="padding:0.6rem;color:var(--muted)">No artists yet. Click <strong>Seed from Discogs</strong> or <strong>+ Add artist</strong>.</div>';
     return;
   }
   const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
@@ -1131,6 +1131,31 @@ function bluesDbToggleSort(key) {
   }
   _bluesDbState.offset = 0;
   bluesDbLoadList();
+}
+
+async function bluesDbExportCsv() {
+  // Use apiFetch so the Bearer token comes along, then trigger a blob
+  // download client-side — direct anchor with `?token=…` would leak the
+  // session token into browser history.
+  const btn = document.getElementById("blues-export-btn");
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = "Exporting…";
+  try {
+    const r = await apiFetch("/api/admin/blues/export.csv?sort=" + encodeURIComponent(_bluesDbState.sort) + "&order=" + encodeURIComponent(_bluesDbState.order));
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert("Export failed: " + (err.error ?? r.status));
+      return;
+    }
+    const blob = await r.blob();
+    const fname = `seadisco-blues-${new Date().toISOString().slice(0,10)}.csv`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch (e) { alert("Export failed: " + e); }
+  finally { btn.disabled = false; btn.textContent = orig; }
 }
 
 async function bluesDbDeleteAll() {

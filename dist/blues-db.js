@@ -333,6 +333,31 @@ async function _fetchMbArtistMeta(mbid) {
         return null;
     }
 }
+/** Resolve an artist NAME to a MusicBrainz MBID via the search API.
+ *  Returns the top hit if its name closely matches the input — otherwise
+ *  null, so we don't pin the wrong "John Lewis" to our row. Used by the
+ *  MB enricher when a row lacks an MBID (Discogs-only seeds). */
+async function _resolveMbidByName(name) {
+    const trimmed = String(name || "").trim();
+    if (!trimmed)
+        return null;
+    try {
+        const data = await _mbFetch(`/artist?query=${encodeURIComponent(trimmed)}&limit=3`);
+        const candidates = (data?.artists ?? []);
+        if (!candidates.length)
+            return null;
+        // Take the top hit only if MB's confidence score is high (>= 90)
+        // AND the name matches case-insensitively after trimming. Stops
+        // "John Lewis" the bluesman from getting linked to the jazz pianist.
+        const top = candidates[0];
+        const sameName = top.name.trim().toLowerCase() === trimmed.toLowerCase();
+        const highScore = (top.score ?? 0) >= 90;
+        return (sameName && highScore) ? top.id : null;
+    }
+    catch {
+        return null;
+    }
+}
 /** Enrich a single artist by MBID. Pure: returns the patch, doesn't write.
  *  deathYear (when known) clamps the "last" pick so a posthumous reissue
  *  in 2025 doesn't masquerade as the artist's last recording. */
@@ -407,13 +432,27 @@ export async function enrichBluesFromMusicBrainz(opts = {}) {
             if (opts.idFilter && row.id !== opts.idFilter)
                 continue;
             attempted++;
-            if (!row.musicbrainz_mbid) {
+            // Fallback: look up MBID by name if missing. Persist on success so
+            // future passes (and the editor) can use it. If we can't resolve a
+            // confident match, skip — too risky to bind the wrong MBID.
+            let mbid = row.musicbrainz_mbid;
+            if (!mbid) {
+                mbid = await _resolveMbidByName(row.name);
+                if (mbid) {
+                    try {
+                        await updateBluesArtist(row.id, { musicbrainz_mbid: mbid });
+                    }
+                    catch { }
+                    await new Promise(res => setTimeout(res, MB_RATE_LIMIT_MS));
+                }
+            }
+            if (!mbid) {
                 skipped++;
                 continue;
             }
             try {
                 const deathYear = row.death_date ? _yearFromMbDate(row.death_date) : null;
-                const patch = await _enrichOneFromMb(row.musicbrainz_mbid, row.aliases ?? [], deathYear);
+                const patch = await _enrichOneFromMb(mbid, row.aliases ?? [], deathYear);
                 const update = {};
                 if (patch.first_recording_year)
                     update.first_recording_year = patch.first_recording_year;
@@ -436,7 +475,7 @@ export async function enrichBluesFromMusicBrainz(opts = {}) {
                 enriched++;
             }
             catch (err) {
-                errors.push({ id: row.id, mbid: row.musicbrainz_mbid, message: err?.message ?? String(err) });
+                errors.push({ id: row.id, mbid: mbid || row.musicbrainz_mbid, message: err?.message ?? String(err) });
             }
             processed++;
             if (opts.limit && processed >= opts.limit)
@@ -474,6 +513,39 @@ function _titleFromWikiSuffix(suffix) {
     }
     catch {
         return m[1].replace(/_/g, " ");
+    }
+}
+/** Resolve an artist NAME to a Wikipedia article title via opensearch.
+ *  Returns null if no clean match — opensearch is loose and can return
+ *  near-misses, so we sanity-check the title before persisting. */
+async function _resolveWikiTitleByName(name) {
+    const trimmed = String(name || "").trim();
+    if (!trimmed)
+        return null;
+    try {
+        const url = `${WIKI_API}?action=opensearch&format=json&limit=3&search=${encodeURIComponent(trimmed)}`;
+        const r = await fetch(url, {
+            headers: {
+                "User-Agent": "SeaDisco/1.0 (+https://seadisco.com; vinyl discovery app)",
+                "Accept": "application/json",
+            },
+        });
+        if (!r.ok)
+            return null;
+        const data = await r.json();
+        // opensearch shape: [query, [titles], [descriptions], [urls]]
+        const titles = Array.isArray(data) && Array.isArray(data[1]) ? data[1] : [];
+        if (!titles.length)
+            return null;
+        // Accept the top hit only if its name shares the first token with
+        // our query (case-insensitive). Stops "Charley" matching "Charles
+        // Dickens" or similar drift.
+        const first = titles[0];
+        const firstWord = (s) => s.split(/\s+/)[0].toLowerCase();
+        return firstWord(first) === firstWord(trimmed) ? first : null;
+    }
+    catch {
+        return null;
     }
 }
 async function _fetchWikipediaIntro(title) {
@@ -515,7 +587,22 @@ export async function enrichBluesFromWikipedia(opts = {}) {
             if (opts.idFilter && row.id !== opts.idFilter)
                 continue;
             attempted++;
-            const title = _titleFromWikiSuffix(row.wikipedia_suffix);
+            // Fallback: opensearch the artist name if we don't already have a
+            // wiki suffix. Persist on success so the editor and future runs
+            // can use it. Pace the extra call.
+            let title = _titleFromWikiSuffix(row.wikipedia_suffix);
+            if (!title) {
+                const found = await _resolveWikiTitleByName(row.name);
+                if (found) {
+                    title = found;
+                    const newSuffix = `/wiki/${found.replace(/ /g, "_")}`;
+                    try {
+                        await updateBluesArtist(row.id, { wikipedia_suffix: newSuffix });
+                    }
+                    catch { }
+                    await new Promise(res => setTimeout(res, WIKI_RATE_LIMIT_MS));
+                }
+            }
             if (!title) {
                 skipped++;
                 continue;

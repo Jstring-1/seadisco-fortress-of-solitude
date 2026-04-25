@@ -3173,6 +3173,61 @@ app.get("/api/admin/blues/list", async (req, res) => {
   } catch (err) { console.error("[blues list]", err); res.status(500).json({ error: String(err) }); }
 });
 
+// CSV export of every row in blues_artists. Admin-only. Streams a
+// content-type-flagged response so browsers download the file directly.
+app.get("/api/admin/blues/export.csv", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    // Pull everything in one shot. Whitelist-safe sort.
+    const sort = (req.query.sort as string ?? "name").trim();
+    const order = (req.query.order as string ?? "asc").trim();
+    const { rows } = await listBluesArtists({ limit: 100000, offset: 0, sort, order });
+    // Columns chosen to be readable in a spreadsheet without losing
+    // the JSON-array structures completely (we serialise arrays as
+    // pipe-separated strings; complex objects get JSON-encoded).
+    const cols = [
+      "id", "name", "aliases",
+      "birth_date", "birth_place", "death_date", "death_place", "death_cause",
+      "hometown_region",
+      "first_recording_year", "first_recording_title",
+      "last_recording_year",  "last_recording_title",
+      "earliest_release_year",
+      "styles", "instruments", "associated_labels", "songs_authored", "collaborators",
+      "discogs_id", "musicbrainz_mbid", "wikidata_qid", "wikipedia_suffix",
+      "photo_url", "youtube_urls",
+      "discogs_releases",
+      "notes", "enrichment_status",
+      "date_added", "updated_at",
+    ];
+    const csvCell = (v: any): string => {
+      if (v == null) return "";
+      if (Array.isArray(v)) {
+        // Pipe-separated for plain string arrays; JSON for object arrays.
+        const isComplex = v.length > 0 && typeof v[0] === "object" && v[0] !== null;
+        v = isComplex ? JSON.stringify(v) : v.join(" | ");
+      } else if (typeof v === "object") {
+        v = JSON.stringify(v);
+      }
+      const s = String(v);
+      // Quote if the value contains comma, quote, newline, or starts
+      // with a leading equals/at/plus/minus (Excel formula-injection guard).
+      if (/[",\n\r]/.test(s) || /^[=@+\-]/.test(s)) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const header = cols.join(",");
+    const body = rows.map(r => cols.map(c => csvCell(r[c])).join(",")).join("\n");
+    const csv = "﻿" + header + "\n" + body + "\n"; // BOM for Excel UTF-8
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="seadisco-blues-${new Date().toISOString().slice(0,10)}.csv"`);
+    res.send(csv);
+  } catch (err: any) {
+    console.error("[blues export.csv]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
+});
+
 // Delete every row in blues_artists. Admin-only. Used to wipe a noisy
 // seed (e.g. the Wikidata pass that smuggled non-blues artists in via
 // loose genre tags) before re-running.
