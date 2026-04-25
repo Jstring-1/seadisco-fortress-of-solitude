@@ -414,6 +414,13 @@ export async function initDb() {
     ALTER TABLE blues_artists
     ADD COLUMN IF NOT EXISTS discogs_releases JSONB DEFAULT '[]'::jsonb
   `);
+    // Discogs artist /artists/:id payload includes a `urls` array — store
+    // it for later cross-reference (often holds Wikipedia, AllMusic,
+    // SecondHandSongs links etc.).
+    await getPool().query(`
+    ALTER TABLE blues_artists
+    ADD COLUMN IF NOT EXISTS external_urls JSONB DEFAULT '[]'::jsonb
+  `);
 }
 // ── Blues DB helpers (admin-only) ──────────────────────────────────────
 // Field whitelist used by upsert/update so the admin UI can't smuggle
@@ -427,12 +434,12 @@ const _BLUES_FIELDS = [
     "associated_labels", "styles", "instruments",
     "songs_authored", "collaborators",
     "photo_url", "wikipedia_suffix", "youtube_urls", "notes",
-    "enrichment_status", "discogs_releases",
+    "enrichment_status", "discogs_releases", "external_urls",
 ];
 const _BLUES_JSONB_FIELDS = new Set([
     "aliases", "associated_labels", "styles", "instruments",
     "songs_authored", "collaborators", "youtube_urls",
-    "enrichment_status", "discogs_releases",
+    "enrichment_status", "discogs_releases", "external_urls",
 ]);
 const _BLUES_INT_FIELDS = new Set([
     "discogs_id", "first_recording_year", "last_recording_year",

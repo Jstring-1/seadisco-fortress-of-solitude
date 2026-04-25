@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260412y" />
+  <link rel="stylesheet" href="/style.css?v=20260412z" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260412y"></script>
+<script defer src="/shared.js?v=20260412z"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
@@ -130,9 +130,11 @@
           <!-- Seed-from-Discogs button removed: artists are now added one-at-a-time
                via the "+" icon next to artist names in album/credit popups
                (admin-only, hidden for artists already in the DB). -->
-          <button class="admin-btn" onclick="bluesDbEnrichMb(null)" id="blues-enrich-mb-btn" title="Fill first/last recording year + title from MusicBrainz. Looks up MBIDs by name when missing.">Enrich from MB</button>
-          <button class="admin-btn" onclick="bluesDbEnrichWiki(null)" id="blues-enrich-wiki-btn" title="Pull the Wikipedia lead paragraph into the notes field. Looks up the Wikipedia page by name when no suffix is set.">Enrich notes (Wiki)</button>
-          <button class="admin-btn" onclick="bluesDbEnrichDiscogs(null)" id="blues-enrich-discogs-btn" title="Look up missing Discogs IDs by artist name. Uses your admin Discogs token. ~3–5 min.">Enrich Discogs</button>
+          <!-- One-stop "give me everything Discogs has" — pulls the
+               full /artists/:id record for every row with a Discogs ID
+               (profile/bio, realname, aliases, name variations, members,
+               groups, first image, external URLs). -->
+          <button class="admin-btn" onclick="bluesDbEnrichDiscogsFull(null)" id="blues-enrich-discogs-full-btn" title="Pull the full Discogs artist record (bio, aliases, realname, name variations, members, groups, photo, URLs) for every row that has a Discogs ID. ~3-5 min at 1 req/sec. Idempotent.">Get all info from Discogs</button>
           <button class="admin-btn" onclick="bluesDbOpenEditor(null)" title="Add a new artist row manually">+ Add artist</button>
           <button class="admin-btn" onclick="bluesDbExportCsv()" id="blues-export-btn" title="Download every row as a CSV (UTF-8 with BOM, opens cleanly in Excel/Sheets).">Export CSV</button>
           <button class="admin-btn admin-btn-danger" onclick="bluesDbDeleteAll()" id="blues-delete-all-btn" title="Wipe every row in the blues_artists table. Two-step confirm. Use to clear a noisy seed before re-running.">Delete all</button>
@@ -264,7 +266,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260412y"></script>
+<script defer src="/modal.js?v=20260412z"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1000,10 +1002,11 @@ function bluesDbInit() {
   bluesDbLoadList();
   // Reattach to any background job already in flight (so reloading the
   // page mid-run still shows live progress on each button).
-  _bluesResumeSeedPollIfRunning();
-  _bluesResumeMbPollIfRunning();
-  _bluesResumeBulkIfRunning("blues-enrich-wiki-btn",    "/api/admin/blues/enrich-wiki/status",    "Enrich notes (Wiki)");
-  _bluesResumeBulkIfRunning("blues-enrich-discogs-btn", "/api/admin/blues/enrich-discogs/status", "Enrich Discogs");
+  // Only the bulk Discogs-full job has a button now; seed +
+  // MB / Wiki / Discogs-ID buttons were removed when we moved to
+  // ad-hoc "+" curation. The corresponding endpoints stay so the
+  // resume-poll for Discogs-full works after a page reload.
+  _bluesResumeBulkIfRunning("blues-enrich-discogs-full-btn", "/api/admin/blues/enrich-discogs-full/status", "Get all info from Discogs");
 }
 
 async function _bluesResumeBulkIfRunning(btnId, statusEndpoint, label) {
@@ -1538,6 +1541,26 @@ function bluesDbEnrichDiscogs(id) {
     btnId: "blues-enrich-discogs-btn",
     label: "Enrich Discogs",
     confirmMsg: "Look up Discogs IDs by name for every row missing one?\n\nRuns in the background. Idempotent.",
+  });
+}
+
+// One-stop "Get all info from Discogs" — pulls /artists/:id for every
+// row in the DB with a discogs_id and stores profile (bio), aliases,
+// realname, namevariations, members, groups, first image, and URLs.
+// Mirrors the bulk-job + status-poll pattern of the others.
+function bluesDbEnrichDiscogsFull(id) {
+  if (id != null) {
+    return _bluesEnrichGeneric({
+      id, endpoint: "/api/admin/blues/enrich-discogs-full",
+      btnId: "blues-editor-discogs", runningLabel: "Loading Discogs…",
+    });
+  }
+  return _bluesEnrichBulkStart({
+    endpoint: "/api/admin/blues/enrich-discogs-full",
+    statusEndpoint: "/api/admin/blues/enrich-discogs-full/status",
+    btnId: "blues-enrich-discogs-full-btn",
+    label: "Get all info from Discogs",
+    confirmMsg: "Pull the full Discogs artist record (bio, aliases, realname, name variations, members, groups, photo, URLs) for every row?\n\nRuns in the background — leave the page if you like. Rate-limited 1 req/sec, ~3-5 min for 200 rows. Idempotent.",
   });
 }
 function bluesDbEnrichYt(id) {

@@ -8,7 +8,7 @@ import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
 import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, upsertBluesArtistByDiscogsId } from "./db.js";
-import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube } from "./blues-db.js";
+import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -3621,6 +3621,62 @@ app.post("/api/admin/blues/enrich-discogs", async (req, res) => {
 app.get("/api/admin/blues/enrich-discogs/status", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   res.json(_bluesDiscogsIdJob);
+});
+
+// Phase 4 — full Discogs artist record. Walks every row with a
+// discogs_id and pulls /artists/:id, storing bio (profile), aliases,
+// realname, namevariations, members, groups, first image and the
+// urls array. Background job + status polling like the others.
+let _bluesDiscogsFullJob: BluesGenericJobState = _emptyJob();
+
+app.post("/api/admin/blues/enrich-discogs-full", async (req, res) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+  const client = await getDiscogsClientForUser(adminId);
+  if (!client) {
+    res.status(400).json({ error: "Admin has no Discogs token configured. Connect Discogs on the Account page first." });
+    return;
+  }
+  const idRaw = req.query.id as string | undefined;
+  const limitRaw = req.query.limit as string | undefined;
+  const idFilter = idRaw ? parseInt(idRaw, 10) : undefined;
+  const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
+  if (Number.isFinite(idFilter as number)) {
+    try {
+      const result = await enrichBluesFromDiscogsArtists(client, { idFilter });
+      res.json({ ok: true, ...result });
+    } catch (err: any) {
+      console.error("[blues enrich-discogs-full single]", err);
+      res.status(500).json({ error: err?.message ?? String(err) });
+    }
+    return;
+  }
+  if (_bluesDiscogsFullJob.status === "running") {
+    res.status(409).json({ error: "Discogs full-artist enrichment already running", startedAt: _bluesDiscogsFullJob.startedAt, progress: _bluesDiscogsFullJob.progress });
+    return;
+  }
+  _bluesDiscogsFullJob = { ..._emptyJob(), status: "running", startedAt: new Date().toISOString() };
+  enrichBluesFromDiscogsArtists(client, {
+    limit: Number.isFinite(limit as number) ? limit : undefined,
+    onProgress: (p) => { _bluesDiscogsFullJob.progress = p; },
+  })
+    .then(result => {
+      _bluesDiscogsFullJob.status = "done";
+      _bluesDiscogsFullJob.result = result;
+      _bluesDiscogsFullJob.endedAt = new Date().toISOString();
+    })
+    .catch(err => {
+      _bluesDiscogsFullJob.status = "error";
+      _bluesDiscogsFullJob.error = err?.message ?? String(err);
+      _bluesDiscogsFullJob.endedAt = new Date().toISOString();
+      console.error("[blues enrich-discogs-full bulk]", err);
+    });
+  res.status(202).json({ ok: true, started: true, startedAt: _bluesDiscogsFullJob.startedAt });
+});
+
+app.get("/api/admin/blues/enrich-discogs-full/status", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  res.json(_bluesDiscogsFullJob);
 });
 
 // Phase 3c — YouTube top tracks. Per-row only because each call costs
