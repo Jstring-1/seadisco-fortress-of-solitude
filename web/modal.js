@@ -461,15 +461,27 @@ async function openWikiPopup(query) {
   }
 }
 
+// Strip operator double-quotes that the W icons add for exact-phrase
+// search so the heading reads naturally even if the entity name itself
+// contains quote marks (e.g. `'Baby Face' Willette`).
+function _wikiHeadingDisplay(q) {
+  let s = String(q || "").trim();
+  if (s.length >= 2 && s.startsWith('"') && s.endsWith('"')) {
+    s = s.slice(1, -1);
+  }
+  return s;
+}
+
 // Render the search-results list inside the wiki popup. Used by both
 // openWikiPopup() and the "← Back to results" button on article view.
 async function _renderWikiPopupSearch(q, contentEl) {
+  const display = _wikiHeadingDisplay(q);
   contentEl.innerHTML = `
     <div class="wiki-header">
-      <h2 style="margin:0 0 0.3rem 0">Wikipedia: "${escHtml(q)}"</h2>
+      <h2 style="margin:0 0 0.3rem 0">Wikipedia: ${escHtml(display)}</h2>
       <div class="wiki-popup-subnote">Click a title to open the article here.</div>
     </div>
-    <div class="wiki-popup-results wiki-results-list"><div class="wiki-results-loading">Searching Wikipedia for <em>${escHtml(q)}</em>…</div></div>`;
+    <div class="wiki-popup-results wiki-results-list"><div class="wiki-results-loading">Searching Wikipedia for <em>${escHtml(display)}</em>…</div></div>`;
   const listEl = contentEl.querySelector(".wiki-popup-results");
   try {
     const r = await apiFetch(`/api/wikipedia/search?q=${encodeURIComponent(q)}&limit=15&offset=0`);
@@ -532,8 +544,9 @@ async function openWikiArticle(title, sourceQuery) {
     }
     const thumb = data.thumbnail ? `<img src="${escHtml(data.thumbnail)}" alt="" style="float:right;max-width:140px;margin:0 0 0.5rem 1rem;border-radius:4px">` : "";
     const safeSrc = String(sourceQuery || "").replace(/'/g, "\\'");
+    const backDisplay = _wikiHeadingDisplay(sourceQuery || "");
     const backBtn = sourceQuery
-      ? `<button type="button" class="wiki-back-btn" onclick="openWikiPopup('${escHtml(safeSrc)}')">← Back to "${escHtml(sourceQuery)}" results</button>`
+      ? `<button type="button" class="wiki-back-btn" onclick="openWikiPopup('${escHtml(safeSrc)}')">← Back to "${escHtml(backDisplay)}" results</button>`
       : "";
     content.innerHTML = `
       <div class="wiki-header">
@@ -1586,7 +1599,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
              : `<div class="album-cover-placeholder">♪</div>`}
       <div class="album-meta">
         ${typeLabel ? `<div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.3rem"><div class="album-type-badge" style="cursor:pointer;user-select:none" onclick="navigator.clipboard.writeText('${escHtml(String(releaseId))}');this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy ID">${escHtml(typeLabel)}</div><button class="popup-share-inline" onclick="sharePopup(this)" title="Copy share link">share</button></div>` : ""}
-        <h2><a href="#" class="modal-title-link" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">${escHtml(title)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">⌕</a>${wikiIcon(stripDupSuffix(title), title, stripDupSuffix(artists[0] || ""))}</h2>
+        <h2><a href="#" class="modal-title-link" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">${escHtml(title)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">⌕</a></h2>
         ${artists.length ? `<div class="album-artist">${artists.map(n => `<a href="#" class="modal-artist-link" data-artist="${escHtml(n)}" onclick="searchArtistFromModal(event,this)" title="Search for ${escHtml(n)}">${escHtml(n)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(n.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(n)}">⌕</a>${wikiIcon(stripDupSuffix(n), n)}`).join(", ")}</div>` : ""}
         ${detailRows ? `<div class="album-detail-grid">${detailRows}</div>` : ""}
         ${(() => {
