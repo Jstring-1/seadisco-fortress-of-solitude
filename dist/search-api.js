@@ -8,7 +8,7 @@ import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
 import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats } from "./db.js";
-import { seedBluesArtistsFromWikidata, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube } from "./blues-db.js";
+import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube } from "./blues-db.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const anthropicKey = process.env.ANTHROPIC_API_KEY ?? "";
 // Discogs OAuth 1.0a consumer credentials (register at discogs.com/settings/developers)
@@ -3753,6 +3753,36 @@ app.post("/api/admin/blues/enrich-mb", async (req, res) => {
     }
     catch (err) {
         console.error("[blues enrich-mb]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// Phase 1.5 — Discogs year-walk seed. Walks releases by year+genre and
+// upserts an artist row per credit, recording every Discogs master ID we
+// found them on (Masters+). Uses the admin's Discogs token.
+//
+//   POST /api/admin/blues/seed-discogs[?startYear=1923&endYear=1930&maxPages=25]
+//
+// Long-running: 30-60 minutes for the default 1923-1930 sweep.
+app.post("/api/admin/blues/seed-discogs", async (req, res) => {
+    const adminId = await requireAdmin(req, res);
+    if (!adminId)
+        return;
+    const client = await getDiscogsClientForUser(adminId);
+    if (!client) {
+        res.status(400).json({ error: "Admin has no Discogs token configured. Connect Discogs on the Account page first." });
+        return;
+    }
+    const startYear = parseInt(String(req.query.startYear ?? "1923"), 10);
+    const endYear = parseInt(String(req.query.endYear ?? "1930"), 10);
+    const maxPages = parseInt(String(req.query.maxPages ?? "25"), 10);
+    if (typeof req.setTimeout === "function")
+        req.setTimeout(90 * 60 * 1000);
+    try {
+        const result = await seedBluesArtistsFromDiscogs(client, { startYear, endYear, maxPages });
+        res.json({ ok: true, ...result });
+    }
+    catch (err) {
+        console.error("[blues seed-discogs]", err);
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });

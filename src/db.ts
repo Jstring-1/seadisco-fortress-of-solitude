@@ -428,6 +428,13 @@ export async function initDb() {
     )
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS blues_artists_name_idx ON blues_artists (lower(name))`);
+  // Phase-1.5 add-on: per-artist list of Discogs master/release IDs
+  // (Masters+) discovered by the year-walk seeder. JSONB array of
+  // { id, type:"master"|"release", title, year, label }.
+  await getPool().query(`
+    ALTER TABLE blues_artists
+    ADD COLUMN IF NOT EXISTS discogs_releases JSONB DEFAULT '[]'::jsonb
+  `);
 }
 
 // ── Blues DB helpers (admin-only) ──────────────────────────────────────
@@ -442,11 +449,12 @@ const _BLUES_FIELDS = [
   "associated_labels", "styles", "instruments",
   "songs_authored", "collaborators",
   "photo_url", "wikipedia_suffix", "youtube_urls", "notes",
-  "enrichment_status",
+  "enrichment_status", "discogs_releases",
 ] as const;
 const _BLUES_JSONB_FIELDS = new Set([
   "aliases", "associated_labels", "styles", "instruments",
-  "songs_authored", "collaborators", "youtube_urls", "enrichment_status",
+  "songs_authored", "collaborators", "youtube_urls",
+  "enrichment_status", "discogs_releases",
 ]);
 const _BLUES_INT_FIELDS = new Set([
   "discogs_id", "first_recording_year", "last_recording_year",
@@ -529,6 +537,74 @@ export async function upsertBluesArtistByQid(record: Record<string, any>): Promi
   `;
   const r = await getPool().query(sql, vals);
   return r.rows[0].id;
+}
+
+/** Upsert from the Discogs seeder. Keys on discogs_id. Merges
+ *  discogs_releases by release id (union), and only fills name/labels/
+ *  styles when the existing row has them blank — never trampling
+ *  manually-edited values or richer Wikidata-sourced data. */
+export async function upsertBluesArtistByDiscogsId(record: {
+  discogs_id: number;
+  name: string;
+  discogs_releases?: Array<{ id: number; type: string; title?: string; year?: number; label?: string }>;
+  associated_labels?: string[];
+  styles?: string[];
+}): Promise<{ id: number; created: boolean; mergedCount: number }> {
+  if (!record.discogs_id || !record.name) {
+    throw new Error("upsertBluesArtistByDiscogsId requires discogs_id and name");
+  }
+  const existing = await getPool().query(
+    `SELECT id, name, discogs_releases, associated_labels, styles, enrichment_status FROM blues_artists WHERE discogs_id = $1`,
+    [record.discogs_id],
+  );
+  const newRels = record.discogs_releases ?? [];
+  if (existing.rows.length) {
+    const row = existing.rows[0];
+    const oldRels = Array.isArray(row.discogs_releases) ? row.discogs_releases : [];
+    const seen = new Set(oldRels.map((r: any) => `${r.type}:${r.id}`));
+    const merged = [...oldRels];
+    let added = 0;
+    for (const r of newRels) {
+      const k = `${r.type}:${r.id}`;
+      if (!seen.has(k)) { merged.push(r); seen.add(k); added++; }
+    }
+    // Fill blank labels/styles, leave populated alone.
+    const oldLabels = Array.isArray(row.associated_labels) ? row.associated_labels : [];
+    const oldStyles = Array.isArray(row.styles) ? row.styles : [];
+    const newLabels = oldLabels.length ? oldLabels : (record.associated_labels ?? []);
+    const newStyles = oldStyles.length ? oldStyles : (record.styles ?? []);
+    const status = (row.enrichment_status && typeof row.enrichment_status === "object")
+      ? row.enrichment_status : {};
+    await getPool().query(
+      `UPDATE blues_artists
+         SET discogs_releases  = $1::jsonb,
+             associated_labels = $2::jsonb,
+             styles            = $3::jsonb,
+             enrichment_status = $4::jsonb,
+             updated_at        = NOW()
+       WHERE id = $5`,
+      [JSON.stringify(merged), JSON.stringify(newLabels), JSON.stringify(newStyles),
+       JSON.stringify({ ...status, discogs_seed: 1 }), row.id],
+    );
+    return { id: row.id, created: false, mergedCount: added };
+  }
+  // No existing row — fresh insert. Other fields default to blank/empty
+  // so a later Wikidata/MB/Wiki enrichment can fill them.
+  const ins = await getPool().query(
+    `INSERT INTO blues_artists
+       (discogs_id, name, discogs_releases, associated_labels, styles, enrichment_status)
+     VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6::jsonb)
+     RETURNING id`,
+    [
+      record.discogs_id,
+      record.name,
+      JSON.stringify(newRels),
+      JSON.stringify(record.associated_labels ?? []),
+      JSON.stringify(record.styles ?? []),
+      JSON.stringify({ discogs_seed: 1 }),
+    ],
+  );
+  return { id: ins.rows[0].id, created: true, mergedCount: newRels.length };
 }
 
 export async function insertBluesArtist(record: Record<string, any>): Promise<number> {
