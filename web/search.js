@@ -145,6 +145,46 @@ function searchFromAiPanel(field, value) {
   doSearch(1, false, true);
 }
 
+// ── localStorage-backed recent main-search list ──────────────────────────
+// Mirrors the wiki SPA pattern (sd_wiki_recent → wiki-recent-list datalist).
+// Both general and AI searches push into this so the #query autocomplete
+// dropdown surfaces every recent run regardless of which mode it was.
+const _SEARCH_RECENT_KEY = "sd_search_recent";
+const _SEARCH_RECENT_MAX = 10;
+function _readRecentSearches() {
+  try {
+    const raw = localStorage.getItem(_SEARCH_RECENT_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.filter(s => typeof s === "string" && s.trim()) : [];
+  } catch { return []; }
+}
+function _writeRecentSearches(arr) {
+  try { localStorage.setItem(_SEARCH_RECENT_KEY, JSON.stringify(arr.slice(0, _SEARCH_RECENT_MAX))); } catch {}
+}
+function _renderRecentSearchDatalist() {
+  const dl = document.getElementById("search-recent-list");
+  if (!dl) return;
+  const recents = _readRecentSearches();
+  dl.innerHTML = recents.map(s => `<option value="${escHtml(s)}"></option>`).join("");
+}
+function _pushRecentSearch(q) {
+  const trimmed = String(q || "").trim();
+  if (!trimmed) return;
+  const cur = _readRecentSearches().filter(s => s.toLowerCase() !== trimmed.toLowerCase());
+  cur.unshift(trimmed);
+  _writeRecentSearches(cur);
+  _renderRecentSearchDatalist();
+}
+// Hydrate the datalist as soon as the form mounts so the dropdown is ready.
+if (typeof window !== "undefined") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => { try { _renderRecentSearchDatalist(); } catch {} });
+  } else {
+    try { _renderRecentSearchDatalist(); } catch {}
+  }
+}
+
 // ── Main search ──────────────────────────────────────────────────────────
 async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
   // A fresh, user-initiated search dismisses the AI results panel. Calls
@@ -176,6 +216,15 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
   if (!q && !artist && !release && !year && !label && !genre && !country) {
     setStatus("Enter a search term or fill in at least one filter.", false);
     return;
+  }
+
+  // Save the typed query to the recent-searches list (only on first
+  // page so pagination clicks don't churn the list). Use the most
+  // descriptive token available — q first, otherwise the strongest
+  // advanced field.
+  if (page === 1) {
+    const recentTerm = q || release || artist || label || year || genre || country;
+    if (recentTerm) _pushRecentSearch(recentTerm);
   }
 
   if (page === 1) saveSearchHistory("main");
@@ -913,6 +962,8 @@ function _aiEntityLinks(name, kind) {
 
 async function doAiSearch(q) {
   if (!q) { setStatus("Enter a question or description to search with AI.", false); return; }
+  // Save AI queries to the same recent-searches list as general searches.
+  _pushRecentSearch(q);
   switchView("search", true);
   setActiveTab("search");
   document.getElementById("results").innerHTML = "";
