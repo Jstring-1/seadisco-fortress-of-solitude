@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, upsertBluesArtistByDiscogsId } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const anthropicKey = process.env.ANTHROPIC_API_KEY ?? "";
@@ -3622,15 +3622,15 @@ app.get("/api/admin/blues/stats", async (req, res) => {
         res.status(500).json({ error: String(err) });
     }
 });
-// Lightweight: list of discogs_ids for every blues_artists row. Used
-// by the admin popup "+" icon to know which artists are already in the
-// DB so the button can be suppressed for them. Cached client-side and
-// updated locally on each successful add (no need to refetch).
+// Lightweight: discogs_ids + names of every blues_artists row. Cached
+// client-side so the admin "+ add to Blues DB" icon (popup AND card)
+// can suppress itself for artists already in the DB. Updated locally
+// on each successful add (no need to refetch).
 app.get("/api/admin/blues/ids", async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
     try {
-        res.json({ ids: await getBluesArtistDiscogsIds() });
+        res.json(await getBluesArtistIdentifiers());
     }
     catch (err) {
         console.error("[blues ids]", err);
@@ -3660,6 +3660,50 @@ app.post("/api/admin/blues/add-by-discogs-id", express.json({ limit: "8kb" }), a
     }
     catch (err) {
         console.error("[blues add-by-discogs-id]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// Same idea but called from result-card "+" icons where we only have
+// the artist NAME parsed from the card title (no Discogs ID locally).
+// Resolves the name to an ID via /database/search?type=artist and
+// upserts. Returns the resolved id + canonical name so the client can
+// add them to its in-memory cache and suppress the button next time.
+app.post("/api/admin/blues/add-by-name", express.json({ limit: "8kb" }), async (req, res) => {
+    const adminId = await requireAdmin(req, res);
+    if (!adminId)
+        return;
+    const client = await getDiscogsClientForUser(adminId);
+    if (!client) {
+        res.status(400).json({ error: "Admin has no Discogs token configured." });
+        return;
+    }
+    const name = (req.body?.name ?? "").trim();
+    if (!name) {
+        res.status(400).json({ error: "name required" });
+        return;
+    }
+    try {
+        const search = await client.get("/database/search", {
+            q: name, type: "artist", per_page: "1",
+        });
+        const top = search?.results?.[0];
+        const artistId = top?.id ?? null;
+        if (!artistId) {
+            res.status(404).json({ error: "No Discogs artist found for that name" });
+            return;
+        }
+        // Use the canonical Discogs name (with disambiguator) when we have
+        // it — keeps the row consistent with the rest of the DB.
+        const canonicalName = (typeof top?.title === "string" && top.title.trim()) ? top.title.trim() : name;
+        const out = await upsertBluesArtistByDiscogsId({
+            discogs_id: artistId,
+            name: canonicalName,
+            discogs_releases: [],
+        });
+        res.json({ ok: true, id: out.id, created: out.created, discogs_id: artistId, name: canonicalName });
+    }
+    catch (err) {
+        console.error("[blues add-by-name]", err);
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });

@@ -866,10 +866,46 @@ async function _bluesAddArtist(discogsId, name, anchor) {
       return;
     }
     if (window._adminBluesIds) window._adminBluesIds.add(Number(discogsId));
+    if (window._adminBluesNames && name) window._adminBluesNames.add(String(name).trim().toLowerCase());
     // Remove every "+ add" link for this id from the DOM so the popup
     // updates in place (multiple may exist if the artist appears in
     // both the album-artist row and a credit row).
     document.querySelectorAll(`.blues-add-icon[data-blues-id="${discogsId}"]`).forEach(a => a.remove());
+    showToast?.("Added to Blues DB");
+  } catch (e) {
+    showToast?.("Add failed: " + e, "error");
+  }
+}
+
+// Card-level + adder — cards only have the artist NAME parsed from the
+// result title (no Discogs ID locally). The server resolves the name
+// to an ID via /database/search?type=artist and upserts.
+async function _bluesAddArtistByName(name, anchor) {
+  try {
+    const r = await apiFetch("/api/admin/blues/add-by-name", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      showToast?.("Add failed: " + (err.error ?? r.status), "error");
+      return;
+    }
+    const j = await r.json();
+    if (window._adminBluesIds && j.discogs_id) window._adminBluesIds.add(Number(j.discogs_id));
+    if (window._adminBluesNames) {
+      if (name) window._adminBluesNames.add(String(name).trim().toLowerCase());
+      if (j.name) window._adminBluesNames.add(String(j.name).trim().toLowerCase());
+    }
+    // Remove every card "+ add" link for this name from the DOM. Match
+    // case-insensitively since cards may have the disambiguator and
+    // the canonical form may not.
+    const lc = String(name).trim().toLowerCase();
+    document.querySelectorAll(".card-blues-add").forEach(a => {
+      const dn = (a.getAttribute("data-blues-name") ?? "").trim().toLowerCase();
+      if (dn === lc) a.remove();
+    });
     showToast?.("Added to Blues DB");
   } catch (e) {
     showToast?.("Add failed: " + e, "error");

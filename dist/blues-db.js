@@ -877,6 +877,25 @@ export async function enrichBluesFromDiscogsArtists(client, opts = {}) {
                 continue;
             attempted++;
             reportProgress(row.name);
+            // Fallback: resolve missing discogs_id by name search before
+            // skipping. Persist on success so future passes don't pay the
+            // extra lookup. Mirrors the MB / Wikipedia enricher pattern.
+            let resolvedId = row.discogs_id;
+            if (!resolvedId) {
+                try {
+                    resolvedId = await _searchDiscogsArtist(client, row.name);
+                }
+                catch { /* fall through */ }
+                if (resolvedId) {
+                    try {
+                        await updateBluesArtist(row.id, { discogs_id: resolvedId });
+                    }
+                    catch { }
+                    // Mutate the in-memory row so the rest of the iteration sees it.
+                    row.discogs_id = resolvedId;
+                    await new Promise(res => setTimeout(res, DISCOGS_RATE_LIMIT_MS));
+                }
+            }
             if (!row.discogs_id) {
                 skipped++;
                 continue;

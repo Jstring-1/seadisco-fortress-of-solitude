@@ -533,6 +533,22 @@ export async function getBluesArtistDiscogsIds() {
     const r = await getPool().query(`SELECT discogs_id FROM blues_artists WHERE discogs_id IS NOT NULL ORDER BY discogs_id`);
     return r.rows.map(row => row.discogs_id);
 }
+/** Return both the discogs_ids and the names of every row in
+ *  blues_artists. Cards parse artist NAMES from result titles and
+ *  don't have a Discogs ID locally, so we cache names too for the
+ *  "already in DB?" check on card-level "+" buttons. */
+export async function getBluesArtistIdentifiers() {
+    const r = await getPool().query(`SELECT discogs_id, name FROM blues_artists`);
+    const ids = [];
+    const names = [];
+    for (const row of r.rows) {
+        if (row.discogs_id)
+            ids.push(row.discogs_id);
+        if (row.name)
+            names.push(row.name);
+    }
+    return { ids, names };
+}
 /** Wipe the entire blues_artists table. Admin-only — there's no
  *  per-row history so this is irreversible. */
 export async function deleteAllBluesArtists() {

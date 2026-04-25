@@ -418,7 +418,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260413b";
+  const SITE_VERSION = "build 20260413c";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -527,14 +527,17 @@ function renderSharedFooter(opts) {
         if (adminA) adminA.style.display = "";
         const locA = document.getElementById("footer-loc-link");
         if (locA) locA.style.display = "";
-        // Pre-load the set of Discogs artist IDs already in the
-        // blues_artists table so the per-popup "+ add to Blues DB"
-        // icon can hide itself for artists that are already in.
+        // Pre-load the discogs_ids AND names already in the
+        // blues_artists table so the admin "+ add to Blues DB" icon
+        // (popup AND card) can hide itself for artists already in.
+        // Cards only know the artist name (parsed from result title),
+        // so we cache names alongside ids for that lookup path.
         try {
           const idsRes = await apiFetch("/api/admin/blues/ids");
           if (idsRes.ok) {
             const j = await idsRes.json();
-            window._adminBluesIds = new Set((j.ids ?? []).map(Number));
+            window._adminBluesIds   = new Set((j.ids   ?? []).map(Number));
+            window._adminBluesNames = new Set((j.names ?? []).map(s => String(s).trim().toLowerCase()));
           }
         } catch { /* non-fatal */ }
       }
