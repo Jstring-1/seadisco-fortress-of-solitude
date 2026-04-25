@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260412u" />
+  <link rel="stylesheet" href="/style.css?v=20260412v" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260412u"></script>
+<script defer src="/shared.js?v=20260412v"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
@@ -262,7 +262,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260412u"></script>
+<script defer src="/modal.js?v=20260412v"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1065,9 +1065,15 @@ function bluesDbRenderList() {
   const rows = _bluesDbState.rows.map(r => {
     const styles = (Array.isArray(r.styles) ? r.styles : []).slice(0, 3).join(", ");
     const relCount = Array.isArray(r.discogs_releases) ? r.discogs_releases.length : 0;
-    // Cross-links to the main app: ⌕ opens a SeaDisco search; W opens
-    // the wiki popup (search-first) with the name double-quoted.
-    const searchHref = "/?q=" + encodeURIComponent(r.name);
+    // Cross-links to the main app:
+    //   ⌕ → artist-specific search, type=Masters+, sorted year asc so
+    //       the artist's earliest releases land first. URL params
+    //       a=… (artist) · r=master+ · s=year:asc match the
+    //       restoreFromParams() handler in search.js.
+    //   W → wiki popup (search-first) with the name double-quoted.
+    const searchHref = "/?a=" + encodeURIComponent(r.name)
+                     + "&r="  + encodeURIComponent("master+")
+                     + "&s="  + encodeURIComponent("year:asc");
     const wikiHref   = "/?wk=" + encodeURIComponent('"' + r.name + '"');
     return `<tr>
       <td>
