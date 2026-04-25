@@ -783,11 +783,27 @@ function renderCard(item, index) {
     notesHtml = `<div class="card-notes-btn" onclick="event.preventDefault();event.stopPropagation();showCardNotes(event,${releaseId})" title="View notes">📝</div>`;
   }
 
+  // Admin-only "+ add to Blues DB" icon — renders only when:
+  //   • admin is signed in (window._isAdmin set in shared.js)
+  //   • the card's genre array contains "Blues"
+  //   • the artist isn't already in the DB (cached names lookup)
+  // Sits BEFORE the artist name. Click resolves the name → Discogs
+  // artist ID server-side and upserts. Hidden after add.
+  let bluesAddBtn = "";
+  if (window._isAdmin && artist && Array.isArray(item.genre)
+      && item.genre.some(g => String(g).toLowerCase() === "blues")) {
+    const lc = String(artist).trim().toLowerCase();
+    const inDb = window._adminBluesNames?.has?.(lc);
+    if (!inDb) {
+      const safe = artist.replace(/'/g, "\\'");
+      bluesAddBtn = `<a href="#" class="blues-add-icon card-blues-add" data-blues-name="${escHtml(artist)}" onclick="event.preventDefault();event.stopPropagation();_bluesAddArtistByName('${escHtml(safe)}',this)" title="Add ${escHtml(artist)} to Blues DB">+</a> `;
+    }
+  }
   return `
     <a ${cardAttrs}${animStyle}>
       ${thumbWrap}
       <div class="card-body">
-        ${artist ? `<div class="card-artist">${escHtml(artist)}</div>` : ""}
+        ${artist ? `<div class="card-artist">${bluesAddBtn}${escHtml(artist)}</div>` : ""}
         <div class="card-title">${escHtml(title)}</div>
         <div class="card-bottom">
           ${label   ? `<div class="card-sub">${escHtml(label)}</div>` : ""}
