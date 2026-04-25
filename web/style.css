@@ -5328,7 +5328,7 @@ footer {
   font-family: 'Times New Roman', serif;
   font-style: italic;
   font-weight: 700;
-  font-size: 0.95em;
+  font-size: 0.85em;
   color: #fff;
   text-decoration: none;
   border-bottom: none;
@@ -5337,6 +5337,21 @@ footer {
   vertical-align: baseline;
 }
 .wiki-icon:hover { color: var(--accent); }
+
+/* Bold proper-nouns inside wiki articles become clickable Discogs searches.
+   Keeps the visual weight so the article still reads as Wikipedia. */
+.wiki-bold-search {
+  font-weight: 700;
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--accent-dim);
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+.wiki-bold-search:hover {
+  color: var(--accent2, var(--accent));
+  border-bottom-color: var(--accent2, var(--accent));
+}
 
 /* ── AI results panel (persistent, scrollable, top-X close) ──────────── */
 .ai-results-panel {

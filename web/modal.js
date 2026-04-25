@@ -505,6 +505,33 @@ async function openWikiPopup(query, opts = {}) {
         a.setAttribute("rel", "noopener");
       }
     });
+    // TextExtracts strips internal wiki links, so the article body is mostly
+    // dead text. Wikipedia keeps proper nouns / article subjects bolded —
+    // turn every <b> into a clickable Discogs search so users can jump
+    // from "Can" or "Neu!" straight to records on the same screen.
+    content.querySelectorAll(".wiki-extract b").forEach(b => {
+      const text = (b.textContent || "").trim();
+      // Skip empty, single-character, and unreasonably long bolds
+      if (!text || text.length < 2 || text.length > 80) return;
+      const a = document.createElement("a");
+      a.href = "#";
+      a.className = "wiki-bold-search";
+      a.title = `Search SeaDisco for "${text}"`;
+      a.textContent = text;
+      a.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        try { closeWikiPopup(); } catch {}
+        try {
+          if (typeof switchView === "function") switchView("search", true);
+          if (typeof clearForm === "function") clearForm();
+          const qInput = document.getElementById("query");
+          if (qInput) qInput.value = text;
+          if (typeof doSearch === "function") doSearch(1);
+        } catch {}
+      });
+      b.parentNode?.replaceChild(a, b);
+    });
     loading.style.display = "none";
   } catch (err) {
     content.innerHTML = `<div style="padding:1rem;color:var(--muted)">Error: ${escHtml(err.message || String(err))}</div>`;
