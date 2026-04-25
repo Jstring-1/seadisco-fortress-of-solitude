@@ -3129,7 +3129,7 @@ button.wiki-link-btn:active {
 /* Search history dropdown */
 .sh-dropdown {
   position: absolute; top: 100%;
-  z-index: 120; max-height: 200px; overflow-y: auto;
+  z-index: 230; max-height: 180px; overflow-y: auto;
   background: #1a1a1a; border: 1px solid #333; border-radius: 0 0 6px 6px;
   box-shadow: 0 4px 16px rgba(0,0,0,0.5);
   text-align: left;
@@ -3184,7 +3184,7 @@ button.wiki-link-btn:active {
   position: absolute;
   top: calc(100% + 4px);
   right: 0;
-  z-index: 120;
+  z-index: 230;
   min-width: 200px;
   max-width: 300px;
   background: #1a1a1a;

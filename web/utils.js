@@ -485,6 +485,20 @@ function toggleSavedDropdown(view) {
   }
 }
 
+// Click anywhere outside a saved-search wrapper closes any open
+// dropdown — without this the bookmark popover stays visible and
+// covers search fields below it (favorites grid, advanced filters,
+// records page, etc.). Hooked once at module load.
+if (typeof document !== "undefined") {
+  document.addEventListener("mousedown", (e) => {
+    if (!e.target?.closest?.(".saved-search-wrap")) {
+      document.querySelectorAll(".saved-search-dropdown").forEach(d => {
+        if (d.style.display !== "none") d.style.display = "none";
+      });
+    }
+  });
+}
+
 function renderSavedList(view, searches, extraSearches, crossView) {
   const list = document.getElementById(`ss-list-${view}`);
   if (!list) return;
