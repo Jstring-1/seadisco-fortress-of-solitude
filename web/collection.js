@@ -334,6 +334,11 @@ function switchView(view, skipPushState = false) {
       // No previous search — restore clean default state
       document.getElementById("results").innerHTML = "";
       document.getElementById("pagination").style.display = "none";
+      // Stale "Load more results" button from a previous regular-search
+      // session would otherwise float above the Recent strip when the
+      // logo is clicked after an AI search wiped _lastResults.
+      const lmWrap = document.getElementById("search-load-more");
+      if (lmWrap) lmWrap.style.display = "none";
       document.getElementById("status").textContent = "";
       const searchDesc = document.getElementById("search-desc");
       if (searchDesc) searchDesc.textContent = "";
