@@ -698,6 +698,19 @@ const DISCOGS_RATE_LIMIT_MS = 1100; // 60/min for authenticated traffic
  *  unless `force === false` is set. */
 async function _enrichOneFromDiscogsArtist(client, row) {
     const data = await client.get(`/artists/${row.discogs_id}`);
+    // Stay polite between the two calls per artist.
+    await new Promise(res => setTimeout(res, DISCOGS_RATE_LIMIT_MS));
+    // Pull the first 100 releases ascending so we can compute first/last
+    // recording year + title and store the master/release ID list.
+    let releasesPayload = null;
+    try {
+        releasesPayload = await client.get(`/artists/${row.discogs_id}/releases`, { sort: "year", sort_order: "asc", per_page: "100" });
+    }
+    catch {
+        // Releases endpoint can 404 on tiny / wiped artist records — keep
+        // going so the rest of the metadata still lands.
+        releasesPayload = null;
+    }
     const patch = {};
     // Bio. Discogs uses [b]/[i]/[url=…] BBCode-ish markup; we keep it
     // raw (the existing notes field is a free-text string already).
@@ -765,6 +778,69 @@ async function _enrichOneFromDiscogsArtist(client, row) {
         const urlSet = new Set([...existingUrls, ...urls]);
         if (urlSet.size !== existingUrls.length)
             patch.external_urls = Array.from(urlSet);
+    }
+    // Releases — first/last recording year + title + a deduplicated
+    // discogs_releases array. Discogs results may include role="Main",
+    // "TrackAppearance", "Producer", etc.; we only treat Main credits as
+    // the artist's own recordings for first/last year purposes.
+    const rawReleases = Array.isArray(releasesPayload?.releases)
+        ? releasesPayload.releases : [];
+    const dated = rawReleases
+        .map(r => ({
+        id: r.id,
+        type: (r.type ?? "release"),
+        title: typeof r.title === "string" ? r.title : "",
+        year: typeof r.year === "number" && r.year > 0 ? r.year : null,
+        label: r.label ?? null,
+        role: r.role ?? null,
+    }))
+        .filter(r => r.year != null);
+    // Sorted ascending so first is earliest. (We asked Discogs for asc but
+    // re-sort defensively in case the page slice isn't perfectly ordered.)
+    dated.sort((a, b) => a.year - b.year);
+    const main = dated.filter(r => !r.role || r.role === "Main");
+    const firstPick = main[0] ?? dated[0];
+    if (firstPick) {
+        patch.first_recording_year = firstPick.year;
+        patch.first_recording_title = firstPick.title || null;
+    }
+    // Death-year clamp so a posthumous reissue doesn't masquerade as the
+    // artist's last recording. Mirrors the MB enricher behaviour.
+    const deathYear = (() => {
+        const m = String(row.death_date ?? "").match(/^(\d{4})/);
+        return m ? parseInt(m[1], 10) : null;
+    })();
+    const ceiling = deathYear ? deathYear + 1 : Infinity;
+    const inLifetimeMain = main.filter(r => r.year <= ceiling);
+    const lastPick = (inLifetimeMain.length ? inLifetimeMain : main).slice(-1)[0]
+        ?? (dated.length ? dated[dated.length - 1] : null);
+    if (lastPick) {
+        patch.last_recording_year = lastPick.year;
+        patch.last_recording_title = lastPick.title || null;
+    }
+    // Merge fetched releases into discogs_releases by (type:id) so the
+    // existing per-row JSONB array gains entries we didn't have before
+    // without duplicating ones we already stored from earlier passes.
+    if (rawReleases.length) {
+        const existing = Array.isArray(row.discogs_releases) ? row.discogs_releases : [];
+        const seen = new Set(existing.map((r) => `${r.type}:${r.id}`));
+        const merged = [...existing];
+        for (const r of rawReleases) {
+            const k = `${r.type ?? "release"}:${r.id}`;
+            if (seen.has(k))
+                continue;
+            seen.add(k);
+            merged.push({
+                id: r.id,
+                type: (r.type ?? "release"),
+                title: typeof r.title === "string" ? r.title : "",
+                year: typeof r.year === "number" ? r.year : undefined,
+                label: r.label ?? undefined,
+                role: r.role ?? undefined,
+            });
+        }
+        if (merged.length !== existing.length)
+            patch.discogs_releases = merged;
     }
     // Mark this enrichment so we can skip-already-done in future passes.
     const status = (row.enrichment_status && typeof row.enrichment_status === "object")
