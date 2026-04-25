@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260412o" />
+  <link rel="stylesheet" href="/style.css?v=20260412p" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260412o"></script>
+<script defer src="/shared.js?v=20260412p"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
@@ -255,7 +255,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260412o"></script>
+<script defer src="/modal.js?v=20260412p"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -976,7 +976,7 @@ async function loadAdminItems() {
 }
 
 // ── Blues DB tab ────────────────────────────────────────────────────────
-let _bluesDbState = { rows: [], total: 0, limit: 50, offset: 0, search: "", editingId: null, sort: "name", order: "asc" };
+let _bluesDbState = { rows: [], total: 0, search: "", editingId: null, sort: "name", order: "asc" };
 let _bluesSearchTimer = null;
 
 function bluesDbInit() {
@@ -998,10 +998,11 @@ async function bluesDbLoadList() {
   const list = document.getElementById("blues-list");
   if (!list) return;
   list.innerHTML = '<div style="padding:0.6rem">Loading…</div>';
+  // Admin grid shows ALL rows in one shot — `all=1` sidesteps the
+  // server-side default 50-row cap. Sort still honoured.
   const params = new URLSearchParams({
     search: _bluesDbState.search,
-    limit: String(_bluesDbState.limit),
-    offset: String(_bluesDbState.offset),
+    all: "1",
     sort: _bluesDbState.sort,
     order: _bluesDbState.order,
   });
@@ -1043,8 +1044,18 @@ function bluesDbRenderList() {
       st.discogs      && "D",
       st.yt           && "Y",
     ].filter(Boolean).join(" ");
+    // Cross-links to the main app: ⌕ opens a SeaDisco search for the
+    // artist in a new tab; W opens the wiki popup (search-first) with the
+    // name double-quoted for an exact-phrase match. Both rely on existing
+    // ?q= / ?wk= URL handlers on the main page, so no extra wiring.
+    const searchHref = "/?q=" + encodeURIComponent(r.name);
+    const wikiHref   = "/?wk=" + encodeURIComponent('"' + r.name + '"');
     return `<tr>
-      <td><a href="#" onclick="event.preventDefault();bluesDbOpenEditor(${r.id})" style="color:var(--accent)">${esc(r.name)}</a></td>
+      <td>
+        <a href="#" onclick="event.preventDefault();bluesDbOpenEditor(${r.id})" style="color:var(--accent)">${esc(r.name)}</a>
+        <a href="${esc(searchHref)}" target="_blank" rel="noopener" title="Search SeaDisco for &quot;${esc(r.name)}&quot;" style="margin-left:0.35em;color:var(--accent);text-decoration:none;font-size:1.05em">⌕</a>
+        <a href="${esc(wikiHref)}" target="_blank" rel="noopener" title="Wikipedia search popup for &quot;${esc(r.name)}&quot;" style="margin-left:0.05em;color:var(--text);text-decoration:none;font-family:'Times New Roman',serif;font-style:italic;font-weight:700;font-size:0.78em">W</a>
+      </td>
       <td>${esc(dates)}</td>
       <td style="text-align:right" title="Earliest of first_recording_year (MB) and min(discogs_releases.year)">${r.earliest_release_year ?? ""}</td>
       <td style="text-align:right">${r.last_recording_year ?? ""}</td>
@@ -1098,22 +1109,12 @@ function bluesDbRenderList() {
   });
 }
 
+// Pager is gone — admin grid shows everything in one shot. Keep this
+// shim for any stale callers but it just renders the row count.
 function bluesDbRenderPager() {
   const pag = document.getElementById("blues-pager");
-  const { offset, limit, total } = _bluesDbState;
-  const start = total ? offset + 1 : 0;
-  const end = Math.min(offset + limit, total);
-  const prevDisabled = offset === 0;
-  const nextDisabled = offset + limit >= total;
-  pag.innerHTML = `
-    <span style="color:var(--muted)">${start}–${end} of ${total}</span>
-    <button class="admin-btn" onclick="bluesDbPage(-1)" ${prevDisabled ? "disabled" : ""}>← Prev</button>
-    <button class="admin-btn" onclick="bluesDbPage(1)" ${nextDisabled ? "disabled" : ""}>Next →</button>
-  `;
-}
-function bluesDbPage(delta) {
-  _bluesDbState.offset = Math.max(0, _bluesDbState.offset + delta * _bluesDbState.limit);
-  bluesDbLoadList();
+  if (!pag) return;
+  pag.innerHTML = `<span style="color:var(--muted)">${_bluesDbState.total} rows</span>`;
 }
 
 // Click a column header → if it's already the active sort, flip
