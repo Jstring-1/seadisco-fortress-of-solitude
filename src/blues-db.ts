@@ -15,6 +15,7 @@
 // Required header on both:    User-Agent (per Wikimedia/MetaBrainz policy)
 
 import { upsertBluesArtistByQid, listBluesArtists, updateBluesArtist } from "./db.js";
+import { DiscogsClient } from "./discogs-client.js";
 
 const WIKIDATA_ENDPOINT = "https://query.wikidata.org/sparql";
 const WIKIDATA_UA = "SeaDisco/1.0 (+https://seadisco.com; vinyl discovery app)";
@@ -443,4 +444,209 @@ export async function enrichBluesFromMusicBrainz(opts: { idFilter?: number; limi
     errors,
     durationMs: Date.now() - start,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Phase 3a: Wikipedia notes (free-text bio paragraph)
+// ─────────────────────────────────────────────────────────────────────────
+
+const WIKI_RATE_LIMIT_MS = 250;  // 4/s — Wikipedia is liberal but we stay polite
+const WIKI_API = "https://en.wikipedia.org/w/api.php";
+
+interface GenericEnrichResult {
+  attempted: number;
+  enriched: number;
+  skipped: number;
+  errors: Array<{ id: number; message: string }>;
+  durationMs: number;
+}
+
+function _titleFromWikiSuffix(suffix?: string | null): string | null {
+  if (!suffix) return null;
+  // Suffix is e.g. "/wiki/Charley_Patton". Strip the prefix and the
+  // section anchor; URL-decode percent-encoded chars.
+  const m = suffix.match(/\/wiki\/([^#?]+)/);
+  if (!m) return null;
+  try { return decodeURIComponent(m[1]).replace(/_/g, " "); }
+  catch { return m[1].replace(/_/g, " "); }
+}
+
+async function _fetchWikipediaIntro(title: string): Promise<string | null> {
+  const params = [
+    "action=query", "format=json", "prop=extracts",
+    "exintro=1", "explaintext=1", "redirects=1",
+    `titles=${encodeURIComponent(title)}`,
+  ].join("&");
+  const r = await fetch(`${WIKI_API}?${params}`, {
+    headers: {
+      "User-Agent": "SeaDisco/1.0 (+https://seadisco.com; vinyl discovery app)",
+      "Accept": "application/json",
+    },
+  });
+  if (!r.ok) throw new Error(`Wikipedia ${r.status}`);
+  const data = await r.json() as any;
+  const pages = data?.query?.pages ?? {};
+  const first = Object.values(pages)[0] as any;
+  const text = first?.extract?.trim();
+  return text || null;
+}
+
+/** Fill the `notes` field from Wikipedia's lead-section plain text for
+ *  any row that has a `wikipedia_suffix` and no notes yet. Skips rows
+ *  whose notes already contain content so we don't trample manual edits.
+ */
+export async function enrichBluesFromWikipedia(opts: { idFilter?: number; limit?: number; force?: boolean } = {}): Promise<GenericEnrichResult> {
+  const start = Date.now();
+  const errors: GenericEnrichResult["errors"] = [];
+  let attempted = 0, enriched = 0, skipped = 0;
+  const PAGE = 200;
+  let offset = 0;
+  let processed = 0;
+  outer: while (true) {
+    const { rows } = await listBluesArtists({ limit: PAGE, offset });
+    if (!rows.length) break;
+    for (const row of rows) {
+      if (opts.idFilter && row.id !== opts.idFilter) continue;
+      attempted++;
+      const title = _titleFromWikiSuffix(row.wikipedia_suffix);
+      if (!title) { skipped++; continue; }
+      // Don't trample existing notes unless explicitly told to.
+      if (!opts.force && row.notes?.trim()) { skipped++; continue; }
+      try {
+        const text = await _fetchWikipediaIntro(title);
+        if (text) {
+          const status = (row.enrichment_status && typeof row.enrichment_status === "object")
+            ? row.enrichment_status : {};
+          await updateBluesArtist(row.id, {
+            notes: text,
+            enrichment_status: { ...status, wiki: 1 },
+          });
+          enriched++;
+        } else {
+          skipped++;
+        }
+      } catch (err: any) {
+        errors.push({ id: row.id, message: err?.message ?? String(err) });
+      }
+      processed++;
+      if (opts.limit && processed >= opts.limit) break outer;
+      await new Promise(res => setTimeout(res, WIKI_RATE_LIMIT_MS));
+    }
+    if (opts.idFilter) break;
+    offset += PAGE;
+  }
+  return { attempted, enriched, skipped, errors, durationMs: Date.now() - start };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Phase 3b: Discogs ID confirmation
+// ─────────────────────────────────────────────────────────────────────────
+
+const DISCOGS_RATE_LIMIT_MS = 1100; // 60/min for authenticated traffic
+
+/** Search Discogs for an artist by name, return the top hit's ID.
+ *  Uses an admin-supplied DiscogsClient (PAT or OAuth). */
+async function _searchDiscogsArtist(client: DiscogsClient, name: string): Promise<number | null> {
+  // Use any to dodge the generic typing on the existing client.
+  const data: any = await (client as any).get("/database/search", { q: name, type: "artist", per_page: "5" });
+  const top = data?.results?.[0];
+  return top?.id ?? null;
+}
+
+/** Fill `discogs_id` for any row missing one, by name lookup. Idempotent —
+ *  rows with an existing discogs_id are skipped. Requires a Discogs
+ *  client (admin's PAT/OAuth) since the search endpoint needs auth. */
+export async function enrichBluesFromDiscogs(client: DiscogsClient, opts: { idFilter?: number; limit?: number } = {}): Promise<GenericEnrichResult> {
+  const start = Date.now();
+  const errors: GenericEnrichResult["errors"] = [];
+  let attempted = 0, enriched = 0, skipped = 0;
+  const PAGE = 200;
+  let offset = 0;
+  let processed = 0;
+  outer: while (true) {
+    const { rows } = await listBluesArtists({ limit: PAGE, offset });
+    if (!rows.length) break;
+    for (const row of rows) {
+      if (opts.idFilter && row.id !== opts.idFilter) continue;
+      attempted++;
+      if (row.discogs_id) { skipped++; continue; }
+      try {
+        const id = await _searchDiscogsArtist(client, row.name);
+        if (id) {
+          const status = (row.enrichment_status && typeof row.enrichment_status === "object")
+            ? row.enrichment_status : {};
+          await updateBluesArtist(row.id, {
+            discogs_id: id,
+            enrichment_status: { ...status, discogs: 1 },
+          });
+          enriched++;
+        } else {
+          skipped++;
+        }
+      } catch (err: any) {
+        errors.push({ id: row.id, message: err?.message ?? String(err) });
+      }
+      processed++;
+      if (opts.limit && processed >= opts.limit) break outer;
+      await new Promise(res => setTimeout(res, DISCOGS_RATE_LIMIT_MS));
+    }
+    if (opts.idFilter) break;
+    offset += PAGE;
+  }
+  return { attempted, enriched, skipped, errors, durationMs: Date.now() - start };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Phase 3c: YouTube top tracks (per-row only — quota-expensive)
+// ─────────────────────────────────────────────────────────────────────────
+//
+// YouTube Data API v3 search costs 100 quota units per call. Default
+// daily quota is 10,000. Bulk-running across 177 artists would burn
+// the entire day's budget in seconds, so we only expose this as a
+// per-row "Find on YouTube" enrichment from the editor.
+
+const YT_API = "https://www.googleapis.com/youtube/v3";
+
+export async function enrichBluesArtistFromYouTube(id: number, apiKey: string): Promise<{ added: string[] } | { error: string }> {
+  if (!apiKey) return { error: "YOUTUBE_API_KEY not configured on the server" };
+  const { rows } = await listBluesArtists({ limit: 1 });
+  // Use list search with idFilter to grab the row we want.
+  const targetRow = await (async () => {
+    let off = 0;
+    while (true) {
+      const { rows: page } = await listBluesArtists({ limit: 200, offset: off });
+      if (!page.length) return null;
+      const hit = page.find(r => r.id === id);
+      if (hit) return hit;
+      off += 200;
+    }
+  })();
+  if (!targetRow) return { error: "Row not found" };
+  // Build a concise query: artist name + first known recording title (if
+  // available) to avoid pulling unrelated channels with the same surname.
+  const parts = [`"${targetRow.name}"`];
+  if (targetRow.first_recording_title) parts.push(`"${targetRow.first_recording_title}"`);
+  const q = parts.join(" ");
+  const url = `${YT_API}/search?part=snippet&maxResults=3&type=video&q=${encodeURIComponent(q)}&key=${apiKey}`;
+  const r = await fetch(url, { headers: { "Accept": "application/json" } });
+  if (!r.ok) {
+    const body = await r.text().catch(() => "");
+    return { error: `YouTube ${r.status}: ${body.slice(0, 200)}` };
+  }
+  const data = await r.json() as any;
+  const items = (data?.items ?? []) as Array<{ id?: { videoId?: string } }>;
+  const newUrls = items
+    .map(it => it.id?.videoId)
+    .filter((v): v is string => !!v)
+    .map(vid => `https://www.youtube.com/watch?v=${vid}`);
+  if (!newUrls.length) return { added: [] };
+  const existing = Array.isArray(targetRow.youtube_urls) ? targetRow.youtube_urls : [];
+  const merged = Array.from(new Set([...existing, ...newUrls]));
+  const status = (targetRow.enrichment_status && typeof targetRow.enrichment_status === "object")
+    ? targetRow.enrichment_status : {};
+  await updateBluesArtist(targetRow.id, {
+    youtube_urls: merged,
+    enrichment_status: { ...status, yt: 1 },
+  });
+  return { added: newUrls };
 }

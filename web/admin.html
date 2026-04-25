@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260412k" />
+  <link rel="stylesheet" href="/style.css?v=20260412l" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260412k"></script>
+<script defer src="/shared.js?v=20260412l"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
@@ -129,6 +129,8 @@
           <button class="admin-refresh-btn" onclick="bluesDbLoadList()" title="Refresh">&#8635;</button>
           <button class="admin-btn" onclick="bluesDbSeed()" id="blues-seed-btn" title="Pull seed list from Wikidata. Idempotent — manual edits are preserved.">Seed from Wikidata</button>
           <button class="admin-btn" onclick="bluesDbEnrichMb(null)" id="blues-enrich-mb-btn" title="Fill first/last recording year + title from MusicBrainz for every row that has an MBID. Rate-limited 1 req/s — bulk pass can take 5–10 minutes.">Enrich from MB</button>
+          <button class="admin-btn" onclick="bluesDbEnrichWiki(null)" id="blues-enrich-wiki-btn" title="Pull the Wikipedia lead paragraph into the notes field for any row with a wikipedia_suffix. Skips rows that already have notes.">Enrich notes (Wiki)</button>
+          <button class="admin-btn" onclick="bluesDbEnrichDiscogs(null)" id="blues-enrich-discogs-btn" title="Look up missing Discogs IDs by artist name. Uses your admin Discogs token. ~3–5 min.">Enrich Discogs</button>
           <button class="admin-btn" onclick="bluesDbOpenEditor(null)" title="Add a new artist row manually">+ Add artist</button>
           <span id="blues-stats" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
         </div>
@@ -173,6 +175,9 @@
               <div style="grid-column:1/-1;display:flex;gap:0.5rem;justify-content:flex-end;margin-top:0.5rem;flex-wrap:wrap">
                 <button type="button" class="admin-btn admin-btn-danger" id="blues-editor-delete" onclick="bluesDbDeleteFromEditor()" style="margin-right:auto;display:none">Delete</button>
                 <button type="button" class="admin-btn" id="blues-editor-mb" onclick="bluesDbEnrichEditorRow()" title="Pull first/last recording year + title from MusicBrainz for THIS artist (uses the MBID in the field above)" style="display:none">Enrich from MB</button>
+                <button type="button" class="admin-btn" id="blues-editor-wiki" onclick="bluesDbEnrichEditorWiki()" title="Pull the Wikipedia lead paragraph into the notes field (uses wikipedia_suffix). Force-overwrites existing notes." style="display:none">Wiki notes</button>
+                <button type="button" class="admin-btn" id="blues-editor-discogs" onclick="bluesDbEnrichEditorDiscogs()" title="Search Discogs by artist name and fill discogs_id" style="display:none">Find Discogs ID</button>
+                <button type="button" class="admin-btn" id="blues-editor-yt" onclick="bluesDbEnrichEditorYt()" title="Search YouTube for the artist + first known recording, append top 3 video URLs (~100 quota units)" style="display:none">Find YouTube</button>
                 <button type="button" class="admin-btn" onclick="bluesDbCloseEditor()">Cancel</button>
                 <button type="submit" class="admin-btn admin-btn-extras">Save</button>
               </div>
@@ -247,7 +252,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260412k"></script>
+<script defer src="/modal.js?v=20260412l"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1135,6 +1140,73 @@ function bluesDbEnrichEditorRow() {
   bluesDbEnrichMb(id);
 }
 
+// Generic helper for the three remaining enrichers — same shape as
+// bluesDbEnrichMb but parameterised so we don't repeat ourselves four
+// times. label + slow-warning + endpoint differ; everything else is
+// identical (button disable + reload + summary alert).
+async function _bluesEnrichGeneric({ id, endpoint, btnId, runningLabel, confirmMsg, urlExtras }) {
+  const btn = document.getElementById(btnId);
+  if (id == null && confirmMsg && !confirm(confirmMsg)) return;
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = runningLabel;
+  try {
+    const url = endpoint + (id != null ? "/" + id : "") + (urlExtras ?? "");
+    const r = await apiFetch(url, { method: "POST" });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert("Failed: " + (err.error ?? r.status));
+      return;
+    }
+    const out = await r.json();
+    const summary = out.attempted != null
+      ? `${out.enriched}/${out.attempted} enriched in ${(out.durationMs/1000).toFixed(1)}s` +
+        (out.skipped ? ` · ${out.skipped} skipped` : "") +
+        (out.errors?.length ? ` · ${out.errors.length} errors` : "")
+      : (Array.isArray(out.added) ? `Added ${out.added.length} URL(s).` : JSON.stringify(out));
+    if (id != null && _bluesDbState.editingId === id) bluesDbOpenEditor(id);
+    bluesDbLoadStats();
+    bluesDbLoadList();
+    alert(summary);
+  } catch (e) { alert("Failed: " + e); }
+  finally { btn.disabled = false; btn.textContent = orig; }
+}
+
+function bluesDbEnrichWiki(id) {
+  return _bluesEnrichGeneric({
+    id,
+    endpoint: "/api/admin/blues/enrich-wiki",
+    btnId: id == null ? "blues-enrich-wiki-btn" : "blues-editor-wiki",
+    runningLabel: "Fetching…",
+    confirmMsg: id == null ? "Pull the Wikipedia lead paragraph into the notes field for every row with a wikipedia_suffix that doesn't already have notes?" : null,
+    // Per-row from editor force-overwrites (admin clicked the button on
+    // purpose). Bulk respects existing notes.
+    urlExtras: id != null ? "?force=1" : "",
+  });
+}
+function bluesDbEnrichDiscogs(id) {
+  return _bluesEnrichGeneric({
+    id,
+    endpoint: "/api/admin/blues/enrich-discogs",
+    btnId: id == null ? "blues-enrich-discogs-btn" : "blues-editor-discogs",
+    runningLabel: "Searching Discogs…",
+    confirmMsg: id == null ? "Look up Discogs IDs by name for every row missing one? Uses your admin Discogs token (~3–5 minutes)." : null,
+  });
+}
+function bluesDbEnrichYt(id) {
+  // YouTube is per-row only — no bulk button.
+  return _bluesEnrichGeneric({
+    id,
+    endpoint: "/api/admin/blues/enrich-yt",
+    btnId: "blues-editor-yt",
+    runningLabel: "Searching YouTube…",
+    confirmMsg: null,
+  });
+}
+function bluesDbEnrichEditorWiki()    { const id = _bluesDbState.editingId; if (id) bluesDbEnrichWiki(id); }
+function bluesDbEnrichEditorDiscogs() { const id = _bluesDbState.editingId; if (id) bluesDbEnrichDiscogs(id); }
+function bluesDbEnrichEditorYt()      { const id = _bluesDbState.editingId; if (id) bluesDbEnrichYt(id); }
+
 async function bluesDbOpenEditor(id) {
   _bluesDbState.editingId = id;
   const overlay = document.getElementById("blues-editor-overlay");
@@ -1142,11 +1214,17 @@ async function bluesDbOpenEditor(id) {
   const title = document.getElementById("blues-editor-title");
   const delBtn = document.getElementById("blues-editor-delete");
   const mbBtn = document.getElementById("blues-editor-mb");
+  const wikiBtn = document.getElementById("blues-editor-wiki");
+  const discogsBtn = document.getElementById("blues-editor-discogs");
+  const ytBtn = document.getElementById("blues-editor-yt");
   form.reset();
   if (id) {
     title.textContent = "Edit artist";
     delBtn.style.display = "";
     mbBtn.style.display = "";
+    wikiBtn.style.display = "";
+    discogsBtn.style.display = "";
+    ytBtn.style.display = "";
     try {
       const r = await apiFetch("/api/admin/blues/" + id);
       if (!r.ok) { alert("Could not load row."); return; }
@@ -1163,6 +1241,9 @@ async function bluesDbOpenEditor(id) {
     title.textContent = "Add artist";
     delBtn.style.display = "none";
     mbBtn.style.display = "none";
+    wikiBtn.style.display = "none";
+    discogsBtn.style.display = "none";
+    ytBtn.style.display = "none";
   }
   overlay.style.display = "flex";
 }

@@ -8,7 +8,7 @@ import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
 import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats } from "./db.js";
-import { seedBluesArtistsFromWikidata, enrichBluesFromMusicBrainz } from "./blues-db.js";
+import { seedBluesArtistsFromWikidata, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube } from "./blues-db.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const anthropicKey = process.env.ANTHROPIC_API_KEY ?? "";
 // Discogs OAuth 1.0a consumer credentials (register at discogs.com/settings/developers)
@@ -3753,6 +3753,91 @@ app.post("/api/admin/blues/enrich-mb", async (req, res) => {
     }
     catch (err) {
         console.error("[blues enrich-mb]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// Phase 3a — Wikipedia notes (lead paragraph). ~3 min for 177 artists.
+//   POST /api/admin/blues/enrich-wiki[?id=N&limit=N&force=1]
+// `force=1` overwrites existing notes (default skips rows with content).
+app.post("/api/admin/blues/enrich-wiki", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const idRaw = req.query.id;
+    const limitRaw = req.query.limit;
+    const force = req.query.force === "1" || req.query.force === "true";
+    const idFilter = idRaw ? parseInt(idRaw, 10) : undefined;
+    const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
+    if (typeof req.setTimeout === "function")
+        req.setTimeout(10 * 60 * 1000);
+    try {
+        const result = await enrichBluesFromWikipedia({
+            idFilter: Number.isFinite(idFilter) ? idFilter : undefined,
+            limit: Number.isFinite(limit) ? limit : undefined,
+            force,
+        });
+        res.json({ ok: true, ...result });
+    }
+    catch (err) {
+        console.error("[blues enrich-wiki]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// Phase 3b — Discogs ID confirmation. Uses the admin's Discogs PAT/OAuth
+// since the search endpoint requires auth. ~3–5 min for the full pass.
+//   POST /api/admin/blues/enrich-discogs[?id=N&limit=N]
+app.post("/api/admin/blues/enrich-discogs", async (req, res) => {
+    const adminId = await requireAdmin(req, res);
+    if (!adminId)
+        return;
+    const client = await getDiscogsClientForUser(adminId);
+    if (!client) {
+        res.status(400).json({ error: "Admin has no Discogs token configured. Connect Discogs on the Account page first." });
+        return;
+    }
+    const idRaw = req.query.id;
+    const limitRaw = req.query.limit;
+    const idFilter = idRaw ? parseInt(idRaw, 10) : undefined;
+    const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
+    if (typeof req.setTimeout === "function")
+        req.setTimeout(15 * 60 * 1000);
+    try {
+        const result = await enrichBluesFromDiscogs(client, {
+            idFilter: Number.isFinite(idFilter) ? idFilter : undefined,
+            limit: Number.isFinite(limit) ? limit : undefined,
+        });
+        res.json({ ok: true, ...result });
+    }
+    catch (err) {
+        console.error("[blues enrich-discogs]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// Phase 3c — YouTube top tracks. Per-row only because each call costs
+// 100 quota units (default daily quota is 10000).
+//   POST /api/admin/blues/enrich-yt/:id
+app.post("/api/admin/blues/enrich-yt/:id", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) {
+        res.status(400).json({ error: "bad id" });
+        return;
+    }
+    const apiKey = process.env.YOUTUBE_API_KEY ?? "";
+    if (!apiKey) {
+        res.status(503).json({ error: "YOUTUBE_API_KEY not configured on the server" });
+        return;
+    }
+    try {
+        const result = await enrichBluesArtistFromYouTube(id, apiKey);
+        if ("error" in result) {
+            res.status(502).json(result);
+            return;
+        }
+        res.json({ ok: true, added: result.added });
+    }
+    catch (err) {
+        console.error("[blues enrich-yt]", err);
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
