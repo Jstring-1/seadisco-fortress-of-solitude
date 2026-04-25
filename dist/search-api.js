@@ -3810,15 +3810,10 @@ app.post("/api/admin/blues/seed", async (req, res) => {
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
-// Phase 2: MusicBrainz enrichment. Walks rows with an MBID and writes
-// first/last recording year + title + any new aliases. Rate-limited
-// internally to MB's 1 req/s policy.
-//
-//   POST /api/admin/blues/enrich-mb           — bulk, all rows
-//   POST /api/admin/blues/enrich-mb?id=N      — single row
-//   POST /api/admin/blues/enrich-mb?limit=10  — first N rows only (testing)
-//
-// 10-minute response timeout because the bulk pass can take a while.
+let _bluesMbJob = {
+    status: "idle", startedAt: null, endedAt: null,
+    progress: null, result: null, error: null,
+};
 app.post("/api/admin/blues/enrich-mb", async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
@@ -3826,21 +3821,57 @@ app.post("/api/admin/blues/enrich-mb", async (req, res) => {
     const limitRaw = req.query.limit;
     const idFilter = idRaw ? parseInt(idRaw, 10) : undefined;
     const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
-    // Express default response timeout is fine; node fetches are bounded by
-    // MB API responses. Bump request timeout just in case.
-    if (typeof req.setTimeout === "function")
-        req.setTimeout(15 * 60 * 1000);
-    try {
-        const result = await enrichBluesFromMusicBrainz({
-            idFilter: Number.isFinite(idFilter) ? idFilter : undefined,
-            limit: Number.isFinite(limit) ? limit : undefined,
+    // Per-row enrich is short — keep it synchronous so the editor button
+    // gets the result back in one round-trip.
+    if (Number.isFinite(idFilter)) {
+        try {
+            const result = await enrichBluesFromMusicBrainz({ idFilter });
+            res.json({ ok: true, ...result });
+        }
+        catch (err) {
+            console.error("[blues enrich-mb single]", err);
+            res.status(500).json({ error: err?.message ?? String(err) });
+        }
+        return;
+    }
+    // Bulk path → background job + 202.
+    if (_bluesMbJob.status === "running") {
+        res.status(409).json({
+            error: "MB enrichment already running",
+            startedAt: _bluesMbJob.startedAt,
+            progress: _bluesMbJob.progress,
         });
-        res.json({ ok: true, ...result });
+        return;
     }
-    catch (err) {
-        console.error("[blues enrich-mb]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
-    }
+    _bluesMbJob = {
+        status: "running",
+        startedAt: new Date().toISOString(),
+        endedAt: null,
+        progress: null,
+        result: null,
+        error: null,
+    };
+    enrichBluesFromMusicBrainz({
+        limit: Number.isFinite(limit) ? limit : undefined,
+        onProgress: (p) => { _bluesMbJob.progress = p; },
+    })
+        .then(result => {
+        _bluesMbJob.status = "done";
+        _bluesMbJob.result = result;
+        _bluesMbJob.endedAt = new Date().toISOString();
+    })
+        .catch(err => {
+        _bluesMbJob.status = "error";
+        _bluesMbJob.error = err?.message ?? String(err);
+        _bluesMbJob.endedAt = new Date().toISOString();
+        console.error("[blues enrich-mb bulk]", err);
+    });
+    res.status(202).json({ ok: true, started: true, startedAt: _bluesMbJob.startedAt });
+});
+app.get("/api/admin/blues/enrich-mb/status", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    res.json(_bluesMbJob);
 });
 let _bluesDiscogsJob = {
     status: "idle", startedAt: null, endedAt: null,
@@ -3898,9 +3929,12 @@ app.get("/api/admin/blues/seed-discogs/status", async (req, res) => {
         return;
     res.json(_bluesDiscogsJob);
 });
-// Phase 3a — Wikipedia notes (lead paragraph). ~3 min for 177 artists.
-//   POST /api/admin/blues/enrich-wiki[?id=N&limit=N&force=1]
-// `force=1` overwrites existing notes (default skips rows with content).
+const _emptyJob = () => ({
+    status: "idle", startedAt: null, endedAt: null,
+    progress: null, result: null, error: null,
+});
+let _bluesWikiJob = _emptyJob();
+let _bluesDiscogsIdJob = _emptyJob();
 app.post("/api/admin/blues/enrich-wiki", async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
@@ -3909,24 +3943,46 @@ app.post("/api/admin/blues/enrich-wiki", async (req, res) => {
     const force = req.query.force === "1" || req.query.force === "true";
     const idFilter = idRaw ? parseInt(idRaw, 10) : undefined;
     const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
-    if (typeof req.setTimeout === "function")
-        req.setTimeout(10 * 60 * 1000);
-    try {
-        const result = await enrichBluesFromWikipedia({
-            idFilter: Number.isFinite(idFilter) ? idFilter : undefined,
-            limit: Number.isFinite(limit) ? limit : undefined,
-            force,
-        });
-        res.json({ ok: true, ...result });
+    if (Number.isFinite(idFilter)) {
+        try {
+            const result = await enrichBluesFromWikipedia({ idFilter, force });
+            res.json({ ok: true, ...result });
+        }
+        catch (err) {
+            console.error("[blues enrich-wiki single]", err);
+            res.status(500).json({ error: err?.message ?? String(err) });
+        }
+        return;
     }
-    catch (err) {
-        console.error("[blues enrich-wiki]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
+    if (_bluesWikiJob.status === "running") {
+        res.status(409).json({ error: "Wiki enrichment already running", startedAt: _bluesWikiJob.startedAt, progress: _bluesWikiJob.progress });
+        return;
     }
+    _bluesWikiJob = { ..._emptyJob(), status: "running", startedAt: new Date().toISOString() };
+    enrichBluesFromWikipedia({
+        limit: Number.isFinite(limit) ? limit : undefined,
+        force,
+        onProgress: (p) => { _bluesWikiJob.progress = p; },
+    })
+        .then(result => {
+        _bluesWikiJob.status = "done";
+        _bluesWikiJob.result = result;
+        _bluesWikiJob.endedAt = new Date().toISOString();
+    })
+        .catch(err => {
+        _bluesWikiJob.status = "error";
+        _bluesWikiJob.error = err?.message ?? String(err);
+        _bluesWikiJob.endedAt = new Date().toISOString();
+        console.error("[blues enrich-wiki bulk]", err);
+    });
+    res.status(202).json({ ok: true, started: true, startedAt: _bluesWikiJob.startedAt });
 });
-// Phase 3b — Discogs ID confirmation. Uses the admin's Discogs PAT/OAuth
-// since the search endpoint requires auth. ~3–5 min for the full pass.
-//   POST /api/admin/blues/enrich-discogs[?id=N&limit=N]
+app.get("/api/admin/blues/enrich-wiki/status", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    res.json(_bluesWikiJob);
+});
+// Phase 3b — Discogs ID confirmation. Same single-inline / bulk-job split.
 app.post("/api/admin/blues/enrich-discogs", async (req, res) => {
     const adminId = await requireAdmin(req, res);
     if (!adminId)
@@ -3940,19 +3996,43 @@ app.post("/api/admin/blues/enrich-discogs", async (req, res) => {
     const limitRaw = req.query.limit;
     const idFilter = idRaw ? parseInt(idRaw, 10) : undefined;
     const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
-    if (typeof req.setTimeout === "function")
-        req.setTimeout(15 * 60 * 1000);
-    try {
-        const result = await enrichBluesFromDiscogs(client, {
-            idFilter: Number.isFinite(idFilter) ? idFilter : undefined,
-            limit: Number.isFinite(limit) ? limit : undefined,
-        });
-        res.json({ ok: true, ...result });
+    if (Number.isFinite(idFilter)) {
+        try {
+            const result = await enrichBluesFromDiscogs(client, { idFilter });
+            res.json({ ok: true, ...result });
+        }
+        catch (err) {
+            console.error("[blues enrich-discogs single]", err);
+            res.status(500).json({ error: err?.message ?? String(err) });
+        }
+        return;
     }
-    catch (err) {
-        console.error("[blues enrich-discogs]", err);
-        res.status(500).json({ error: err?.message ?? String(err) });
+    if (_bluesDiscogsIdJob.status === "running") {
+        res.status(409).json({ error: "Discogs ID enrichment already running", startedAt: _bluesDiscogsIdJob.startedAt, progress: _bluesDiscogsIdJob.progress });
+        return;
     }
+    _bluesDiscogsIdJob = { ..._emptyJob(), status: "running", startedAt: new Date().toISOString() };
+    enrichBluesFromDiscogs(client, {
+        limit: Number.isFinite(limit) ? limit : undefined,
+        onProgress: (p) => { _bluesDiscogsIdJob.progress = p; },
+    })
+        .then(result => {
+        _bluesDiscogsIdJob.status = "done";
+        _bluesDiscogsIdJob.result = result;
+        _bluesDiscogsIdJob.endedAt = new Date().toISOString();
+    })
+        .catch(err => {
+        _bluesDiscogsIdJob.status = "error";
+        _bluesDiscogsIdJob.error = err?.message ?? String(err);
+        _bluesDiscogsIdJob.endedAt = new Date().toISOString();
+        console.error("[blues enrich-discogs bulk]", err);
+    });
+    res.status(202).json({ ok: true, started: true, startedAt: _bluesDiscogsIdJob.startedAt });
+});
+app.get("/api/admin/blues/enrich-discogs/status", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    res.json(_bluesDiscogsIdJob);
 });
 // Phase 3c — YouTube top tracks. Per-row only because each call costs
 // 100 quota units (default daily quota is 10000).
