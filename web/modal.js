@@ -854,7 +854,9 @@ function wikiIcon(query, label = "", extraTerms = "") {
     : `"${phrase}"`;
   const q = composed.replace(/'/g, "\\'");
   const lab = label || query;
-  return ` <a href="#" class="wiki-icon" onclick="event.preventDefault();openWikiPopup('${escHtml(q)}')" title="Wikipedia: ${escHtml(lab)}">W</a>`;
+  // No leading space — wiki-icon's small left margin in CSS provides
+  // just enough breathing room from the preceding ⌕ glass.
+  return `<a href="#" class="wiki-icon" onclick="event.preventDefault();openWikiPopup('${escHtml(q)}')" title="Wikipedia: ${escHtml(lab)}">W</a>`;
 }
 
 // ── Video popup ────────────────────────────────────────────────────────────
