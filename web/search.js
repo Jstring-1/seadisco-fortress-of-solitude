@@ -95,7 +95,10 @@ function restoreFromParams(p) {
   if (hasAdvanced) toggleAdvanced(true);
 }
 
-function clearForm() {
+// Reset every form field + status row, but DON'T touch the AI results
+// panel. AI entity-link clicks call this directly so they can spawn a
+// fresh search without dismissing the panel they came from.
+function clearFormFieldsOnly() {
   ["query","f-artist","f-release","f-year","f-label","f-genre","f-style","f-country"].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.value = "";
@@ -112,12 +115,44 @@ function clearForm() {
   document.getElementById("search-info-block").style.display = "none";
   window._lastResults = null;
   if (typeof resetSelectHighlights === "function") resetSelectHighlights();
-  // Clear-form X also dismisses the AI results panel (per user spec).
+}
+
+function clearForm() {
+  clearFormFieldsOnly();
+  // The clear-form ✕ explicitly dismisses the AI results panel too.
   if (typeof closeAiPanel === "function") closeAiPanel();
 }
 
+// AI panel entry-point: clear fields, fill the right one, run the search,
+// keep the AI panel visible so the user can pick another row afterward.
+// Search results render below the AI panel (the panel is inserted above
+// #blurb, which is above #results).
+function searchFromAiPanel(field, value) {
+  clearFormFieldsOnly();
+  if (field === "f-artist") {
+    document.getElementById("f-artist").value = value;
+    if (typeof applyEntityLinkDefaults === "function") applyEntityLinkDefaults();
+    if (typeof toggleAdvanced === "function") toggleAdvanced(true);
+  } else if (field === "f-label") {
+    document.getElementById("f-label").value = value;
+    if (typeof applyEntityLinkDefaults === "function") applyEntityLinkDefaults();
+    if (typeof toggleAdvanced === "function") toggleAdvanced(true);
+  } else {
+    const q = document.getElementById("query");
+    if (q) q.value = value;
+  }
+  // Third arg = keepAiPanel: true → doSearch skips its closeAiPanel call.
+  doSearch(1, false, true);
+}
+
 // ── Main search ──────────────────────────────────────────────────────────
-async function doSearch(page = 1, skipPushState = false) {
+async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
+  // A fresh, user-initiated search dismisses the AI results panel. Calls
+  // from inside the AI panel pass keepAiPanel=true via searchFromAiPanel
+  // so the panel stays put and the new results render below it.
+  if (!keepAiPanel && typeof closeAiPanel === "function") {
+    closeAiPanel();
+  }
   const q         = document.getElementById("query").value.trim();
   const advOpen   = document.getElementById("advanced-panel")?.dataset.open === "true";
   const artistRaw = advOpen ? document.getElementById("f-artist").value.trim() : "";
@@ -855,15 +890,17 @@ function _aiEntityLinks(name, kind) {
   if (!name) return "";
   const safe = String(name).replace(/'/g, "\\'");
   const safeEsc = escHtml(safe);
-  // SeaDisco new search — kind controls which field gets populated
+  // SeaDisco new search — kind controls which field gets populated.
+  // Routes through searchFromAiPanel so the AI panel stays open and the
+  // search results render below it.
   let newSearch = "";
   if (kind === "artist") {
-    newSearch = `event.preventDefault();closeAiPanel();clearForm();document.getElementById('f-artist').value='${safeEsc}';applyEntityLinkDefaults();toggleAdvanced(true);doSearch(1)`;
+    newSearch = `event.preventDefault();searchFromAiPanel('f-artist','${safeEsc}')`;
   } else if (kind === "label") {
-    newSearch = `event.preventDefault();closeAiPanel();clearForm();document.getElementById('f-label').value='${safeEsc}';applyEntityLinkDefaults();toggleAdvanced(true);doSearch(1)`;
+    newSearch = `event.preventDefault();searchFromAiPanel('f-label','${safeEsc}')`;
   } else {
     // release/album/general — put into main query
-    newSearch = `event.preventDefault();closeAiPanel();clearForm();document.getElementById('query').value='${safeEsc}';doSearch(1)`;
+    newSearch = `event.preventDefault();searchFromAiPanel('query','${safeEsc}')`;
   }
   const cwField = kind === "artist" ? "cw-artist" : kind === "label" ? "cw-label" : "cw-query";
   const wikiQ = kind === "label" ? `${name} record label` : name;
