@@ -3707,10 +3707,10 @@ Return ONLY a valid JSON object, no markdown, no explanation.`;
         res.status(500).json({ error: "AI search failed: " + err.message });
     }
 });
-// GET /api/wikipedia/search?q=X — list-style search for the wiki SPA page.
-// Returns up to 10 matching articles with title + HTML snippet. Each row
-// has Wikipedia's <span class="searchmatch"> highlighting around the
-// query terms so the page can render the snippets verbatim.
+// GET /api/wikipedia/search?q=X[&limit=N&offset=N] — list-style search for
+// the wiki SPA page. Returns matching articles with title + HTML snippet
+// (Wikipedia's <span class="searchmatch"> highlight markup preserved).
+// Supports paging via offset so the frontend can implement "Load more".
 app.get("/api/wikipedia/search", async (req, res) => {
     if (!await requireUser(req, res))
         return;
@@ -3719,6 +3719,9 @@ app.get("/api/wikipedia/search", async (req, res) => {
         res.status(400).json({ error: "Missing q" });
         return;
     }
+    // Clamp limit to Wikipedia's 50/page ceiling and a sensible default of 20.
+    const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? "20"), 10) || 20));
+    const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
     const wikiHeaders = {
         "User-Agent": "SeaDisco/1.0 (+https://seadisco.com; vinyl discovery app)",
         "Accept": "application/json",
@@ -3726,7 +3729,8 @@ app.get("/api/wikipedia/search", async (req, res) => {
     try {
         const params = [
             "action=query", "format=json", "list=search",
-            "srlimit=10", "srprop=snippet",
+            `srlimit=${limit}`, `sroffset=${offset}`,
+            "srprop=snippet",
             `srsearch=${encodeURIComponent(q)}`,
         ].join("&");
         const url = `https://en.wikipedia.org/w/api.php?${params}`;
@@ -3743,7 +3747,9 @@ app.get("/api/wikipedia/search", async (req, res) => {
             snippet: s.snippet ?? "",
             url: `https://en.wikipedia.org/wiki/${encodeURIComponent((s.title || "").replace(/ /g, "_"))}`,
         }));
-        res.json({ results });
+        const totalhits = data?.query?.searchinfo?.totalhits ?? null;
+        const nextOffset = data?.continue?.sroffset ?? null;
+        res.json({ results, offset, limit, totalhits, nextOffset });
     }
     catch (err) {
         console.error("[wikipedia/search] error:", err);

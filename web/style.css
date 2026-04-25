@@ -5328,6 +5328,36 @@ footer {
 }
 .wiki-results-error { color: #d27a6c; }
 
+/* Footer under the result list — counter + load-more button. */
+.wiki-results-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  margin-top: 0.8rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.82rem;
+}
+.wiki-results-counter { color: var(--muted); }
+.wiki-results-end { color: var(--muted); font-style: italic; }
+.wiki-load-more {
+  background: none;
+  border: 1px solid var(--accent-dim);
+  color: var(--accent);
+  padding: 0.35rem 0.9rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 0.82rem;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+.wiki-load-more:hover:not(:disabled) {
+  background: var(--accent);
+  color: #1a1208;
+  border-color: var(--accent);
+}
+.wiki-load-more:disabled { opacity: 0.5; cursor: default; }
+
 /* Wikipedia SPA page — clean, themed search form. */
 .wiki-search-form {
   display: flex;

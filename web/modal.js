@@ -603,23 +603,80 @@ document.getElementById("wiki-overlay")?.addEventListener("click", e => {
   if (e.target === document.getElementById("wiki-overlay")) closeWikiPopup();
 });
 
-// Wikipedia SPA page (/?v=wiki) — list-style search. Renders up to 10
-// matching articles with snippets right on the page; clicking a row opens
-// that specific article in the popup, where in-article links work as usual.
+// localStorage-backed recent-searches list for the wiki SPA page.
+// Keeps last 8 unique queries (most recent first) and rehydrates the
+// <datalist> so the input gets a native autocomplete dropdown — same
+// idea as a browser history-style suggestion list.
+const _WIKI_RECENT_KEY = "sd_wiki_recent";
+const _WIKI_RECENT_MAX = 8;
+function _readWikiRecents() {
+  try {
+    const raw = localStorage.getItem(_WIKI_RECENT_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.filter(s => typeof s === "string" && s.trim()) : [];
+  } catch { return []; }
+}
+function _writeWikiRecents(arr) {
+  try { localStorage.setItem(_WIKI_RECENT_KEY, JSON.stringify(arr.slice(0, _WIKI_RECENT_MAX))); } catch {}
+}
+function _renderWikiRecentDatalist() {
+  const dl = document.getElementById("wiki-recent-list");
+  if (!dl) return;
+  const recents = _readWikiRecents();
+  dl.innerHTML = recents.map(s => `<option value="${escHtml(s)}"></option>`).join("");
+}
+function _pushWikiRecent(q) {
+  const trimmed = String(q || "").trim();
+  if (!trimmed) return;
+  const cur = _readWikiRecents().filter(s => s.toLowerCase() !== trimmed.toLowerCase());
+  cur.unshift(trimmed);
+  _writeWikiRecents(cur);
+  _renderWikiRecentDatalist();
+}
+
+// Wikipedia SPA page (/?v=wiki) — list-style search. Renders matching
+// articles with snippets right on the page; clicking a row opens that
+// specific article in the popup, where in-article links work as usual.
+// 20 rows per page; "Load more" appends the next page in place.
+const _WIKI_PAGE_SIZE = 20;
+
+function _wikiResultRowHtml(rec) {
+  const safeTitle = String(rec.title || "").replace(/'/g, "\\'");
+  return `
+    <div class="wiki-result">
+      <a href="#" class="wiki-result-title" onclick="event.preventDefault();openWikiPopup('${escHtml(safeTitle)}')" title="Open in popup">${escHtml(rec.title || "")}</a>
+      <div class="wiki-result-snippet">${rec.snippet || ""}…</div>
+    </div>`;
+}
+
 async function runWikiPageSearch(query) {
   const q = String(query || "").trim();
   const resultsEl = document.getElementById("wiki-view-results");
   if (!resultsEl) return;
   if (!q) { resultsEl.innerHTML = ""; return; }
   resultsEl.innerHTML = `<div class="wiki-results-loading">Searching Wikipedia for <em>${escHtml(q)}</em>…</div>`;
-  // Reflect the query in the URL so the search is shareable.
+  // Track the current query on the container so the load-more button
+  // knows what to extend, and reset paging state for the new query.
+  resultsEl.dataset.query = q;
+  resultsEl.dataset.offset = "0";
+  // Save to recents + refresh the datalist for native autocomplete.
+  _pushWikiRecent(q);
+  // Reflect the query in the URL. pushState (vs replaceState) so each
+  // search becomes a back-button entry — typing a new search and then
+  // hitting back returns to the previous wiki search list.
   try {
     const u = new URL(window.location.href);
+    const prev = u.searchParams.get("wq") || "";
     u.searchParams.set("wq", q);
-    history.replaceState({}, "", u.toString());
+    if (prev !== q) {
+      history.pushState({}, "", u.toString());
+    } else {
+      history.replaceState({}, "", u.toString());
+    }
   } catch {}
   try {
-    const r = await apiFetch(`/api/wikipedia/search?q=${encodeURIComponent(q)}`);
+    const r = await apiFetch(`/api/wikipedia/search?q=${encodeURIComponent(q)}&limit=${_WIKI_PAGE_SIZE}&offset=0`);
     if (!r.ok) {
       resultsEl.innerHTML = `<div class="wiki-results-error">Wikipedia search failed.</div>`;
       return;
@@ -632,16 +689,57 @@ async function runWikiPageSearch(query) {
     }
     // Wikipedia's snippet field already contains <span class="searchmatch">
     // highlight markup; render verbatim so query terms are emphasised.
-    resultsEl.innerHTML = rows.map(rec => {
-      const safeTitle = String(rec.title || "").replace(/'/g, "\\'");
-      return `
-        <div class="wiki-result">
-          <a href="#" class="wiki-result-title" onclick="event.preventDefault();openWikiPopup('${escHtml(safeTitle)}')" title="Open in popup">${escHtml(rec.title || "")}</a>
-          <div class="wiki-result-snippet">${rec.snippet || ""}…</div>
-        </div>`;
-    }).join("");
+    resultsEl.innerHTML =
+      `<div class="wiki-results-rows">${rows.map(_wikiResultRowHtml).join("")}</div>` +
+      _renderWikiLoadMoreFooter(rows.length, data.totalhits, data.nextOffset);
+    resultsEl.dataset.offset = String(data.nextOffset ?? rows.length);
   } catch (err) {
     resultsEl.innerHTML = `<div class="wiki-results-error">Wikipedia search failed: ${escHtml(err.message || String(err))}</div>`;
+  }
+}
+
+// Footer rendered below the results list — shows "X of Y results" plus a
+// "Load more" button when there are still rows on Wikipedia's side.
+function _renderWikiLoadMoreFooter(loadedCount, totalhits, nextOffset) {
+  const total = (typeof totalhits === "number") ? totalhits : null;
+  const hasMore = nextOffset != null && (total == null || loadedCount < total);
+  const counter = total != null
+    ? `<span class="wiki-results-counter">${loadedCount} of ${total.toLocaleString()} results</span>`
+    : `<span class="wiki-results-counter">${loadedCount} results</span>`;
+  const btn = hasMore
+    ? `<button type="button" class="wiki-load-more" onclick="loadMoreWikiResults()">Load more</button>`
+    : `<span class="wiki-results-end">— end of results —</span>`;
+  return `<div class="wiki-results-footer">${counter}${btn}</div>`;
+}
+
+async function loadMoreWikiResults() {
+  const resultsEl = document.getElementById("wiki-view-results");
+  if (!resultsEl) return;
+  const q = resultsEl.dataset.query || "";
+  const offset = parseInt(resultsEl.dataset.offset || "0", 10) || 0;
+  if (!q) return;
+  const rowsContainer = resultsEl.querySelector(".wiki-results-rows");
+  const footer = resultsEl.querySelector(".wiki-results-footer");
+  // Disable the button while loading so users don't double-click.
+  const btn = footer?.querySelector(".wiki-load-more");
+  if (btn) { btn.disabled = true; btn.textContent = "Loading…"; }
+  try {
+    const r = await apiFetch(`/api/wikipedia/search?q=${encodeURIComponent(q)}&limit=${_WIKI_PAGE_SIZE}&offset=${offset}`);
+    if (!r.ok) {
+      if (btn) { btn.disabled = false; btn.textContent = "Load more"; }
+      return;
+    }
+    const data = await r.json();
+    const rows = Array.isArray(data?.results) ? data.results : [];
+    if (rowsContainer && rows.length) {
+      rowsContainer.insertAdjacentHTML("beforeend", rows.map(_wikiResultRowHtml).join(""));
+    }
+    const loadedCount = (rowsContainer?.children.length) ?? rows.length;
+    const newFooter = _renderWikiLoadMoreFooter(loadedCount, data.totalhits, data.nextOffset);
+    if (footer) footer.outerHTML = newFooter;
+    resultsEl.dataset.offset = String(data.nextOffset ?? (offset + rows.length));
+  } catch {
+    if (btn) { btn.disabled = false; btn.textContent = "Load more"; }
   }
 }
 
