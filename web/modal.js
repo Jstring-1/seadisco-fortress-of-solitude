@@ -603,6 +603,48 @@ document.getElementById("wiki-overlay")?.addEventListener("click", e => {
   if (e.target === document.getElementById("wiki-overlay")) closeWikiPopup();
 });
 
+// Wikipedia SPA page (/?v=wiki) — list-style search. Renders up to 10
+// matching articles with snippets right on the page; clicking a row opens
+// that specific article in the popup, where in-article links work as usual.
+async function runWikiPageSearch(query) {
+  const q = String(query || "").trim();
+  const resultsEl = document.getElementById("wiki-view-results");
+  if (!resultsEl) return;
+  if (!q) { resultsEl.innerHTML = ""; return; }
+  resultsEl.innerHTML = `<div class="wiki-results-loading">Searching Wikipedia for <em>${escHtml(q)}</em>…</div>`;
+  // Reflect the query in the URL so the search is shareable.
+  try {
+    const u = new URL(window.location.href);
+    u.searchParams.set("wq", q);
+    history.replaceState({}, "", u.toString());
+  } catch {}
+  try {
+    const r = await apiFetch(`/api/wikipedia/search?q=${encodeURIComponent(q)}`);
+    if (!r.ok) {
+      resultsEl.innerHTML = `<div class="wiki-results-error">Wikipedia search failed.</div>`;
+      return;
+    }
+    const data = await r.json();
+    const rows = Array.isArray(data?.results) ? data.results : [];
+    if (!rows.length) {
+      resultsEl.innerHTML = `<div class="wiki-results-empty">No matches for <em>${escHtml(q)}</em>.</div>`;
+      return;
+    }
+    // Wikipedia's snippet field already contains <span class="searchmatch">
+    // highlight markup; render verbatim so query terms are emphasised.
+    resultsEl.innerHTML = rows.map(rec => {
+      const safeTitle = String(rec.title || "").replace(/'/g, "\\'");
+      return `
+        <div class="wiki-result">
+          <a href="#" class="wiki-result-title" onclick="event.preventDefault();openWikiPopup('${escHtml(safeTitle)}')" title="Open in popup">${escHtml(rec.title || "")}</a>
+          <div class="wiki-result-snippet">${rec.snippet || ""}…</div>
+        </div>`;
+    }).join("");
+  } catch (err) {
+    resultsEl.innerHTML = `<div class="wiki-results-error">Wikipedia search failed: ${escHtml(err.message || String(err))}</div>`;
+  }
+}
+
 // Esc closes wiki popup if open (without touching underlying modals)
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") {
