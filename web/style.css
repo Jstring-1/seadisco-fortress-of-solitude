@@ -1,6 +1,41 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { overflow-x: hidden; }
 
+/* Per-field × clear button — appears inside text inputs when they
+   have content. Wrapper is added programmatically by app.js so the
+   existing label > input HTML doesn't need changing. */
+.input-clear-wrap {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+}
+.input-clear-wrap > input {
+  width: 100%;
+  padding-right: 1.6rem;
+}
+.input-clear-btn {
+  position: absolute;
+  right: 0.35rem;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.05rem;
+  line-height: 1;
+  padding: 0.05rem 0.35rem;
+  cursor: pointer;
+  display: none;
+  border-radius: 3px;
+  z-index: 2;
+}
+.input-clear-wrap.has-text .input-clear-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.input-clear-btn:hover { color: var(--text); background: var(--border); }
+
 /* Results type + sort row */
 .type-sort-row {
   display: flex;

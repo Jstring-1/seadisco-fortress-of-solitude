@@ -1694,7 +1694,9 @@ async function loadDiscogsIds() {
         cb.addEventListener("change", () => { if (window._lastResults) renderResults(window._lastResults); });
       }
       if (lbl) {
-        lbl.style.color = "#aaa"; lbl.style.cursor = "pointer";
+        lbl.style.color = "var(--muted)";
+        lbl.style.opacity = "1";
+        lbl.style.cursor = "pointer";
         lbl.title = window._collectionIds.size > 0 ? "Hide releases already in your collection" : "Sync your collection on the Account page to use this filter";
       }
     }
