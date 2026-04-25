@@ -839,6 +839,43 @@ document.addEventListener("keydown", e => {
   }
 }, true);
 
+// Admin-only "+" icon — adds the given Discogs artist to the Blues DB.
+// Hidden when the artist's ID is already in window._adminBluesIds (the
+// set is preloaded in shared.js after admin auth). Returns "" for
+// non-admins or when the artist is already in the DB so it folds out
+// of the inline icon row cleanly.
+function bluesAddIcon(discogsId, name) {
+  if (!window._isAdmin) return "";
+  const id = Number(discogsId);
+  if (!Number.isFinite(id) || id <= 0) return "";
+  if (window._adminBluesIds && window._adminBluesIds.has(id)) return "";
+  const safeName = String(name || "").replace(/'/g, "\\'");
+  return `<a href="#" class="blues-add-icon" data-blues-id="${id}" onclick="event.preventDefault();_bluesAddArtist(${id},'${escHtml(safeName)}',this)" title="Add ${escHtml(name)} to Blues DB">+</a>`;
+}
+
+async function _bluesAddArtist(discogsId, name, anchor) {
+  try {
+    const r = await apiFetch("/api/admin/blues/add-by-discogs-id", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ discogs_id: discogsId, name }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      showToast?.("Add failed: " + (err.error ?? r.status), "error");
+      return;
+    }
+    if (window._adminBluesIds) window._adminBluesIds.add(Number(discogsId));
+    // Remove every "+ add" link for this id from the DOM so the popup
+    // updates in place (multiple may exist if the artist appears in
+    // both the album-artist row and a credit row).
+    document.querySelectorAll(`.blues-add-icon[data-blues-id="${discogsId}"]`).forEach(a => a.remove());
+    showToast?.("Added to Blues DB");
+  } catch (e) {
+    showToast?.("Add failed: " + e, "error");
+  }
+}
+
 // Small "W" icon to render after a magnifying glass — opens the wiki popup
 // for the given query. Wraps the term in double-quotes so Wikipedia's
 // CirrusSearch treats it as an exact phrase — fixes fuzzy mismatches
@@ -1355,6 +1392,11 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const artistNames = (d.artists ?? []).map(a => a.name);
   const artists  = artistNames.length ? artistNames
                    : ((searchResult.title ?? "").split(" - ")[0] ? [(searchResult.title ?? "").split(" - ")[0]] : []);
+  // Same data with Discogs IDs preserved — used so the admin "+ add to
+  // Blues DB" icon next to each artist name has the ID it needs.
+  const artistEntries = (d.artists ?? []).length
+    ? (d.artists ?? []).map(a => ({ id: a.id, name: a.name }))
+    : artists.map(n => ({ id: null, name: n }));
   const year     = d.year ?? searchResult.year ?? "";
   const labelNames = (d.labels ?? []).map(l => l.name).slice(0, 2);
   if (!labelNames.length) labelNames.push(...(searchResult.label ?? []).slice(0, 2));
@@ -1376,8 +1418,8 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
       const nameEl = a.id
         ? `<a href="#" class="modal-internal-link credit-name" data-alt-name="${escHtml(a.name)}" data-alt-id="${a.id}" onclick="selectAltArtist(event,this);closeModal()" title="Search for ${escHtml(a.name)}">${escHtml(a.name)}</a>`
         : `<span class="credit-name">${escHtml(a.name)}</span>`;
-      const searchIcon = ` <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(a.name.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(a.name)}" style="font-size:1.1em">⌕</a>${wikiIcon(stripDupSuffix(a.name), a.name)}`;
-      // Role parentheses come right after the name; ⌕/W go AFTER the role.
+      const searchIcon = ` <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(a.name.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(a.name)}" style="font-size:1.1em">⌕</a>${wikiIcon(stripDupSuffix(a.name), a.name)}${bluesAddIcon(a.id, a.name)}`;
+      // Role parentheses come right after the name; ⌕/W/+ go AFTER the role.
       return `<span class="credit-item">${nameEl}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}${searchIcon}</span>`;
     });
   const notes       = d.notes ? stripDiscogsMarkup(d.notes) : "";
@@ -1558,10 +1600,10 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
               const nameEl = a.id
                 ? `<a href="#" class="modal-internal-link credit-name" data-alt-name="${escHtml(a.name)}" data-alt-id="${a.id}" onclick="selectAltArtist(event,this);closeModal()" title="Search for ${escHtml(a.name)}">${escHtml(a.name)}</a>`
                 : `<span class="credit-name">${escHtml(a.name)}</span>`;
-              const credSearchIcon = ` <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(a.name.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(a.name)}" style="font-size:1.1em">\u2315</a>${wikiIcon(stripDupSuffix(a.name), a.name)}`;
+              const credSearchIcon = ` <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(a.name.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(a.name)}" style="font-size:1.1em">\u2315</a>${wikiIcon(stripDupSuffix(a.name), a.name)}${bluesAddIcon(a.id, a.name)}`;
               // Role parentheses come right after the name; the inventory \u2315
               // and wiki W icons go AFTER the role so the line reads
-              // "Name (Role) \u2315 W" instead of "Name \u2315 W (Role)".
+              // "Name (Role) \u2315 W +" instead of "Name \u2315 W (Role) +".
               return `${nameEl}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}${credSearchIcon}`;
             }).join('<span class="credit-sep"> · </span>')}</div>`
           : "";
@@ -1603,7 +1645,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
       <div class="album-meta">
         ${typeLabel ? `<div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.3rem"><div class="album-type-badge" style="cursor:pointer;user-select:none" onclick="navigator.clipboard.writeText('${escHtml(String(releaseId))}');this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy ID">${escHtml(typeLabel)}</div><button class="popup-share-inline" onclick="sharePopup(this)" title="Copy share link">share</button></div>` : ""}
         <h2><a href="#" class="modal-title-link" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">${escHtml(title)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">⌕</a></h2>
-        ${artists.length ? `<div class="album-artist">${artists.map(n => `<a href="#" class="modal-artist-link" data-artist="${escHtml(n)}" onclick="searchArtistFromModal(event,this)" title="Search for ${escHtml(n)}">${escHtml(n)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(n.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(n)}">⌕</a>${wikiIcon(stripDupSuffix(n), n)}`).join(", ")}</div>` : ""}
+        ${artistEntries.length ? `<div class="album-artist">${artistEntries.map(({ id: aId, name: n }) => `<a href="#" class="modal-artist-link" data-artist="${escHtml(n)}" onclick="searchArtistFromModal(event,this)" title="Search for ${escHtml(n)}">${escHtml(n)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(n.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(n)}">⌕</a>${wikiIcon(stripDupSuffix(n), n)}${bluesAddIcon(aId, n)}`).join(", ")}</div>` : ""}
         ${detailRows ? `<div class="album-detail-grid">${detailRows}</div>` : ""}
         ${(() => {
           const r = d.community?.rating;

@@ -418,7 +418,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260412x";
+  const SITE_VERSION = "build 20260412y";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -527,6 +527,16 @@ function renderSharedFooter(opts) {
         if (adminA) adminA.style.display = "";
         const locA = document.getElementById("footer-loc-link");
         if (locA) locA.style.display = "";
+        // Pre-load the set of Discogs artist IDs already in the
+        // blues_artists table so the per-popup "+ add to Blues DB"
+        // icon can hide itself for artists that are already in.
+        try {
+          const idsRes = await apiFetch("/api/admin/blues/ids");
+          if (idsRes.ok) {
+            const j = await idsRes.json();
+            window._adminBluesIds = new Set((j.ids ?? []).map(Number));
+          }
+        } catch { /* non-fatal */ }
       }
     } catch { /* hidden by default — fine */ }
   })();
