@@ -1524,7 +1524,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
               // and wiki W icons go AFTER the role so the line reads
               // "Name (Role) \u2315 W" instead of "Name \u2315 W (Role)".
               return `${nameEl}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}${credSearchIcon}`;
-            }).join(", ")}</div>`
+            }).join('<span class="credit-sep"> · </span>')}</div>`
           : "";
         return `<div class="track">
           <span class="track-play-cell">${playCell}</span>

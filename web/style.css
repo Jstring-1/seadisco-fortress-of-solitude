@@ -1993,7 +1993,11 @@ button.wiki-link-btn:active {
 .album-credits {
   padding: 0.75rem;
 }
-.credit-sep { color: #444;
+.credit-sep {
+  color: var(--muted);
+  font-size: 1.05em;
+  font-weight: 700;
+  margin: 0 0.15em;
 }
 
 /* ── Master versions grid ── */
@@ -5400,15 +5404,15 @@ footer {
 
 /* Inline W icon used after every magnifying glass in popups.
    Sized relative to context so it matches the neighbouring ⌕ visually,
-   white (Wikipedia-style) with no underline. */
+   uses the site beige (--text) so it sits in the line of body copy. */
 .wiki-icon {
   display: inline-block;
   margin-left: 0.2rem;
   font-family: 'Times New Roman', serif;
   font-style: italic;
   font-weight: 700;
-  font-size: 0.85em;
-  color: #fff;
+  font-size: 0.78em;
+  color: var(--text);
   text-decoration: none;
   border-bottom: none;
   line-height: 1;
