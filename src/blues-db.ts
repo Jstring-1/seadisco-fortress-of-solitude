@@ -27,14 +27,25 @@ const BLUES_GENRE_QIDS = [
   "Q1058355",   // ragtime          (overlaps the era)
 ];
 
-// Born-on-or-before this year → likely active by 1930.
-const BORN_BEFORE_YEAR = 1910;
+// Cut-off year. The criterion is "released or recorded music before this".
+const BEFORE_YEAR = 1930;
 
 function _buildSeedSparql(): string {
   const valuesClause = BLUES_GENRE_QIDS.map(q => `wd:${q}`).join(" ");
+  // The criterion is recordings/releases pre-1930. Wikidata coverage of
+  // 1920s recordings is uneven, so we union three signals that all imply
+  // the artist was active in the era:
+  //   1. Has a musical work (P175 → ?artist) with publication date P577
+  //      before BEFORE_YEAR — strongest, "they actually released a record".
+  //   2. Has a documented work-period start (P2031) before BEFORE_YEAR —
+  //      "career began before 1930".
+  //   3. Born on/before (BEFORE_YEAR - 18) AND in a blues genre — proxy
+  //      that catches artists whose Wikidata entry has a birth date but
+  //      no recording metadata; the admin can delete false positives.
   // GROUP_CONCAT keeps multi-valued fields (aliases, instruments,
   // hometowns, labels) on a single row per artist. The SERVICE block
   // resolves Q-IDs to English labels for any wd:* item we reference.
+  const birthCutoff = BEFORE_YEAR - 18; // 1912 — youngest plausible recorder
   return `
 SELECT DISTINCT
   ?artist ?artistLabel
@@ -48,9 +59,23 @@ SELECT DISTINCT
   ?image ?wikipediaArticle ?mbid ?discogsId
 WHERE {
   VALUES ?genre { ${valuesClause} }
-  ?artist wdt:P136 ?genre ;
-          wdt:P569 ?birth .
-  FILTER(YEAR(?birth) <= ${BORN_BEFORE_YEAR})
+  ?artist wdt:P136 ?genre .
+  {
+    # Path 1: a recording credited to this artist, published before 1930.
+    ?work wdt:P175 ?artist ;
+          wdt:P577 ?pubDate .
+    FILTER(YEAR(?pubDate) < ${BEFORE_YEAR})
+  } UNION {
+    # Path 2: career start (work period) before 1930.
+    ?artist wdt:P2031 ?wsDate .
+    FILTER(YEAR(?wsDate) < ${BEFORE_YEAR})
+  } UNION {
+    # Path 3: birth ≤ 1912 (= 1930 minus 18). Proxy for "could plausibly
+    # have recorded before 1930" when Wikidata lacks recording metadata.
+    ?artist wdt:P569 ?bornDate .
+    FILTER(YEAR(?bornDate) <= ${birthCutoff})
+  }
+  OPTIONAL { ?artist wdt:P569 ?birth .       }
   OPTIONAL { ?artist wdt:P570 ?death .       }
   OPTIONAL { ?artist wdt:P19  ?birthPlace .  }
   OPTIONAL { ?artist wdt:P20  ?deathPlace .  }
