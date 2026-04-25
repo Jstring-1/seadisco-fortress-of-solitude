@@ -284,6 +284,13 @@ html { overflow-x: hidden; }
      earthy-light  (light cream bg, dark brown text, maroon accents)
      slate-dark    (cool steel neutrals with teal accent)
      mossy-dark    (deep forest green primary, warm gold highlights)
+     vinyl-black   (jukebox red on near-black — turntable mood)
+     tape-cream    (sepia paper light — vintage typewriter / liner notes)
+     neon-wax      (synthwave violet/cyan dark)
+     forest-floor  (oatmeal/moss/acorn light — quiet woodland)
+     ocean-deep    (deep navy with bright cyan + sand gold)
+     saffron-gold  (warm desert dark — saffron + burgundy on cocoa)
+     paperback     (sage / dusty rose / off-white light — book design)
    ══════════════════════════════════════════════════════════════════════ */
 
 :root,
@@ -495,6 +502,307 @@ html { overflow-x: hidden; }
   --inventory-bg:    #2a2410;
   --inventory-border:#5a4620;
   --favorite:        #d4a843;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+}
+
+/* ── Theme: Vinyl Black (jukebox red on near-black) ───────────────── */
+:root[data-theme="vinyl-black"] {
+  color-scheme: dark;
+  --bg:              #0a0a0a;
+  --bg-elevated:     #161616;
+  --bg-hover:        #1d1d1d;
+  --surface:         #141414;
+  --surface-raised:  #1f1f1f;
+  --surface-sunken:  #050505;
+  --border:          #262626;
+  --border-strong:   #363636;
+  --border-soft:     #1c1c1c;
+  --fg:              #f0f0f0;
+  --text:            #e0e0e0;
+  --muted:           #888888;
+  --muted-dim:       #666666;
+  --text-disabled:   #444444;
+  --accent:          #d63333;          /* vinyl wax red */
+  --accent-hover:    #ec5050;
+  --accent-dim:      #7a1818;
+  --accent2:         #ec5050;
+  --accent-hi:       #f0c95c;          /* needle gold */
+  --accent-soft:     #2a0d0d;
+  --success:         #6dd49b;
+  --success-bg:      #122a1c;
+  --success-border:  #2a5a3a;
+  --warning:         #e8b34a;
+  --warning-bg:      #2a230f;
+  --warning-border:  #4a3f20;
+  --danger:          #d63333;
+  --danger-bright:   #ff4848;
+  --danger-bg:       #2a0e0e;
+  --danger-border:   #5a1818;
+  --inventory:       #f0c95c;
+  --inventory-bg:    #2a230f;
+  --inventory-border:#5a4818;
+  --favorite:        #f0c95c;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+}
+
+/* ── Theme: Tape Cream (sepia paper light) ────────────────────────── */
+:root[data-theme="tape-cream"] {
+  color-scheme: light;
+  --bg:              #f4ecd8;
+  --bg-elevated:     #ece2c8;
+  --bg-hover:        #e2d6b8;
+  --surface:         #faf5e4;
+  --surface-raised:  #fcf9ed;
+  --surface-sunken:  #ece2c8;
+  --border:          #c9b88d;
+  --border-strong:   #a8946a;
+  --border-soft:     #ddd0a4;
+  --fg:              #2a1d0e;
+  --text:            #3a2a16;
+  --muted:           #6b5840;
+  --muted-dim:       #8c7c60;
+  --text-disabled:   #a89878;
+  --accent:          #8b3a1f;          /* sepia rust */
+  --accent-hover:    #a44a28;
+  --accent-dim:      #5a2410;
+  --accent2:         #a44a28;
+  --accent-hi:       #a87832;          /* aged gold */
+  --accent-soft:     #ead5b8;
+  --success:         #4a7a3a;
+  --success-bg:      #d8e2c4;
+  --success-border:  #95a878;
+  --warning:         #a87832;
+  --warning-bg:      #ead5b8;
+  --warning-border:  #c9a868;
+  --danger:          #8b3a1f;
+  --danger-bright:   #a44a28;
+  --danger-bg:       #ead5b8;
+  --danger-border:   #c98870;
+  --inventory:       #a87832;
+  --inventory-bg:    #ead5b8;
+  --inventory-border:#c9a868;
+  --favorite:        #a87832;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+}
+
+/* ── Theme: Neon Wax (synthwave violet/cyan dark) ─────────────────── */
+:root[data-theme="neon-wax"] {
+  color-scheme: dark;
+  --bg:              #0d0a18;
+  --bg-elevated:     #1a1430;
+  --bg-hover:        #221a3a;
+  --surface:         #18142a;
+  --surface-raised:  #221a3a;
+  --surface-sunken:  #08061a;
+  --border:          #2e2348;
+  --border-strong:   #423462;
+  --border-soft:     #1d1735;
+  --fg:              #ece8ff;
+  --text:            #d8d4ff;
+  --muted:           #8a82b8;
+  --muted-dim:       #685e95;
+  --text-disabled:   #4a4170;
+  --accent:          #c060f0;          /* electric violet */
+  --accent-hover:    #d480ff;
+  --accent-dim:      #6a3088;
+  --accent2:         #ff5dde;          /* hot magenta */
+  --accent-hi:       #00e5ff;          /* cyan */
+  --accent-soft:     #2a1845;
+  --success:         #50f5b8;
+  --success-bg:      #0e2a1f;
+  --success-border:  #1f5a40;
+  --warning:         #ffd84a;
+  --warning-bg:      #2a2510;
+  --warning-border:  #5a4f20;
+  --danger:          #ff5dde;
+  --danger-bright:   #ff8df0;
+  --danger-bg:       #2a0e22;
+  --danger-border:   #5a1f48;
+  --inventory:       #00e5ff;
+  --inventory-bg:    #0a2a32;
+  --inventory-border:#1f5a68;
+  --favorite:        #00e5ff;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+}
+
+/* ── Theme: Forest Floor (oatmeal/moss/acorn light) ───────────────── */
+:root[data-theme="forest-floor"] {
+  color-scheme: light;
+  --bg:              #e8e0c8;
+  --bg-elevated:     #ddd4b6;
+  --bg-hover:        #d2c8a4;
+  --surface:         #f1ead2;
+  --surface-raised:  #f5efdc;
+  --surface-sunken:  #ddd4b6;
+  --border:          #b9ad8a;
+  --border-strong:   #968a68;
+  --border-soft:     #ccc09e;
+  --fg:              #2c2410;
+  --text:            #3a3018;
+  --muted:           #685a3c;
+  --muted-dim:       #897c5c;
+  --text-disabled:   #a89978;
+  --accent:          #4a6b3a;          /* moss */
+  --accent-hover:    #5a7d48;
+  --accent-dim:      #2a4520;
+  --accent2:         #6b8a4d;
+  --accent-hi:       #b87d2a;          /* acorn brown */
+  --accent-soft:     #d8dcb0;
+  --success:         #4a6b3a;
+  --success-bg:      #d8dcb0;
+  --success-border:  #98a878;
+  --warning:         #b87d2a;
+  --warning-bg:      #ead5b8;
+  --warning-border:  #c9a868;
+  --danger:          #8a3a28;
+  --danger-bright:   #a44a30;
+  --danger-bg:       #ead0c0;
+  --danger-border:   #c98a78;
+  --inventory:       #b87d2a;
+  --inventory-bg:    #ead5b8;
+  --inventory-border:#c9a868;
+  --favorite:        #b87d2a;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+}
+
+/* ── Theme: Ocean Deep (navy with bright cyan) ────────────────────── */
+:root[data-theme="ocean-deep"] {
+  color-scheme: dark;
+  --bg:              #061018;
+  --bg-elevated:     #0e1a26;
+  --bg-hover:        #142434;
+  --surface:         #0e1a26;
+  --surface-raised:  #142434;
+  --surface-sunken:  #040a10;
+  --border:          #1e2e3e;
+  --border-strong:   #2e4254;
+  --border-soft:     #14202c;
+  --fg:              #e0ebf5;
+  --text:            #c8d8e8;
+  --muted:           #7090a8;
+  --muted-dim:       #506878;
+  --text-disabled:   #38485a;
+  --accent:          #2cd4d0;          /* bright cyan/teal */
+  --accent-hover:    #5fe3df;
+  --accent-dim:      #157a78;
+  --accent2:         #5fe3df;
+  --accent-hi:       #f0c44a;          /* sand gold highlight */
+  --accent-soft:     #0a2a2a;
+  --success:         #4adea8;
+  --success-bg:      #0a2a20;
+  --success-border:  #1f5a48;
+  --warning:         #f0c44a;
+  --warning-bg:      #2a2410;
+  --warning-border:  #5a4820;
+  --danger:          #e85968;
+  --danger-bright:   #ff7080;
+  --danger-bg:       #2a0e14;
+  --danger-border:   #5a1f28;
+  --inventory:       #f0c44a;
+  --inventory-bg:    #2a2410;
+  --inventory-border:#5a4820;
+  --favorite:        #f0c44a;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+}
+
+/* ── Theme: Saffron Gold (warm desert dark) ───────────────────────── */
+:root[data-theme="saffron-gold"] {
+  color-scheme: dark;
+  --bg:              #150b08;
+  --bg-elevated:     #20140e;
+  --bg-hover:        #281a13;
+  --surface:         #1f1310;
+  --surface-raised:  #281a13;
+  --surface-sunken:  #0e0805;
+  --border:          #38241a;
+  --border-strong:   #4d3525;
+  --border-soft:     #251812;
+  --fg:              #f5e4c0;
+  --text:            #f0d8b0;
+  --muted:           #b89770;
+  --muted-dim:       #8a705a;
+  --text-disabled:   #5a4a38;
+  --accent:          #e8a020;          /* saffron */
+  --accent-hover:    #f5b942;
+  --accent-dim:      #8a5a10;
+  --accent2:         #f5b942;
+  --accent-hi:       #c25040;          /* burgundy */
+  --accent-soft:     #2a1808;
+  --success:         #b8a040;
+  --success-bg:      #2a2410;
+  --success-border:  #5a4820;
+  --warning:         #f5b942;
+  --warning-bg:      #2a2010;
+  --warning-border:  #5a4520;
+  --danger:          #c25040;
+  --danger-bright:   #d86850;
+  --danger-bg:       #2a1410;
+  --danger-border:   #5a2818;
+  --inventory:       #e8a020;
+  --inventory-bg:    #2a1808;
+  --inventory-border:#5a3818;
+  --favorite:        #f5b942;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+}
+
+/* ── Theme: Paperback (sage / dusty rose / off-white light) ───────── */
+:root[data-theme="paperback"] {
+  color-scheme: light;
+  --bg:              #f0ebe1;
+  --bg-elevated:     #e6e0d2;
+  --bg-hover:        #d8d0bc;
+  --surface:         #f8f4ea;
+  --surface-raised:  #fcfaf2;
+  --surface-sunken:  #e6e0d2;
+  --border:          #c2b8a0;
+  --border-strong:   #9c917a;
+  --border-soft:     #d4cab2;
+  --fg:              #322a22;
+  --text:            #423832;
+  --muted:           #6b5e52;
+  --muted-dim:       #8c8074;
+  --text-disabled:   #a89e90;
+  --accent:          #6b8068;          /* sage */
+  --accent-hover:    #7d957a;
+  --accent-dim:      #3e4d3c;
+  --accent2:         #8a9d87;
+  --accent-hi:       #c1716e;          /* dusty rose */
+  --accent-soft:     #d8e0d4;
+  --success:         #6b8068;
+  --success-bg:      #d8e0d4;
+  --success-border:  #98a895;
+  --warning:         #c1956e;
+  --warning-bg:      #ead8c0;
+  --warning-border:  #c9a888;
+  --danger:          #c1716e;
+  --danger-bright:   #d4827f;
+  --danger-bg:       #ead0d0;
+  --danger-border:   #c98a88;
+  --inventory:       #c1956e;
+  --inventory-bg:    #ead8c0;
+  --inventory-border:#c9a888;
+  --favorite:        #c1716e;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;

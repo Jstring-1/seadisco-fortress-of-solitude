@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260412q" />
+  <link rel="stylesheet" href="/style.css?v=20260412r" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260412q"></script>
+<script defer src="/shared.js?v=20260412r"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
@@ -203,6 +203,13 @@
             <option value="earthy-light">Earthy Light (sand · dark brown · maroon)</option>
             <option value="slate-dark">Slate Dark (cool steel · teal)</option>
             <option value="mossy-dark">Mossy Dark (deep forest · warm gold)</option>
+            <option value="vinyl-black">Vinyl Black (jukebox red · gold)</option>
+            <option value="tape-cream">Tape Cream (sepia paper · rust)</option>
+            <option value="neon-wax">Neon Wax (violet · cyan · magenta)</option>
+            <option value="forest-floor">Forest Floor (oatmeal · moss · acorn)</option>
+            <option value="ocean-deep">Ocean Deep (navy · cyan · sand)</option>
+            <option value="saffron-gold">Saffron Gold (saffron · burgundy)</option>
+            <option value="paperback">Paperback (sage · dusty rose · cream)</option>
           </select>
         </div>
         <div id="theme-preview" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:0.8rem"></div>
@@ -255,7 +262,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260412q"></script>
+<script defer src="/modal.js?v=20260412r"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -275,11 +282,18 @@ const _adminTabLoaders = {
 
 // ── Theme picker ──────────────────────────────────────────────────────
 const _themes = [
-  { id: "amber-dark",   label: "Amber Dark",   swatches: ["#080706", "#15120e", "#ff6b35", "#e8dcc8", "#e8d44d"] },
-  { id: "earthy-dark",  label: "Earthy Dark",  swatches: ["#1a1612", "#221c17", "#c9571f", "#e8ddc4", "#5d8a4a"] },
-  { id: "earthy-light", label: "Earthy Light", swatches: ["#ebe0c4", "#efe5cb", "#8a2828", "#3d2a18", "#a6732a"] },
-  { id: "slate-dark",   label: "Slate Dark",   swatches: ["#0f1418", "#161c24", "#2fa8a0", "#c8d0dc", "#d4b84a"] },
-  { id: "mossy-dark",   label: "Mossy Dark",   swatches: ["#0d140e", "#121c13", "#6b9248", "#c8d4b8", "#d4a843"] },
+  { id: "amber-dark",    label: "Amber Dark",    swatches: ["#080706", "#15120e", "#ff6b35", "#e8dcc8", "#e8d44d"] },
+  { id: "earthy-dark",   label: "Earthy Dark",   swatches: ["#1a1612", "#221c17", "#c9571f", "#e8ddc4", "#5d8a4a"] },
+  { id: "earthy-light",  label: "Earthy Light",  swatches: ["#ebe0c4", "#efe5cb", "#8a2828", "#3d2a18", "#a6732a"] },
+  { id: "slate-dark",    label: "Slate Dark",    swatches: ["#0f1418", "#161c24", "#2fa8a0", "#c8d0dc", "#d4b84a"] },
+  { id: "mossy-dark",    label: "Mossy Dark",    swatches: ["#0d140e", "#121c13", "#6b9248", "#c8d4b8", "#d4a843"] },
+  { id: "vinyl-black",   label: "Vinyl Black",   swatches: ["#0a0a0a", "#141414", "#d63333", "#e0e0e0", "#f0c95c"] },
+  { id: "tape-cream",    label: "Tape Cream",    swatches: ["#f4ecd8", "#faf5e4", "#8b3a1f", "#3a2a16", "#a87832"] },
+  { id: "neon-wax",      label: "Neon Wax",      swatches: ["#0d0a18", "#18142a", "#c060f0", "#d8d4ff", "#00e5ff"] },
+  { id: "forest-floor",  label: "Forest Floor",  swatches: ["#e8e0c8", "#f1ead2", "#4a6b3a", "#3a3018", "#b87d2a"] },
+  { id: "ocean-deep",    label: "Ocean Deep",    swatches: ["#061018", "#0e1a26", "#2cd4d0", "#c8d8e8", "#f0c44a"] },
+  { id: "saffron-gold",  label: "Saffron Gold",  swatches: ["#150b08", "#1f1310", "#e8a020", "#f0d8b0", "#c25040"] },
+  { id: "paperback",     label: "Paperback",     swatches: ["#f0ebe1", "#f8f4ea", "#6b8068", "#423832", "#c1716e"] },
 ];
 
 function initThemePicker() {
