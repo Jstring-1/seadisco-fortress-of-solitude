@@ -465,6 +465,29 @@ async function openWikiPopup(query) {
         <h2 style="margin:0 0 0.4rem 0">${escHtml(data.title)}</h2>
       </div>
       <div class="wiki-extract">${thumb}${data.html}</div>`;
+    // Mark "External links" / "References" / "Notes" / "Further reading"
+    // / "See also" / "Bibliography" / "Sources" / "Citations" sections so
+    // the bold→Discogs and disambiguation rewriters below skip them — those
+    // sections are reference-style content, not article body to be searched.
+    const _blockedHeadings = new Set([
+      "external links", "references", "notes", "bibliography",
+      "sources", "further reading", "see also", "citations", "footnotes",
+    ]);
+    content.querySelectorAll(".wiki-extract").forEach(extract => {
+      let blocked = false;
+      Array.from(extract.children).forEach(child => {
+        if (/^H[1-6]$/.test(child.tagName)) {
+          const t = (child.textContent || "").trim().toLowerCase();
+          // Strip Wikipedia's "[edit]" suffix and trailing punctuation.
+          const norm = t.replace(/\s*\[edit\]\s*$/, "").trim();
+          blocked = _blockedHeadings.has(norm);
+          // Mark the heading itself too so any inline bolds in it don't get rewritten.
+          if (blocked) child.classList.add("wiki-no-rewrite");
+        } else if (blocked) {
+          child.classList.add("wiki-no-rewrite");
+        }
+      });
+    });
     // Rewrite in-article wiki links to use internal popup
     content.querySelectorAll(".wiki-extract a[href]").forEach(a => {
       const href = a.getAttribute("href") || "";
@@ -494,6 +517,7 @@ async function openWikiPopup(query) {
     // We only touch list items that have NO existing anchor (so we don't
     // double-wrap real wiki links in articles that survived stripping).
     content.querySelectorAll(".wiki-extract li").forEach(li => {
+      if (li.closest(".wiki-no-rewrite")) return;
       if (li.querySelector("a")) return;
       const raw = (li.textContent || "").trim();
       if (!raw || raw.length < 3) return;
@@ -543,6 +567,7 @@ async function openWikiPopup(query) {
     // turn every <b> into a clickable Discogs search so users can jump
     // from "Can" or "Neu!" straight to records on the same screen.
     content.querySelectorAll(".wiki-extract b").forEach(b => {
+      if (b.closest(".wiki-no-rewrite")) return;
       const text = (b.textContent || "").trim();
       // Skip empty, single-character, and unreasonably long bolds
       if (!text || text.length < 2 || text.length > 80) return;
