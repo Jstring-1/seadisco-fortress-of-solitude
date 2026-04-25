@@ -228,6 +228,9 @@ function _yearOnly(iso?: string): string | null {
 export interface SeedResult {
   fetched: number;
   upserted: number;
+  created?: number;          // brand-new rows
+  mergedByQid?: number;      // matched existing row via wikidata_qid
+  mergedByDiscogs?: number;  // matched existing Discogs-seeded row via discogs_id
   errors: Array<{ qid: string; message: string }>;
   durationMs: number;
 }
@@ -254,7 +257,7 @@ export async function seedBluesArtistsFromWikidata(): Promise<SeedResult> {
   const bindings = data?.results?.bindings ?? [];
 
   const errors: SeedResult["errors"] = [];
-  let upserted = 0;
+  let upserted = 0, created = 0, mergedByQid = 0, mergedByDiscogs = 0;
 
   for (const b of bindings) {
     const qid = _qidFromUri(b.artist.value);
@@ -283,8 +286,11 @@ export async function seedBluesArtistsFromWikidata(): Promise<SeedResult> {
       enrichment_status: { wikidata: 1 },
     };
     try {
-      await upsertBluesArtistByQid(record);
+      const out = await upsertBluesArtistByQid(record);
       upserted++;
+      if (out.createdNew) created++;
+      else if (out.matchedBy === "qid") mergedByQid++;
+      else if (out.matchedBy === "discogs_id") mergedByDiscogs++;
     } catch (err: any) {
       errors.push({ qid, message: err?.message ?? String(err) });
     }
@@ -293,9 +299,12 @@ export async function seedBluesArtistsFromWikidata(): Promise<SeedResult> {
   return {
     fetched: bindings.length,
     upserted,
+    created,
+    mergedByQid,
+    mergedByDiscogs,
     errors,
     durationMs: Date.now() - start,
-  };
+  } as SeedResult & { created: number; mergedByQid: number; mergedByDiscogs: number };
 }
 
 // ─────────────────────────────────────────────────────────────────────────

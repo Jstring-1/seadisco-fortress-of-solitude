@@ -217,7 +217,7 @@ export async function seedBluesArtistsFromWikidata() {
     const data = await r.json();
     const bindings = data?.results?.bindings ?? [];
     const errors = [];
-    let upserted = 0;
+    let upserted = 0, created = 0, mergedByQid = 0, mergedByDiscogs = 0;
     for (const b of bindings) {
         const qid = _qidFromUri(b.artist.value);
         const name = b.artistLabel?.value?.trim();
@@ -246,8 +246,14 @@ export async function seedBluesArtistsFromWikidata() {
             enrichment_status: { wikidata: 1 },
         };
         try {
-            await upsertBluesArtistByQid(record);
+            const out = await upsertBluesArtistByQid(record);
             upserted++;
+            if (out.createdNew)
+                created++;
+            else if (out.matchedBy === "qid")
+                mergedByQid++;
+            else if (out.matchedBy === "discogs_id")
+                mergedByDiscogs++;
         }
         catch (err) {
             errors.push({ qid, message: err?.message ?? String(err) });
@@ -256,6 +262,9 @@ export async function seedBluesArtistsFromWikidata() {
     return {
         fetched: bindings.length,
         upserted,
+        created,
+        mergedByQid,
+        mergedByDiscogs,
         errors,
         durationMs: Date.now() - start,
     };
