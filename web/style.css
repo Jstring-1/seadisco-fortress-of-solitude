@@ -5407,7 +5407,7 @@ footer {
    uses the site beige (--text) so it sits in the line of body copy. */
 .wiki-icon {
   display: inline-block;
-  margin-left: 0.2rem;
+  margin-left: 0.05rem;
   font-family: 'Times New Roman', serif;
   font-style: italic;
   font-weight: 700;
