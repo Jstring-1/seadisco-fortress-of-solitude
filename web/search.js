@@ -112,6 +112,8 @@ function clearForm() {
   document.getElementById("search-info-block").style.display = "none";
   window._lastResults = null;
   if (typeof resetSelectHighlights === "function") resetSelectHighlights();
+  // Clear-form X also dismisses the AI results panel (per user spec).
+  if (typeof closeAiPanel === "function") closeAiPanel();
 }
 
 // ── Main search ──────────────────────────────────────────────────────────
@@ -804,16 +806,82 @@ function renderPagination() {
 }
 
 // ── AI search ─────────────────────────────────────────────────────────────
+// AI results render into a dedicated, persistent panel (#ai-results-panel)
+// instead of the shared #blurb. The panel survives subsequent regular
+// searches so the user can read suggestions while pursuing them. It closes
+// only when the form's clear button (X) is pressed or the panel's own X
+// (top corner) is pressed.
+function _aiPanelEl() {
+  let el = document.getElementById("ai-results-panel");
+  if (el) return el;
+  el = document.createElement("div");
+  el.id = "ai-results-panel";
+  el.className = "ai-results-panel";
+  el.style.display = "none";
+  // Insert just above #blurb so it lives at the top of the search content
+  const blurb = document.getElementById("blurb");
+  if (blurb && blurb.parentNode) blurb.parentNode.insertBefore(el, blurb);
+  else document.getElementById("search-view")?.prepend(el);
+  return el;
+}
+function closeAiPanel() {
+  const el = document.getElementById("ai-results-panel");
+  if (el) { el.style.display = "none"; el.innerHTML = ""; el.classList.remove("is-minimized"); }
+  try {
+    const u = new URL(window.location.href);
+    u.searchParams.delete("ai");
+    history.replaceState({}, "", u.toString());
+  } catch {}
+}
+
+// Toggle minimized state — collapses the body to a thin clickable header bar.
+// Content and ai= URL state are preserved so the user can re-expand instantly.
+function toggleAiPanelMinimize(ev) {
+  if (ev) ev.stopPropagation();
+  const el = document.getElementById("ai-results-panel");
+  if (!el) return;
+  const nowMin = !el.classList.contains("is-minimized");
+  el.classList.toggle("is-minimized", nowMin);
+  const btn = el.querySelector(".ai-panel-min");
+  if (btn) {
+    btn.textContent = nowMin ? "+" : "–";
+    btn.title = nowMin ? "Expand AI results" : "Minimize AI results";
+  }
+}
+
+// Build a single AI item row. Each entity (artist/album/label) gets a trio
+// of links: new SeaDisco search, your-records search (orange ⌕), Wikipedia (W).
+function _aiEntityLinks(name, kind) {
+  if (!name) return "";
+  const safe = String(name).replace(/'/g, "\\'");
+  const safeEsc = escHtml(safe);
+  // SeaDisco new search — kind controls which field gets populated
+  let newSearch = "";
+  if (kind === "artist") {
+    newSearch = `event.preventDefault();closeAiPanel();clearForm();document.getElementById('f-artist').value='${safeEsc}';applyEntityLinkDefaults();toggleAdvanced(true);doSearch(1)`;
+  } else if (kind === "label") {
+    newSearch = `event.preventDefault();closeAiPanel();clearForm();document.getElementById('f-label').value='${safeEsc}';applyEntityLinkDefaults();toggleAdvanced(true);doSearch(1)`;
+  } else {
+    // release/album/general — put into main query
+    newSearch = `event.preventDefault();closeAiPanel();clearForm();document.getElementById('query').value='${safeEsc}';doSearch(1)`;
+  }
+  const cwField = kind === "artist" ? "cw-artist" : kind === "label" ? "cw-label" : "cw-query";
+  const wikiQ = kind === "label" ? `${name} record label` : name;
+  return `<a href="#" class="ai-entity-link" onclick="${newSearch}" title="New SeaDisco search for ${escHtml(name)}">${escHtml(name)}</a>` +
+    ` <a href="#" class="track-search-icon ai-entity-icon" onclick="event.preventDefault();searchCollectionFor('${cwField}','${safeEsc}')" title="Search your records for ${escHtml(name)}">⌕</a>` +
+    ` <a href="#" class="wiki-icon ai-entity-icon" onclick="event.preventDefault();openWikiPopup('${escHtml(String(wikiQ).replace(/'/g, "\\'"))}')" title="Wikipedia: ${escHtml(name)}">W</a>`;
+}
+
 async function doAiSearch(q) {
   if (!q) { setStatus("Enter a question or description to search with AI.", false); return; }
   switchView("search", true);
   setActiveTab("search");
-  const blurbEl = document.getElementById("blurb");
   document.getElementById("results").innerHTML = "";
   document.getElementById("pagination").style.display = "none";
   document.getElementById("search-load-more").style.display = "none";
   document.getElementById("artist-alts").innerHTML = "";
-  blurbEl.style.display = "none";
+  const blurbEl = document.getElementById("blurb");
+  if (blurbEl) blurbEl.style.display = "none";
   setStatus("Asking Claude…");
   document.getElementById("search-btn").disabled = true;
   try {
@@ -824,38 +892,45 @@ async function doAiSearch(q) {
     if (!recommendations?.length) { setStatus("No recommendations returned.", false); return; }
     setStatus("");
 
-    blurbEl.innerHTML = `
-      <div style="margin-bottom:1rem">
-        <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.1em;color:#666;margin-bottom:0.4rem">✦ AI Recommendations for "${escHtml(q)}"</div>
-        ${blurb ? `<div style="font-size:0.85rem;color:var(--muted);font-style:italic;margin-bottom:0.75rem">${escHtml(blurb)}</div>` : ""}
+    // Reflect in URL so AI results are shareable.
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.set("ai", q);
+      history.replaceState({}, "", u.toString());
+    } catch {}
+
+    const panel = _aiPanelEl();
+    panel.classList.remove("is-minimized");
+    panel.innerHTML = `
+      <button class="ai-panel-min" onclick="toggleAiPanelMinimize(event)" title="Minimize AI results">–</button>
+      <button class="ai-panel-close" onclick="closeAiPanel()" title="Close AI results">×</button>
+      <div class="ai-panel-head" onclick="if(document.getElementById('ai-results-panel')?.classList.contains('is-minimized')) toggleAiPanelMinimize(event)">
+        <div class="ai-panel-eyebrow">✦ AI Recommendations for "${escHtml(q)}"</div>
+        ${blurb ? `<div class="ai-panel-blurb">${escHtml(blurb)}</div>` : ""}
+      </div>
+      <div class="ai-panel-scroll">
         ${recommendations.map(rec => {
-          const params = new URLSearchParams();
-          const p = rec.discogsParams ?? {};
-          if (rec.type === "artist" && p.artist) {
-            params.set("ar", p.artist);
-          } else if (rec.type === "release" && p.artist) {
-            params.set("ar", p.artist);
-            if (p.q) params.set("re", p.q);
+          const artist = rec.artist || "";
+          const album = rec.album || (rec.type === "release" && rec.name ? rec.name : "");
+          const label = rec.label || "";
+          // Prefer structured fields. Row title is the primary entity link.
+          let titleHtml;
+          if (rec.type === "artist" && artist) {
+            titleHtml = _aiEntityLinks(artist, "artist");
+          } else if (album) {
+            titleHtml = (artist ? `${_aiEntityLinks(artist, "artist")} <span class="ai-sep">·</span> ` : "") + _aiEntityLinks(album, "release");
           } else {
-            if (p.q)      params.set("q",  p.q);
-            if (p.artist) params.set("ar", p.artist);
+            titleHtml = _aiEntityLinks(rec.name || "", rec.type === "artist" ? "artist" : "release");
           }
-          if (p.label)  params.set("lb", p.label);
-          if (p.genre)  params.set("gn", p.genre);
-          if (p.style)  params.set("st", p.style);
-          const yr = p.year ? String(p.year).split(/[-–]/)[0].trim() : "";
-          if (/^\d{4}$/.test(yr)) params.set("yr", yr);
-          const href = "/?" + params.toString();
-          return `<div style="padding:0.75rem 0;border-bottom:1px solid #222">
-            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:1rem">
-              <span style="color:var(--fg);font-weight:600">${rec.name}</span>
-              <a href="${href}" style="font-size:0.78rem;color:var(--accent);white-space:nowrap;flex-shrink:0">New Search →</a>
-            </div>
-            <div style="font-size:0.83rem;color:var(--muted);margin-top:0.25rem">${rec.description}</div>
+          const labelHtml = label ? `<div class="ai-row-label"><span class="ai-row-label-tag">Label</span> ${_aiEntityLinks(label, "label")}</div>` : "";
+          return `<div class="ai-row">
+            <div class="ai-row-title">${titleHtml}</div>
+            <div class="ai-row-desc">${escHtml(rec.description || "")}</div>
+            ${labelHtml}
           </div>`;
         }).join("")}
       </div>`;
-    blurbEl.style.display = "block";
+    panel.style.display = "block";
 
     if (typeof gtag === "function") {
       gtag("event", "page_view", {
@@ -1277,11 +1352,24 @@ async function toggleWantlistFromCard(btn, releaseId) {
 }
 
 // ── Artist / entity navigation ───────────────────────────────────────────
+// When the user follows an artist/label/entity link from a popup we want
+// the resulting search to land on a discography view rather than a flood of
+// individual pressings. Default to Masters+ (groups pressings under one
+// master and still surfaces standalone releases that have no master) and
+// sort oldest-first so the catalogue reads chronologically.
+function applyEntityLinkDefaults() {
+  const masterPlus = document.querySelector('input[name="result-type"][value="master+"]');
+  if (masterPlus) masterPlus.checked = true;
+  const sortSel = document.getElementById("f-sort");
+  if (sortSel) sortSel.value = "year:asc";
+}
+
 function searchArtistFromModal(event, el) {
   event.preventDefault();
   closeModal();
   clearForm();
   document.getElementById("f-artist").value = el.dataset.artist;
+  applyEntityLinkDefaults();
   toggleAdvanced(true);
   doSearch(1);
 }
@@ -1291,6 +1379,7 @@ function selectAltArtist(event, el) {
   clearForm();
   document.getElementById("f-artist").value = el.dataset.altName;
   currentArtistId = el.dataset.altId || null;
+  applyEntityLinkDefaults();
   toggleAdvanced(true);
   doSearch(1);
 }
@@ -1323,6 +1412,7 @@ function searchByEntity(event, el) {
     currentArtistId = el.dataset.entityId || null;
   }
   if (type === "label")  document.getElementById("f-label").value  = name;
+  applyEntityLinkDefaults();
   toggleAdvanced(true);
   doSearch(1);
 }

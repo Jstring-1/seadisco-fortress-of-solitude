@@ -425,6 +425,113 @@ document.getElementById("bio-full-overlay").addEventListener("click", e => {
   if (e.target === document.getElementById("bio-full-overlay")) closeBioFull();
 });
 
+// ── Wikipedia popup ──────────────────────────────────────────────────────────
+// Opens a stacked popup over any underlying modal/version popup. Music keeps
+// playing. Closing returns to the underlying popup intact. In-article wiki
+// links are rewritten so they open the same internal popup instead of leaving.
+async function openWikiPopup(query) {
+  const q = String(query || "").trim();
+  if (!q) return;
+  const overlay = document.getElementById("wiki-overlay");
+  const loading = document.getElementById("wiki-loading");
+  const content = document.getElementById("wiki-content");
+  if (!overlay) return;
+  overlay.classList.add("open");
+  loading.style.display = "";
+  content.innerHTML = "";
+  // Reflect in URL so the popup is shareable.
+  try {
+    const u = new URL(window.location.href);
+    u.searchParams.set("wk", q);
+    history.replaceState({}, "", u.toString());
+  } catch {}
+  try {
+    const r = await apiFetch(`/api/wikipedia/lookup?q=${encodeURIComponent(q)}`);
+    if (!r.ok) {
+      content.innerHTML = `<div style="padding:1rem;color:var(--muted)">Wikipedia lookup failed.</div>`;
+      loading.style.display = "none";
+      return;
+    }
+    const data = await r.json();
+    if (!data.found) {
+      content.innerHTML = `<div style="padding:1rem;color:var(--muted)">No Wikipedia article found for <em>${escHtml(q)}</em>.</div>`;
+      loading.style.display = "none";
+      return;
+    }
+    const thumb = data.thumbnail ? `<img src="${escHtml(data.thumbnail)}" alt="" style="float:right;max-width:140px;margin:0 0 0.5rem 1rem;border-radius:4px">` : "";
+    content.innerHTML = `
+      <div class="wiki-header">
+        <h2 style="margin:0 0 0.4rem 0">${escHtml(data.title)}</h2>
+        <a href="${escHtml(data.url)}" target="_blank" rel="noopener" class="wiki-read-full">Read full article on Wikipedia ↗</a>
+      </div>
+      <div class="wiki-extract">${thumb}${data.html}</div>
+      <div class="wiki-footer">
+        <a href="${escHtml(data.url)}" target="_blank" rel="noopener">Continue reading on Wikipedia ↗</a>
+      </div>`;
+    // Rewrite in-article wiki links to use internal popup
+    content.querySelectorAll(".wiki-extract a[href]").forEach(a => {
+      const href = a.getAttribute("href") || "";
+      // Wikipedia returns relative /wiki/Title links and absolute ones
+      let title = "";
+      if (href.startsWith("/wiki/")) title = decodeURIComponent(href.slice(6).split("#")[0]);
+      else if (/^https?:\/\/[^/]*wikipedia\.org\/wiki\//.test(href)) {
+        title = decodeURIComponent(href.split("/wiki/")[1].split("#")[0]);
+      }
+      if (title) {
+        const t = title.replace(/_/g, " ");
+        a.setAttribute("href", "#");
+        a.removeAttribute("target");
+        a.addEventListener("click", (ev) => {
+          ev.preventDefault();
+          openWikiPopup(t);
+        });
+      } else {
+        // External non-wiki link in article — open in new tab
+        a.setAttribute("target", "_blank");
+        a.setAttribute("rel", "noopener");
+      }
+    });
+    loading.style.display = "none";
+  } catch (err) {
+    content.innerHTML = `<div style="padding:1rem;color:var(--muted)">Error: ${escHtml(err.message || String(err))}</div>`;
+    loading.style.display = "none";
+  }
+}
+
+function closeWikiPopup() {
+  const overlay = document.getElementById("wiki-overlay");
+  if (overlay) overlay.classList.remove("open");
+  try {
+    const u = new URL(window.location.href);
+    u.searchParams.delete("wk");
+    history.replaceState({}, "", u.toString());
+  } catch {}
+}
+
+document.getElementById("wiki-overlay")?.addEventListener("click", e => {
+  if (e.target === document.getElementById("wiki-overlay")) closeWikiPopup();
+});
+
+// Esc closes wiki popup if open (without touching underlying modals)
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") {
+    const w = document.getElementById("wiki-overlay");
+    if (w && w.classList.contains("open")) {
+      e.stopPropagation();
+      closeWikiPopup();
+    }
+  }
+}, true);
+
+// Small "W" icon to render after a magnifying glass — opens the wiki popup
+// for the given query. Keeps the visual footprint tiny and tied to the entity.
+function wikiIcon(query, label = "") {
+  if (!query) return "";
+  const q = String(query).replace(/'/g, "\\'");
+  const lab = label || query;
+  return ` <a href="#" class="wiki-icon" onclick="event.preventDefault();openWikiPopup('${escHtml(q)}')" title="Wikipedia: ${escHtml(lab)}">W</a>`;
+}
+
 // ── Video popup ────────────────────────────────────────────────────────────
 let ytPlayer = null;
 let _ytLoading = false;
@@ -453,10 +560,27 @@ window.onYouTubeIframeAPIReady = function() { window._ytAPIReady = true; };
 // Highlight the currently playing track in any open popup tracklist
 function highlightPlayingTrack() {
   document.querySelectorAll(".track-link.now-playing").forEach(el => el.classList.remove("now-playing"));
-  const currentUrl = (window._videoQueue ?? [])[window._videoQueueIndex ?? -1];
+  const queue = window._videoQueue ?? [];
+  const idx = window._videoQueueIndex ?? -1;
+  const currentUrl = queue[idx];
   if (!currentUrl) return;
-  // Highlight first match per popup container to avoid duplicates when
-  // multiple tracks share the same YouTube URL (e.g. full-album videos)
+  // Prefer highlighting the exact row at the queue's index inside the
+  // container the queue was built from. This avoids the "wrong track turns
+  // orange" problem when fuzzy title matching gives two adjacent tracks the
+  // same YouTube URL — in that case URL-only matching would always light up
+  // the first occurrence, even if the user clicked the second.
+  const ownerId = window._videoQueueContainerId || "";
+  const owner = ownerId ? document.getElementById(ownerId) : null;
+  if (owner) {
+    const ownerTracks = owner.querySelectorAll(".track-link[data-video]");
+    const target = ownerTracks[idx];
+    if (target && target.dataset.video === currentUrl) {
+      target.classList.add("now-playing");
+      return;
+    }
+  }
+  // Fallback: highlight the first URL match per popup container (covers
+  // cases where the queue's owner popup is no longer in the DOM).
   const seen = new Set();
   document.querySelectorAll(".track-link[data-video]").forEach(el => {
     if (el.dataset.video !== currentUrl) return;
@@ -549,6 +673,7 @@ function updatePlayerStatus(state, errorCode) {
   const info = map[state] ?? { text: "", cls: "" };
   el.textContent = info.text;
   el.className = "mini-player-status " + info.cls;
+  syncPlayPauseBtn(state);
 }
 
 function _createYTPlayer(id) {
@@ -693,6 +818,11 @@ function openVideo(event, url) {
   const clickedIdx = clickedTrack ? trackLinks.indexOf(clickedTrack) : -1;
   window._videoQueueIndex = clickedIdx >= 0 ? clickedIdx : window._videoQueue.indexOf(url);
   if (window._videoQueueIndex === -1) window._videoQueueIndex = 0;
+  // Remember which container's tracklist owns the queue so highlightPlayingTrack
+  // can light up the exact clicked row even when several rows share the same
+  // URL (findVideo() can fuzzy-match neighbouring tracks to the same video) or
+  // when both an album and version popup are open at once.
+  window._videoQueueContainerId = container?.id || "";
   // Save the currently open release so the player bar can reopen it
   const opParam = new URLSearchParams(location.search).get("op");
   if (opParam && opParam.includes(":")) {
@@ -767,6 +897,29 @@ function onVideoEnded() {
     return;
   }
   playNextVideo();
+}
+
+// Toggle YouTube playback from the mini-player bar. Exposed on window so the
+// inline onclick in index.html can find it. Mirrors the YT IFrame API states:
+// 1=playing → pause, anything else → play (covers paused/buffering/cued/ended).
+function toggleVideoPause() {
+  if (!ytPlayer || typeof ytPlayer.getPlayerState !== "function") return;
+  let state = -1;
+  try { state = ytPlayer.getPlayerState(); } catch {}
+  try {
+    if (state === 1) ytPlayer.pauseVideo();
+    else ytPlayer.playVideo();
+  } catch {}
+}
+
+// Reflect the current play/pause state on the mini-player toggle button so
+// the icon and tooltip stay in sync with what the YouTube player is doing.
+function syncPlayPauseBtn(state) {
+  const btn = document.getElementById("mini-playpause");
+  if (!btn) return;
+  const isPlaying = state === "playing" || state === "buffering";
+  btn.textContent = isPlaying ? "\u23F8" : "\u25B6";
+  btn.title = isPlaying ? "Pause" : "Play";
 }
 
 function openPlayerRelease() {
@@ -856,78 +1009,7 @@ function renderEbayLink(artist, title, catno, standalone = false, label = "") {
   if (!q) return "";
   const url = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(q)}&_sacat=11233`;
   const ml = standalone ? "" : "margin-left:0.5rem;";
-  const ebayLink = `<a href="${url}" target="_blank" rel="noopener nofollow" title="Search eBay Music for: ${escHtml(q)}" style="text-decoration:none;${ml}font-size:0.72rem;font-weight:900;font-family:'Helvetica Neue',Arial,Helvetica,sans-serif;letter-spacing:-0.04em;font-style:italic;vertical-align:baseline"><span style="color:#e53238">e</span><span style="color:#0064d2">b</span><span style="color:#f5af02">a</span><span style="color:#86b817">y</span><span style="color:#666;font-weight:400;font-style:normal;margin-left:0.1em">↗</span></a>`;
-  return ebayLink + renderWikipediaLink(artist, title, label);
-}
-
-// Wikipedia search dropdown — the button is a small serif "W" and
-// clicking it opens a 3-item menu with links that search Wikipedia for
-// the artist, album, or label. The label parameter is passed separately
-// because eBay doesn't care about it but Wikipedia does. Uses
-// Special:Search?search=X&go=Go so an exact match auto-redirects to
-// the article and otherwise shows search results. Inputs are stripped
-// of Discogs' "(N)" disambiguation suffix — Wikipedia doesn't use those
-// markers and stripping them yields more accurate searches plus
-// cleaner display labels and tooltips.
-function renderWikipediaLink(artist, title, label) {
-  artist = stripDupSuffix(artist || "");
-  title  = stripDupSuffix(title  || "");
-  label  = stripDupSuffix(label  || "");
-  const items = [];
-  const wiki = (term) => `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(term)}&go=Go`;
-  if (artist) items.push({ key: "Artist", value: artist, url: wiki(artist) });
-  if (title)  items.push({ key: "Album",  value: title,  url: wiki(artist ? `${artist} ${title}` : title) });
-  if (label)  items.push({ key: "Label",  value: label,  url: wiki(`${label} record label`) });
-  if (!items.length) return "";
-  const menu = items.map(it => `
-    <a href="${it.url}" target="_blank" rel="noopener nofollow" class="wiki-menu-item" title="Search Wikipedia for ${escHtml(it.value)}">
-      <span class="wiki-menu-key">${escHtml(it.key)}</span>
-      <span class="wiki-menu-val">${escHtml(it.value)}</span>
-    </a>
-  `).join("");
-  return `<span class="wiki-link-wrap">
-    <button type="button" class="wiki-link-btn" onclick="toggleWikiMenu(event, this)" title="Search Wikipedia"><span class="wiki-w">W</span></button>
-    <div class="wiki-link-menu" hidden>${menu}</div>
-  </span>`;
-}
-
-// Toggle the Wikipedia menu next to the clicked button. Outside-click
-// handler is installed once per open and removed when the menu closes.
-function toggleWikiMenu(event, btn) {
-  event.preventDefault();
-  event.stopPropagation();
-  const wrap = btn.closest(".wiki-link-wrap");
-  if (!wrap) return;
-  const menu = wrap.querySelector(".wiki-link-menu");
-  if (!menu) return;
-  // Close any other open wiki menus first
-  document.querySelectorAll(".wiki-link-menu:not([hidden])").forEach(m => {
-    if (m !== menu) m.hidden = true;
-  });
-  const willOpen = menu.hidden;
-  menu.hidden = !willOpen;
-  if (willOpen) {
-    // Install a one-shot outside-click + Esc handler
-    const closeOnOutside = (ev) => {
-      if (!wrap.contains(ev.target)) {
-        menu.hidden = true;
-        document.removeEventListener("click", closeOnOutside, true);
-        document.removeEventListener("keydown", closeOnEsc);
-      }
-    };
-    const closeOnEsc = (ev) => {
-      if (ev.key === "Escape") {
-        menu.hidden = true;
-        document.removeEventListener("click", closeOnOutside, true);
-        document.removeEventListener("keydown", closeOnEsc);
-      }
-    };
-    // Use setTimeout so the current click doesn't immediately close it
-    setTimeout(() => {
-      document.addEventListener("click", closeOnOutside, true);
-      document.addEventListener("keydown", closeOnEsc);
-    }, 0);
-  }
+  return `<a href="${url}" target="_blank" rel="noopener nofollow" title="Search eBay Music for: ${escHtml(q)}" style="text-decoration:none;${ml}font-size:0.72rem;font-weight:900;font-family:'Helvetica Neue',Arial,Helvetica,sans-serif;letter-spacing:-0.04em;font-style:italic;vertical-align:baseline"><span style="color:#e53238">e</span><span style="color:#0064d2">b</span><span style="color:#f5af02">a</span><span style="color:#86b817">y</span><span style="color:#666;font-weight:400;font-style:normal;margin-left:0.1em">↗</span></a>`;
 }
 
 // ── Album info panel ──────────────────────────────────────────────────────
@@ -967,7 +1049,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
       const nameEl = a.id
         ? `<a href="#" class="modal-internal-link credit-name" data-alt-name="${escHtml(a.name)}" data-alt-id="${a.id}" onclick="selectAltArtist(event,this);closeModal()" title="Search for ${escHtml(a.name)}">${escHtml(a.name)}</a>`
         : `<span class="credit-name">${escHtml(a.name)}</span>`;
-      const searchIcon = ` <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(a.name.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(a.name)}" style="font-size:1.1em">⌕</a>`;
+      const searchIcon = ` <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(a.name.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(a.name)}" style="font-size:1.1em">⌕</a>${wikiIcon(stripDupSuffix(a.name), a.name)}`;
       return `<span class="credit-item">${nameEl}${searchIcon}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}</span>`;
     });
   const notes       = d.notes ? stripDiscogsMarkup(d.notes) : "";
@@ -1066,7 +1148,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const detailRows = [
     labelNames.length ? `<span class="detail-label">Label</span><span>${labelNames.map(n => {
       const esc = n.replace(/'/g, "\\'");
-      return `<a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('f-label').value='${escHtml(esc)}';toggleAdvanced(true);doSearch(1)" title="Search for ${escHtml(n)} releases">${escHtml(n)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-label','${escHtml(esc)}')" title="Search your collection for ${escHtml(n)}">⌕</a>`;
+      return `<a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('f-label').value='${escHtml(esc)}';applyEntityLinkDefaults();toggleAdvanced(true);doSearch(1)" title="Search for ${escHtml(n)} releases">${escHtml(n)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-label','${escHtml(esc)}')" title="Search your collection for ${escHtml(n)}">⌕</a>${wikiIcon(stripDupSuffix(n) + " record label", n)}`;
     }).join(", ")}</span>` : "",
     (labels && labelCodeRow) ? labelCodeRow : "",
     (!isMaster && catno) ? `<span class="detail-label">Cat#</span><span><a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('query').value='${escHtml(catnoEsc)}';doSearch(1)" title="Search for this catalog number">${escHtml(catno)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-query','${escHtml(catnoEsc)}')" title="Search your collection for ${escHtml(catno)}">⌕</a></span>` : "",
@@ -1102,24 +1184,34 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         const url = findVideo(t.title || "");
         const trackArtist = artists.length ? artists[0] : "";
         const ytQuery = encodeURIComponent(`${trackArtist} ${title} ${t.title || ""}`);
-        const ytIcon = `<a class="yt-search" href="https://www.youtube.com/results?search_query=${ytQuery}" target="_blank" rel="noopener" title="Search on YouTube"><svg width="16" height="11" viewBox="0 0 16 11" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="11" rx="2.5" fill="#FF0000"/><path d="M6.5 3L11 5.5L6.5 8V3Z" fill="white"/></svg></a>`;
         const trackSearchQ = ('"' + (t.title || '').trim() + '"').replace(/'/g, "\\'");
-        const searchIcon = t.title ? ` <a class="track-search-icon" href="#" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('query').value='${escHtml(trackSearchQ)}';doSearch(1)" title="Search for other versions of this track" style="text-decoration:none">⌕</a>` : "";
-        const titleEl = url
-          ? `<a class="track-link" href="#" data-video="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" onclick="openVideo(event,'${url.replace(/'/g, "\\'")}')" title="Play this track">${escHtml(t.title || "")} ▶</a>${searchIcon}`
-          : `${escHtml(t.title || "")}${ytIcon}${searchIcon}`;
+        // Play column: always reserved width so rows align even with no playable URL.
+        // If a YouTube match exists, render the play button. Otherwise render a
+        // tiny YT-search fallback at the same slot width.
+        const playCell = url
+          ? `<a class="track-play-btn track-link" href="#" data-video="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" onclick="openVideo(event,'${url.replace(/'/g, "\\'")}')" title="Play this track">▶</a>`
+          : (t.title ? `<a class="track-play-btn track-yt-search" href="https://www.youtube.com/results?search_query=${ytQuery}" target="_blank" rel="noopener" title="Search on YouTube"><svg width="14" height="10" viewBox="0 0 16 11" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="11" rx="2.5" fill="#FF0000"/><path d="M6.5 3L11 5.5L6.5 8V3Z" fill="white"/></svg></a>` : "");
+        // Track title is now a Discogs new-search link for the track name.
+        const titleLink = t.title
+          ? `<a href="#" class="track-title-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('query').value='${escHtml(trackSearchQ)}';doSearch(1)" title="Search Discogs for &quot;${escHtml(t.title)}&quot;">${escHtml(t.title)}</a>`
+          : "";
+        // Magnifying glass searches the user's records for the track (orange via .track-search-icon).
+        const searchIcon = t.title
+          ? ` <a class="track-search-icon" href="#" onclick="event.preventDefault();searchCollectionFor('cw-query','${escHtml(trackSearchQ)}')" title="Search your records for &quot;${escHtml(t.title)}&quot;">⌕</a>`
+          : "";
         const trackCredits = (t.extraartists ?? []).length
           ? `<div class="track-credits">${t.extraartists.map(a => {
               const nameEl = a.id
                 ? `<a href="#" class="modal-internal-link credit-name" data-alt-name="${escHtml(a.name)}" data-alt-id="${a.id}" onclick="selectAltArtist(event,this);closeModal()" title="Search for ${escHtml(a.name)}">${escHtml(a.name)}</a>`
                 : `<span class="credit-name">${escHtml(a.name)}</span>`;
-              const searchIcon = ` <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(a.name.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(a.name)}" style="font-size:1.1em">\u2315</a>`;
-              return `${nameEl}${searchIcon}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}`;
+              const credSearchIcon = ` <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(a.name.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(a.name)}" style="font-size:1.1em">\u2315</a>${wikiIcon(stripDupSuffix(a.name), a.name)}`;
+              return `${nameEl}${credSearchIcon}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}`;
             }).join(", ")}</div>`
           : "";
         return `<div class="track">
+          <span class="track-play-cell">${playCell}</span>
           <span class="track-pos">${escHtml(t.position || "")}</span>
-          <span class="track-title">${titleEl}${trackCredits}</span>
+          <span class="track-title">${titleLink}${searchIcon}${trackCredits}</span>
           ${t.duration ? `<span class="track-dur">${escHtml(t.duration)}</span>` : ""}
         </div>`;
       }).join("")}
@@ -1153,8 +1245,8 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
              : `<div class="album-cover-placeholder">♪</div>`}
       <div class="album-meta">
         ${typeLabel ? `<div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.3rem"><div class="album-type-badge" style="cursor:pointer;user-select:none" onclick="navigator.clipboard.writeText('${escHtml(String(releaseId))}');this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy ID">${escHtml(typeLabel)}</div><button class="popup-share-inline" onclick="sharePopup(this)" title="Copy share link">share</button></div>` : ""}
-        <h2><a href="#" class="modal-title-link" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">${escHtml(title)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">⌕</a></h2>
-        ${artists.length ? `<div class="album-artist">${artists.map(n => `<a href="#" class="modal-artist-link" data-artist="${escHtml(n)}" onclick="searchArtistFromModal(event,this)" title="Search for ${escHtml(n)}">${escHtml(n)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(n.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(n)}">⌕</a>`).join(", ")}</div>` : ""}
+        <h2><a href="#" class="modal-title-link" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">${escHtml(title)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">⌕</a>${wikiIcon((stripDupSuffix(artists[0] || "") + " " + stripDupSuffix(title)).trim(), title)}</h2>
+        ${artists.length ? `<div class="album-artist">${artists.map(n => `<a href="#" class="modal-artist-link" data-artist="${escHtml(n)}" onclick="searchArtistFromModal(event,this)" title="Search for ${escHtml(n)}">${escHtml(n)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(n.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(n)}">⌕</a>${wikiIcon(stripDupSuffix(n), n)}`).join(", ")}</div>` : ""}
         ${detailRows ? `<div class="album-detail-grid">${detailRows}</div>` : ""}
         ${(() => {
           const r = d.community?.rating;
@@ -1172,7 +1264,13 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
               const low = stats.lowestPrice != null ? parseFloat(stats.lowestPrice).toFixed(2) : null;
               const med = stats.medianPrice != null ? parseFloat(stats.medianPrice).toFixed(2) : null;
               const high = stats.highestPrice != null ? parseFloat(stats.highestPrice).toFixed(2) : null;
-              const sellUrl = `https://www.discogs.com/sell/list?release_id=${escHtml(String(stats.releaseId))}`;
+              // For masters, link to listings across ALL pressings (master_id) so the
+               // user lands on the full marketplace view for the work, not the listings
+               // for the single main_release that the stats endpoint resolved to (which
+               // can be confusing when the user has their own listing on that pressing).
+               const sellUrl = isMaster
+                 ? `https://www.discogs.com/sell/list?master_id=${escHtml(String(searchResult.id))}`
+                 : `https://www.discogs.com/sell/list?release_id=${escHtml(String(stats.releaseId))}`;
               const count = escHtml(String(stats.numForSale));
               const dash = `<span style="color:#555;margin:0 0.15rem"> ── </span>`;
               const parts = [];
@@ -2250,7 +2348,7 @@ function renderMasterVersions() {
       ${fmtCell}
       ${badge}
       <span title="${escHtml(v.catno || "")}">${v.catno && v.catno !== "—" ? `<a href="#" class="modal-internal-link catno-link" onclick="openVersionPopup(event,${v.id})" title="Open this release">${escHtml(v.catno)}</a>` : `<span style="color:#7ec87e">—</span>`}</span>
-      <span title="${escHtml(v.label ?? v.title ?? "")}">${(v.label) ? `<a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('f-label').value='${escHtml((v.label).replace(/'/g, "\\'"))}';toggleAdvanced(true);doSearch(1)" title="Search for ${escHtml(v.label)}" style="color:var(--fg)">${escHtml(v.label)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-label','${escHtml((v.label).replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(v.label)}" style="font-size:0.85em">⌕</a>` : `<span style="color:#888">${escHtml(v.title ?? "—")}</span>`}</span>`;
+      <span title="${escHtml(v.label ?? v.title ?? "")}">${(v.label) ? `<a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('f-label').value='${escHtml((v.label).replace(/'/g, "\\'"))}';applyEntityLinkDefaults();toggleAdvanced(true);doSearch(1)" title="Search for ${escHtml(v.label)}" style="color:var(--fg)">${escHtml(v.label)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-label','${escHtml((v.label).replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(v.label)}" style="font-size:0.85em">⌕</a>` : `<span style="color:#888">${escHtml(v.title ?? "—")}</span>`}</span>`;
   }).join("");
   applyVisitedCards();
 }
