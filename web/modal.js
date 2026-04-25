@@ -1091,7 +1091,8 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         ? `<a href="#" class="modal-internal-link credit-name" data-alt-name="${escHtml(a.name)}" data-alt-id="${a.id}" onclick="selectAltArtist(event,this);closeModal()" title="Search for ${escHtml(a.name)}">${escHtml(a.name)}</a>`
         : `<span class="credit-name">${escHtml(a.name)}</span>`;
       const searchIcon = ` <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(a.name.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(a.name)}" style="font-size:1.1em">⌕</a>${wikiIcon(stripDupSuffix(a.name), a.name)}`;
-      return `<span class="credit-item">${nameEl}${searchIcon}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}</span>`;
+      // Role parentheses come right after the name; ⌕/W go AFTER the role.
+      return `<span class="credit-item">${nameEl}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}${searchIcon}</span>`;
     });
   const notes       = d.notes ? stripDiscogsMarkup(d.notes) : "";
   const catno     = (d.labels ?? [])[0]?.catno ?? "";
@@ -1257,7 +1258,10 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
                 ? `<a href="#" class="modal-internal-link credit-name" data-alt-name="${escHtml(a.name)}" data-alt-id="${a.id}" onclick="selectAltArtist(event,this);closeModal()" title="Search for ${escHtml(a.name)}">${escHtml(a.name)}</a>`
                 : `<span class="credit-name">${escHtml(a.name)}</span>`;
               const credSearchIcon = ` <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(a.name.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(a.name)}" style="font-size:1.1em">\u2315</a>${wikiIcon(stripDupSuffix(a.name), a.name)}`;
-              return `${nameEl}${credSearchIcon}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}`;
+              // Role parentheses come right after the name; the inventory \u2315
+              // and wiki W icons go AFTER the role so the line reads
+              // "Name (Role) \u2315 W" instead of "Name \u2315 W (Role)".
+              return `${nameEl}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}${credSearchIcon}`;
             }).join(", ")}</div>`
           : "";
         return `<div class="track">
