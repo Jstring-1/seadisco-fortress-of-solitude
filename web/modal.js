@@ -1537,12 +1537,13 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         const searchIcon = t.title
           ? ` <a class="track-search-icon" href="#" onclick="event.preventDefault();searchCollectionFor('cw-query','${escHtml(trackSearchQ)}')" title="Search your records for &quot;${escHtml(t.title)}&quot;">⌕</a>`
           : "";
-        // W → wiki popup for the track title (artist context helps
-        // disambiguation). Quote the title via wikiIcon's phrase arg and
-        // pass the artist as unquoted extra terms so the search becomes
-        // `"Hi-Heel Sneakers" Tommy Tucker` instead of one big phrase.
+        // W → wiki popup for the track title. Search becomes
+        // `"Track Title" song` so results surface ANY Wikipedia article
+        // mentioning the song — covers cases where the song is famous
+        // but the article isn't filed under our artist (covers, samples,
+        // chart history, song-itself articles, etc.).
         const wikiW = t.title
-          ? wikiIcon(t.title, t.title, trackArtist || "")
+          ? wikiIcon(t.title, t.title, "song")
           : "";
         // External YouTube search at the end of the title row. Shown for
         // every track (even ones with an in-app ▶) because embedded
