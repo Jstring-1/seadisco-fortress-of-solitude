@@ -414,16 +414,39 @@ async function _enrichOneFromMb(mbid, existingAliases = [], deathYear = null) {
  *
  * If `idFilter` is given, only processes that one row (used by the
  * per-row "Enrich" button in the editor).
+ *
+ * Pass `onProgress` to receive periodic updates — used by the
+ * background-job runner to surface progress to the admin UI.
  */
 export async function enrichBluesFromMusicBrainz(opts = {}) {
     const start = Date.now();
     const errors = [];
     let attempted = 0, enriched = 0, skipped = 0;
     // Pull rows in name order, page through them so we don't keep an
-    // unbounded array in memory if the table grows.
+    // unbounded array in memory if the table grows. We need an upfront
+    // total count so the progress UI has a denominator — easy: count rows
+    // matching the filter in one query.
     const PAGE = 200;
     let offset = 0;
     let processed = 0;
+    const totalRowsRes = await listBluesArtists({ limit: 1, offset: 0 });
+    const total = opts.idFilter ? 1 : (opts.limit ?? totalRowsRes.total);
+    const reportProgress = (currentName) => {
+        if (!opts.onProgress)
+            return;
+        try {
+            opts.onProgress({
+                total,
+                processed,
+                enriched,
+                skipped,
+                errors: errors.length,
+                currentName,
+            });
+        }
+        catch { /* never let a progress callback abort the run */ }
+    };
+    reportProgress();
     outer: while (true) {
         const { rows } = await listBluesArtists({ limit: PAGE, offset });
         if (!rows.length)
@@ -432,6 +455,7 @@ export async function enrichBluesFromMusicBrainz(opts = {}) {
             if (opts.idFilter && row.id !== opts.idFilter)
                 continue;
             attempted++;
+            reportProgress(row.name);
             // Fallback: look up MBID by name if missing. Persist on success so
             // future passes (and the editor) can use it. If we can't resolve a
             // confident match, skip — too risky to bind the wrong MBID.
@@ -480,6 +504,8 @@ export async function enrichBluesFromMusicBrainz(opts = {}) {
             processed++;
             if (opts.limit && processed >= opts.limit)
                 break outer;
+            // Periodic progress every artist — cheap.
+            reportProgress();
             // Rate-limit between artists to stay polite.
             await new Promise(res => setTimeout(res, MB_RATE_LIMIT_MS));
         }
@@ -487,6 +513,7 @@ export async function enrichBluesFromMusicBrainz(opts = {}) {
             break;
         offset += PAGE;
     }
+    reportProgress();
     return {
         attempted,
         enriched,
@@ -579,6 +606,17 @@ export async function enrichBluesFromWikipedia(opts = {}) {
     const PAGE = 200;
     let offset = 0;
     let processed = 0;
+    const totalRowsRes = await listBluesArtists({ limit: 1, offset: 0 });
+    const total = opts.idFilter ? 1 : (opts.limit ?? totalRowsRes.total);
+    const reportProgress = (currentName) => {
+        if (!opts.onProgress)
+            return;
+        try {
+            opts.onProgress({ total, processed, enriched, skipped, errors: errors.length, currentName });
+        }
+        catch { /* swallow */ }
+    };
+    reportProgress();
     outer: while (true) {
         const { rows } = await listBluesArtists({ limit: PAGE, offset });
         if (!rows.length)
@@ -587,6 +625,7 @@ export async function enrichBluesFromWikipedia(opts = {}) {
             if (opts.idFilter && row.id !== opts.idFilter)
                 continue;
             attempted++;
+            reportProgress(row.name);
             // Fallback: opensearch the artist name if we don't already have a
             // wiki suffix. Persist on success so the editor and future runs
             // can use it. Pace the extra call.
@@ -631,6 +670,7 @@ export async function enrichBluesFromWikipedia(opts = {}) {
                 errors.push({ id: row.id, message: err?.message ?? String(err) });
             }
             processed++;
+            reportProgress();
             if (opts.limit && processed >= opts.limit)
                 break outer;
             await new Promise(res => setTimeout(res, WIKI_RATE_LIMIT_MS));
@@ -639,6 +679,7 @@ export async function enrichBluesFromWikipedia(opts = {}) {
             break;
         offset += PAGE;
     }
+    reportProgress();
     return { attempted, enriched, skipped, errors, durationMs: Date.now() - start };
 }
 // ─────────────────────────────────────────────────────────────────────────
@@ -663,6 +704,17 @@ export async function enrichBluesFromDiscogs(client, opts = {}) {
     const PAGE = 200;
     let offset = 0;
     let processed = 0;
+    const totalRowsRes = await listBluesArtists({ limit: 1, offset: 0 });
+    const total = opts.idFilter ? 1 : (opts.limit ?? totalRowsRes.total);
+    const reportProgress = (currentName) => {
+        if (!opts.onProgress)
+            return;
+        try {
+            opts.onProgress({ total, processed, enriched, skipped, errors: errors.length, currentName });
+        }
+        catch { /* swallow */ }
+    };
+    reportProgress();
     outer: while (true) {
         const { rows } = await listBluesArtists({ limit: PAGE, offset });
         if (!rows.length)
@@ -671,6 +723,7 @@ export async function enrichBluesFromDiscogs(client, opts = {}) {
             if (opts.idFilter && row.id !== opts.idFilter)
                 continue;
             attempted++;
+            reportProgress(row.name);
             if (row.discogs_id) {
                 skipped++;
                 continue;
@@ -694,6 +747,7 @@ export async function enrichBluesFromDiscogs(client, opts = {}) {
                 errors.push({ id: row.id, message: err?.message ?? String(err) });
             }
             processed++;
+            reportProgress();
             if (opts.limit && processed >= opts.limit)
                 break outer;
             await new Promise(res => setTimeout(res, DISCOGS_RATE_LIMIT_MS));
@@ -702,6 +756,7 @@ export async function enrichBluesFromDiscogs(client, opts = {}) {
             break;
         offset += PAGE;
     }
+    reportProgress();
     return { attempted, enriched, skipped, errors, durationMs: Date.now() - start };
 }
 // ─────────────────────────────────────────────────────────────────────────

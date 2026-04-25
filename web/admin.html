@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260412t" />
+  <link rel="stylesheet" href="/style.css?v=20260412u" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260412t"></script>
+<script defer src="/shared.js?v=20260412u"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
@@ -262,7 +262,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260412t"></script>
+<script defer src="/modal.js?v=20260412u"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -996,9 +996,25 @@ let _bluesSearchTimer = null;
 function bluesDbInit() {
   bluesDbLoadStats();
   bluesDbLoadList();
-  // Reattach to a Discogs seed already in flight (so reloading the page
-  // mid-seed still shows live progress on the button).
+  // Reattach to any background job already in flight (so reloading the
+  // page mid-run still shows live progress on each button).
   _bluesResumeSeedPollIfRunning();
+  _bluesResumeMbPollIfRunning();
+  _bluesResumeBulkIfRunning("blues-enrich-wiki-btn",    "/api/admin/blues/enrich-wiki/status",    "Enrich notes (Wiki)");
+  _bluesResumeBulkIfRunning("blues-enrich-discogs-btn", "/api/admin/blues/enrich-discogs/status", "Enrich Discogs");
+}
+
+async function _bluesResumeBulkIfRunning(btnId, statusEndpoint, label) {
+  try {
+    const r = await apiFetch(statusEndpoint);
+    if (!r.ok) return;
+    const job = await r.json();
+    if (job.status === "running") {
+      const btn = document.getElementById(btnId);
+      if (btn) btn.disabled = true;
+      _bluesEnrichBulkPoll({ btnId, statusEndpoint, label });
+    }
+  } catch {}
 }
 
 async function bluesDbLoadStats() {
@@ -1047,24 +1063,10 @@ function bluesDbRenderList() {
     return "";
   };
   const rows = _bluesDbState.rows.map(r => {
-    const styles = (Array.isArray(r.styles) ? r.styles : []).slice(0, 2).join(", ");
-    const instruments = (Array.isArray(r.instruments) ? r.instruments : []).slice(0, 2).join(", ");
-    const dates = fmtRange(r.birth_date, r.death_date);
+    const styles = (Array.isArray(r.styles) ? r.styles : []).slice(0, 3).join(", ");
     const relCount = Array.isArray(r.discogs_releases) ? r.discogs_releases.length : 0;
-    // Source badges — compact letters showing which enrichers have run.
-    const st = r.enrichment_status && typeof r.enrichment_status === "object" ? r.enrichment_status : {};
-    const sources = [
-      st.wikidata     && "W",
-      st.discogs_seed && "Ds",
-      st.mb           && "M",
-      st.wiki         && "Wp",
-      st.discogs      && "D",
-      st.yt           && "Y",
-    ].filter(Boolean).join(" ");
-    // Cross-links to the main app: ⌕ opens a SeaDisco search for the
-    // artist in a new tab; W opens the wiki popup (search-first) with the
-    // name double-quoted for an exact-phrase match. Both rely on existing
-    // ?q= / ?wk= URL handlers on the main page, so no extra wiring.
+    // Cross-links to the main app: ⌕ opens a SeaDisco search; W opens
+    // the wiki popup (search-first) with the name double-quoted.
     const searchHref = "/?q=" + encodeURIComponent(r.name);
     const wikiHref   = "/?wk=" + encodeURIComponent('"' + r.name + '"');
     return `<tr>
@@ -1073,32 +1075,20 @@ function bluesDbRenderList() {
         <a href="${esc(searchHref)}" target="_blank" rel="noopener" title="Search SeaDisco for &quot;${esc(r.name)}&quot;" style="margin-left:0.35em;color:var(--accent);text-decoration:none;font-size:1.05em">⌕</a>
         <a href="${esc(wikiHref)}" target="_blank" rel="noopener" title="Wikipedia search popup for &quot;${esc(r.name)}&quot;" style="margin-left:0.05em;color:var(--text);text-decoration:none;font-family:'Times New Roman',serif;font-style:italic;font-weight:700;font-size:0.78em">W</a>
       </td>
-      <td>${esc(dates)}</td>
       <td style="text-align:right" title="Earliest of first_recording_year (MB) and min(discogs_releases.year)">${r.earliest_release_year ?? ""}</td>
-      <td style="text-align:right">${r.last_recording_year ?? ""}</td>
-      <td>${esc(r.birth_place ?? "")}</td>
-      <td>${esc(r.hometown_region ?? "")}</td>
       <td>${esc(styles)}</td>
-      <td>${esc(instruments)}</td>
       <td>${r.discogs_id ? esc(r.discogs_id) : ""}</td>
       <td style="text-align:right">${relCount || ""}</td>
-      <td style="font-size:0.72rem;color:var(--muted)" title="Sources: W=Wikidata · Ds=Discogs seed · M=MusicBrainz · Wp=Wiki notes · D=Discogs ID · Y=YouTube">${esc(sources)}</td>
     </tr>`;
   }).join("");
   // Build clickable column headers. Sort key matches the server's
   // _BLUES_SORT_COLUMNS whitelist.
   const _bluesCols = [
-    { key: "name",                 label: "Name" },
-    { key: "birth_date",           label: "Years",       title: "Birth-Death" },
-    { key: "earliest_release",     label: "1st rel",     align: "right", title: "Earliest year — first_recording_year (MB) or min(discogs_releases.year)" },
-    { key: "last_recording_year",  label: "Last rec",    align: "right" },
-    { key: "birth_place",          label: "Birth place" },
-    { key: "hometown_region",      label: "Hometown" },
-    { key: "styles",               label: "Styles" },
-    { key: null,                   label: "Instruments" },
-    { key: "discogs_id",           label: "Discogs" },
-    { key: "release_count",        label: "#",           align: "right", title: "Discogs masters/releases" },
-    { key: null,                   label: "Sources",     title: "W=Wikidata · Ds=Discogs seed · M=MusicBrainz · Wp=Wiki notes · D=Discogs ID · Y=YouTube" },
+    { key: "name",             label: "Name" },
+    { key: "earliest_release", label: "1st rel", align: "right", title: "Earliest year — first_recording_year (MB) or min(discogs_releases.year)" },
+    { key: "styles",           label: "Styles" },
+    { key: "discogs_id",       label: "Discogs" },
+    { key: "release_count",    label: "#",       align: "right", title: "Discogs masters/releases" },
   ];
   const headerCells = _bluesCols.map(c => {
     const sortable = !!c.key;
@@ -1305,22 +1295,23 @@ async function _bluesResumeSeedPollIfRunning() {
   } catch {}
 }
 
-// MusicBrainz enrichment. id = null means bulk run across every row that
-// has an MBID (5–10 minutes for the seeded set). id = N enriches that
-// single row and refreshes the editor in place.
+// MusicBrainz enrichment.
+//   id = N    → single row, runs synchronously (~3-5s).
+//   id = null → bulk, fires a background job and polls status every 5s
+//               (avoids the 502 timeout we'd otherwise hit at ~5 min).
+let _bluesMbPollTimer = null;
+
 async function bluesDbEnrichMb(id) {
-  const btn = id == null
-    ? document.getElementById("blues-enrich-mb-btn")
-    : document.getElementById("blues-editor-mb");
-  if (id == null) {
-    if (!confirm("Pull first/last recording year + title from MusicBrainz for every row with an MBID?\n\nRate-limited 1 req/s — bulk pass takes 5–10 minutes. Idempotent.")) return;
-  }
-  const origLabel = btn.textContent;
-  btn.disabled = true;
-  btn.textContent = id == null ? "Enriching… (long)" : "Enriching…";
+  if (id != null) return _bluesEnrichMbSingleRow(id);
+  return _bluesEnrichMbBulk();
+}
+
+async function _bluesEnrichMbSingleRow(id) {
+  const btn = document.getElementById("blues-editor-mb");
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = "Enriching…";
   try {
-    const url = "/api/admin/blues/enrich-mb" + (id != null ? "?id=" + id : "");
-    const r = await apiFetch(url, { method: "POST" });
+    const r = await apiFetch("/api/admin/blues/enrich-mb?id=" + id, { method: "POST" });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
       alert("Enrich failed: " + (err.error ?? r.status));
@@ -1330,17 +1321,83 @@ async function bluesDbEnrichMb(id) {
     const summary = `${out.enriched}/${out.attempted} enriched in ${(out.durationMs/1000).toFixed(1)}s` +
       (out.skipped ? ` · ${out.skipped} skipped (no MBID)` : "") +
       (out.errors?.length ? ` · ${out.errors.length} errors` : "");
-    if (id != null) {
-      // Reload the editor so the user sees the new fields without a page reload.
-      bluesDbOpenEditor(id);
-      bluesDbLoadList();
-    } else {
-      bluesDbLoadStats();
-      bluesDbLoadList();
-    }
+    bluesDbOpenEditor(id);
+    bluesDbLoadList();
     alert(summary);
   } catch (e) { alert("Enrich failed: " + e); }
-  finally { btn.disabled = false; btn.textContent = origLabel; }
+  finally { btn.disabled = false; btn.textContent = orig; }
+}
+
+async function _bluesEnrichMbBulk() {
+  const btn = document.getElementById("blues-enrich-mb-btn");
+  if (!confirm("Pull first/last recording year + title from MusicBrainz for every row?\n\nRate-limited 1 req/s — bulk pass takes ~7-10 min. Runs in the background; you can leave this page and come back. Idempotent.")) return;
+  btn.disabled = true; btn.textContent = "Starting…";
+  try {
+    const r = await apiFetch("/api/admin/blues/enrich-mb", { method: "POST" });
+    if (r.status === 409) {
+      const j = await r.json().catch(() => ({}));
+      alert("MB enrichment already running (started " + (j.startedAt ?? "earlier") + "). Watching progress.");
+    } else if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert("Could not start: " + (err.error ?? r.status));
+      btn.disabled = false; btn.textContent = "Enrich from MB";
+      return;
+    }
+  } catch (e) {
+    alert("Could not start: " + e);
+    btn.disabled = false; btn.textContent = "Enrich from MB";
+    return;
+  }
+  _bluesPollMbStatus();
+}
+
+function _bluesPollMbStatus() {
+  const btn = document.getElementById("blues-enrich-mb-btn");
+  if (_bluesMbPollTimer) { clearInterval(_bluesMbPollTimer); _bluesMbPollTimer = null; }
+  const tick = async () => {
+    try {
+      const r = await apiFetch("/api/admin/blues/enrich-mb/status");
+      if (!r.ok) return;
+      const job = await r.json();
+      if (job.status === "running") {
+        const p = job.progress;
+        if (p) {
+          btn.textContent = `MB: ${p.processed}/${p.total} · ${p.enriched} hit · ${p.skipped} skip` + (p.errors ? ` · ${p.errors} err` : "");
+        } else {
+          btn.textContent = "Enriching…";
+        }
+        return;
+      }
+      clearInterval(_bluesMbPollTimer); _bluesMbPollTimer = null;
+      btn.disabled = false; btn.textContent = "Enrich from MB";
+      bluesDbLoadStats();
+      bluesDbLoadList();
+      if (job.status === "done" && job.result) {
+        const o = job.result;
+        alert(`MB enrichment done in ${(o.durationMs/60000).toFixed(1)} min:\n` +
+          `· ${o.enriched}/${o.attempted} enriched\n` +
+          `· ${o.skipped} skipped (no confident match)\n` +
+          (o.errors?.length ? `· ${o.errors.length} errors` : "· no errors"));
+      } else if (job.status === "error") {
+        alert("MB enrichment errored: " + (job.error ?? "unknown"));
+      }
+    } catch { /* network blip — next tick */ }
+  };
+  tick();
+  _bluesMbPollTimer = setInterval(tick, 5000);
+}
+
+async function _bluesResumeMbPollIfRunning() {
+  try {
+    const r = await apiFetch("/api/admin/blues/enrich-mb/status");
+    if (!r.ok) return;
+    const job = await r.json();
+    if (job.status === "running") {
+      const btn = document.getElementById("blues-enrich-mb-btn");
+      if (btn) btn.disabled = true;
+      _bluesPollMbStatus();
+    }
+  } catch {}
 }
 
 function bluesDbEnrichEditorRow() {
@@ -1353,14 +1410,20 @@ function bluesDbEnrichEditorRow() {
 // bluesDbEnrichMb but parameterised so we don't repeat ourselves four
 // times. label + slow-warning + endpoint differ; everything else is
 // identical (button disable + reload + summary alert).
-async function _bluesEnrichGeneric({ id, endpoint, btnId, runningLabel, confirmMsg, urlExtras }) {
+async function _bluesEnrichGeneric({ id, endpoint, btnId, runningLabel, confirmMsg, urlExtras, idAsPath }) {
   const btn = document.getElementById(btnId);
   if (id == null && confirmMsg && !confirm(confirmMsg)) return;
   const orig = btn.textContent;
   btn.disabled = true;
   btn.textContent = runningLabel;
   try {
-    const url = endpoint + (id != null ? "/" + id : "") + (urlExtras ?? "");
+    // YouTube wants id as a path segment (/:id); MB/Wiki/Discogs use ?id=N.
+    let url = endpoint;
+    if (id != null && idAsPath) url += "/" + id;
+    url += (urlExtras ?? "");
+    if (id != null && !idAsPath) {
+      url += (url.includes("?") ? "&" : "?") + "id=" + encodeURIComponent(String(id));
+    }
     const r = await apiFetch(url, { method: "POST" });
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
@@ -1381,35 +1444,100 @@ async function _bluesEnrichGeneric({ id, endpoint, btnId, runningLabel, confirmM
   finally { btn.disabled = false; btn.textContent = orig; }
 }
 
+// Generic bulk runner — kicks off a background job and polls /status
+// every 5s. Same shape for Wiki + Discogs ID enrichers.
+function _bluesEnrichBulkPoll({ btnId, statusEndpoint, label }) {
+  const timerKey = "_bluesPollTimer_" + btnId;
+  if (window[timerKey]) { clearInterval(window[timerKey]); window[timerKey] = null; }
+  const btn = document.getElementById(btnId);
+  const tick = async () => {
+    try {
+      const r = await apiFetch(statusEndpoint);
+      if (!r.ok) return;
+      const job = await r.json();
+      if (job.status === "running") {
+        const p = job.progress;
+        if (p) btn.textContent = `${label}: ${p.processed}/${p.total} · ${p.enriched} hit · ${p.skipped} skip` + (p.errors ? ` · ${p.errors} err` : "");
+        else btn.textContent = label + "…";
+        return;
+      }
+      clearInterval(window[timerKey]); window[timerKey] = null;
+      btn.disabled = false; btn.textContent = label;
+      bluesDbLoadStats(); bluesDbLoadList();
+      if (job.status === "done" && job.result) {
+        const o = job.result;
+        alert(`${label} done in ${(o.durationMs/60000).toFixed(1)} min:\n` +
+          `· ${o.enriched}/${o.attempted} enriched\n` +
+          `· ${o.skipped} skipped\n` +
+          (o.errors?.length ? `· ${o.errors.length} errors` : "· no errors"));
+      } else if (job.status === "error") {
+        alert(`${label} errored: ` + (job.error ?? "unknown"));
+      }
+    } catch { /* network blip */ }
+  };
+  tick();
+  window[timerKey] = setInterval(tick, 5000);
+}
+async function _bluesEnrichBulkStart({ endpoint, statusEndpoint, btnId, label, confirmMsg, urlExtras }) {
+  if (confirmMsg && !confirm(confirmMsg)) return;
+  const btn = document.getElementById(btnId);
+  btn.disabled = true; btn.textContent = "Starting…";
+  try {
+    const r = await apiFetch(endpoint + (urlExtras ?? ""), { method: "POST" });
+    if (r.status === 409) {
+      const j = await r.json().catch(() => ({}));
+      alert(`${label} already running (started ` + (j.startedAt ?? "earlier") + "). Watching progress.");
+    } else if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert("Could not start: " + (err.error ?? r.status));
+      btn.disabled = false; btn.textContent = label;
+      return;
+    }
+  } catch (e) {
+    alert("Could not start: " + e);
+    btn.disabled = false; btn.textContent = label;
+    return;
+  }
+  _bluesEnrichBulkPoll({ btnId, statusEndpoint, label });
+}
+
 function bluesDbEnrichWiki(id) {
-  return _bluesEnrichGeneric({
-    id,
+  if (id != null) {
+    return _bluesEnrichGeneric({
+      id, endpoint: "/api/admin/blues/enrich-wiki",
+      btnId: "blues-editor-wiki", runningLabel: "Fetching…",
+      urlExtras: "?force=1",
+    });
+  }
+  return _bluesEnrichBulkStart({
     endpoint: "/api/admin/blues/enrich-wiki",
-    btnId: id == null ? "blues-enrich-wiki-btn" : "blues-editor-wiki",
-    runningLabel: "Fetching…",
-    confirmMsg: id == null ? "Pull the Wikipedia lead paragraph into the notes field for every row with a wikipedia_suffix that doesn't already have notes?" : null,
-    // Per-row from editor force-overwrites (admin clicked the button on
-    // purpose). Bulk respects existing notes.
-    urlExtras: id != null ? "?force=1" : "",
+    statusEndpoint: "/api/admin/blues/enrich-wiki/status",
+    btnId: "blues-enrich-wiki-btn",
+    label: "Enrich notes (Wiki)",
+    confirmMsg: "Pull Wikipedia lead paragraphs into the notes field for every row?\n\nRuns in the background — you can leave this page. Skips rows that already have notes.",
   });
 }
 function bluesDbEnrichDiscogs(id) {
-  return _bluesEnrichGeneric({
-    id,
+  if (id != null) {
+    return _bluesEnrichGeneric({
+      id, endpoint: "/api/admin/blues/enrich-discogs",
+      btnId: "blues-editor-discogs", runningLabel: "Searching Discogs…",
+    });
+  }
+  return _bluesEnrichBulkStart({
     endpoint: "/api/admin/blues/enrich-discogs",
-    btnId: id == null ? "blues-enrich-discogs-btn" : "blues-editor-discogs",
-    runningLabel: "Searching Discogs…",
-    confirmMsg: id == null ? "Look up Discogs IDs by name for every row missing one? Uses your admin Discogs token (~3–5 minutes)." : null,
+    statusEndpoint: "/api/admin/blues/enrich-discogs/status",
+    btnId: "blues-enrich-discogs-btn",
+    label: "Enrich Discogs",
+    confirmMsg: "Look up Discogs IDs by name for every row missing one?\n\nRuns in the background. Idempotent.",
   });
 }
 function bluesDbEnrichYt(id) {
-  // YouTube is per-row only — no bulk button.
+  // YouTube is per-row only (quota cost) and wants id as a path segment.
   return _bluesEnrichGeneric({
-    id,
-    endpoint: "/api/admin/blues/enrich-yt",
-    btnId: "blues-editor-yt",
-    runningLabel: "Searching YouTube…",
-    confirmMsg: null,
+    id, endpoint: "/api/admin/blues/enrich-yt",
+    btnId: "blues-editor-yt", runningLabel: "Searching YouTube…",
+    idAsPath: true,
   });
 }
 function bluesDbEnrichEditorWiki()    { const id = _bluesDbState.editingId; if (id) bluesDbEnrichWiki(id); }
