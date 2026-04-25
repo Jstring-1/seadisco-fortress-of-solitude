@@ -40,7 +40,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260411e" />
+  <link rel="stylesheet" href="/style.css?v=20260411g" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -78,7 +78,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260411e"></script>
+<script defer src="/shared.js?v=20260411g"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search" }));</script>
 <div id="search-view">
 
@@ -571,19 +571,11 @@
 <div id="loc-view" class="content-narrow" style="display:none"></div>
 
 <div id="wiki-view" class="content-narrow" style="display:none">
-  <h1 style="margin-top:0">Wikipedia</h1>
-  <p style="color:var(--muted);font-size:0.9rem">Search Wikipedia without leaving SeaDisco. Articles open in a popup so you can keep listening.</p>
-  <div style="display:flex;gap:0.5rem;margin:1rem 0">
-    <input id="wiki-view-q" type="search" placeholder="Search Wikipedia..." style="flex:1;padding:0.5rem;font-size:1rem" onkeydown="if(event.key==='Enter'){event.preventDefault();openWikiPopup(this.value)}">
-    <button type="button" onclick="openWikiPopup(document.getElementById('wiki-view-q').value)">Search</button>
-  </div>
-  <div id="wiki-view-suggestions" style="font-size:0.85rem;color:var(--muted);line-height:1.8">
-    Try: <a href="#" onclick="event.preventDefault();openWikiPopup('Fela Kuti')">Fela Kuti</a> ·
-    <a href="#" onclick="event.preventDefault();openWikiPopup('Krautrock')">Krautrock</a> ·
-    <a href="#" onclick="event.preventDefault();openWikiPopup('Blue Note Records')">Blue Note Records</a> ·
-    <a href="#" onclick="event.preventDefault();openWikiPopup('Tropicália')">Tropicália</a> ·
-    <a href="#" onclick="event.preventDefault();openWikiPopup('Dub music')">Dub music</a>
-  </div>
+  <div class="page-eyebrow">✦ Wikipedia</div>
+  <form class="wiki-search-form" onsubmit="event.preventDefault();openWikiPopup(document.getElementById('wiki-view-q').value)">
+    <input id="wiki-view-q" type="search" placeholder="Search Wikipedia" autocomplete="off">
+    <button type="submit">Search</button>
+  </form>
 </div>
 
 <div id="account-view" style="display:none">
@@ -819,18 +811,18 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260411e"></script>
-<script defer src="/search.js?v=20260411e"></script>
-<script defer src="/collection.js?v=20260411e"></script>
-<script defer src="/account.js?v=20260411e"></script>
-<script defer src="/orders.js?v=20260411e"></script>
+<script defer src="/utils.js?v=20260411g"></script>
+<script defer src="/search.js?v=20260411g"></script>
+<script defer src="/collection.js?v=20260411g"></script>
+<script defer src="/account.js?v=20260411g"></script>
+<script defer src="/orders.js?v=20260411g"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260411e"></script>
-<script defer src="/app.js?v=20260411e"></script>
+<script defer src="/modal.js?v=20260411g"></script>
+<script defer src="/app.js?v=20260411g"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/inventory-editor.js?v=20260411e"></script>
-<script defer src="/loc.js?v=20260411e"></script>
+<script defer src="/inventory-editor.js?v=20260411g"></script>
+<script defer src="/loc.js?v=20260411g"></script>
 
 </body>
 </html>

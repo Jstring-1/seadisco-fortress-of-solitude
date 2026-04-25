@@ -3622,20 +3622,29 @@ app.post("/api/ai-search", express.json(), async (req, res) => {
         res.status(400).json({ error: "Query required" });
         return;
     }
-    const prompt = `You are a music expert specializing in vinyl records, rare and world music.
+    const prompt = `You are a deep-catalog music expert — a record-shop digger, not a radio programmer.
 The user is searching for: "${q}"
 
-Return a JSON object with two fields:
-- blurb: a single sentence (max 30 words) that contextualizes these recommendations — what connects them, what era or sound they represent. Conversational, no filler phrases.
-- items: an array of 12 music recommendations (artists or albums/releases) that best match this query.
+Your job: surface LESSER-KNOWN, scene-accurate recommendations. Treat this like a crate-digging session, not a "best of" list.
 
-Each item in the items array must include:
+Anchoring rules:
+1. First, silently identify the specific scene, era, region, and sub-genre of the query (e.g. "Hi-Heel Sneakers" by Tommy Tucker = mid-1960s post-war US electric blues / R&B 12-bar). Stay inside that pocket.
+2. STRONGLY AVOID household names and crossover hits. No Beatles, Stones, Big Bopper, Elvis, Dylan, Hendrix, Marley, Miles Davis, etc., unless the query is literally about them.
+3. Prefer regional contemporaries, B-sides, single-album acts, label-mates, session players who cut their own records, and obscure scene peers.
+4. If the query is a specific song/release, lean into other artists who recorded that exact style/era — not generic "similar artists".
+5. Mix artist and release types. Releases should be specific records, not greatest-hits comps.
+
+Return a JSON object with two fields:
+- blurb: one sentence (max 30 words) naming the scene/era/sound these picks share — concrete, no filler.
+- items: array of 12 recommendations.
+
+Each item must include:
 - name: artist name, or "Album Title by Artist"
 - type: "artist" or "release"
 - artist: the artist or band name (always present, even for releases)
 - album: the album/release title (only for type "release", omit for "artist")
 - label: a record label most associated with this entity if relevant (optional)
-- description: one compelling sentence explaining why this fits
+- description: one sentence — name the scene/era and why this is a deeper cut than the obvious answer
 - discogsParams: object with relevant Discogs search fields only (choose from: q, artist, label, genre, style, year). year must be a single 4-digit year, never a range.
 
 Return ONLY a valid JSON object, no markdown, no explanation.`;
@@ -3683,10 +3692,22 @@ app.get("/api/wikipedia/lookup", async (req, res) => {
         res.status(400).json({ error: "Missing q" });
         return;
     }
+    // Wikipedia API requires a descriptive User-Agent per their policy:
+    // https://meta.wikimedia.org/wiki/User-Agent_policy
+    // Without one, requests can be 403'd or rate-limited aggressively.
+    const wikiHeaders = {
+        "User-Agent": "SeaDisco/1.0 (+https://seadisco.com; vinyl discovery app)",
+        "Accept": "application/json",
+    };
     try {
         // Step 1: opensearch to find canonical title
         const searchUrl = `https://en.wikipedia.org/w/api.php?action=opensearch&format=json&limit=1&search=${encodeURIComponent(q)}`;
-        const sr = await loggedFetch("wikipedia", searchUrl, { context: "wiki opensearch" });
+        const sr = await loggedFetch("wikipedia", searchUrl, { context: "wiki opensearch", headers: wikiHeaders });
+        if (!sr.ok) {
+            console.error("[wikipedia] opensearch HTTP", sr.status);
+            res.status(502).json({ error: "Wikipedia search failed", status: sr.status });
+            return;
+        }
         const sdata = await sr.json();
         const title = Array.isArray(sdata) && Array.isArray(sdata[1]) && sdata[1][0] ? sdata[1][0] : null;
         if (!title) {
@@ -3696,7 +3717,12 @@ app.get("/api/wikipedia/lookup", async (req, res) => {
         const pageUrl = (Array.isArray(sdata[3]) && sdata[3][0]) ? sdata[3][0] : `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`;
         // Step 2: fetch generous lead extract via action=query
         const extractUrl = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=extracts|pageimages&exintro=1&piprop=thumbnail&pithumbsize=200&redirects=1&titles=${encodeURIComponent(title)}`;
-        const er = await loggedFetch("wikipedia", extractUrl, { context: "wiki extract" });
+        const er = await loggedFetch("wikipedia", extractUrl, { context: "wiki extract", headers: wikiHeaders });
+        if (!er.ok) {
+            console.error("[wikipedia] extract HTTP", er.status);
+            res.status(502).json({ error: "Wikipedia extract failed", status: er.status });
+            return;
+        }
         const edata = await er.json();
         const pages = edata?.query?.pages ?? {};
         const firstKey = Object.keys(pages)[0];
