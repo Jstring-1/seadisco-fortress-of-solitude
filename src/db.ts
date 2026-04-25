@@ -481,8 +481,23 @@ function _coerceBluesValue(field: string, value: any): any {
   return String(value);
 }
 
-export async function listBluesArtists(opts: { search?: string; limit?: number; offset?: number } = {}): Promise<{ rows: any[]; total: number }> {
-  const { search, limit = 50, offset = 0 } = opts;
+// Whitelist of sortable columns → SQL fragments. Anything outside this
+// map is rejected so the admin form can't smuggle arbitrary SQL.
+const _BLUES_SORT_COLUMNS: Record<string, string> = {
+  name:          "lower(name)",
+  birth_date:    "birth_date",
+  death_date:    "death_date",
+  birth_place:   "lower(coalesce(birth_place,''))",
+  styles:        "lower(coalesce(styles->>0,''))",
+  wikidata_qid:  "wikidata_qid",
+  discogs_id:    "discogs_id",
+  release_count: "jsonb_array_length(coalesce(discogs_releases, '[]'::jsonb))",
+  date_added:    "date_added",
+  updated_at:    "updated_at",
+};
+
+export async function listBluesArtists(opts: { search?: string; limit?: number; offset?: number; sort?: string; order?: string } = {}): Promise<{ rows: any[]; total: number }> {
+  const { search, limit = 50, offset = 0, sort = "name", order = "asc" } = opts;
   const args: any[] = [];
   let where = "";
   if (search?.trim()) {
@@ -492,15 +507,26 @@ export async function listBluesArtists(opts: { search?: string; limit?: number; 
   const countSql = `SELECT count(*)::int AS total FROM blues_artists ${where}`;
   const totalRes = await getPool().query(countSql, args);
   const total = totalRes.rows[0]?.total ?? 0;
+  // Resolve sort against the whitelist; fall back to name if unknown.
+  const sortFrag = _BLUES_SORT_COLUMNS[sort] ?? _BLUES_SORT_COLUMNS["name"];
+  const dir = String(order).toLowerCase() === "desc" ? "DESC" : "ASC";
+  // NULLS LAST so empty values don't dominate the top of asc sorts.
   args.push(limit, offset);
   const sql = `
     SELECT * FROM blues_artists
     ${where}
-    ORDER BY lower(name) ASC
+    ORDER BY ${sortFrag} ${dir} NULLS LAST, lower(name) ASC
     LIMIT $${args.length - 1} OFFSET $${args.length}
   `;
   const r = await getPool().query(sql, args);
   return { rows: r.rows, total };
+}
+
+/** Wipe the entire blues_artists table. Admin-only — there's no
+ *  per-row history so this is irreversible. */
+export async function deleteAllBluesArtists(): Promise<number> {
+  const r = await getPool().query(`DELETE FROM blues_artists`);
+  return r.rowCount ?? 0;
 }
 
 export async function getBluesArtist(id: number): Promise<any | null> {
