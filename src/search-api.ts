@@ -8,7 +8,7 @@ import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
 import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats } from "./db.js";
-import { seedBluesArtistsFromWikidata } from "./blues-db.js";
+import { seedBluesArtistsFromWikidata, enrichBluesFromMusicBrainz } from "./blues-db.js";
 
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -3223,6 +3223,36 @@ app.post("/api/admin/blues/seed", async (req, res) => {
     res.json({ ok: true, ...result });
   } catch (err: any) {
     console.error("[blues seed]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
+});
+
+// Phase 2: MusicBrainz enrichment. Walks rows with an MBID and writes
+// first/last recording year + title + any new aliases. Rate-limited
+// internally to MB's 1 req/s policy.
+//
+//   POST /api/admin/blues/enrich-mb           — bulk, all rows
+//   POST /api/admin/blues/enrich-mb?id=N      — single row
+//   POST /api/admin/blues/enrich-mb?limit=10  — first N rows only (testing)
+//
+// 10-minute response timeout because the bulk pass can take a while.
+app.post("/api/admin/blues/enrich-mb", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const idRaw = req.query.id as string | undefined;
+  const limitRaw = req.query.limit as string | undefined;
+  const idFilter = idRaw ? parseInt(idRaw, 10) : undefined;
+  const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
+  // Express default response timeout is fine; node fetches are bounded by
+  // MB API responses. Bump request timeout just in case.
+  if (typeof req.setTimeout === "function") req.setTimeout(15 * 60 * 1000);
+  try {
+    const result = await enrichBluesFromMusicBrainz({
+      idFilter: Number.isFinite(idFilter as number) ? idFilter : undefined,
+      limit:    Number.isFinite(limit as number) ? limit : undefined,
+    });
+    res.json({ ok: true, ...result });
+  } catch (err: any) {
+    console.error("[blues enrich-mb]", err);
     res.status(500).json({ error: err?.message ?? String(err) });
   }
 });

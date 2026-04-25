@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260412j" />
+  <link rel="stylesheet" href="/style.css?v=20260412k" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260412j"></script>
+<script defer src="/shared.js?v=20260412k"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
@@ -128,6 +128,7 @@
           <h2 style="margin:0">Pre-1930 Blues Artists</h2>
           <button class="admin-refresh-btn" onclick="bluesDbLoadList()" title="Refresh">&#8635;</button>
           <button class="admin-btn" onclick="bluesDbSeed()" id="blues-seed-btn" title="Pull seed list from Wikidata. Idempotent — manual edits are preserved.">Seed from Wikidata</button>
+          <button class="admin-btn" onclick="bluesDbEnrichMb(null)" id="blues-enrich-mb-btn" title="Fill first/last recording year + title from MusicBrainz for every row that has an MBID. Rate-limited 1 req/s — bulk pass can take 5–10 minutes.">Enrich from MB</button>
           <button class="admin-btn" onclick="bluesDbOpenEditor(null)" title="Add a new artist row manually">+ Add artist</button>
           <span id="blues-stats" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
         </div>
@@ -169,8 +170,9 @@
               <label style="grid-column:1/-1">YouTube URLs (comma-sep) <input name="youtube_urls"></label>
               <label style="grid-column:1/-1">Photo URL <input name="photo_url"></label>
               <label style="grid-column:1/-1">Notes <textarea name="notes" rows="4" style="width:100%"></textarea></label>
-              <div style="grid-column:1/-1;display:flex;gap:0.5rem;justify-content:flex-end;margin-top:0.5rem">
+              <div style="grid-column:1/-1;display:flex;gap:0.5rem;justify-content:flex-end;margin-top:0.5rem;flex-wrap:wrap">
                 <button type="button" class="admin-btn admin-btn-danger" id="blues-editor-delete" onclick="bluesDbDeleteFromEditor()" style="margin-right:auto;display:none">Delete</button>
+                <button type="button" class="admin-btn" id="blues-editor-mb" onclick="bluesDbEnrichEditorRow()" title="Pull first/last recording year + title from MusicBrainz for THIS artist (uses the MBID in the field above)" style="display:none">Enrich from MB</button>
                 <button type="button" class="admin-btn" onclick="bluesDbCloseEditor()">Cancel</button>
                 <button type="submit" class="admin-btn admin-btn-extras">Save</button>
               </div>
@@ -245,7 +247,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260412j"></script>
+<script defer src="/modal.js?v=20260412k"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1089,16 +1091,62 @@ async function bluesDbSeed() {
   finally { btn.disabled = false; btn.textContent = "Seed from Wikidata"; }
 }
 
+// MusicBrainz enrichment. id = null means bulk run across every row that
+// has an MBID (5–10 minutes for the seeded set). id = N enriches that
+// single row and refreshes the editor in place.
+async function bluesDbEnrichMb(id) {
+  const btn = id == null
+    ? document.getElementById("blues-enrich-mb-btn")
+    : document.getElementById("blues-editor-mb");
+  if (id == null) {
+    if (!confirm("Pull first/last recording year + title from MusicBrainz for every row with an MBID?\n\nRate-limited 1 req/s — bulk pass takes 5–10 minutes. Idempotent.")) return;
+  }
+  const origLabel = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = id == null ? "Enriching… (long)" : "Enriching…";
+  try {
+    const url = "/api/admin/blues/enrich-mb" + (id != null ? "?id=" + id : "");
+    const r = await apiFetch(url, { method: "POST" });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert("Enrich failed: " + (err.error ?? r.status));
+      return;
+    }
+    const out = await r.json();
+    const summary = `${out.enriched}/${out.attempted} enriched in ${(out.durationMs/1000).toFixed(1)}s` +
+      (out.skipped ? ` · ${out.skipped} skipped (no MBID)` : "") +
+      (out.errors?.length ? ` · ${out.errors.length} errors` : "");
+    if (id != null) {
+      // Reload the editor so the user sees the new fields without a page reload.
+      bluesDbOpenEditor(id);
+      bluesDbLoadList();
+    } else {
+      bluesDbLoadStats();
+      bluesDbLoadList();
+    }
+    alert(summary);
+  } catch (e) { alert("Enrich failed: " + e); }
+  finally { btn.disabled = false; btn.textContent = origLabel; }
+}
+
+function bluesDbEnrichEditorRow() {
+  const id = _bluesDbState.editingId;
+  if (!id) return;
+  bluesDbEnrichMb(id);
+}
+
 async function bluesDbOpenEditor(id) {
   _bluesDbState.editingId = id;
   const overlay = document.getElementById("blues-editor-overlay");
   const form = document.getElementById("blues-editor-form");
   const title = document.getElementById("blues-editor-title");
   const delBtn = document.getElementById("blues-editor-delete");
+  const mbBtn = document.getElementById("blues-editor-mb");
   form.reset();
   if (id) {
     title.textContent = "Edit artist";
     delBtn.style.display = "";
+    mbBtn.style.display = "";
     try {
       const r = await apiFetch("/api/admin/blues/" + id);
       if (!r.ok) { alert("Could not load row."); return; }
@@ -1114,6 +1162,7 @@ async function bluesDbOpenEditor(id) {
   } else {
     title.textContent = "Add artist";
     delBtn.style.display = "none";
+    mbBtn.style.display = "none";
   }
   overlay.style.display = "flex";
 }

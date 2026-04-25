@@ -1,14 +1,19 @@
-// ── Pre-1930 blues artists DB seeder ───────────────────────────────────
+// ── Pre-1930 blues artists DB seeder + enricher ───────────────────────
 //
-// Phase 1: pull the seed list from Wikidata via SPARQL and upsert into the
-// blues_artists table. Each artist is keyed by its Q-number so re-running
-// the seed is idempotent and only fills empty fields without clobbering
-// any manual admin edits stored alongside.
+// Phase 1 (seed): pull the seed list from Wikidata via SPARQL and upsert
+// into the blues_artists table. Each artist is keyed by its Q-number so
+// re-running the seed is idempotent and only fills empty fields without
+// clobbering any manual admin edits stored alongside.
+//
+// Phase 2 (enrich/MB): for every row that has a musicbrainz_mbid, query
+// MusicBrainz for that artist's release list and write back the earliest
+// + latest release year + title. Also merges in any new aliases MB knows
+// that Wikidata didn't.
 //
 // Wikidata SPARQL endpoint:   https://query.wikidata.org/sparql
-// Required header:            User-Agent (per Wikimedia policy)
-// Default rate limit:         5 concurrent / 60s of CPU time per query
-import { upsertBluesArtistByQid } from "./db.js";
+// MusicBrainz endpoint:       https://musicbrainz.org/ws/2/  (JSON, 1 req/s)
+// Required header on both:    User-Agent (per Wikimedia/MetaBrainz policy)
+import { upsertBluesArtistByQid, listBluesArtists, updateBluesArtist } from "./db.js";
 const WIKIDATA_ENDPOINT = "https://query.wikidata.org/sparql";
 const WIKIDATA_UA = "SeaDisco/1.0 (+https://seadisco.com; vinyl discovery app)";
 // Genre Q-numbers the seeder treats as "blues" for matching.
@@ -193,6 +198,193 @@ export async function seedBluesArtistsFromWikidata() {
     return {
         fetched: bindings.length,
         upserted,
+        errors,
+        durationMs: Date.now() - start,
+    };
+}
+// ─────────────────────────────────────────────────────────────────────────
+// Phase 2: MusicBrainz enrichment
+// ─────────────────────────────────────────────────────────────────────────
+const MB_ENDPOINT = "https://musicbrainz.org/ws/2";
+const MB_UA = "SeaDisco/1.0 ( https://seadisco.com )";
+const MB_RATE_LIMIT_MS = 1100; // 1 req/s strict + safety margin
+const MB_RELEASE_PAGE = 100; // MB max per page
+const MB_RELEASE_PAGE_CAP = 5; // hard cap on pages per artist (500 releases)
+function _yearFromMbDate(d) {
+    if (!d)
+        return null;
+    const m = d.match(/^(\d{4})/);
+    if (!m)
+        return null;
+    const y = parseInt(m[1], 10);
+    return Number.isFinite(y) && y >= 1800 && y <= 2100 ? y : null;
+}
+async function _mbFetch(path) {
+    const url = `${MB_ENDPOINT}${path}${path.includes("?") ? "&" : "?"}fmt=json`;
+    const r = await fetch(url, {
+        headers: { "User-Agent": MB_UA, "Accept": "application/json" },
+    });
+    if (r.status === 503) {
+        // MB rate limit / maintenance — wait then retry once.
+        await new Promise(res => setTimeout(res, 2500));
+        const r2 = await fetch(url, {
+            headers: { "User-Agent": MB_UA, "Accept": "application/json" },
+        });
+        if (!r2.ok)
+            throw new Error(`MB ${r2.status}: ${path}`);
+        return r2.json();
+    }
+    if (!r.ok)
+        throw new Error(`MB ${r.status}: ${path}`);
+    return r.json();
+}
+/**
+ * Fetch all releases for an MBID, paging up to MB_RELEASE_PAGE_CAP pages.
+ * Skips bootleg / pseudo-release / promotion statuses for first/last
+ * picks but keeps them in the count.
+ */
+async function _fetchAllMbReleases(mbid) {
+    const all = [];
+    for (let page = 0; page < MB_RELEASE_PAGE_CAP; page++) {
+        const offset = page * MB_RELEASE_PAGE;
+        const data = await _mbFetch(`/release?artist=${encodeURIComponent(mbid)}&limit=${MB_RELEASE_PAGE}&offset=${offset}`);
+        const releases = (data?.releases ?? []);
+        all.push(...releases);
+        if (releases.length < MB_RELEASE_PAGE)
+            break;
+        // Pace ourselves between pages to stay under MB's 1 req/s limit.
+        await new Promise(res => setTimeout(res, MB_RATE_LIMIT_MS));
+    }
+    return all;
+}
+async function _fetchMbArtistMeta(mbid) {
+    try {
+        const data = await _mbFetch(`/artist/${encodeURIComponent(mbid)}?inc=aliases+tags`);
+        return data ?? null;
+    }
+    catch {
+        return null;
+    }
+}
+/** Enrich a single artist by MBID. Pure: returns the patch, doesn't write.
+ *  deathYear (when known) clamps the "last" pick so a posthumous reissue
+ *  in 2025 doesn't masquerade as the artist's last recording. */
+async function _enrichOneFromMb(mbid, existingAliases = [], deathYear = null) {
+    // Releases are the strongest signal for first/last recording year.
+    const releases = await _fetchAllMbReleases(mbid);
+    // Filter out bootleg / pseudo-release / promotion when picking first/last,
+    // but only if there's at least one official release. Otherwise fall back
+    // to whatever's available so we still get something.
+    const PRIMARY_STATUS = new Set(["Official", undefined, ""]);
+    const officialOnly = releases.filter(r => PRIMARY_STATUS.has(r.status));
+    const pool = officialOnly.length ? officialOnly : releases;
+    const dated = pool
+        .map(r => ({ r, year: _yearFromMbDate(r.date) }))
+        .filter(x => x.year != null);
+    let firstYear = null;
+    let firstTitle = null;
+    let lastYear = null;
+    let lastTitle = null;
+    if (dated.length) {
+        const asc = [...dated].sort((a, b) => a.year - b.year);
+        firstYear = asc[0].year;
+        firstTitle = asc[0].r.title || null;
+        // Clamp "last" to the artist's death year + 1-year grace (a release
+        // can hit the market shortly after death without being posthumous).
+        // If we have no death year, take the global max as before.
+        const ceiling = deathYear ? deathYear + 1 : Infinity;
+        const inLifetime = asc.filter(x => x.year <= ceiling);
+        const pickFromLast = inLifetime.length ? inLifetime : asc;
+        const last = pickFromLast[pickFromLast.length - 1];
+        lastYear = last.year;
+        lastTitle = last.r.title || null;
+    }
+    // Aliases — pace before the second call.
+    await new Promise(res => setTimeout(res, MB_RATE_LIMIT_MS));
+    const meta = await _fetchMbArtistMeta(mbid);
+    const mbAliases = (meta?.aliases ?? [])
+        .map(a => a.name?.trim()).filter((s) => !!s);
+    const lowerExisting = new Set(existingAliases.map(s => s.toLowerCase()));
+    const aliasesAdded = mbAliases.filter(a => !lowerExisting.has(a.toLowerCase()));
+    return {
+        first_recording_year: firstYear,
+        first_recording_title: firstTitle,
+        last_recording_year: lastYear,
+        last_recording_title: lastTitle,
+        aliasesAdded,
+        releaseCount: releases.length,
+    };
+}
+/**
+ * Walk every blues_artists row that has an MBID and enrich first/last
+ * recording fields + aliases. Rate-limited to MusicBrainz's 1 req/s
+ * policy; for ~177 artists this takes ~6–10 minutes.
+ *
+ * If `idFilter` is given, only processes that one row (used by the
+ * per-row "Enrich" button in the editor).
+ */
+export async function enrichBluesFromMusicBrainz(opts = {}) {
+    const start = Date.now();
+    const errors = [];
+    let attempted = 0, enriched = 0, skipped = 0;
+    // Pull rows in name order, page through them so we don't keep an
+    // unbounded array in memory if the table grows.
+    const PAGE = 200;
+    let offset = 0;
+    let processed = 0;
+    outer: while (true) {
+        const { rows } = await listBluesArtists({ limit: PAGE, offset });
+        if (!rows.length)
+            break;
+        for (const row of rows) {
+            if (opts.idFilter && row.id !== opts.idFilter)
+                continue;
+            attempted++;
+            if (!row.musicbrainz_mbid) {
+                skipped++;
+                continue;
+            }
+            try {
+                const deathYear = row.death_date ? _yearFromMbDate(row.death_date) : null;
+                const patch = await _enrichOneFromMb(row.musicbrainz_mbid, row.aliases ?? [], deathYear);
+                const update = {};
+                if (patch.first_recording_year)
+                    update.first_recording_year = patch.first_recording_year;
+                if (patch.first_recording_title)
+                    update.first_recording_title = patch.first_recording_title;
+                if (patch.last_recording_year)
+                    update.last_recording_year = patch.last_recording_year;
+                if (patch.last_recording_title)
+                    update.last_recording_title = patch.last_recording_title;
+                if (patch.aliasesAdded.length) {
+                    update.aliases = [...(row.aliases ?? []), ...patch.aliasesAdded];
+                }
+                // Mark enrichment so we can skip in future passes if desired.
+                const status = (row.enrichment_status && typeof row.enrichment_status === "object")
+                    ? row.enrichment_status : {};
+                update.enrichment_status = { ...status, mb: 1, mb_releases: patch.releaseCount };
+                if (Object.keys(update).length) {
+                    await updateBluesArtist(row.id, update);
+                }
+                enriched++;
+            }
+            catch (err) {
+                errors.push({ id: row.id, mbid: row.musicbrainz_mbid, message: err?.message ?? String(err) });
+            }
+            processed++;
+            if (opts.limit && processed >= opts.limit)
+                break outer;
+            // Rate-limit between artists to stay polite.
+            await new Promise(res => setTimeout(res, MB_RATE_LIMIT_MS));
+        }
+        if (opts.idFilter)
+            break;
+        offset += PAGE;
+    }
+    return {
+        attempted,
+        enriched,
+        skipped,
         errors,
         durationMs: Date.now() - start,
     };
