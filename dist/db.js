@@ -519,6 +519,13 @@ export async function listBluesArtists(opts = {}) {
     const r = await getPool().query(sql, args);
     return { rows: r.rows, total };
 }
+/** Return every discogs_id currently in blues_artists. Used by the
+ *  admin-only "+" icon next to artist names in album popups so we can
+ *  hide the icon for artists already in the DB. */
+export async function getBluesArtistDiscogsIds() {
+    const r = await getPool().query(`SELECT discogs_id FROM blues_artists WHERE discogs_id IS NOT NULL ORDER BY discogs_id`);
+    return r.rows.map(row => row.discogs_id);
+}
 /** Wipe the entire blues_artists table. Admin-only — there's no
  *  per-row history so this is irreversible. */
 export async function deleteAllBluesArtists() {
