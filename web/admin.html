@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260412s" />
+  <link rel="stylesheet" href="/style.css?v=20260412t" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260412s"></script>
+<script defer src="/shared.js?v=20260412t"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
@@ -262,7 +262,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260412s"></script>
+<script defer src="/modal.js?v=20260412t"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -996,6 +996,9 @@ let _bluesSearchTimer = null;
 function bluesDbInit() {
   bluesDbLoadStats();
   bluesDbLoadList();
+  // Reattach to a Discogs seed already in flight (so reloading the page
+  // mid-seed still shows live progress on the button).
+  _bluesResumeSeedPollIfRunning();
 }
 
 async function bluesDbLoadStats() {
@@ -1217,29 +1220,89 @@ async function bluesDbSeed() {
   finally { btn.disabled = false; btn.textContent = "Seed from Wikidata"; }
 }
 
+// Discogs seed runs as a background job — kick it off, return 202 right
+// away, then poll status every 5s so we can show progress and pick up
+// the final summary without holding an HTTP request open (Railway's
+// edge proxy 502s connections after ~5 min).
+let _bluesSeedPollTimer = null;
+
 async function bluesDbSeedDiscogs() {
   const btn = document.getElementById("blues-seed-discogs-btn");
-  if (!confirm("Walk Discogs blues releases 1923-1930?\n\nThis is the long pass — ~30-60 minutes at 1 req/sec. Uses your admin Discogs token. Idempotent: existing rows get new releases merged in, manual edits preserved.")) return;
-  btn.disabled = true; btn.textContent = "Walking Discogs… (long)";
+  if (!confirm("Walk Discogs blues releases 1900-1930?\n\nLong pass — ~10 minutes at 1 req/sec. Uses your admin Discogs token. Runs in the background; you can leave this page and come back. Idempotent: existing rows get new releases merged in.")) return;
+  btn.disabled = true; btn.textContent = "Starting…";
   try {
     const r = await apiFetch("/api/admin/blues/seed-discogs", { method: "POST" });
-    if (!r.ok) {
+    if (r.status === 409) {
+      const j = await r.json().catch(() => ({}));
+      alert("A Discogs seed is already running (started " + (j.startedAt ?? "earlier") + "). Watching progress.");
+    } else if (!r.ok) {
       const err = await r.json().catch(() => ({}));
-      alert("Discogs seed failed: " + (err.error ?? r.status));
+      alert("Could not start seed: " + (err.error ?? r.status));
+      btn.disabled = false; btn.textContent = "Seed from Discogs";
       return;
     }
-    const out = await r.json();
-    const summary = `Discogs seed done in ${(out.durationMs/60000).toFixed(1)} min:\n` +
-      `· scanned ${out.rowsScanned} release rows across ${out.yearsScanned?.length || 0} years\n` +
-      `· ${out.uniqueArtists} unique artists found\n` +
-      `· ${out.artistsCreated} new rows created · ${out.artistsMerged} existing rows merged\n` +
-      `· ${out.releasesAdded} releases added` +
-      (out.errors?.length ? `\n· ${out.errors.length} errors` : "");
-    alert(summary);
-    bluesDbLoadStats();
-    bluesDbLoadList();
-  } catch (e) { alert("Discogs seed failed: " + e); }
-  finally { btn.disabled = false; btn.textContent = "Seed from Discogs"; }
+  } catch (e) {
+    alert("Could not start seed: " + e);
+    btn.disabled = false; btn.textContent = "Seed from Discogs";
+    return;
+  }
+  _bluesPollSeedStatus();
+}
+
+function _bluesPollSeedStatus() {
+  const btn = document.getElementById("blues-seed-discogs-btn");
+  if (_bluesSeedPollTimer) { clearInterval(_bluesSeedPollTimer); _bluesSeedPollTimer = null; }
+  const tick = async () => {
+    try {
+      const r = await apiFetch("/api/admin/blues/seed-discogs/status");
+      if (!r.ok) return;
+      const job = await r.json();
+      if (job.status === "running") {
+        const p = job.progress;
+        if (p?.phase === "scanning") {
+          btn.textContent = `Scanning ${p.yearsScannedSoFar}/${p.yearsTotal}y · ${p.uniqueArtistsSoFar} artists`;
+        } else if (p?.phase === "upserting") {
+          btn.textContent = `Upserting ${p.upsertsDone}/${p.upsertsTotal}`;
+        } else {
+          btn.textContent = "Seeding…";
+        }
+        return;
+      }
+      // Terminal state — stop polling, refresh list, summarise.
+      clearInterval(_bluesSeedPollTimer); _bluesSeedPollTimer = null;
+      btn.disabled = false; btn.textContent = "Seed from Discogs";
+      bluesDbLoadStats();
+      bluesDbLoadList();
+      if (job.status === "done" && job.result) {
+        const o = job.result;
+        alert(`Discogs seed done in ${(o.durationMs/60000).toFixed(1)} min:\n` +
+          `· scanned ${o.rowsScanned} release rows across ${o.yearsScanned?.length || 0} years\n` +
+          `· ${o.uniqueArtists} unique artists found\n` +
+          `· ${o.artistsCreated} new rows created · ${o.artistsMerged} existing rows merged\n` +
+          `· ${o.releasesAdded} releases added` +
+          (o.errors?.length ? `\n· ${o.errors.length} errors` : ""));
+      } else if (job.status === "error") {
+        alert("Discogs seed errored: " + (job.error ?? "unknown"));
+      }
+    } catch { /* network blip — next tick will retry */ }
+  };
+  tick();
+  _bluesSeedPollTimer = setInterval(tick, 5000);
+}
+
+// Hook into any in-flight seed when the tab loads — so the button shows
+// progress even if the admin reloaded the page mid-seed.
+async function _bluesResumeSeedPollIfRunning() {
+  try {
+    const r = await apiFetch("/api/admin/blues/seed-discogs/status");
+    if (!r.ok) return;
+    const job = await r.json();
+    if (job.status === "running") {
+      const btn = document.getElementById("blues-seed-discogs-btn");
+      if (btn) btn.disabled = true;
+      _bluesPollSeedStatus();
+    }
+  } catch {}
 }
 
 // MusicBrainz enrichment. id = null means bulk run across every row that

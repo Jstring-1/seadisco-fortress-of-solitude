@@ -3339,16 +3339,42 @@ app.post("/api/admin/blues/enrich-mb", async (req, res) => {
   }
 });
 
-// Phase 1.5 — Discogs year-walk seed. Walks releases by year+genre and
-// upserts an artist row per credit, recording every Discogs master ID we
-// found them on (Masters+). Uses the admin's Discogs token.
+// Phase 1.5 — Discogs year-walk seed (background job).
 //
-//   POST /api/admin/blues/seed-discogs[?startYear=1923&endYear=1930&maxPages=25]
+//   POST /api/admin/blues/seed-discogs[?startYear=1900&endYear=1930&maxPages=25]
+//        → 202 immediately if the job started, 409 if one's already running
+//   GET  /api/admin/blues/seed-discogs/status
+//        → { status: "idle"|"running"|"done"|"error", progress, result, error }
 //
-// Long-running: 30-60 minutes for the default 1923-1930 sweep.
+// The seed walks Discogs paginated search results paced 1.1s/req and runs
+// for ~10 minutes — well past Railway's edge proxy timeout. We run it as
+// a background promise so the HTTP request can return immediately, and
+// the admin UI polls the status endpoint to display progress.
+
+interface BluesSeedJobState {
+  status: "idle" | "running" | "done" | "error";
+  startedAt: string | null;
+  endedAt: string | null;
+  progress: import("./blues-db.js").DiscogsSeedProgress | null;
+  result: import("./blues-db.js").DiscogsSeedResult | null;
+  error: string | null;
+}
+let _bluesDiscogsJob: BluesSeedJobState = {
+  status: "idle", startedAt: null, endedAt: null,
+  progress: null, result: null, error: null,
+};
+
 app.post("/api/admin/blues/seed-discogs", async (req, res) => {
   const adminId = await requireAdmin(req, res);
   if (!adminId) return;
+  if (_bluesDiscogsJob.status === "running") {
+    res.status(409).json({
+      error: "Seed already running",
+      startedAt: _bluesDiscogsJob.startedAt,
+      progress: _bluesDiscogsJob.progress,
+    });
+    return;
+  }
   const client = await getDiscogsClientForUser(adminId);
   if (!client) {
     res.status(400).json({ error: "Admin has no Discogs token configured. Connect Discogs on the Account page first." });
@@ -3357,14 +3383,39 @@ app.post("/api/admin/blues/seed-discogs", async (req, res) => {
   const startYear = parseInt(String(req.query.startYear ?? "1900"), 10);
   const endYear   = parseInt(String(req.query.endYear   ?? "1930"), 10);
   const maxPages  = parseInt(String(req.query.maxPages  ?? "25"),   10);
-  if (typeof req.setTimeout === "function") req.setTimeout(90 * 60 * 1000);
-  try {
-    const result = await seedBluesArtistsFromDiscogs(client, { startYear, endYear, maxPages });
-    res.json({ ok: true, ...result });
-  } catch (err: any) {
-    console.error("[blues seed-discogs]", err);
-    res.status(500).json({ error: err?.message ?? String(err) });
-  }
+
+  // Reset job state and kick off — explicitly NOT awaited.
+  _bluesDiscogsJob = {
+    status: "running",
+    startedAt: new Date().toISOString(),
+    endedAt: null,
+    progress: null,
+    result: null,
+    error: null,
+  };
+  seedBluesArtistsFromDiscogs(client, {
+    startYear, endYear, maxPages,
+    onProgress: (p) => { _bluesDiscogsJob.progress = p; },
+  })
+    .then(result => {
+      _bluesDiscogsJob.status = "done";
+      _bluesDiscogsJob.result = result;
+      _bluesDiscogsJob.endedAt = new Date().toISOString();
+    })
+    .catch(err => {
+      _bluesDiscogsJob.status = "error";
+      _bluesDiscogsJob.error = err?.message ?? String(err);
+      _bluesDiscogsJob.endedAt = new Date().toISOString();
+      console.error("[blues seed-discogs]", err);
+    });
+
+  // 202 Accepted — work is in flight, frontend should poll status.
+  res.status(202).json({ ok: true, started: true, startedAt: _bluesDiscogsJob.startedAt });
+});
+
+app.get("/api/admin/blues/seed-discogs/status", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  res.json(_bluesDiscogsJob);
 });
 
 // Phase 3a — Wikipedia notes (lead paragraph). ~3 min for 177 artists.
