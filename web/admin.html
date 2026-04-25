@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260412n" />
+  <link rel="stylesheet" href="/style.css?v=20260412o" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260412n"></script>
+<script defer src="/shared.js?v=20260412o"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
@@ -255,7 +255,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260412n"></script>
+<script defer src="/modal.js?v=20260412o"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1029,36 +1029,59 @@ function bluesDbRenderList() {
     return "";
   };
   const rows = _bluesDbState.rows.map(r => {
-    const styles = (Array.isArray(r.styles) ? r.styles : []).slice(0, 3).join(", ");
+    const styles = (Array.isArray(r.styles) ? r.styles : []).slice(0, 2).join(", ");
+    const instruments = (Array.isArray(r.instruments) ? r.instruments : []).slice(0, 2).join(", ");
     const dates = fmtRange(r.birth_date, r.death_date);
     const relCount = Array.isArray(r.discogs_releases) ? r.discogs_releases.length : 0;
+    // Source badges — compact letters showing which enrichers have run.
+    const st = r.enrichment_status && typeof r.enrichment_status === "object" ? r.enrichment_status : {};
+    const sources = [
+      st.wikidata     && "W",
+      st.discogs_seed && "Ds",
+      st.mb           && "M",
+      st.wiki         && "Wp",
+      st.discogs      && "D",
+      st.yt           && "Y",
+    ].filter(Boolean).join(" ");
     return `<tr>
       <td><a href="#" onclick="event.preventDefault();bluesDbOpenEditor(${r.id})" style="color:var(--accent)">${esc(r.name)}</a></td>
       <td>${esc(dates)}</td>
+      <td style="text-align:right" title="Earliest of first_recording_year (MB) and min(discogs_releases.year)">${r.earliest_release_year ?? ""}</td>
+      <td style="text-align:right">${r.last_recording_year ?? ""}</td>
       <td>${esc(r.birth_place ?? "")}</td>
+      <td>${esc(r.hometown_region ?? "")}</td>
       <td>${esc(styles)}</td>
-      <td>${esc(r.wikidata_qid ?? "")}</td>
+      <td>${esc(instruments)}</td>
       <td>${r.discogs_id ? esc(r.discogs_id) : ""}</td>
       <td style="text-align:right">${relCount || ""}</td>
+      <td style="font-size:0.72rem;color:var(--muted)" title="Sources: W=Wikidata · Ds=Discogs seed · M=MusicBrainz · Wp=Wiki notes · D=Discogs ID · Y=YouTube">${esc(sources)}</td>
     </tr>`;
   }).join("");
-  // Build clickable column headers. The sort key matches what the
-  // server's _BLUES_SORT_COLUMNS whitelist accepts.
+  // Build clickable column headers. Sort key matches the server's
+  // _BLUES_SORT_COLUMNS whitelist.
   const _bluesCols = [
-    { key: "name",         label: "Name" },
-    { key: "birth_date",   label: "Years" },
-    { key: "birth_place",  label: "Birth place" },
-    { key: "styles",       label: "Styles" },
-    { key: "wikidata_qid", label: "QID" },
-    { key: "discogs_id",   label: "Discogs" },
-    { key: "release_count", label: "#", align: "right", title: "Discogs masters/releases" },
+    { key: "name",                 label: "Name" },
+    { key: "birth_date",           label: "Years",       title: "Birth-Death" },
+    { key: "earliest_release",     label: "1st rel",     align: "right", title: "Earliest year — first_recording_year (MB) or min(discogs_releases.year)" },
+    { key: "last_recording_year",  label: "Last rec",    align: "right" },
+    { key: "birth_place",          label: "Birth place" },
+    { key: "hometown_region",      label: "Hometown" },
+    { key: "styles",               label: "Styles" },
+    { key: null,                   label: "Instruments" },
+    { key: "discogs_id",           label: "Discogs" },
+    { key: "release_count",        label: "#",           align: "right", title: "Discogs masters/releases" },
+    { key: null,                   label: "Sources",     title: "W=Wikidata · Ds=Discogs seed · M=MusicBrainz · Wp=Wiki notes · D=Discogs ID · Y=YouTube" },
   ];
   const headerCells = _bluesCols.map(c => {
-    const active = _bluesDbState.sort === c.key;
+    const sortable = !!c.key;
+    const active = sortable && _bluesDbState.sort === c.key;
     const arrow = active ? (_bluesDbState.order === "asc" ? " ▲" : " ▼") : "";
     const align = c.align === "right" ? "text-align:right;" : "";
     const title = c.title ? ` title="${c.title}"` : "";
-    return `<th style="padding:0.35rem 0.5rem;cursor:pointer;user-select:none;${align}${active ? "color:var(--accent);" : ""}" onclick="bluesDbToggleSort('${c.key}')"${title}>${c.label}${arrow}</th>`;
+    const cursor = sortable ? "cursor:pointer;" : "";
+    const onclick = sortable ? ` onclick="bluesDbToggleSort('${c.key}')"` : "";
+    const colour = active ? "color:var(--accent);" : "";
+    return `<th style="padding:0.35rem 0.5rem;${cursor}user-select:none;${align}${colour}"${onclick}${title}>${c.label}${arrow}</th>`;
   }).join("");
   list.innerHTML = `
     <table style="width:100%;border-collapse:collapse;font-size:0.82rem">

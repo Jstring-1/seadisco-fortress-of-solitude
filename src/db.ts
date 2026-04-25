@@ -481,19 +481,36 @@ function _coerceBluesValue(field: string, value: any): any {
   return String(value);
 }
 
+// SQL fragment that computes the earliest release year for an artist:
+// the smaller of first_recording_year (filled by MB enrichment) and the
+// minimum year inside the discogs_releases JSONB array (filled by the
+// Discogs seed). Used for both the display column and the sort key.
+const _EARLIEST_REL_SQL = `
+  LEAST(
+    first_recording_year,
+    (SELECT min((rel->>'year')::int)
+       FROM jsonb_array_elements(coalesce(discogs_releases, '[]'::jsonb)) rel
+       WHERE rel ? 'year' AND (rel->>'year') ~ '^[0-9]+$')
+  )
+`;
+
 // Whitelist of sortable columns → SQL fragments. Anything outside this
 // map is rejected so the admin form can't smuggle arbitrary SQL.
 const _BLUES_SORT_COLUMNS: Record<string, string> = {
-  name:          "lower(name)",
-  birth_date:    "birth_date",
-  death_date:    "death_date",
-  birth_place:   "lower(coalesce(birth_place,''))",
-  styles:        "lower(coalesce(styles->>0,''))",
-  wikidata_qid:  "wikidata_qid",
-  discogs_id:    "discogs_id",
-  release_count: "jsonb_array_length(coalesce(discogs_releases, '[]'::jsonb))",
-  date_added:    "date_added",
-  updated_at:    "updated_at",
+  name:           "lower(name)",
+  birth_date:     "birth_date",
+  death_date:     "death_date",
+  birth_place:    "lower(coalesce(birth_place,''))",
+  hometown_region:"lower(coalesce(hometown_region,''))",
+  styles:         "lower(coalesce(styles->>0,''))",
+  wikidata_qid:   "wikidata_qid",
+  discogs_id:     "discogs_id",
+  release_count:  "jsonb_array_length(coalesce(discogs_releases, '[]'::jsonb))",
+  earliest_release: _EARLIEST_REL_SQL,
+  first_recording_year: "first_recording_year",
+  last_recording_year:  "last_recording_year",
+  date_added:     "date_added",
+  updated_at:     "updated_at",
 };
 
 export async function listBluesArtists(opts: { search?: string; limit?: number; offset?: number; sort?: string; order?: string } = {}): Promise<{ rows: any[]; total: number }> {
@@ -513,7 +530,9 @@ export async function listBluesArtists(opts: { search?: string; limit?: number; 
   // NULLS LAST so empty values don't dominate the top of asc sorts.
   args.push(limit, offset);
   const sql = `
-    SELECT * FROM blues_artists
+    SELECT *,
+           ${_EARLIEST_REL_SQL} AS earliest_release_year
+    FROM blues_artists
     ${where}
     ORDER BY ${sortFrag} ${dir} NULLS LAST, lower(name) ASC
     LIMIT $${args.length - 1} OFFSET $${args.length}
@@ -538,10 +557,65 @@ export async function deleteBluesArtist(id: number): Promise<void> {
   await getPool().query(`DELETE FROM blues_artists WHERE id = $1`, [id]);
 }
 
-export async function upsertBluesArtistByQid(record: Record<string, any>): Promise<number> {
+/** Upsert a Wikidata-sourced blues artist row.
+ *
+ *  Match order:
+ *    1. existing row with same wikidata_qid  (re-running the seed)
+ *    2. existing row with same discogs_id    (Discogs seed already
+ *       created it — this is how the Wikidata seed merges its
+ *       bio data into Discogs-keyed rows)
+ *    3. else INSERT new row
+ *
+ *  When merging into an existing row we use COALESCE semantics: blank
+ *  existing fields get filled, non-blank existing fields stay put so
+ *  manual edits and earlier richer data aren't trampled. */
+export async function upsertBluesArtistByQid(record: Record<string, any>): Promise<{ id: number; merged: boolean; createdNew: boolean; matchedBy: "qid" | "discogs_id" | null }> {
   if (!record.wikidata_qid || !record.name) {
     throw new Error("upsertBluesArtistByQid requires wikidata_qid and name");
   }
+  // Look up existing row by either key.
+  const existing = await getPool().query(
+    `SELECT id, wikidata_qid, discogs_id FROM blues_artists
+     WHERE wikidata_qid = $1
+        OR ($2::int IS NOT NULL AND discogs_id = $2::int)
+     ORDER BY (wikidata_qid = $1) DESC
+     LIMIT 1`,
+    [record.wikidata_qid, record.discogs_id ?? null],
+  );
+  if (existing.rows.length) {
+    const row = existing.rows[0];
+    const matchedBy: "qid" | "discogs_id" =
+      row.wikidata_qid === record.wikidata_qid ? "qid" : "discogs_id";
+    // Build a COALESCE-style UPDATE so non-null existing values win.
+    // JSONB array fields use a different rule: prefer the existing
+    // array if it has content; otherwise take the new one.
+    const sets: string[] = [];
+    const vals: any[] = [];
+    for (const f of _BLUES_FIELDS) {
+      if (!(f in record)) continue;
+      vals.push(_coerceBluesValue(f, (record as any)[f]));
+      const ph = `$${vals.length}`;
+      if (_BLUES_JSONB_FIELDS.has(f)) {
+        // Keep existing JSONB unless it's NULL / empty array.
+        sets.push(`${f} = CASE
+          WHEN ${f} IS NULL OR jsonb_typeof(${f}) = 'null' OR ${f} = '[]'::jsonb
+            THEN ${ph}::jsonb
+          ELSE ${f}
+        END`);
+      } else {
+        // Keep existing scalar unless it's NULL or empty string.
+        sets.push(`${f} = COALESCE(NULLIF(${f}, ''), ${ph})`);
+      }
+    }
+    vals.push(new Date()); sets.push(`updated_at = $${vals.length}`);
+    vals.push(row.id);
+    await getPool().query(
+      `UPDATE blues_artists SET ${sets.join(", ")} WHERE id = $${vals.length}`,
+      vals,
+    );
+    return { id: row.id, merged: true, createdNew: false, matchedBy };
+  }
+  // No existing row — straight insert.
   const cols: string[] = [];
   const vals: any[] = [];
   const ph: string[] = [];
@@ -551,18 +625,11 @@ export async function upsertBluesArtistByQid(record: Record<string, any>): Promi
     vals.push(_coerceBluesValue(f, (record as any)[f]));
     ph.push(`$${vals.length}`);
   }
-  // updated_at always bumped on upsert
-  cols.push("updated_at"); vals.push(new Date()); ph.push(`$${vals.length}`);
-  const updateSet = cols.filter(c => c !== "wikidata_qid").map(c => `${c} = EXCLUDED.${c}`).join(", ");
-  const sql = `
-    INSERT INTO blues_artists (${cols.join(", ")})
-    VALUES (${ph.join(", ")})
-    ON CONFLICT (wikidata_qid)
-    DO UPDATE SET ${updateSet}
-    RETURNING id
-  `;
-  const r = await getPool().query(sql, vals);
-  return r.rows[0].id;
+  const ins = await getPool().query(
+    `INSERT INTO blues_artists (${cols.join(", ")}) VALUES (${ph.join(", ")}) RETURNING id`,
+    vals,
+  );
+  return { id: ins.rows[0].id, merged: false, createdNew: true, matchedBy: null };
 }
 
 /** Upsert from the Discogs seeder. Keys on discogs_id. Merges
