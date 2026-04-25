@@ -455,7 +455,10 @@ async function openWikiPopup(query) {
     }
     const data = await r.json();
     if (!data.found) {
-      content.innerHTML = `<div style="padding:1rem;color:var(--muted)">No Wikipedia article found for <em>${escHtml(q)}</em>.</div>`;
+      // Fallback: no direct article hit — pull general search results into
+      // the same popup so the user can pick the closest match without
+      // dropping out to the wiki page.
+      await _renderWikiPopupFallbackSearch(q, content);
       loading.style.display = "none";
       return;
     }
@@ -610,6 +613,36 @@ function closeWikiPopup() {
 document.getElementById("wiki-overlay")?.addEventListener("click", e => {
   if (e.target === document.getElementById("wiki-overlay")) closeWikiPopup();
 });
+
+// Fallback for the wiki POPUP: when openWikiPopup(q) gets no direct
+// article match, fetch /api/wikipedia/search and render up to 10
+// suggestions inline. Each row is clickable and re-enters the popup
+// with the chosen title, so the user never leaves the overlay.
+async function _renderWikiPopupFallbackSearch(q, contentEl) {
+  contentEl.innerHTML = `
+    <div class="wiki-header">
+      <h2 style="margin:0 0 0.4rem 0">No exact match for "${escHtml(q)}"</h2>
+      <div style="font-size:0.85rem;color:var(--muted);margin-bottom:0.4rem">Closest articles on Wikipedia — click to open in this popup.</div>
+    </div>
+    <div class="wiki-popup-fallback wiki-results-list"><div class="wiki-results-loading">Searching Wikipedia for <em>${escHtml(q)}</em>…</div></div>`;
+  const listEl = contentEl.querySelector(".wiki-popup-fallback");
+  try {
+    const r = await apiFetch(`/api/wikipedia/search?q=${encodeURIComponent(q)}&limit=10&offset=0`);
+    if (!r.ok) {
+      listEl.innerHTML = `<div class="wiki-results-error">Wikipedia search failed.</div>`;
+      return;
+    }
+    const data = await r.json();
+    const rows = Array.isArray(data?.results) ? data.results : [];
+    if (!rows.length) {
+      listEl.innerHTML = `<div class="wiki-results-empty">No matches for <em>${escHtml(q)}</em>.</div>`;
+      return;
+    }
+    listEl.innerHTML = rows.map(_wikiResultRowHtml).join("");
+  } catch (err) {
+    listEl.innerHTML = `<div class="wiki-results-error">Wikipedia search failed.</div>`;
+  }
+}
 
 // localStorage-backed recent-searches list for the wiki SPA page.
 // Keeps last 8 unique queries (most recent first) and rehydrates the
