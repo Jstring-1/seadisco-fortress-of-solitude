@@ -903,7 +903,9 @@ function _aiEntityLinks(name, kind) {
     newSearch = `event.preventDefault();searchFromAiPanel('query','${safeEsc}')`;
   }
   const cwField = kind === "artist" ? "cw-artist" : kind === "label" ? "cw-label" : "cw-query";
-  const wikiQ = kind === "label" ? `${name} record label` : name;
+  // Quote the entity name for Wikipedia so we get an exact-phrase match;
+  // for labels add the unquoted "record label" hint as extra search context.
+  const wikiQ = kind === "label" ? `"${name}" record label` : `"${name}"`;
   return `<a href="#" class="ai-entity-link" onclick="${newSearch}" title="New SeaDisco search for ${escHtml(name)}">${escHtml(name)}</a>` +
     ` <a href="#" class="track-search-icon ai-entity-icon" onclick="event.preventDefault();searchCollectionFor('${cwField}','${safeEsc}')" title="Search your records for ${escHtml(name)}">⌕</a>` +
     ` <a href="#" class="wiki-icon ai-entity-icon" onclick="event.preventDefault();openWikiPopup('${escHtml(String(wikiQ).replace(/'/g, "\\'"))}')" title="Wikipedia: ${escHtml(name)}">W</a>`;

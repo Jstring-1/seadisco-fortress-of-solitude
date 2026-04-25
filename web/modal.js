@@ -827,10 +827,19 @@ document.addEventListener("keydown", e => {
 }, true);
 
 // Small "W" icon to render after a magnifying glass — opens the wiki popup
-// for the given query. Keeps the visual footprint tiny and tied to the entity.
-function wikiIcon(query, label = "") {
+// for the given query. Wraps the term in double-quotes so Wikipedia's
+// CirrusSearch treats it as an exact phrase — fixes fuzzy mismatches
+// like "Bill Wax" → Bill Gates by forcing a literal phrase match.
+// Pass extraTerms (unquoted) for context like "record label" so the
+// quoted phrase isn't the entire query.
+function wikiIcon(query, label = "", extraTerms = "") {
   if (!query) return "";
-  const q = String(query).replace(/'/g, "\\'");
+  const phrase = String(query).trim();
+  if (!phrase) return "";
+  const composed = extraTerms
+    ? `"${phrase}" ${String(extraTerms).trim()}`
+    : `"${phrase}"`;
+  const q = composed.replace(/'/g, "\\'");
   const lab = label || query;
   return ` <a href="#" class="wiki-icon" onclick="event.preventDefault();openWikiPopup('${escHtml(q)}')" title="Wikipedia: ${escHtml(lab)}">W</a>`;
 }
@@ -1452,7 +1461,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const detailRows = [
     labelNames.length ? `<span class="detail-label">Label</span><span>${labelNames.map(n => {
       const esc = n.replace(/'/g, "\\'");
-      return `<a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('f-label').value='${escHtml(esc)}';applyEntityLinkDefaults();toggleAdvanced(true);doSearch(1)" title="Search for ${escHtml(n)} releases">${escHtml(n)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-label','${escHtml(esc)}')" title="Search your collection for ${escHtml(n)}">⌕</a>${wikiIcon(stripDupSuffix(n) + " record label", n)}`;
+      return `<a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('f-label').value='${escHtml(esc)}';applyEntityLinkDefaults();toggleAdvanced(true);doSearch(1)" title="Search for ${escHtml(n)} releases">${escHtml(n)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-label','${escHtml(esc)}')" title="Search your collection for ${escHtml(n)}">⌕</a>${wikiIcon(stripDupSuffix(n), n, "record label")}`;
     }).join(", ")}</span>` : "",
     (labels && labelCodeRow) ? labelCodeRow : "",
     (!isMaster && catno) ? `<span class="detail-label">Cat#</span><span><a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('query').value='${escHtml(catnoEsc)}';doSearch(1)" title="Search for this catalog number">${escHtml(catno)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-query','${escHtml(catnoEsc)}')" title="Search your collection for ${escHtml(catno)}">⌕</a></span>` : "",
@@ -1504,9 +1513,12 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         const searchIcon = t.title
           ? ` <a class="track-search-icon" href="#" onclick="event.preventDefault();searchCollectionFor('cw-query','${escHtml(trackSearchQ)}')" title="Search your records for &quot;${escHtml(t.title)}&quot;">⌕</a>`
           : "";
-        // W → wiki popup for the track title (artist context helps disambiguation).
+        // W → wiki popup for the track title (artist context helps
+        // disambiguation). Quote the title via wikiIcon's phrase arg and
+        // pass the artist as unquoted extra terms so the search becomes
+        // `"Hi-Heel Sneakers" Tommy Tucker` instead of one big phrase.
         const wikiW = t.title
-          ? wikiIcon(`${t.title}${trackArtist ? " " + trackArtist : ""}`, t.title)
+          ? wikiIcon(t.title, t.title, trackArtist || "")
           : "";
         // External YouTube search — restored to the end of the title row,
         // after the wiki icon. Only shown when there's no in-app playable
@@ -1563,7 +1575,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
              : `<div class="album-cover-placeholder">♪</div>`}
       <div class="album-meta">
         ${typeLabel ? `<div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.3rem"><div class="album-type-badge" style="cursor:pointer;user-select:none" onclick="navigator.clipboard.writeText('${escHtml(String(releaseId))}');this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy ID">${escHtml(typeLabel)}</div><button class="popup-share-inline" onclick="sharePopup(this)" title="Copy share link">share</button></div>` : ""}
-        <h2><a href="#" class="modal-title-link" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">${escHtml(title)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">⌕</a>${wikiIcon((stripDupSuffix(artists[0] || "") + " " + stripDupSuffix(title)).trim(), title)}</h2>
+        <h2><a href="#" class="modal-title-link" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">${escHtml(title)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">⌕</a>${wikiIcon(stripDupSuffix(title), title, stripDupSuffix(artists[0] || ""))}</h2>
         ${artists.length ? `<div class="album-artist">${artists.map(n => `<a href="#" class="modal-artist-link" data-artist="${escHtml(n)}" onclick="searchArtistFromModal(event,this)" title="Search for ${escHtml(n)}">${escHtml(n)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(n.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(n)}">⌕</a>${wikiIcon(stripDupSuffix(n), n)}`).join(", ")}</div>` : ""}
         ${detailRows ? `<div class="album-detail-grid">${detailRows}</div>` : ""}
         ${(() => {
