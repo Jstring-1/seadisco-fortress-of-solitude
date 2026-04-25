@@ -3189,7 +3189,9 @@ Return ONLY a valid JSON object, no markdown, no explanation.`;
       },
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
-        max_tokens: 1700,
+        // 12 items × structured JSON with richer descriptions blew past 1700;
+        // 2800 leaves headroom so the JSON never truncates mid-array.
+        max_tokens: 2800,
         messages: [{ role: "user", content: prompt }],
       }),
       context: "ai-search suggestions",
@@ -3203,7 +3205,25 @@ Return ONLY a valid JSON object, no markdown, no explanation.`;
     let text = (data.content?.[0]?.text ?? "{}").trim();
     // Strip markdown code fences if present
     text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-    const parsed = JSON.parse(text);
+    let parsed: any;
+    try {
+      parsed = JSON.parse(text);
+    } catch (parseErr) {
+      // Defensive: if the model truncated mid-array (max_tokens hit, network
+      // hiccup, etc.), salvage the well-formed prefix instead of returning
+      // a generic 500. Trim back to the last complete `},` then close the
+      // array+object brackets.
+      console.warn("[ai-search] JSON parse failed, attempting salvage. stop_reason=", data.stop_reason);
+      const lastClosed = text.lastIndexOf("},");
+      if (lastClosed > 0) {
+        const salvaged = text.slice(0, lastClosed + 1) + "]}";
+        try { parsed = JSON.parse(salvaged); } catch { /* fall through */ }
+      }
+      if (!parsed) {
+        res.status(502).json({ error: "AI returned malformed JSON", stop_reason: data.stop_reason });
+        return;
+      }
+    }
     // Support both new { blurb, items } format and legacy bare array
     const recommendations = Array.isArray(parsed) ? parsed : (parsed.items ?? []);
     const blurb: string = Array.isArray(parsed) ? "" : (parsed.blurb ?? "");
