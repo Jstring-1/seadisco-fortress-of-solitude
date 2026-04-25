@@ -5353,6 +5353,20 @@ footer {
   border-bottom-color: var(--accent2, var(--accent));
 }
 
+/* Disambiguation-list entries — leading "Name (qualifier)" becomes a
+   click that loads that exact Wikipedia article in the popup. */
+.wiki-disambig-link {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--accent-dim);
+  cursor: pointer;
+  transition: color 0.12s, border-color 0.12s;
+}
+.wiki-disambig-link:hover {
+  color: var(--accent2, var(--accent));
+  border-bottom-color: var(--accent2, var(--accent));
+}
+
 /* ── AI results panel (persistent, scrollable, top-X close) ──────────── */
 .ai-results-panel {
   position: relative;
@@ -5468,13 +5482,16 @@ footer {
 #version-info .track-play-btn.now-playing { color: var(--accent2) !important; }
 
 /* External YouTube-search fallback — sits at the end of the title row,
-   after the wiki W. Only shown when no in-app playable URL exists. */
+   after the wiki W. Only shown when no in-app playable URL exists.
+   Default state is dim so the muted red doesn't shout against text;
+   hover brightens it. The SVG itself uses a desaturated #8a2a22, not
+   the eye-piercing pure-red #FF0000. */
 .track-yt-search-end {
   display: inline-flex;
   vertical-align: middle;
   margin-left: 0.25rem;
   text-decoration: none;
-  opacity: 0.85;
+  opacity: 0.65;
   transition: opacity 0.12s;
 }
 .track-yt-search-end:hover { opacity: 1; }

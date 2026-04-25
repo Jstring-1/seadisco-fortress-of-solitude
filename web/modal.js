@@ -505,6 +505,56 @@ async function openWikiPopup(query, opts = {}) {
         a.setAttribute("rel", "noopener");
       }
     });
+    // Disambiguation pages: each <li> like "Fred Jackson (saxophonist),
+    // American R&B…" gets the leading name + qualifier turned into a
+    // wiki-popup link so the user can jump straight to the right person.
+    // We only touch list items that have NO existing anchor (so we don't
+    // double-wrap real wiki links in articles that survived stripping).
+    content.querySelectorAll(".wiki-extract li").forEach(li => {
+      if (li.querySelector("a")) return;
+      const raw = (li.textContent || "").trim();
+      if (!raw || raw.length < 3) return;
+      // Step 1: capture the leading proper-noun phrase (capitalised words,
+      // initials with dots, common connectors like "of/the/de/von/and").
+      const nameMatch = raw.match(
+        /^([A-Z][\w'\-.]*(?:\s+(?:[A-Z][\w'\-.]*|of|the|de|von|van|der|du|da|y|and|&)){0,6})/
+      );
+      if (!nameMatch) return;
+      let prefix = nameMatch[1].trim();
+      let consumed = nameMatch[0].length;
+      // Step 2: optionally append a "(qualifier)" — but only if it's an
+      // article disambiguator like "(saxophonist)" rather than a date
+      // like "(born 1981)" or "(1868–1931)".
+      const after = raw.slice(consumed);
+      const qualMatch = after.match(/^\s*\(([^)]+)\)/);
+      if (qualMatch) {
+        const qual = qualMatch[1].trim();
+        // Treat as date/year if it contains any 3-4 digit run — covers
+        // "born 1981", "1868–1931", "born c. 1945", "fl. 1700s", etc.
+        // Wikipedia article disambiguators are descriptive words like
+        // "(saxophonist)" / "(album)" — those rarely contain digits.
+        const isDate = /\b\d{3,4}\b/.test(qual);
+        if (!isDate && qual.length <= 60) {
+          prefix = `${prefix} (${qual})`;
+          consumed += qualMatch[0].length;
+        }
+      }
+      if (prefix.length < 3 || prefix.length > 80) return;
+      const remainder = raw.slice(consumed);
+      const a = document.createElement("a");
+      a.href = "#";
+      a.className = "wiki-disambig-link";
+      a.textContent = prefix;
+      a.title = `Open Wikipedia: ${prefix}`;
+      a.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        ev.stopPropagation();
+        try { openWikiPopup(prefix); } catch {}
+      });
+      li.textContent = "";
+      li.appendChild(a);
+      if (remainder) li.appendChild(document.createTextNode(remainder));
+    });
     // TextExtracts strips internal wiki links, so the article body is mostly
     // dead text. Wikipedia keeps proper nouns / article subjects bolded —
     // turn every <b> into a clickable Discogs search so users can jump
@@ -1250,7 +1300,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         // after the wiki icon. Only shown when there's no in-app playable
         // match, so it acts as a fallback rather than duplicate of ▶.
         const ytSearchEnd = (t.title && !url)
-          ? ` <a class="track-yt-search-end" href="https://www.youtube.com/results?search_query=${ytQuery}" target="_blank" rel="noopener" title="Search on YouTube"><svg width="14" height="10" viewBox="0 0 16 11" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="11" rx="2.5" fill="#FF0000"/><path d="M6.5 3L11 5.5L6.5 8V3Z" fill="white"/></svg></a>`
+          ? ` <a class="track-yt-search-end" href="https://www.youtube.com/results?search_query=${ytQuery}" target="_blank" rel="noopener" title="Search on YouTube"><svg width="14" height="10" viewBox="0 0 16 11" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="11" rx="2.5" fill="#8a2a22"/><path d="M6.5 3L11 5.5L6.5 8V3Z" fill="#e8dcc8"/></svg></a>`
           : "";
         const trackCredits = (t.extraartists ?? []).length
           ? `<div class="track-credits">${t.extraartists.map(a => {
