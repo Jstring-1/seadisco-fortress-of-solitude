@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260412m" />
+  <link rel="stylesheet" href="/style.css?v=20260412n" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260412m"></script>
+<script defer src="/shared.js?v=20260412n"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
@@ -133,6 +133,7 @@
           <button class="admin-btn" onclick="bluesDbEnrichWiki(null)" id="blues-enrich-wiki-btn" title="Pull the Wikipedia lead paragraph into the notes field for any row with a wikipedia_suffix. Skips rows that already have notes.">Enrich notes (Wiki)</button>
           <button class="admin-btn" onclick="bluesDbEnrichDiscogs(null)" id="blues-enrich-discogs-btn" title="Look up missing Discogs IDs by artist name. Uses your admin Discogs token. ~3–5 min.">Enrich Discogs</button>
           <button class="admin-btn" onclick="bluesDbOpenEditor(null)" title="Add a new artist row manually">+ Add artist</button>
+          <button class="admin-btn admin-btn-danger" onclick="bluesDbDeleteAll()" id="blues-delete-all-btn" title="Wipe every row in the blues_artists table. Two-step confirm. Use to clear a noisy seed before re-running.">Delete all</button>
           <span id="blues-stats" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
         </div>
         <div style="display:flex;gap:0.5rem;margin-bottom:0.6rem">
@@ -254,7 +255,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260412m"></script>
+<script defer src="/modal.js?v=20260412n"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -975,7 +976,7 @@ async function loadAdminItems() {
 }
 
 // ── Blues DB tab ────────────────────────────────────────────────────────
-let _bluesDbState = { rows: [], total: 0, limit: 50, offset: 0, search: "", editingId: null };
+let _bluesDbState = { rows: [], total: 0, limit: 50, offset: 0, search: "", editingId: null, sort: "name", order: "asc" };
 let _bluesSearchTimer = null;
 
 function bluesDbInit() {
@@ -1001,6 +1002,8 @@ async function bluesDbLoadList() {
     search: _bluesDbState.search,
     limit: String(_bluesDbState.limit),
     offset: String(_bluesDbState.offset),
+    sort: _bluesDbState.sort,
+    order: _bluesDbState.order,
   });
   try {
     const r = await apiFetch("/api/admin/blues/list?" + params.toString());
@@ -1039,17 +1042,29 @@ function bluesDbRenderList() {
       <td style="text-align:right">${relCount || ""}</td>
     </tr>`;
   }).join("");
+  // Build clickable column headers. The sort key matches what the
+  // server's _BLUES_SORT_COLUMNS whitelist accepts.
+  const _bluesCols = [
+    { key: "name",         label: "Name" },
+    { key: "birth_date",   label: "Years" },
+    { key: "birth_place",  label: "Birth place" },
+    { key: "styles",       label: "Styles" },
+    { key: "wikidata_qid", label: "QID" },
+    { key: "discogs_id",   label: "Discogs" },
+    { key: "release_count", label: "#", align: "right", title: "Discogs masters/releases" },
+  ];
+  const headerCells = _bluesCols.map(c => {
+    const active = _bluesDbState.sort === c.key;
+    const arrow = active ? (_bluesDbState.order === "asc" ? " ▲" : " ▼") : "";
+    const align = c.align === "right" ? "text-align:right;" : "";
+    const title = c.title ? ` title="${c.title}"` : "";
+    return `<th style="padding:0.35rem 0.5rem;cursor:pointer;user-select:none;${align}${active ? "color:var(--accent);" : ""}" onclick="bluesDbToggleSort('${c.key}')"${title}>${c.label}${arrow}</th>`;
+  }).join("");
   list.innerHTML = `
     <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
       <thead>
         <tr style="text-align:left;color:var(--muted);border-bottom:1px solid var(--border)">
-          <th style="padding:0.35rem 0.5rem">Name</th>
-          <th style="padding:0.35rem 0.5rem">Years</th>
-          <th style="padding:0.35rem 0.5rem">Birth place</th>
-          <th style="padding:0.35rem 0.5rem">Styles</th>
-          <th style="padding:0.35rem 0.5rem">QID</th>
-          <th style="padding:0.35rem 0.5rem">Discogs</th>
-          <th style="padding:0.35rem 0.5rem;text-align:right" title="Discogs masters/releases">#</th>
+          ${headerCells}
         </tr>
       </thead>
       <tbody style="color:var(--text)">${rows}</tbody>
@@ -1076,6 +1091,44 @@ function bluesDbRenderPager() {
 function bluesDbPage(delta) {
   _bluesDbState.offset = Math.max(0, _bluesDbState.offset + delta * _bluesDbState.limit);
   bluesDbLoadList();
+}
+
+// Click a column header → if it's already the active sort, flip
+// asc↔desc; otherwise switch to that column with a sensible default
+// direction (numeric/date columns default to descending so the most
+// recent / largest values surface first).
+function bluesDbToggleSort(key) {
+  if (_bluesDbState.sort === key) {
+    _bluesDbState.order = _bluesDbState.order === "asc" ? "desc" : "asc";
+  } else {
+    _bluesDbState.sort = key;
+    const numericish = ["birth_date","death_date","discogs_id","release_count","date_added","updated_at"];
+    _bluesDbState.order = numericish.includes(key) ? "desc" : "asc";
+  }
+  _bluesDbState.offset = 0;
+  bluesDbLoadList();
+}
+
+async function bluesDbDeleteAll() {
+  // Two-step confirm: simple OK/Cancel first, then a typed token so a
+  // stray button click can't wipe the table. Backend ALSO requires the
+  // token in the request, so even a bypassed confirm() can't nuke it.
+  if (!confirm("Delete EVERY row in the blues_artists table?\n\nThis is irreversible. You'll need to reseed afterwards.")) return;
+  const typed = prompt("Type DELETE ALL (in caps) to confirm.");
+  if (typed !== "DELETE ALL") { alert("Cancelled — token didn't match."); return; }
+  try {
+    const r = await apiFetch("/api/admin/blues/all?confirm=DELETE%20ALL", { method: "DELETE" });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert("Delete failed: " + (err.error ?? r.status));
+      return;
+    }
+    const out = await r.json();
+    alert(`Deleted ${out.deleted} rows.`);
+    _bluesDbState.offset = 0;
+    bluesDbLoadStats();
+    bluesDbLoadList();
+  } catch (e) { alert("Delete failed: " + e); }
 }
 function bluesDbDebouncedSearch() {
   clearTimeout(_bluesSearchTimer);

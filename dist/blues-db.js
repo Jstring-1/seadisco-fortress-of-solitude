@@ -705,7 +705,10 @@ function _normaliseDiscogsName(s) {
  *  configured genre/style filters, accumulates artist→releases pairs,
  *  resolves each artist name to a Discogs ID, then upserts. */
 export async function seedBluesArtistsFromDiscogs(client, opts = {}) {
-    const startYear = opts.startYear ?? 1923;
+    // Walk 1900..1930 by default. Years before ~1920 will return very
+    // few hits but cost nothing to scan (one empty search call each),
+    // and they catch the rare wax-cylinder / very-early 78 outliers.
+    const startYear = opts.startYear ?? 1900;
     const endYear = opts.endYear ?? 1930;
     const perPage = opts.perPage ?? DISCOGS_PER_PAGE;
     const maxPages = opts.maxPages ?? DISCOGS_MAX_PAGES_PER_YEAR;
