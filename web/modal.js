@@ -1226,12 +1226,13 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         const trackArtist = artists.length ? artists[0] : "";
         const ytQuery = encodeURIComponent(`${trackArtist} ${title} ${t.title || ""}`);
         const trackSearchQ = ('"' + (t.title || '').trim() + '"').replace(/'/g, "\\'");
-        // Play column: always reserved width so rows align even with no playable URL.
-        // If a YouTube match exists, render the play button. Otherwise render a
-        // tiny YT-search fallback at the same slot width.
+        // Play column: reserved width so rows align even with no playable URL.
+        // Only the ▶ play button lives here now (no orange circle); the
+        // external YouTube-search fallback was moved to the end of the
+        // title cell, after the wiki W icon.
         const playCell = url
           ? `<a class="track-play-btn track-link" href="#" data-video="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" onclick="openVideo(event,'${url.replace(/'/g, "\\'")}')" title="Play this track">▶</a>`
-          : (t.title ? `<a class="track-play-btn track-yt-search" href="https://www.youtube.com/results?search_query=${ytQuery}" target="_blank" rel="noopener" title="Search on YouTube"><svg width="14" height="10" viewBox="0 0 16 11" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="11" rx="2.5" fill="#FF0000"/><path d="M6.5 3L11 5.5L6.5 8V3Z" fill="white"/></svg></a>` : "");
+          : "";
         // Track title is now a Discogs new-search link for the track name.
         const titleLink = t.title
           ? `<a href="#" class="track-title-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('query').value='${escHtml(trackSearchQ)}';doSearch(1)" title="Search Discogs for &quot;${escHtml(t.title)}&quot;">${escHtml(t.title)}</a>`
@@ -1239,6 +1240,16 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         // Magnifying glass searches the user's records for the track (orange via .track-search-icon).
         const searchIcon = t.title
           ? ` <a class="track-search-icon" href="#" onclick="event.preventDefault();searchCollectionFor('cw-query','${escHtml(trackSearchQ)}')" title="Search your records for &quot;${escHtml(t.title)}&quot;">⌕</a>`
+          : "";
+        // W → wiki popup for the track title (artist context helps disambiguation).
+        const wikiW = t.title
+          ? wikiIcon(`${t.title}${trackArtist ? " " + trackArtist : ""}`, t.title)
+          : "";
+        // External YouTube search — restored to the end of the title row,
+        // after the wiki icon. Only shown when there's no in-app playable
+        // match, so it acts as a fallback rather than duplicate of ▶.
+        const ytSearchEnd = (t.title && !url)
+          ? ` <a class="track-yt-search-end" href="https://www.youtube.com/results?search_query=${ytQuery}" target="_blank" rel="noopener" title="Search on YouTube"><svg width="14" height="10" viewBox="0 0 16 11" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="11" rx="2.5" fill="#FF0000"/><path d="M6.5 3L11 5.5L6.5 8V3Z" fill="white"/></svg></a>`
           : "";
         const trackCredits = (t.extraartists ?? []).length
           ? `<div class="track-credits">${t.extraartists.map(a => {
@@ -1252,7 +1263,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         return `<div class="track">
           <span class="track-play-cell">${playCell}</span>
           <span class="track-pos">${escHtml(t.position || "")}</span>
-          <span class="track-title">${titleLink}${searchIcon}${trackCredits}</span>
+          <span class="track-title">${titleLink}${searchIcon}${wikiW}${ytSearchEnd}${trackCredits}</span>
           ${t.duration ? `<span class="track-dur">${escHtml(t.duration)}</span>` : ""}
         </div>`;
       }).join("")}

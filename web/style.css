@@ -5442,30 +5442,42 @@ footer {
   min-width: 28px;
   height: 1.2rem;
 }
-.track-play-btn {
+/* Play arrow — bare ▶ in accent colour, no orange circle background.
+   Selectors scoped to album/version popups to outrank the existing
+   `#album-info .track-link { color: inherit }` rule above. */
+.track-play-btn,
+#album-info .track-play-btn,
+#version-info .track-play-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 22px;
   height: 22px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #000;
-  text-decoration: none;
-  font-size: 0.75rem;
-  line-height: 1;
-}
-.track-play-btn:hover { background: var(--accent2); color: #000; }
-.track-play-btn.track-yt-search {
   background: transparent;
-  width: auto;
-  height: auto;
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.95rem;
+  line-height: 1;
+  transition: color 0.12s, transform 0.08s;
 }
-.track-play-btn.now-playing {
-  background: var(--accent2) !important;
-  color: #000 !important;
-  box-shadow: 0 0 0 2px var(--accent-dim);
+.track-play-btn:hover,
+#album-info .track-play-btn:hover,
+#version-info .track-play-btn:hover { color: var(--accent2, var(--accent)); transform: scale(1.1); }
+.track-play-btn.now-playing,
+#album-info .track-play-btn.now-playing,
+#version-info .track-play-btn.now-playing { color: var(--accent2) !important; }
+
+/* External YouTube-search fallback — sits at the end of the title row,
+   after the wiki W. Only shown when no in-app playable URL exists. */
+.track-yt-search-end {
+  display: inline-flex;
+  vertical-align: middle;
+  margin-left: 0.25rem;
+  text-decoration: none;
+  opacity: 0.85;
+  transition: opacity 0.12s;
 }
+.track-yt-search-end:hover { opacity: 1; }
 .track-title-link {
   color: var(--text);
   text-decoration: none;
