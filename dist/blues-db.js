@@ -676,17 +676,15 @@ export async function enrichBluesArtistFromYouTube(id, apiKey) {
 // them on so the row records exactly which 1923-1930 sides surfaced.
 //
 // Auth: admin's PAT/OAuth, 60 req/min limit, paced at 1.1s/request.
-// Genre noise: pre-1930 blues is sometimes filed under "Folk, World &
-// Country" or "Jazz" on Discogs, so we sweep those genres too — adds
-// maybe 200-300 extra rows the strict Blues-only filter misses.
+// Strict Blues-only filter — the previous multi-genre sweep (Folk,
+// World & Country / Jazz with style refinements) pulled in too much
+// non-blues noise. If the admin wants to widen the net later, this
+// list is the one knob to turn.
 const DISCOGS_SEED_RATE_MS = 1100;
 const DISCOGS_PER_PAGE = 100;
 const DISCOGS_MAX_PAGES_PER_YEAR = 25;
 const DISCOGS_SEED_GENRES = [
     { genre: "Blues", style: "" },
-    { genre: "Folk, World, & Country", style: "Country Blues" },
-    { genre: "Folk, World, & Country", style: "Delta Blues" },
-    { genre: "Jazz", style: "Classic Female Blues" },
 ];
 /** Parse "Artist - Title" and return just the artist string. */
 function _artistFromSearchTitle(t) {
