@@ -429,6 +429,15 @@ document.getElementById("bio-full-overlay").addEventListener("click", e => {
 // Opens a stacked popup over any underlying modal/version popup. Music keeps
 // playing. Closing returns to the underlying popup intact. In-article wiki
 // links are rewritten so they open the same internal popup instead of leaving.
+// Wiki popup is now SEARCH-FIRST. Every entry point (W icon, in-article
+// wiki link, disambig list, manual call) lands on a list of matching
+// articles; clicking a result loads that article in the SAME popup.
+// This avoids fuzzy auto-jumps like "Bill Wax" → Bill Gates.
+//
+//   openWikiPopup(query)         — show search results for `query`
+//   openWikiArticle(title, src)  — load that article inline; if `src` is
+//                                  given, render a "← Back" button that
+//                                  re-opens the search for `src`.
 async function openWikiPopup(query) {
   const q = String(query || "").trim();
   if (!q) return;
@@ -439,165 +448,217 @@ async function openWikiPopup(query) {
   overlay.classList.add("open");
   loading.style.display = "";
   content.innerHTML = "";
-  // Reflect in URL so the popup is shareable.
+  // Reflect in URL so the popup is shareable. wk= holds the search query.
   try {
     const u = new URL(window.location.href);
     u.searchParams.set("wk", q);
     history.replaceState({}, "", u.toString());
   } catch {}
   try {
-    // Always fetch the full article body — no intro/full toggle.
-    const r = await apiFetch(`/api/wikipedia/lookup?q=${encodeURIComponent(q)}&full=1`);
+    await _renderWikiPopupSearch(q, content);
+  } finally {
+    loading.style.display = "none";
+  }
+}
+
+// Render the search-results list inside the wiki popup. Used by both
+// openWikiPopup() and the "← Back to results" button on article view.
+async function _renderWikiPopupSearch(q, contentEl) {
+  contentEl.innerHTML = `
+    <div class="wiki-header">
+      <h2 style="margin:0 0 0.3rem 0">Wikipedia: "${escHtml(q)}"</h2>
+      <div class="wiki-popup-subnote">Click a title to open the article here.</div>
+    </div>
+    <div class="wiki-popup-results wiki-results-list"><div class="wiki-results-loading">Searching Wikipedia for <em>${escHtml(q)}</em>…</div></div>`;
+  const listEl = contentEl.querySelector(".wiki-popup-results");
+  try {
+    const r = await apiFetch(`/api/wikipedia/search?q=${encodeURIComponent(q)}&limit=15&offset=0`);
+    if (!r.ok) {
+      listEl.innerHTML = `<div class="wiki-results-error">Wikipedia search failed.</div>`;
+      return;
+    }
+    const data = await r.json();
+    const rows = Array.isArray(data?.results) ? data.results : [];
+    if (!rows.length) {
+      listEl.innerHTML = `<div class="wiki-results-empty">No matches for <em>${escHtml(q)}</em>.</div>`;
+      return;
+    }
+    const safeQ = String(q).replace(/'/g, "\\'");
+    listEl.innerHTML = rows.map(rec => {
+      const safeTitle = String(rec.title || "").replace(/'/g, "\\'");
+      return `
+        <div class="wiki-result">
+          <a href="#" class="wiki-result-title" onclick="event.preventDefault();openWikiArticle('${escHtml(safeTitle)}','${escHtml(safeQ)}')" title="Open in popup">${escHtml(rec.title || "")}</a>
+          <div class="wiki-result-snippet">${rec.snippet || ""}…</div>
+        </div>`;
+    }).join("");
+  } catch (err) {
+    listEl.innerHTML = `<div class="wiki-results-error">Wikipedia search failed.</div>`;
+  }
+}
+
+// Load a specific Wikipedia article into the popup. Internal article
+// wiki links and disambig list rows call this directly (those are
+// exact-title links, no need to bounce through search).
+async function openWikiArticle(title, sourceQuery) {
+  const t = String(title || "").trim();
+  if (!t) return;
+  const overlay = document.getElementById("wiki-overlay");
+  const loading = document.getElementById("wiki-loading");
+  const content = document.getElementById("wiki-content");
+  if (!overlay) return;
+  overlay.classList.add("open");
+  loading.style.display = "";
+  content.innerHTML = "";
+  // Reflect in URL: wk = the article title (so a shared link opens the
+  // popup with search results for that exact title — Wikipedia's first
+  // hit will be that article, plus alternatives if disambiguation).
+  try {
+    const u = new URL(window.location.href);
+    u.searchParams.set("wk", t);
+    history.replaceState({}, "", u.toString());
+  } catch {}
+  try {
+    const r = await apiFetch(`/api/wikipedia/lookup?q=${encodeURIComponent(t)}&full=1`);
     if (!r.ok) {
       content.innerHTML = `<div style="padding:1rem;color:var(--muted)">Wikipedia lookup failed.</div>`;
-      loading.style.display = "none";
       return;
     }
     const data = await r.json();
     if (!data.found) {
-      // Fallback: no direct article hit — pull general search results into
-      // the same popup so the user can pick the closest match without
-      // dropping out to the wiki page.
-      await _renderWikiPopupFallbackSearch(q, content);
-      loading.style.display = "none";
+      // Fall back to a fresh search for the title — same popup.
+      await _renderWikiPopupSearch(t, content);
       return;
     }
     const thumb = data.thumbnail ? `<img src="${escHtml(data.thumbnail)}" alt="" style="float:right;max-width:140px;margin:0 0 0.5rem 1rem;border-radius:4px">` : "";
+    const safeSrc = String(sourceQuery || "").replace(/'/g, "\\'");
+    const backBtn = sourceQuery
+      ? `<button type="button" class="wiki-back-btn" onclick="openWikiPopup('${escHtml(safeSrc)}')">← Back to "${escHtml(sourceQuery)}" results</button>`
+      : "";
     content.innerHTML = `
       <div class="wiki-header">
-        <h2 style="margin:0 0 0.4rem 0">${escHtml(data.title)}</h2>
+        ${backBtn}
+        <h2 style="margin:0.3rem 0 0.4rem 0">${escHtml(data.title)}</h2>
       </div>
       <div class="wiki-extract">${thumb}${data.html}</div>`;
-    // Mark "External links" / "References" / "Notes" / "Further reading"
-    // / "See also" / "Bibliography" / "Sources" / "Citations" sections so
-    // the bold→Discogs and disambiguation rewriters below skip them — those
-    // sections are reference-style content, not article body to be searched.
-    const _blockedHeadings = new Set([
-      "external links", "references", "notes", "bibliography",
-      "sources", "further reading", "see also", "citations", "footnotes",
-    ]);
-    content.querySelectorAll(".wiki-extract").forEach(extract => {
-      let blocked = false;
-      Array.from(extract.children).forEach(child => {
-        if (/^H[1-6]$/.test(child.tagName)) {
-          const t = (child.textContent || "").trim().toLowerCase();
-          // Strip Wikipedia's "[edit]" suffix and trailing punctuation.
-          const norm = t.replace(/\s*\[edit\]\s*$/, "").trim();
-          blocked = _blockedHeadings.has(norm);
-          // Mark the heading itself too so any inline bolds in it don't get rewritten.
-          if (blocked) child.classList.add("wiki-no-rewrite");
-        } else if (blocked) {
-          child.classList.add("wiki-no-rewrite");
-        }
-      });
-    });
-    // Rewrite in-article wiki links to use internal popup
-    content.querySelectorAll(".wiki-extract a[href]").forEach(a => {
-      const href = a.getAttribute("href") || "";
-      // Wikipedia returns relative /wiki/Title links and absolute ones
-      let title = "";
-      if (href.startsWith("/wiki/")) title = decodeURIComponent(href.slice(6).split("#")[0]);
-      else if (/^https?:\/\/[^/]*wikipedia\.org\/wiki\//.test(href)) {
-        title = decodeURIComponent(href.split("/wiki/")[1].split("#")[0]);
-      }
-      if (title) {
-        const t = title.replace(/_/g, " ");
-        a.setAttribute("href", "#");
-        a.removeAttribute("target");
-        a.addEventListener("click", (ev) => {
-          ev.preventDefault();
-          openWikiPopup(t);
-        });
-      } else {
-        // External non-wiki link in article — open in new tab
-        a.setAttribute("target", "_blank");
-        a.setAttribute("rel", "noopener");
-      }
-    });
-    // Disambiguation pages: each <li> like "Fred Jackson (saxophonist),
-    // American R&B…" gets the leading name + qualifier turned into a
-    // wiki-popup link so the user can jump straight to the right person.
-    // We only touch list items that have NO existing anchor (so we don't
-    // double-wrap real wiki links in articles that survived stripping).
-    content.querySelectorAll(".wiki-extract li").forEach(li => {
-      if (li.closest(".wiki-no-rewrite")) return;
-      if (li.querySelector("a")) return;
-      const raw = (li.textContent || "").trim();
-      if (!raw || raw.length < 3) return;
-      // Step 1: capture the leading proper-noun phrase (capitalised words,
-      // initials with dots, common connectors like "of/the/de/von/and").
-      const nameMatch = raw.match(
-        /^([A-Z][\w'\-.]*(?:\s+(?:[A-Z][\w'\-.]*|of|the|de|von|van|der|du|da|y|and|&)){0,6})/
-      );
-      if (!nameMatch) return;
-      let prefix = nameMatch[1].trim();
-      let consumed = nameMatch[0].length;
-      // Step 2: optionally append a "(qualifier)" — but only if it's an
-      // article disambiguator like "(saxophonist)" rather than a date
-      // like "(born 1981)" or "(1868–1931)".
-      const after = raw.slice(consumed);
-      const qualMatch = after.match(/^\s*\(([^)]+)\)/);
-      if (qualMatch) {
-        const qual = qualMatch[1].trim();
-        // Treat as date/year if it contains any 3-4 digit run — covers
-        // "born 1981", "1868–1931", "born c. 1945", "fl. 1700s", etc.
-        // Wikipedia article disambiguators are descriptive words like
-        // "(saxophonist)" / "(album)" — those rarely contain digits.
-        const isDate = /\b\d{3,4}\b/.test(qual);
-        if (!isDate && qual.length <= 60) {
-          prefix = `${prefix} (${qual})`;
-          consumed += qualMatch[0].length;
-        }
-      }
-      if (prefix.length < 3 || prefix.length > 80) return;
-      const remainder = raw.slice(consumed);
-      const a = document.createElement("a");
-      a.href = "#";
-      a.className = "wiki-disambig-link";
-      a.textContent = prefix;
-      a.title = `Open Wikipedia: ${prefix}`;
-      a.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        try { openWikiPopup(prefix); } catch {}
-      });
-      li.textContent = "";
-      li.appendChild(a);
-      if (remainder) li.appendChild(document.createTextNode(remainder));
-    });
-    // TextExtracts strips internal wiki links, so the article body is mostly
-    // dead text. Wikipedia keeps proper nouns / article subjects bolded —
-    // turn every <b> into a clickable Discogs search so users can jump
-    // from "Can" or "Neu!" straight to records on the same screen.
-    content.querySelectorAll(".wiki-extract b").forEach(b => {
-      if (b.closest(".wiki-no-rewrite")) return;
-      const text = (b.textContent || "").trim();
-      // Skip empty, single-character, and unreasonably long bolds
-      if (!text || text.length < 2 || text.length > 80) return;
-      const a = document.createElement("a");
-      a.href = "#";
-      a.className = "wiki-bold-search";
-      a.title = `Search SeaDisco for "${text}"`;
-      a.textContent = text;
-      a.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        try { closeWikiPopup(); } catch {}
-        try {
-          if (typeof switchView === "function") switchView("search", true);
-          if (typeof clearForm === "function") clearForm();
-          const qInput = document.getElementById("query");
-          if (qInput) qInput.value = text;
-          if (typeof doSearch === "function") doSearch(1);
-        } catch {}
-      });
-      b.parentNode?.replaceChild(a, b);
-    });
-    loading.style.display = "none";
+    _applyWikiArticleRewrites(content, sourceQuery || data.title);
   } catch (err) {
     content.innerHTML = `<div style="padding:1rem;color:var(--muted)">Error: ${escHtml(err.message || String(err))}</div>`;
+  } finally {
     loading.style.display = "none";
   }
+}
+
+// Apply blocked-section markers, internal-wiki-link rewrites, disambig
+// list links, and bold→Discogs rewrites to a freshly rendered article.
+// Extracted from openWikiPopup so openWikiArticle can reuse it.
+function _applyWikiArticleRewrites(content, sourceQuery) {
+  // Mark "External links" / "References" / "Notes" / "Further reading"
+  // / "See also" / "Bibliography" / "Sources" / "Citations" sections so
+  // the bold→Discogs and disambiguation rewriters skip them — those
+  // sections are reference-style content, not article body.
+  const _blockedHeadings = new Set([
+    "external links", "references", "notes", "bibliography",
+    "sources", "further reading", "see also", "citations", "footnotes",
+  ]);
+  content.querySelectorAll(".wiki-extract").forEach(extract => {
+    let blocked = false;
+    Array.from(extract.children).forEach(child => {
+      if (/^H[1-6]$/.test(child.tagName)) {
+        const txt = (child.textContent || "").trim().toLowerCase();
+        const norm = txt.replace(/\s*\[edit\]\s*$/, "").trim();
+        blocked = _blockedHeadings.has(norm);
+        if (blocked) child.classList.add("wiki-no-rewrite");
+      } else if (blocked) {
+        child.classList.add("wiki-no-rewrite");
+      }
+    });
+  });
+  // Internal-wiki <a href> links — exact article titles, so jump straight
+  // to that article (skip the search-results step).
+  content.querySelectorAll(".wiki-extract a[href]").forEach(a => {
+    const href = a.getAttribute("href") || "";
+    let title = "";
+    if (href.startsWith("/wiki/")) title = decodeURIComponent(href.slice(6).split("#")[0]);
+    else if (/^https?:\/\/[^/]*wikipedia\.org\/wiki\//.test(href)) {
+      title = decodeURIComponent(href.split("/wiki/")[1].split("#")[0]);
+    }
+    if (title) {
+      const t = title.replace(/_/g, " ");
+      a.setAttribute("href", "#");
+      a.removeAttribute("target");
+      a.addEventListener("click", (ev) => {
+        ev.preventDefault();
+        openWikiArticle(t, sourceQuery);
+      });
+    } else {
+      a.setAttribute("target", "_blank");
+      a.setAttribute("rel", "noopener");
+    }
+  });
+  // Disambiguation list items — leading "Name (qualifier)" is an exact
+  // article title, so go straight to the article.
+  content.querySelectorAll(".wiki-extract li").forEach(li => {
+    if (li.closest(".wiki-no-rewrite")) return;
+    if (li.querySelector("a")) return;
+    const raw = (li.textContent || "").trim();
+    if (!raw || raw.length < 3) return;
+    const nameMatch = raw.match(
+      /^([A-Z][\w'\-.]*(?:\s+(?:[A-Z][\w'\-.]*|of|the|de|von|van|der|du|da|y|and|&)){0,6})/
+    );
+    if (!nameMatch) return;
+    let prefix = nameMatch[1].trim();
+    let consumed = nameMatch[0].length;
+    const after = raw.slice(consumed);
+    const qualMatch = after.match(/^\s*\(([^)]+)\)/);
+    if (qualMatch) {
+      const qual = qualMatch[1].trim();
+      const isDate = /\b\d{3,4}\b/.test(qual);
+      if (!isDate && qual.length <= 60) {
+        prefix = `${prefix} (${qual})`;
+        consumed += qualMatch[0].length;
+      }
+    }
+    if (prefix.length < 3 || prefix.length > 80) return;
+    const remainder = raw.slice(consumed);
+    const a = document.createElement("a");
+    a.href = "#";
+    a.className = "wiki-disambig-link";
+    a.textContent = prefix;
+    a.title = `Open Wikipedia: ${prefix}`;
+    a.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      try { openWikiArticle(prefix, sourceQuery); } catch {}
+    });
+    li.textContent = "";
+    li.appendChild(a);
+    if (remainder) li.appendChild(document.createTextNode(remainder));
+  });
+  // Bold proper nouns → Discogs search (closes popup + runs main search).
+  content.querySelectorAll(".wiki-extract b").forEach(b => {
+    if (b.closest(".wiki-no-rewrite")) return;
+    const text = (b.textContent || "").trim();
+    if (!text || text.length < 2 || text.length > 80) return;
+    const a = document.createElement("a");
+    a.href = "#";
+    a.className = "wiki-bold-search";
+    a.title = `Search SeaDisco for "${text}"`;
+    a.textContent = text;
+    a.addEventListener("click", (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      try { closeWikiPopup(); } catch {}
+      try {
+        if (typeof switchView === "function") switchView("search", true);
+        if (typeof clearForm === "function") clearForm();
+        const qInput = document.getElementById("query");
+        if (qInput) qInput.value = text;
+        if (typeof doSearch === "function") doSearch(1);
+      } catch {}
+    });
+    b.parentNode?.replaceChild(a, b);
+  });
 }
 
 function closeWikiPopup() {
@@ -613,36 +674,6 @@ function closeWikiPopup() {
 document.getElementById("wiki-overlay")?.addEventListener("click", e => {
   if (e.target === document.getElementById("wiki-overlay")) closeWikiPopup();
 });
-
-// Fallback for the wiki POPUP: when openWikiPopup(q) gets no direct
-// article match, fetch /api/wikipedia/search and render up to 10
-// suggestions inline. Each row is clickable and re-enters the popup
-// with the chosen title, so the user never leaves the overlay.
-async function _renderWikiPopupFallbackSearch(q, contentEl) {
-  contentEl.innerHTML = `
-    <div class="wiki-header">
-      <h2 style="margin:0 0 0.4rem 0">No exact match for "${escHtml(q)}"</h2>
-      <div style="font-size:0.85rem;color:var(--muted);margin-bottom:0.4rem">Closest articles on Wikipedia — click to open in this popup.</div>
-    </div>
-    <div class="wiki-popup-fallback wiki-results-list"><div class="wiki-results-loading">Searching Wikipedia for <em>${escHtml(q)}</em>…</div></div>`;
-  const listEl = contentEl.querySelector(".wiki-popup-fallback");
-  try {
-    const r = await apiFetch(`/api/wikipedia/search?q=${encodeURIComponent(q)}&limit=10&offset=0`);
-    if (!r.ok) {
-      listEl.innerHTML = `<div class="wiki-results-error">Wikipedia search failed.</div>`;
-      return;
-    }
-    const data = await r.json();
-    const rows = Array.isArray(data?.results) ? data.results : [];
-    if (!rows.length) {
-      listEl.innerHTML = `<div class="wiki-results-empty">No matches for <em>${escHtml(q)}</em>.</div>`;
-      return;
-    }
-    listEl.innerHTML = rows.map(_wikiResultRowHtml).join("");
-  } catch (err) {
-    listEl.innerHTML = `<div class="wiki-results-error">Wikipedia search failed.</div>`;
-  }
-}
 
 // localStorage-backed recent-searches list for the wiki SPA page.
 // Keeps last 8 unique queries (most recent first) and rehydrates the
