@@ -36,7 +36,7 @@ html { overflow-x: hidden; }
 
 /* ── Mobile (≤ 640px) ── */
 @media (max-width: 640px) {
-  #site-header { padding: 0.4rem 0.75rem; margin-bottom: 12px; }
+  #site-header { padding: 0.4rem 0.75rem; margin-bottom: 0; }
   #site-header img { height: 32px; }
   .text-logo { font-size: 1.15rem; }
 
@@ -135,7 +135,8 @@ html { overflow-x: hidden; }
   #modal-overlay,
   #bio-full-overlay,
   #version-overlay,
-  #series-overlay {
+  #series-overlay,
+  #wiki-overlay {
     padding: 0.5rem;
     align-items: flex-end;  /* slide up from bottom on mobile */
   }
@@ -161,8 +162,12 @@ html { overflow-x: hidden; }
   .modal-act-btn { font-size: 0.75rem; padding: 0.4rem 0.65rem; min-height: 36px; }
   .price-sparkline-row { flex-wrap: wrap; }
 
-  /* Mini-player — stack info + controls on mobile when collapsed */
-  body.player-open { padding-bottom: 80px; }
+  /* Mini-player — stack info + controls on mobile when collapsed.
+     Mobile bars are taller because controls wrap; loc bar stays single
+     row so it gets the same treatment as desktop. */
+  body.player-open { padding-bottom: 140px; }
+  body.loc-open    { padding-bottom: 88px; }
+  body.player-open.loc-open { padding-bottom: 220px; }
   .mini-player-bar {
     flex-wrap: wrap;
     padding: 0.3rem 0.5rem;
@@ -485,7 +490,7 @@ body {
   justify-content: space-between;
   padding: 0.6rem 1.5rem;
   max-width: 1100px;
-  margin: 0 auto 50px;
+  margin: 0 auto;
 }
 
 .header-logo-wrap { display: flex; flex-direction: column; align-items: flex-start; flex-shrink: 0; line-height: 1; }
@@ -1292,7 +1297,12 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   font-family: inherit;
 }
 .mini-player.open { display: block; }
-body.player-open { padding-bottom: 72px; }
+/* Reserve space at the bottom of the page whenever either bottom-docked
+   audio bar is visible so the last row of album cards doesn't disappear
+   behind it. The expanded YouTube mini-player needs more headroom. */
+body.player-open,
+body.loc-open    { padding-bottom: 96px; }
+body.player-open.loc-open { padding-bottom: 168px; }
 body.modal-open  { overflow: hidden; }
 
 .mini-player-bar {
@@ -5172,3 +5182,221 @@ footer {
   .loc-info-title { font-size: 1.05rem; }
   .loc-info-row { grid-template-columns: 1fr; gap: 0.15rem; }
 }
+
+/* ── Wikipedia popup (stacks above other modals) ─────────────────────── */
+#wiki-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.78);
+  z-index: 200;       /* above #modal-overlay (100), version (140), bio-full (160) */
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+#wiki-overlay.open { display: flex; }
+
+#wiki-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  max-width: 760px;
+  width: 100%;
+  max-height: 86vh;
+  overflow-y: auto;
+  position: relative;
+  padding: 1.25rem 1.4rem 1.4rem;
+}
+
+#wiki-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.6rem;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.4rem;
+  cursor: pointer;
+  padding: 0.1rem 0.4rem;
+  line-height: 1;
+  border-radius: 4px;
+  z-index: 2;
+}
+#wiki-close:hover { color: var(--text); background: var(--border); }
+
+.wiki-header { padding-right: 2rem; margin-bottom: 0.6rem; }
+.wiki-header h2 { color: var(--accent); font-size: 1.1rem; }
+.wiki-read-full,
+.wiki-footer a {
+  display: inline-block;
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 0.8rem;
+  border-bottom: 1px dotted var(--accent-dim);
+}
+.wiki-read-full:hover,
+.wiki-footer a:hover { color: var(--accent2); border-bottom-color: var(--accent2); }
+
+.wiki-extract {
+  font-size: 0.9rem;
+  line-height: 1.6;
+  color: var(--text);
+}
+.wiki-extract p { margin: 0 0 0.8rem 0; }
+.wiki-extract a {
+  color: var(--accent);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--accent-dim);
+  cursor: pointer;
+}
+.wiki-extract a:hover { color: var(--accent2); border-bottom-color: var(--accent2); }
+.wiki-footer { margin-top: 1rem; padding-top: 0.8rem; border-top: 1px solid var(--border); font-size: 0.82rem; }
+
+/* Inline W icon used after every magnifying glass in popups */
+.wiki-icon {
+  display: inline-block;
+  margin-left: 0.25rem;
+  font-family: 'Times New Roman', serif;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--muted);
+  line-height: 1;
+  cursor: pointer;
+  vertical-align: baseline;
+}
+.wiki-icon:hover { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── AI results panel (persistent, scrollable, top-X close) ──────────── */
+.ai-results-panel {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  margin: 0.75rem 0 1rem 0;
+  padding: 0.85rem 1rem 0.5rem 1rem;
+  max-width: 100%;
+}
+.ai-panel-close,
+.ai-panel-min {
+  position: absolute;
+  top: 0.35rem;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0.1rem 0.4rem;
+  line-height: 1;
+  border-radius: 4px;
+}
+.ai-panel-close { right: 0.5rem; }
+.ai-panel-min   { right: 2rem; font-size: 1.1rem; }
+.ai-panel-close:hover,
+.ai-panel-min:hover { color: var(--text); background: var(--border); }
+
+.ai-panel-head { padding-right: 3rem; }
+
+/* Minimized state — collapse body to a thin clickable header bar.
+   Content + ai= URL stay intact so click-to-expand restores instantly. */
+.ai-results-panel.is-minimized { padding-bottom: 0.35rem; }
+.ai-results-panel.is-minimized .ai-panel-head { cursor: pointer; }
+.ai-results-panel.is-minimized .ai-panel-blurb,
+.ai-results-panel.is-minimized .ai-panel-scroll { display: none; }
+.ai-results-panel.is-minimized .ai-panel-eyebrow { margin-bottom: 0; }
+.ai-panel-eyebrow {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #888;
+  margin-bottom: 0.35rem;
+}
+.ai-panel-blurb {
+  font-size: 0.85rem;
+  color: var(--muted);
+  font-style: italic;
+  margin-bottom: 0.6rem;
+}
+
+.ai-panel-scroll {
+  max-height: 360px;
+  overflow-y: auto;
+  padding-right: 0.4rem;
+}
+
+.ai-row {
+  padding: 0.55rem 0;
+  border-bottom: 1px solid var(--border);
+}
+.ai-row:last-child { border-bottom: none; }
+.ai-row-title { font-size: 0.95rem; font-weight: 600; color: var(--text); }
+.ai-row-desc { font-size: 0.83rem; color: var(--muted); margin-top: 0.2rem; }
+.ai-row-label { font-size: 0.78rem; color: var(--muted); margin-top: 0.25rem; }
+.ai-row-label-tag { color: #888; margin-right: 0.3rem; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.ai-entity-link { color: var(--accent); text-decoration: none; border-bottom: 1px dotted var(--accent-dim); cursor: pointer; }
+.ai-entity-link:hover { color: var(--accent2); border-bottom-color: var(--accent2); }
+.ai-entity-icon { margin-left: 0.15rem; }
+.ai-sep { color: #555; margin: 0 0.25rem; }
+
+/* ── Tracklist play column (always reserves space so rows align) ─────── */
+#album-info .track,
+#version-info .track {
+  display: grid;
+  grid-template-columns: 28px 2.4rem 1fr auto;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+}
+.track-play-cell {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  min-width: 28px;
+  height: 1.2rem;
+}
+.track-play-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #000;
+  text-decoration: none;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+.track-play-btn:hover { background: var(--accent2); color: #000; }
+.track-play-btn.track-yt-search {
+  background: transparent;
+  width: auto;
+  height: auto;
+}
+.track-play-btn.now-playing {
+  background: var(--accent2) !important;
+  color: #000 !important;
+  box-shadow: 0 0 0 2px var(--accent-dim);
+}
+.track-title-link {
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--border);
+  cursor: pointer;
+}
+.track-title-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
+/* Force orange magnifying glass on tracks */
+.track .track-search-icon,
+.track-search-icon {
+  color: var(--accent) !important;
+  text-decoration: none;
+  margin-left: 0.25rem;
+  font-size: 1em;
+}
+.track .track-search-icon:hover,
+.track-search-icon:hover { color: var(--accent2) !important; }

@@ -1239,6 +1239,9 @@ async function _locPlay(item) {
   _locNowPlaying = item;
   titleEl.textContent = item.title || "Playing…";
   bar.classList.add("is-visible");
+  // Body class lets the page reserve bottom padding so the last row of
+  // cards isn't hidden behind the fixed audio bar.
+  document.body.classList.add("loc-open");
   _locUpdateQueueButtons();
 
   // Tear down any prior hls.js instance cleanly
@@ -1337,6 +1340,7 @@ function _locClosePlayer() {
     }
   }
   if (bar) bar.classList.remove("is-visible");
+  document.body.classList.remove("loc-open");
   _locNowPlaying = null;
   _locQueue = null;
   _locUpdateQueueButtons();

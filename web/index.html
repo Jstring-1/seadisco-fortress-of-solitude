@@ -40,7 +40,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260410h" />
+  <link rel="stylesheet" href="/style.css?v=20260411e" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -78,7 +78,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260410h"></script>
+<script defer src="/shared.js?v=20260411e"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search" }));</script>
 <div id="search-view">
 
@@ -570,6 +570,22 @@
 
 <div id="loc-view" class="content-narrow" style="display:none"></div>
 
+<div id="wiki-view" class="content-narrow" style="display:none">
+  <h1 style="margin-top:0">Wikipedia</h1>
+  <p style="color:var(--muted);font-size:0.9rem">Search Wikipedia without leaving SeaDisco. Articles open in a popup so you can keep listening.</p>
+  <div style="display:flex;gap:0.5rem;margin:1rem 0">
+    <input id="wiki-view-q" type="search" placeholder="Search Wikipedia..." style="flex:1;padding:0.5rem;font-size:1rem" onkeydown="if(event.key==='Enter'){event.preventDefault();openWikiPopup(this.value)}">
+    <button type="button" onclick="openWikiPopup(document.getElementById('wiki-view-q').value)">Search</button>
+  </div>
+  <div id="wiki-view-suggestions" style="font-size:0.85rem;color:var(--muted);line-height:1.8">
+    Try: <a href="#" onclick="event.preventDefault();openWikiPopup('Fela Kuti')">Fela Kuti</a> ·
+    <a href="#" onclick="event.preventDefault();openWikiPopup('Krautrock')">Krautrock</a> ·
+    <a href="#" onclick="event.preventDefault();openWikiPopup('Blue Note Records')">Blue Note Records</a> ·
+    <a href="#" onclick="event.preventDefault();openWikiPopup('Tropicália')">Tropicália</a> ·
+    <a href="#" onclick="event.preventDefault();openWikiPopup('Dub music')">Dub music</a>
+  </div>
+</div>
+
 <div id="account-view" style="display:none">
   <div class="account-box">
 
@@ -731,6 +747,15 @@
   </div>
 </div>
 
+<div id="wiki-overlay">
+  <div id="wiki-box">
+    <div class="popup-close-zone" onclick="closeWikiPopup()" title="Click to close"></div>
+    <button id="wiki-close" onclick="closeWikiPopup()" title="Close">×</button>
+    <div id="wiki-loading" style="padding:2rem;text-align:center;color:var(--muted)">Loading…</div>
+    <div id="wiki-content"></div>
+  </div>
+</div>
+
 <div id="loc-info-overlay" class="loc-info-overlay" onclick="if(event.target===this)_locCloseInfoPopup()">
   <div class="loc-info-box">
     <button class="loc-info-close" onclick="_locCloseInfoPopup()">×</button>
@@ -765,6 +790,7 @@
       <button id="mini-share" onclick="sharePlayerUrl()" title="Copy share link" style="display:none;font-size:0.8rem">🔗</button>
       <button id="mini-album" onclick="openPlayerRelease()" title="Open this album" style="display:none;font-size:0.8rem">💿</button>
       <button id="mini-prev" onclick="videoPrev()" disabled title="Previous track">&#9664;&#9664;</button>
+      <button id="mini-playpause" onclick="toggleVideoPause()" title="Pause">&#9208;</button>
       <button id="mini-next" onclick="playNextVideo()" disabled title="Next track">&#9654;&#9654;</button>
       <button class="repeat-btn" onclick="toggleRepeat()" title="Repeat: off" style="color:#666">↻</button>
       <button id="mini-expand" onclick="toggleMiniPlayer()" title="Expand player">&#9650;</button>
@@ -793,16 +819,18 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260410h"></script>
-<script defer src="/search.js?v=20260410h"></script>
-<script defer src="/collection.js?v=20260410h"></script>
-<script defer src="/account.js?v=20260410h"></script>
-<script defer src="/orders.js?v=20260410h"></script>
-<script defer src="/app.js?v=20260410h"></script>
+<script defer src="/utils.js?v=20260411e"></script>
+<script defer src="/search.js?v=20260411e"></script>
+<script defer src="/collection.js?v=20260411e"></script>
+<script defer src="/account.js?v=20260411e"></script>
+<script defer src="/orders.js?v=20260411e"></script>
+<!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
+     openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
+<script defer src="/modal.js?v=20260411e"></script>
+<script defer src="/app.js?v=20260411e"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/modal.js?v=20260410h"></script>
-<script defer src="/inventory-editor.js?v=20260410h"></script>
-<script defer src="/loc.js?v=20260410h"></script>
+<script defer src="/inventory-editor.js?v=20260411e"></script>
+<script defer src="/loc.js?v=20260411e"></script>
 
 </body>
 </html>

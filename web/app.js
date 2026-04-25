@@ -40,7 +40,7 @@ function _hasSearch(p) { return p.get("q") || p.get("a") || p.get("ar") || p.get
     }
   } else if (rawView === "account") {
     switchView("account", true);
-  } else if (rawView === "info" || rawView === "privacy" || rawView === "terms") {
+  } else if (rawView === "info" || rawView === "privacy" || rawView === "terms" || rawView === "wiki") {
     switchView(rawView, true);
   } else if (rawView === "loc") {
     await authReadyPromise;
@@ -63,9 +63,36 @@ function _hasSearch(p) { return p.get("q") || p.get("a") || p.get("ar") || p.get
     await authReadyPromise;
     doSearch(_getPage(p), true);
   }
-  // Open album popup from URL (works even without a search query)
-  // vp = video's source popup (fallback if op was cleared when modal closed during playback)
-  const openParam = p.get("op") || p.get("vp");
+
+  // ── Restore stacked popups from URL ────────────────────────────────────
+  // Load order is tuned for perceived speed: warm up the YouTube API
+  // immediately so audio can start as soon as a tracklist arrives, then
+  // open the topmost popup first so the user sees what they expect, then
+  // open underlying popups in parallel so deeper context is ready when
+  // they close the topmost. Stacking order (top→bottom):
+  //   wk (wiki) > vr (release) > op (master/release) > vd (video bar)
+  const wkParam      = p.get("wk");
+  const versionParam = p.get("vr");
+  const openParam    = p.get("op") || p.get("vp"); // vp = video parent popup fallback
+  const videoParam   = p.get("vd");
+
+  // 1) Pre-warm YouTube API so playback starts the instant we have a URL.
+  if (videoParam && typeof ensureYTAPI === "function") { try { ensureYTAPI(); } catch {} }
+
+  // 2) Topmost: wiki popup (independent fetch, no DOM dependencies).
+  if (wkParam && typeof openWikiPopup === "function") {
+    setTimeout(() => { try { openWikiPopup(wkParam); } catch {} }, 0);
+  }
+
+  // 3) Release popup (vr) is the visible top of the modal stack — open
+  //    immediately, in parallel with the underlying master modal below.
+  //    openVersionPopup fetches its own data, so it does NOT depend on the
+  //    master modal having loaded.
+  if (versionParam && typeof openVersionPopup === "function") {
+    setTimeout(() => { try { openVersionPopup(null, versionParam); } catch {} }, 0);
+  }
+
+  // 4) Underlying master/release modal — kicked off in parallel with vr.
   if (openParam && !document.getElementById("modal-overlay")?.classList.contains("open")) {
     const colon = openParam.indexOf(":");
     if (colon > 0) {
@@ -78,31 +105,36 @@ function _hasSearch(p) { return p.get("q") || p.get("a") || p.get("ar") || p.get
         window._discogsIdsReady,
         new Promise(r => setTimeout(r, 3000)),
       ]);
-      const versionParam = p.get("vr");
       idsOrTimeout.then(() => {
         try { openModal(null, pId, pType, pUrl); } catch {}
-        // Open version popup after modal has had time to load
-        if (versionParam) setTimeout(() => openVersionPopup(null, versionParam), 1400);
       });
     }
   }
-  // Resume video from URL — wait for tracklist if a popup is also opening
-  const videoParam = p.get("vd");
+
+  // 5) Video bar — start playing as soon as a tracklist exists so the queue
+  //    is correct. We poll quickly (already 200ms cadence). YT API was
+  //    pre-warmed above so the first frame loads fast.
   if (videoParam) {
     const playUrl = `https://www.youtube.com/watch?v=${videoParam}`;
-    if (openParam) {
-      // Poll for tracklist (popup still loading), up to 8s then play anyway
+    if (openParam || versionParam) {
       let waited = 0;
       const poll = setInterval(() => {
         waited += 200;
         if (document.querySelector(".track-link[data-video]") || waited >= 8000) {
           clearInterval(poll);
-          openVideo(null, playUrl);
+          try { openVideo(null, playUrl); } catch {}
         }
       }, 200);
     } else {
-      setTimeout(() => openVideo(null, playUrl), 300);
+      setTimeout(() => { try { openVideo(null, playUrl); } catch {} }, 300);
     }
+  }
+
+  // 6) Restore AI search panel if shared.
+  const aiParam = p.get("ai");
+  if (aiParam && typeof doAiSearch === "function") {
+    await authReadyPromise;
+    setTimeout(() => { try { doAiSearch(aiParam); } catch {} }, 0);
   }
 
   // Invite-only mode: signed-out users see only the splash on the home view,
@@ -122,7 +154,7 @@ window.addEventListener("popstate", () => {
     if (sort) { const el = document.getElementById("cw-sort"); if (el) el.value = sort; }
     switchView("records", true); return;
   }
-  if (rawView === "records" || rawView === "info" || rawView === "privacy" || rawView === "terms" || rawView === "wanted" || rawView === "account" || rawView === "loc") {
+  if (rawView === "records" || rawView === "info" || rawView === "privacy" || rawView === "terms" || rawView === "wanted" || rawView === "account" || rawView === "loc" || rawView === "wiki") {
     if (rawView === "records") {
       _cwTab = p.get("tab") || "collection";
       const sort = p.get("s") || p.get("sort");
