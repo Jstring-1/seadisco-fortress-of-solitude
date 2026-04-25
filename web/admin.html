@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260412g" />
+  <link rel="stylesheet" href="/style.css?v=20260412h" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260412g"></script>
+<script defer src="/shared.js?v=20260412h"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
@@ -59,6 +59,7 @@
         <button class="admin-tab" onclick="switchAdminTab('api-log')">API Log</button>
         <button class="admin-tab" onclick="switchAdminTab('db-stats')">Database</button>
         <button class="admin-tab" onclick="switchAdminTab('loc-stats')">LOC</button>
+        <button class="admin-tab" onclick="switchAdminTab('blues-db')">Blues DB</button>
         <button class="admin-tab" onclick="switchAdminTab('theme')">Theme</button>
       </div>
 
@@ -119,6 +120,63 @@
           <button class="admin-refresh-btn" onclick="loadLocStats()" title="Refresh">&#8635;</button>
         </div>
         <div id="loc-stats-body" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
+      </div>
+
+      <!-- Blues DB (pre-1930 artists, admin-only) -->
+      <div class="admin-tab-panel" id="panel-blues-db" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
+          <h2 style="margin:0">Pre-1930 Blues Artists</h2>
+          <button class="admin-refresh-btn" onclick="bluesDbLoadList()" title="Refresh">&#8635;</button>
+          <button class="admin-btn" onclick="bluesDbSeed()" id="blues-seed-btn" title="Pull seed list from Wikidata. Idempotent — manual edits are preserved.">Seed from Wikidata</button>
+          <button class="admin-btn" onclick="bluesDbOpenEditor(null)" title="Add a new artist row manually">+ Add artist</button>
+          <span id="blues-stats" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
+        </div>
+        <div style="display:flex;gap:0.5rem;margin-bottom:0.6rem">
+          <input id="blues-search" type="search" placeholder="Search name / birthplace / hometown" style="flex:1;padding:0.45rem 0.7rem;font-size:0.88rem" oninput="bluesDbDebouncedSearch()" />
+        </div>
+        <div id="blues-list" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
+        <div id="blues-pager" style="margin-top:0.6rem;display:flex;gap:0.4rem;align-items:center;font-size:0.78rem"></div>
+
+        <!-- Editor dialog -->
+        <div id="blues-editor-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.78);z-index:300;align-items:flex-start;justify-content:center;padding:2rem 1rem;overflow:auto" onclick="if(event.target===this)bluesDbCloseEditor()">
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(900px,100%)">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.7rem">
+              <h3 id="blues-editor-title" style="margin:0">Edit artist</h3>
+              <button class="admin-btn" onclick="bluesDbCloseEditor()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
+            </div>
+            <form id="blues-editor-form" onsubmit="event.preventDefault();bluesDbSaveEditor()" style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem 1rem">
+              <label style="grid-column:1/-1">Name <input name="name" required style="width:100%"></label>
+              <label>Wikidata QID <input name="wikidata_qid" placeholder="Q123456"></label>
+              <label>MusicBrainz MBID <input name="musicbrainz_mbid" placeholder="uuid"></label>
+              <label>Discogs ID <input name="discogs_id" type="number"></label>
+              <label>Wikipedia suffix <input name="wikipedia_suffix" placeholder="/wiki/Charley_Patton"></label>
+              <label>Birth date <input name="birth_date" placeholder="YYYY-MM-DD"></label>
+              <label>Death date <input name="death_date" placeholder="YYYY-MM-DD"></label>
+              <label>Birth place <input name="birth_place"></label>
+              <label>Death place <input name="death_place"></label>
+              <label>Death cause <input name="death_cause"></label>
+              <label>Hometown / region <input name="hometown_region"></label>
+              <label>1st recording year <input name="first_recording_year" type="number"></label>
+              <label>1st recording title <input name="first_recording_title"></label>
+              <label>Last recording year <input name="last_recording_year" type="number"></label>
+              <label>Last recording title <input name="last_recording_title"></label>
+              <label style="grid-column:1/-1">Aliases (comma-sep) <input name="aliases"></label>
+              <label style="grid-column:1/-1">Styles (comma-sep) <input name="styles"></label>
+              <label style="grid-column:1/-1">Instruments (comma-sep) <input name="instruments"></label>
+              <label style="grid-column:1/-1">Associated labels (comma-sep) <input name="associated_labels"></label>
+              <label style="grid-column:1/-1">Songs authored (comma-sep) <input name="songs_authored"></label>
+              <label style="grid-column:1/-1">Collaborators (comma-sep) <input name="collaborators"></label>
+              <label style="grid-column:1/-1">YouTube URLs (comma-sep) <input name="youtube_urls"></label>
+              <label style="grid-column:1/-1">Photo URL <input name="photo_url"></label>
+              <label style="grid-column:1/-1">Notes <textarea name="notes" rows="4" style="width:100%"></textarea></label>
+              <div style="grid-column:1/-1;display:flex;gap:0.5rem;justify-content:flex-end;margin-top:0.5rem">
+                <button type="button" class="admin-btn admin-btn-danger" id="blues-editor-delete" onclick="bluesDbDeleteFromEditor()" style="margin-right:auto;display:none">Delete</button>
+                <button type="button" class="admin-btn" onclick="bluesDbCloseEditor()">Cancel</button>
+                <button type="submit" class="admin-btn admin-btn-extras">Save</button>
+              </div>
+            </form>
+          </div>
+        </div>
       </div>
 
       <!-- Theme picker -->
@@ -187,7 +245,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260412g"></script>
+<script defer src="/modal.js?v=20260412h"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -201,6 +259,7 @@ const _adminTabLoaders = {
   'api-log': () => loadApiLog(),
   'db-stats': () => loadDbStats(),
   'loc-stats': () => loadLocStats(),
+  'blues-db': () => bluesDbInit(),
   'theme': () => initThemePicker(),
 };
 
@@ -904,6 +963,201 @@ async function loadAdminItems() {
       pag.style.display = "block";
     }
   } catch { list.innerHTML = '<div style="color:#e88;padding:1rem">Error loading items.</div>'; }
+}
+
+// ── Blues DB tab ────────────────────────────────────────────────────────
+let _bluesDbState = { rows: [], total: 0, limit: 50, offset: 0, search: "", editingId: null };
+let _bluesSearchTimer = null;
+
+function bluesDbInit() {
+  bluesDbLoadStats();
+  bluesDbLoadList();
+}
+
+async function bluesDbLoadStats() {
+  try {
+    const r = await apiFetch("/api/admin/blues/stats");
+    if (!r.ok) return;
+    const s = await r.json();
+    const last = s.lastUpdate ? new Date(s.lastUpdate).toLocaleString() : "—";
+    document.getElementById("blues-stats").textContent = `${s.total} artists · last update ${last}`;
+  } catch {}
+}
+
+async function bluesDbLoadList() {
+  const list = document.getElementById("blues-list");
+  if (!list) return;
+  list.innerHTML = '<div style="padding:0.6rem">Loading…</div>';
+  const params = new URLSearchParams({
+    search: _bluesDbState.search,
+    limit: String(_bluesDbState.limit),
+    offset: String(_bluesDbState.offset),
+  });
+  try {
+    const r = await apiFetch("/api/admin/blues/list?" + params.toString());
+    if (!r.ok) { list.innerHTML = '<div style="color:#e88">Could not load.</div>'; return; }
+    const data = await r.json();
+    _bluesDbState.rows = data.rows; _bluesDbState.total = data.total;
+    bluesDbRenderList();
+    bluesDbRenderPager();
+  } catch { list.innerHTML = '<div style="color:#e88">Error loading.</div>'; }
+}
+
+function bluesDbRenderList() {
+  const list = document.getElementById("blues-list");
+  if (!_bluesDbState.rows.length) {
+    list.innerHTML = '<div style="padding:0.6rem;color:var(--muted)">No artists yet. Click <strong>Seed from Wikidata</strong> or <strong>+ Add artist</strong>.</div>';
+    return;
+  }
+  const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  const fmtRange = (a, b) => {
+    if (a && b) return `${a} – ${b}`;
+    if (a) return `b. ${a}`;
+    if (b) return `d. ${b}`;
+    return "";
+  };
+  const rows = _bluesDbState.rows.map(r => {
+    const styles = (Array.isArray(r.styles) ? r.styles : []).slice(0, 3).join(", ");
+    const dates = fmtRange(r.birth_date, r.death_date);
+    return `<tr>
+      <td><a href="#" onclick="event.preventDefault();bluesDbOpenEditor(${r.id})" style="color:var(--accent)">${esc(r.name)}</a></td>
+      <td>${esc(dates)}</td>
+      <td>${esc(r.birth_place ?? "")}</td>
+      <td>${esc(styles)}</td>
+      <td>${esc(r.wikidata_qid ?? "")}</td>
+      <td>${r.discogs_id ? esc(r.discogs_id) : ""}</td>
+    </tr>`;
+  }).join("");
+  list.innerHTML = `
+    <table style="width:100%;border-collapse:collapse;font-size:0.82rem">
+      <thead>
+        <tr style="text-align:left;color:var(--muted);border-bottom:1px solid var(--border)">
+          <th style="padding:0.35rem 0.5rem">Name</th>
+          <th style="padding:0.35rem 0.5rem">Years</th>
+          <th style="padding:0.35rem 0.5rem">Birth place</th>
+          <th style="padding:0.35rem 0.5rem">Styles</th>
+          <th style="padding:0.35rem 0.5rem">QID</th>
+          <th style="padding:0.35rem 0.5rem">Discogs</th>
+        </tr>
+      </thead>
+      <tbody style="color:var(--text)">${rows}</tbody>
+    </table>`;
+  list.querySelectorAll("tbody tr").forEach(tr => {
+    tr.style.borderBottom = "1px solid var(--border)";
+    tr.querySelectorAll("td").forEach(td => td.style.padding = "0.35rem 0.5rem");
+  });
+}
+
+function bluesDbRenderPager() {
+  const pag = document.getElementById("blues-pager");
+  const { offset, limit, total } = _bluesDbState;
+  const start = total ? offset + 1 : 0;
+  const end = Math.min(offset + limit, total);
+  const prevDisabled = offset === 0;
+  const nextDisabled = offset + limit >= total;
+  pag.innerHTML = `
+    <span style="color:var(--muted)">${start}–${end} of ${total}</span>
+    <button class="admin-btn" onclick="bluesDbPage(-1)" ${prevDisabled ? "disabled" : ""}>← Prev</button>
+    <button class="admin-btn" onclick="bluesDbPage(1)" ${nextDisabled ? "disabled" : ""}>Next →</button>
+  `;
+}
+function bluesDbPage(delta) {
+  _bluesDbState.offset = Math.max(0, _bluesDbState.offset + delta * _bluesDbState.limit);
+  bluesDbLoadList();
+}
+function bluesDbDebouncedSearch() {
+  clearTimeout(_bluesSearchTimer);
+  _bluesSearchTimer = setTimeout(() => {
+    _bluesDbState.search = document.getElementById("blues-search").value.trim();
+    _bluesDbState.offset = 0;
+    bluesDbLoadList();
+  }, 250);
+}
+
+async function bluesDbSeed() {
+  const btn = document.getElementById("blues-seed-btn");
+  if (!confirm("Pull the seed list from Wikidata?\n\nIdempotent — re-running upserts on QID and won't overwrite manual edits to other fields.")) return;
+  btn.disabled = true; btn.textContent = "Seeding…";
+  try {
+    const r = await apiFetch("/api/admin/blues/seed", { method: "POST" });
+    if (!r.ok) { alert("Seed failed: HTTP " + r.status); return; }
+    const out = await r.json();
+    alert(`Seeded ${out.upserted} of ${out.fetched} artists in ${(out.durationMs/1000).toFixed(1)}s${out.errors?.length ? ` (${out.errors.length} errors)` : ""}.`);
+    bluesDbLoadStats();
+    bluesDbLoadList();
+  } catch (e) { alert("Seed failed: " + e); }
+  finally { btn.disabled = false; btn.textContent = "Seed from Wikidata"; }
+}
+
+async function bluesDbOpenEditor(id) {
+  _bluesDbState.editingId = id;
+  const overlay = document.getElementById("blues-editor-overlay");
+  const form = document.getElementById("blues-editor-form");
+  const title = document.getElementById("blues-editor-title");
+  const delBtn = document.getElementById("blues-editor-delete");
+  form.reset();
+  if (id) {
+    title.textContent = "Edit artist";
+    delBtn.style.display = "";
+    try {
+      const r = await apiFetch("/api/admin/blues/" + id);
+      if (!r.ok) { alert("Could not load row."); return; }
+      const row = await r.json();
+      for (const [k, v] of Object.entries(row)) {
+        const el = form.elements.namedItem(k);
+        if (!el) continue;
+        if (Array.isArray(v)) el.value = v.join(", ");
+        else if (v == null) el.value = "";
+        else el.value = v;
+      }
+    } catch { alert("Error loading row."); return; }
+  } else {
+    title.textContent = "Add artist";
+    delBtn.style.display = "none";
+  }
+  overlay.style.display = "flex";
+}
+function bluesDbCloseEditor() {
+  document.getElementById("blues-editor-overlay").style.display = "none";
+  _bluesDbState.editingId = null;
+}
+async function bluesDbSaveEditor() {
+  const form = document.getElementById("blues-editor-form");
+  const data = {};
+  for (const el of form.elements) {
+    if (!el.name) continue;
+    data[el.name] = el.value.trim();
+  }
+  const id = _bluesDbState.editingId;
+  const url = id ? "/api/admin/blues/" + id : "/api/admin/blues";
+  const method = id ? "PUT" : "POST";
+  try {
+    const r = await apiFetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert("Save failed: " + (err.error ?? r.status));
+      return;
+    }
+    bluesDbCloseEditor();
+    bluesDbLoadStats();
+    bluesDbLoadList();
+  } catch (e) { alert("Save failed: " + e); }
+}
+async function bluesDbDeleteFromEditor() {
+  const id = _bluesDbState.editingId;
+  if (!id) return;
+  if (!confirm("Delete this artist row? This cannot be undone.")) return;
+  try {
+    const r = await apiFetch("/api/admin/blues/" + id, { method: "DELETE" });
+    if (!r.ok) { alert("Delete failed."); return; }
+    bluesDbCloseEditor();
+    bluesDbLoadStats();
+    bluesDbLoadList();
+  } catch (e) { alert("Delete failed: " + e); }
 }
 
 // toggleMobileNav — now in shared.js
