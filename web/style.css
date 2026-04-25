@@ -5238,25 +5238,6 @@ footer {
 .wiki-read-full:hover,
 .wiki-footer a:hover { color: var(--accent2); border-bottom-color: var(--accent2); }
 
-/* In-popup "Read full article" toggle — swaps the body content for the
-   entire article in-place (no external Wikipedia link). */
-.wiki-load-full {
-  display: inline-block;
-  background: none;
-  border: 1px solid var(--accent-dim);
-  color: var(--accent);
-  font-size: 0.78rem;
-  padding: 0.3rem 0.7rem;
-  border-radius: var(--radius);
-  cursor: pointer;
-  transition: background 0.12s, color 0.12s, border-color 0.12s;
-}
-.wiki-load-full:hover {
-  background: var(--accent);
-  color: #1a1208;
-  border-color: var(--accent);
-}
-
 .wiki-extract {
   font-size: 0.9rem;
   line-height: 1.6;

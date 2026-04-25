@@ -40,7 +40,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260411r" />
+  <link rel="stylesheet" href="/style.css?v=20260411s" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -78,7 +78,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260411r"></script>
+<script defer src="/shared.js?v=20260411s"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search" }));</script>
 <div id="search-view">
 
@@ -813,18 +813,18 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260411r"></script>
-<script defer src="/search.js?v=20260411r"></script>
-<script defer src="/collection.js?v=20260411r"></script>
-<script defer src="/account.js?v=20260411r"></script>
-<script defer src="/orders.js?v=20260411r"></script>
+<script defer src="/utils.js?v=20260411s"></script>
+<script defer src="/search.js?v=20260411s"></script>
+<script defer src="/collection.js?v=20260411s"></script>
+<script defer src="/account.js?v=20260411s"></script>
+<script defer src="/orders.js?v=20260411s"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260411r"></script>
-<script defer src="/app.js?v=20260411r"></script>
+<script defer src="/modal.js?v=20260411s"></script>
+<script defer src="/app.js?v=20260411s"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/inventory-editor.js?v=20260411r"></script>
-<script defer src="/loc.js?v=20260411r"></script>
+<script defer src="/inventory-editor.js?v=20260411s"></script>
+<script defer src="/loc.js?v=20260411s"></script>
 
 </body>
 </html>
