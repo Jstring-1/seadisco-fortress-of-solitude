@@ -1562,6 +1562,26 @@ function playerInfoClick() {
   toggleMiniPlayer();
 }
 
+// ➕ on a track row → resolve the YouTube videoId and add to the queue.
+// The data-yt-url attribute carries the matched watch URL written into
+// the row by renderModal at popup time.
+function _trackQueueAdd(el) {
+  const url = el?.dataset?.ytUrl || "";
+  const videoId = (typeof extractYouTubeId === "function") ? extractYouTubeId(url) : "";
+  if (!videoId) return;
+  const meta = {
+    title:       el.dataset.track   || "",
+    artist:      el.dataset.artist  || "",
+    albumTitle:  el.dataset.album   || "",
+  };
+  if (typeof queueAddYt === "function") {
+    queueAddYt(videoId, meta);
+    el.classList.add("queued");
+    el.title = "Already added — click queue button to view";
+  }
+}
+window._trackQueueAdd = _trackQueueAdd;
+
 function openVideo(event, url) {
   if (event) { event.preventDefault(); event.stopPropagation(); }
   // Starting YouTube playback should stop the LOC audio bar so we
@@ -1630,6 +1650,19 @@ function videoPrev() {
 }
 
 function playNextVideo() {
+  // Cross-source queue takes precedence over the per-album internal
+  // _videoQueue: a user-curated queue should drive auto-advance, falling
+  // back to the album's track list only when the queue is empty.
+  if (typeof _queuePlayNext === "function") {
+    Promise.resolve(_queuePlayNext()).then(handled => {
+      if (handled) return;
+      _playNextVideoInternal();
+    }).catch(() => _playNextVideoInternal());
+    return;
+  }
+  _playNextVideoInternal();
+}
+function _playNextVideoInternal() {
   const queue = window._videoQueue ?? [];
   let next = (window._videoQueueIndex ?? -1) + 1;
   while (next < queue.length) {
@@ -2015,6 +2048,12 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         const ytSearchEnd = t.title
           ? ` <a class="track-yt-search-end" href="https://www.youtube.com/results?search_query=${ytQuery}" target="_blank" rel="noopener" title="Search on YouTube"><svg width="14" height="10" viewBox="0 0 16 11" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="11" rx="2.5" fill="#8a2a22"/><path d="M6.5 3L11 5.5L6.5 8V3Z" fill="#e8dcc8"/></svg></a>`
           : "";
+        // ➕ → add this YouTube-matched track to the cross-source play
+        // queue. Only renders when the row has a confirmed YT URL match
+        // (otherwise there's nothing to queue from this row).
+        const queueAdd = url
+          ? ` <a href="#" class="queue-add-icon" data-yt-url="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" onclick="event.preventDefault();_trackQueueAdd(this);return false" title="Add to play queue">＋</a>`
+          : "";
         const trackCredits = (t.extraartists ?? []).length
           ? `<div class="track-credits">${t.extraartists.map(a => {
               const nameEl = a.id
@@ -2030,7 +2069,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         return `<div class="track">
           <span class="track-play-cell">${playCell}</span>
           <span class="track-pos">${escHtml(t.position || "")}</span>
-          <span class="track-title">${titleLink}${searchIcon}${wikiW}${locL}${ytSearchEnd}${trackCredits}</span>
+          <span class="track-title">${titleLink}${searchIcon}${wikiW}${locL}${ytSearchEnd}${queueAdd}${trackCredits}</span>
           ${t.duration ? `<span class="track-dur">${escHtml(t.duration)}</span>` : ""}
         </div>`;
       }).join("")}

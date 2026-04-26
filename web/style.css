@@ -81,7 +81,8 @@ html { overflow-x: hidden; }
 @media (max-width: 640px) {
   #site-header { padding: 0.4rem 0.75rem; margin-bottom: 0; }
   #site-header img { height: 32px; }
-  .text-logo { font-size: 1.15rem; }
+  /* Mobile logo stays compact — desktop 2.7rem would dominate */
+  .text-logo { font-size: 1.4rem; }
 
   #header-bar {
     flex-direction: column;
@@ -1465,10 +1466,11 @@ body {
   display: block;
 }
 
-/* Text logo */
+/* Text logo. Desktop bumped ~75% (1.55rem → 2.7rem) for stronger
+   brand presence; mobile breakpoints below scale back down. */
 .text-logo {
   font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
-  font-size: 1.55rem;
+  font-size: 2.7rem;
   letter-spacing: 0.03em;
   line-height: 1;
   user-select: none;
@@ -1574,12 +1576,18 @@ body {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  /* Larger nav icons — bumped from 22px → 32px so the line-art vinyl
-     details (heart, ribbon, headphone discs) read clearly at a glance. */
-  width: 32px;
-  height: 32px;
+  /* Desktop nav icons (~32px → 56px, +75%) so the line-art vinyl
+     details read clearly. Scaled back down at small breakpoints. */
+  width: 56px;
+  height: 56px;
   opacity: 0.85;
   transition: opacity 0.15s, transform 0.15s;
+}
+@media (max-width: 1024px) {
+  .nav-tab-top.icon-nav .nav-icon { width: 40px; height: 40px; }
+}
+@media (max-width: 720px) {
+  .nav-tab-top.icon-nav .nav-icon { width: 28px; height: 28px; }
 }
 .nav-tab-top.icon-nav .nav-icon svg {
   /* SVG markup carries no fixed width/height — fill the container
@@ -1664,7 +1672,8 @@ body {
 }
 #nav-hamburger span {
   display: block;
-  height: 2px;
+  width: 100%;
+  height: 3px;
   background: var(--accent);
   border-radius: 2px;
 }
@@ -1675,12 +1684,12 @@ body {
     display: flex !important;
     position: fixed;
     top: 1rem;
-    right: 1rem;
+    left: 1rem;
     z-index: 500;
     background: var(--surface);
     border-color: var(--accent);
   }
-  #nav-tabs-wrap { position: fixed; top: 3.5rem; right: 1rem; z-index: 500; min-width: 200px; }
+  #nav-tabs-wrap { position: fixed; top: 3.5rem; left: 1rem; z-index: 500; min-width: 200px; }
   #main-nav-tabs {
     display: none !important;
     flex-direction: column;
@@ -4443,15 +4452,24 @@ button.wiki-link-btn:active {
   color-scheme: dark;
 }
 
-/* Main search: 3 columns desktop */
-.main-filters { grid-template-columns: repeat(3, 1fr); }
+/* Main search: row 1 has 3 wide fields (Artist, Release, Label),
+   row 2 has 5 short fields (Format, Year, Country, Genre, Style).
+   We use a 15-col grid (LCM of 3 and 5) so each row divides evenly:
+   row-1 children span 5, row-2 children span 3. */
+.main-filters { grid-template-columns: repeat(15, 1fr); }
+.main-filters > label:nth-child(-n+3) { grid-column: span 5; }
+.main-filters > label:nth-child(n+4)  { grid-column: span 3; }
 /* Collection: 3 columns on desktop */
 .cw-filters { grid-template-columns: repeat(3, 1fr); }
 
 /* ── Mobile: 2-col grid layouts for filter forms ── */
 @media (max-width: 640px) {
-  /* Main search: 2 cols — natural flow gives Artist/Release, Label/Format, Year/Country, Genre/Style */
+  /* Main search: 2 cols on mobile — natural flow gives
+     Artist/Release, Label/Format, Year/Country, Genre/Style.
+     Reset desktop's nth-child span rules so each label takes one slot. */
   .main-filters { grid-template-columns: repeat(2, 1fr); }
+  .main-filters > label:nth-child(-n+3),
+  .main-filters > label:nth-child(n+4) { grid-column: auto; }
 
   /* Collection: 6-col grid for flexible row sizing */
   .cw-filters {
@@ -5996,6 +6014,163 @@ a.profile-stat-link:hover {
 }
 /* The save badge keeps its is-saved highlight regardless of source */
 #mini-loc-save.is-saved { color: var(--favorite); }
+
+/* ── Cross-source play queue drawer ─────────────────────────────────────
+   Slides up from the right side of the bar; persistent until dismissed.
+   z-index sits above the bar (300) but below modal overlays. */
+.queue-drawer {
+  position: fixed;
+  right: 1rem;
+  bottom: 60px;
+  z-index: 320;
+  width: 360px;
+  max-width: calc(100vw - 2rem);
+  max-height: 60vh;
+  background: #111;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.7);
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+}
+.queue-drawer.open { display: flex; }
+body.player-open .queue-drawer.open { bottom: 102px; }
+
+.queue-drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid #2a2a2a;
+  background: #18181a;
+}
+.queue-drawer-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #ccc;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.queue-drawer-count {
+  font-size: 0.7rem;
+  color: #888;
+  flex: 1;
+}
+.queue-drawer-clear,
+.queue-drawer-close {
+  background: none;
+  border: none;
+  color: #888;
+  cursor: pointer;
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+}
+.queue-drawer-close { font-size: 1.1rem; }
+.queue-drawer-clear:hover,
+.queue-drawer-close:hover { color: #fff; background: rgba(255,255,255,0.08); }
+
+.queue-drawer-list {
+  overflow-y: auto;
+  max-height: calc(60vh - 48px);
+}
+.queue-empty {
+  padding: 1.5rem 1rem;
+  font-size: 0.78rem;
+  color: #888;
+  text-align: center;
+  line-height: 1.5;
+}
+
+.queue-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.55rem;
+  border-bottom: 1px solid #1d1d20;
+}
+.queue-row:last-child { border-bottom: none; }
+.queue-row.sortable-chosen { background: rgba(255,255,255,0.04); }
+.queue-row-handle {
+  color: #555;
+  cursor: grab;
+  user-select: none;
+  font-size: 0.85rem;
+  letter-spacing: -2px;
+  padding: 0 0.15rem;
+}
+.queue-row-handle:hover { color: #aaa; }
+.queue-row-source {
+  color: var(--accent);
+  font-size: 0.85rem;
+  flex-shrink: 0;
+  width: 16px;
+  text-align: center;
+}
+.queue-row-play {
+  flex: 1;
+  background: none;
+  border: none;
+  color: #ccc;
+  text-align: left;
+  cursor: pointer;
+  padding: 0.15rem 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+.queue-row-play:hover .queue-row-title { color: var(--accent-hi, var(--accent)); }
+.queue-row-title {
+  font-size: 0.78rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 600;
+}
+.queue-row-artist {
+  font-size: 0.7rem;
+  color: #888;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.queue-row-remove {
+  background: none;
+  border: none;
+  color: #555;
+  cursor: pointer;
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+.queue-row-remove:hover { color: var(--danger-bright, #ff6b6b); background: rgba(255,255,255,0.06); }
+
+/* Tiny ➕ "add to queue" icon, used inline next to track titles, on
+   LOC card thumbnails, and in info popups. Matches the existing
+   .track-loc-icon footprint so it doesn't crowd track rows. */
+.queue-add-icon {
+  display: inline-block;
+  font-size: 0.78em;
+  margin-left: 0.2rem;
+  padding: 0 0.25rem;
+  text-decoration: none;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  line-height: 1.2;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+  vertical-align: baseline;
+}
+.queue-add-icon:hover {
+  color: var(--accent-hi, var(--accent));
+  border-color: var(--accent-hi, var(--accent));
+  background: rgba(255,255,255,0.04);
+}
+.queue-add-icon.queued { color: var(--success); border-color: var(--success); }
 
 /* ── LOC info popup overlay ───────────────────────────────────────── */
 .loc-info-overlay {

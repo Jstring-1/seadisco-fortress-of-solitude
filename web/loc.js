@@ -799,6 +799,9 @@ async function _locOpenInfoPopup(locId) {
   const playBtn = canPlay
     ? `<button type="button" class="loc-info-btn loc-info-btn-play" onclick="_locPlayFromInfo('${esc(item.id).replace(/'/g, "\\'")}')">▶ Play</button>`
     : `<button type="button" class="loc-info-btn loc-info-btn-play is-disabled" disabled title="No playable stream">▶ No stream</button>`;
+  const queueBtn = canPlay
+    ? `<button type="button" class="loc-info-btn loc-info-btn-queue" onclick="_locQueueFromInfo('${esc(item.id).replace(/'/g, "\\'")}')" title="Add to play queue">＋ Queue</button>`
+    : "";
   const saveBtn = `<button type="button" class="loc-info-btn loc-info-btn-save${saved ? " is-saved" : ""}" onclick="_locToggleSaveFromInfo('${esc(item.id).replace(/'/g, "\\'")}')">${saved ? "★ Saved" : "☆ Save"}</button>`;
   const locLink = `<a class="loc-info-btn loc-info-btn-loc" href="${esc(item.url || item.id)}" target="_blank" rel="noopener">Open on loc.gov ↗</a>`;
 
@@ -836,7 +839,7 @@ async function _locOpenInfoPopup(locId) {
       <div class="loc-info-head-text">
         ${titleEl}
         ${artistEl}
-        <div class="loc-info-actions">${playBtn}${saveBtn}${locLink}</div>
+        <div class="loc-info-actions">${playBtn}${queueBtn}${saveBtn}${locLink}</div>
       </div>
     </div>
     ${summaryHtml}
@@ -904,6 +907,14 @@ async function _locFetchLookup(locId) {
   } catch { /* fall through */ }
   return null;
 }
+
+// Add the LOC item from the info popup to the cross-source play queue.
+function _locQueueFromInfo(locId) {
+  const item = _locItemCache.get(locId);
+  if (!item) return;
+  if (typeof queueAddLoc === "function") queueAddLoc(item);
+}
+window._locQueueFromInfo = (locId) => _locQueueFromInfo(locId);
 
 function _locPlayFromInfo(locId) {
   const item = _locItemCache.get(locId);
@@ -1508,10 +1519,16 @@ function _locToggleExpand() {
   if (typeof toggleMiniPlayer === "function") toggleMiniPlayer();
 }
 
-// Auto-advance: when the current track ends, play the next one in the
-// queue if there is one. If we're at the end of the queue (or there's
-// no queue at all) just leave the bar in its paused state.
-function _locOnTrackEnded() {
+// Auto-advance: when the current track ends, the cross-source queue
+// takes precedence. If there's an item in the user's saved queue,
+// hand off to it (LOC or YouTube source). Otherwise fall back to the
+// internal multi-track LOC queue (for albums with multiple tracks
+// inside a single LOC item).
+async function _locOnTrackEnded() {
+  if (typeof _queuePlayNext === "function") {
+    const handled = await _queuePlayNext();
+    if (handled) return;
+  }
   if (!_locQueue) return;
   if (_locQueue.index + 1 >= _locQueue.items.length) {
     _locUpdateQueueButtons();

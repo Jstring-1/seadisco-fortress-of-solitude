@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 
 
@@ -2624,6 +2624,94 @@ app.delete("/api/user/wiki-saves", express.json(), async (req, res) => {
   if (!title) { res.status(400).json({ error: "title required" }); return; }
   try {
     await deleteWikiSave(userId, title);
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// ── Play queue (cross-source: LOC + YouTube) ────────────────────────────
+//
+// The queue lives server-side so it persists across devices/logins. Items
+// carry everything needed to play without a Discogs round-trip — title,
+// artist, image, plus engine-specific fields (streamUrl/streamType for
+// LOC, videoId/durationSec for YT). Cap at 500 per user.
+
+app.get("/api/user/play-queue", async (req, res) => {
+  const userId = await requireUser(req, res);
+  if (!userId) return;
+  try {
+    const items = await getPlayQueue(userId);
+    res.json({ items });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// POST /api/user/play-queue — append items to the end of the queue.
+// Body: { items: [{ source: "loc"|"yt", externalId: string, data: object }] }
+app.post("/api/user/play-queue", express.json({ limit: "256kb" }), async (req, res) => {
+  const userId = await requireUser(req, res);
+  if (!userId) return;
+  const raw = Array.isArray(req.body?.items) ? req.body.items : [];
+  // Normalize + validate each item. Reject anything missing source / id.
+  const items = raw
+    .map((it: any) => {
+      const src = String(it?.source ?? "").trim().toLowerCase();
+      if (src !== "loc" && src !== "yt") return null;
+      const externalId = String(it?.externalId ?? "").trim().slice(0, 2000);
+      if (!externalId) return null;
+      const data = (it?.data && typeof it.data === "object") ? it.data : {};
+      return { source: src as "loc" | "yt", externalId, data };
+    })
+    .filter((x: any): x is NonNullable<typeof x> => !!x)
+    .slice(0, 100); // cap one POST at 100 items
+  if (!items.length) { res.status(400).json({ error: "items required" }); return; }
+  try {
+    const result = await appendPlayQueue(userId, items);
+    res.json({ ok: true, ...result });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// DELETE /api/user/play-queue?position=N or body { position: N } — remove
+// a single item. POST body { clear: true } clears the whole queue.
+app.delete("/api/user/play-queue", express.json(), async (req, res) => {
+  const userId = await requireUser(req, res);
+  if (!userId) return;
+  if (req.body?.clear === true) {
+    try {
+      const removed = await clearPlayQueue(userId);
+      res.json({ ok: true, removed });
+    } catch (e: any) {
+      res.status(500).json({ error: String(e?.message ?? e) });
+    }
+    return;
+  }
+  const positionRaw = req.body?.position ?? req.query?.position;
+  const position = parseInt(String(positionRaw), 10);
+  if (!Number.isFinite(position)) { res.status(400).json({ error: "position required" }); return; }
+  try {
+    await removeFromPlayQueue(userId, position);
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// PATCH /api/user/play-queue/reorder — body: { positions: [oldPos1, oldPos2, ...] }
+// Server rewrites positions to match the order given; transactional so
+// concurrent reorders stay consistent.
+app.patch("/api/user/play-queue/reorder", express.json({ limit: "16kb" }), async (req, res) => {
+  const userId = await requireUser(req, res);
+  if (!userId) return;
+  const positions = Array.isArray(req.body?.positions)
+    ? req.body.positions.map((n: any) => parseInt(String(n), 10)).filter((n: number) => Number.isFinite(n))
+    : [];
+  if (!positions.length) { res.status(400).json({ error: "positions required" }); return; }
+  try {
+    await reorderPlayQueue(userId, positions);
     res.json({ ok: true });
   } catch (e: any) {
     res.status(500).json({ error: String(e?.message ?? e) });
