@@ -936,8 +936,16 @@ async function doAiSearch(q) {
   const qInput = document.getElementById("query");
   if (qInput && qInput.value.trim() !== q.trim()) qInput.value = q;
   saveSearchHistory("main");
-  switchView("search", true);
-  setActiveTab("search");
+  // Only call switchView when we aren't already on the search view —
+  // when we are, switchView's else-branch tears down and rebuilds the
+  // Recent grid (loadRandomRecords does grid.innerHTML = ...) which
+  // causes a noticeable flash on every AI submit. The Recent grid
+  // already shows correctly; AI search just floats a panel over it.
+  const searchVisible = document.getElementById("search-view")?.style.display !== "none";
+  if (!searchVisible) {
+    switchView("search", true);
+    setActiveTab("search");
+  }
   document.getElementById("results").innerHTML = "";
   document.getElementById("pagination").style.display = "none";
   document.getElementById("search-load-more").style.display = "none";

@@ -35,6 +35,14 @@ html { overflow-x: hidden; }
   justify-content: center;
 }
 .input-clear-btn:hover { color: var(--text); background: var(--border); }
+/* When the wrapped input contains text, tint its border with the
+   theme's catno (off-spectrum accent) so users can see at a glance
+   which fields are populated. Wins over the input's own focus state
+   only when it actually has content. */
+.input-clear-wrap.has-text > input,
+.input-clear-wrap.has-text > input:focus {
+  border-color: var(--catno, var(--accent)) !important;
+}
 
 /* Results type + sort row */
 .type-sort-row {
@@ -346,6 +354,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #3a2a0d;
   --inventory-border:#6b4a18;
   --favorite:        #e8d44d;
+  --catno:           #5fd4d0;          /* cyan against orange accent */
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -389,6 +398,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #2a1a10;
   --inventory-border:#6b4a20;
   --favorite:        #d4b84a;
+  --catno:           #e06090;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -432,6 +442,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #2a2410;
   --inventory-border:#5a4620;
   --favorite:        #d4a843;
+  --catno:           #b070a0;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -475,6 +486,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #2a230f;
   --inventory-border:#5a4818;
   --favorite:        #f0c95c;
+  --catno:           #5fd4d0;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -518,6 +530,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #ead5b8;
   --inventory-border:#c9a868;
   --favorite:        #a87832;
+  --catno:           #3d4a8a;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -561,6 +574,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #0a2a32;
   --inventory-border:#1f5a68;
   --favorite:        #00e5ff;
+  --catno:           #9aff5a;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -604,6 +618,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #ead8c0;
   --inventory-border:#c9a888;
   --favorite:        #c1716e;
+  --catno:           #2a6a78;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -650,6 +665,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #2e2200;
   --inventory-border:#5a4500;
   --favorite:        #d29922;
+  --catno:           #ff79c6;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -696,6 +712,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #fff8c5;
   --inventory-border:#d4a72c;
   --favorite:        #9a6700;
+  --catno:           #a8328a;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -742,6 +759,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #3a1808;
   --inventory-border:#7a3010;
   --favorite:        #b58900;          /* yellow */
+  --catno:           #d33682;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -787,6 +805,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #f0d8c0;
   --inventory-border:#c49060;
   --favorite:        #b58900;
+  --catno:           #d33682;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -833,6 +852,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #3a2410;
   --inventory-border:#7a5018;
   --favorite:        #e6db74;          /* yellow */
+  --catno:           #66d9ef;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -883,6 +903,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #ececec;
   --inventory-border:#b8b8b8;
   --favorite:        #1a1a1a;
+  --catno:           #0d8a8a;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -927,6 +948,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #f0e0c0;
   --inventory-border:#c0a070;
   --favorite:        #b8000a;
+  --catno:           #1a7a3a;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -971,6 +993,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #f0e0b8;
   --inventory-border:#c0a062;
   --favorite:        #b04d6a;
+  --catno:           #5a4ab8;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -1015,6 +1038,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #f0e0b8;
   --inventory-border:#c0a062;
   --favorite:        #8a6a18;
+  --catno:           #5a4ab8;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -1059,6 +1083,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #f0e0c0;
   --inventory-border:#c0a070;
   --favorite:        #5a3aa0;
+  --catno:           #0d7a7a;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -1103,6 +1128,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #ece0b8;
   --inventory-border:#c0a060;
   --favorite:        #b89020;
+  --catno:           #1a6a78;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -1147,6 +1173,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #1f1f1f;
   --inventory-border:#3a3a3a;
   --favorite:        #ffffff;
+  --catno:           #5fe8e0;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -1191,6 +1218,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #2e2410;
   --inventory-border:#5a4520;
   --favorite:        #ffb84a;
+  --catno:           #e878d4;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -1235,6 +1263,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #2e1a10;
   --inventory-border:#5a3520;
   --favorite:        #00d4d0;
+  --catno:           #e878d4;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -1279,6 +1308,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #2e2410;
   --inventory-border:#5a4520;
   --favorite:        #ff7878;
+  --catno:           #5fd4d0;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -1323,6 +1353,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #2e2410;
   --inventory-border:#5a4520;
   --favorite:        #b070ff;
+  --catno:           #ff7878;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -1367,6 +1398,7 @@ html { overflow-x: hidden; }
   --inventory-bg:    #2e1a10;
   --inventory-border:#5a3520;
   --favorite:        #50d68a;
+  --catno:           #e878d4;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -1436,13 +1468,17 @@ body {
   color: var(--accent);
   font-weight: 700;
 }
+/* "rch" and "gs" — the lowercase tail of "SEArch DISCOgs" — now use
+   the theme's highlight accent (--accent-hi). Each theme picks a
+   contrasting hi color so the dual-tone logo reads on every theme. */
 .logo-lo {
-  color: rgba(255, 107, 53, 0.3);
+  color: var(--accent-hi, var(--accent2, var(--accent)));
+  opacity: 0.65;
   font-weight: 400;
 }
 .logo-gap { width: 0.2em; display: inline-block; }
-.text-logo:hover .logo-hi { color: var(--favorite); }
-.text-logo:hover .logo-lo { color: rgba(232, 212, 77, 0.3); }
+.text-logo:hover .logo-hi { color: var(--accent-hi, var(--favorite)); }
+.text-logo:hover .logo-lo { color: var(--accent); opacity: 0.5; }
 
 #site-tagline {
   font-size: 0.78rem;
@@ -2817,7 +2853,11 @@ button.wiki-link-btn:active {
 }
 .catno-link,
 .catno-link:visited {
-  color: var(--success) !important;
+  /* Catalog numbers use a per-theme "off-spectrum" color so they pop
+     out from the primary accent (which is usually link/CTA color).
+     Falls back to success for any theme that doesn't define --catno. */
+  color: var(--catno, var(--success)) !important;
+  font-variant-numeric: tabular-nums;
 }
 .mv-grid a:hover {
   text-decoration: underline dotted !important;
@@ -3782,8 +3822,10 @@ button.wiki-link-btn:active {
 
 .card-catno-line {
   font-size: 0.68rem;
-  color: var(--success);
+  color: var(--catno, var(--success));
   margin-top: 0.15rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
 }
 
 /* ── Saved searches ── */
@@ -3953,11 +3995,16 @@ button.wiki-link-btn:active {
 
 /* Radio label hover + checked colours per type */
 .type-radios label { transition: color 0.15s; cursor: pointer; }
-.type-radios label:hover:has(input[value=""])       { color: var(--accent); }
+.type-radios label:hover:has(input[value=""])        { color: var(--accent); }
 .type-radios label:hover:has(input[value="master"])  { color: var(--type-master); }
+/* Masters+ shares the master type color so the related variants read
+   as the same family — was missing before, leaving Masters+ with no
+   hover affordance while Masters lit up. */
+.type-radios label:hover:has(input[value="master+"]) { color: var(--type-master); }
 .type-radios label:hover:has(input[value="release"]) { color: var(--type-release); }
 .type-radios label:hover:has(input[value="artist"])  { color: var(--type-artist); }
 .type-radios label:hover:has(input[value="label"])   { color: var(--type-label); }
+.type-radios label:hover:has(input[value="ai"])      { color: var(--accent-hi, var(--accent)); }
 
 .type-radios label:has(input[value=""]:checked)       { color: var(--accent); }
 .type-radios label:has(input[value="master"]:checked)  { color: var(--type-master); text-shadow: 0 0 6px var(--type-master); }
@@ -3965,13 +4012,18 @@ button.wiki-link-btn:active {
 .type-radios label:has(input[value="artist"]:checked)  { color: var(--type-artist); text-shadow: 0 0 6px var(--type-artist); }
 .type-radios label:has(input[value="label"]:checked)   { color: var(--type-label); text-shadow: 0 0 6px var(--type-label); }
 .type-radios label:has(input[value="master+"]:checked) { color: var(--type-master); text-shadow: 0 0 6px var(--type-master); }
-.type-radios label:has(input[value="ai"]:checked)      { color: var(--accent); text-shadow: 0 0 6px var(--accent); }
+/* AI engaged uses the theme's highlight (--accent-hi) so it reads as
+   a deliberate "special mode" rather than another instance of the
+   primary accent — visually distinct from regular search states. */
+.type-radios label:has(input[value="ai"]:checked)      { color: var(--accent-hi, var(--accent)); text-shadow: 0 0 6px var(--accent-hi, var(--accent)); }
 
-.type-radios input[value=""]       { accent-color: var(--accent); }
+.type-radios input[value=""]        { accent-color: var(--accent); }
 .type-radios input[value="master"]  { accent-color: var(--type-master); }
+.type-radios input[value="master+"] { accent-color: var(--type-master); }
 .type-radios input[value="release"] { accent-color: var(--type-release); }
 .type-radios input[value="artist"]  { accent-color: var(--type-artist); }
 .type-radios input[value="label"]   { accent-color: var(--type-label); }
+.type-radios input[value="ai"]      { accent-color: var(--accent-hi, var(--accent)); }
 
 /* ── Pagination ── */
 #pagination {
@@ -6453,7 +6505,10 @@ a.profile-stat-link:hover .profile-stat-num { color: var(--accent); }
    uses the site beige (--text) so it sits in the line of body copy. */
 .wiki-icon {
   display: inline-block;
-  margin-left: 0.05rem;
+  /* Visible breathing room between the preceding ⌕ magnifier and the W
+     so the two cross-reference icons don't crowd each other. Applied
+     site-wide — modal popups, track rows, credit lines, blues DB, etc. */
+  margin-left: 0.35rem;
   font-family: 'Times New Roman', serif;
   font-style: italic;
   font-weight: 700;
@@ -6762,9 +6817,13 @@ a.profile-stat-link:hover .profile-stat-num { color: var(--accent); }
 .track-play-btn:hover,
 #album-info .track-play-btn:hover,
 #version-info .track-play-btn:hover { color: var(--accent2, var(--accent)); transform: scale(1.1); }
+/* Now-playing track in the popup tracklist uses the same theme-specific
+   "off-spectrum" --catno color as catalog numbers, so the active row
+   reads as a deliberate accent rather than another shade of the link
+   color. Falls back to --accent2 for any theme that hasn't defined it. */
 .track-play-btn.now-playing,
 #album-info .track-play-btn.now-playing,
-#version-info .track-play-btn.now-playing { color: var(--accent2) !important; }
+#version-info .track-play-btn.now-playing { color: var(--catno, var(--accent2)) !important; }
 
 /* External YouTube-search fallback — sits at the end of the title row,
    after the wiki W. Only shown when no in-app playable URL exists.
@@ -6878,3 +6937,13 @@ a.profile-stat-link:hover .profile-stat-num { color: var(--accent); }
 }
 .track .track-search-icon:hover,
 .track-search-icon:hover { color: var(--accent2) !important; }
+
+/* ── Site-wide default link-hover color ───────────────────────────────
+   Generic <a> hovers pick up the theme's highlight (--accent-hi). Any
+   element with its own explicit :hover rule keeps it — selector
+   specificity ensures things like .album-title-search:hover or
+   .wiki-icon:hover override this default. */
+a:hover,
+a:focus-visible {
+  color: var(--accent-hi, var(--accent));
+}
