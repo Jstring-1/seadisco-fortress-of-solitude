@@ -724,9 +724,15 @@ function renderCard(item, index) {
       const wantTitle = wantActive
         ? `${wantCount} ${wantCount === 1 ? "version" : "versions"} of this master in your wantlist — click to view pressings`
         : "Open to add a version to wantlist";
-      // When active, show the count number; otherwise show the C/W glyph.
-      badges += `<span class="card-badge badge-collection${colActive ? " is-active has-count" : ""}" onclick="event.preventDefault();event.stopPropagation();openModal(event,'${releaseId}','master','')" title="${colTitle}">${colActive ? colCount : "C"}</span>`;
-      badges += `<span class="card-badge badge-wantlist${wantActive ? " is-active has-count" : ""}" onclick="event.preventDefault();event.stopPropagation();openModal(event,'${releaseId}','master','')" title="${wantTitle}">${wantActive ? wantCount : "W"}</span>`;
+      // Always show the C/W glyph so the badge reads consistently with
+      // the release-card variant; only append a small superscript count
+      // when the user owns >=2 versions of this master (the case where
+      // the count actually adds info — owning 1 is already conveyed
+      // by the is-active highlight).
+      const colSup  = colCount  >= 2 ? `<sup class="card-badge-count">${colCount}</sup>`  : "";
+      const wantSup = wantCount >= 2 ? `<sup class="card-badge-count">${wantCount}</sup>` : "";
+      badges += `<span class="card-badge badge-collection${colActive ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();openModal(event,'${releaseId}','master','')" title="${colTitle}">C${colSup}</span>`;
+      badges += `<span class="card-badge badge-wantlist${wantActive ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();openModal(event,'${releaseId}','master','')" title="${wantTitle}">W${wantSup}</span>`;
     }
     const lists = window._listMembership?.[releaseId];
     if (lists?.length) {
@@ -1280,14 +1286,17 @@ function clearRecentHistory() {
   }
 }
 
-// Re-render the strip whenever the history changes (modal opened elsewhere)
+// History-change listener — DOES NOT auto-rebuild the visible grid.
+// Rebuilding would reset _randomShown to 0 and call grid.innerHTML = ...
+// which (a) loses the user's scroll position and (b) drops every
+// "Load more" page they'd already opened. The strip refreshes whenever
+// the user navigates away from search and back (switchView fallthrough
+// calls showRandomRecords). For the rare "I want to see the change
+// without leaving the page" case, the user can click the logo (goHome)
+// which force-rebuilds. This listener is left in place as a hook for
+// future incremental in-place updates that don't tear down the grid.
 window.addEventListener("sd-history-change", () => {
-  clearTimeout(window._recentReloadTimer);
-  window._recentReloadTimer = setTimeout(() => {
-    // Only re-render if the strip is currently visible on the search view
-    const wrap = document.getElementById("random-records");
-    if (wrap && wrap.style.display !== "none") loadRandomRecords();
-  }, 400);
+  // Intentionally a no-op — see comment above.
 });
 
 function toggleFavoriteFromCard(btn, discogsId, entityType) {
