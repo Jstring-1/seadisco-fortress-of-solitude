@@ -1000,12 +1000,17 @@ function _locPlayPrevInQueue() {
 function _locUpdateQueueButtons() {
   // Unified bar — prev/next live on the .mini-player controls and are
   // dispatched via playerPrev / playerNext when LOC is the engine.
+  // Next is enabled if EITHER the per-item LOC track-queue has more
+  // tracks OR the cross-source play queue has any item; prev only
+  // applies to the LOC track-queue (cross-source queue is forward-only).
   const prev = document.getElementById("mini-prev");
   const next = document.getElementById("mini-next");
   if (prev && next) {
-    const hasQueue = !!_locQueue && _locQueue.items.length >= 2;
-    prev.disabled = !hasQueue || _locQueue.index <= 0;
-    next.disabled = !hasQueue || _locQueue.index + 1 >= _locQueue.items.length;
+    const locHasMore = !!_locQueue && _locQueue.items.length >= 2 && _locQueue.index + 1 < _locQueue.items.length;
+    const xqHasNext  = (typeof _queueHasNext === "function") ? _queueHasNext() : false;
+    const locHasPrev = !!_locQueue && _locQueue.index > 0;
+    prev.disabled = !locHasPrev;
+    next.disabled = !(locHasMore || xqHasNext);
   }
   // Info / save buttons — enabled whenever something is playing
   const info = document.getElementById("mini-loc-info");

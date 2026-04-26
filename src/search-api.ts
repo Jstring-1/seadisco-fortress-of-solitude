@@ -2640,7 +2640,10 @@ app.delete("/api/user/wiki-saves", express.json(), async (req, res) => {
 // archive.org serves direct mp3 URLs the same way LOC does.
 
 const _ARCHIVE_AADAM_COLLECTION = "aadamjacobs";
-const _ARCHIVE_CACHE_TTL_S = 60 * 60 * 24; // 1 day
+// Curated archive.org collections rarely change, so the cache is
+// effectively permanent. Admin can force a refresh from the page or
+// hit ?nocache=1 directly.
+const _ARCHIVE_CACHE_TTL_S = 60 * 60 * 24 * 365 * 5; // ~5 years
 // Synthetic discogs_id used as the cache key for this collection's
 // listing. Any positive int that won't collide with a real master.
 const _ARCHIVE_AADAM_CACHE_KEY = 999_900_001;
@@ -2655,53 +2658,62 @@ type ArchiveItem = {
   duration: string;    // best-effort, may be empty
 };
 
+async function _fetchArchiveMeta(identifier: string): Promise<{ streamUrl: string; duration: string }> {
+  const metaUrl = `https://archive.org/metadata/${encodeURIComponent(identifier)}`;
+  try {
+    const mr = await loggedFetch("archive", metaUrl, {
+      headers: { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "application/json" },
+      context: "archive-meta",
+    });
+    if (!mr.ok) return { streamUrl: "", duration: "" };
+    const meta = await mr.json() as any;
+    const files: any[] = Array.isArray(meta?.files) ? meta.files : [];
+    const mp3 = files.find(f =>
+      typeof f?.name === "string" &&
+      /\.mp3$/i.test(f.name) &&
+      (f.format === "VBR MP3" || f.format === "128Kbps MP3" || f.format === "MP3")
+    ) || files.find(f => typeof f?.name === "string" && /\.mp3$/i.test(f.name));
+    if (!mp3) return { streamUrl: "", duration: "" };
+    return {
+      streamUrl: `https://archive.org/download/${encodeURIComponent(identifier)}/${encodeURIComponent(mp3.name)}`,
+      duration: typeof mp3.length === "string" ? mp3.length : "",
+    };
+  } catch {
+    return { streamUrl: "", duration: "" };
+  }
+}
+
 async function _fetchArchiveCollection(collectionId: string): Promise<ArchiveItem[]> {
   // Step 1: search for items in the collection. Public API, CORS-friendly.
-  const searchUrl = `https://archive.org/advancedsearch.php?q=collection%3A${encodeURIComponent(collectionId)}&fl[]=identifier,title,date,description&rows=200&page=1&output=json&sort[]=title+asc`;
+  // Hard cap rows=80 to keep total fetch time bounded; collections larger
+  // than this would need a different listing strategy (paging UI etc).
+  const searchUrl = `https://archive.org/advancedsearch.php?q=collection%3A${encodeURIComponent(collectionId)}&fl[]=identifier,title,date,description&rows=80&page=1&output=json&sort[]=title+asc`;
   const r = await loggedFetch("archive", searchUrl, {
     headers: { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "application/json" },
     context: "archive-search",
   });
   if (!r.ok) throw new Error(`archive.org HTTP ${r.status}`);
   const body = await r.json() as any;
-  const docs: any[] = body?.response?.docs ?? [];
-  // Step 2: for each item, fetch its file list and pick the first
-  // playable mp3 derivative. This is a serial walk through the
-  // collection — the cache below means we only do it once per day.
+  const docs: any[] = (body?.response?.docs ?? []).filter((d: any) => d?.identifier);
+  // Step 2: per-item metadata in parallel batches of 10. Was sequential
+  // before, taking 50+ seconds for a 100-item collection — long enough
+  // for the proxy to time out before the response could land.
+  const PARALLEL = 10;
   const items: ArchiveItem[] = [];
-  for (const d of docs) {
-    if (!d?.identifier) continue;
-    const metaUrl = `https://archive.org/metadata/${encodeURIComponent(d.identifier)}`;
-    let streamUrl = "";
-    let duration = "";
-    try {
-      const mr = await loggedFetch("archive", metaUrl, {
-        headers: { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "application/json" },
-        context: "archive-meta",
+  for (let i = 0; i < docs.length; i += PARALLEL) {
+    const batch = docs.slice(i, i + PARALLEL);
+    const metas = await Promise.all(batch.map((d: any) => _fetchArchiveMeta(d.identifier)));
+    batch.forEach((d: any, j: number) => {
+      const m = metas[j] ?? { streamUrl: "", duration: "" };
+      items.push({
+        identifier:  d.identifier,
+        title:       String(d.title ?? d.identifier),
+        date:        Array.isArray(d.date) ? d.date[0] : (d.date ?? ""),
+        description: Array.isArray(d.description) ? d.description.join(" ") : (d.description ?? ""),
+        itemUrl:     `https://archive.org/details/${encodeURIComponent(d.identifier)}`,
+        streamUrl:   m.streamUrl,
+        duration:    m.duration,
       });
-      if (mr.ok) {
-        const meta = await mr.json() as any;
-        const files: any[] = Array.isArray(meta?.files) ? meta.files : [];
-        // Prefer 128/160kbps MP3 derivatives; fall back to any mp3
-        const mp3 = files.find(f =>
-          typeof f?.name === "string" &&
-          /\.mp3$/i.test(f.name) &&
-          (f.format === "VBR MP3" || f.format === "128Kbps MP3" || f.format === "MP3")
-        ) || files.find(f => typeof f?.name === "string" && /\.mp3$/i.test(f.name));
-        if (mp3) {
-          streamUrl = `https://archive.org/download/${encodeURIComponent(d.identifier)}/${encodeURIComponent(mp3.name)}`;
-          duration = typeof mp3.length === "string" ? mp3.length : "";
-        }
-      }
-    } catch { /* skip on a single-item failure; the rest still render */ }
-    items.push({
-      identifier:  d.identifier,
-      title:       String(d.title ?? d.identifier),
-      date:        Array.isArray(d.date) ? d.date[0] : (d.date ?? ""),
-      description: Array.isArray(d.description) ? d.description.join(" ") : (d.description ?? ""),
-      itemUrl:     `https://archive.org/details/${encodeURIComponent(d.identifier)}`,
-      streamUrl,
-      duration,
     });
   }
   return items;
