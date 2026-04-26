@@ -779,10 +779,16 @@ async function _enrichOneFromDiscogsArtist(client, row) {
         if (urlSet.size !== existingUrls.length)
             patch.external_urls = Array.from(urlSet);
     }
-    // Releases — first/last recording year + title + a deduplicated
+    // Releases — first recording year + title + a deduplicated
     // discogs_releases array. Discogs results may include role="Main",
     // "TrackAppearance", "Producer", etc.; we only treat Main credits as
-    // the artist's own recordings for first/last year purposes.
+    // the artist's own recordings for the first-year pick.
+    //
+    // We deliberately DO NOT compute last_recording_year / title — those
+    // fields came out wrong too often because Discogs aggregates posthumous
+    // reissues, comp appearances, and credits the original artist never
+    // actually played on. Removed from the UI; left in the schema for now
+    // so existing data isn't lost, but new passes won't write them.
     const rawReleases = Array.isArray(releasesPayload?.releases)
         ? releasesPayload.releases : [];
     const dated = rawReleases
@@ -795,28 +801,12 @@ async function _enrichOneFromDiscogsArtist(client, row) {
         role: r.role ?? null,
     }))
         .filter(r => r.year != null);
-    // Sorted ascending so first is earliest. (We asked Discogs for asc but
-    // re-sort defensively in case the page slice isn't perfectly ordered.)
     dated.sort((a, b) => a.year - b.year);
     const main = dated.filter(r => !r.role || r.role === "Main");
     const firstPick = main[0] ?? dated[0];
     if (firstPick) {
         patch.first_recording_year = firstPick.year;
         patch.first_recording_title = firstPick.title || null;
-    }
-    // Death-year clamp so a posthumous reissue doesn't masquerade as the
-    // artist's last recording. Mirrors the MB enricher behaviour.
-    const deathYear = (() => {
-        const m = String(row.death_date ?? "").match(/^(\d{4})/);
-        return m ? parseInt(m[1], 10) : null;
-    })();
-    const ceiling = deathYear ? deathYear + 1 : Infinity;
-    const inLifetimeMain = main.filter(r => r.year <= ceiling);
-    const lastPick = (inLifetimeMain.length ? inLifetimeMain : main).slice(-1)[0]
-        ?? (dated.length ? dated[dated.length - 1] : null);
-    if (lastPick) {
-        patch.last_recording_year = lastPick.year;
-        patch.last_recording_title = lastPick.title || null;
     }
     // Merge fetched releases into discogs_releases by (type:id) so the
     // existing per-row JSONB array gains entries we didn't have before

@@ -515,7 +515,6 @@ const _BLUES_SORT_COLUMNS: Record<string, string> = {
   release_count:  "jsonb_array_length(coalesce(discogs_releases, '[]'::jsonb))",
   earliest_release: _EARLIEST_REL_SQL,
   first_recording_year: "first_recording_year",
-  last_recording_year:  "last_recording_year",
   date_added:     "date_added",
   updated_at:     "updated_at",
 };

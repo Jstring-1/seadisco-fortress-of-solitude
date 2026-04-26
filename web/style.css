@@ -5792,6 +5792,99 @@ footer {
   background: transparent;
 }
 
+/* ── Blues DB admin grid: row thumb + hover popup + lightbox ─── */
+.blues-row-thumb {
+  width: 32px;
+  height: 32px;
+  object-fit: cover;
+  border-radius: 4px;
+  cursor: zoom-in;
+  border: 1px solid var(--border);
+  display: inline-block;
+  vertical-align: middle;
+}
+.blues-row-thumb-empty {
+  background: var(--surface-sunken, var(--surface));
+  cursor: default;
+}
+.blues-row-name {
+  color: var(--accent);
+  text-decoration: none;
+  cursor: pointer;
+}
+.blues-row-name:hover { text-decoration: underline; }
+.blues-row-icon {
+  margin-left: 0.35em;
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 1.05em;
+}
+.blues-row-icon.blues-row-wiki {
+  color: var(--text);
+  font-family: 'Times New Roman', serif;
+  font-style: italic;
+  font-weight: 700;
+  font-size: 0.78em;
+  margin-left: 0.05em;
+}
+.blues-row-icon:hover { color: var(--accent2, var(--accent)); }
+.blues-hover-cell { cursor: help; }
+
+#blues-hover-popup {
+  display: none;
+  position: absolute;
+  z-index: 9000;
+  max-width: 480px;
+  min-width: 200px;
+  background: var(--surface-raised, var(--surface));
+  border: 1px solid var(--accent-dim);
+  border-radius: 6px;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.78rem;
+  color: var(--text);
+  box-shadow: 0 6px 24px rgba(0,0,0,0.55);
+  pointer-events: none;
+  line-height: 1.4;
+}
+.blues-hover-section { margin-bottom: 0.4rem; }
+.blues-hover-section:last-child { margin-bottom: 0; }
+.blues-hover-label { color: var(--accent); font-weight: 600; margin-right: 0.25em; }
+.blues-hover-empty { color: var(--muted); font-style: italic; }
+.blues-hover-notes {
+  white-space: pre-wrap;
+  border-top: 1px solid var(--border);
+  padding-top: 0.4rem;
+  max-height: 320px;
+  overflow-y: auto;
+  /* Re-enable pointer events INSIDE the popup so the user could scroll
+     long bios, while the popup itself ignores mouse so it doesn't
+     intercept the trigger's mouseleave. Ignored when popup is dismissed
+     on mouseleave anyway, but keeps long-bio scrolling intact during
+     the small grace period before hide. */
+}
+.blues-hover-list { list-style: none; margin: 0; padding: 0; max-height: 320px; overflow-y: auto; }
+.blues-hover-list li { padding: 0.1rem 0; }
+.blues-hover-year { color: var(--accent); font-weight: 600; margin-right: 0.4em; min-width: 2.5em; display: inline-block; }
+
+.blues-image-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: zoom-out;
+  padding: 1.5rem;
+}
+.blues-image-overlay img {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 12px 48px rgba(0,0,0,0.7);
+}
+
 /* Bold proper-nouns inside wiki articles become clickable Discogs searches.
    Keeps the visual weight so the article still reads as Wikipedia. */
 .wiki-bold-search {
