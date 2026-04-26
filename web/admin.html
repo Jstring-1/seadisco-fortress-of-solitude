@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260413g" />
+  <link rel="stylesheet" href="/style.css?v=20260413h" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260413g"></script>
+<script defer src="/shared.js?v=20260413h"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
@@ -268,7 +268,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260413g"></script>
+<script defer src="/modal.js?v=20260413h"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1163,33 +1163,66 @@ function _bluesHoverShow(target) {
   const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   const type = target.dataset.hoverType;
   let html = "";
+  // URL builders for cross-links into the main app (open in new tabs).
+  // Artist search lands on Masters+, sorted year asc — same shape as the
+  // ⌕ link in the row. Release link uses ?op=<type>:<id> which the home
+  // page's URL-restore IIFE auto-pops as a modal. Combining the two
+  // (?a=…&op=master:…) opens the modal AND prefills the search behind
+  // it so closing the modal leaves you on that artist's discography.
+  const artistSearchHref = (name) =>
+    "/?a=" + encodeURIComponent(name) + "&r=" + encodeURIComponent("master+") + "&s=" + encodeURIComponent("year:asc");
+  const releaseModalHref = (rel, withArtistSearch) => {
+    if (!rel?.id) return "";
+    const t = (rel.type === "release") ? "release" : "master";
+    const op = "op=" + t + ":" + encodeURIComponent(String(rel.id));
+    if (withArtistSearch) {
+      return "/?a=" + encodeURIComponent(row.name)
+           + "&r=" + encodeURIComponent("master+")
+           + "&s=" + encodeURIComponent("year:asc")
+           + "&" + op;
+    }
+    return "/?" + op;
+  };
+
   if (type === "name") {
     const aliases = (Array.isArray(row.aliases) ? row.aliases : []).filter(Boolean);
     const collabs = (Array.isArray(row.collaborators) ? row.collaborators : [])
       .map(c => typeof c === "string" ? c : c?.name)
       .filter(Boolean);
     const notes = (row.notes ?? "").trim();
-    const sec = (label, val) => val ? `<div class="blues-hover-section"><span class="blues-hover-label">${label}</span> ${esc(val)}</div>` : "";
+    // Each alias / collaborator becomes a clickable link that opens a
+    // SeaDisco artist search in a new tab.
+    const linkified = (names) => names.map(n =>
+      `<a href="${esc(artistSearchHref(n))}" target="_blank" rel="noopener" class="blues-hover-link">${esc(n)}</a>`
+    ).join(", ");
+    const sec = (label, items) => items.length
+      ? `<div class="blues-hover-section"><span class="blues-hover-label">${label}</span> ${linkified(items)}</div>`
+      : "";
     html =
-      sec("Aliases:",       aliases.join(", ")) +
-      sec("Collaborators:", collabs.join(", "));
+      sec("Aliases:",       aliases) +
+      sec("Collaborators:", collabs);
     if (notes) html += `<div class="blues-hover-section blues-hover-notes">${esc(notes)}</div>`;
     if (!html) html = `<div class="blues-hover-section blues-hover-empty">(no aliases / collaborators / notes yet)</div>`;
   } else if (type === "first-rel") {
-    // Find the title for the earliest year. Prefer first_recording_title
-    // when its year matches earliest_release_year; otherwise fall back
-    // to the discogs_releases entry with that year.
+    // Find the title + master/release for the earliest year. Prefer
+    // first_recording_title when its year matches; otherwise fall back
+    // to the discogs_releases entry with that year so we have an id.
     const earliest = row.earliest_release_year;
     let title = null;
-    if (earliest != null) {
-      if (row.first_recording_year === earliest && row.first_recording_title) {
-        title = row.first_recording_title;
-      } else if (Array.isArray(row.discogs_releases)) {
-        const hit = row.discogs_releases.find(rel => rel?.year === earliest);
-        title = hit?.title ?? null;
-      }
+    let earliestRel = null;
+    if (earliest != null && Array.isArray(row.discogs_releases)) {
+      earliestRel = row.discogs_releases.find(rel => rel?.year === earliest) ?? null;
     }
-    html = `<div class="blues-hover-section">${title ? esc(title) : "(no title recorded)"}</div>`;
+    if (row.first_recording_year === earliest && row.first_recording_title) {
+      title = row.first_recording_title;
+    } else if (earliestRel) {
+      title = earliestRel.title ?? null;
+    }
+    if (title && earliestRel?.id) {
+      html = `<div class="blues-hover-section"><a href="${esc(releaseModalHref(earliestRel, false))}" target="_blank" rel="noopener" class="blues-hover-link">${esc(title)}</a></div>`;
+    } else {
+      html = `<div class="blues-hover-section">${title ? esc(title) : "(no title recorded)"}</div>`;
+    }
   } else if (type === "releases") {
     const list = (Array.isArray(row.discogs_releases) ? row.discogs_releases : [])
       .slice()
@@ -1197,8 +1230,15 @@ function _bluesHoverShow(target) {
     if (!list.length) {
       html = `<div class="blues-hover-section blues-hover-empty">(no Discogs releases stored)</div>`;
     } else {
+      // Every entry links to /?a=<artist>&op=<type>:<id> — opens the
+      // master/release modal AND seeds an artist search behind it, so
+      // closing the modal leaves the user on this artist's catalogue.
       html = `<div class="blues-hover-section"><ul class="blues-hover-list">` +
-        list.map(rel => `<li><span class="blues-hover-year">${esc(rel?.year ?? "?")}</span> ${esc(rel?.title ?? "")}</li>`).join("") +
+        list.map(rel => {
+          const labelText = `<span class="blues-hover-year">${esc(rel?.year ?? "?")}</span> ${esc(rel?.title ?? "")}`;
+          if (!rel?.id) return `<li>${labelText}</li>`;
+          return `<li><a href="${esc(releaseModalHref(rel, true))}" target="_blank" rel="noopener" class="blues-hover-link">${labelText}</a></li>`;
+        }).join("") +
         `</ul></div>`;
     }
   }
