@@ -4499,12 +4499,27 @@ button.wiki-link-btn:active {
 /* ── Admin tab bar ── */
 .admin-tab-bar {
   display: flex; gap: 0; margin: 1rem 0 0; border-bottom: 1px solid var(--border);
+  /* Horizontal scroll on narrow screens so the full set of admin tabs
+     stays reachable without wrapping into messy multiple rows. The
+     scrollbar itself is hidden for cleaner look; users scroll via
+     swipe / shift-wheel / drag — chevron edge-fade hints at overflow. */
+  overflow-x: auto;
+  flex-wrap: nowrap;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  /* Right-side gradient fade as a visual cue that more tabs exist;
+     uses theme bg so it blends with whatever's behind. */
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 24px), transparent 100%);
+  mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 24px), transparent 100%);
 }
+.admin-tab-bar::-webkit-scrollbar { display: none; }
 .admin-tab {
   padding: 0.45rem 1rem; font-size: 0.78rem; font-weight: 600;
   background: none; border: 1px solid transparent; border-bottom: none;
-  color: #888; cursor: pointer; border-radius: 6px 6px 0 0;
+  color: var(--muted); cursor: pointer; border-radius: 6px 6px 0 0;
   transition: color 0.15s, background 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .admin-tab:hover { color: var(--fg); background: rgba(255,255,255,0.03); }
 .admin-tab.active {
@@ -4512,6 +4527,22 @@ button.wiki-link-btn:active {
   border-color: var(--border); margin-bottom: -1px; padding-bottom: calc(0.45rem + 1px);
 }
 .admin-tab-panel { padding: 1rem 0; }
+/* Mobile: drop the edge-fade mask (it can clip the tap target on the
+   rightmost tab) and reduce padding so more tabs fit per screen. */
+@media (max-width: 720px) {
+  .admin-tab-bar {
+    -webkit-mask-image: none;
+    mask-image: none;
+    margin: 0.5rem -0.5rem 0;
+    padding: 0 0.5rem;
+  }
+  .admin-tab {
+    padding: 0.5rem 0.7rem;
+    font-size: 0.74rem;
+    /* Bigger tap target on touch — minimum 36px height per WCAG */
+    min-height: 36px;
+  }
+}
 .admin-refresh-btn {
   background: none; border: 1px solid #333; border-radius: 4px;
   color: #888; font-size: 1rem; cursor: pointer; padding: 0.1rem 0.4rem;
@@ -7006,4 +7037,30 @@ a.profile-stat-link:hover {
 a:hover,
 a:focus-visible {
   color: var(--accent-hi, var(--accent));
+}
+
+/* Persistent corner chip shown only when an admin has flipped the
+   "view as user" toggle in /admin → Theme. Click to restore. */
+#admin-as-user-chip {
+  position: fixed;
+  bottom: 1rem;
+  right: 1rem;
+  z-index: 5000;
+  background: var(--surface);
+  color: var(--accent-hi, var(--accent));
+  border: 1px solid var(--accent-hi, var(--accent));
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition: background 0.12s, color 0.12s, transform 0.12s;
+}
+#admin-as-user-chip:hover {
+  background: var(--accent-hi, var(--accent));
+  color: var(--bg);
+  transform: translateY(-1px);
 }

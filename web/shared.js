@@ -449,7 +449,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260425n";
+  const SITE_VERSION = "build 20260426a";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -563,12 +563,36 @@ function renderSharedFooter(opts) {
       const res = await apiFetch("/api/me");
       if (!res.ok) return;
       const data = await res.json();
-      // Set the flag for everyone (false for non-admins) so app.js's
-      // _ensureAdminFlag() can read it synchronously after this resolves.
-      window._isAdmin = !!data?.isAdmin;
-      if (data?.isAdmin) {
+      // _serverIsAdmin reflects the actual server-confirmed admin status;
+      // _isAdmin is the EFFECTIVE flag every consumer reads — which we
+      // override to false when the admin has opted into "view as user"
+      // mode via /admin. The footer Admin link still uses _serverIsAdmin
+      // so the admin can always reach /admin to flip the toggle back.
+      window._serverIsAdmin = !!data?.isAdmin;
+      let viewAsUser = false;
+      try { viewAsUser = localStorage.getItem("sd-admin-as-user") === "1"; } catch {}
+      window._adminViewAsUser = viewAsUser && window._serverIsAdmin;
+      window._isAdmin = window._serverIsAdmin && !viewAsUser;
+      if (window._serverIsAdmin) {
         const adminA = document.getElementById("footer-admin-link");
         if (adminA) adminA.style.display = "";
+        // When viewing-as-user, drop a small fixed chip in the corner
+        // so the admin can see they're impersonating + restore with
+        // one click. Hidden in any other state. Only injected once.
+        if (window._adminViewAsUser && !document.getElementById("admin-as-user-chip")) {
+          const chip = document.createElement("button");
+          chip.id = "admin-as-user-chip";
+          chip.type = "button";
+          chip.title = "Restore admin view";
+          chip.textContent = "Viewing as user · restore";
+          chip.onclick = () => {
+            try { localStorage.removeItem("sd-admin-as-user"); } catch {}
+            location.reload();
+          };
+          document.body.appendChild(chip);
+        }
+      }
+      if (window._isAdmin) {
         const wikiA = document.getElementById("footer-wiki-link");
         if (wikiA) wikiA.style.display = "";
         const locA = document.getElementById("footer-loc-link");
