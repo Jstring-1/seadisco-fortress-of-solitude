@@ -2685,9 +2685,10 @@ async function _fetchArchiveMeta(identifier: string): Promise<{ streamUrl: strin
 
 async function _fetchArchiveCollection(collectionId: string): Promise<ArchiveItem[]> {
   // Step 1: search for items in the collection. Public API, CORS-friendly.
-  // Hard cap rows=80 to keep total fetch time bounded; collections larger
-  // than this would need a different listing strategy (paging UI etc).
-  const searchUrl = `https://archive.org/advancedsearch.php?q=collection%3A${encodeURIComponent(collectionId)}&fl[]=identifier,title,date,description&rows=80&page=1&output=json&sort[]=title+asc`;
+  // Cap rows=300 — first-load cost is paid once and cached for ~5 years;
+  // client paginates with a Load-more button. Collections larger than
+  // this would need a server-side paging strategy.
+  const searchUrl = `https://archive.org/advancedsearch.php?q=collection%3A${encodeURIComponent(collectionId)}&fl[]=identifier,title,date,description&rows=300&page=1&output=json&sort[]=title+asc`;
   const r = await loggedFetch("archive", searchUrl, {
     headers: { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "application/json" },
     context: "archive-search",
