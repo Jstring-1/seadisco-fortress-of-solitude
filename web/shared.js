@@ -450,20 +450,18 @@ function renderSharedHeader(opts) {
     return `<a class="${navTabClass}" href="/?v=${rtab}" data-rtab="${rtab}" title="${label}">${labelMarkup(label, iconKey)}</a>`;
   };
 
-  // Auth tab (rightmost). Signed-out users get Clerk's modal sign-in
-  // overlay; signed-in users get routed to the Account view (handled
-  // inside openSignInModal). app.js applyAuthState updates the label
-  // between "Sign In" / "Account" based on auth state.
-  const authTab = isSPA
-    ? `<button class="${navTabClass} nav-auth-tab" data-view="account" onclick="openSignInModal()" id="nav-auth-tab" title="Sign In">${labelMarkup("Sign In", "account")}</button>`
-    : `<a class="${navTabClass} nav-auth-tab" href="/?v=account" id="nav-auth-tab" title="Sign In">${labelMarkup("Sign In", "account")}</a>`;
+  // Auth tab removed from the navbar — the footer "Account" link
+  // (rendered by renderSharedFooter) covers both signed-in and
+  // signed-out paths. applyAuthState in app.js still tries to update
+  // a #nav-auth-tab element if present and silently no-ops otherwise,
+  // so no follow-up cleanup is required.
 
   const header = document.getElementById("site-header");
   if (!header) return;
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260426e";
+  const SITE_VERSION = "build 20260426f";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -483,7 +481,6 @@ function renderSharedHeader(opts) {
             ${recTab("Lists", "lists", "lists")}
             ${recTab("Inventory", "inventory", "inventory")}
             ${recTab("Favorites", "favorites", "favorites")}
-            ${authTab}
           </div>
         </div>
       </div>
