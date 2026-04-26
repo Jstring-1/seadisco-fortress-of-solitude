@@ -4134,7 +4134,11 @@ button.wiki-link-btn:active {
 #pagination .pag-num.pag-active {
   background: var(--accent);
   border-color: var(--accent);
-  color: #fff;
+  /* Use the page background as the active-button text color so it
+     always inverts the accent — was hardcoded #fff which collapsed
+     to white-on-white in Noir White and any other theme where
+     --accent is light/white. */
+  color: var(--bg);
   cursor: default;
 }
 
