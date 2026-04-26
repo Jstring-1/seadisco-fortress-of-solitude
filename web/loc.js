@@ -977,16 +977,18 @@ function _locPlayPrevInQueue() {
 }
 
 function _locUpdateQueueButtons() {
-  const prev = document.getElementById("loc-audio-prev");
-  const next = document.getElementById("loc-audio-next");
+  // Unified bar — prev/next live on the .mini-player controls and are
+  // dispatched via playerPrev / playerNext when LOC is the engine.
+  const prev = document.getElementById("mini-prev");
+  const next = document.getElementById("mini-next");
   if (prev && next) {
     const hasQueue = !!_locQueue && _locQueue.items.length >= 2;
     prev.disabled = !hasQueue || _locQueue.index <= 0;
     next.disabled = !hasQueue || _locQueue.index + 1 >= _locQueue.items.length;
   }
   // Info / save buttons — enabled whenever something is playing
-  const info = document.getElementById("loc-audio-info");
-  const save = document.getElementById("loc-audio-save");
+  const info = document.getElementById("mini-loc-info");
+  const save = document.getElementById("mini-loc-save");
   const baseId = _locCurrentBarItemId();
   if (info) info.disabled = !baseId;
   if (save) {
@@ -1382,9 +1384,12 @@ async function _locRemoveSavedFromCard(btn) {
 
 async function _locPlay(item) {
   if (!item?.streamUrl) return;
-  const bar = document.getElementById("loc-audio-bar");
-  const audio = document.getElementById("loc-audio");
-  const titleEl = document.getElementById("loc-audio-title");
+  // Unified persistent bar — was a separate #loc-audio-bar element;
+  // now LOC playback shares the .mini-player chrome with YouTube and
+  // dispatches via window._currentEngine.
+  const bar     = document.getElementById("mini-player");
+  const audio   = document.getElementById("loc-audio");
+  const titleEl = document.getElementById("mini-player-title");
   if (!bar || !audio) return;
 
   // Each _locPlay call gets a monotonic token. If a newer call arrives
@@ -1407,11 +1412,10 @@ async function _locPlay(item) {
   }
 
   _locNowPlaying = item;
-  titleEl.textContent = item.title || "Playing…";
-  bar.classList.add("is-visible");
-  // Body class lets the page reserve bottom padding so the last row of
-  // cards isn't hidden behind the fixed audio bar.
-  document.body.classList.add("loc-open");
+  if (titleEl) titleEl.textContent = item.title || "Playing…";
+  bar.classList.add("open");
+  if (typeof _setPlayerEngine === "function") _setPlayerEngine("loc");
+  document.body.classList.add("player-open");
   // Reflect now-playing in the URL — share/copy the link and the
   // recipient lands with the same track queued in the bar.
   _locPushPlayUrlState(item.id);
@@ -1486,7 +1490,11 @@ function _locTogglePause() {
 // audio state. Wired to the audio element's play/pause/ended events
 // once per page (lazy-bound on first _locPlay).
 function _locUpdatePlayPauseBtn() {
-  const btn = document.getElementById("loc-audio-playpause");
+  // Unified bar — same playpause button is used for both engines.
+  // Only update its icon when LOC is the active engine; let YT manage
+  // its own icon updates while it's active.
+  if (window._currentEngine && window._currentEngine !== "loc") return;
+  const btn = document.getElementById("mini-playpause");
   const audio = document.getElementById("loc-audio");
   if (!btn || !audio) return;
   const playing = !audio.paused && !audio.ended;
@@ -1494,17 +1502,10 @@ function _locUpdatePlayPauseBtn() {
   btn.title = playing ? "Pause" : "Play";
 }
 
-// Toggle the expanded scrubber panel — same UX as the YouTube mini-player's
-// expand control. Adds/removes a class on the bar so CSS can show/hide
-// the <audio controls> sub-row.
+// Toggle the expanded scrubber panel — delegates to the unified
+// mini-player expand toggle so both engines use the same control.
 function _locToggleExpand() {
-  const bar = document.getElementById("loc-audio-bar");
-  if (!bar) return;
-  bar.classList.toggle("expanded");
-  // Expanded LOC bar is taller; adjust body padding the same way the
-  // YouTube mini-player does in its expanded mode (handled site-wide
-  // via body.loc-open / body.player-open padding rules).
-  document.body.classList.toggle("loc-expanded", bar.classList.contains("expanded"));
+  if (typeof toggleMiniPlayer === "function") toggleMiniPlayer();
 }
 
 // Auto-advance: when the current track ends, play the next one in the
@@ -1539,7 +1540,7 @@ function _locPlayFromCard(btn) {
 }
 
 function _locClosePlayer() {
-  const bar = document.getElementById("loc-audio-bar");
+  const bar = document.getElementById("mini-player");
   const audio = document.getElementById("loc-audio");
   if (audio) {
     audio.pause();
@@ -1550,8 +1551,13 @@ function _locClosePlayer() {
       audio._hls = null;
     }
   }
-  if (bar) bar.classList.remove("is-visible");
-  document.body.classList.remove("loc-open");
+  // Only hide the bar when LOC is the active engine — if YT is playing
+  // we're just stopping the LOC handoff, not the bar itself.
+  if (bar && window._currentEngine === "loc") {
+    bar.classList.remove("open", "expanded");
+    document.body.classList.remove("player-open");
+    if (typeof _setPlayerEngine === "function") _setPlayerEngine(null);
+  }
   _locNowPlaying = null;
   _locQueue = null;
   _locUpdateQueueButtons();

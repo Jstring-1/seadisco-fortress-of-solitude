@@ -209,8 +209,6 @@ html { overflow-x: hidden; }
      Mobile bars are taller because controls wrap; loc bar stays single
      row so it gets the same treatment as desktop. */
   body.player-open { padding-bottom: 140px; }
-  body.loc-open    { padding-bottom: 88px; }
-  body.player-open.loc-open { padding-bottom: 220px; }
   .mini-player-bar {
     flex-wrap: wrap;
     padding: 0.3rem 0.5rem;
@@ -2358,9 +2356,8 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 /* Reserve space at the bottom of the page whenever either bottom-docked
    audio bar is visible so the last row of album cards doesn't disappear
    behind it. The expanded YouTube mini-player needs more headroom. */
-body.player-open,
-body.loc-open    { padding-bottom: 96px; }
-body.player-open.loc-open { padding-bottom: 168px; }
+body.player-open { padding-bottom: 96px; }
+body.player-open.expanded-mini { padding-bottom: 168px; }
 body.modal-open  { overflow: hidden; }
 
 .mini-player-bar {
@@ -5964,89 +5961,41 @@ a.profile-stat-link:hover {
    so the LOC and YouTube persistent players are visually identical
    except for the icon (♪ vs none) and the expand-panel content. The
    native <audio> element only appears in the expanded panel. */
-.loc-audio-bar {
-  display: none;
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  z-index: 300;
-  background: #111;
-  border-top: 1px solid #2a2a2a;
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.6);
-  font-family: inherit;
-}
-.loc-audio-bar.is-visible { display: block; }
-.loc-audio-bar-row {
-  display: flex;
-  align-items: center;
-  padding: 0.5rem 0.6rem 0.65rem;
-  gap: 0.4rem;
-  min-height: 48px;
-}
-.loc-audio-bar-info {
-  flex: 1;
-  min-width: 0;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  overflow: hidden;
-}
-.loc-audio-bar-icon {
+/* ── Unified mini-player engine show/hide rules ─────────────────────────
+   The bar's expanded panel and source-specific buttons swap based on
+   .mini-player.engine-yt / .engine-loc set by _setPlayerEngine. The
+   former dedicated #loc-audio-bar element is gone — its <audio> is
+   now hosted inside the mini-player. */
+.mini-engine-yt, .mini-engine-loc { display: none; }
+.mini-player.engine-yt.expanded .mini-engine-yt { display: block; }
+.mini-player.engine-loc.expanded .mini-engine-loc { display: block; }
+
+/* Source-specific buttons in the controls cluster */
+.mini-loc-only { display: none !important; }
+.mini-player.engine-loc .mini-loc-only { display: inline-flex !important; }
+.mini-yt-only { display: inline-flex; }
+.mini-player.engine-loc .mini-yt-only { display: none !important; }
+
+/* The little source-icon next to the title (♪ for LOC, ▶ for YT) */
+.mini-player-source-icon {
+  display: inline-block;
+  margin-right: 0.35rem;
   color: var(--accent);
-  font-size: 0.9rem;
-  flex-shrink: 0;
-}
-.loc-audio-bar-title {
-  font-size: 0.78rem;
-  color: #ccc;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex-shrink: 1;
-  min-width: 0;
-  font-weight: 600;
-}
-.loc-audio-bar-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.15rem;
-  flex-shrink: 0;
-}
-/* Buttons styled identically to .mini-player-controls button */
-.loc-audio-bar-nav,
-.loc-audio-bar-close {
-  background: none;
-  border: none;
-  color: #aaa;
   font-size: 0.85rem;
-  padding: 0.25rem 0.45rem;
-  cursor: pointer;
-  border-radius: 4px;
-  line-height: 1;
+  flex-shrink: 0;
 }
-.loc-audio-bar-nav:hover:not(:disabled),
-.loc-audio-bar-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
-.loc-audio-bar-nav:disabled { opacity: 0.3; cursor: default; }
-.loc-audio-bar-save.is-saved { color: var(--favorite); }
-#loc-audio-close { font-size: 1.1rem; }
-#loc-audio-expand { transition: transform 0.2s; }
-.loc-audio-bar.expanded #loc-audio-expand { transform: rotate(180deg); }
-/* Expanded panel hosts the native <audio> scrubber so users CAN seek;
-   collapsed by default to match the YouTube mini-player's compact mode. */
-.loc-audio-bar-expanded {
-  display: none;
-  padding: 0 0.6rem 0.5rem;
-}
-.loc-audio-bar.expanded .loc-audio-bar-expanded { display: block; }
-.loc-audio-native {
+.mini-player-source-icon:empty { display: none; }
+
+/* LOC's audio scrubber inside the expanded panel */
+#loc-audio {
   width: 100%;
   height: 36px;
   /* Tint the OS-native control to read on the dark bar. WebKit/Chromium
      respect this; Firefox renders its own dark control by default. */
   filter: invert(0.85) hue-rotate(180deg);
 }
+/* The save badge keeps its is-saved highlight regardless of source */
+#mini-loc-save.is-saved { color: var(--favorite); }
 
 /* ── LOC info popup overlay ───────────────────────────────────────── */
 .loc-info-overlay {
@@ -6373,9 +6322,6 @@ a.profile-stat-link:hover {
 @media (max-width: 640px) {
   .loc-form-grid { grid-template-columns: 1fr 1fr; gap: 0.5rem; }
   .loc-form-grid label { font-size: 0.62rem; }
-  .loc-audio-bar { padding: 0.4rem 0.55rem; gap: 0.5rem; }
-  .loc-audio-bar-info { flex: 0 0 auto; max-width: 40%; }
-  .loc-audio-bar-title { font-size: 0.75rem; }
   .loc-info-box { padding: 0.8rem; }
   .loc-info-head { flex-direction: column; gap: 0.7rem; padding-right: 1.5rem; }
   .loc-info-thumb { width: 100%; max-width: 200px; height: auto; aspect-ratio: 1; }

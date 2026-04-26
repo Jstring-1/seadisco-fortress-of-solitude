@@ -1502,6 +1502,66 @@ function toggleMiniPlayer() {
   if (mp) mp.classList.toggle("expanded");
 }
 
+// ── Unified player dispatchers ─────────────────────────────────────────
+// The persistent bar hosts both the YouTube iframe engine and the LOC
+// <audio> engine. window._currentEngine ("yt" | "loc" | null) tracks
+// which one is active; the controls cluster routes through these
+// wrappers so prev/play-pause/next/close hit the right engine.
+window._currentEngine = window._currentEngine || null;
+
+// Set the engine on the bar so CSS can swap which expanded panel +
+// source-specific buttons are shown. Pass null to clear.
+function _setPlayerEngine(name) {
+  window._currentEngine = name;
+  const mp = document.getElementById("mini-player");
+  if (!mp) return;
+  mp.classList.remove("engine-yt", "engine-loc");
+  if (name === "yt")  mp.classList.add("engine-yt");
+  if (name === "loc") mp.classList.add("engine-loc");
+  // Source icon next to the title
+  const icon = document.getElementById("mini-player-source-icon");
+  if (icon) icon.textContent = name === "loc" ? "♪" : (name === "yt" ? "▶" : "");
+}
+
+function playerTogglePause() {
+  if (window._currentEngine === "loc") {
+    const a = document.getElementById("loc-audio");
+    if (!a || !a.src) return;
+    if (a.paused) a.play().catch(() => {}); else a.pause();
+    return;
+  }
+  if (typeof toggleVideoPause === "function") toggleVideoPause();
+}
+function playerPrev() {
+  if (window._currentEngine === "loc") {
+    if (typeof _locPlayPrevInQueue === "function") _locPlayPrevInQueue();
+    return;
+  }
+  if (typeof videoPrev === "function") videoPrev();
+}
+function playerNext() {
+  if (window._currentEngine === "loc") {
+    if (typeof _locPlayNextInQueue === "function") _locPlayNextInQueue();
+    return;
+  }
+  if (typeof playNextVideo === "function") playNextVideo();
+}
+function playerClose() {
+  if (window._currentEngine === "loc") {
+    if (typeof _locClosePlayer === "function") _locClosePlayer();
+    return;
+  }
+  if (typeof closeVideo === "function") closeVideo();
+}
+// Bar info-area click. For YT: open the album modal if known. For LOC:
+// open the info popup for the playing item. Falls back to expand toggle.
+function playerInfoClick() {
+  if (window._currentEngine === "loc") {
+    if (typeof _locOpenFromBar === "function") { _locOpenFromBar(); return; }
+  }
+  toggleMiniPlayer();
+}
+
 function openVideo(event, url) {
   if (event) { event.preventDefault(); event.stopPropagation(); }
   // Starting YouTube playback should stop the LOC audio bar so we
@@ -1547,6 +1607,7 @@ function openVideo(event, url) {
   setVideoUrl(id);
   const mp = document.getElementById("mini-player");
   mp.classList.add("open");
+  _setPlayerEngine("yt");
   document.body.classList.add("player-open");
   loadYTVideo(id);
   updateVideoNavButtons();
@@ -1665,6 +1726,9 @@ function closeVideo() {
   if (_ytLoadTimer) { clearTimeout(_ytLoadTimer); _ytLoadTimer = null; }
   const mp = document.getElementById("mini-player");
   mp.classList.remove("open", "expanded");
+  // Only clear the engine if we're actually closing a YT session (not
+  // mid-handoff to LOC). _setPlayerEngine(null) leaves the bar generic.
+  if (window._currentEngine === "yt") _setPlayerEngine(null);
   document.body.classList.remove("player-open");
   if (ytPlayer && typeof ytPlayer.stopVideo === "function") {
     ytPlayer.stopVideo();
