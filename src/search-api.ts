@@ -3262,7 +3262,6 @@ app.get("/api/admin/blues/export.csv", async (req, res) => {
       "birth_date", "birth_place", "death_date", "death_place", "death_cause",
       "hometown_region",
       "first_recording_year", "first_recording_title",
-      "last_recording_year",  "last_recording_title",
       "earliest_release_year",
       "styles", "instruments", "associated_labels", "songs_authored", "collaborators",
       "discogs_id", "musicbrainz_mbid", "wikidata_qid", "wikipedia_suffix",

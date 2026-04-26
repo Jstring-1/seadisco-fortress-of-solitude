@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260413e" />
+  <link rel="stylesheet" href="/style.css?v=20260413f" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260413e"></script>
+<script defer src="/shared.js?v=20260413f"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
@@ -167,8 +167,10 @@
               <label>Hometown / region <input name="hometown_region"></label>
               <label>1st recording year <input name="first_recording_year" type="number"></label>
               <label>1st recording title <input name="first_recording_title"></label>
-              <label>Last recording year <input name="last_recording_year" type="number"></label>
-              <label>Last recording title <input name="last_recording_title"></label>
+              <!-- Last-recording fields removed: Discogs returns
+                   posthumous reissues + compilation appearances, which
+                   made the field misleading more often than not. -->
+
               <label style="grid-column:1/-1">Aliases (comma-sep) <input name="aliases"></label>
               <label style="grid-column:1/-1">Styles (comma-sep) <input name="styles"></label>
               <label style="grid-column:1/-1">Instruments (comma-sep) <input name="instruments"></label>
@@ -266,7 +268,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260413e"></script>
+<script defer src="/modal.js?v=20260413f"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1072,34 +1074,40 @@ function bluesDbRenderList() {
     const relCount = Array.isArray(r.discogs_releases) ? r.discogs_releases.length : 0;
     // Cross-links to the main app:
     //   ⌕ → artist-specific search, type=Masters+, sorted year asc so
-    //       the artist's earliest releases land first. URL params
-    //       a=… (artist) · r=master+ · s=year:asc match the
-    //       restoreFromParams() handler in search.js.
+    //       the artist's earliest releases land first.
     //   W → wiki popup (search-first) with the name double-quoted.
     const searchHref = "/?a=" + encodeURIComponent(r.name)
                      + "&r="  + encodeURIComponent("master+")
                      + "&s="  + encodeURIComponent("year:asc");
     const wikiHref   = "/?wk=" + encodeURIComponent('"' + r.name + '"');
-    return `<tr>
+    // Photo thumb cell — small avatar that pops a full-size lightbox on
+    // click. Empty placeholder square keeps the column aligned for rows
+    // with no photo yet.
+    const thumbCell = r.photo_url
+      ? `<img src="${esc(r.photo_url)}" alt="" class="blues-row-thumb" loading="lazy" onclick="bluesShowImage('${esc(r.photo_url).replace(/'/g, "&#39;")}')" />`
+      : `<span class="blues-row-thumb blues-row-thumb-empty"></span>`;
+    return `<tr data-row-id="${r.id}">
+      <td>${thumbCell}</td>
       <td>
-        <a href="#" onclick="event.preventDefault();bluesDbOpenEditor(${r.id})" style="color:var(--accent)">${esc(r.name)}</a>
-        <a href="${esc(searchHref)}" target="_blank" rel="noopener" title="Search SeaDisco for &quot;${esc(r.name)}&quot;" style="margin-left:0.35em;color:var(--accent);text-decoration:none;font-size:1.05em">⌕</a>
-        <a href="${esc(wikiHref)}" target="_blank" rel="noopener" title="Wikipedia search popup for &quot;${esc(r.name)}&quot;" style="margin-left:0.05em;color:var(--text);text-decoration:none;font-family:'Times New Roman',serif;font-style:italic;font-weight:700;font-size:0.78em">W</a>
+        <a href="#" class="blues-row-name" data-hover-type="name" data-row-id="${r.id}" onclick="event.preventDefault();bluesDbOpenEditor(${r.id})">${esc(r.name)}</a>
+        <a href="${esc(searchHref)}" target="_blank" rel="noopener" title="Search SeaDisco" class="blues-row-icon blues-row-search">⌕</a>
+        <a href="${esc(wikiHref)}" target="_blank" rel="noopener" title="Wikipedia popup" class="blues-row-icon blues-row-wiki">W</a>
       </td>
-      <td style="text-align:right" title="Earliest of first_recording_year (MB) and min(discogs_releases.year)">${r.earliest_release_year ?? ""}</td>
+      <td style="text-align:right" class="blues-hover-cell" data-hover-type="first-rel" data-row-id="${r.id}">${r.earliest_release_year ?? ""}</td>
       <td>${esc(styles)}</td>
       <td>${r.discogs_id ? esc(r.discogs_id) : ""}</td>
-      <td style="text-align:right">${relCount || ""}</td>
+      <td style="text-align:right" class="blues-hover-cell" data-hover-type="releases" data-row-id="${r.id}">${relCount || ""}</td>
     </tr>`;
   }).join("");
   // Build clickable column headers. Sort key matches the server's
   // _BLUES_SORT_COLUMNS whitelist.
   const _bluesCols = [
+    { key: null,               label: "" },               // image column — non-sortable
     { key: "name",             label: "Name" },
-    { key: "earliest_release", label: "1st rel", align: "right", title: "Earliest year — first_recording_year (MB) or min(discogs_releases.year)" },
+    { key: "earliest_release", label: "1st rel", align: "right", title: "Earliest year — first_recording_year or min(discogs_releases.year). Hover for title." },
     { key: "styles",           label: "Styles" },
     { key: "discogs_id",       label: "Discogs" },
-    { key: "release_count",    label: "#",       align: "right", title: "Discogs masters/releases" },
+    { key: "release_count",    label: "#",       align: "right", title: "Discogs masters/releases — hover for full list" },
   ];
   const headerCells = _bluesCols.map(c => {
     const sortable = !!c.key;
@@ -1125,6 +1133,106 @@ function bluesDbRenderList() {
     tr.style.borderBottom = "1px solid var(--border)";
     tr.querySelectorAll("td").forEach(td => td.style.padding = "0.35rem 0.5rem");
   });
+  // Wire hover popups on cells flagged with data-hover-type. Single
+  // shared popup element lives at body level and is repositioned per
+  // hovered cell. Mouse-leave hides it.
+  list.querySelectorAll("[data-hover-type]").forEach(el => {
+    el.addEventListener("mouseenter", () => _bluesHoverShow(el));
+    el.addEventListener("mouseleave", _bluesHoverHide);
+  });
+}
+
+// Build the popup HTML for whichever cell is being hovered. Pulls
+// data straight from _bluesDbState.rows so we don't have to embed
+// big strings in DOM attributes.
+function _bluesHoverShow(target) {
+  const id = parseInt(target.dataset.rowId, 10);
+  const row = _bluesDbState.rows.find(r => r.id === id);
+  if (!row) return;
+  const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  const type = target.dataset.hoverType;
+  let html = "";
+  if (type === "name") {
+    const aliases = (Array.isArray(row.aliases) ? row.aliases : []).filter(Boolean);
+    const collabs = (Array.isArray(row.collaborators) ? row.collaborators : [])
+      .map(c => typeof c === "string" ? c : c?.name)
+      .filter(Boolean);
+    const notes = (row.notes ?? "").trim();
+    const sec = (label, val) => val ? `<div class="blues-hover-section"><span class="blues-hover-label">${label}</span> ${esc(val)}</div>` : "";
+    html =
+      sec("Aliases:",       aliases.join(", ")) +
+      sec("Collaborators:", collabs.join(", "));
+    if (notes) html += `<div class="blues-hover-section blues-hover-notes">${esc(notes)}</div>`;
+    if (!html) html = `<div class="blues-hover-section blues-hover-empty">(no aliases / collaborators / notes yet)</div>`;
+  } else if (type === "first-rel") {
+    // Find the title for the earliest year. Prefer first_recording_title
+    // when its year matches earliest_release_year; otherwise fall back
+    // to the discogs_releases entry with that year.
+    const earliest = row.earliest_release_year;
+    let title = null;
+    if (earliest != null) {
+      if (row.first_recording_year === earliest && row.first_recording_title) {
+        title = row.first_recording_title;
+      } else if (Array.isArray(row.discogs_releases)) {
+        const hit = row.discogs_releases.find(rel => rel?.year === earliest);
+        title = hit?.title ?? null;
+      }
+    }
+    html = `<div class="blues-hover-section">${title ? esc(title) : "(no title recorded)"}</div>`;
+  } else if (type === "releases") {
+    const list = (Array.isArray(row.discogs_releases) ? row.discogs_releases : [])
+      .slice()
+      .sort((a, b) => (a?.year ?? 9999) - (b?.year ?? 9999));
+    if (!list.length) {
+      html = `<div class="blues-hover-section blues-hover-empty">(no Discogs releases stored)</div>`;
+    } else {
+      html = `<div class="blues-hover-section"><ul class="blues-hover-list">` +
+        list.map(rel => `<li><span class="blues-hover-year">${esc(rel?.year ?? "?")}</span> ${esc(rel?.title ?? "")}</li>`).join("") +
+        `</ul></div>`;
+    }
+  }
+  let popup = document.getElementById("blues-hover-popup");
+  if (!popup) {
+    popup = document.createElement("div");
+    popup.id = "blues-hover-popup";
+    document.body.appendChild(popup);
+  }
+  popup.innerHTML = html;
+  popup.style.display = "block";
+  // Position below the trigger; clamp inside the viewport horizontally
+  // so long bio popups don't get clipped on the right.
+  const rect = target.getBoundingClientRect();
+  let top = rect.bottom + window.scrollY + 4;
+  let left = rect.left + window.scrollX;
+  popup.style.top = top + "px";
+  popup.style.left = left + "px";
+  // After paint, nudge inward if we ran off the viewport.
+  requestAnimationFrame(() => {
+    const pr = popup.getBoundingClientRect();
+    const overflowRight = pr.right - window.innerWidth + 12;
+    if (overflowRight > 0) popup.style.left = (left - overflowRight) + "px";
+  });
+}
+function _bluesHoverHide() {
+  const popup = document.getElementById("blues-hover-popup");
+  if (popup) popup.style.display = "none";
+}
+
+// Click-to-enlarge for the row thumbnails — quick lightbox, click
+// anywhere on the backdrop to dismiss.
+function bluesShowImage(url) {
+  if (!url) return;
+  const overlay = document.createElement("div");
+  overlay.className = "blues-image-overlay";
+  overlay.onclick = () => overlay.remove();
+  const img = document.createElement("img");
+  img.src = url;
+  img.alt = "";
+  overlay.appendChild(img);
+  document.body.appendChild(overlay);
+  // Esc dismiss
+  const onEsc = (e) => { if (e.key === "Escape") { overlay.remove(); document.removeEventListener("keydown", onEsc); } };
+  document.addEventListener("keydown", onEsc);
 }
 
 // Pager is gone — admin grid shows everything in one shot. Keep this
