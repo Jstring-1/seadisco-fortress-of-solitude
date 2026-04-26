@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260426n" />
+  <link rel="stylesheet" href="/style.css?v=20260426o" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260426n"></script>
+<script defer src="/shared.js?v=20260426o"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true, iconNav: true }));</script>
 
 <main>
@@ -111,6 +111,17 @@
           <button class="admin-refresh-btn" onclick="loadDbStats()" title="Refresh">&#8635;</button>
         </div>
         <div id="db-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
+        <!-- Manual archive refresh — the cache auto-updates weekly via
+             a server-side scheduler; this button forces an immediate
+             refetch when admin uploads new shows on archive.org and
+             doesn't want to wait for the weekly cycle. -->
+        <div style="margin-top:1.2rem;padding-top:0.8rem;border-top:1px dashed var(--border)">
+          <h3 style="margin:0 0 0.4rem;font-size:0.92rem">External caches</h3>
+          <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap">
+            <button class="admin-btn" onclick="adminRefreshArchive(this)" title="Re-fetch the Aadam Jacobs archive.org collection now (auto-runs weekly)">Get archive data</button>
+            <span id="admin-archive-status" style="font-size:0.78rem;color:var(--muted)"></span>
+          </div>
+        </div>
       </div>
 
       <!-- LOC Stats -->
@@ -301,7 +312,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260426n"></script>
+<script defer src="/modal.js?v=20260426o"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -635,6 +646,55 @@ async function adminExtrasFetch() {
 }
 
 // ── Database Stats ────────────────────────────────────────────────────
+// Manual trigger to refresh the archive.org cache. The server runs
+// the same refresh weekly on its own schedule; this button is for
+// when admin uploads new shows and doesn't want to wait. Returns
+// 202 immediately; we poll the listing endpoint to detect when the
+// new data has landed in DB.
+async function adminRefreshArchive(btn) {
+  const statusEl = document.getElementById("admin-archive-status");
+  const setStatus = (msg) => { if (statusEl) statusEl.textContent = msg; };
+  if (btn) { btn.disabled = true; btn.textContent = "Refreshing…"; }
+  setStatus("Triggered — walking archive.org pages, may take 1–2 min for large collections");
+  try {
+    const r = await apiFetch("/api/admin/archive/refresh", { method: "POST" });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      setStatus("Failed: " + (err.error ?? r.status));
+      if (btn) { btn.disabled = false; btn.textContent = "Get archive data"; }
+      return;
+    }
+    // Poll the listing endpoint every 6s; show item count on success.
+    let lastCount = -1;
+    let polls = 0;
+    const tick = async () => {
+      polls++;
+      try {
+        const lr = await apiFetch("/api/archive/aadamjacobs");
+        if (lr.ok) {
+          const j = await lr.json();
+          const count = (j.items || []).length;
+          if (count !== lastCount) {
+            lastCount = count;
+            const fetched = j.fetchedAt ? new Date(j.fetchedAt).toLocaleString() : "";
+            setStatus(`${count} item${count === 1 ? "" : "s"} cached${fetched ? " · " + fetched : ""}`);
+          }
+        }
+      } catch {}
+      if (polls < 40) setTimeout(tick, 6000); // up to ~4 minutes
+      else if (btn) { btn.disabled = false; btn.textContent = "Get archive data"; }
+    };
+    setTimeout(tick, 4000);
+    if (btn) {
+      // Re-enable after polling window so the button isn't stuck disabled
+      setTimeout(() => { btn.disabled = false; btn.textContent = "Get archive data"; }, 60000);
+    }
+  } catch (e) {
+    setStatus("Failed: " + e);
+    if (btn) { btn.disabled = false; btn.textContent = "Get archive data"; }
+  }
+}
+
 async function loadDbStats() {
   const el = document.getElementById("db-stats");
   try {

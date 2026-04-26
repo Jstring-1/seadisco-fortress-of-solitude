@@ -51,6 +51,10 @@ async function initArchiveView(forceRefresh = false) {
   }
 }
 
+// archiveRefresh kept for backwards-compat only — the page no longer
+// renders a refresh button, but admin.html's "Get archive data"
+// button still calls into the admin endpoint, which writes the cache
+// in the background. The page will show fresh data on next reload.
 function archiveRefresh() {
   _archiveList = null;
   initArchiveView(true);
@@ -170,11 +174,12 @@ function _renderArchiveList() {
     ["date-desc",  "Date (newest)"],
     ["date-asc",   "Date (oldest)"],
   ].map(([v, label]) => `<option value="${v}"${v === _archiveSort ? " selected" : ""}>${label}</option>`).join("");
+  // Refresh button removed — the cache is auto-updated weekly server-
+  // side and admin can trigger a manual refresh from /admin if needed.
   const controls = `<div class="archive-meta-bar">
     <input type="search" class="archive-filter" placeholder="Filter title, date, description…" value="${filterVal}" oninput="_archiveOnFilterInput(this)" />
     <select class="archive-sort" onchange="_archiveOnSortChange(this)">${sortOpts}</select>
     <span class="archive-meta-count" id="archive-count">${total} item${total === 1 ? "" : "s"}</span>
-    <button type="button" class="archive-refresh" onclick="archiveRefresh()" title="Re-fetch from archive.org">↻ Refresh</button>
   </div>
   <div id="archive-rows"></div>`;
   listEl.innerHTML = controls;
