@@ -254,6 +254,24 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS user_wiki_saves_user_time_idx ON user_wiki_saves (clerk_user_id, saved_at DESC)`);
 
+  // ── User play queue (cross-source: LOC + YouTube) ───────────────────────
+  // Items are ordered by `position` (1-indexed). Source is "loc" or "yt"
+  // and `data` JSONB carries everything needed to play without a Discogs
+  // round-trip: title, artist, image, plus engine-specific fields
+  // (streamUrl/streamType for LOC; videoId/durationSec for YT).
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_play_queue (
+      clerk_user_id TEXT        NOT NULL,
+      position      INTEGER     NOT NULL,
+      source        TEXT        NOT NULL,
+      external_id   TEXT        NOT NULL,
+      data          JSONB       NOT NULL,
+      added_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (clerk_user_id, position)
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS user_play_queue_user_idx ON user_play_queue (clerk_user_id, position)`);
+
   // ── User orders (marketplace buy/sell history) ──────────────────────────
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS user_orders (
@@ -819,6 +837,7 @@ export async function purgeNonAdminUserData(adminClerkId: string): Promise<Recor
     "user_recent_views",
     "user_loc_saves",
     "user_wiki_saves",
+    "user_play_queue",
     "saved_searches",
     "feedback",
     "oauth_request_tokens",
@@ -1094,6 +1113,7 @@ export async function deleteUserData(clerkUserId: string): Promise<void> {
     "user_recent_views",
     "user_loc_saves",
     "user_wiki_saves",
+    "user_play_queue",
     "saved_searches",
     "price_alerts",
     "triggered_alerts",
@@ -1847,6 +1867,118 @@ export async function getWikiSaveIds(clerkUserId: string): Promise<string[]> {
     [clerkUserId]
   );
   return r.rows.map(row => row.wiki_title);
+}
+
+// ── Play queue (cross-source: LOC + YouTube) ─────────────────────────
+const PLAY_QUEUE_MAX = 500;
+
+export type QueueItem = {
+  source: "loc" | "yt";
+  externalId: string;            // loc URL OR YouTube videoId
+  data: any;                     // title, artist, image, streamUrl/streamType OR durationSec etc.
+};
+
+export async function getPlayQueue(clerkUserId: string): Promise<Array<QueueItem & { position: number }>> {
+  const r = await getPool().query(
+    `SELECT position, source, external_id, data
+     FROM user_play_queue
+     WHERE clerk_user_id = $1
+     ORDER BY position ASC`,
+    [clerkUserId]
+  );
+  return r.rows.map(row => ({
+    position: row.position,
+    source: row.source,
+    externalId: row.external_id,
+    data: row.data ?? {},
+  }));
+}
+
+// Append items to the end of the queue. Each call assigns positions
+// starting at MAX(existing position) + 1. Caps total queue at 500;
+// older items at the head get trimmed if the cap would be exceeded.
+export async function appendPlayQueue(clerkUserId: string, items: QueueItem[]): Promise<{ added: number; firstPosition: number }> {
+  if (!items.length) return { added: 0, firstPosition: 0 };
+  const pool = getPool();
+  const r = await pool.query(
+    `SELECT COALESCE(MAX(position), 0) AS maxp FROM user_play_queue WHERE clerk_user_id = $1`,
+    [clerkUserId]
+  );
+  const startPos = (r.rows[0]?.maxp ?? 0) + 1;
+  const values: any[] = [];
+  const placeholders: string[] = [];
+  items.forEach((it, i) => {
+    const p = startPos + i;
+    placeholders.push(`($1, $${values.length + 2}, $${values.length + 3}, $${values.length + 4}, $${values.length + 5})`);
+    values.push(p, it.source, it.externalId, JSON.stringify(it.data ?? {}));
+  });
+  await pool.query(
+    `INSERT INTO user_play_queue (clerk_user_id, position, source, external_id, data) VALUES ${placeholders.join(", ")}
+     ON CONFLICT (clerk_user_id, position) DO UPDATE SET source = EXCLUDED.source, external_id = EXCLUDED.external_id, data = EXCLUDED.data, added_at = NOW()`,
+    [clerkUserId, ...values]
+  );
+  // Trim the head if we've exceeded the cap.
+  await pool.query(
+    `DELETE FROM user_play_queue
+     WHERE clerk_user_id = $1
+       AND position NOT IN (
+         SELECT position FROM user_play_queue
+         WHERE clerk_user_id = $1
+         ORDER BY position DESC
+         LIMIT ${PLAY_QUEUE_MAX}
+       )`,
+    [clerkUserId]
+  );
+  return { added: items.length, firstPosition: startPos };
+}
+
+export async function removeFromPlayQueue(clerkUserId: string, position: number): Promise<void> {
+  await getPool().query(
+    `DELETE FROM user_play_queue WHERE clerk_user_id = $1 AND position = $2`,
+    [clerkUserId, position]
+  );
+}
+
+export async function clearPlayQueue(clerkUserId: string): Promise<number> {
+  const r = await getPool().query(
+    `DELETE FROM user_play_queue WHERE clerk_user_id = $1`,
+    [clerkUserId]
+  );
+  return r.rowCount ?? 0;
+}
+
+// Reorder by sending the full ordered list of positions. Server rewrites
+// positions in a transaction so concurrent updates stay consistent.
+export async function reorderPlayQueue(clerkUserId: string, orderedPositions: number[]): Promise<void> {
+  if (!orderedPositions.length) return;
+  const pool = getPool();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const r = await client.query(
+      `SELECT position, source, external_id, data FROM user_play_queue WHERE clerk_user_id = $1`,
+      [clerkUserId]
+    );
+    const byPos = new Map<number, any>();
+    r.rows.forEach(row => byPos.set(row.position, row));
+    await client.query(`DELETE FROM user_play_queue WHERE clerk_user_id = $1`, [clerkUserId]);
+    let newPos = 1;
+    for (const oldPos of orderedPositions) {
+      const row = byPos.get(oldPos);
+      if (!row) continue;
+      await client.query(
+        `INSERT INTO user_play_queue (clerk_user_id, position, source, external_id, data) VALUES ($1, $2, $3, $4, $5)`,
+        [clerkUserId, newPos, row.source, row.external_id, JSON.stringify(row.data ?? {})]
+      );
+      newPos++;
+    }
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 // ── Phase 4: Price intelligence DB functions ─────────────────────────────
