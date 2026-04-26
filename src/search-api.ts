@@ -2926,27 +2926,21 @@ app.use("/api/admin", (req, res, next) => {
 
 // GET /api/admin/feedback — inbox, only for admin user
 app.get("/api/admin/feedback", async (req, res) => {
-  const userId = await getClerkUserId(req);
-  const adminId = ADMIN_CLERK_ID;
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!await requireAdmin(req, res)) return;
   const items = await getFeedback();
   res.json({ items });
 });
 
 // DELETE /api/admin/feedback/:id — delete a feedback item, admin only
 app.delete("/api/admin/feedback/:id", async (req, res) => {
-  const userId = await getClerkUserId(req);
-  const adminId = ADMIN_CLERK_ID;
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!await requireAdmin(req, res)) return;
   await deleteFeedback(parseInt(req.params.id));
   res.json({ ok: true });
 });
 
 // GET /api/admin/sync-status — per-user sync status, admin only
 app.get("/api/admin/sync-status", async (req, res) => {
-  const userId = await getClerkUserId(req);
-  const adminId = ADMIN_CLERK_ID;
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!await requireAdmin(req, res)) return;
   const [users, favCounts] = await Promise.all([getAllUsersSyncStatus(), getAllFavoriteCounts()]);
 
   // Check Clerk sessions for accurate last-activity timestamps
@@ -2990,9 +2984,7 @@ app.get("/api/admin/sync-status", async (req, res) => {
 
 // POST /api/admin/sync-all — trigger FULL background sync for all users, admin only
 app.post("/api/admin/sync-all", express.json(), async (req, res) => {
-  const userId = await getClerkUserId(req);
-  const adminId = ADMIN_CLERK_ID;
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!await requireAdmin(req, res)) return;
   _syncAbort = false; // clear any previous abort
   const users = await getAllUsersForSync();
   res.json({ ok: true, queued: users.length, mode: "full" });
@@ -3013,9 +3005,7 @@ app.post("/api/admin/sync-all", express.json(), async (req, res) => {
 
 // POST /api/admin/sync-user — trigger background sync for a single user, admin only
 app.post("/api/admin/sync-user", express.json(), async (req, res) => {
-  const userId = await getClerkUserId(req);
-  const adminId = ADMIN_CLERK_ID;
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!await requireAdmin(req, res)) return;
   const { username } = req.body as { username: string };
   if (!username) { res.status(400).json({ error: "username required" }); return; }
   const users = await getAllUsersForSync();
@@ -3036,9 +3026,7 @@ app.post("/api/admin/sync-user", express.json(), async (req, res) => {
 
 // POST /api/admin/sync-stop — abort all running syncs and reset statuses
 app.post("/api/admin/sync-stop", async (req, res) => {
-  const userId = await getClerkUserId(req);
-  const adminId = ADMIN_CLERK_ID;
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!await requireAdmin(req, res)) return;
   _syncAbort = true;
   const count = await resetAllSyncingStatuses();
   console.log(`Admin: sync abort requested, ${count} syncing statuses reset`);
@@ -3047,9 +3035,7 @@ app.post("/api/admin/sync-stop", async (req, res) => {
 
 // POST /api/admin/api-kill — toggle global API kill switch
 app.post("/api/admin/api-kill", async (req, res) => {
-  const userId = await getClerkUserId(req);
-  const adminId = ADMIN_CLERK_ID;
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!await requireAdmin(req, res)) return;
   const { enabled } = req.body ?? {};
   _apiKillSwitch = enabled !== undefined ? !!enabled : !_apiKillSwitch;
   console.log(`Admin: API kill switch ${_apiKillSwitch ? "ENABLED — all outgoing requests blocked" : "DISABLED — requests flowing"}`);
@@ -3058,17 +3044,14 @@ app.post("/api/admin/api-kill", async (req, res) => {
 
 // GET /api/admin/api-kill — check kill switch status
 app.get("/api/admin/api-kill", async (req, res) => {
-  const userId = await getClerkUserId(req);
-  const adminId = ADMIN_CLERK_ID;
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!await requireAdmin(req, res)) return;
   res.json({ killSwitch: _apiKillSwitch });
 });
 
 // POST /api/admin/revoke-sessions — log out all Clerk users except admin
 app.post("/api/admin/revoke-sessions", async (req, res) => {
-  const userId = await getClerkUserId(req);
-  const adminId = ADMIN_CLERK_ID;
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!await requireAdmin(req, res)) return;
+  const adminId = ADMIN_CLERK_ID; // skip the admin's own session below
   const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
   if (!clerkSecret) { res.status(500).json({ error: "CLERK_SECRET_KEY not configured" }); return; }
   try {
@@ -3163,9 +3146,7 @@ app.post("/api/admin/purge-non-admin-users", express.json(), async (req, res) =>
 
 // GET /api/admin/collection-stats — per-user and global collection/wantlist stats
 app.get("/api/admin/collection-stats", async (req, res) => {
-  const userId = await getClerkUserId(req);
-  const adminId = ADMIN_CLERK_ID;
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!await requireAdmin(req, res)) return;
   try {
     const stats = await getUserCollectionStats();
     res.json(stats);
@@ -3176,9 +3157,7 @@ app.get("/api/admin/collection-stats", async (req, res) => {
 
 // GET /api/admin/user-items — view any user's collection or wantlist, admin only
 app.get("/api/admin/user-items", async (req, res) => {
-  const userId = await getClerkUserId(req);
-  const adminId = ADMIN_CLERK_ID;
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!await requireAdmin(req, res)) return;
   const username = (req.query.username as string ?? "").trim();
   const tab = (req.query.tab as string ?? "collection");
   const page = Math.max(1, parseInt(req.query.page as string) || 1);
@@ -3196,9 +3175,7 @@ app.get("/api/admin/user-items", async (req, res) => {
 
 // GET /api/admin/user-favorites — view any user's favorites, admin only
 app.get("/api/admin/user-favorites", async (req, res) => {
-  const userId = await getClerkUserId(req);
-  const adminId = ADMIN_CLERK_ID;
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!await requireAdmin(req, res)) return;
   const username = (req.query.username as string ?? "").trim();
   if (!username) { res.status(400).json({ error: "username required" }); return; }
   try {
@@ -4085,15 +4062,34 @@ app.get("/search", async (req, res) => {
 });
 
 // GET /release/:id
+// Cache TTLs by resource type. Masters and artists are stable; releases
+// can be edited so they get a shorter TTL. Override per-request with
+// ?nocache=1 (admin-only) to force a fresh fetch.
+const _RELEASE_CACHE_TTL_S = 60 * 60 * 24 * 1;     // 1 day
+const _MASTER_CACHE_TTL_S  = 60 * 60 * 24 * 7;     // 7 days
+const _ARTIST_CACHE_TTL_S  = 60 * 60 * 24 * 7;     // 7 days
+
 app.get("/release/:id", async (req, res) => {
   if (!await requireUser(req, res)) return;
   const id = parseInt(req.params.id, 10);
+  // Cache HIT: serve immediately, no Discogs round-trip. Big win for
+  // shared URLs and repeat opens (popular masters/releases hit by
+  // multiple users serve from cache instead of burning rate-limit slots).
+  const noCache = req.query.nocache === "1";
+  if (!noCache) {
+    const cached = await getCachedRelease(id, "release", _RELEASE_CACHE_TTL_S);
+    if (cached) {
+      res.setHeader("X-SeaDisco-Cache", "hit");
+      res.json(cached);
+      return;
+    }
+  }
   const dc = await getDiscogsForRequest(req);
   if (!dc) { res.status(503).json({ error: "No Discogs OAuth connection" }); return; }
   try {
     const result = await dc.getRelease(req.params.id);
-    // Always save fresh data to cache
     cacheRelease(id, "release", result as object).catch(() => {});
+    res.setHeader("X-SeaDisco-Cache", "miss");
     res.json(result);
   } catch (err) {
     console.error(err);
@@ -4105,12 +4101,21 @@ app.get("/release/:id", async (req, res) => {
 app.get("/master/:id", async (req, res) => {
   if (!await requireUser(req, res)) return;
   const id = parseInt(req.params.id, 10);
+  const noCache = req.query.nocache === "1";
+  if (!noCache) {
+    const cached = await getCachedRelease(id, "master", _MASTER_CACHE_TTL_S);
+    if (cached) {
+      res.setHeader("X-SeaDisco-Cache", "hit");
+      res.json(cached);
+      return;
+    }
+  }
   const dc = await getDiscogsForRequest(req);
   if (!dc) { res.status(503).json({ error: "No Discogs OAuth connection" }); return; }
   try {
     const result = await dc.getMasterRelease(req.params.id);
-    // Always save fresh data to cache
     cacheRelease(id, "master", result as object).catch(() => {});
+    res.setHeader("X-SeaDisco-Cache", "miss");
     res.json(result);
   } catch (err) {
     console.error(err);
@@ -4121,10 +4126,24 @@ app.get("/master/:id", async (req, res) => {
 // GET /artist/:id
 app.get("/artist/:id", async (req, res) => {
   if (!await requireUser(req, res)) return;
+  const id = parseInt(req.params.id, 10);
+  const noCache = req.query.nocache === "1";
+  if (!noCache && Number.isFinite(id) && id > 0) {
+    const cached = await getCachedRelease(id, "artist", _ARTIST_CACHE_TTL_S);
+    if (cached) {
+      res.setHeader("X-SeaDisco-Cache", "hit");
+      res.json(cached);
+      return;
+    }
+  }
   const dc = await getDiscogsForRequest(req);
   if (!dc) { res.status(503).json({ error: "No Discogs OAuth connection" }); return; }
   try {
     const result = await dc.getArtist(req.params.id);
+    if (Number.isFinite(id) && id > 0) {
+      cacheRelease(id, "artist", result as object).catch(() => {});
+    }
+    res.setHeader("X-SeaDisco-Cache", "miss");
     res.json(result);
   } catch (err) {
     console.error(err);
@@ -4493,9 +4512,7 @@ app.get("/series-releases/:id", async (req, res) => {
 
 // POST /api/admin/extras/fetch — manual trigger for inventory/lists sync
 app.post("/api/admin/extras/fetch", express.json(), async (req, res) => {
-  const userId = await getClerkUserId(req);
-  const adminId = ADMIN_CLERK_ID;
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!await requireAdmin(req, res)) return;
   res.json({ ok: true, message: "Extras sync started" });
   (async () => {
     const users = await getAllUsersForSync();
@@ -4516,9 +4533,7 @@ app.post("/api/admin/extras/fetch", express.json(), async (req, res) => {
 
 // GET /api/admin/api-log — view API request log (last 24h by default)
 app.get("/api/admin/api-log", async (req, res) => {
-  const userId = await getClerkUserId(req);
-  const adminId = ADMIN_CLERK_ID;
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!await requireAdmin(req, res)) return;
   const service = req.query.service as string | undefined;
   const errorsOnly = req.query.errors === "true";
   const scheduledOnly = req.query.scheduled === "true";
@@ -4529,9 +4544,7 @@ app.get("/api/admin/api-log", async (req, res) => {
 
 // GET /api/admin/api-stats — 24h summary by service
 app.get("/api/admin/api-stats", async (req, res) => {
-  const userId = await getClerkUserId(req);
-  const adminId = ADMIN_CLERK_ID;
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!await requireAdmin(req, res)) return;
   const hours = Math.min(parseInt(req.query.hours as string) || 24, 168);
   const stats = await getApiRequestStats(hours);
   res.json({ stats });
@@ -4539,9 +4552,7 @@ app.get("/api/admin/api-stats", async (req, res) => {
 
 // GET /api/admin/db-stats — row counts for all tables
 app.get("/api/admin/db-stats", async (req, res) => {
-  const userId = await getClerkUserId(req);
-  const adminId = ADMIN_CLERK_ID;
-  if (!userId || !adminId || userId !== adminId) { res.status(403).json({ error: "Forbidden" }); return; }
+  if (!await requireAdmin(req, res)) return;
   try {
     const tables = await getTableRowCounts();
     const totalRows = tables.reduce((sum, t) => sum + (t.rows > 0 ? t.rows : 0), 0);

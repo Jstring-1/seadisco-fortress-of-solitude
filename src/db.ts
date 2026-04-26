@@ -2997,19 +2997,41 @@ export async function getUserCollectionStats(): Promise<{ users: any[]; global: 
   return { users: perUser.rows, global: globalQ.rows[0] };
 }
 
-// ── Release cache ─────────────────────────────────────────────────────────
+// ── Release / master / artist cache ───────────────────────────────────────
+//
+// Generic Discogs metadata cache. The `release_cache` table name is kept
+// for backwards compat but now also stores 'artist' rows alongside
+// 'release' and 'master'. Each call site picks an appropriate TTL via
+// `maxAgeSeconds` — masters/artists are stable so 7 days is fine;
+// releases get 1 day since their metadata can be edited.
 
-/** Get a cached release/master from DB. Returns null if not cached. */
-export async function getCachedRelease(discogsId: number, type: "release" | "master"): Promise<any | null> {
+export type DiscogsCacheType = "release" | "master" | "artist";
+
+/** Get a cached entry from DB. Returns null if not cached or if the
+ *  entry is older than `maxAgeSeconds` (cache miss vs stale-eviction
+ *  collapsed to a single null return — caller decides whether to
+ *  refetch). When `maxAgeSeconds` is undefined the entry is returned
+ *  regardless of age (caller can then decide based on cached_at). */
+export async function getCachedRelease(
+  discogsId: number,
+  type: DiscogsCacheType,
+  maxAgeSeconds?: number,
+): Promise<any | null> {
   const r = await getPool().query(
-    `SELECT data FROM release_cache WHERE discogs_id = $1 AND type = $2`,
+    `SELECT data, cached_at FROM release_cache WHERE discogs_id = $1 AND type = $2`,
     [discogsId, type]
   );
-  return r.rows[0]?.data ?? null;
+  const row = r.rows[0];
+  if (!row) return null;
+  if (typeof maxAgeSeconds === "number" && row.cached_at) {
+    const ageMs = Date.now() - new Date(row.cached_at).getTime();
+    if (ageMs > maxAgeSeconds * 1000) return null;
+  }
+  return row.data ?? null;
 }
 
-/** Save a release/master response to cache. Overwrites if already present. */
-export async function cacheRelease(discogsId: number, type: "release" | "master", data: object): Promise<void> {
+/** Save a metadata response to cache. Overwrites if already present. */
+export async function cacheRelease(discogsId: number, type: DiscogsCacheType, data: object): Promise<void> {
   await getPool().query(
     `INSERT INTO release_cache (discogs_id, type, data, cached_at)
      VALUES ($1, $2, $3, NOW())
@@ -3017,6 +3039,18 @@ export async function cacheRelease(discogsId: number, type: "release" | "master"
      DO UPDATE SET data = EXCLUDED.data, cached_at = NOW()`,
     [discogsId, type, JSON.stringify(data)]
   );
+}
+
+/** Prune stale cache entries — masters/artists older than 30 days,
+ *  releases older than 7 days. Run nightly via a scheduled task or
+ *  on-demand from the admin DB Stats panel. Returns rows deleted. */
+export async function pruneStaleReleaseCache(): Promise<number> {
+  const r = await getPool().query(
+    `DELETE FROM release_cache
+       WHERE (type IN ('master','artist') AND cached_at < NOW() - INTERVAL '30 days')
+          OR (type = 'release' AND cached_at < NOW() - INTERVAL '7 days')`
+  );
+  return r.rowCount ?? 0;
 }
 
 export async function getApiRequestStats(hours: number = 24): Promise<any[]> {

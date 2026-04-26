@@ -231,7 +231,7 @@ async function loadSyncStatus() {
     // Sync finished or idle — stop polling if running
     stopSyncPolling();
 
-    let statusText = `Collection: synced ${fmtTime(d.collectionSyncedAt)} \u00b7 Wantlist: synced ${fmtTime(d.wantlistSyncedAt)}`;
+    let statusText = `Collection: synced ${fmtTime(d.collectionSyncedAt, "never")} \u00b7 Wantlist: synced ${fmtTime(d.wantlistSyncedAt, "never")}`;
     if (d.discogsUsername) statusText += ` \u00b7 @${d.discogsUsername}`;
     if (d.syncStatus === "complete" && d.syncProgress > 0) {
       statusText += ` \u00b7 Last sync: ${d.syncProgress.toLocaleString()} items`;

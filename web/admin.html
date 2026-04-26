@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260426a" />
+  <link rel="stylesheet" href="/style.css?v=20260426b" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260426a"></script>
+<script defer src="/shared.js?v=20260426b"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true, iconNav: true }));</script>
 
 <main>
@@ -301,7 +301,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260426a"></script>
+<script defer src="/modal.js?v=20260426b"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -521,7 +521,7 @@ async function loadAdminSyncStatus() {
         <span class="sync-row-status" style="color:${statusColor}">${statusText}</span>
         <div class="sync-row-meta">
           <span style="color:${lastActiveColor};font-size:0.75rem">${lastActiveStr}</span>
-          <span style="color:#555">Coll: ${fmtTime(u.collectionSyncedAt)} \u00b7 Want: ${fmtTime(u.wantlistSyncedAt)}</span>
+          <span style="color:#555">Coll: ${fmtTime(u.collectionSyncedAt, "never")} \u00b7 Want: ${fmtTime(u.wantlistSyncedAt, "never")}</span>
         </div>
       </div>`;
     }).join("");
