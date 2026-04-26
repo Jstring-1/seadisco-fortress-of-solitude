@@ -1157,7 +1157,11 @@ html { overflow-x: hidden; }
   --accent-hover:    #ffffff;
   --accent-dim:      #aaaaaa;
   --accent2:         #d0d0d0;
-  --accent-hi:       #aaaaaa;
+  /* Highlight is the lone chromatic in this otherwise-greyscale theme
+     besides --catno. Hot yellow against pure black reads as a deliberate
+     noir-poster spot color and gives logo-lo, active-tab underlines,
+     and link hovers a pop instead of just disappearing into another grey. */
+  --accent-hi:       #ffe833;
   --accent-soft:     #2a2a2a;
   --success:         #b0b0b0;
   --success-bg:      #1a1a1a;
@@ -1178,7 +1182,11 @@ html { overflow-x: hidden; }
   --panel:           var(--surface);
   --radius:          6px;
   --input-h:         28px;
-  --font:            "SF Mono", "JetBrains Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, "Courier New", monospace;
+  /* Optima is the marquee humanist sans for stark minimalist looks —
+     refined, very readable, distinctly NOT typewriter. Falls back
+     across platforms: Optima (macOS) → Avenir Next / Avenir / Futura
+     (macOS/iOS) → Trebuchet MS / Geneva (Windows/Linux) → system. */
+  --font:            "Optima", "Optima Nova", "Avenir Next", "Avenir", "Futura", "Trebuchet MS", "Geneva", "Helvetica Neue", system-ui, sans-serif;
 }
 
 /* ── Dark: Graphite Amber (charcoal + amber + system sans) ───────── */
@@ -1432,8 +1440,11 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 0.6rem 1.5rem;
+  /* ~60px breathing room between the header and the first content
+     block below (search form, page eyebrow, modal content, etc.) so
+     the navbar doesn't crowd the body. */
+  margin: 0 auto 60px;
   max-width: 1100px;
-  margin: 0 auto;
 }
 
 .header-logo-wrap { display: flex; flex-direction: column; align-items: flex-start; flex-shrink: 0; line-height: 1; }
@@ -1500,9 +1511,10 @@ body {
 #main-nav-tabs {
   display: flex;
   flex-direction: column;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  overflow: hidden;
+  /* Borderless wrap — the icon-nav tabs are visually distinct enough on
+     their own; the surrounding 1px box created a "pill" look that
+     fought the floating-tooltip label and active-tab underline. */
+  overflow: visible;
 }
 /* ─ Nav rows ───────────────────────────────────────────────────────────── */
 .nav-row {
@@ -1514,7 +1526,9 @@ body {
   background: none;
   border: none;
   border-radius: 0;
-  box-shadow: inset -1px 0 0 var(--border);
+  /* No inter-tab separator — the inset box-shadow that drew a 1px
+     vertical line between tabs is removed for a cleaner navbar. */
+  box-shadow: none;
   color: var(--muted);
   height: auto;
   padding: 0.3rem 1rem;
@@ -1530,8 +1544,7 @@ body {
   align-self: stretch;
 }
 .nav-tab-top:hover           { color: var(--text); background: none; }
-.nav-tab-top.active          { color: var(--accent); font-weight: 600; background: rgba(255,107,53,0.08); }
-.nav-tab-top:last-child      { box-shadow: none; }
+.nav-tab-top.active          { color: var(--accent); font-weight: 600; }
 /* Record tabs — disabled state + per-tab hover/active colors */
 .nav-tab-top.nav-rec-disabled { color: #555; cursor: pointer; }
 .nav-tab-top.nav-rec-disabled:hover { color: var(--accent); }
@@ -1555,7 +1568,7 @@ body {
    an accent bottom-border + slightly more saturated icon. */
 .nav-tab-top.icon-nav {
   position: relative;
-  padding: 0.3rem 0.65rem;
+  padding: 0.4rem 0.85rem;
   gap: 0;
 }
 .nav-tab-top.icon-nav .nav-icon {
@@ -1563,10 +1576,19 @@ body {
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 22px;
-  height: 22px;
+  /* Larger nav icons — bumped from 22px → 32px so the line-art vinyl
+     details (heart, ribbon, headphone discs) read clearly at a glance. */
+  width: 32px;
+  height: 32px;
   opacity: 0.85;
   transition: opacity 0.15s, transform 0.15s;
+}
+.nav-tab-top.icon-nav .nav-icon svg {
+  /* SVG markup carries no fixed width/height — fill the container
+     so the CSS sizing above controls the icon size cleanly. */
+  width: 100%;
+  height: 100%;
+  display: block;
 }
 .nav-tab-top.icon-nav:hover .nav-icon,
 .nav-tab-top.icon-nav:focus-visible .nav-icon,
@@ -2876,6 +2898,7 @@ button.wiki-link-btn:active {
 }
 .album-title-search:hover,
 .modal-internal-link:hover {
+  color: var(--accent-hi);
   text-decoration: underline dotted;
   text-underline-offset: 3px;
   text-decoration-color: var(--muted);
@@ -2930,9 +2953,9 @@ button.wiki-link-btn:active {
   margin-bottom: 0.5rem;
 }
 .modal-artist-link { color: var(--fg); text-decoration: none; font-size: 0.75rem; }
-.modal-artist-link:hover { text-decoration: underline dotted; text-underline-offset: 3px; text-decoration-color: var(--muted); }
+.modal-artist-link:hover { color: var(--accent-hi); text-decoration: underline dotted; text-underline-offset: 3px; text-decoration-color: var(--muted); }
 .modal-title-link { color: var(--fg); text-decoration: none; }
-.modal-title-link:hover { text-decoration: underline dotted; text-underline-offset: 3px; text-decoration-color: var(--muted); }
+.modal-title-link:hover { color: var(--accent-hi); text-decoration: underline dotted; text-underline-offset: 3px; text-decoration-color: var(--muted); }
 
 #album-info .album-detail-grid, #version-info .album-detail-grid {
   display: grid;
@@ -3121,7 +3144,7 @@ button.wiki-link-btn:active {
   color: var(--accent) !important;
 }
 #album-info .track-link:hover, #version-info .track-link:hover {
-  color: var(--accent);
+  color: var(--accent-hi);
   text-decoration: underline dotted;
   text-underline-offset: 3px;
   text-decoration-color: var(--muted);
