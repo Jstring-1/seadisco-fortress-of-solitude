@@ -259,49 +259,15 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
 });
 
 // ── Clerk auth init ──────────────────────────────────────────────────────
-function _applySplashVisibility(clerk) {
-  // Invite-only mode: when there's no Clerk session, hide the search UI
-  // entirely and show the waitlist splash inline. Info / privacy / terms
-  // pages remain reachable via the header nav.
+// Public mode: site is visible to everyone. Search works without
+// signing in; sync / collection / wantlist / favorites still require
+// auth, gated server-side. The old splash-section is only shown if
+// it's still in the DOM AND nothing else is hiding it.
+function _applySplashVisibility(_clerk) {
   const splash = document.getElementById("splash-section");
   const form   = document.getElementById("main-search-form");
-  const results = document.getElementById("results");
-  const random = document.getElementById("random-records");
-  const pagination = document.getElementById("pagination");
-  const searchInfo = document.getElementById("search-info-block");
-  if (!splash) return;
-
-  if (clerk.user) {
-    splash.style.display = "none";
-    if (form) form.style.display = "";
-  } else {
-    if (form) form.style.display = "none";
-    if (results) results.innerHTML = "";
-    if (random) random.style.display = "none";
-    if (pagination) pagination.style.display = "none";
-    if (searchInfo) searchInfo.style.display = "none";
-    splash.style.display = "block";
-    // Mount Clerk waitlist (preferred) or fall back to sign-up widget.
-    // Localization is applied globally via Clerk.load() in shared.js so
-    // the sign-up fallback reads "Join the waitlist" rather than
-    // Clerk's default "Create your account".
-    const mount = document.getElementById("splash-waitlist-mount");
-    if (mount && !mount.dataset.mounted) {
-      mount.dataset.mounted = "1";
-      const appearance = (typeof SEADISCO_CLERK_APPEARANCE !== "undefined")
-        ? SEADISCO_CLERK_APPEARANCE
-        : undefined;
-      try {
-        if (typeof clerk.mountWaitlist === "function") {
-          clerk.mountWaitlist(mount, { appearance });
-        } else if (typeof clerk.mountSignUp === "function") {
-          clerk.mountSignUp(mount, { appearance });
-        }
-      } catch (e) {
-        console.error("[splash] Clerk mount failed:", e);
-      }
-    }
-  }
+  if (splash) splash.style.display = "none";
+  if (form)   form.style.display   = "";
 }
 
 async function applyAuthState(clerk) {

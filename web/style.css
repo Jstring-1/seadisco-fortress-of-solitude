@@ -5843,7 +5843,11 @@ footer {
   font-size: 0.78rem;
   color: var(--text);
   box-shadow: 0 6px 24px rgba(0,0,0,0.55);
-  pointer-events: none;
+  /* Pointer events ENABLED — the cursor needs to be able to enter the
+     popup to scroll long bios / release lists. Show/hide is now driven
+     by tracking whether the mouse is over either the trigger or the
+     popup itself (see admin.html _bluesHoverShow / _bluesHoverHide). */
+  pointer-events: auto;
   line-height: 1.4;
 }
 .blues-hover-section { margin-bottom: 0.4rem; }

@@ -1,7 +1,7 @@
 {
   "name": "SeaDisco",
   "short_name": "SeaDisco",
-  "description": "Invite-only music discovery platform. Search Discogs, manage your collection, wantlist, and marketplace listings.",
+  "description": "Music discovery platform. Search Discogs, manage your collection, wantlist, and marketplace listings.",
   "categories": ["music", "entertainment"],
   "icons": [],
   "theme_color": "#080706",

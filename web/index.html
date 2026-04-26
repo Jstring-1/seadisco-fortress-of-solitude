@@ -40,7 +40,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260413f" />
+  <link rel="stylesheet" href="/style.css?v=20260413g" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -78,31 +78,17 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260413f"></script>
+<script defer src="/shared.js?v=20260413g"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search" }));</script>
 <div id="search-view">
 
 <main>
   <span id="auth-status" style="display:none"></span>
 
-  <!-- Invite-only splash for signed-out visitors. Hidden by default;
-       app.js / applyAuthState() shows this when no Clerk session is active
-       and hides #main-search-form / #results. -->
-  <div id="splash-section" class="content-narrow" style="display:none;text-align:center;padding:2.5rem 1rem 1rem">
-    <h1 style="font-size:1.6rem;margin:0 0 0.5rem;color:var(--accent);letter-spacing:0.02em">SeaDisco is invite-only</h1>
-    <p style="font-size:0.95rem;color:#a89880;max-width:30rem;margin:0 auto 1.5rem;line-height:1.5">
-      Join the waitlist below — when a spot opens up, we'll be in touch.
-    </p>
-    <div id="splash-waitlist-mount" style="max-width:25rem;margin:0 auto;min-height:340px"></div>
-    <p style="font-size:0.85rem;color:#8a7d6b;margin:1.25rem auto 0">
-      Already approved? <a href="javascript:void(0)" onclick="openSignInModal()" style="color:var(--accent);text-decoration:none">Sign in</a>
-    </p>
-  </div>
-
-  <!-- Hidden by default; revealed by app.js applyAuthState() when signed-in.
-       Avoids a brief flash of the search form for signed-out users before
-       Clerk loads and the splash takes over. -->
-  <div id="main-search-form" class="content-narrow" style="display:none">
+  <!-- Public mode: search is open to everyone. Sign-up / sign-in is
+       still reachable via the header "Sign In" / Account link for
+       collection / wantlist / favorites sync. -->
+  <div id="main-search-form" class="content-narrow">
   <div class="search-row">
     <input type="text" id="query" placeholder="Search Discogs" autocomplete="off" />
     <button id="search-btn" onclick="doSearch(1)" style="flex-shrink:0">Search</button>
@@ -534,8 +520,8 @@
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">What SeaDisco Is</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco is a music discovery tool that searches the Discogs database (including Masters+ mode for finding orphan releases), provides AI-powered recommendations (via Anthropic's Claude), and helps you browse and manage your vinyl collection, wantlist, favorites, lists, marketplace inventory, and seller orders. It is a personal project provided as-is.</p>
 
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Invite-Only Access</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco is currently invite-only. If you are not yet approved, you can request access by joining the waitlist from the home page. We will review your request and invite you when a spot becomes available. We reserve the right to decline access, revoke access, or remove waitlist entries at our sole discretion, with or without notice. Joining the waitlist does not guarantee approval or any specific timeline.</p>
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Account Access</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco accounts are open to anyone with an email address. We reserve the right to suspend or remove accounts at our sole discretion, with or without notice, particularly for abuse, automated scraping, or violations of these terms or Discogs' own terms of service.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Marketplace Actions</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you use SeaDisco to create, edit, or delete a Discogs marketplace listing, to change the status of a seller order, or to send a message to a buyer, those actions are forwarded to Discogs and take effect immediately on your Discogs account. <strong style="color:#ccc">You are solely responsible for the listings you publish, the prices and conditions you set, the order statuses you change, and the messages you send.</strong> SeaDisco is a convenience interface to the Discogs marketplace — Discogs' own Seller Terms, fees, and refund/cancellation policies still apply, and your obligations to buyers are governed entirely by your agreement with Discogs.</p>
@@ -593,9 +579,8 @@
 
       <div id="signed-out-section">
         <p style="color:var(--text);font-size:1rem;margin-bottom:1rem">
-          <strong style="color:var(--accent)">SeaDisco is invite-only.</strong> If you're already approved, sign in below
-          to connect your Discogs account and manage your collection, wantlist, listings, and orders.
-          If you're not yet approved, join the waitlist from the home page and we'll be in touch when a spot opens up.
+          Sign in below (or create an account) to connect your Discogs profile and manage
+          your collection, wantlist, favorites, listings, and orders.
         </p>
         <p style="color:#555;font-size:0.8rem;margin-bottom:0.8rem">
           SeaDisco never sees your Discogs password. The connection is a standard Discogs OAuth authorization,
@@ -812,18 +797,18 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260413f"></script>
-<script defer src="/search.js?v=20260413f"></script>
-<script defer src="/collection.js?v=20260413f"></script>
-<script defer src="/account.js?v=20260413f"></script>
-<script defer src="/orders.js?v=20260413f"></script>
+<script defer src="/utils.js?v=20260413g"></script>
+<script defer src="/search.js?v=20260413g"></script>
+<script defer src="/collection.js?v=20260413g"></script>
+<script defer src="/account.js?v=20260413g"></script>
+<script defer src="/orders.js?v=20260413g"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260413f"></script>
-<script defer src="/app.js?v=20260413f"></script>
+<script defer src="/modal.js?v=20260413g"></script>
+<script defer src="/app.js?v=20260413g"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/inventory-editor.js?v=20260413f"></script>
-<script defer src="/loc.js?v=20260413f"></script>
+<script defer src="/inventory-editor.js?v=20260413g"></script>
+<script defer src="/loc.js?v=20260413g"></script>
 
 </body>
 </html>
