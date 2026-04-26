@@ -163,8 +163,11 @@ async function loadProfilePanel() {
     const badgeHtml = isOAuth
       ? `<span class="profile-badge profile-badge-oauth" title="Connected via OAuth \u2014 full access including marketplace management">OAuth</span>`
       : `<span class="profile-badge profile-badge-pat" title="Connected via Personal Access Token \u2014 read-only; connect via OAuth above for marketplace management">Token</span>`;
+    // OAuth case shows no extra hint line \u2014 the OAuth badge already
+    // communicates the connection state. Token-only case keeps the
+    // hint pointing users to OAuth for marketplace features.
     const authHint = isOAuth
-      ? `<div class="profile-sub" style="color:#6bcf8e;font-size:0.72rem;margin-top:0.15rem">Full access \u2014 collection, wantlist, marketplace listings, orders &amp; messages</div>`
+      ? ""
       : `<div class="profile-sub" style="color:#e8a020;font-size:0.72rem;margin-top:0.15rem">Read-only \u2014 connect via OAuth above to manage marketplace listings &amp; orders</div>`;
     const disconnectHtml = isOAuth
       ? `<button type="button" class="profile-disconnect" onclick="disconnectOAuth()" title="Disconnect your Discogs connection">Disconnect</button>`
