@@ -1157,11 +1157,11 @@ html { overflow-x: hidden; }
   --accent-hover:    #ffffff;
   --accent-dim:      #aaaaaa;
   --accent2:         #d0d0d0;
-  /* Highlight is the lone chromatic in this otherwise-greyscale theme
-     besides --catno. Hot yellow against pure black reads as a deliberate
-     noir-poster spot color and gives logo-lo, active-tab underlines,
-     and link hovers a pop instead of just disappearing into another grey. */
-  --accent-hi:       #ffe833;
+  /* Highlight matches the catno baby-blue cyan so the lone chromatic
+     in this otherwise-greyscale theme is unified — logo-lo, active-tab
+     underlines, link hovers, and catalog numbers all share the same
+     cyan spot color. */
+  --accent-hi:       #5fe8e0;
   --accent-soft:     #2a2a2a;
   --success:         #b0b0b0;
   --success-bg:      #1a1a1a;
