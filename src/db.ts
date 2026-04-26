@@ -235,6 +235,25 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS user_loc_saves_user_time_idx ON user_loc_saves (clerk_user_id, saved_at DESC)`);
 
+  // ── Wikipedia article saves (Wikipedia SPA "Saved" tab) ──────────────────
+  // Mirrors user_loc_saves so users can bookmark articles without bouncing
+  // through search again. Title is the canonical Wikipedia title (used to
+  // re-fetch the article on click); the snippet/thumbnail/url fields are
+  // a snapshot for the saved-tab card render.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_wiki_saves (
+      clerk_user_id TEXT        NOT NULL,
+      wiki_title    TEXT        NOT NULL,   -- canonical Wikipedia title
+      wiki_url      TEXT,                   -- en.wikipedia.org/wiki/<Title>
+      snippet       TEXT,                   -- HTML-stripped first paragraph
+      thumbnail     TEXT,                   -- thumbnail image URL if any
+      data          JSONB       NOT NULL,   -- additional snapshot fields
+      saved_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (clerk_user_id, wiki_title)
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS user_wiki_saves_user_time_idx ON user_wiki_saves (clerk_user_id, saved_at DESC)`);
+
   // ── User orders (marketplace buy/sell history) ──────────────────────────
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS user_orders (
@@ -799,6 +818,7 @@ export async function purgeNonAdminUserData(adminClerkId: string): Promise<Recor
     "user_favorites",
     "user_recent_views",
     "user_loc_saves",
+    "user_wiki_saves",
     "saved_searches",
     "feedback",
     "oauth_request_tokens",
@@ -1073,6 +1093,7 @@ export async function deleteUserData(clerkUserId: string): Promise<void> {
     "user_favorites",
     "user_recent_views",
     "user_loc_saves",
+    "user_wiki_saves",
     "saved_searches",
     "price_alerts",
     "triggered_alerts",
@@ -1752,6 +1773,80 @@ export async function getLocSaveIds(clerkUserId: string): Promise<string[]> {
     [clerkUserId]
   );
   return r.rows.map(row => row.loc_id);
+}
+
+// ── Wikipedia article saves ───────────────────────────────────────────
+// Mirrors the LOC saves API. The Wikipedia title is the natural primary
+// key (canonical, stable). Cap matches LOC's so a user can't accumulate
+// more than 1000 saved articles.
+const WIKI_SAVES_MAX_PER_USER = 1000;
+
+export async function saveWikiArticle(
+  clerkUserId: string,
+  title: string,
+  url: string | null,
+  snippet: string | null,
+  thumbnail: string | null,
+  data: object
+): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    `INSERT INTO user_wiki_saves (clerk_user_id, wiki_title, wiki_url, snippet, thumbnail, data, saved_at)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW())
+     ON CONFLICT (clerk_user_id, wiki_title)
+     DO UPDATE SET wiki_url = EXCLUDED.wiki_url, snippet = EXCLUDED.snippet,
+                   thumbnail = EXCLUDED.thumbnail, data = EXCLUDED.data, saved_at = NOW()`,
+    [clerkUserId, title, url, snippet, thumbnail, JSON.stringify(data)]
+  );
+  await pool.query(
+    `DELETE FROM user_wiki_saves
+     WHERE clerk_user_id = $1
+       AND wiki_title NOT IN (
+         SELECT wiki_title FROM user_wiki_saves
+         WHERE clerk_user_id = $1
+         ORDER BY saved_at DESC
+         LIMIT ${WIKI_SAVES_MAX_PER_USER}
+       )`,
+    [clerkUserId]
+  );
+}
+
+export async function getWikiSaves(
+  clerkUserId: string,
+  limit: number = 500
+): Promise<Array<{ title: string; url: string | null; snippet: string | null; thumbnail: string | null; data: any; savedAt: string }>> {
+  const capped = Math.min(Math.max(1, limit), 1000);
+  const r = await getPool().query(
+    `SELECT wiki_title, wiki_url, snippet, thumbnail, data, saved_at
+     FROM user_wiki_saves
+     WHERE clerk_user_id = $1
+     ORDER BY saved_at DESC
+     LIMIT $2`,
+    [clerkUserId, capped]
+  );
+  return r.rows.map(row => ({
+    title: row.wiki_title,
+    url: row.wiki_url,
+    snippet: row.snippet,
+    thumbnail: row.thumbnail,
+    data: row.data ?? {},
+    savedAt: row.saved_at,
+  }));
+}
+
+export async function deleteWikiSave(clerkUserId: string, title: string): Promise<void> {
+  await getPool().query(
+    `DELETE FROM user_wiki_saves WHERE clerk_user_id = $1 AND wiki_title = $2`,
+    [clerkUserId, title]
+  );
+}
+
+export async function getWikiSaveIds(clerkUserId: string): Promise<string[]> {
+  const r = await getPool().query(
+    `SELECT wiki_title FROM user_wiki_saves WHERE clerk_user_id = $1`,
+    [clerkUserId]
+  );
+  return r.rows.map(row => row.wiki_title);
 }
 
 // ── Phase 4: Price intelligence DB functions ─────────────────────────────

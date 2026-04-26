@@ -5661,6 +5661,12 @@ a.profile-stat-link:hover .profile-stat-num { color: var(--accent); }
   border-bottom: 1px solid var(--border);
 }
 
+/* Wikipedia SPA page — matches the LOC SPA's spacing/heading layout
+   so the two browse pages feel like siblings (same .loc-header, same
+   .loc-tabs). The .wiki-panel-* divs swap visibility based on tab. */
+#wiki-view { padding: 1rem 0 4rem; }
+.wiki-panel { margin-top: 1rem; }
+
 /* Wikipedia SPA page results list — each row is a clickable title plus
    a snippet with Wikipedia's <span class="searchmatch"> highlighting. */
 .wiki-results-list { margin-top: 1rem; }
@@ -5669,6 +5675,14 @@ a.profile-stat-link:hover .profile-stat-num { color: var(--accent); }
   border-bottom: 1px solid var(--border);
 }
 .wiki-result:last-child { border-bottom: none; }
+.wiki-result-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.2rem;
+}
+.wiki-result-head .wiki-result-title { margin-bottom: 0; }
 .wiki-result-title {
   display: inline-block;
   color: var(--accent);
@@ -5678,6 +5692,49 @@ a.profile-stat-link:hover .profile-stat-num { color: var(--accent); }
   border-bottom: 1px dotted var(--accent-dim);
   margin-bottom: 0.2rem;
   cursor: pointer;
+}
+/* ★ Save toggle next to result rows + article header. Inactive is dim
+   muted; saved is full accent + slight bg tint. Match the LOC star
+   button visually so the two pages share a save vocabulary. */
+.wiki-save-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--muted-dim, #888);
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.12s, background 0.12s, border-color 0.12s, transform 0.12s;
+}
+.wiki-save-btn:hover {
+  color: var(--favorite);
+  background: rgba(232,212,77,0.08);
+  border-color: var(--border);
+  transform: scale(1.05);
+}
+.wiki-save-btn.is-saved {
+  color: var(--favorite);
+  background: rgba(232,212,77,0.12);
+  border-color: rgba(232,212,77,0.4);
+}
+.wiki-save-btn.is-saved:hover {
+  color: var(--accent);
+  background: rgba(255,107,53,0.08);
+  border-color: rgba(255,107,53,0.4);
+}
+/* Title + ★ row inside the article popup header */
+.wiki-article-title-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.wiki-article-title-row h2 { flex: 1; }
+.wiki-article-title-row .wiki-save-btn {
+  font-size: 1.2rem;
+  padding: 0.25rem 0.55rem;
 }
 .wiki-result-title:hover {
   color: var(--accent2, var(--accent));
