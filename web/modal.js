@@ -1986,7 +1986,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const playableCount = playableUrls.length;
   const firstPlayableUrl = playableUrls[0] || "";
   const playableMeta = playableCount
-    ? `<span class="tracklist-playable">(${playableCount}${firstPlayableUrl ? ` <a href="#" class="tracklist-play-all" onclick="event.preventDefault();event.stopPropagation();openVideo(event,'${firstPlayableUrl.replace(/'/g, "\\'")}')" title="Play the first playable track">▶</a>` : ""})</span>`
+    ? `<span class="tracklist-playable">(${playableCount}${firstPlayableUrl ? ` <a href="#" class="tracklist-play-all" onclick="event.preventDefault();event.stopPropagation();openVideo(event,'${firstPlayableUrl.replace(/'/g, "\\'")}')" title="Play the first playable track">▶</a>` : ""}${playableCount >= 1 ? ` <a href="#" class="tracklist-queue-album" onclick="event.preventDefault();event.stopPropagation();queueAddAlbum(this)" title="Add all playable tracks to your queue">＋ Queue album</a>` : ""})</span>`
     : "";
   const tracklistOpen = localStorage.getItem("tracklist-open") !== "false";
   const trackHTML = tracks.length ? `

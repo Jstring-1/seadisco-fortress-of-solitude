@@ -3033,6 +3033,20 @@ button.wiki-link-btn:active {
   color: var(--accent-hover);
   transform: scale(1.2);
 }
+/* "+ Queue album" link in the tracklist heading. Subtle muted color
+   so it doesn't compete with the play button next to it; brightens
+   to --accent-hi on hover like other link affordances. */
+.tracklist-queue-album {
+  display: inline-block;
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 0.7rem;
+  margin-left: 0.45rem;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition: color 0.15s;
+}
+.tracklist-queue-album:hover { color: var(--accent-hi, var(--accent)); }
 .tracklist-filter {
   flex: 1;
   max-width: 160px;
@@ -6285,6 +6299,99 @@ body.player-open .queue-drawer.open { bottom: 102px; }
 }
 .loc-info-btn-loc {
   color: var(--muted);
+}
+.loc-info-btn-queue {
+  color: var(--accent-hi, var(--accent));
+}
+.loc-info-btn-queue:hover:not(:disabled) {
+  background: var(--accent-hi, var(--accent));
+  color: var(--bg);
+  border-color: var(--accent-hi, var(--accent));
+}
+
+/* ── Archive.org list page ──────────────────────────────────────────── */
+.archive-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  margin-top: 1rem;
+}
+.archive-row {
+  display: flex;
+  gap: 0.85rem;
+  align-items: flex-start;
+  padding: 0.75rem 0.9rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.archive-row:hover { border-color: var(--accent); }
+.archive-row-main { flex: 1; min-width: 0; }
+.archive-row-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  word-break: break-word;
+}
+.archive-row-date {
+  font-size: 0.75rem;
+  color: var(--accent-hi, var(--accent));
+  margin-top: 0.15rem;
+  font-variant-numeric: tabular-nums;
+}
+.archive-row-desc {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-top: 0.35rem;
+  line-height: 1.45;
+}
+.archive-row-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  flex-shrink: 0;
+  align-items: flex-end;
+}
+.archive-btn {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.35rem 0.7rem;
+  border-radius: 5px;
+  font-size: 0.78rem;
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+  font: inherit;
+  font-size: 0.78rem;
+  min-width: 6em;
+  text-align: center;
+}
+.archive-btn:hover:not(.is-disabled) {
+  border-color: var(--accent-hi, var(--accent));
+  color: var(--accent-hi, var(--accent));
+}
+.archive-btn-play {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+}
+.archive-btn-play:hover:not(.is-disabled) {
+  background: var(--accent-hi, var(--accent2));
+  color: var(--bg);
+}
+.archive-btn-play.is-disabled {
+  background: none;
+  color: var(--muted-dim);
+  cursor: not-allowed;
+}
+.archive-btn-queue { color: var(--accent-hi, var(--accent)); }
+.archive-btn-link  { color: var(--muted); font-size: 0.72rem; min-width: 0; }
+@media (max-width: 720px) {
+  .archive-row { flex-direction: column; }
+  .archive-row-actions { flex-direction: row; align-items: stretch; width: 100%; }
+  .archive-btn { flex: 1; min-width: 0; }
 }
 .loc-info-summary {
   font-size: 0.85rem;

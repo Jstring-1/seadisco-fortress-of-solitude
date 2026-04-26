@@ -909,12 +909,22 @@ async function _locFetchLookup(locId) {
 }
 
 // Add the LOC item from the info popup to the cross-source play queue.
-function _locQueueFromInfo(locId) {
-  const item = _locItemCache.get(locId);
-  if (!item) return;
+// Falls back to a server lookup if the item isn't in the local cache —
+// covers the case where the popup is opened from a deep-link or saved
+// tab and queueAddLoc fires before the cache is populated.
+async function _locQueueFromInfo(locId) {
+  let item = _locItemCache.get(locId);
+  if (!item && typeof _locFetchLookup === "function") {
+    try { item = await _locFetchLookup(locId); } catch {}
+  }
+  if (!item) {
+    if (typeof showToast === "function") showToast("Could not load item", "error");
+    return;
+  }
   if (typeof queueAddLoc === "function") queueAddLoc(item);
+  else if (typeof showToast === "function") showToast("Queue not available", "error");
 }
-window._locQueueFromInfo = (locId) => _locQueueFromInfo(locId);
+window._locQueueFromInfo = _locQueueFromInfo;
 
 function _locPlayFromInfo(locId) {
   const item = _locItemCache.get(locId);

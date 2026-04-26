@@ -194,19 +194,20 @@ function switchView(view, skipPushState = false) {
   const termsView   = document.getElementById("terms-view");
   const locView     = document.getElementById("loc-view");
   const wikiView    = document.getElementById("wiki-view");
+  const archiveView = document.getElementById("archive-view");
   const accountView = document.getElementById("account-view");
   if (!skipPushState) {
     if (view === "records") {
       const tab = _cwTab || "collection";
       history.pushState({ view, tab }, "", "?v=" + tab);
-    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki") {
+    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive") {
       history.pushState({ view }, "", "?v=" + view);
     } else {
       history.pushState({}, "", location.pathname);
     }
   }
   if (typeof gtag === "function") {
-    const titles = { info: "Info", privacy: "Privacy Policy", terms: "Terms of Service", records: "My Records", wanted: "Wants", search: "Search", account: "Account", loc: "Library of Congress", wiki: "Wikipedia" };
+    const titles = { info: "Info", privacy: "Privacy Policy", terms: "Terms of Service", records: "My Records", wanted: "Wants", search: "Search", account: "Account", loc: "Library of Congress", wiki: "Wikipedia", archive: "Archive — Live Shows" };
     gtag("event", "page_view", {
       page_location: window.location.href,
       page_path:     window.location.pathname + window.location.search,
@@ -219,6 +220,7 @@ function switchView(view, skipPushState = false) {
   if (termsView)   termsView.style.display   = "none";
   if (locView)     locView.style.display     = "none";
   if (wikiView)    wikiView.style.display    = "none";
+  if (archiveView) archiveView.style.display = "none";
   if (accountView) accountView.style.display = "none";
 
   // Invite-only splash: only show on the home/search view, never on
@@ -269,6 +271,13 @@ function switchView(view, skipPushState = false) {
     if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
     if (typeof initLocView === "function") initLocView();
+  } else if (view === "archive") {
+    const archView = document.getElementById("archive-view");
+    if (archView) archView.style.display = "block";
+    if (mainForm) mainForm.style.display = "none";
+    if (recordsWrap) recordsWrap.style.display = "none";
+    if (wantedWrap) wantedWrap.style.display = "none";
+    if (typeof initArchiveView === "function") initArchiveView();
   } else if (view === "wiki") {
     if (wikiView) wikiView.style.display = "block";
     if (mainForm) mainForm.style.display = "none";

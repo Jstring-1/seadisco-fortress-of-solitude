@@ -40,20 +40,23 @@ async function _queueLoad(force = false) {
 }
 
 // ── Add to queue ────────────────────────────────────────────────────
-// Public entry-point used by the ➕ buttons site-wide. Returns true on
-// success, false on failure (toast already shown).
-async function queueAdd(items) {
+// Public entry-point used by the ➕ buttons site-wide. mode "next"
+// (default) inserts at the head — single-track ➕ wants "play this
+// next" semantics. mode "append" adds to the tail — used by
+// queueAddAlbum so the tracks play in order after the existing queue.
+async function queueAdd(items, opts) {
   const arr = Array.isArray(items) ? items : [items];
   if (!arr.length) return false;
   if (!window._clerk?.user) {
     if (typeof showToast === "function") showToast("Sign in to use the queue", "error");
     return false;
   }
+  const mode = opts?.mode === "append" ? "append" : "next";
   try {
     const r = await apiFetch("/api/user/play-queue", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ items: arr }),
+      body: JSON.stringify({ items: arr, mode }),
     });
     if (!r.ok) {
       if (typeof showToast === "function") showToast("Could not add to queue", "error");
@@ -61,9 +64,10 @@ async function queueAdd(items) {
     }
     _queue = null; // invalidate cache; next read refetches
     if (typeof showToast === "function") {
-      showToast(arr.length === 1 ? "Added to queue" : `Added ${arr.length} to queue`);
+      const verb = mode === "next" ? "Playing next" : "Queued";
+      const count = arr.length === 1 ? "" : ` (${arr.length})`;
+      showToast(`${verb}${count}`);
     }
-    // If the drawer is open, refresh it
     if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
     return true;
   } catch {
@@ -73,7 +77,7 @@ async function queueAdd(items) {
 }
 
 // Convenience: build a queue item from a LOC card / info-popup item.
-function queueAddLoc(locItem) {
+function queueAddLoc(locItem, opts) {
   if (!locItem?.id) return false;
   if (!locItem.streamUrl) {
     if (typeof showToast === "function") showToast("Track has no playable stream", "error");
@@ -90,12 +94,12 @@ function queueAddLoc(locItem) {
       streamType: locItem.streamType || "",
       year: locItem.year || "",
     },
-  }]);
+  }], opts);
 }
 
 // Convenience: build a queue item from a YouTube videoId + track meta.
 // The YT player resolves the URL from the videoId.
-function queueAddYt(videoId, meta) {
+function queueAddYt(videoId, meta, opts) {
   if (!videoId) return false;
   return queueAdd([{
     source: "yt",
@@ -107,7 +111,44 @@ function queueAddYt(videoId, meta) {
       image: meta?.image || "",
       durationSec: meta?.durationSec || null,
     },
-  }]);
+  }], opts);
+}
+
+// Bulk-add every YT-matched track from an album popup tracklist. Reads
+// the per-row data attributes that renderModal writes (data-yt-url,
+// data-track, data-artist, data-album). Always uses mode "append" so
+// the album plays in order after whatever's already queued.
+async function queueAddAlbum(btn) {
+  // Find the nearest tracklist container so we only grab THIS popup's
+  // tracks, not any other tracklist that might be in the DOM.
+  const scope = btn?.closest("#album-info, #version-info, .tracklist") || document;
+  const rows  = scope.querySelectorAll(".queue-add-icon[data-yt-url]");
+  if (!rows.length) {
+    if (typeof showToast === "function") showToast("No playable tracks on this album", "error");
+    return false;
+  }
+  const items = [];
+  rows.forEach(el => {
+    const url = el.dataset.ytUrl || "";
+    const id  = (typeof extractYouTubeId === "function") ? extractYouTubeId(url) : "";
+    if (!id) return;
+    items.push({
+      source: "yt",
+      externalId: id,
+      data: {
+        title:      el.dataset.track  || "",
+        artist:     el.dataset.artist || "",
+        albumTitle: el.dataset.album  || "",
+      },
+    });
+  });
+  if (!items.length) {
+    if (typeof showToast === "function") showToast("No playable tracks on this album", "error");
+    return false;
+  }
+  // Visually mark each row as queued
+  rows.forEach(el => el.classList.add("queued"));
+  return queueAdd(items, { mode: "append" });
 }
 
 // ── Queue navigation hooks ──────────────────────────────────────────
@@ -142,27 +183,36 @@ async function _queueConsume(position) {
 async function _queuePlayNext() {
   const next = await _queueShiftNext();
   if (!next) return false;
-  await _queueConsume(next.position);
+  // Snapshot the item BEFORE consume so the play call uses the right
+  // data even if _queue is mutated/refetched mid-flight. Consume runs
+  // fire-and-forget after play starts — the bar title was occasionally
+  // showing the *following* item because consume re-rendered the
+  // drawer (which forced a queue refetch) before _locPlay set the
+  // title from `next`.
+  const playItem = next.source === "loc"
+    ? {
+        id:           next.externalId,
+        title:        next.data?.title || "",
+        streamUrl:    next.data?.streamUrl || "",
+        streamType:   next.data?.streamType || "",
+        contributors: next.data?.artist ? [next.data.artist] : [],
+        image:        next.data?.image || "",
+        year:         next.data?.year || "",
+      }
+    : null;
   if (next.source === "loc") {
-    // Synthesize a LOC-style item so _locPlay can take it as-is.
-    const item = {
-      id: next.externalId,
-      title: next.data?.title || "",
-      streamUrl: next.data?.streamUrl || "",
-      streamType: next.data?.streamType || "",
-      contributors: next.data?.artist ? [next.data.artist] : [],
-      image: next.data?.image || "",
-      year: next.data?.year || "",
-    };
-    if (typeof _locPlay === "function") _locPlay(item);
-    return true;
-  }
-  if (next.source === "yt") {
+    if (typeof _locPlay === "function") _locPlay(playItem);
+  } else if (next.source === "yt") {
     const url = `https://www.youtube.com/watch?v=${encodeURIComponent(next.externalId)}`;
     if (typeof openVideo === "function") openVideo(null, url);
-    return true;
+  } else {
+    return false;
   }
-  return false;
+  // Fire-and-forget: remove the consumed item from the queue. Failures
+  // here only mean the server queue stays slightly stale; the right
+  // item is already playing.
+  _queueConsume(next.position).catch(() => {});
+  return true;
 }
 
 // ── Drawer UI ───────────────────────────────────────────────────────
@@ -205,7 +255,14 @@ async function _renderQueueDrawer() {
   await _queueLoad(true);
   if (countEl) countEl.textContent = _queue?.length ? `${_queue.length} item${_queue.length === 1 ? "" : "s"}` : "";
   if (!_queue?.length) {
-    listEl.innerHTML = `<div class="queue-empty">Queue empty. Click ➕ on tracks or LOC items to add them.</div>`;
+    // Empty-queue copy varies by audience: admins see all add-paths
+    // (➕ on track rows, LOC items, archive items); regular users only
+    // see the track-row path since LOC and Archive are admin-only.
+    const isAdmin = !!window._isAdmin;
+    const hint = isAdmin
+      ? "Queue empty. Click ➕ on tracks, LOC items, or archive items to add them."
+      : "Queue empty. Click ➕ on any playable track to add it.";
+    listEl.innerHTML = `<div class="queue-empty">${hint}</div>`;
     return;
   }
   listEl.innerHTML = _queue.map(it => {
@@ -352,6 +409,7 @@ function queueAddIconHtml(kind = "yt") {
 window.queueAdd            = queueAdd;
 window.queueAddLoc         = queueAddLoc;
 window.queueAddYt          = queueAddYt;
+window.queueAddAlbum       = queueAddAlbum;
 window.queueRemove         = queueRemove;
 window.queueClear          = queueClear;
 window.queueJumpTo         = queueJumpTo;
