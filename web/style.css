@@ -1509,6 +1509,62 @@ body {
 .nav-tab-top[data-rtab="inventory"].active   { color: #cda0f5; }
 .nav-tab-top[data-rtab="favorites"]:hover,
 .nav-tab-top[data-rtab="favorites"].active   { color: var(--accent); }
+
+/* ── Icon-nav variant (admin page test bed) ─────────────────────────────
+   When renderSharedHeader is called with iconNav:true the tab markup is
+   [icon][hover-label]. The icon stays visible at all times; the label
+   reveals on hover/focus and on the active tab. Designed to slot into
+   the same .nav-tab-top container so layout doesn't shift. */
+.nav-tab-top.icon-nav {
+  /* Slightly tighter padding since the icon takes its own width */
+  padding: 0.3rem 0.55rem;
+  gap: 0.4rem;
+}
+.nav-tab-top.icon-nav .nav-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  /* SVGs inherit currentColor from the tab; opacity dimmer than the
+     label so hover/active feels lifted. */
+  opacity: 0.85;
+  transition: opacity 0.15s, transform 0.15s;
+}
+.nav-tab-top.icon-nav:hover .nav-icon,
+.nav-tab-top.icon-nav.active .nav-icon {
+  opacity: 1;
+  transform: scale(1.06);
+}
+.nav-tab-top.icon-nav .nav-label {
+  /* Width animation reveals the label cleanly without layout snap.
+     max-width clips during transition; opacity fades in. */
+  display: inline-block;
+  max-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  opacity: 0;
+  transition: max-width 0.18s ease, opacity 0.15s ease, margin-left 0.18s ease;
+  margin-left: 0;
+}
+.nav-tab-top.icon-nav:hover .nav-label,
+.nav-tab-top.icon-nav:focus-visible .nav-label,
+.nav-tab-top.icon-nav.active .nav-label {
+  max-width: 140px;
+  opacity: 1;
+  margin-left: 0.05rem;
+}
+/* On the mobile drawer the icon-nav row stacks vertically, so always
+   show the label (the slide-out reveal is a desktop affordance). */
+@media (max-width: 720px) {
+  .nav-tab-top.icon-nav .nav-label {
+    max-width: none;
+    opacity: 1;
+    margin-left: 0.4rem;
+  }
+}
+
 /* ─ Auth popup ──────────────────────────────────────────────────────────── */
 /* ─ Hamburger (desktop: hidden) ────────────────────────────────────────── */
 #nav-hamburger {
