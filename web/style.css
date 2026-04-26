@@ -5773,6 +5773,25 @@ footer {
   border-color: var(--accent);
 }
 
+/* Card variant — sits inside .card-artist (font-size 0.75rem, line-
+   clamp 1). The boxed-button look from .blues-add-icon would balloon
+   the line height; use a flat unboxed "+" that drops in inline. */
+.card-artist .card-blues-add {
+  margin: 0 0.25rem 0 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-size: 1.05em;
+  font-weight: 700;
+  color: var(--accent);
+  line-height: 1;
+  display: inline;
+}
+.card-artist .card-blues-add:hover {
+  color: var(--accent2, var(--accent));
+  background: transparent;
+}
+
 /* Bold proper-nouns inside wiki articles become clickable Discogs searches.
    Keeps the visual weight so the article still reads as Wikipedia. */
 .wiki-bold-search {
