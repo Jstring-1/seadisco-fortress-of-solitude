@@ -2630,6 +2630,108 @@ app.delete("/api/user/wiki-saves", express.json(), async (req, res) => {
   }
 });
 
+// ── Archive.org collection proxy (admin-only) ───────────────────────────
+//
+// Lightweight proxy for a curated archive.org collection. Lists every
+// item in the collection with metadata + the primary playable audio
+// URL. Cached in release_cache via a fixed sentinel key so the browser
+// hits archive.org at most once a day even with many admin visits.
+// Items play through the existing LOC <audio> engine since
+// archive.org serves direct mp3 URLs the same way LOC does.
+
+const _ARCHIVE_AADAM_COLLECTION = "aadamjacobs";
+const _ARCHIVE_CACHE_TTL_S = 60 * 60 * 24; // 1 day
+// Synthetic discogs_id used as the cache key for this collection's
+// listing. Any positive int that won't collide with a real master.
+const _ARCHIVE_AADAM_CACHE_KEY = 999_900_001;
+
+type ArchiveItem = {
+  identifier: string;
+  title: string;
+  date: string;
+  description: string;
+  itemUrl: string;     // https://archive.org/details/{identifier}
+  streamUrl: string;   // direct .mp3 in /download/{identifier}/...
+  duration: string;    // best-effort, may be empty
+};
+
+async function _fetchArchiveCollection(collectionId: string): Promise<ArchiveItem[]> {
+  // Step 1: search for items in the collection. Public API, CORS-friendly.
+  const searchUrl = `https://archive.org/advancedsearch.php?q=collection%3A${encodeURIComponent(collectionId)}&fl[]=identifier,title,date,description&rows=200&page=1&output=json&sort[]=title+asc`;
+  const r = await loggedFetch("archive", searchUrl, {
+    headers: { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "application/json" },
+    context: "archive-search",
+  });
+  if (!r.ok) throw new Error(`archive.org HTTP ${r.status}`);
+  const body = await r.json() as any;
+  const docs: any[] = body?.response?.docs ?? [];
+  // Step 2: for each item, fetch its file list and pick the first
+  // playable mp3 derivative. This is a serial walk through the
+  // collection — the cache below means we only do it once per day.
+  const items: ArchiveItem[] = [];
+  for (const d of docs) {
+    if (!d?.identifier) continue;
+    const metaUrl = `https://archive.org/metadata/${encodeURIComponent(d.identifier)}`;
+    let streamUrl = "";
+    let duration = "";
+    try {
+      const mr = await loggedFetch("archive", metaUrl, {
+        headers: { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "application/json" },
+        context: "archive-meta",
+      });
+      if (mr.ok) {
+        const meta = await mr.json() as any;
+        const files: any[] = Array.isArray(meta?.files) ? meta.files : [];
+        // Prefer 128/160kbps MP3 derivatives; fall back to any mp3
+        const mp3 = files.find(f =>
+          typeof f?.name === "string" &&
+          /\.mp3$/i.test(f.name) &&
+          (f.format === "VBR MP3" || f.format === "128Kbps MP3" || f.format === "MP3")
+        ) || files.find(f => typeof f?.name === "string" && /\.mp3$/i.test(f.name));
+        if (mp3) {
+          streamUrl = `https://archive.org/download/${encodeURIComponent(d.identifier)}/${encodeURIComponent(mp3.name)}`;
+          duration = typeof mp3.length === "string" ? mp3.length : "";
+        }
+      }
+    } catch { /* skip on a single-item failure; the rest still render */ }
+    items.push({
+      identifier:  d.identifier,
+      title:       String(d.title ?? d.identifier),
+      date:        Array.isArray(d.date) ? d.date[0] : (d.date ?? ""),
+      description: Array.isArray(d.description) ? d.description.join(" ") : (d.description ?? ""),
+      itemUrl:     `https://archive.org/details/${encodeURIComponent(d.identifier)}`,
+      streamUrl,
+      duration,
+    });
+  }
+  return items;
+}
+
+// GET /api/archive/aadamjacobs — admin-only listing of the curated
+// Aadam Jacobs live shows collection on archive.org.
+app.get("/api/archive/aadamjacobs", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const noCache = req.query.nocache === "1";
+  if (!noCache) {
+    const cached = await getCachedRelease(_ARCHIVE_AADAM_CACHE_KEY, "master-versions", _ARCHIVE_CACHE_TTL_S);
+    if (cached?.items) {
+      res.setHeader("X-SeaDisco-Cache", "hit");
+      res.json(cached);
+      return;
+    }
+  }
+  try {
+    const items = await _fetchArchiveCollection(_ARCHIVE_AADAM_COLLECTION);
+    const payload = { items, fetchedAt: new Date().toISOString() };
+    cacheRelease(_ARCHIVE_AADAM_CACHE_KEY, "master-versions", payload).catch(() => {});
+    res.setHeader("X-SeaDisco-Cache", "miss");
+    res.json(payload);
+  } catch (e: any) {
+    console.error("[archive/aadamjacobs]", e?.message ?? e);
+    res.status(502).json({ error: String(e?.message ?? e) });
+  }
+});
+
 // ── Play queue (cross-source: LOC + YouTube) ────────────────────────────
 //
 // The queue lives server-side so it persists across devices/logins. Items
@@ -2648,8 +2750,10 @@ app.get("/api/user/play-queue", async (req, res) => {
   }
 });
 
-// POST /api/user/play-queue — append items to the end of the queue.
-// Body: { items: [{ source: "loc"|"yt", externalId: string, data: object }] }
+// POST /api/user/play-queue — add items to the queue.
+// Body: { items: [...], mode?: "next" | "append" }
+//   mode "next" (default) — insert at head; existing items shift down
+//   mode "append"          — add to tail
 app.post("/api/user/play-queue", express.json({ limit: "256kb" }), async (req, res) => {
   const userId = await requireUser(req, res);
   if (!userId) return;
@@ -2667,9 +2771,10 @@ app.post("/api/user/play-queue", express.json({ limit: "256kb" }), async (req, r
     .filter((x: any): x is NonNullable<typeof x> => !!x)
     .slice(0, 100); // cap one POST at 100 items
   if (!items.length) { res.status(400).json({ error: "items required" }); return; }
+  const mode = req.body?.mode === "append" ? "append" : "next";
   try {
-    const result = await appendPlayQueue(userId, items);
-    res.json({ ok: true, ...result });
+    const result = await appendPlayQueue(userId, items, { mode });
+    res.json({ ok: true, mode, ...result });
   } catch (e: any) {
     res.status(500).json({ error: String(e?.message ?? e) });
   }

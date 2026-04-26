@@ -461,7 +461,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260426h";
+  const SITE_VERSION = "build 20260426j";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -551,6 +551,9 @@ function renderSharedFooter(opts) {
         ${isSPA
           ? `<a id="footer-wiki-link" href="javascript:void(0)" onclick="switchView('wiki')" style="display:none">Wikipedia</a>`
           : `<a id="footer-wiki-link" href="/?v=wiki" style="display:none">Wikipedia</a>`}
+        ${isSPA
+          ? `<a id="footer-archive-link" href="javascript:void(0)" onclick="switchView('archive')" style="display:none">Archive</a>`
+          : `<a id="footer-archive-link" href="/?v=archive" style="display:none">Archive</a>`}
         <a id="footer-admin-link" href="/admin" style="display:none">Admin</a>
       </div>
     </div>
@@ -608,6 +611,8 @@ function renderSharedFooter(opts) {
         if (wikiA) wikiA.style.display = "";
         const locA = document.getElementById("footer-loc-link");
         if (locA) locA.style.display = "";
+        const archA = document.getElementById("footer-archive-link");
+        if (archA) archA.style.display = "";
         // Pre-load the discogs_ids AND names already in the
         // blues_artists table so the admin "+ add to Blues DB" icon
         // (popup AND card) can hide itself for artists already in.

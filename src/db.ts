@@ -1894,42 +1894,74 @@ export async function getPlayQueue(clerkUserId: string): Promise<Array<QueueItem
   }));
 }
 
-// Append items to the end of the queue. Each call assigns positions
-// starting at MAX(existing position) + 1. Caps total queue at 500;
-// older items at the head get trimmed if the cap would be exceeded.
-export async function appendPlayQueue(clerkUserId: string, items: QueueItem[]): Promise<{ added: number; firstPosition: number }> {
+// Add items to the queue. mode "next" inserts at the head (positions
+// 1..N) and shifts existing items down by N. mode "append" puts them
+// at the tail (MAX(position)+1..). Caps total at 500; head trims when
+// exceeded. Both modes are transactional so concurrent adds stay
+// monotonic. Default mode is "next" — single-track ➕ buttons want
+// "I want this NOW" semantics; album bulk-adds pass mode "append".
+export async function appendPlayQueue(
+  clerkUserId: string,
+  items: QueueItem[],
+  opts?: { mode?: "next" | "append" },
+): Promise<{ added: number; firstPosition: number }> {
   if (!items.length) return { added: 0, firstPosition: 0 };
+  const mode = opts?.mode === "append" ? "append" : "next";
   const pool = getPool();
-  const r = await pool.query(
-    `SELECT COALESCE(MAX(position), 0) AS maxp FROM user_play_queue WHERE clerk_user_id = $1`,
-    [clerkUserId]
-  );
-  const startPos = (r.rows[0]?.maxp ?? 0) + 1;
-  const values: any[] = [];
-  const placeholders: string[] = [];
-  items.forEach((it, i) => {
-    const p = startPos + i;
-    placeholders.push(`($1, $${values.length + 2}, $${values.length + 3}, $${values.length + 4}, $${values.length + 5})`);
-    values.push(p, it.source, it.externalId, JSON.stringify(it.data ?? {}));
-  });
-  await pool.query(
-    `INSERT INTO user_play_queue (clerk_user_id, position, source, external_id, data) VALUES ${placeholders.join(", ")}
-     ON CONFLICT (clerk_user_id, position) DO UPDATE SET source = EXCLUDED.source, external_id = EXCLUDED.external_id, data = EXCLUDED.data, added_at = NOW()`,
-    [clerkUserId, ...values]
-  );
-  // Trim the head if we've exceeded the cap.
-  await pool.query(
-    `DELETE FROM user_play_queue
-     WHERE clerk_user_id = $1
-       AND position NOT IN (
-         SELECT position FROM user_play_queue
-         WHERE clerk_user_id = $1
-         ORDER BY position DESC
-         LIMIT ${PLAY_QUEUE_MAX}
-       )`,
-    [clerkUserId]
-  );
-  return { added: items.length, firstPosition: startPos };
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    let startPos: number;
+    if (mode === "append") {
+      const r = await client.query(
+        `SELECT COALESCE(MAX(position), 0) AS maxp FROM user_play_queue WHERE clerk_user_id = $1`,
+        [clerkUserId]
+      );
+      startPos = (r.rows[0]?.maxp ?? 0) + 1;
+    } else {
+      // "next": shift all existing positions down by items.length, then
+      // place the new items at 1..N. Updates run highest-first so the
+      // PK uniqueness constraint never collides mid-update.
+      await client.query(
+        `UPDATE user_play_queue
+            SET position = position + $2
+          WHERE clerk_user_id = $1`,
+        [clerkUserId, items.length]
+      );
+      startPos = 1;
+    }
+    const values: any[] = [];
+    const placeholders: string[] = [];
+    items.forEach((it, i) => {
+      const p = startPos + i;
+      placeholders.push(`($1, $${values.length + 2}, $${values.length + 3}, $${values.length + 4}, $${values.length + 5})`);
+      values.push(p, it.source, it.externalId, JSON.stringify(it.data ?? {}));
+    });
+    await client.query(
+      `INSERT INTO user_play_queue (clerk_user_id, position, source, external_id, data) VALUES ${placeholders.join(", ")}
+       ON CONFLICT (clerk_user_id, position) DO UPDATE SET source = EXCLUDED.source, external_id = EXCLUDED.external_id, data = EXCLUDED.data, added_at = NOW()`,
+      [clerkUserId, ...values]
+    );
+    // Trim the cap (drops oldest tail entries beyond PLAY_QUEUE_MAX).
+    await client.query(
+      `DELETE FROM user_play_queue
+       WHERE clerk_user_id = $1
+         AND position NOT IN (
+           SELECT position FROM user_play_queue
+           WHERE clerk_user_id = $1
+           ORDER BY position ASC
+           LIMIT ${PLAY_QUEUE_MAX}
+         )`,
+      [clerkUserId]
+    );
+    await client.query("COMMIT");
+    return { added: items.length, firstPosition: startPos };
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 export async function removeFromPlayQueue(clerkUserId: string, position: number): Promise<void> {

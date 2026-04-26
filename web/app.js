@@ -60,10 +60,9 @@ async function _ensureAdminFlag() {
     switchView("account", true);
   } else if (rawView === "info" || rawView === "privacy" || rawView === "terms") {
     switchView(rawView, true);
-  } else if (rawView === "wiki" || rawView === "loc") {
-    // Wikipedia and LOC are admin-only — server endpoints all use
-    // requireAdmin. Redirect non-admins quietly to search; the
-    // affordances that link here are already hidden for non-admins.
+  } else if (rawView === "wiki" || rawView === "loc" || rawView === "archive") {
+    // Wikipedia, LOC, and Archive are admin-only — server endpoints
+    // all use requireAdmin. Redirect non-admins quietly to search.
     await authReadyPromise;
     if (!window._clerk?.user) { switchView("account", true); }
     else if (!await _ensureAdminFlag()) { switchView("search", true); }
