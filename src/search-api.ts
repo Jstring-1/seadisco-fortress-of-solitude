@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 
 
@@ -260,36 +260,21 @@ async function getClerkUserId(req: express.Request): Promise<string | null> {
   } catch { return null; }
 }
 
-/** Resolve a Discogs token for an authenticated request. OAuth → PAT → null.
- *  No shared-token fallback — invite-only sites require every caller to have
- *  brought their own auth. */
-async function getTokenForRequest(req: express.Request): Promise<string | null> {
-  const userId = await getClerkUserId(req);
-  if (!userId) return null;
-  const userToken = await getUserToken(userId);
-  if (userToken && userToken !== "__oauth__") return userToken;
-  return null;
-}
-
+/** Build a DiscogsClient from a request's authenticated user. OAuth-only —
+ *  Personal Access Token support has been removed. Returns null if the user
+ *  is unauthenticated or has not connected via OAuth. */
 async function getDiscogsForRequest(req: express.Request): Promise<DiscogsClient | null> {
   const userId = await getClerkUserId(req);
   if (!userId) return null;
-  // Check if user has OAuth credentials first
-  if (discogsConsumerKey) {
-    const oauth = await getOAuthCredentials(userId);
-    if (oauth) {
-      return new DiscogsClient({
-        consumerKey: discogsConsumerKey,
-        consumerSecret: discogsConsumerSecret,
-        accessToken: oauth.accessToken,
-        accessSecret: oauth.accessSecret,
-      });
-    }
-  }
-  // Fall back to PAT flow
-  const t = await getTokenForRequest(req);
-  if (!t) return null;
-  return new DiscogsClient(t);
+  if (!discogsConsumerKey) return null;
+  const oauth = await getOAuthCredentials(userId);
+  if (!oauth) return null;
+  return new DiscogsClient({
+    consumerKey: discogsConsumerKey,
+    consumerSecret: discogsConsumerSecret,
+    accessToken: oauth.accessToken,
+    accessSecret: oauth.accessSecret,
+  });
 }
 
 /** Gate helper: returns the Clerk userId for a signed-in caller, or null
@@ -328,22 +313,18 @@ async function requireAdmin(req: express.Request, res: express.Response): Promis
 }
 
 /** Build a DiscogsClient for a userId (outside of an HTTP request context).
- *  Checks OAuth first, then PAT. Returns null if user has no valid auth. */
+ *  OAuth-only — Personal Access Token support has been removed. Returns
+ *  null if the user has no OAuth credentials on file. */
 async function getDiscogsClientForUser(userId: string): Promise<DiscogsClient | null> {
-  if (discogsConsumerKey) {
-    const oauth = await getOAuthCredentials(userId);
-    if (oauth) {
-      return new DiscogsClient({
-        consumerKey: discogsConsumerKey,
-        consumerSecret: discogsConsumerSecret,
-        accessToken: oauth.accessToken,
-        accessSecret: oauth.accessSecret,
-      });
-    }
-  }
-  const token = await getUserToken(userId);
-  if (token && token !== "__oauth__") return new DiscogsClient(token);
-  return null;
+  if (!discogsConsumerKey) return null;
+  const oauth = await getOAuthCredentials(userId);
+  if (!oauth) return null;
+  return new DiscogsClient({
+    consumerKey: discogsConsumerKey,
+    consumerSecret: discogsConsumerSecret,
+    accessToken: oauth.accessToken,
+    accessSecret: oauth.accessSecret,
+  });
 }
 
 // Boot DB if a connection string is configured
@@ -482,7 +463,9 @@ app.get("/api/user-count", async (req, res) => {
   } catch { res.json({ count: 0, limit: MAX_USERS }); }
 });
 
-// GET /api/user/token — returns whether the user has a token saved + auth method
+// GET /api/user/token — reports whether the user has connected via Discogs
+// OAuth. Personal Access Tokens are no longer supported; the endpoint name
+// is kept for client compatibility but `authMethod` is always "oauth" or null.
 app.get("/api/user/token", async (req, res) => {
   const userId = await getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
@@ -499,75 +482,15 @@ app.get("/api/user/token", async (req, res) => {
     await reactivateUser(userId);
   }
 
-  // Touch activity
-  const existingToken = await getUserToken(userId);
-  if (existingToken) touchUserActivity(userId).catch(() => {});
-
-  const [t, oauthCreds] = await Promise.all([
-    getUserToken(userId),
-    getOAuthCredentials(userId),
-  ]);
-  const hasPat = !!t && t !== "__oauth__";
+  const oauthCreds = await getOAuthCredentials(userId);
   const hasOAuth = !!oauthCreds;
+  if (hasOAuth) touchUserActivity(userId).catch(() => {});
+
   res.json({
-    hasToken: hasPat || hasOAuth,
-    masked: hasPat ? `****${t!.slice(-4)}` : null,
-    authMethod: hasOAuth ? "oauth" : (hasPat ? "pat" : null),
+    hasToken: hasOAuth,
+    authMethod: hasOAuth ? "oauth" : null,
     oauthEnabled: !!discogsConsumerKey,
   });
-});
-
-// POST /api/user/token — save user's Discogs personal access token
-app.post("/api/user/token", express.json(), async (req, res) => {
-  const userId = await getClerkUserId(req);
-  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-  const { token } = req.body ?? {};
-  if (!token || typeof token !== "string" || token.trim().length < 8) {
-    res.status(400).json({ error: "Invalid token" }); return;
-  }
-  // Check user cap for new users
-  const existingToken = await getUserToken(userId);
-  if (!existingToken) {
-    const count = await getActiveUserCount();
-    if (count >= MAX_USERS) {
-      res.status(403).json({ error: `User limit reached (${MAX_USERS}). New registrations are currently closed.` });
-      return;
-    }
-  }
-  await setUserToken(userId, token.trim());
-  // Fetch Discogs username and profile using the user's token
-  try {
-    const identRes = await loggedFetch("discogs", "https://api.discogs.com/oauth/identity", {
-      headers: { "Authorization": `Discogs token=${token.trim()}`, "User-Agent": "SeaDisco/1.0" },
-      context: "save-token identity check",
-    });
-    if (identRes.ok) {
-      const ident = await identRes.json() as { username?: string; id?: number };
-      if (ident.username) {
-        await setDiscogsUsername(userId, ident.username);
-        // Also fetch and cache the full profile
-        try {
-          const profileRes = await loggedFetch("discogs", `https://api.discogs.com/users/${encodeURIComponent(ident.username)}`, {
-            headers: { "Authorization": `Discogs token=${token.trim()}`, "User-Agent": "SeaDisco/1.0" },
-            context: "save-token profile fetch",
-          });
-          if (profileRes.ok) {
-            const profile = await profileRes.json() as any;
-            await setDiscogsProfile(userId, profile.id ?? ident.id ?? 0, profile.avatar_url ?? "", _extractDiscogsProfile(profile));
-          }
-        } catch {}
-      }
-    }
-  } catch {}
-  res.json({ ok: true });
-});
-
-// DELETE /api/user/token — remove user's saved token
-app.delete("/api/user/token", async (req, res) => {
-  const userId = await getClerkUserId(req);
-  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
-  await deleteUserToken(userId);
-  res.json({ ok: true });
 });
 
 // DELETE /api/user/account — wipe all user data from our DB (Clerk deletion handled client-side)
@@ -669,7 +592,9 @@ app.get("/api/auth/discogs/callback", async (req, res) => {
     // Clean up request token
     await deleteOAuthRequestToken(oauthToken);
 
-    // Ensure the user has a row in user_tokens (they might not have saved a PAT yet)
+    // Ensure the user has a row in user_tokens. The schema requires a
+    // non-null discogs_token, so we write a sentinel value — no Personal
+    // Access Token UI exists anymore.
     const existingToken = await getUserToken(stored.clerkUserId);
     if (!existingToken) {
       // Check user cap for new users
@@ -2400,8 +2325,9 @@ function _normalizeLocResult(r: any): any {
 
 // GET /api/loc/search — proxy with rate limiting and response caching
 app.get("/api/loc/search", async (req, res) => {
-  // Admin-only: the LOC view is a personal workspace for the site owner.
-  const userId = await requireAdmin(req, res);
+  // Open to any signed-in user. The locLimiter (token bucket below) and
+  // _locCache keep LOC-side load bounded across all callers.
+  const userId = await requireUser(req, res);
   if (!userId) return;
 
   const { url, cacheKey } = _buildLocSearchUrl(req);
@@ -2488,7 +2414,7 @@ app.get("/api/loc/search", async (req, res) => {
 
 // GET /api/user/loc-saves — list the current user's saved LOC items
 app.get("/api/user/loc-saves", async (req, res) => {
-  const userId = await requireAdmin(req, res);
+  const userId = await requireUser(req, res);
   if (!userId) return;
   try {
     const items = await getLocSaves(userId);
@@ -2500,7 +2426,7 @@ app.get("/api/user/loc-saves", async (req, res) => {
 
 // GET /api/user/loc-saves/ids — lightweight list of saved IDs (for toggling star state)
 app.get("/api/user/loc-saves/ids", async (req, res) => {
-  const userId = await requireAdmin(req, res);
+  const userId = await requireUser(req, res);
   if (!userId) return;
   try {
     const ids = await getLocSaveIds(userId);
@@ -2513,7 +2439,7 @@ app.get("/api/user/loc-saves/ids", async (req, res) => {
 // POST /api/user/loc-saves — save an item
 // Body: { locId, title, streamUrl, data }
 app.post("/api/user/loc-saves", express.json({ limit: "64kb" }), async (req, res) => {
-  const userId = await requireAdmin(req, res);
+  const userId = await requireUser(req, res);
   if (!userId) return;
   const { locId, title = null, streamUrl = null, data = {} } = req.body ?? {};
   if (typeof locId !== "string" || !locId) {
@@ -2534,7 +2460,7 @@ app.post("/api/user/loc-saves", express.json({ limit: "64kb" }), async (req, res
 // Body: { locId }
 // (DELETE with a URL param was avoided because LOC IDs are full URLs with slashes)
 app.delete("/api/user/loc-saves", express.json(), async (req, res) => {
-  const userId = await requireAdmin(req, res);
+  const userId = await requireUser(req, res);
   if (!userId) return;
   const locId = typeof req.body?.locId === "string"
     ? req.body.locId
@@ -3200,7 +3126,7 @@ app.post("/api/admin/blues/add-by-name", express.json({ limit: "8kb" }), async (
   if (!adminId) return;
   const client = await getDiscogsClientForUser(adminId);
   if (!client) {
-    res.status(400).json({ error: "Admin has no Discogs token configured." });
+    res.status(400).json({ error: "Admin has not connected Discogs via OAuth." });
     return;
   }
   const name = (req.body?.name as string ?? "").trim();
@@ -3504,7 +3430,7 @@ app.post("/api/admin/blues/seed-discogs", async (req, res) => {
   }
   const client = await getDiscogsClientForUser(adminId);
   if (!client) {
-    res.status(400).json({ error: "Admin has no Discogs token configured. Connect Discogs on the Account page first." });
+    res.status(400).json({ error: "Admin has not connected Discogs via OAuth. Connect Discogs on the Account page first." });
     return;
   }
   const startYear = parseInt(String(req.query.startYear ?? "1900"), 10);
@@ -3614,7 +3540,7 @@ app.post("/api/admin/blues/enrich-discogs", async (req, res) => {
   if (!adminId) return;
   const client = await getDiscogsClientForUser(adminId);
   if (!client) {
-    res.status(400).json({ error: "Admin has no Discogs token configured. Connect Discogs on the Account page first." });
+    res.status(400).json({ error: "Admin has not connected Discogs via OAuth. Connect Discogs on the Account page first." });
     return;
   }
   const idRaw = req.query.id as string | undefined;
@@ -3670,7 +3596,7 @@ app.post("/api/admin/blues/enrich-discogs-full", async (req, res) => {
   if (!adminId) return;
   const client = await getDiscogsClientForUser(adminId);
   if (!client) {
-    res.status(400).json({ error: "Admin has no Discogs token configured. Connect Discogs on the Account page first." });
+    res.status(400).json({ error: "Admin has not connected Discogs via OAuth. Connect Discogs on the Account page first." });
     return;
   }
   const idRaw = req.query.id as string | undefined;
@@ -4024,7 +3950,7 @@ app.get("/release/:id", async (req, res) => {
   if (!await requireUser(req, res)) return;
   const id = parseInt(req.params.id, 10);
   const dc = await getDiscogsForRequest(req);
-  if (!dc) { res.status(503).json({ error: "No Discogs token configured" }); return; }
+  if (!dc) { res.status(503).json({ error: "No Discogs OAuth connection" }); return; }
   try {
     const result = await dc.getRelease(req.params.id);
     // Always save fresh data to cache
@@ -4041,7 +3967,7 @@ app.get("/master/:id", async (req, res) => {
   if (!await requireUser(req, res)) return;
   const id = parseInt(req.params.id, 10);
   const dc = await getDiscogsForRequest(req);
-  if (!dc) { res.status(503).json({ error: "No Discogs token configured" }); return; }
+  if (!dc) { res.status(503).json({ error: "No Discogs OAuth connection" }); return; }
   try {
     const result = await dc.getMasterRelease(req.params.id);
     // Always save fresh data to cache
@@ -4057,7 +3983,7 @@ app.get("/master/:id", async (req, res) => {
 app.get("/artist/:id", async (req, res) => {
   if (!await requireUser(req, res)) return;
   const dc = await getDiscogsForRequest(req);
-  if (!dc) { res.status(503).json({ error: "No Discogs token configured" }); return; }
+  if (!dc) { res.status(503).json({ error: "No Discogs OAuth connection" }); return; }
   try {
     const result = await dc.getArtist(req.params.id);
     res.json(result);

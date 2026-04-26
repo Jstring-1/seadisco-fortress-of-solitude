@@ -153,34 +153,24 @@ async function initLocView() {
   const root = document.getElementById("loc-view");
   if (!root) return;
 
-  // Admin-only feature. shared.js sets window._isAdmin = true after
-  // /api/me confirms the current session. If that hasn't resolved yet,
-  // hit /api/me directly before rendering so a deep-link (?v=loc) can't
-  // briefly show the LOC UI to non-admins. Backend endpoints are also
-  // gated with requireAdmin — this is a layered defense.
-  if (!window._isAdmin) {
-    try {
-      const r = await apiFetch("/api/me");
-      if (r.ok) {
-        const data = await r.json();
-        if (data?.isAdmin) window._isAdmin = true;
-      }
-    } catch { /* fall through to deny */ }
-  }
-  if (!window._isAdmin) {
+  // Auth gate: any signed-in user can browse LOC. Backend endpoints use
+  // requireUser, so this is just a UX guard — the server is the source
+  // of truth.
+  if (!window._clerk?.user) {
     root.dataset.mounted = "1";
     root.innerHTML = `
       <div class="loc-empty" style="padding:3rem 1rem">
-        <div style="font-size:1rem;color:var(--text);margin-bottom:0.5rem">LOC is currently admin-only.</div>
-        <div style="font-size:0.82rem">This section is a personal workspace and isn't open to other accounts.</div>
+        <div style="font-size:1rem;color:var(--text);margin-bottom:0.5rem">Sign in to browse LOC.</div>
+        <div style="font-size:0.82rem">The Library of Congress search is available to any signed-in SeaDisco account.</div>
       </div>
     `;
     return;
   }
 
   if (root.dataset.mounted === "1") {
-    // Already rendered — just make sure the tab state is correct
-    _locSwitchTab(_locTab);
+    // Already rendered — re-sync from URL params (back/forward navigation
+    // and shared deep-links land here on the second mount).
+    _locApplyUrlFromAddress();
     return;
   }
   root.dataset.mounted = "1";
@@ -234,9 +224,29 @@ async function initLocView() {
     }
   }
 
-  // If the user linked straight to a saved tab (?v=loc&tab=saved), honor it
-  const urlTab = new URLSearchParams(location.search).get("tab");
-  _locSwitchTab(urlTab === "saved" ? "saved" : "search");
+  // Honor any deep-link / shared URL: pre-fill the form, switch tab,
+  // and auto-run a search if the URL carries any criteria.
+  _locApplyUrlFromAddress();
+}
+
+// Restore the LOC view from the current address bar — used both on
+// first mount (deep link / share) and re-mount (back/forward).
+function _locApplyUrlFromAddress() {
+  const p = new URLSearchParams(location.search);
+  const tab = p.get("tab") === "saved" ? "saved" : "search";
+  const hasCriteria = _locApplyUrlParamsToForm(p);
+  // Set sp from URL so Load more knows where to continue from
+  if (p.get("sp")) {
+    // Stash on the form's hidden state via _locLastQuery (used by Load more)
+    // — we set it here even before the search runs so a deep-link to page 3
+    // would technically request page 3 as the first call. Most users will
+    // land on page 1, so this is just plumbing.
+  }
+  // Don't push another history entry — we're consuming the existing one.
+  _locSwitchTab(tab, { pushUrl: false });
+  if (tab === "search" && hasCriteria) {
+    _locRunSearchFromForm({ resetPage: !p.get("sp"), pushUrl: false });
+  }
 }
 
 function _locRenderShell() {
@@ -312,7 +322,7 @@ function _locRenderShell() {
   `;
 }
 
-function _locSwitchTab(tab) {
+function _locSwitchTab(tab, { pushUrl = true } = {}) {
   _locTab = tab === "saved" ? "saved" : "search";
   document.querySelectorAll(".loc-tab").forEach(btn => btn.classList.remove("active"));
   document.querySelector(`.loc-tab-${_locTab}`)?.classList.add("active");
@@ -321,6 +331,16 @@ function _locSwitchTab(tab) {
   if (searchPanel) searchPanel.style.display = _locTab === "search" ? "" : "none";
   if (savedPanel)  savedPanel.style.display  = _locTab === "saved"  ? "" : "none";
   if (_locTab === "saved") _locLoadSaved();
+  // Reflect tab in the address bar so /?v=loc&tab=saved is shareable.
+  if (pushUrl && typeof history?.pushState === "function") {
+    const qs = new URLSearchParams(location.search);
+    qs.set("v", "loc");
+    if (_locTab === "saved") qs.set("tab", "saved"); else qs.delete("tab");
+    const next = "/?" + qs.toString();
+    if (location.pathname + location.search !== next) {
+      history.pushState({}, "", next);
+    }
+  }
 }
 
 // ── Search execution ────────────────────────────────────────────────────
@@ -343,14 +363,59 @@ function _locReadFormParams() {
   };
 }
 
-async function _locRunSearchFromForm({ resetPage = true } = {}) {
+async function _locRunSearchFromForm({ resetPage = true, pushUrl = true } = {}) {
   const params = _locReadFormParams();
   if (resetPage) params.sp = "1";
   else if (_locLastQuery?.sp) params.sp = _locLastQuery.sp;
+  if (pushUrl) _locPushUrlState(params);
   return _locRunSearch(params);
 }
 
-async function _locRunSearch(params) {
+// Mirror the form's current state into the address bar so deep-links
+// and the browser back button restore the same view. We strip defaults
+// (relevance / 100 per page / playable on / sp=1) for shorter URLs.
+function _locPushUrlState(params) {
+  const qs = new URLSearchParams({ v: "loc" });
+  const skip = (k, v) => (
+    v == null || v === "" ||
+    (k === "sort"     && v === "relevance") ||
+    (k === "c"        && v === "100")       ||
+    (k === "playable" && v === "1")         ||
+    (k === "sp"       && (v === "1" || v === 1))
+  );
+  for (const [k, v] of Object.entries(params || {})) {
+    if (!skip(k, v)) qs.set(k, String(v));
+  }
+  // Preserve tab=saved if the user is on the saved tab
+  if (_locTab === "saved") qs.set("tab", "saved");
+  const next = "/?" + qs.toString();
+  if (location.pathname + location.search !== next) {
+    history.pushState({}, "", next);
+  }
+}
+
+// Read deep-link / back-button URL params and apply to the form.
+// Returns true if any meaningful search criteria are present.
+function _locApplyUrlParamsToForm(p) {
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v ?? ""; };
+  set("loc-q",           p.get("q"));
+  set("loc-contributor", p.get("contributor"));
+  set("loc-subject",     p.get("subject"));
+  set("loc-location",    p.get("location"));
+  set("loc-language",    p.get("language"));
+  set("loc-partof",      p.get("partof"));
+  set("loc-start-date",  p.get("start_date"));
+  set("loc-end-date",    p.get("end_date"));
+  set("loc-sort",        p.get("sort") || "relevance");
+  set("loc-perpage",     p.get("c")    || "100");
+  const cb = document.getElementById("loc-playable");
+  if (cb) cb.checked = p.get("playable") !== "0";
+  return !!(p.get("q") || p.get("contributor") || p.get("subject") ||
+            p.get("location") || p.get("language") || p.get("partof") ||
+            p.get("start_date") || p.get("end_date"));
+}
+
+async function _locRunSearch(params, { append = false } = {}) {
   const statusEl = document.getElementById("loc-status");
   const grid     = document.getElementById("loc-results");
   const pag      = document.getElementById("loc-pagination");
@@ -369,9 +434,15 @@ async function _locRunSearch(params) {
   }
 
   _locLastQuery = params;
-  statusEl.textContent = "Searching LOC…";
-  grid.innerHTML = `<div class="loc-skeleton"></div>`;
-  pag.innerHTML = "";
+  if (!append) {
+    statusEl.textContent = "Searching LOC…";
+    grid.innerHTML = `<div class="loc-skeleton"></div>`;
+    pag.innerHTML = "";
+  } else {
+    // Disable the in-place Load more button while the next page is fetched
+    const lm = pag.querySelector(".load-more-btn");
+    if (lm) { lm.disabled = true; lm.classList.add("loading"); lm.textContent = "Loading…"; }
+  }
   if (submitBtn) submitBtn.disabled = true;
 
   try {
@@ -379,6 +450,12 @@ async function _locRunSearch(params) {
     _locLastResponse = body;
     let results = Array.isArray(body?.results) ? body.results : [];
     if (!results.length) {
+      if (append) {
+        // Page returned empty — just hide the load-more and update status.
+        const lm = pag.querySelector(".load-more-btn");
+        if (lm) lm.remove();
+        return;
+      }
       statusEl.textContent = "No results.";
       grid.innerHTML = "";
       return;
@@ -427,48 +504,49 @@ async function _locRunSearch(params) {
       statusText = `${results.length} results${hiddenHint}`;
     }
     statusEl.textContent = statusText + sortHint;
-    grid.innerHTML = results.map(_locRenderCard).join("");
+    const cardsHtml = results.map(_locRenderCard).join("");
+    if (append) {
+      // Append mode: insert the new cards before any in-grid placeholder
+      // (none in practice) and re-render the load-more footer.
+      grid.insertAdjacentHTML("beforeend", cardsHtml);
+    } else {
+      grid.innerHTML = cardsHtml;
+    }
     _locRenderPagination(body.pagination);
     _locUpdatePlayingCard();  // re-apply .is-playing after grid re-render
   } catch (e) {
     statusEl.textContent = e?.message || "Search failed.";
-    grid.innerHTML = "";
+    if (!append) grid.innerHTML = "";
+    else {
+      const lm = pag.querySelector(".load-more-btn");
+      if (lm) { lm.disabled = false; lm.classList.remove("loading"); lm.textContent = "Load more results"; }
+    }
   } finally {
     if (submitBtn) submitBtn.disabled = false;
   }
 }
 
+// Render the load-more footer matching the rest of the site (search /
+// wiki / collection all use the .load-more-wrap + .load-more-btn pair).
+// The button hands off to _locLoadMore which appends the next page in
+// place; the URL stays on the original search so the deep-link is the
+// initial query.
 function _locRenderPagination(p) {
   const el = document.getElementById("loc-pagination");
   if (!el || !p) return;
-  const current = Number(p.current) || 1;
-  const perpage = Number(p.perpage) || 100;
-  const total   = Number(p.total)   || 0;
-  const totalPages = Math.max(1, Math.ceil(total / perpage));
-  if (totalPages <= 1) { el.innerHTML = ""; return; }
-  const prevDis = !p.hasPrev ? "disabled" : "";
-  const nextDis = !p.hasNext ? "disabled" : "";
+  if (!p.hasNext) { el.innerHTML = ""; return; }
   el.innerHTML = `
-    <button type="button" class="loc-page-btn" ${prevDis} onclick="_locGotoPage(${current - 1})">← Prev</button>
-    <span class="loc-page-info">Page ${current} / ${totalPages}</span>
-    <button type="button" class="loc-page-btn" ${nextDis} onclick="_locGotoPage(${current + 1})">Next →</button>
+    <div class="load-more-wrap">
+      <button type="button" class="load-more-btn" onclick="_locLoadMore()">Load more results</button>
+    </div>
   `;
 }
 
-async function _locGotoPage(n) {
+async function _locLoadMore() {
   if (!_locLastQuery) return;
-  const next = { ..._locLastQuery, sp: String(Math.max(1, Number(n) || 1)) };
-  // Await the search so the scroll lands on the FRESH results, not the
-  // old ones. LOC uses true pagination (not load-more), so we always
-  // scroll back to the top of the results block when the page changes.
-  await _locRunSearch(next);
-  const el = document.getElementById("loc-results");
-  if (el) {
-    // Aim slightly above the grid so the "N-M of T" status line is
-    // visible, not clipped under whatever's at the very top.
-    const top = el.getBoundingClientRect().top + window.scrollY - 80;
-    window.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
-  }
+  const nextSp = String(Math.max(1, (Number(_locLastQuery.sp) || 1) + 1));
+  const next = { ..._locLastQuery, sp: nextSp };
+  await _locRunSearch(next, { append: true });
 }
 
 // ── Result card renderer ────────────────────────────────────────────────
@@ -1354,12 +1432,13 @@ document.addEventListener("keydown", (e) => {
 // Expose globals for inline onclick handlers
 window.initLocView              = initLocView;
 window._locSwitchTab            = _locSwitchTab;
+window._locPlay                 = _locPlay;
 window._locPlayFromCard         = _locPlayFromCard;
 window._locToggleSaveFromCard   = _locToggleSaveFromCard;
 window._locRemoveSavedFromCard  = _locRemoveSavedFromCard;
 window._locOnSavedFilterInput   = _locOnSavedFilterInput;
 window._locOnSavedSortChange    = _locOnSavedSortChange;
-window._locGotoPage             = _locGotoPage;
+window._locLoadMore             = _locLoadMore;
 window._locLoadSaved            = _locLoadSaved;
 window._locClosePlayer          = _locClosePlayer;
 window._locRunSearchFromForm    = _locRunSearchFromForm;

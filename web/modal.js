@@ -728,9 +728,14 @@ const _WIKI_PAGE_SIZE = 20;
 
 function _wikiResultRowHtml(rec) {
   const safeTitle = String(rec.title || "").replace(/'/g, "\\'");
+  // Open the article popup directly — the SPA results list already shows
+  // the same matches we'd render in an intermediate search popup, so an
+  // extra hop just duplicates what the user is looking at. Pass an empty
+  // sourceQuery so the article view doesn't render a "Back to results"
+  // button (closing the popup returns the user to the SPA list anyway).
   return `
     <div class="wiki-result">
-      <a href="#" class="wiki-result-title" onclick="event.preventDefault();openWikiPopup('${escHtml(safeTitle)}')" title="Open in popup">${escHtml(rec.title || "")}</a>
+      <a href="#" class="wiki-result-title" onclick="event.preventDefault();openWikiArticle('${escHtml(safeTitle)}','')" title="Open article">${escHtml(rec.title || "")}</a>
       <div class="wiki-result-snippet">${rec.snippet || ""}…</div>
     </div>`;
 }
@@ -931,6 +936,141 @@ function wikiIcon(query, label = "", extraTerms = "") {
   // just enough breathing room from the preceding ⌕ glass.
   return `<a href="#" class="wiki-icon" onclick="event.preventDefault();openWikiPopup('${escHtml(q)}')" title="Wikipedia: ${escHtml(lab)}">W</a>`;
 }
+
+// ── Per-track Library of Congress lookup ───────────────────────────────
+// Renders a small 🏛 icon next to a track title. Clicking it queries
+// loc.gov for a public-domain audio match against `"track" "artist"`.
+// Behavior:
+//   0 results → small "No LOC match" toast under the icon.
+//   1 result  → start playback in the existing LOC bottom bar.
+//   2+ results → small floating list anchored to the icon; click a row
+//                to play it. Click outside to dismiss.
+function locIcon(trackTitle, artistName) {
+  if (!trackTitle) return "";
+  const t = String(trackTitle).replace(/'/g, "\\'");
+  const a = String(artistName || "").replace(/'/g, "\\'");
+  return ` <a href="#" class="track-loc-icon" onclick="locTrackSearch(event, '${escHtml(t)}', '${escHtml(a)}', this)" title="Search Library of Congress for &quot;${escHtml(trackTitle)}&quot; (public-domain recordings)">🏛</a>`;
+}
+
+let _locTrackPopupEl = null;
+let _locTrackOutsideClickHandler = null;
+
+function _closeLocTrackPopup() {
+  if (_locTrackPopupEl) { _locTrackPopupEl.remove(); _locTrackPopupEl = null; }
+  if (_locTrackOutsideClickHandler) {
+    document.removeEventListener("mousedown", _locTrackOutsideClickHandler, true);
+    _locTrackOutsideClickHandler = null;
+  }
+}
+
+function _locTrackToast(anchor, msg) {
+  _closeLocTrackPopup();
+  const tip = document.createElement("div");
+  tip.className = "track-loc-toast";
+  tip.textContent = msg;
+  document.body.appendChild(tip);
+  const r = anchor.getBoundingClientRect();
+  tip.style.position = "fixed";
+  tip.style.left = `${Math.min(window.innerWidth - 220, Math.max(8, r.left))}px`;
+  tip.style.top  = `${r.bottom + 6}px`;
+  setTimeout(() => { tip.classList.add("fade-out"); }, 1600);
+  setTimeout(() => { tip.remove(); }, 2200);
+}
+
+function _renderLocTrackPopup(anchor, items) {
+  _closeLocTrackPopup();
+  const wrap = document.createElement("div");
+  wrap.className = "track-loc-popup";
+  wrap.innerHTML = `
+    <div class="track-loc-popup-header">Library of Congress · ${items.length} match${items.length === 1 ? "" : "es"}</div>
+    <div class="track-loc-popup-list">
+      ${items.slice(0, 10).map((it, i) => {
+        const contributor = Array.isArray(it.contributors) && it.contributors.length ? it.contributors.join(", ") : "";
+        const yr = it.year ? ` · ${escHtml(String(it.year))}` : "";
+        return `<a href="#" class="track-loc-popup-row" data-i="${i}" onclick="event.preventDefault();_locPlayFromTrackPopup(${i})">
+          <div class="track-loc-popup-title">${escHtml(it.title || "Untitled")}</div>
+          <div class="track-loc-popup-meta">${escHtml(contributor)}${yr}</div>
+        </a>`;
+      }).join("")}
+    </div>
+  `;
+  document.body.appendChild(wrap);
+  // Stash the items on the popup element so the row click handler can read them
+  wrap._locItems = items.slice(0, 10);
+  _locTrackPopupEl = wrap;
+
+  // Position below the anchor; clamp to viewport.
+  const r = anchor.getBoundingClientRect();
+  const popupW = 320;
+  const left = Math.min(window.innerWidth - popupW - 8, Math.max(8, r.left));
+  wrap.style.position = "fixed";
+  wrap.style.left = `${left}px`;
+  wrap.style.top  = `${r.bottom + 6}px`;
+  wrap.style.width = `${popupW}px`;
+
+  // Dismiss on outside click
+  _locTrackOutsideClickHandler = (ev) => {
+    if (!_locTrackPopupEl) return;
+    if (_locTrackPopupEl.contains(ev.target)) return;
+    if (ev.target === anchor) return;
+    _closeLocTrackPopup();
+  };
+  document.addEventListener("mousedown", _locTrackOutsideClickHandler, true);
+}
+
+function _locPlayFromTrackPopup(idx) {
+  if (!_locTrackPopupEl?._locItems) return;
+  const item = _locTrackPopupEl._locItems[idx];
+  if (!item) return;
+  _closeLocTrackPopup();
+  if (typeof _locPlay === "function") _locPlay(item);
+}
+
+async function locTrackSearch(ev, trackTitle, artistName, btn) {
+  ev.preventDefault();
+  ev.stopPropagation();
+  if (btn?.dataset.locBusy === "1") return;
+  if (btn) {
+    btn.dataset.locBusy = "1";
+    btn.classList.add("is-loading");
+  }
+  // Compose `"track" "artist"` so LOC's full-text index needs both phrases.
+  // If we have no artist, fall back to just the track.
+  const qParts = [];
+  if (trackTitle) qParts.push(`"${trackTitle}"`);
+  if (artistName) qParts.push(`"${artistName}"`);
+  const q = qParts.join(" ");
+  try {
+    const r = await apiFetch(`/api/loc/search?q=${encodeURIComponent(q)}&playable=1&c=20`);
+    if (!r.ok) {
+      _locTrackToast(btn, r.status === 401 ? "Sign in to search LOC" : "LOC search failed");
+      return;
+    }
+    const body = await r.json();
+    const items = (Array.isArray(body?.results) ? body.results : [])
+      .filter(it => it && typeof it.streamUrl === "string" && it.streamUrl);
+    if (!items.length) {
+      _locTrackToast(btn, "No public-domain LOC match");
+      return;
+    }
+    if (items.length === 1) {
+      _closeLocTrackPopup();
+      if (typeof _locPlay === "function") _locPlay(items[0]);
+      return;
+    }
+    _renderLocTrackPopup(btn, items);
+  } catch (err) {
+    _locTrackToast(btn, "LOC search failed");
+  } finally {
+    if (btn) {
+      btn.dataset.locBusy = "0";
+      btn.classList.remove("is-loading");
+    }
+  }
+}
+
+window.locTrackSearch          = locTrackSearch;
+window._locPlayFromTrackPopup  = _locPlayFromTrackPopup;
 
 // ── Video popup ────────────────────────────────────────────────────────────
 let ytPlayer = null;
@@ -1623,6 +1763,13 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         const wikiW = t.title
           ? wikiIcon(t.title, t.title, "song")
           : "";
+        // 🏛 → search Library of Congress for a public-domain audio match
+        // for this track + artist. Click runs a backend search; if exactly
+        // one playable match comes back it starts in the LOC bar, else
+        // a small floating list of matches is rendered.
+        const locL = t.title
+          ? locIcon(t.title, trackArtist || "")
+          : "";
         // External YouTube search at the end of the title row. Shown for
         // every track (even ones with an in-app ▶) because embedded
         // playback sometimes fails or the video is unavailable in the
@@ -1646,7 +1793,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         return `<div class="track">
           <span class="track-play-cell">${playCell}</span>
           <span class="track-pos">${escHtml(t.position || "")}</span>
-          <span class="track-title">${titleLink}${searchIcon}${wikiW}${ytSearchEnd}${trackCredits}</span>
+          <span class="track-title">${titleLink}${searchIcon}${wikiW}${locL}${ytSearchEnd}${trackCredits}</span>
           ${t.duration ? `<span class="track-dur">${escHtml(t.duration)}</span>` : ""}
         </div>`;
       }).join("")}

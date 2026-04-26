@@ -40,7 +40,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260413k" />
+  <link rel="stylesheet" href="/style.css?v=20260424d" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -78,7 +78,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260413k"></script>
+<script defer src="/shared.js?v=20260424d"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search" }));</script>
 <div id="search-view">
 
@@ -448,7 +448,7 @@
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Heart any album, artist, or label to add it to your favorites — from the card thumbnail (hover to reveal) or from the detail popup. Favorites are stored in your account and persist across sessions. View all your favorites in the Favorites tab under My Records.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">My Records</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Connect your Discogs account to sync your full collection, wantlist, inventory, and lists — any size. You can connect via <strong style="color:#ccc">OAuth</strong> (one-click authorization) or by pasting a <strong style="color:#ccc">Personal Access Token</strong>. Sync runs in the background and refreshes automatically each night.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Connect your Discogs account via <strong style="color:#ccc">OAuth</strong> (one-click authorization) to sync your full collection, wantlist, inventory, and lists — any size. Sync runs in the background and refreshes automatically each night.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">The Collection and Wantlist tabs have dedicated filters (artist, release, label, year, genre, style, format) with <strong style="color:#ccc">+</strong> (AND), <strong style="color:#ccc">|</strong> (OR), and <strong style="color:#ccc">-</strong> (exclude) operators. <strong style="color:#6ddf70">C</strong> and <strong style="color:#f0c95c">W</strong> badges on every card show which items are in your collection and wantlist.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">The <strong style="color:#ccc">Inventory</strong> tab shows your marketplace listings with full create/edit/delete support — list a new record for sale, change prices, update conditions, or pull a listing. The editor pulls Discogs' own median/low/high price suggestions so you can price with confidence. Each card shows an ✏️ edit and 🗑 delete button, and every release popup for records you own gains a "Sell this release" shortcut. <strong style="color:#ccc">Lists</strong> displays your curated Discogs lists — click any list to browse its items as album cards. Lists and list items are read-only (Discogs does not expose write APIs for lists) and sync every 6 hours alongside your other data.</p>
 
@@ -467,10 +467,10 @@
 
 <div id="privacy-view" class="content-narrow" style="display:none">
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">Privacy Policy</h2>
-  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: April 9, 2026</p>
+  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: April 24, 2026</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">What We Collect</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you create an account, we store your email address (provided by our authentication provider, Clerk) and any Discogs credentials you choose to connect — either a Personal Access Token or OAuth access credentials.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you create an account, we store your email address (provided by our authentication provider, Clerk) and, if you connect your Discogs account, the OAuth access credentials returned by Discogs.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you sync your Discogs account, we store a local copy of your collection, wantlist, marketplace inventory (listings), list metadata, list items, and — if you sell on Discogs — your seller order history including buyer usernames, shipping addresses, order items, totals, and the full message thread for each order. This includes per-copy metadata for your collection items (folder assignment, rating, instance notes, and date added) so that multiple owned copies of the same release can be tracked independently. We also cache your Discogs profile information (username, avatar, location, marketplace currency, and account stats including seller/buyer ratings) for display on the Account page.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">If you favorite albums, artists, or labels, those selections and their display data (title, artwork URL, type) are stored with your account. If you save searches, those search parameters are stored with your account. If you submit feedback, your email and message are stored.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0">We log API usage for operational monitoring. Your IP address is used for rate limiting anonymous users but is not persisted to the database. Google Analytics receives search terms you enter along with standard page view data. When you use the AI search feature, your search query is sent to Anthropic (Claude) to generate recommendations.</p>
@@ -478,7 +478,7 @@
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Third-Party Services</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">SeaDisco integrates with the following third-party services:</p>
   <ul style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem;padding-left:1.2rem">
-    <li><strong style="color:#ccc">Discogs</strong> — music database searches, collection syncing, and collection actions, using your personal API token or OAuth authorization</li>
+    <li><strong style="color:#ccc">Discogs</strong> — music database searches, collection syncing, and collection actions, using your OAuth authorization</li>
     <li><strong style="color:#ccc">Clerk</strong> — authentication and account management</li>
     <li><strong style="color:#ccc">Anthropic (Claude)</strong> — AI-powered search recommendations and genre descriptions; your search query text is sent to Anthropic's API when using AI features</li>
     <li><strong style="color:#ccc">Google Analytics</strong> — usage statistics including search terms to help us improve the site</li>
@@ -488,20 +488,17 @@
   <p style="font-size:0.84rem;color:#aaa;margin:0">If you connect via OAuth, SeaDisco receives limited access to your Discogs account through the standard OAuth 1.0a flow. We store the resulting access token and secret to make API requests on your behalf. We do not receive or store your Discogs password. You can disconnect OAuth at any time from the Account page, which immediately revokes our access.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">How We Use Your Data</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Your Discogs credentials (token or OAuth) are used solely to make API requests to Discogs on your behalf — searching, syncing your collection, managing your collection/wantlist, creating and editing marketplace listings, and updating seller orders and messages. Every write action (rating a release, moving a folder, editing a listing, changing an order's status, sending a reply to a buyer) is only sent to Discogs when you explicitly trigger it in the UI. We never share your credentials with any other service or third party. Your collection data, inventory, orders, and favorites are used only to display your records and personalize your experience within SeaDisco.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Your Discogs OAuth credentials are used solely to make API requests to Discogs on your behalf — searching, syncing your collection, managing your collection/wantlist, creating and editing marketplace listings, and updating seller orders and messages. Every write action (rating a release, moving a folder, editing a listing, changing an order's status, sending a reply to a buyer) is only sent to Discogs when you explicitly trigger it in the UI. We never share your credentials with any other service or third party. Your collection data, inventory, orders, and favorites are used only to display your records and personalize your experience within SeaDisco.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0">We do not sell, rent, or share your personal data with anyone.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Data Storage &amp; Security</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">All data is stored in a secured PostgreSQL database hosted on Railway. Your Discogs credentials are stored encrypted at rest by the database provider. OAuth secrets are stored server-side only and are never exposed to the browser. Access to the database is restricted to the application server only.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">All data is stored in a secured PostgreSQL database hosted on Railway. Your Discogs OAuth credentials are stored encrypted at rest by the database provider. OAuth secrets are stored server-side only and are never exposed to the browser. Access to the database is restricted to the application server only.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Data Retention &amp; Deletion</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Synced user data (collection, wantlist, marketplace inventory, lists, list items, seller orders, order messages, and cached profile) is automatically deleted 30 days after it was last synced, or immediately on request. Your authentication tokens are retained for as long as your account exists.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Accounts that go unused for 6 months are hibernated: the account remains but its synced data is cleared and you'll see a hibernation notice the next time you sign in. Contact the admin to reactivate a hibernated account.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Temporary operational data is also pruned automatically: API logs and search caches.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0">You can delete your account at any time from the Account tab. Deleting your account <strong style="color:#ccc">permanently removes all of your data</strong> from our database, including your email, Discogs credentials, collection, wantlist, marketplace inventory, lists, list items, seller orders, order messages, favorites, saved searches, feedback, and profile data. Your Clerk authentication account is also deleted. This action is immediate and irreversible — there is no way to recover your data after deletion. Note that deleting your SeaDisco account does <strong style="color:#ccc">not</strong> alter anything on Discogs itself — your Discogs account, listings, and orders are untouched.</p>
-
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Waitlist</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco is invite-only. When you join the waitlist from the home page, your email address (and any other fields Clerk collects during waitlist sign-up) is stored by Clerk on our behalf. Waitlist entries are kept until you are either approved for access or you ask to be removed. To remove yourself from the waitlist, contact the admin using the feedback form on the <a href="/?v=account" onclick="switchView('account');return false;" style="color:#5a9aaa">Account</a> page. Approval is at the admin's discretion.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Cookies</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco uses cookies for authentication (via Clerk), analytics (via Google Analytics), and a temporary CSRF protection cookie during the Discogs OAuth flow. We do not use advertising or tracking cookies, and we do not sell any data.</p>
@@ -512,7 +509,7 @@
 
 <div id="terms-view" class="content-narrow" style="display:none">
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">Terms of Service</h2>
-  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: April 9, 2026</p>
+  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: April 24, 2026</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Acceptance</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">By using SeaDisco, you agree to these terms. If you don't agree, please don't use the site.</p>
@@ -528,7 +525,7 @@
   <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco does not facilitate payments, hold funds, arbitrate disputes, or guarantee the accuracy of Discogs' price suggestions. Price suggestions shown in the listing editor come directly from Discogs and are provided for reference only.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Your Account</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">You are responsible for keeping your Discogs API token secure. Do not share your token with others. SeaDisco uses your token only to interact with the Discogs API on your behalf.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">You are responsible for keeping your SeaDisco account secure. SeaDisco uses your Discogs OAuth credentials only to interact with the Discogs API on your behalf, and you can disconnect at any time from the Account page.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Acceptable Use</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Don't abuse the service. This includes but is not limited to:</p>
@@ -584,7 +581,7 @@
         </p>
         <p style="color:#555;font-size:0.8rem;margin-bottom:0.8rem">
           SeaDisco never sees your Discogs password. The connection is a standard Discogs OAuth authorization,
-          and you can disconnect anytime. A Personal Access Token is also supported as an alternative.
+          and you can disconnect anytime.
         </p>
         <div id="clerk-sign-in"></div>
       </div>
@@ -596,7 +593,7 @@
         <div id="oauth-section" style="display:none;margin-bottom:1.5rem">
           <h2 style="margin-top:0;margin-bottom:0.5rem">Connect with Discogs</h2>
           <p style="font-size:0.85rem;color:var(--muted);margin-bottom:0.8rem">
-            One click to connect your Discogs account. OAuth gives full access including marketplace listing management (create, edit, delete), seller order management, and messaging with buyers — features not available with a Personal Access Token.
+            One click to connect your Discogs account. OAuth gives full access including searching Discogs with your own rate limit, syncing your collection &amp; wantlist, marketplace listing management (create, edit, delete), seller order management, and messaging with buyers.
           </p>
           <button id="oauth-connect-btn" onclick="startOAuth()" style="font-size:0.88rem;padding:0.5rem 1.2rem;background:#333;color:#fff;border:1px solid #555;border-radius:6px;cursor:pointer;font-weight:600;display:flex;align-items:center;gap:0.5rem">
             <span style="font-size:1.1rem">🔗</span> Connect with Discogs
@@ -604,39 +601,11 @@
           <div id="oauth-status" style="font-size:0.82rem;color:var(--muted);margin-top:0.5rem;display:none"></div>
         </div>
 
-        <!-- PAT section (collapsible when OAuth is connected) -->
-        <div id="pat-section">
-          <h2 style="margin-top:0">Your Discogs Token</h2>
-          <p id="pat-oauth-hint" style="font-size:0.82rem;color:#888;margin-bottom:0.6rem;display:none">
-            The easiest way to connect is the <strong style="color:#ccc">Connect with Discogs</strong> button above — no token needed. A Personal Access Token is an alternative if you prefer.
-          </p>
-          <p>
-            A Discogs Personal Access Token lets SeaDisco search Discogs on your behalf using your own rate limits.
-            Without one, searches are limited to 5 per day.
-          </p>
-          <p style="margin-top:0.75rem">
-            <strong style="color:var(--fg)">How to get your token:</strong><br />
-            1. Go to <a href="https://www.discogs.com/settings/developers" target="_blank" rel="noopener">discogs.com/settings/developers</a><br />
-            2. Click <strong style="color:var(--fg)">Generate new token</strong><br />
-            3. Copy and paste it below
-          </p>
-
-          <div id="token-status" class="token-status"></div>
-
-          <div class="token-form">
-            <input type="text" id="token-input" placeholder="Paste your Discogs token here" autocomplete="off" spellcheck="false" />
-            <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
-              <button id="save-btn" onclick="saveToken()">Save token</button>
-              <button id="remove-btn" class="danger-btn" onclick="removeToken()" style="display:none">Remove saved token</button>
-            </div>
-          </div>
-        </div>
-
         <div id="profile-panel" style="display:none"></div>
 
         <div id="marketplace-scope-banner" style="display:none;background:rgba(200,140,40,0.15);border:1px solid rgba(200,140,40,0.6);color:#ffd89b;padding:0.6rem 0.85rem;border-radius:6px;margin:0.8rem 0;font-size:0.85rem">
           <strong>Marketplace permission needed.</strong>
-          Your Discogs connection was rejected when trying to create, edit, or delete a listing or order. Reconnect via OAuth (or replace your personal access token) to re-enable selling features.
+          Your Discogs connection was rejected when trying to create, edit, or delete a listing or order. Reconnect via OAuth to re-enable selling features.
           <button onclick="dismissMarketplaceBanner()" style="float:right;background:none;border:none;color:#ffd89b;cursor:pointer;font-size:1.1rem;line-height:1;padding:0 0 0 0.5rem">×</button>
         </div>
 
@@ -797,18 +766,18 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260413k"></script>
-<script defer src="/search.js?v=20260413k"></script>
-<script defer src="/collection.js?v=20260413k"></script>
-<script defer src="/account.js?v=20260413k"></script>
-<script defer src="/orders.js?v=20260413k"></script>
+<script defer src="/utils.js?v=20260424d"></script>
+<script defer src="/search.js?v=20260424d"></script>
+<script defer src="/collection.js?v=20260424d"></script>
+<script defer src="/account.js?v=20260424d"></script>
+<script defer src="/orders.js?v=20260424d"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260413k"></script>
-<script defer src="/app.js?v=20260413k"></script>
+<script defer src="/modal.js?v=20260424d"></script>
+<script defer src="/app.js?v=20260424d"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/inventory-editor.js?v=20260413k"></script>
-<script defer src="/loc.js?v=20260413k"></script>
+<script defer src="/inventory-editor.js?v=20260424d"></script>
+<script defer src="/loc.js?v=20260424d"></script>
 
 </body>
 </html>

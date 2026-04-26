@@ -61,39 +61,12 @@ async function showAuthSection() {
   }
   const data = tokenRes ? await tokenRes.json().catch(() => null) : null;
 
-  const statusEl = document.getElementById("token-status");
-  const removeBtn = document.getElementById("remove-btn");
   const oauthSection = document.getElementById("oauth-section");
-  const patSection = document.getElementById("pat-section");
 
-  // Show OAuth connect option if server has it configured
-  const patHint = document.getElementById("pat-oauth-hint");
+  // OAuth is the only supported connection method now. Show the connect
+  // button when nothing is connected; hide it once we're connected.
   if (data?.oauthEnabled) {
-    oauthSection.style.display = "";
-    if (patHint) patHint.style.display = "";
-  }
-
-  if (data?.authMethod === "oauth") {
-    // OAuth connected — show profile, collapse PAT section
-    oauthSection.style.display = "none";
-    if (patHint) patHint.style.display = "none";
-    patSection.querySelector("h2").textContent = "Personal Access Token (optional)";
-    // If user also has a PAT saved, show it
-    if (data.masked) {
-      statusEl.textContent = `Saved token: ${data.masked}`;
-      statusEl.className = "token-status ok";
-      removeBtn.style.display = "block";
-    } else {
-      statusEl.textContent = "Connected via OAuth — PAT is optional.";
-      statusEl.className = "token-status ok";
-    }
-  } else if (data?.hasToken) {
-    statusEl.textContent = `Saved token: ${data.masked}`;
-    statusEl.className = "token-status ok";
-    removeBtn.style.display = "block";
-  } else {
-    statusEl.textContent = "No token saved — connect with Discogs or paste a token below.";
-    statusEl.className = "token-status";
+    oauthSection.style.display = data?.authMethod === "oauth" ? "none" : "";
   }
 
   if (data?.hasToken) { loadProfilePanel(); loadSyncStatus(); if (typeof loadOrdersSection === "function") loadOrdersSection(); renderMarketplaceScopeBanner(); }
@@ -158,17 +131,10 @@ async function loadProfilePanel() {
     const sellerStars = d.seller_rating_stars != null ? stars(d.seller_rating_stars) : (d.seller_rating != null ? stars(d.seller_rating) : "");
     const sellerText = sellerRatings > 0 ? `${sellerStars} (${sellerRatings} rating${sellerRatings === 1 ? "" : "s"})` : "No seller ratings yet";
 
-    const curr = p.currAbbr || d.curr_abbr || "USD";
     const isOAuth = p.authMethod === "oauth";
     const badgeHtml = isOAuth
-      ? `<span class="profile-badge profile-badge-oauth" title="Connected via OAuth \u2014 full access including marketplace management">OAuth</span>`
-      : `<span class="profile-badge profile-badge-pat" title="Connected via Personal Access Token \u2014 read-only; connect via OAuth above for marketplace management">Token</span>`;
-    // OAuth case shows no extra hint line \u2014 the OAuth badge already
-    // communicates the connection state. Token-only case keeps the
-    // hint pointing users to OAuth for marketplace features.
-    const authHint = isOAuth
-      ? ""
-      : `<div class="profile-sub" style="color:#e8a020;font-size:0.72rem;margin-top:0.15rem">Read-only \u2014 connect via OAuth above to manage marketplace listings &amp; orders</div>`;
+      ? `<span class="profile-badge profile-badge-oauth" title="Connected via OAuth">OAuth</span>`
+      : "";
     const disconnectHtml = isOAuth
       ? `<button type="button" class="profile-disconnect" onclick="disconnectOAuth()" title="Disconnect your Discogs connection">Disconnect</button>`
       : "";
@@ -184,8 +150,6 @@ async function loadProfilePanel() {
               ${loc ? ` \u00b7 ${esc(loc)}` : ""}
               ${joined ? ` \u00b7 joined ${esc(joined)}` : ""}
             </div>
-            <div class="profile-sub">Marketplace currency: <strong>${esc(curr)}</strong></div>
-            ${authHint}
           </div>
           <div class="profile-head-actions">
             <button type="button" class="profile-refresh" onclick="refreshProfilePanel(this)" title="Re-sync profile from Discogs">\u21bb</button>
@@ -193,10 +157,10 @@ async function loadProfilePanel() {
           </div>
         </div>
         <div class="profile-stats">
-          <div class="profile-stat"><div class="profile-stat-num">${fmt(d.num_collection)}</div><div class="profile-stat-label">Collection</div></div>
-          <div class="profile-stat"><div class="profile-stat-num">${fmt(d.num_wantlist)}</div><div class="profile-stat-label">Wantlist</div></div>
-          <div class="profile-stat"><div class="profile-stat-num">${fmt(d.num_lists)}</div><div class="profile-stat-label">Lists</div></div>
-          <div class="profile-stat"><div class="profile-stat-num">${fmt(d.num_for_sale)}</div><div class="profile-stat-label">For sale</div></div>
+          <a href="/?v=collection" class="profile-stat profile-stat-link" onclick="event.preventDefault();_cwTab='collection';switchView('records');return false" title="Open your collection"><div class="profile-stat-num">${fmt(d.num_collection)}</div><div class="profile-stat-label">Collection</div></a>
+          <a href="/?v=wantlist" class="profile-stat profile-stat-link" onclick="event.preventDefault();_cwTab='wantlist';switchView('records');return false" title="Open your wantlist"><div class="profile-stat-num">${fmt(d.num_wantlist)}</div><div class="profile-stat-label">Wantlist</div></a>
+          <a href="/?v=lists" class="profile-stat profile-stat-link" onclick="event.preventDefault();_cwTab='lists';switchView('records');return false" title="Open your lists"><div class="profile-stat-num">${fmt(d.num_lists)}</div><div class="profile-stat-label">Lists</div></a>
+          <a href="/?v=inventory" class="profile-stat profile-stat-link" onclick="event.preventDefault();_cwTab='inventory';switchView('records');return false" title="Open your inventory"><div class="profile-stat-num">${fmt(d.num_for_sale)}</div><div class="profile-stat-label">For sale</div></a>
           <div class="profile-stat"><div class="profile-stat-num">${fmt(d.releases_rated)}</div><div class="profile-stat-label">Rated</div></div>
         </div>
         <div class="profile-seller">Seller: ${esc(sellerText)}</div>
@@ -350,31 +314,6 @@ async function accountSync(silent = false) {
       btn.style.opacity = "1";
     }
   }
-}
-
-async function saveToken() {
-  const token = document.getElementById("token-input").value.trim();
-  if (!token) { alert("Please paste your Discogs token first."); return; }
-
-  const r = await apiFetch("/api/user/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token }),
-  });
-
-  if (r.ok) {
-    document.getElementById("token-input").value = "";
-    await showAuthSection();
-  } else {
-    const err = await r.json().catch(() => ({}));
-    alert("Error saving token: " + (err.error ?? r.status));
-  }
-}
-
-async function removeToken() {
-  if (!confirm("Remove your saved Discogs token?")) return;
-  await apiFetch("/api/user/token", { method: "DELETE" });
-  await showAuthSection();
 }
 
 function openFeedback() {

@@ -357,7 +357,7 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
         document.getElementById("results").innerHTML =
           `<div class="empty-state"><div class="empty-state-icon">🔑</div>` +
           `<div class="empty-state-title">Sign in to search</div>` +
-          `<div class="empty-state-subtitle"><a href="/?v=account" onclick="switchView('account');return false;" style="color:var(--accent)">Create a free account</a> and add your Discogs token to start discovering music.</div></div>`;
+          `<div class="empty-state-subtitle"><a href="/?v=account" onclick="switchView('account');return false;" style="color:var(--accent)">Create a free account</a> and connect your Discogs account to start discovering music.</div></div>`;
         return;
       }
       if (errData.error === "rate_limited") {
@@ -365,7 +365,7 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
         document.getElementById("results").innerHTML =
           `<div class="empty-state"><div class="empty-state-icon">🔑</div>` +
           `<div class="empty-state-title">Sign in to search</div>` +
-          `<div class="empty-state-subtitle"><a href="/?v=account" onclick="switchView('account');return false;" style="color:var(--accent)">Sign in</a> and connect your Discogs token to continue.</div></div>`;
+          `<div class="empty-state-subtitle"><a href="/?v=account" onclick="switchView('account');return false;" style="color:var(--accent)">Sign in</a> and connect your Discogs account to continue.</div></div>`;
         return;
       }
     }
@@ -948,7 +948,7 @@ async function doAiSearch(q) {
   document.getElementById("search-btn").disabled = true;
   try {
     const r = await apiFetch("/api/ai-search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ q }) });
-    if (r.status === 401) { setStatus("Sign in and add your Discogs token to use AI search.", false); return; }
+    if (r.status === 401) { setStatus("Sign in and connect your Discogs account to use AI search.", false); return; }
     if (!r.ok) { setStatus("AI search failed. Try again.", false); return; }
     const { recommendations, blurb } = await r.json();
     if (!recommendations?.length) { setStatus("No recommendations returned.", false); return; }
