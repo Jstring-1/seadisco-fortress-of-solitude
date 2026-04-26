@@ -52,7 +52,7 @@ function _hasSearch(p) { return p.get("q") || p.get("a") || p.get("ar") || p.get
   } else if (rawView === "loc") {
     await authReadyPromise;
     if (!window._clerk?.user) { showToast("Sign in to browse LOC", "error"); switchView("account", true); }
-    else switchView("loc", true);  // initLocView() does the admin check
+    else switchView("loc", true);  // initLocView() reads query params for deep-links
   } else if (rawView === "records" || rawView === "wanted") {
     await authReadyPromise;
     if (!window._clerk?.user) { showToast("Sign in to view your records", "error"); switchView("account", true); }
@@ -246,6 +246,75 @@ _attachInputClearButtons([
   // Collection / wantlist search panel
   "cw-query", "cw-artist", "cw-release", "cw-year", "cw-label", "cw-notes",
 ]);
+
+// ── Global × clear-button auto-attach ────────────────────────────────────
+// Beyond the explicit ID list above, attach a × clear button to every
+// text-like input on the site (LOC form, account page, popup forms,
+// dynamically-rendered fields, etc.). Opt-out by setting `data-no-clear`
+// on the input or any ancestor — used to skip Clerk-mounted widgets
+// where the wrapper <span> would collide with their internal layout.
+function _attachClearToOneInput(input) {
+  if (!input || input.dataset.hasClearBtn === "1") return;
+  if (input.dataset.noClear === "1") return;
+  if (input.closest("[data-no-clear]")) return;
+  // Clerk's mounted forms have their own field styling — skip everything
+  // in their root containers to avoid breaking the sign-in/up UI.
+  if (input.closest(".cl-rootBox, .cl-component, .cl-card, .cl-modalContent, .cl-userButtonPopover")) return;
+  // Datalist-only inputs and hidden inputs aren't worth clearing.
+  if (input.type === "hidden") return;
+  if (!input.offsetParent && getComputedStyle(input).display === "none") {
+    // Defer — input might be in a hidden tab; observer will catch it on display
+    return;
+  }
+  input.dataset.hasClearBtn = "1";
+  let wrap = input.parentElement;
+  if (!wrap || !wrap.classList?.contains("input-clear-wrap")) {
+    const span = document.createElement("span");
+    span.className = "input-clear-wrap";
+    input.parentNode.insertBefore(span, input);
+    span.appendChild(input);
+    wrap = span;
+  }
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "input-clear-btn";
+  btn.title = "Clear field";
+  btn.tabIndex = -1;
+  btn.textContent = "×";
+  wrap.appendChild(btn);
+  const update = () => wrap.classList.toggle("has-text", !!input.value);
+  update();
+  input.addEventListener("input", update);
+  btn.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    ev.stopPropagation();
+    input.value = "";
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.focus();
+  });
+}
+
+function _attachClearButtonsGlobally(root) {
+  const scope = root || document;
+  if (scope.querySelectorAll) {
+    const sel = 'input[type="text"], input[type="search"], input[type="email"], input[type="url"], input[type="tel"], input:not([type])';
+    scope.querySelectorAll(sel).forEach(_attachClearToOneInput);
+  }
+}
+
+// Initial sweep, then observe the DOM for inputs that get rendered
+// later (LOC form, account dashboard, modal popups, etc.).
+_attachClearButtonsGlobally(document);
+const _clearFieldObserver = new MutationObserver((mutations) => {
+  for (const m of mutations) {
+    for (const node of m.addedNodes) {
+      if (!node || node.nodeType !== 1) continue;
+      if (node.tagName === "INPUT") _attachClearToOneInput(node);
+      else if (node.querySelectorAll) _attachClearButtonsGlobally(node);
+    }
+  }
+});
+_clearFieldObserver.observe(document.body, { childList: true, subtree: true });
 
 // ── Grey out advanced toggle when AI mode selected ───────────────────────
 document.querySelectorAll('input[name="result-type"]').forEach(radio => {

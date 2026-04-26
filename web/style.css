@@ -278,19 +278,22 @@ html { overflow-x: hidden; }
      Aliases:    --link, --panel   (legacy hooks)
      Misc:       --radius, --input-h, --color-scheme
 
-   Themes available (user picks via /admin → Theme dropdown):
-     amber-dark    (default — original warm amber/black)
-     earthy-dark   (dark green / maroon / burnt orange on warm charcoal)
-     earthy-light  (light cream bg, dark brown text, maroon accents)
-     slate-dark    (cool steel neutrals with teal accent)
-     mossy-dark    (deep forest green primary, warm gold highlights)
-     vinyl-black   (jukebox red on near-black — turntable mood)
-     tape-cream    (sepia paper light — vintage typewriter / liner notes)
-     neon-wax      (synthwave violet/cyan dark)
-     forest-floor  (oatmeal/moss/acorn light — quiet woodland)
-     ocean-deep    (deep navy with bright cyan + sand gold)
-     saffron-gold  (warm desert dark — saffron + burgundy on cocoa)
-     paperback     (sage / dusty rose / off-white light — book design)
+   Themes available (user picks via /admin → Theme):
+     ── Standard ─────────────────────────────────────────────────
+     amber-dark      SeaDisco signature — warm amber on black (default)
+     dark-default    GitHub-dark — neutral dark + blue link + green hi
+     light-default   GitHub-light — white + blue link, clean minimal
+     ── Designer classics ────────────────────────────────────────
+     solarized-dark  Ethan Schoonover's teal-base + blue + yellow dark
+     solarized-light Solarized's sister palette on sepia cream
+     monokai         Wimer Hazenberg's classic — magenta + green + yellow
+     ── Themed ──────────────────────────────────────────────────
+     slate-dark      Cool steel neutrals with teal accent
+     mossy-dark      Deep forest green primary, warm gold highlights
+     vinyl-black     Jukebox red on near-black — turntable mood
+     neon-wax        Synthwave violet/cyan/magenta dark
+     tape-cream      Sepia paper light — vintage typewriter / liner notes
+     paperback       Sage / dusty rose / off-white light — book design
    ══════════════════════════════════════════════════════════════════════ */
 
 :root,
@@ -330,92 +333,6 @@ html { overflow-x: hidden; }
   --inventory-bg:    #3a2a0d;
   --inventory-border:#6b4a18;
   --favorite:        #e8d44d;
-  --link:            var(--accent);
-  --panel:           var(--surface);
-  --radius:          6px;
-  --input-h:         28px;
-}
-
-/* ── Theme: Earthy Dark (green / maroon / burnt orange) ─────────────── */
-:root[data-theme="earthy-dark"] {
-  color-scheme: dark;
-  --bg:              #1a1612;
-  --bg-elevated:     #241e18;
-  --bg-hover:        #2b241d;
-  --surface:         #221c17;
-  --surface-raised:  #2b241d;
-  --surface-sunken:  #120f0c;
-  --border:          #3d322a;
-  --border-strong:   #4d4034;
-  --border-soft:     #2b241d;
-  --fg:              #f5eed8;
-  --text:            #e8ddc4;
-  --muted:           #9e8f76;
-  --muted-dim:       #7a6c5a;
-  --text-disabled:   #5a4f42;
-  --accent:          #c9571f;   /* burnt orange */
-  --accent-hover:    #dc6a2d;
-  --accent-dim:      #7a3510;
-  --accent2:         #dc6a2d;
-  --accent-hi:       #d4a843;
-  --accent-soft:     #2e1a0e;
-  --success:         #5d8a4a;   /* dark green */
-  --success-bg:      #1f2e18;
-  --success-border:  #3d5a28;
-  --warning:         #a08040;
-  --warning-bg:      #2a2010;
-  --warning-border:  #4a3920;
-  --danger:          #8a2828;   /* maroon */
-  --danger-bright:   #a83636;
-  --danger-bg:       #2e1010;
-  --danger-border:   #5a1f1f;
-  --inventory:       #c9571f;
-  --inventory-bg:    #2e1a0e;
-  --inventory-border:#7a3510;
-  --favorite:        #d4a843;
-  --link:            var(--accent);
-  --panel:           var(--surface);
-  --radius:          6px;
-  --input-h:         28px;
-}
-
-/* ── Theme: Earthy Light (sand bg, dark brown text, maroon accents) ── */
-:root[data-theme="earthy-light"] {
-  color-scheme: light;
-  --bg:              #ebe0c4;   /* warm sand beige */
-  --bg-elevated:     #ddd0ac;   /* darker sand for hover */
-  --bg-hover:        #d4c69f;
-  --surface:         #efe5cb;   /* slightly lighter sand for cards */
-  --surface-raised:  #f5ecd3;   /* lightest, for modals */
-  --surface-sunken:  #ddd0ac;   /* darker, for inputs */
-  --border:          #c4b593;
-  --border-strong:   #a08f6a;
-  --border-soft:     #dccf9c;
-  --fg:              #2e1f10;   /* dark brown */
-  --text:            #3d2a18;
-  --muted:           #6e5a3e;
-  --muted-dim:       #8a7556;
-  --text-disabled:   #a89878;
-  --accent:          #8a2828;   /* maroon — replaces orange sitewide */
-  --accent-hover:    #a83636;
-  --accent-dim:      #5a1f1f;
-  --accent2:         #a83636;
-  --accent-hi:       #a6732a;
-  --accent-soft:     #e8d8b8;   /* sand-tinted accent bg, not pink */
-  --success:         #3d6b28;
-  --success-bg:      #d4deb4;
-  --success-border:  #8aa868;
-  --warning:         #8a6020;
-  --warning-bg:      #ead8a8;
-  --warning-border:  #c4a062;
-  --danger:          #8a2828;
-  --danger-bright:   #b03030;
-  --danger-bg:       #e8ccc4;
-  --danger-border:   #b87878;
-  --inventory:       #8a4018;
-  --inventory-bg:    #e8d4b8;
-  --inventory-border:#c4865a;
-  --favorite:        #a6732a;
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -637,135 +554,6 @@ html { overflow-x: hidden; }
   --input-h:         28px;
 }
 
-/* ── Theme: Forest Floor (oatmeal/moss/acorn light) ───────────────── */
-:root[data-theme="forest-floor"] {
-  color-scheme: light;
-  --bg:              #e8e0c8;
-  --bg-elevated:     #ddd4b6;
-  --bg-hover:        #d2c8a4;
-  --surface:         #f1ead2;
-  --surface-raised:  #f5efdc;
-  --surface-sunken:  #ddd4b6;
-  --border:          #b9ad8a;
-  --border-strong:   #968a68;
-  --border-soft:     #ccc09e;
-  --fg:              #2c2410;
-  --text:            #3a3018;
-  --muted:           #685a3c;
-  --muted-dim:       #897c5c;
-  --text-disabled:   #a89978;
-  --accent:          #4a6b3a;          /* moss */
-  --accent-hover:    #5a7d48;
-  --accent-dim:      #2a4520;
-  --accent2:         #6b8a4d;
-  --accent-hi:       #b87d2a;          /* acorn brown */
-  --accent-soft:     #d8dcb0;
-  --success:         #4a6b3a;
-  --success-bg:      #d8dcb0;
-  --success-border:  #98a878;
-  --warning:         #b87d2a;
-  --warning-bg:      #ead5b8;
-  --warning-border:  #c9a868;
-  --danger:          #8a3a28;
-  --danger-bright:   #a44a30;
-  --danger-bg:       #ead0c0;
-  --danger-border:   #c98a78;
-  --inventory:       #b87d2a;
-  --inventory-bg:    #ead5b8;
-  --inventory-border:#c9a868;
-  --favorite:        #b87d2a;
-  --link:            var(--accent);
-  --panel:           var(--surface);
-  --radius:          6px;
-  --input-h:         28px;
-}
-
-/* ── Theme: Ocean Deep (navy with bright cyan) ────────────────────── */
-:root[data-theme="ocean-deep"] {
-  color-scheme: dark;
-  --bg:              #061018;
-  --bg-elevated:     #0e1a26;
-  --bg-hover:        #142434;
-  --surface:         #0e1a26;
-  --surface-raised:  #142434;
-  --surface-sunken:  #040a10;
-  --border:          #1e2e3e;
-  --border-strong:   #2e4254;
-  --border-soft:     #14202c;
-  --fg:              #e0ebf5;
-  --text:            #c8d8e8;
-  --muted:           #7090a8;
-  --muted-dim:       #506878;
-  --text-disabled:   #38485a;
-  --accent:          #2cd4d0;          /* bright cyan/teal */
-  --accent-hover:    #5fe3df;
-  --accent-dim:      #157a78;
-  --accent2:         #5fe3df;
-  --accent-hi:       #f0c44a;          /* sand gold highlight */
-  --accent-soft:     #0a2a2a;
-  --success:         #4adea8;
-  --success-bg:      #0a2a20;
-  --success-border:  #1f5a48;
-  --warning:         #f0c44a;
-  --warning-bg:      #2a2410;
-  --warning-border:  #5a4820;
-  --danger:          #e85968;
-  --danger-bright:   #ff7080;
-  --danger-bg:       #2a0e14;
-  --danger-border:   #5a1f28;
-  --inventory:       #f0c44a;
-  --inventory-bg:    #2a2410;
-  --inventory-border:#5a4820;
-  --favorite:        #f0c44a;
-  --link:            var(--accent);
-  --panel:           var(--surface);
-  --radius:          6px;
-  --input-h:         28px;
-}
-
-/* ── Theme: Saffron Gold (warm desert dark) ───────────────────────── */
-:root[data-theme="saffron-gold"] {
-  color-scheme: dark;
-  --bg:              #150b08;
-  --bg-elevated:     #20140e;
-  --bg-hover:        #281a13;
-  --surface:         #1f1310;
-  --surface-raised:  #281a13;
-  --surface-sunken:  #0e0805;
-  --border:          #38241a;
-  --border-strong:   #4d3525;
-  --border-soft:     #251812;
-  --fg:              #f5e4c0;
-  --text:            #f0d8b0;
-  --muted:           #b89770;
-  --muted-dim:       #8a705a;
-  --text-disabled:   #5a4a38;
-  --accent:          #e8a020;          /* saffron */
-  --accent-hover:    #f5b942;
-  --accent-dim:      #8a5a10;
-  --accent2:         #f5b942;
-  --accent-hi:       #c25040;          /* burgundy */
-  --accent-soft:     #2a1808;
-  --success:         #b8a040;
-  --success-bg:      #2a2410;
-  --success-border:  #5a4820;
-  --warning:         #f5b942;
-  --warning-bg:      #2a2010;
-  --warning-border:  #5a4520;
-  --danger:          #c25040;
-  --danger-bright:   #d86850;
-  --danger-bg:       #2a1410;
-  --danger-border:   #5a2818;
-  --inventory:       #e8a020;
-  --inventory-bg:    #2a1808;
-  --inventory-border:#5a3818;
-  --favorite:        #f5b942;
-  --link:            var(--accent);
-  --panel:           var(--surface);
-  --radius:          6px;
-  --input-h:         28px;
-}
-
 /* ── Theme: Paperback (sage / dusty rose / off-white light) ───────── */
 :root[data-theme="paperback"] {
   color-scheme: light;
@@ -803,6 +591,235 @@ html { overflow-x: hidden; }
   --inventory-bg:    #ead8c0;
   --inventory-border:#c9a888;
   --favorite:        #c1716e;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+}
+
+/* ── Theme: Dark Default (GitHub-dark — neutral dark + blue) ─────────
+   The clean, unsurprising tech-default. If a user just wants a "dark
+   mode" without any aesthetic, this is it. Palette derived from
+   github.com's dark theme so it reads instantly familiar. */
+:root[data-theme="dark-default"] {
+  color-scheme: dark;
+  --bg:              #0d1117;
+  --bg-elevated:     #161b22;
+  --bg-hover:        #21262d;
+  --surface:         #161b22;
+  --surface-raised:  #1c2128;
+  --surface-sunken:  #010409;
+  --border:          #30363d;
+  --border-strong:   #484f58;
+  --border-soft:     #21262d;
+  --fg:              #f0f6fc;
+  --text:            #c9d1d9;
+  --muted:           #8b949e;
+  --muted-dim:       #6e7681;
+  --text-disabled:   #484f58;
+  --accent:          #58a6ff;          /* link blue */
+  --accent-hover:    #79b8ff;
+  --accent-dim:      #1f6feb;
+  --accent2:         #79b8ff;
+  --accent-hi:       #7ee787;          /* highlight green */
+  --accent-soft:     #0c2d6b;
+  --success:         #3fb950;
+  --success-bg:      #0d3217;
+  --success-border:  #196c2e;
+  --warning:         #d29922;
+  --warning-bg:      #2e2200;
+  --warning-border:  #5a4500;
+  --danger:          #f85149;
+  --danger-bright:   #ff7b72;
+  --danger-bg:       #3c0d0d;
+  --danger-border:   #6e2222;
+  --inventory:       #d29922;
+  --inventory-bg:    #2e2200;
+  --inventory-border:#5a4500;
+  --favorite:        #d29922;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+}
+
+/* ── Theme: Light Default (GitHub-light — white + blue) ──────────────
+   The companion to dark-default — clean, high-contrast, no aesthetic.
+   For users who want a basic light mode that just gets out of the way.
+*/
+:root[data-theme="light-default"] {
+  color-scheme: light;
+  --bg:              #ffffff;
+  --bg-elevated:     #f6f8fa;
+  --bg-hover:        #eaeef2;
+  --surface:         #f6f8fa;
+  --surface-raised:  #ffffff;
+  --surface-sunken:  #eaeef2;
+  --border:          #d0d7de;
+  --border-strong:   #afb8c1;
+  --border-soft:     #eaeef2;
+  --fg:              #1f2328;
+  --text:            #1f2328;
+  --muted:           #656d76;
+  --muted-dim:       #8c959f;
+  --text-disabled:   #afb8c1;
+  --accent:          #0969da;          /* link blue */
+  --accent-hover:    #218bff;
+  --accent-dim:      #0550ae;
+  --accent2:         #218bff;
+  --accent-hi:       #1a7f37;          /* green highlight */
+  --accent-soft:     #ddf4ff;
+  --success:         #1a7f37;
+  --success-bg:      #dafbe1;
+  --success-border:  #4ac26b;
+  --warning:         #9a6700;
+  --warning-bg:      #fff8c5;
+  --warning-border:  #d4a72c;
+  --danger:          #cf222e;
+  --danger-bright:   #d1242f;
+  --danger-bg:       #ffebe9;
+  --danger-border:   #ff8182;
+  --inventory:       #9a6700;
+  --inventory-bg:    #fff8c5;
+  --inventory-border:#d4a72c;
+  --favorite:        #9a6700;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+}
+
+/* ── Theme: Solarized Dark (Ethan Schoonover's classic) ──────────────
+   The designer-classic palette: scientifically-tuned to maintain even
+   contrast across all 16 colors. Recognizable to anyone who's used a
+   text editor in the last decade. Teal-dark base, blue link, yellow hi. */
+:root[data-theme="solarized-dark"] {
+  color-scheme: dark;
+  --bg:              #002b36;          /* base03 */
+  --bg-elevated:     #073642;          /* base02 */
+  --bg-hover:        #094352;
+  --surface:         #073642;          /* base02 */
+  --surface-raised:  #094352;
+  --surface-sunken:  #001f27;
+  --border:          #1d4956;
+  --border-strong:   #586e75;          /* base01 */
+  --border-soft:     #073642;
+  --fg:              #eee8d5;          /* base2 */
+  --text:            #93a1a1;          /* base1 */
+  --muted:           #586e75;          /* base01 */
+  --muted-dim:       #4d6168;
+  --text-disabled:   #3a4a50;
+  --accent:          #268bd2;          /* blue */
+  --accent-hover:    #4ca3da;
+  --accent-dim:      #1a5d8e;
+  --accent2:         #2aa198;          /* cyan */
+  --accent-hi:       #b58900;          /* yellow */
+  --accent-soft:     #093d52;
+  --success:         #859900;          /* green */
+  --success-bg:      #1a2c00;
+  --success-border:  #4d5a00;
+  --warning:         #b58900;          /* yellow */
+  --warning-bg:      #2c2200;
+  --warning-border:  #5a4500;
+  --danger:          #dc322f;          /* red */
+  --danger-bright:   #ec5552;
+  --danger-bg:       #350d0d;
+  --danger-border:   #7a1f1f;
+  --inventory:       #cb4b16;          /* orange */
+  --inventory-bg:    #3a1808;
+  --inventory-border:#7a3010;
+  --favorite:        #b58900;          /* yellow */
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+}
+
+/* ── Theme: Solarized Light (Solarized's sister palette) ─────────────
+   Cream-paper base from the same color science. Pairs with solarized-
+   dark for a cohesive day/night look. */
+:root[data-theme="solarized-light"] {
+  color-scheme: light;
+  --bg:              #fdf6e3;          /* base3 */
+  --bg-elevated:     #eee8d5;          /* base2 */
+  --bg-hover:        #ddd5b8;
+  --surface:         #eee8d5;          /* base2 */
+  --surface-raised:  #f5f0dc;
+  --surface-sunken:  #ddd5b8;
+  --border:          #ccc5a8;
+  --border-strong:   #93a1a1;          /* base1 */
+  --border-soft:     #ddd5b8;
+  --fg:              #073642;          /* base02 */
+  --text:            #586e75;          /* base01 */
+  --muted:           #93a1a1;          /* base1 */
+  --muted-dim:       #a0a99a;
+  --text-disabled:   #c0c0a0;
+  --accent:          #268bd2;          /* blue */
+  --accent-hover:    #4ca3da;
+  --accent-dim:      #195e92;
+  --accent2:         #2aa198;          /* cyan */
+  --accent-hi:       #b58900;          /* yellow */
+  --accent-soft:     #d8e8f0;
+  --success:         #859900;
+  --success-bg:      #e6e8c4;
+  --success-border:  #aab084;
+  --warning:         #b58900;
+  --warning-bg:      #f0e8c0;
+  --warning-border:  #c4a84e;
+  --danger:          #dc322f;
+  --danger-bright:   #ec5552;
+  --danger-bg:       #f5d0d0;
+  --danger-border:   #d09090;
+  --inventory:       #cb4b16;          /* orange */
+  --inventory-bg:    #f0d8c0;
+  --inventory-border:#c49060;
+  --favorite:        #b58900;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+}
+
+/* ── Theme: Monokai (Wimer Hazenberg's editor classic) ───────────────
+   Cult-classic editor palette — warm dark green base, magenta primary,
+   green secondary, yellow highlight. Anyone who's used Sublime Text,
+   TextMate, or VS Code's Monokai recognizes this on sight. */
+:root[data-theme="monokai"] {
+  color-scheme: dark;
+  --bg:              #272822;
+  --bg-elevated:     #34352f;
+  --bg-hover:        #49483e;
+  --surface:         #2d2e27;
+  --surface-raised:  #34352f;
+  --surface-sunken:  #1e1f1a;
+  --border:          #3e3d32;
+  --border-strong:   #75715e;
+  --border-soft:     #2d2e27;
+  --fg:              #ffffff;
+  --text:            #f8f8f2;
+  --muted:           #75715e;
+  --muted-dim:       #5a5749;
+  --text-disabled:   #3e3d32;
+  --accent:          #f92672;          /* magenta — primary */
+  --accent-hover:    #ff5599;
+  --accent-dim:      #a01640;
+  --accent2:         #fd971f;          /* orange */
+  --accent-hi:       #a6e22e;          /* green highlight */
+  --accent-soft:     #3e1828;
+  --success:         #a6e22e;
+  --success-bg:      #2a3a14;
+  --success-border:  #5a8020;
+  --warning:         #e6db74;          /* yellow */
+  --warning-bg:      #36321c;
+  --warning-border:  #75715e;
+  --danger:          #f92672;
+  --danger-bright:   #ff5599;
+  --danger-bg:       #3e1828;
+  --danger-border:   #75204a;
+  --inventory:       #fd971f;          /* orange */
+  --inventory-bg:    #3a2410;
+  --inventory-border:#7a5018;
+  --favorite:        #e6db74;          /* yellow */
   --link:            var(--accent);
   --panel:           var(--surface);
   --radius:          6px;
@@ -4772,6 +4789,19 @@ footer {
   padding: 0.5rem 0.4rem;
   text-align: center;
 }
+a.profile-stat-link {
+  text-decoration: none;
+  color: inherit;
+  display: block;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, transform 0.12s;
+}
+a.profile-stat-link:hover {
+  background: #1d1d24;
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+a.profile-stat-link:hover .profile-stat-num { color: var(--accent); }
 .profile-stat-num {
   font-size: 1.05rem;
   font-weight: 700;
@@ -5120,79 +5150,87 @@ footer {
 }
 .loc-remove-btn:disabled { opacity: 0.35; cursor: wait; }
 
-/* ── LOC audio bar (fixed bottom) ───────────────────────────────────── */
+/* ── LOC audio bar (fixed bottom) ─────────────────────────────────────
+   Visually aligned with the YouTube mini-player bar (.mini-player-bar)
+   so the two persistent players read as a single style language. Same
+   dark surface, same border, same z-index layer. */
 .loc-audio-bar {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 200;
+  z-index: 300;
   display: none;
   align-items: center;
-  gap: 0.8rem;
-  padding: 0.55rem 0.9rem;
-  background: var(--surface);
-  border-top: 1px solid var(--border);
-  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
+  gap: 0.4rem;
+  padding: 0.5rem 0.6rem 0.65rem;
+  background: #111;
+  border-top: 1px solid #2a2a2a;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.6);
+  min-height: 48px;
 }
 .loc-audio-bar.is-visible { display: flex; }
 .loc-audio-bar-info {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.4rem;
   min-width: 0;
   flex: 0 1 260px;
+  cursor: pointer;
 }
 .loc-audio-bar-icon {
   color: var(--accent);
-  font-size: 1.2rem;
+  font-size: 1rem;
+  flex-shrink: 0;
 }
 .loc-audio-bar-title {
-  font-size: 0.82rem;
-  color: var(--text);
+  font-size: 0.78rem;
+  color: #ccc;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   font-weight: 600;
+  min-width: 0;
 }
 .loc-audio {
   flex: 1;
-  height: 36px;
+  height: 32px;
   min-width: 0;
+  /* Native audio controls inherit OS theming; on Webkit/Chromium tint the
+     panel to match the dark bar. */
+  filter: invert(0.85) hue-rotate(180deg);
 }
 .loc-audio-bar-close {
   background: none;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 1.1rem;
+  border: none;
+  color: #aaa;
+  font-size: 1rem;
   line-height: 1;
   cursor: pointer;
-  padding: 0.15rem 0.5rem;
+  padding: 0.25rem 0.45rem;
   border-radius: 4px;
 }
-.loc-audio-bar-close:hover { color: var(--text); border-color: var(--accent); }
+.loc-audio-bar-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
 .loc-audio-bar-queue-nav,
 .loc-audio-bar-actions {
   display: flex;
-  gap: 0.25rem;
+  align-items: center;
+  gap: 0.15rem;
   flex-shrink: 0;
 }
-.loc-audio-bar-save.is-saved {
-  color: var(--favorite);
-  border-color: var(--favorite);
-}
+.loc-audio-bar-save.is-saved { color: var(--favorite); }
 .loc-audio-bar-nav {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--muted);
+  background: none;
+  border: none;
+  color: #aaa;
   font-size: 0.7rem;
   line-height: 1;
   cursor: pointer;
-  padding: 0.35rem 0.6rem;
+  padding: 0.35rem 0.5rem;
   border-radius: 4px;
   font-variant-numeric: tabular-nums;
 }
-.loc-audio-bar-nav:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); }
+.loc-audio-bar-nav:hover:not(:disabled) { color: #fff; background: rgba(255,255,255,0.1); }
 .loc-audio-bar-nav:disabled { opacity: 0.3; cursor: not-allowed; }
 
 /* ── LOC info popup overlay ───────────────────────────────────────── */
@@ -6062,6 +6100,87 @@ footer {
   transition: opacity 0.12s;
 }
 .track-yt-search-end:hover { opacity: 1; }
+/* Per-track Library of Congress lookup icon. Sits between the W (wiki)
+   and the YouTube-search rectangle so the row reads "title ⌕ W 🏛 ▭". */
+.track-loc-icon {
+  display: inline-block;
+  font-size: 0.85em;
+  margin-left: 0.2rem;
+  text-decoration: none;
+  opacity: 0.6;
+  transition: opacity 0.12s, transform 0.12s;
+  cursor: pointer;
+  filter: grayscale(0.3);
+}
+.track-loc-icon:hover { opacity: 1; transform: translateY(-1px); filter: none; }
+.track-loc-icon.is-loading { opacity: 1; animation: track-loc-pulse 1s ease-in-out infinite; }
+@keyframes track-loc-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.4; }
+}
+/* Floating popup with multiple LOC matches per track */
+.track-loc-popup {
+  background: #15151a;
+  border: 1px solid #2e2e2e;
+  border-radius: 6px;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.55);
+  z-index: 1100;
+  font-size: 0.82rem;
+  color: var(--text);
+  max-height: 360px;
+  overflow-y: auto;
+}
+.track-loc-popup-header {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: 0.45rem 0.7rem;
+  border-bottom: 1px solid #2a2a2a;
+  background: #0e0e12;
+  position: sticky;
+  top: 0;
+}
+.track-loc-popup-list { display: flex; flex-direction: column; }
+.track-loc-popup-row {
+  display: block;
+  padding: 0.5rem 0.7rem;
+  text-decoration: none;
+  color: var(--text);
+  border-bottom: 1px solid #1d1d22;
+  cursor: pointer;
+}
+.track-loc-popup-row:last-child { border-bottom: none; }
+.track-loc-popup-row:hover { background: #1d1d24; }
+.track-loc-popup-title {
+  font-size: 0.84rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.track-loc-popup-meta {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Tiny toast that appears under the icon on 0-result / error responses */
+.track-loc-toast {
+  background: #1a1a1f;
+  border: 1px solid #2e2e2e;
+  border-radius: 6px;
+  padding: 0.4rem 0.7rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  z-index: 1100;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+.track-loc-toast.fade-out { opacity: 0; }
 .track-title-link {
   color: var(--text);
   text-decoration: none;

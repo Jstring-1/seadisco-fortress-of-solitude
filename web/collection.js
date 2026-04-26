@@ -1450,7 +1450,7 @@ async function loadCollectionTab(page = 1, filters) {
       setCwStatus("");
       document.getElementById("results").innerHTML = hasFilter
         ? renderEmptyState("🔍", `No collection items matching "${filterDesc}"`, "Try adjusting your filters")
-        : renderEmptyState("📀", "No collection items synced", "Connect your Discogs token in Account to sync your collection");
+        : renderEmptyState("📀", "No collection items synced", "Connect your Discogs account in Account to sync your collection");
       return;
     }
     const prefix = hasFilter ? `${data.total} results for "${filterDesc}"` : `${data.total} items in collection`;
@@ -1501,7 +1501,7 @@ async function loadWantlistTab(page = 1, filters) {
       setCwStatus("");
       document.getElementById("results").innerHTML = hasFilter
         ? renderEmptyState("🔍", `No wantlist items matching "${filterDesc}"`, "Try adjusting your filters")
-        : renderEmptyState("💿", "No wantlist items synced", "Connect your Discogs token in Account to sync your wantlist");
+        : renderEmptyState("💿", "No wantlist items synced", "Connect your Discogs account in Account to sync your wantlist");
       return;
     }
     const prefix = hasFilter ? `${data.total} results for "${filterDesc}"` : `${data.total} items in wantlist`;
