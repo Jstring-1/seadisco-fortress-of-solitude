@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 
 
@@ -2412,6 +2412,74 @@ app.get("/api/loc/search", async (req, res) => {
   }
 });
 
+// GET /api/loc/lookup — resolve a single LOC item by its full URL/id.
+// Used so a shared URL like /?v=loc&li=<urlencoded-loc-id> can open the
+// info popup (and a /?v=loc&lp=<id> URL can resume playback) without
+// the recipient having to re-run the search that originally surfaced
+// the item. Same rate limiter as /api/loc/search.
+app.get("/api/loc/lookup", async (req, res) => {
+  const userId = await requireUser(req, res);
+  if (!userId) return;
+  const id = typeof req.query.id === "string" ? req.query.id : "";
+  // Validate: must be a loc.gov item URL. Anything else gets a 400 so
+  // we don't proxy arbitrary URLs through this endpoint.
+  if (!/^https?:\/\/(www\.)?loc\.gov\//i.test(id)) {
+    res.status(400).json({ error: "id must be a loc.gov URL" });
+    return;
+  }
+  try {
+    await locLimiter.acquire();
+  } catch (e: any) {
+    if (e?.code === "rate_limit_queue_full") {
+      res.status(503).json({ error: "rate_limited", message: "LOC API is busy, try again in a moment." });
+      return;
+    }
+    res.status(500).json({ error: String(e?.message ?? e) });
+    return;
+  }
+  try {
+    const url = id + (id.includes("?") ? "&" : "?") + "fo=json";
+    const r = await loggedFetch("loc", url, {
+      headers: { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "application/json" },
+      context: "loc-lookup",
+    });
+    if (r.status === 429) {
+      res.status(503).json({ error: "rate_limited", message: "LOC is currently rate-limiting — try again shortly." });
+      return;
+    }
+    if (!r.ok) {
+      res.status(502).json({ error: `LOC HTTP ${r.status}` });
+      return;
+    }
+    const ct = r.headers.get("content-type") ?? "";
+    if (!ct.includes("json")) {
+      res.status(502).json({ error: "LOC returned non-JSON (possible CAPTCHA). Try again later." });
+      return;
+    }
+    const body = await r.json() as any;
+    // The single-item response wraps the actual record under `item` (and
+    // `resources`/`recording` siblings carry the audio info). Build a
+    // flat object that matches the search-result shape so _normalizeLocResult
+    // can produce the same normalized card.
+    const merged = {
+      ...(body?.item ?? {}),
+      // search results carry these at the top level — preserve resources
+      // so audio URLs survive normalization
+      resources: body?.resources ?? body?.item?.resources ?? [],
+      id,
+      url: id,
+    };
+    const normalized = _normalizeLocResult(merged);
+    if (!normalized) {
+      res.status(404).json({ error: "Item not found" });
+      return;
+    }
+    res.json({ item: normalized });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
 // GET /api/user/loc-saves — list the current user's saved LOC items
 app.get("/api/user/loc-saves", async (req, res) => {
   const userId = await requireUser(req, res);
@@ -2468,6 +2536,76 @@ app.delete("/api/user/loc-saves", express.json(), async (req, res) => {
   if (!locId) { res.status(400).json({ error: "locId required" }); return; }
   try {
     await deleteLocSave(userId, locId);
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// ── Wikipedia article saves (Wikipedia SPA "Saved" tab) ────────────────
+// Same shape as the LOC saves API. Wikipedia titles can contain spaces,
+// slashes, and other URL-unfriendly characters — title is sent in the
+// request body for POST/DELETE, never in the URL path.
+
+// GET /api/user/wiki-saves — list the current user's saved Wikipedia articles
+app.get("/api/user/wiki-saves", async (req, res) => {
+  const userId = await requireUser(req, res);
+  if (!userId) return;
+  try {
+    const items = await getWikiSaves(userId);
+    res.json({ items });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// GET /api/user/wiki-saves/ids — lightweight list of saved titles for ★ state
+app.get("/api/user/wiki-saves/ids", async (req, res) => {
+  const userId = await requireUser(req, res);
+  if (!userId) return;
+  try {
+    const ids = await getWikiSaveIds(userId);
+    res.json({ ids });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// POST /api/user/wiki-saves — save an article
+// Body: { title, url?, snippet?, thumbnail?, data? }
+app.post("/api/user/wiki-saves", express.json({ limit: "64kb" }), async (req, res) => {
+  const userId = await requireUser(req, res);
+  if (!userId) return;
+  const { title, url = null, snippet = null, thumbnail = null, data = {} } = req.body ?? {};
+  if (typeof title !== "string" || !title.trim()) {
+    res.status(400).json({ error: "title required" }); return;
+  }
+  try {
+    await saveWikiArticle(
+      userId,
+      title.trim().slice(0, 500),
+      url ? String(url).slice(0, 2000) : null,
+      snippet ? String(snippet).slice(0, 2000) : null,
+      thumbnail ? String(thumbnail).slice(0, 2000) : null,
+      data && typeof data === "object" ? data : {},
+    );
+    res.json({ ok: true });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// DELETE /api/user/wiki-saves — remove a single save
+// Body: { title }
+app.delete("/api/user/wiki-saves", express.json(), async (req, res) => {
+  const userId = await requireUser(req, res);
+  if (!userId) return;
+  const title = typeof req.body?.title === "string"
+    ? req.body.title.trim()
+    : (typeof req.query?.title === "string" ? req.query.title.trim() : "");
+  if (!title) { res.status(400).json({ error: "title required" }); return; }
+  try {
+    await deleteWikiSave(userId, title);
     res.json({ ok: true });
   } catch (e: any) {
     res.status(500).json({ error: String(e?.message ?? e) });

@@ -496,11 +496,16 @@ async function _renderWikiPopupSearch(q, contentEl) {
       return;
     }
     const safeQ = String(q).replace(/'/g, "\\'");
+    // Make sure ★ state is loaded so the saved buttons render correctly
+    await _wikiLoadSavedIds();
     listEl.innerHTML = rows.map(rec => {
       const safeTitle = String(rec.title || "").replace(/'/g, "\\'");
       return `
         <div class="wiki-result">
-          <a href="#" class="wiki-result-title" onclick="event.preventDefault();openWikiArticle('${escHtml(safeTitle)}','${escHtml(safeQ)}')" title="Open in popup">${escHtml(rec.title || "")}</a>
+          <div class="wiki-result-head">
+            <a href="#" class="wiki-result-title" onclick="event.preventDefault();openWikiArticle('${escHtml(safeTitle)}','${escHtml(safeQ)}')" title="Open in popup">${escHtml(rec.title || "")}</a>
+            ${_wikiSaveBtnHtml(rec.title || "")}
+          </div>
           <div class="wiki-result-snippet">${rec.snippet || ""}…</div>
         </div>`;
     }).join("");
@@ -548,10 +553,17 @@ async function openWikiArticle(title, sourceQuery) {
     const backBtn = sourceQuery
       ? `<button type="button" class="wiki-back-btn" onclick="openWikiPopup('${escHtml(safeSrc)}')">← Back to "${escHtml(backDisplay)}" results</button>`
       : "";
+    // Render ★ next to the article heading so the user can save the
+    // article they're currently reading without bouncing back to a list.
+    await _wikiLoadSavedIds();
+    const saveBtnHtml = _wikiSaveBtnHtml(data.title || "");
     content.innerHTML = `
       <div class="wiki-header">
         ${backBtn}
-        <h2 style="margin:0.3rem 0 0.4rem 0">${escHtml(data.title)}</h2>
+        <div class="wiki-article-title-row">
+          <h2 style="margin:0.3rem 0 0.4rem 0">${escHtml(data.title)}</h2>
+          ${saveBtnHtml}
+        </div>
       </div>
       <div class="wiki-extract">${thumb}${data.html}</div>`;
     _applyWikiArticleRewrites(content, sourceQuery || data.title);
@@ -735,10 +747,164 @@ function _wikiResultRowHtml(rec) {
   // button (closing the popup returns the user to the SPA list anyway).
   return `
     <div class="wiki-result">
-      <a href="#" class="wiki-result-title" onclick="event.preventDefault();openWikiArticle('${escHtml(safeTitle)}','')" title="Open article">${escHtml(rec.title || "")}</a>
+      <div class="wiki-result-head">
+        <a href="#" class="wiki-result-title" onclick="event.preventDefault();openWikiArticle('${escHtml(safeTitle)}','')" title="Open article">${escHtml(rec.title || "")}</a>
+        ${_wikiSaveBtnHtml(rec.title || "")}
+      </div>
       <div class="wiki-result-snippet">${rec.snippet || ""}…</div>
     </div>`;
 }
+
+// ── Saved-articles state ────────────────────────────────────────────
+// _wikiSavedTitles is a Set of canonical titles the current user has
+// starred. Loaded once per page from /api/user/wiki-saves/ids and
+// mutated locally on every toggle so ★ state is instant.
+let _wikiSavedTitles = null;
+let _wikiSavedItems  = null;
+let _wikiTab         = "search";
+
+async function _wikiLoadSavedIds() {
+  if (_wikiSavedTitles) return _wikiSavedTitles;
+  try {
+    const r = await apiFetch("/api/user/wiki-saves/ids");
+    if (!r.ok) { _wikiSavedTitles = new Set(); return _wikiSavedTitles; }
+    const j = await r.json();
+    _wikiSavedTitles = new Set(Array.isArray(j?.ids) ? j.ids : []);
+  } catch {
+    _wikiSavedTitles = new Set();
+  }
+  return _wikiSavedTitles;
+}
+
+function _wikiSaveBtnHtml(title) {
+  if (!title) return "";
+  const safe = String(title).replace(/'/g, "\\'");
+  const isSaved = !!(_wikiSavedTitles && _wikiSavedTitles.has(title));
+  const cls = isSaved ? "wiki-save-btn is-saved" : "wiki-save-btn";
+  const tip = isSaved ? "Remove from saved" : "Save article for later";
+  return `<button type="button" class="${cls}" data-wiki-title="${escHtml(title)}" onclick="event.preventDefault();event.stopPropagation();_wikiToggleSave('${escHtml(safe)}', this)" title="${tip}">★</button>`;
+}
+
+// Update every ★ button in the DOM that targets this title so they
+// stay in sync (a row's ★, the article-header ★, the saved-tab card,
+// etc. all live independently).
+function _wikiSyncSaveButtons(title) {
+  const isSaved = !!(_wikiSavedTitles && _wikiSavedTitles.has(title));
+  document.querySelectorAll(`.wiki-save-btn[data-wiki-title="${CSS.escape(title)}"]`).forEach(b => {
+    b.classList.toggle("is-saved", isSaved);
+    b.title = isSaved ? "Remove from saved" : "Save article for later";
+  });
+}
+
+async function _wikiToggleSave(title, btn) {
+  const t = String(title || "").trim();
+  if (!t) return;
+  await _wikiLoadSavedIds();
+  const isSaved = _wikiSavedTitles.has(t);
+  // Optimistic toggle so the ★ flips instantly even on slow connections
+  if (isSaved) _wikiSavedTitles.delete(t); else _wikiSavedTitles.add(t);
+  _wikiSyncSaveButtons(t);
+  try {
+    if (isSaved) {
+      const r = await apiFetch("/api/user/wiki-saves", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: t }),
+      });
+      if (!r.ok) throw new Error("Delete failed");
+    } else {
+      const row = btn?.closest(".wiki-result");
+      const snippetEl = row?.querySelector(".wiki-result-snippet");
+      const snippet = snippetEl ? snippetEl.textContent.trim().slice(0, 500) : null;
+      const url = `https://en.wikipedia.org/wiki/${encodeURIComponent(t.replace(/ /g, "_"))}`;
+      const r = await apiFetch("/api/user/wiki-saves", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title: t, url, snippet, thumbnail: null, data: {} }),
+      });
+      if (!r.ok) throw new Error("Save failed");
+    }
+    _wikiSavedItems = null;
+    if (_wikiTab === "saved") _wikiRenderSavedTab();
+    if (typeof showToast === "function") {
+      showToast(isSaved ? "Removed from saved" : "Saved");
+    }
+  } catch (err) {
+    if (isSaved) _wikiSavedTitles.add(t); else _wikiSavedTitles.delete(t);
+    _wikiSyncSaveButtons(t);
+    if (typeof showToast === "function") {
+      showToast(isSaved ? "Could not remove save" : "Could not save", "error");
+    }
+  }
+}
+
+// ── Tab switching + saved-tab render ─────────────────────────────────
+function _wikiSwitchTab(tab, { pushUrl = true } = {}) {
+  _wikiTab = tab === "saved" ? "saved" : "search";
+  document.querySelectorAll("#wiki-view .loc-tab").forEach(btn => btn.classList.remove("active"));
+  document.querySelector(`#wiki-view .loc-tab-${_wikiTab}`)?.classList.add("active");
+  const searchPanel = document.querySelector(".wiki-panel-search");
+  const savedPanel  = document.querySelector(".wiki-panel-saved");
+  if (searchPanel) searchPanel.style.display = _wikiTab === "search" ? "" : "none";
+  if (savedPanel)  savedPanel.style.display  = _wikiTab === "saved"  ? "" : "none";
+  if (_wikiTab === "saved") _wikiRenderSavedTab();
+  if (pushUrl && typeof history?.pushState === "function") {
+    const qs = new URLSearchParams(location.search);
+    qs.set("v", "wiki");
+    if (_wikiTab === "saved") qs.set("tab", "saved"); else qs.delete("tab");
+    const next = "/?" + qs.toString();
+    if (location.pathname + location.search !== next) {
+      history.pushState({}, "", next);
+    }
+  }
+}
+
+async function _wikiRenderSavedTab() {
+  const el = document.getElementById("wiki-saved-results");
+  if (!el) return;
+  if (_wikiSavedItems) {
+    el.innerHTML = _wikiRenderSavedListHtml(_wikiSavedItems);
+    return;
+  }
+  el.innerHTML = `<div class="wiki-results-loading">Loading saved articles…</div>`;
+  try {
+    const r = await apiFetch("/api/user/wiki-saves");
+    if (!r.ok) {
+      el.innerHTML = `<div class="wiki-results-error">Could not load saved articles.</div>`;
+      return;
+    }
+    const j = await r.json();
+    _wikiSavedItems = Array.isArray(j?.items) ? j.items : [];
+    _wikiSavedTitles = new Set(_wikiSavedItems.map(it => it.title));
+    el.innerHTML = _wikiRenderSavedListHtml(_wikiSavedItems);
+  } catch {
+    el.innerHTML = `<div class="wiki-results-error">Could not load saved articles.</div>`;
+  }
+}
+
+function _wikiRenderSavedListHtml(items) {
+  if (!items.length) {
+    return `<div class="wiki-results-empty">No saved articles yet. Click ★ on any search result to save it for later.</div>`;
+  }
+  return `<div class="wiki-results-rows">${items.map(it => {
+    const safeTitle = String(it.title || "").replace(/'/g, "\\'");
+    const snippetHtml = it.snippet
+      ? `<div class="wiki-result-snippet">${escHtml(String(it.snippet))}</div>`
+      : "";
+    return `
+      <div class="wiki-result">
+        <div class="wiki-result-head">
+          <a href="#" class="wiki-result-title" onclick="event.preventDefault();openWikiArticle('${escHtml(safeTitle)}','')" title="Open article">${escHtml(it.title || "")}</a>
+          ${_wikiSaveBtnHtml(it.title || "")}
+        </div>
+        ${snippetHtml}
+      </div>`;
+  }).join("")}</div>`;
+}
+
+// Expose tab switcher + toggle to inline onclick handlers in index.html
+window._wikiSwitchTab = _wikiSwitchTab;
+window._wikiToggleSave = _wikiToggleSave;
 
 async function runWikiPageSearch(query) {
   const q = String(query || "").trim();

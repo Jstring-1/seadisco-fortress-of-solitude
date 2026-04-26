@@ -247,6 +247,37 @@ function _locApplyUrlFromAddress() {
   if (tab === "search" && hasCriteria) {
     _locRunSearchFromForm({ resetPage: !p.get("sp"), pushUrl: false });
   }
+  // Deep-link: ?li=<loc URL> reopens the info popup; ?lp=<loc URL>
+  // resumes playback in the bar. Both can be present (e.g. a user
+  // shares a link with the popup open AND a track playing).
+  const li = p.get("li");
+  const lp = p.get("lp");
+  if (li || lp) {
+    _locResumeFromUrl(li, lp);
+  }
+}
+
+async function _locResumeFromUrl(li, lp) {
+  // Resolve any ids that aren't already cached. Both li and lp may
+  // refer to the same item, so coalesce duplicate fetches.
+  const needed = new Set();
+  if (li && !_locItemCache.has(li)) needed.add(li);
+  if (lp && !_locItemCache.has(lp)) needed.add(lp);
+  for (const id of needed) {
+    try { await _locFetchLookup(id); } catch { /* keep going */ }
+  }
+  if (lp && _locItemCache.has(lp)) {
+    const item = _locItemCache.get(lp);
+    if (item?.streamUrl) {
+      // Best-effort autoplay — modern browsers may block until the
+      // user interacts. The bar still appears with the right title
+      // and a tap on ▶ resumes the right track.
+      try { _locPlay(item); } catch {}
+    }
+  }
+  if (li && _locItemCache.has(li)) {
+    try { _locOpenInfoPopup(li); } catch {}
+  }
 }
 
 function _locRenderShell() {
@@ -618,16 +649,27 @@ function _locRenderCard(item, opts) {
 // location, label, genres, summary, and big Play / Save / Open-on-LOC
 // buttons. The popup reuses the existing shared modal overlay pattern
 // (see #loc-info-overlay in index.html).
-function _locOpenInfoPopup(locId) {
+async function _locOpenInfoPopup(locId) {
   if (!locId) return;
   const overlay = document.getElementById("loc-info-overlay");
   const body    = document.getElementById("loc-info-body");
   if (!overlay || !body) return;
-  const item = _locItemCache.get(locId);
+  // Reflect in URL so the popup is shareable. Receiver lands on
+  // /?v=loc&li=<id>, _locApplyUrlFromAddress runs the resolver, and
+  // the popup reopens with the same item.
+  _locPushPopupUrlState(locId);
+  let item = _locItemCache.get(locId);
   if (!item) {
-    body.innerHTML = `<div class="loc-empty">Item no longer in cache.</div>`;
+    // Show a brief loading state, then fetch the item from the lookup proxy
     overlay.classList.add("open");
-    return;
+    body.innerHTML = `<div class="loc-empty">Loading…</div>`;
+    try {
+      item = await _locFetchLookup(locId);
+    } catch { /* fall through */ }
+    if (!item) {
+      body.innerHTML = `<div class="loc-empty">Item no longer in cache and lookup failed.</div>`;
+      return;
+    }
   }
 
   const esc = (v) => escHtml(String(v ?? ""));
@@ -814,6 +856,53 @@ function _locOpenInfoPopup(locId) {
 
 function _locCloseInfoPopup() {
   document.getElementById("loc-info-overlay")?.classList.remove("open");
+  // Strip the popup param from the URL so the back-button doesn't
+  // re-open it; keep `lp=` if a track is currently playing.
+  _locPushPopupUrlState(null);
+}
+
+// ── URL state for shareable popup + playback ─────────────────────────
+// `li=<full loc URL>` → reopen the info popup on landing.
+// `lp=<full loc URL>` → resume playback on landing (best-effort; mobile
+//   browsers may require a tap before audio actually plays).
+// Both params are kept in sync via small helpers so the address bar
+// always reflects the current popup + bar state.
+function _locPushPopupUrlState(locIdOrNull) {
+  if (typeof history?.replaceState !== "function") return;
+  const qs = new URLSearchParams(location.search);
+  qs.set("v", "loc");
+  if (locIdOrNull) qs.set("li", locIdOrNull); else qs.delete("li");
+  const next = "/?" + qs.toString();
+  if (location.pathname + location.search !== next) {
+    history.replaceState({}, "", next);
+  }
+}
+function _locPushPlayUrlState(locIdOrNull) {
+  if (typeof history?.replaceState !== "function") return;
+  const qs = new URLSearchParams(location.search);
+  qs.set("v", "loc");
+  if (locIdOrNull) qs.set("lp", locIdOrNull); else qs.delete("lp");
+  const next = "/?" + qs.toString();
+  if (location.pathname + location.search !== next) {
+    history.replaceState({}, "", next);
+  }
+}
+
+// Fetch a single LOC item by id via the server proxy. Adds to the
+// item cache. Returns the normalized item, or null on failure.
+async function _locFetchLookup(locId) {
+  if (!locId) return null;
+  try {
+    const r = await apiFetch(`/api/loc/lookup?id=${encodeURIComponent(locId)}`);
+    if (!r.ok) return null;
+    const j = await r.json();
+    const item = j?.item;
+    if (item && item.id) {
+      _locItemCache.set(item.id, item);
+      return item;
+    }
+  } catch { /* fall through */ }
+  return null;
 }
 
 function _locPlayFromInfo(locId) {
@@ -1320,6 +1409,9 @@ async function _locPlay(item) {
   // Body class lets the page reserve bottom padding so the last row of
   // cards isn't hidden behind the fixed audio bar.
   document.body.classList.add("loc-open");
+  // Reflect now-playing in the URL — share/copy the link and the
+  // recipient lands with the same track queued in the bar.
+  _locPushPlayUrlState(item.id);
   _locUpdateQueueButtons();
 
   // Tear down any prior hls.js instance cleanly
@@ -1422,6 +1514,9 @@ function _locClosePlayer() {
   _locNowPlaying = null;
   _locQueue = null;
   _locUpdateQueueButtons();
+  // Drop the now-playing param from the URL so the shareable link
+  // doesn't keep pointing at a track the user has stopped.
+  _locPushPlayUrlState(null);
 }
 
 // Close the info popup with Escape

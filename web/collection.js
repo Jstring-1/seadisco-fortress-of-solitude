@@ -279,16 +279,30 @@ function switchView(view, skipPushState = false) {
     // shareable AND survives back-button navigation. Wait for auth so
     // apiFetch attaches the Bearer token.
     try {
-      const wq = new URLSearchParams(location.search).get("wq");
+      const params = new URLSearchParams(location.search);
+      const wq = params.get("wq");
+      const tab = params.get("tab") === "saved" ? "saved" : "search";
       const qInput = document.getElementById("wiki-view-q");
       if (qInput) qInput.value = wq || "";
-      if (wq && typeof runWikiPageSearch === "function") {
+      // Pre-load saved-article IDs so ★ state is correct on first paint
+      if (typeof _wikiLoadSavedIds === "function") {
+        if (typeof authReadyPromise !== "undefined") {
+          authReadyPromise.then(() => { try { _wikiLoadSavedIds(); } catch {} });
+        } else {
+          try { _wikiLoadSavedIds(); } catch {}
+        }
+      }
+      // Honor ?tab=saved deep-link before running any search
+      if (typeof _wikiSwitchTab === "function") {
+        try { _wikiSwitchTab(tab, { pushUrl: false }); } catch {}
+      }
+      if (tab === "search" && wq && typeof runWikiPageSearch === "function") {
         if (typeof authReadyPromise !== "undefined") {
           authReadyPromise.then(() => { try { runWikiPageSearch(wq); } catch {} });
         } else {
           try { runWikiPageSearch(wq); } catch {}
         }
-      } else {
+      } else if (tab === "search") {
         // No wq= → clear any stale results from a previous visit.
         const resultsEl = document.getElementById("wiki-view-results");
         if (resultsEl) resultsEl.innerHTML = "";
