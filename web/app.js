@@ -367,13 +367,16 @@ async function applyAuthState(clerk) {
   // sign-in modal when signed-out and routes to /account when signed-in.
   const navBtn = document.getElementById("nav-auth-tab");
   if (navBtn) {
-    if (clerk.user) {
-      navBtn.textContent = "Account";
-      navBtn.classList.remove("nav-signup-btn");
-    } else {
-      navBtn.textContent = "Sign In";
-      navBtn.classList.add("nav-signup-btn");
-    }
+    const newLabel = clerk.user ? "Account" : "Sign In";
+    navBtn.title = newLabel;
+    // When iconNav is on the tab contains [icon SVG][label span] — set
+    // textContent on the whole tab would nuke the icon. Update only
+    // the .nav-label span if it exists; otherwise fall back to text.
+    const labelSpan = navBtn.querySelector(".nav-label");
+    if (labelSpan) labelSpan.textContent = newLabel;
+    else navBtn.textContent = newLabel;
+    if (clerk.user) navBtn.classList.remove("nav-signup-btn");
+    else navBtn.classList.add("nav-signup-btn");
   }
 
   _applySplashVisibility(clerk);

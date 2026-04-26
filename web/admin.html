@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260425h" />
+  <link rel="stylesheet" href="/style.css?v=20260425i" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260425h"></script>
+<script defer src="/shared.js?v=20260425i"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true, iconNav: true }));</script>
 
 <main>
@@ -288,7 +288,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260425h"></script>
+<script defer src="/modal.js?v=20260425i"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -617,23 +617,31 @@ async function loadDbStats() {
       { label: "Users & Auth", tables: ["user_tokens", "oauth_request_tokens"] },
       { label: "Collection & Library", tables: ["user_collection", "user_collection_folders", "user_wantlist", "user_inventory", "user_lists", "user_list_items", "user_orders", "user_order_messages"] },
       { label: "Pricing", tables: ["price_cache", "price_history", "price_alerts", "triggered_alerts"] },
-      { label: "User Features", tables: ["saved_searches", "user_favorites", "user_recent_views", "user_loc_saves", "feedback", "release_cache"] },
+      { label: "User Features", tables: ["saved_searches", "user_favorites", "user_recent_views", "user_loc_saves", "user_wiki_saves", "feedback", "release_cache"] },
+      { label: "Curated Data", tables: ["blues_artists"] },
       { label: "System", tables: ["api_request_log"] },
     ];
 
     const countMap = {};
     tables.forEach(t => countMap[t.table] = t.rows);
 
-    let html = `<div style="margin-bottom:0.6rem;font-weight:600;color:var(--fg)">${totalRows.toLocaleString()} total rows</div>`;
+    // Flag any tables the server reports that aren't in any of our groups
+    // — keeps this panel self-checking when a new table is added without
+    // remembering to update the grouping above.
+    const knownTables = new Set(groups.flatMap(g => g.tables));
+    const ungrouped = tables.map(t => t.table).filter(t => !knownTables.has(t));
+    if (ungrouped.length) groups.push({ label: "Ungrouped (unrecognized)", tables: ungrouped });
+
+    let html = `<div style="margin-bottom:0.6rem;font-weight:600;color:var(--fg)">${totalRows.toLocaleString()} total rows · ${tables.length} tables</div>`;
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:0.8rem">';
     for (const g of groups) {
-      html += `<div style="background:#1a1510;border:1px solid #2e2518;border-radius:6px;padding:0.5rem 0.7rem">`;
+      html += `<div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.5rem 0.7rem">`;
       html += `<div style="font-size:0.72rem;color:var(--accent);font-weight:600;margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.5px">${g.label}</div>`;
       for (const t of g.tables) {
         const count = countMap[t] ?? -1;
         const display = count < 0 ? "err" : count.toLocaleString();
-        const color = count < 0 ? "#c0392b" : count === 0 ? "#555" : "var(--fg)";
-        html += `<div style="display:flex;justify-content:space-between;padding:0.12rem 0;font-size:0.78rem"><span style="color:#888">${t}</span><span style="color:${color};font-weight:500">${display}</span></div>`;
+        const color = count < 0 ? "var(--danger)" : count === 0 ? "var(--muted-dim)" : "var(--fg)";
+        html += `<div style="display:flex;justify-content:space-between;padding:0.12rem 0;font-size:0.78rem"><span style="color:var(--muted)">${t}</span><span style="color:${color};font-weight:500">${display}</span></div>`;
       }
       html += `</div>`;
     }
