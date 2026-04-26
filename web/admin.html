@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260425n" />
+  <link rel="stylesheet" href="/style.css?v=20260426a" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260425n"></script>
+<script defer src="/shared.js?v=20260426a"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true, iconNav: true }));</script>
 
 <main>
@@ -201,6 +201,19 @@
         <p style="font-size:0.82rem;color:var(--muted);margin:0 0 1rem">
           Theme is stored in your browser (localStorage, key <code>sd-theme</code>). Switching applies instantly site-wide.
         </p>
+        <!-- View-as-user toggle: hides every admin-only affordance on
+             the main site (W icons, 🏛 LOC track icons, blues + adders,
+             admin-only nav surfaces) so the admin can preview the site
+             as a regular user sees it. The footer Admin link stays
+             visible and a small fixed chip in the corner of the main
+             site offers a one-click restore. -->
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:1.2rem;padding:0.6rem 0.8rem;background:var(--surface);border:1px solid var(--border);border-radius:6px">
+          <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;color:var(--text);cursor:pointer;font-weight:600">
+            <input type="checkbox" id="admin-as-user-toggle" onchange="toggleAdminAsUser(this)">
+            View main site as a regular user
+          </label>
+          <span style="font-size:0.72rem;color:var(--muted)">Hides admin-only icons + tabs everywhere except <code>/admin</code>.</span>
+        </div>
         <div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:1rem">
           <label for="theme-select" style="font-size:0.82rem;color:var(--text);font-weight:600">Active theme:</label>
           <select id="theme-select" onchange="applyThemeChoice(this.value)" style="min-width:240px">
@@ -288,7 +301,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260425n"></script>
+<script defer src="/modal.js?v=20260426a"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -345,6 +358,19 @@ const _themes = [
   { id: "slate-emerald",    label: "Slate Emerald",         swatches: ["#1c1d22", "#22232a", "#50d68a", "#d8d8e0", "#ff8a50"], font: "'Rockwell', 'Roboto Slab', 'Slabo 27px', 'Calisto MT', Georgia, serif" },
 ];
 
+// View-as-user toggle. Stored in localStorage so the override survives
+// page loads. Reload after flipping so every cached admin-flag read in
+// memory (fetched via _ensureAdminFlag, etc.) picks up the new state.
+function toggleAdminAsUser(checkbox) {
+  try {
+    if (checkbox.checked) localStorage.setItem("sd-admin-as-user", "1");
+    else localStorage.removeItem("sd-admin-as-user");
+  } catch {}
+  // Reload /admin so the change takes effect — main site picks it up
+  // on its next load too.
+  location.reload();
+}
+
 function initThemePicker() {
   // Migrate stale theme IDs (renamed/removed in earlier reorgs) to the
   // brand default so users with localStorage from before this update
@@ -355,6 +381,9 @@ function initThemePicker() {
     try { localStorage.setItem("sd-theme", current); } catch {}
     document.documentElement.setAttribute("data-theme", current);
   }
+  // Restore the view-as-user checkbox state from localStorage.
+  const asUserCb = document.getElementById("admin-as-user-toggle");
+  if (asUserCb) asUserCb.checked = localStorage.getItem("sd-admin-as-user") === "1";
   const select = document.getElementById("theme-select");
   if (select) select.value = current;
   const grid = document.getElementById("theme-preview");
