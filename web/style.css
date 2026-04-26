@@ -4217,6 +4217,55 @@ button.wiki-link-btn:active {
   border-bottom-color: var(--accent2);
 }
 
+/* ── Artist-relations rows + overflow popup (utils.js) ─────────────────
+   Replaces the inline style="color:#777..." / "color:#555..." blobs
+   that fought every theme. Now fully theme-driven. */
+.rel-block {
+  margin-top: 0.6rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--border);
+}
+.rel-row {
+  font-size: 0.78rem;
+  margin-top: 0.55rem;
+  line-height: 1.6;
+}
+.rel-row-urls { line-height: 1.8; }
+.rel-row-label {
+  color: var(--muted);
+  margin-right: 0.4em;
+}
+.rel-sep {
+  color: var(--muted-dim, var(--muted));
+  margin: 0 0.2em;
+}
+.rel-more-btn {
+  font-size: 0.72rem;
+  color: var(--muted);
+  white-space: nowrap;
+  text-decoration: none;
+}
+.rel-more-btn:hover { color: var(--accent-hi, var(--accent)); }
+.rel-url-link {
+  color: var(--accent);
+  text-decoration: none;
+}
+.rel-url-link:hover { color: var(--accent-hi, var(--accent)); }
+
+#rel-overflow-popup {
+  position: absolute;
+  z-index: 600;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.6rem 0.85rem;
+  max-width: 260px;
+  font-size: 0.78rem;
+  line-height: 1.7;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+  display: none;
+}
+
 /* ── Alternatives "more" popup ── */
 #alts-popup {
   display: none;

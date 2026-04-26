@@ -723,6 +723,21 @@ async function runBackgroundSync(userId: string, client: DiscogsClient, username
   // Build headers per-request via the client (handles both PAT and OAuth signing)
   const getHeaders = (url: string) => client.buildHeaders("GET", url);
   const delay = (ms: number) => new Promise(r => setTimeout(r, ms));
+  // Adaptive pacer (audit #3) — fixed-1.2s waits added ~12s of dead
+  // time on a 10-page collection sync even when responses came back
+  // in 800ms. This pacer measures inter-request gap and only sleeps
+  // long enough to maintain the minimum spacing. 1.1s gap stays just
+  // under Discogs' 60/min limit. Per-collection-loop instances so
+  // collection and wantlist pacing are independent.
+  const makePacer = (minGapMs: number) => {
+    let last = 0;
+    return async () => {
+      const now = Date.now();
+      const wait = minGapMs - (now - last);
+      if (wait > 0) await delay(wait);
+      last = Date.now();
+    };
+  };
   let totalSynced = 0;
   let lastProgressAt = Date.now(); // tracks last time progress was made
 
@@ -804,9 +819,10 @@ async function runBackgroundSync(userId: string, client: DiscogsClient, username
 
     if (syncCollection) {
       const allInstanceIds: number[] = [];
+      const pace = makePacer(1100);
       for (let page = 1; ; page++) {
         if (_syncAbort || _thisSyncAbort) { console.log(`Sync ${username}: aborted`); await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted"); _syncDone = true; return; }
-        if (page > 1) await delay(1200); // 1.2s pacing — Discogs allows 60/min
+        await pace(); // adaptive — only sleeps if last request started <1.1s ago
         const r = await fetchWithRetry(
           `https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=500&page=${page}&sort=added&sort_order=desc`
         );
@@ -853,9 +869,10 @@ async function runBackgroundSync(userId: string, client: DiscogsClient, username
 
     if (syncWantlist) {
       const allWantlistIds: number[] = [];
+      const pace = makePacer(1100);
       for (let page = 1; ; page++) {
         if (_syncAbort || _thisSyncAbort) { console.log(`Sync ${username}: aborted`); await updateSyncProgress(userId, "error", totalSynced, 0, "Aborted"); _syncDone = true; return; }
-        if (page > 1) await delay(1200);
+        await pace();
         const r = await fetchWithRetry(
           `https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=500&page=${page}&sort=added&sort_order=desc`
         );
