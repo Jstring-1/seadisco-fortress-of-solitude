@@ -223,6 +223,27 @@ function _storeRelPopup(items, isLinks) {
   return key;
 }
 
+// ── Safe link render helpers ────────────────────────────────────────
+// Centralizes the artist + url link templates so escHtml() is applied
+// in exactly one place per kind. (Audit #4: was 4 inline templates,
+// each independently calling escHtml — a future refactor that forgets
+// the call would have been an instant XSS vector.)
+function _relArtistLink(a, opts) {
+  // Accept either a string name OR an {id, name} object. Always escapes.
+  const name = typeof a === "string" ? a : (a?.name ?? "");
+  const id   = typeof a === "object" && a?.id ? a.id : null;
+  if (!name) return "";
+  const safe = escHtml(name);
+  const idAttr = id ? ` data-artist-id="${id}"` : "";
+  const extra = opts?.extraOnclick ? `;${opts.extraOnclick}` : "";
+  return `<a href="#" class="bio-artist-link" onclick="searchBioArtist(event,this)${extra}" data-artist="${safe}"${idAttr}>${safe}</a>`;
+}
+function _relUrlLink(u) {
+  const safe = escHtml(u);
+  const display = escHtml(String(u).replace(/^https?:\/\//, "").replace(/\/$/, ""));
+  return `<a href="${safe}" target="_blank" rel="noopener" class="rel-url-link">${display}</a>`;
+}
+
 function showRelPopup(event, key) {
   event.preventDefault();
   event.stopPropagation();
@@ -232,19 +253,16 @@ function showRelPopup(event, key) {
   if (!popup) {
     popup = document.createElement("div");
     popup.id = "rel-overflow-popup";
-    popup.style.cssText = "position:absolute;z-index:600;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.6rem 0.85rem;max-width:260px;font-size:0.78rem;line-height:1.7;box-shadow:0 4px 20px rgba(0,0,0,0.6);display:none";
     popup.onclick = e => e.stopPropagation();
     document.body.appendChild(popup);
     document.addEventListener("click", () => { popup.style.display = "none"; });
   }
   if (store.isLinks) {
-    popup.innerHTML = store.items.map(u =>
-      `<div><a href="${escHtml(u)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${escHtml(u.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</a></div>`
-    ).join("");
+    popup.innerHTML = store.items.map(u => `<div>${_relUrlLink(u)}</div>`).join("");
   } else {
     popup.innerHTML = store.items.map(a => typeof a === "string"
       ? `<div>${escHtml(a)}</div>`
-      : `<div><a href="#" class="bio-artist-link" onclick="searchBioArtist(event,this);document.getElementById('rel-overflow-popup').style.display='none'" data-artist="${escHtml(a.name)}"${a.id ? ` data-artist-id="${a.id}"` : ""}>${escHtml(a.name)}</a></div>`
+      : `<div>${_relArtistLink(a, { extraOnclick: "document.getElementById('rel-overflow-popup').style.display='none'" })}</div>`
     ).join("");
   }
   const rect = event.target.getBoundingClientRect();
@@ -259,18 +277,16 @@ function renderArtistRelations(members = [], groups = [], aliases = [], namevari
   const moreBtn = (overflow, isLinks) => {
     if (!overflow.length) return "";
     const key = _storeRelPopup(overflow, isLinks);
-    return ` <a href="#" style="font-size:0.72rem;color:var(--muted);white-space:nowrap;text-decoration:none" onclick="showRelPopup(event,'${key}')">+${overflow.length} more</a>`;
+    return ` <a href="#" class="rel-more-btn" onclick="showRelPopup(event,'${key}')">+${overflow.length} more</a>`;
   };
 
   const row = (label, items) => {
     if (!items.length) return "";
     const visible  = compact ? items.slice(0, LIMIT) : items;
     const overflow = compact ? items.slice(LIMIT) : [];
-    const links = visible.map(a =>
-      `<a href="#" class="bio-artist-link" onclick="searchBioArtist(event,this)" data-artist="${escHtml(a.name)}"${a.id ? ` data-artist-id="${a.id}"` : ""}>${escHtml(a.name)}</a>`
-    ).join('<span style="color:#555;margin:0 0.2em">·</span>');
-    return `<div style="font-size:0.78rem;margin-top:0.55rem;line-height:1.6">
-              <span style="color:#777;margin-right:0.4em">${label}:</span>${links}${moreBtn(overflow, false)}
+    const links = visible.map(_relArtistLink).join('<span class="rel-sep">·</span>');
+    return `<div class="rel-row">
+              <span class="rel-row-label">${escHtml(label)}:</span>${links}${moreBtn(overflow, false)}
             </div>`;
   };
   const urlRow = (label, items) => {
@@ -278,20 +294,16 @@ function renderArtistRelations(members = [], groups = [], aliases = [], namevari
     if (!filtered.length) return "";
     const visible  = compact ? filtered.slice(0, LIMIT) : filtered;
     const overflow = compact ? filtered.slice(LIMIT) : [];
-    const links = visible.map(u =>
-      `<div><a href="${escHtml(u)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${escHtml(u.replace(/^https?:\/\//, "").replace(/\/$/, ""))}</a></div>`
-    ).join("");
-    return `<div style="font-size:0.78rem;margin-top:0.55rem;line-height:1.8">
-              <span style="color:#777;margin-right:0.4em">${label}:</span>${links}${moreBtn(overflow, true)}
+    const links = visible.map(u => `<div>${_relUrlLink(u)}</div>`).join("");
+    return `<div class="rel-row rel-row-urls">
+              <span class="rel-row-label">${escHtml(label)}:</span>${links}${moreBtn(overflow, true)}
             </div>`;
   };
   const akaRow = (label, items) => {
     if (!items.length || compact) return "";
-    const links = items.map(n =>
-      `<a href="#" class="bio-artist-link" onclick="searchBioArtist(event,this)" data-artist="${escHtml(n)}" style="color:var(--accent);text-decoration:none">${escHtml(n)}</a>`
-    ).join('<span style="color:#555;margin:0 0.2em">·</span>');
-    return `<div style="font-size:0.78rem;margin-top:0.55rem;line-height:1.6">
-              <span style="color:#777;margin-right:0.4em">${label}:</span>${links}
+    const links = items.map(n => _relArtistLink(n)).join('<span class="rel-sep">·</span>');
+    return `<div class="rel-row">
+              <span class="rel-row-label">${escHtml(label)}:</span>${links}
             </div>`;
   };
   const html = row("Members", members)
@@ -301,7 +313,7 @@ function renderArtistRelations(members = [], groups = [], aliases = [], namevari
     + (parentLabel ? row("Part of", [parentLabel]) : "")
     + row("Sub-labels", sublabels)
     + urlRow("Links", urls);
-  return html ? `<div style="margin-top:0.6rem;padding-top:0.5rem;border-top:1px solid var(--border)">${html}</div>` : "";
+  return html ? `<div class="rel-block">${html}</div>` : "";
 }
 
 // ── Toast notifications ──────────────────────────────────────────────────
