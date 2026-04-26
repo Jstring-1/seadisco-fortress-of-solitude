@@ -9,7 +9,7 @@
 let _archiveList = null;
 let _archiveLoading = false;
 
-async function initArchiveView() {
+async function initArchiveView(forceRefresh = false) {
   const root = document.getElementById("archive-view");
   if (!root) return;
   // Admin gate — server enforces; this is the UX guard.
@@ -19,24 +19,37 @@ async function initArchiveView() {
     </div>`;
     return;
   }
+  // If we already have items in memory and nothing's forcing a refresh,
+  // re-render and return immediately. The server cache is effectively
+  // permanent (5-year TTL) so once loaded the data is stable.
+  if (_archiveList?.length && !forceRefresh) {
+    _renderArchiveList();
+    return;
+  }
   if (_archiveLoading) return;
   _archiveLoading = true;
   const listEl = document.getElementById("archive-list");
-  if (listEl) listEl.innerHTML = "Loading…";
+  if (listEl) listEl.innerHTML = `<div class="loc-empty">Loading collection — first load may take a few seconds.</div>`;
   try {
-    const r = await apiFetch("/api/archive/aadamjacobs");
+    const url = forceRefresh ? "/api/archive/aadamjacobs?nocache=1" : "/api/archive/aadamjacobs";
+    const r = await apiFetch(url);
     if (!r.ok) {
-      if (listEl) listEl.innerHTML = `<div class="loc-empty">Could not load archive collection.</div>`;
+      if (listEl) listEl.innerHTML = `<div class="loc-empty">Could not load archive collection (HTTP ${r.status}).</div>`;
       return;
     }
     const j = await r.json();
     _archiveList = Array.isArray(j?.items) ? j.items : [];
     _renderArchiveList();
-  } catch {
+  } catch (err) {
     if (listEl) listEl.innerHTML = `<div class="loc-empty">Could not load archive collection.</div>`;
   } finally {
     _archiveLoading = false;
   }
+}
+
+function archiveRefresh() {
+  _archiveList = null;
+  initArchiveView(true);
 }
 
 function _renderArchiveList() {
@@ -46,7 +59,11 @@ function _renderArchiveList() {
     listEl.innerHTML = `<div class="loc-empty">No items in this collection.</div>`;
     return;
   }
-  listEl.innerHTML = _archiveList.map((it, i) => {
+  const refreshBar = `<div class="archive-meta-bar">
+    <span class="archive-meta-count">${_archiveList.length} item${_archiveList.length === 1 ? "" : "s"}</span>
+    <button type="button" class="archive-refresh" onclick="archiveRefresh()" title="Re-fetch from archive.org">↻ Refresh</button>
+  </div>`;
+  listEl.innerHTML = refreshBar + _archiveList.map((it, i) => {
     const safeTitle = escHtml(it.title || it.identifier);
     const safeDate  = escHtml(it.date || "");
     const safeDesc  = escHtml(String(it.description || "").slice(0, 280));
@@ -103,3 +120,4 @@ function archiveQueueItem(idx) {
 window.initArchiveView   = initArchiveView;
 window.archivePlayItem   = archivePlayItem;
 window.archiveQueueItem  = archiveQueueItem;
+window.archiveRefresh    = archiveRefresh;

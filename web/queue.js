@@ -68,6 +68,10 @@ async function queueAdd(items, opts) {
       const count = arr.length === 1 ? "" : ` (${arr.length})`;
       showToast(`${verb}${count}`);
     }
+    // Refetch in the background so the bar's prev/next state can
+    // reflect the new queue immediately without waiting for the user
+    // to open the drawer.
+    _queueLoad(true).then(() => _refreshPlayerNavButtons()).catch(() => {});
     if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
     return true;
   } catch {
@@ -173,6 +177,7 @@ async function _queueConsume(position) {
     });
   } catch { /* ignore — server-side will drift */ }
   if (_queue) _queue = _queue.filter(it => it.position !== position);
+  _refreshPlayerNavButtons();
   if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
 }
 
@@ -405,7 +410,30 @@ function queueAddIconHtml(kind = "yt") {
   return `<a href="#" class="queue-add-icon" title="${tip}" onclick="event.preventDefault();event.stopPropagation();return false">＋</a>`;
 }
 
+// Sync "is there a next item" check used by the player nav buttons
+// across both engines. Reads the locally-cached queue (not the server)
+// so it returns instantly. Initial reads return false until the cache
+// is hydrated; queueAdd/Remove/Clear all invalidate the cache and
+// re-fire button state via _refreshPlayerNavButtons below.
+function _queueHasNext() {
+  return Array.isArray(_queue) && _queue.length > 0;
+}
+
+// Whenever the queue mutates we invalidate the cache, then refresh the
+// player's prev/next buttons so the UI reflects the new state without
+// requiring the user to reopen the drawer or wait for a track-end.
+function _refreshPlayerNavButtons() {
+  if (typeof _locUpdateQueueButtons === "function") {
+    try { _locUpdateQueueButtons(); } catch {}
+  }
+  if (typeof updateVideoNavButtons === "function") {
+    try { updateVideoNavButtons(); } catch {}
+  }
+}
+
 // ── Globals ─────────────────────────────────────────────────────────
+window._queueHasNext = _queueHasNext;
+window._refreshPlayerNavButtons = _refreshPlayerNavButtons;
 window.queueAdd            = queueAdd;
 window.queueAddLoc         = queueAddLoc;
 window.queueAddYt          = queueAddYt;

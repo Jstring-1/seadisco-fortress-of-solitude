@@ -1463,16 +1463,21 @@ function _createYTPlayer(id) {
 function updateVideoNavButtons() {
   const queue = window._videoQueue ?? [];
   const idx   = window._videoQueueIndex ?? 0;
-  // Update both expanded nav and mini bar buttons
+  // Update both expanded nav and mini bar buttons. NEXT is enabled if
+  // either the per-album _videoQueue has more or the cross-source
+  // queue has any item — same dual-source check the LOC engine uses.
   const prevBtn  = document.getElementById("video-prev");
   const nextBtn  = document.getElementById("video-next");
   const miniPrev = document.getElementById("mini-prev");
   const miniNext = document.getElementById("mini-next");
   const titleEl  = document.getElementById("mini-player-title");
+  const ytHasNext = idx < queue.length - 1;
+  const xqHasNext = (typeof _queueHasNext === "function") ? _queueHasNext() : false;
+  const nextDisabled = !(ytHasNext || xqHasNext);
   if (prevBtn)  prevBtn.disabled  = idx <= 0;
-  if (nextBtn)  nextBtn.disabled  = idx >= queue.length - 1;
+  if (nextBtn)  nextBtn.disabled  = nextDisabled;
   if (miniPrev) miniPrev.disabled = idx <= 0;
-  if (miniNext) miniNext.disabled = idx >= queue.length - 1;
+  if (miniNext) miniNext.disabled = nextDisabled;
   if (titleEl) {
     const meta = (window._videoQueueMeta ?? [])[idx];
     if (meta && (meta.track || meta.album || meta.artist)) {
