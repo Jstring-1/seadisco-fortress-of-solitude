@@ -1,18 +1,11 @@
 // ── Shared utilities for all pages (index, account, admin) ──────────────
 
 // ── Relative time formatting ─────────────────────────────────────────────
-function fmtTime(ts) {
-  if (!ts) return "never";
-  const diff = Math.round((Date.now() - new Date(ts)) / 60000);
-  if (diff < 1) return "just now";
-  if (diff < 60) return `${diff}m ago`;
-  const h = Math.round(diff / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.round(h / 24)}d ago`;
-}
-
-function fmtRelativeTime(ts) {
-  if (!ts) return "\u2014";
+// Single helper covers both "syncedAt" displays (use fallback "never")
+// and generic "ago" labels (default em-dash). Accepts ms-numbers or
+// any Date-parsable value. Unifies what used to be fmtTime + fmtRelativeTime.
+function fmtTime(ts, fallback = "\u2014") {
+  if (!ts) return fallback;
   const ms = Date.now() - (typeof ts === "number" ? ts : new Date(ts).getTime());
   const mins = Math.floor(ms / 60000);
   if (mins < 1) return "just now";
@@ -25,6 +18,8 @@ function fmtRelativeTime(ts) {
   if (months < 12) return `${months}mo ago`;
   return `${Math.floor(days / 365)}y ago`;
 }
+// Back-compat alias \u2014 admin UI calls fmtRelativeTime in a few places.
+const fmtRelativeTime = fmtTime;
 
 // ── Mobile nav toggle ────────────────────────────────────────────────────
 function toggleMobileNav() {
@@ -449,7 +444,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260426a";
+  const SITE_VERSION = "build 20260426b";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
