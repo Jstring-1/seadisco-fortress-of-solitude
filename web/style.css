@@ -1468,17 +1468,17 @@ body {
   color: var(--accent);
   font-weight: 700;
 }
-/* "rch" and "gs" — the lowercase tail of "SEArch DISCOgs" — now use
-   the theme's highlight accent (--accent-hi). Each theme picks a
-   contrasting hi color so the dual-tone logo reads on every theme. */
+/* "rch" and "gs" — the lowercase tail of "SEArch DISCOgs" — use the
+   theme's highlight accent (--accent-hi). Full opacity so the color
+   reads cleanly; weight stays 400 so it's still visually distinct
+   from the bolder "SEA" / "DISCO" hi-color text. */
 .logo-lo {
   color: var(--accent-hi, var(--accent2, var(--accent)));
-  opacity: 0.65;
   font-weight: 400;
 }
 .logo-gap { width: 0.2em; display: inline-block; }
 .text-logo:hover .logo-hi { color: var(--accent-hi, var(--favorite)); }
-.text-logo:hover .logo-lo { color: var(--accent); opacity: 0.5; }
+.text-logo:hover .logo-lo { color: var(--accent); }
 
 #site-tagline {
   font-size: 0.78rem;
@@ -1548,56 +1548,83 @@ body {
 
 /* ── Icon-nav variant (admin page test bed) ─────────────────────────────
    When renderSharedHeader is called with iconNav:true the tab markup is
-   [icon][hover-label]. The icon stays visible at all times; the label
-   reveals on hover/focus and on the active tab. Designed to slot into
-   the same .nav-tab-top container so layout doesn't shift. */
+   [icon][label]. The icon stays visible at all times; the label appears
+   as an absolute-positioned tooltip below the icon on hover/focus so
+   the navbar dimensions stay stable (no inline width animation that
+   would push neighboring tabs around). The active tab is marked with
+   an accent bottom-border + slightly more saturated icon. */
 .nav-tab-top.icon-nav {
-  /* Slightly tighter padding since the icon takes its own width */
-  padding: 0.3rem 0.55rem;
-  gap: 0.4rem;
+  position: relative;
+  padding: 0.3rem 0.65rem;
+  gap: 0;
 }
 .nav-tab-top.icon-nav .nav-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  width: 20px;
-  height: 20px;
-  /* SVGs inherit currentColor from the tab; opacity dimmer than the
-     label so hover/active feels lifted. */
+  width: 22px;
+  height: 22px;
   opacity: 0.85;
   transition: opacity 0.15s, transform 0.15s;
 }
 .nav-tab-top.icon-nav:hover .nav-icon,
+.nav-tab-top.icon-nav:focus-visible .nav-icon,
 .nav-tab-top.icon-nav.active .nav-icon {
   opacity: 1;
   transform: scale(1.06);
 }
+.nav-tab-top.icon-nav.active::after {
+  content: "";
+  position: absolute;
+  left: 0.55rem;
+  right: 0.55rem;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent-hi, var(--accent));
+  border-radius: 2px;
+}
+/* Label as floating tooltip below the icon. Hidden until hover/focus.
+   pointer-events: none keeps it from intercepting clicks on the icon
+   itself or stealing hover from neighbours. */
 .nav-tab-top.icon-nav .nav-label {
-  /* Width animation reveals the label cleanly without layout snap.
-     max-width clips during transition; opacity fades in. */
-  display: inline-block;
-  max-width: 0;
-  overflow: hidden;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.68rem;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
   white-space: nowrap;
   opacity: 0;
-  transition: max-width 0.18s ease, opacity 0.15s ease, margin-left 0.18s ease;
-  margin-left: 0;
+  visibility: hidden;
+  pointer-events: none;
+  z-index: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  transition: opacity 0.12s ease;
 }
 .nav-tab-top.icon-nav:hover .nav-label,
-.nav-tab-top.icon-nav:focus-visible .nav-label,
-.nav-tab-top.icon-nav.active .nav-label {
-  max-width: 140px;
+.nav-tab-top.icon-nav:focus-visible .nav-label {
   opacity: 1;
-  margin-left: 0.05rem;
+  visibility: visible;
 }
-/* On the mobile drawer the icon-nav row stacks vertically, so always
-   show the label (the slide-out reveal is a desktop affordance). */
+/* On the mobile drawer the icon-nav row stacks vertically, so revert
+   to inline labels (no floating tooltip needed at full-width rows). */
 @media (max-width: 720px) {
   .nav-tab-top.icon-nav .nav-label {
-    max-width: none;
+    position: static;
+    transform: none;
     opacity: 1;
-    margin-left: 0.4rem;
+    visibility: visible;
+    background: none;
+    border: none;
+    box-shadow: none;
+    padding: 0;
+    margin-left: 0.5rem;
+    color: inherit;
   }
 }
 
@@ -1728,7 +1755,7 @@ body {
   user-select: none;
 }
 .lists-th-sortable { cursor: pointer; }
-.lists-th-sortable:hover { color: var(--accent); }
+ { color: var(--accent-hi); }
 .lists-th-items { text-align: right; }
 .lists-table tbody tr { border-bottom: 1px solid var(--border); cursor: pointer; }
 .lists-table tbody tr:hover { background: rgba(255,255,255,0.03); }
@@ -1738,7 +1765,7 @@ body {
 .lists-td-vis { color: var(--muted-dim); font-size: 0.75rem; white-space: nowrap; }
 .lists-td-desc { color: var(--muted-dim); font-size: 0.75rem; max-width: 350px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lists-ext-link { color: #555; margin-left: 0.3rem; font-size: 0.7rem; text-decoration: none; }
-.lists-ext-link:hover { color: var(--accent); }
+ { color: var(--accent-hi); }
 
 /* Collection folder pill cloud */
 .cw-folder-cloud {
@@ -2184,11 +2211,17 @@ input[type="text"] {
 input[type="text"]:focus {
   border-color: var(--accent);
 }
-/* Highlight fields that have content */
+/* Highlight fields that have content. Uses --catno (the theme's
+   off-spectrum accent) for the border so populated fields pop on
+   every theme, not just amber-dark where the old hardcoded #8b5a1b
+   happened to fit. Falls back to --accent for any theme without
+   --catno. */
 input[type="text"]:not(:placeholder-shown),
 select.has-value {
-  background: var(--accent-soft); border-color: #8b5a1b; color: var(--fg);
-  box-shadow: 0 0 5px rgba(180, 100, 20, 0.2);
+  background: var(--accent-soft);
+  border-color: var(--catno, var(--accent));
+  color: var(--fg);
+  box-shadow: 0 0 5px color-mix(in srgb, var(--catno, var(--accent)) 30%, transparent);
 }
 
 select {
@@ -2535,7 +2568,7 @@ body.modal-open  { overflow: hidden; }
   border-radius: 3px;
 }
 .sr-grid .sr-title { color: var(--fg); cursor: pointer; text-decoration: none; word-break: break-word; overflow-wrap: break-word; min-width: 0; }
-.sr-grid .sr-title:hover { color: var(--accent); text-decoration: dotted underline; }
+ { color: var(--accent-hi); text-decoration: dotted underline; }
 .sr-pill-row { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.6rem; }
 .sr-pill {
   background: #2a2a2a;
@@ -2579,7 +2612,7 @@ body.modal-open  { overflow: hidden; }
   font-size: 0.72rem; color: var(--muted); padding: 0.15rem 0.4rem;
   border-radius: 4px; letter-spacing: 0.03em;
 }
-.popup-share-inline:hover { color: var(--accent); background: var(--surface); }
+ { color: var(--accent-hi); background: var(--surface); }
 
 /* Share button inside bio / video popups */
 .popup-share {
@@ -2588,7 +2621,7 @@ body.modal-open  { overflow: hidden; }
   border-radius: 4px; float: right; margin: 0.6rem 0.2rem 0 0;
   letter-spacing: 0.03em;
 }
-.popup-share:hover { color: var(--accent); background: var(--surface); }
+ { color: var(--accent-hi); background: var(--surface); }
 
 /* ── Wikipedia dropdown (sits next to the eBay logo in modal header) ── */
 .wiki-link-wrap {
@@ -2635,7 +2668,7 @@ button.wiki-link-btn:active {
   text-shadow: 0 0 1px rgba(0, 0, 0, 0.4);
   transition: color 0.15s;
 }
-.wiki-link-btn:hover .wiki-w { color: var(--accent); }
+ { color: var(--accent-hi); }
 .wiki-link-menu {
   position: absolute;
   top: calc(100% + 0.35rem);
@@ -2666,7 +2699,7 @@ button.wiki-link-btn:active {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.wiki-menu-item:hover { background: var(--bg-elevated); color: var(--accent); }
+ { background: var(--bg-elevated); color: var(--accent-hi); }
 .wiki-menu-key {
   color: var(--muted);
   font-size: 0.62rem;
@@ -5469,7 +5502,7 @@ a.profile-stat-link:hover {
   border-color: var(--accent);
   transform: translateY(-1px);
 }
-a.profile-stat-link:hover .profile-stat-num { color: var(--accent); }
+ { color: var(--accent-hi); }
 .profile-stat-num {
   font-size: 1.05rem;
   font-weight: 700;
@@ -6174,9 +6207,9 @@ a.profile-stat-link:hover .profile-stat-num { color: var(--accent); }
 /* Discogs / Collection magnifying-glass icons get theme-adjacent colors
    so you can tell them apart at a glance. Hover lights them up. */
 .loc-credit-discogs  { color: var(--accent-hi);  margin-left: 0.15rem; }
-.loc-credit-discogs:hover  { color: var(--accent); }
+  { color: var(--accent-hi); }
 .loc-credit-collection { color: var(--success); margin-left: 0.1rem; }
-.loc-credit-collection:hover { color: var(--accent); }
+ { color: var(--accent-hi); }
 
 /* LOC reuses the shared .saved-search-wrap / .saved-search-dropdown
    styles from the main search UI — no overrides needed. */
@@ -6520,7 +6553,7 @@ a.profile-stat-link:hover .profile-stat-num { color: var(--accent); }
   cursor: pointer;
   vertical-align: baseline;
 }
-.wiki-icon:hover { color: var(--accent); }
+ { color: var(--accent-hi); }
 
 /* Admin-only "+ add to Blues DB" icon — sits right after the W,
    only renders for admin and only when the artist is not already
@@ -6926,7 +6959,7 @@ a.profile-stat-link:hover .profile-stat-num { color: var(--accent); }
   border-bottom: 1px dotted var(--border);
   cursor: pointer;
 }
-.track-title-link:hover { color: var(--accent); border-bottom-color: var(--accent); }
+ { color: var(--accent-hi); border-bottom-color: var(--accent); }
 /* Force orange magnifying glass on tracks */
 .track .track-search-icon,
 .track-search-icon {

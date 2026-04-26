@@ -449,7 +449,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260425h";
+  const SITE_VERSION = "build 20260425i";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -480,7 +480,14 @@ function renderSharedHeader(opts) {
     loadClerkInstance().then(c => {
       if (c?.user) {
         const el = document.getElementById("nav-auth-tab");
-        if (el) el.textContent = "Account";
+        if (el) {
+          el.title = "Account";
+          // Same iconNav-safe pattern as applyAuthState — preserve the
+          // SVG markup by updating only the label span.
+          const labelSpan = el.querySelector(".nav-label");
+          if (labelSpan) labelSpan.textContent = "Account";
+          else el.textContent = "Account";
+        }
       }
     }).catch(() => {});
   }
