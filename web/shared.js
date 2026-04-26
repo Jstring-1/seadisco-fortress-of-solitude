@@ -21,6 +21,27 @@ function fmtTime(ts, fallback = "\u2014") {
 // Back-compat alias \u2014 admin UI calls fmtRelativeTime in a few places.
 const fmtRelativeTime = fmtTime;
 
+// \u2500\u2500 localStorage JSON helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// Parse a JSON value out of localStorage, falling back to `defaultVal`
+// on missing key, parse errors, or sandboxed/disabled storage. Replaces
+// the repeated `JSON.parse(localStorage.getItem(key) || "{}")` pattern
+// in 4+ files. (Audit #6.)
+function getStorageJSON(key, defaultVal) {
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw == null) return defaultVal;
+    const parsed = JSON.parse(raw);
+    return parsed == null ? defaultVal : parsed;
+  } catch {
+    return defaultVal;
+  }
+}
+// Set a JSON value into localStorage, swallowing quota/disabled errors.
+function setStorageJSON(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); return true; }
+  catch { return false; }
+}
+
 // ── Mobile nav toggle ────────────────────────────────────────────────────
 function toggleMobileNav() {
   document.getElementById("main-nav-tabs")?.classList.toggle("mobile-open");
@@ -157,14 +178,12 @@ async function loadClerkInstance() {
   // load Clerk the old dynamic way
   if (!c) {
     let pk = "";
-    try {
-      const cached = JSON.parse(localStorage.getItem("_clerkCfg") || "{}");
-      if (cached.pk && (Date.now() - (cached.ts || 0)) < 3600000) pk = cached.pk;
-    } catch {}
+    const cached = getStorageJSON("_clerkCfg", null);
+    if (cached?.pk && (Date.now() - (cached.ts || 0)) < 3600000) pk = cached.pk;
     if (!pk) {
       const cfg = await fetch("/api/config").then(r => r.json()).catch(() => ({}));
       pk = cfg.clerkPublishableKey || "";
-      if (pk) try { localStorage.setItem("_clerkCfg", JSON.stringify({ pk, ts: Date.now() })); } catch {}
+      if (pk) setStorageJSON("_clerkCfg", { pk, ts: Date.now() });
     }
     if (!pk) return null;
 
@@ -444,7 +463,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260426b";
+  const SITE_VERSION = "build 20260426c";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>

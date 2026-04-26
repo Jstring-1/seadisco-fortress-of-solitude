@@ -18,7 +18,7 @@ function searchCollectionFor(field, value) {
 }
 // ── Visited cards — dim releases the user has already opened ────────────
 const _visitedKey = "sd_visited";
-let _visited = new Set(JSON.parse(localStorage.getItem(_visitedKey) || "[]"));
+let _visited = new Set(getStorageJSON(_visitedKey, []));
 function _markVisited(id) {
   const key = String(id);
   if (_visited.has(key)) return;

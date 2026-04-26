@@ -3005,7 +3005,7 @@ export async function getUserCollectionStats(): Promise<{ users: any[]; global: 
 // `maxAgeSeconds` — masters/artists are stable so 7 days is fine;
 // releases get 1 day since their metadata can be edited.
 
-export type DiscogsCacheType = "release" | "master" | "artist";
+export type DiscogsCacheType = "release" | "master" | "artist" | "master-versions";
 
 /** Get a cached entry from DB. Returns null if not cached or if the
  *  entry is older than `maxAgeSeconds` (cache miss vs stale-eviction
