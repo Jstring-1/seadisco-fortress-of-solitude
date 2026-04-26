@@ -1582,6 +1582,46 @@ function _trackQueueAdd(el) {
 }
 window._trackQueueAdd = _trackQueueAdd;
 
+// ▶ in the tracklist heading: play the first playable track immediately
+// AND queue the rest into the cross-source play queue (in append mode
+// so they play after whatever's already queued). Clears the per-album
+// _videoQueue afterward so auto-advance only runs through the
+// cross-source queue (otherwise both would advance and tracks would
+// double-up).
+function playAlbumAndQueue(triggerEl, firstUrl) {
+  if (typeof openVideo === "function") openVideo(null, firstUrl);
+  const scope = triggerEl?.closest("#album-info, #version-info, .tracklist") || document;
+  const rows  = scope.querySelectorAll(".queue-add-icon[data-yt-url]");
+  if (rows.length <= 1) return;
+  const items = [];
+  for (let i = 1; i < rows.length; i++) {
+    const el = rows[i];
+    const url = el.dataset.ytUrl || "";
+    const id  = (typeof extractYouTubeId === "function") ? extractYouTubeId(url) : "";
+    if (!id) continue;
+    items.push({
+      source: "yt",
+      externalId: id,
+      data: {
+        title:      el.dataset.track  || "",
+        artist:     el.dataset.artist || "",
+        albumTitle: el.dataset.album  || "",
+      },
+    });
+    el.classList.add("queued");
+  }
+  if (items.length && typeof queueAdd === "function") {
+    queueAdd(items, { mode: "append" });
+    // Drop the per-album _videoQueue so the cross-source queue is the
+    // sole driver of auto-advance. Without this, playNextVideo would
+    // advance via the cross-source queue first AND THEN _videoQueue
+    // would also advance on the next "ended", duplicating tracks.
+    window._videoQueue = [];
+    window._videoQueueIndex = 0;
+  }
+}
+window.playAlbumAndQueue = playAlbumAndQueue;
+
 function openVideo(event, url) {
   if (event) { event.preventDefault(); event.stopPropagation(); }
   // Starting YouTube playback should stop the LOC audio bar so we
@@ -1986,7 +2026,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const playableCount = playableUrls.length;
   const firstPlayableUrl = playableUrls[0] || "";
   const playableMeta = playableCount
-    ? `<span class="tracklist-playable">(${playableCount}${firstPlayableUrl ? ` <a href="#" class="tracklist-play-all" onclick="event.preventDefault();event.stopPropagation();openVideo(event,'${firstPlayableUrl.replace(/'/g, "\\'")}')" title="Play the first playable track">▶</a>` : ""}${playableCount >= 1 ? ` <a href="#" class="tracklist-queue-album" onclick="event.preventDefault();event.stopPropagation();queueAddAlbum(this)" title="Add all playable tracks to your queue">＋ Queue album</a>` : ""})</span>`
+    ? `<span class="tracklist-playable">(${playableCount}${firstPlayableUrl ? ` <a href="#" class="tracklist-play-all" onclick="event.preventDefault();event.stopPropagation();playAlbumAndQueue(this,'${firstPlayableUrl.replace(/'/g, "\\'")}')" title="Play the first track and queue the rest of the album">▶</a>` : ""}${playableCount >= 1 ? ` <a href="#" class="tracklist-queue-album" onclick="event.preventDefault();event.stopPropagation();queueAddAlbum(this)" title="Add all playable tracks to your queue">＋ Queue album</a>` : ""})</span>`
     : "";
   const tracklistOpen = localStorage.getItem("tracklist-open") !== "false";
   const trackHTML = tracks.length ? `
