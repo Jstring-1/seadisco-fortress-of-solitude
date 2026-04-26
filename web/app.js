@@ -22,6 +22,24 @@ function _getView(p) {
 function _getPage(p) { return parseInt(p.get("p") || p.get("pg") || "1"); }
 function _hasSearch(p) { return p.get("q") || p.get("a") || p.get("ar") || p.get("e") || p.get("re") || p.get("y") || p.get("yr") || p.get("l") || p.get("lb") || p.get("g") || p.get("gn"); }
 
+// Fetch /api/me once and cache the admin flag on window. Used by URL
+// routing (wiki/loc are admin-only) so we don't briefly render the
+// page before shared.js's footer probe resolves. Returns the cached
+// boolean if already known.
+async function _ensureAdminFlag() {
+  if (typeof window._isAdmin === "boolean") return window._isAdmin;
+  try {
+    const r = await apiFetch("/api/me");
+    if (!r.ok) { window._isAdmin = false; return false; }
+    const j = await r.json();
+    window._isAdmin = !!j?.isAdmin;
+    return window._isAdmin;
+  } catch {
+    window._isAdmin = false;
+    return false;
+  }
+}
+
 // ── Restore from URL on page load ────────────────────────────────────────
 (async function () {
   const p = new URLSearchParams(location.search);
@@ -42,17 +60,14 @@ function _hasSearch(p) { return p.get("q") || p.get("a") || p.get("ar") || p.get
     switchView("account", true);
   } else if (rawView === "info" || rawView === "privacy" || rawView === "terms") {
     switchView(rawView, true);
-  } else if (rawView === "wiki") {
-    // Wiki SPA page is auth-gated — the underlying /api/wikipedia/*
-    // endpoints already require auth, but the page itself was world-
-    // readable. Redirect signed-out visitors to the account view.
+  } else if (rawView === "wiki" || rawView === "loc") {
+    // Wikipedia and LOC are admin-only — server endpoints all use
+    // requireAdmin. Redirect non-admins quietly to search; the
+    // affordances that link here are already hidden for non-admins.
     await authReadyPromise;
-    if (!window._clerk?.user) { showToast("Sign in to use Wikipedia search", "error"); switchView("account", true); }
-    else switchView("wiki", true);
-  } else if (rawView === "loc") {
-    await authReadyPromise;
-    if (!window._clerk?.user) { showToast("Sign in to browse LOC", "error"); switchView("account", true); }
-    else switchView("loc", true);  // initLocView() reads query params for deep-links
+    if (!window._clerk?.user) { switchView("account", true); }
+    else if (!await _ensureAdminFlag()) { switchView("search", true); }
+    else switchView(rawView, true);
   } else if (rawView === "records" || rawView === "wanted") {
     await authReadyPromise;
     if (!window._clerk?.user) { showToast("Sign in to view your records", "error"); switchView("account", true); }

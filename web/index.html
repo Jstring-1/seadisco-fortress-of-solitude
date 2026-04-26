@@ -40,7 +40,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260425a" />
+  <link rel="stylesheet" href="/style.css?v=20260425e" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -78,7 +78,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260425a"></script>
+<script defer src="/shared.js?v=20260425e"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search" }));</script>
 <div id="search-view">
 
@@ -724,21 +724,29 @@
   </div>
 </div>
 
+<!-- LOC audio bar — visually mirrors the YouTube mini-player below. The
+     <audio> element does the actual playback but is hidden; control comes
+     from the custom button cluster (prev / play-pause / next + save /
+     info / expand / close) so the two persistent players share the same
+     compact bar shape. Click "expand" to reveal a thin scrubber row. -->
 <div id="loc-audio-bar" class="loc-audio-bar">
-  <div class="loc-audio-bar-info">
-    <span class="loc-audio-bar-icon">♪</span>
-    <span id="loc-audio-title" class="loc-audio-bar-title">Not playing</span>
+  <div id="loc-audio-bar-row" class="loc-audio-bar-row">
+    <div class="loc-audio-bar-info" onclick="_locOpenFromBar()">
+      <span class="loc-audio-bar-icon">♪</span>
+      <span id="loc-audio-title" class="loc-audio-bar-title">Not playing</span>
+    </div>
+    <div class="loc-audio-bar-controls">
+      <button type="button" id="loc-audio-save" class="loc-audio-bar-nav loc-audio-bar-save" onclick="_locToggleSaveFromBar()" title="Save this item" disabled>☆</button>
+      <button type="button" id="loc-audio-prev" class="loc-audio-bar-nav" onclick="_locPlayPrevInQueue()" title="Previous track" disabled>◀◀</button>
+      <button type="button" id="loc-audio-playpause" class="loc-audio-bar-nav" onclick="_locTogglePause()" title="Pause">&#9208;</button>
+      <button type="button" id="loc-audio-next" class="loc-audio-bar-nav" onclick="_locPlayNextInQueue()" title="Next track" disabled>▶▶</button>
+      <button type="button" id="loc-audio-expand" class="loc-audio-bar-nav" onclick="_locToggleExpand()" title="Show scrubber">&#9650;</button>
+      <button type="button" id="loc-audio-close" class="loc-audio-bar-close" onclick="_locClosePlayer()" title="Close player">×</button>
+    </div>
   </div>
-  <div class="loc-audio-bar-actions">
-    <button type="button" id="loc-audio-info" class="loc-audio-bar-nav" onclick="_locOpenFromBar()" title="Open info popup for this item" disabled>ℹ</button>
-    <button type="button" id="loc-audio-save" class="loc-audio-bar-nav loc-audio-bar-save" onclick="_locToggleSaveFromBar()" title="Save this item" disabled>☆</button>
+  <div id="loc-audio-bar-expanded" class="loc-audio-bar-expanded">
+    <audio id="loc-audio" class="loc-audio-native" controls preload="none"></audio>
   </div>
-  <div class="loc-audio-bar-queue-nav">
-    <button type="button" id="loc-audio-prev" class="loc-audio-bar-nav" onclick="_locPlayPrevInQueue()" title="Previous track" disabled>◀◀</button>
-    <button type="button" id="loc-audio-next" class="loc-audio-bar-nav" onclick="_locPlayNextInQueue()" title="Next track" disabled>▶▶</button>
-  </div>
-  <audio id="loc-audio" class="loc-audio" controls preload="none"></audio>
-  <button type="button" id="loc-audio-close" class="loc-audio-bar-close" onclick="_locClosePlayer()" title="Close player">×</button>
 </div>
 
 <div id="mini-player" class="mini-player">
@@ -780,18 +788,18 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260425a"></script>
-<script defer src="/search.js?v=20260425a"></script>
-<script defer src="/collection.js?v=20260425a"></script>
-<script defer src="/account.js?v=20260425a"></script>
-<script defer src="/orders.js?v=20260425a"></script>
+<script defer src="/utils.js?v=20260425e"></script>
+<script defer src="/search.js?v=20260425e"></script>
+<script defer src="/collection.js?v=20260425e"></script>
+<script defer src="/account.js?v=20260425e"></script>
+<script defer src="/orders.js?v=20260425e"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260425a"></script>
-<script defer src="/app.js?v=20260425a"></script>
+<script defer src="/modal.js?v=20260425e"></script>
+<script defer src="/app.js?v=20260425e"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/inventory-editor.js?v=20260425a"></script>
-<script defer src="/loc.js?v=20260425a"></script>
+<script defer src="/inventory-editor.js?v=20260425e"></script>
+<script defer src="/loc.js?v=20260425e"></script>
 
 </body>
 </html>

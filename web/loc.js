@@ -1397,9 +1397,12 @@ async function _locPlay(item) {
   // Stop any YouTube playback so we don't double-play
   try { if (typeof closeVideo === "function") closeVideo(); } catch {}
 
-  // Attach the auto-advance handler once per page load.
+  // Attach auto-advance + play/pause-icon handlers once per page load.
   if (!audio._locEndedBound) {
     audio.addEventListener("ended", _locOnTrackEnded);
+    audio.addEventListener("play",  _locUpdatePlayPauseBtn);
+    audio.addEventListener("pause", _locUpdatePlayPauseBtn);
+    audio.addEventListener("ended", _locUpdatePlayPauseBtn);
     audio._locEndedBound = true;
   }
 
@@ -1464,6 +1467,44 @@ async function _locPlay(item) {
       showToast?.("Playback failed: " + (err?.message || "unknown"), "error");
     }
   }
+}
+
+// Toggle native pause/play from the custom play-pause button so the LOC
+// bar can hide the browser's default <audio controls> chrome and still
+// expose play/pause in a way that matches the YouTube mini-player.
+function _locTogglePause() {
+  const audio = document.getElementById("loc-audio");
+  if (!audio || !audio.src) return;
+  if (audio.paused) {
+    audio.play().catch(() => {});
+  } else {
+    audio.pause();
+  }
+}
+
+// Update the ⏸/▶ icon on the play-pause button based on the current
+// audio state. Wired to the audio element's play/pause/ended events
+// once per page (lazy-bound on first _locPlay).
+function _locUpdatePlayPauseBtn() {
+  const btn = document.getElementById("loc-audio-playpause");
+  const audio = document.getElementById("loc-audio");
+  if (!btn || !audio) return;
+  const playing = !audio.paused && !audio.ended;
+  btn.innerHTML = playing ? "&#9208;" : "&#9654;";
+  btn.title = playing ? "Pause" : "Play";
+}
+
+// Toggle the expanded scrubber panel — same UX as the YouTube mini-player's
+// expand control. Adds/removes a class on the bar so CSS can show/hide
+// the <audio controls> sub-row.
+function _locToggleExpand() {
+  const bar = document.getElementById("loc-audio-bar");
+  if (!bar) return;
+  bar.classList.toggle("expanded");
+  // Expanded LOC bar is taller; adjust body padding the same way the
+  // YouTube mini-player does in its expanded mode (handled site-wide
+  // via body.loc-open / body.player-open padding rules).
+  document.body.classList.toggle("loc-expanded", bar.classList.contains("expanded"));
 }
 
 // Auto-advance: when the current track ends, play the next one in the
@@ -1536,6 +1577,8 @@ window._locOnSavedSortChange    = _locOnSavedSortChange;
 window._locLoadMore             = _locLoadMore;
 window._locLoadSaved            = _locLoadSaved;
 window._locClosePlayer          = _locClosePlayer;
+window._locTogglePause          = _locTogglePause;
+window._locToggleExpand         = _locToggleExpand;
 window._locRunSearchFromForm    = _locRunSearchFromForm;
 window._locOpenInfoPopup        = _locOpenInfoPopup;
 window._locCloseInfoPopup       = _locCloseInfoPopup;

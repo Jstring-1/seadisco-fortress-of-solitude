@@ -416,7 +416,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260425a";
+  const SITE_VERSION = "build 20260425e";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -516,21 +516,23 @@ function renderSharedFooter(opts) {
       // Wait for Clerk so apiFetch can attach the bearer token. loadClerkInstance
       // is idempotent and returns the cached instance after first call.
       const c = await loadClerkInstance();
-      // Reveal the Wikipedia and LOC footer links for any signed-in
-      // user — both pages are auth-gated like Collection / Wantlist.
-      if (c?.user) {
+      // Wikipedia and LOC footer links stay hidden for non-admins —
+      // both surfaces (search, lookup, saves, and the icon affordances
+      // sprinkled through modals/cards) are admin-only. The /api/me
+      // probe below reveals them only when isAdmin is true.
+      const res = await apiFetch("/api/me");
+      if (!res.ok) return;
+      const data = await res.json();
+      // Set the flag for everyone (false for non-admins) so app.js's
+      // _ensureAdminFlag() can read it synchronously after this resolves.
+      window._isAdmin = !!data?.isAdmin;
+      if (data?.isAdmin) {
+        const adminA = document.getElementById("footer-admin-link");
+        if (adminA) adminA.style.display = "";
         const wikiA = document.getElementById("footer-wiki-link");
         if (wikiA) wikiA.style.display = "";
         const locA = document.getElementById("footer-loc-link");
         if (locA) locA.style.display = "";
-      }
-      const res = await apiFetch("/api/me");
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data?.isAdmin) {
-        window._isAdmin = true;
-        const adminA = document.getElementById("footer-admin-link");
-        if (adminA) adminA.style.display = "";
         // Pre-load the discogs_ids AND names already in the
         // blues_artists table so the admin "+ add to Blues DB" icon
         // (popup AND card) can hide itself for artists already in.

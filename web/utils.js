@@ -468,10 +468,14 @@ function buildSavedSearchUI(view, getParamsFn, applyFn, containerEl) {
 
 function toggleSavedDropdown(view) {
   const dd = document.getElementById(`ss-dropdown-${view}`);
+  const toggle = document.getElementById(`ss-toggle-${view}`);
   if (!dd) return;
   const showing = dd.style.display !== "none";
-  // Close all other dropdowns first
-  document.querySelectorAll(".saved-search-dropdown").forEach(d => d.style.display = "none");
+  // Close all other dropdowns first and reset any prior flip state
+  document.querySelectorAll(".saved-search-dropdown").forEach(d => {
+    d.style.display = "none";
+    d.classList.remove("drop-up");
+  });
   if (!showing) {
     dd.style.display = "";
     // Cross-pollinate: records ↔ search saved searches
@@ -482,7 +486,46 @@ function toggleSavedDropdown(view) {
     } else {
       loadSavedSearches(view).then(searches => renderSavedList(view, searches));
     }
+    // Flip the dropdown ABOVE the toggle when it would otherwise cover
+    // a text input below the toggle (LOC filter grid, advanced search,
+    // collection panel, etc.) or run off the bottom of the viewport.
+    // Without this, the dropdown lands on top of inputs and obscures
+    // whatever the user has typed in them.
+    if (toggle) {
+      requestAnimationFrame(() => _ssPositionDropdown(toggle, dd));
+    }
   }
+}
+
+// Decide whether `dd` should drop down (default) or flip up above the
+// toggle. Two flip triggers:
+//   1. Dropdown rect would extend past the bottom of the viewport.
+//   2. There's a text-like input within the dropdown's reach directly
+//      below the toggle (so the dropdown would cover its content).
+function _ssPositionDropdown(toggle, dd) {
+  const togRect = toggle.getBoundingClientRect();
+  const ddRect  = dd.getBoundingClientRect();
+  const ddH     = ddRect.height || 240;   // fallback before content paints
+  const margin  = 8;
+  let flipUp = (togRect.bottom + ddH + margin) > window.innerHeight;
+  if (!flipUp) {
+    // Look for a text-like input inside the same form/row that lives
+    // below the toggle and within the dropdown's vertical reach.
+    const wrap  = toggle.closest(".saved-search-wrap");
+    const scope = wrap?.closest("form, .loc-form, .cw-search-row, .records-controls, .search-row, body") || document.body;
+    const candidates = scope.querySelectorAll(
+      'input[type="text"], input[type="search"], input:not([type]), textarea'
+    );
+    for (const el of candidates) {
+      if (!el.offsetParent) continue;       // hidden inputs don't matter
+      const r = el.getBoundingClientRect();
+      if (r.top > togRect.bottom && r.top < togRect.bottom + ddH + margin) {
+        flipUp = true;
+        break;
+      }
+    }
+  }
+  dd.classList.toggle("drop-up", flipUp);
 }
 
 // Click anywhere outside a saved-search wrapper closes any open
