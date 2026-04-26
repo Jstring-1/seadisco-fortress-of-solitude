@@ -57,7 +57,7 @@ function saveFilterState() {
 
 function restoreFilterState() {
   try {
-    const state = JSON.parse(localStorage.getItem("cw-filters") || "{}");
+    const state = getStorageJSON("cw-filters", {});
     _cwFilterIds.forEach(id => {
       const el = document.getElementById(id);
       if (el) el.value = state[id] || "";

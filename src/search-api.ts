@@ -3004,9 +3004,10 @@ app.post("/api/admin/sync-all", express.json(), async (req, res) => {
 });
 
 // POST /api/admin/sync-user — trigger background sync for a single user, admin only
-app.post("/api/admin/sync-user", express.json(), async (req, res) => {
+app.post("/api/admin/sync-user", express.json({ limit: "4kb" }), async (req, res) => {
   if (!await requireAdmin(req, res)) return;
-  const { username } = req.body as { username: string };
+  const usernameRaw = (req.body?.username as string ?? "").trim();
+  const username = usernameRaw.slice(0, 200);
   if (!username) { res.status(400).json({ error: "username required" }); return; }
   const users = await getAllUsersForSync();
   const user = users.find(u => u.username === username);
@@ -3213,7 +3214,9 @@ app.get("/api/admin/blues/ids", async (req, res) => {
 app.post("/api/admin/blues/add-by-discogs-id", express.json({ limit: "8kb" }), async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   const discogsIdRaw = req.body?.discogs_id;
-  const name = (req.body?.name as string ?? "").trim();
+  // Length cap (audit #11) — express.json's 8kb limit is the outer
+  // line of defense; this caps the actual stored field at 500 chars.
+  const name = (req.body?.name as string ?? "").trim().slice(0, 500);
   const discogsId = parseInt(String(discogsIdRaw), 10);
   if (!Number.isFinite(discogsId) || discogsId <= 0 || !name) {
     res.status(400).json({ error: "discogs_id (positive int) and name required" });
@@ -3245,7 +3248,7 @@ app.post("/api/admin/blues/add-by-name", express.json({ limit: "8kb" }), async (
     res.status(400).json({ error: "Admin has not connected Discogs via OAuth." });
     return;
   }
-  const name = (req.body?.name as string ?? "").trim();
+  const name = (req.body?.name as string ?? "").trim().slice(0, 500);
   if (!name) { res.status(400).json({ error: "name required" }); return; }
   try {
     const search: any = await (client as any).get("/database/search", {
@@ -4443,23 +4446,50 @@ app.get("/api/price-suggestions/:id", async (req, res) => {
 // Discogs paginates at 100 per page; popular masters can have several
 // hundred pressings, so walk pages until the response runs out (with a
 // safety cap to avoid runaway loops).
+// Master version-lists rarely change (new pressings of a master do, but
+// rarely on the timescale of a typical user session). Cache 1 day so
+// repeat opens of the same master skip the per-page Discogs walk.
+const _MASTER_VERSIONS_CACHE_TTL_S = 60 * 60 * 24;
 app.get("/master-versions/:id", async (req, res) => {
   if (!await requireUser(req, res)) return;
   const { id } = req.params;
+  const idNum = parseInt(id, 10);
+  const noCache = req.query.nocache === "1";
+  // Cache HIT: skip the entire Discogs walk
+  if (!noCache && Number.isFinite(idNum) && idNum > 0) {
+    const cached = await getCachedRelease(idNum, "master-versions", _MASTER_VERSIONS_CACHE_TTL_S);
+    if (cached?.versions) {
+      res.setHeader("X-SeaDisco-Cache", "hit");
+      res.json(cached);
+      return;
+    }
+  }
   const dc = await getDiscogsForRequest(req);
   if (!dc) { res.json({ versions: [] }); return; }
   try {
     const PER_PAGE = 100;
     const MAX_PAGES = 10;  // 1,000 versions ceiling — well above any real master
-    const collected: any[] = [];
-    let page = 1;
-    while (page <= MAX_PAGES) {
-      const data = await dc.getMasterVersions(id, { page, perPage: PER_PAGE, sort: "released", sortOrder: "asc" }) as any;
-      const chunk = data?.versions ?? [];
-      collected.push(...chunk);
-      const totalPages = data?.pagination?.pages ?? 1;
-      if (page >= totalPages || chunk.length < PER_PAGE) break;
-      page++;
+    const PARALLEL_BATCH = 4;  // tail pages fired in chunks to balance speed vs Discogs rate-limit pressure
+    // Fetch page 1 first to learn total page count.
+    const firstPage = await dc.getMasterVersions(id, { page: 1, perPage: PER_PAGE, sort: "released", sortOrder: "asc" }) as any;
+    const collected: any[] = firstPage?.versions ?? [];
+    const totalPages = Math.min(firstPage?.pagination?.pages ?? 1, MAX_PAGES);
+    // Pages 2..N fetched in parallel batches. Was sequential — for masters
+    // with 5+ pages this collapsed 1.5-2.5s of waterfall into one batch
+    // round-trip. (Audit #1.)
+    if (totalPages > 1) {
+      const remaining = [];
+      for (let p = 2; p <= totalPages; p++) remaining.push(p);
+      for (let i = 0; i < remaining.length; i += PARALLEL_BATCH) {
+        const batch = remaining.slice(i, i + PARALLEL_BATCH);
+        const results = await Promise.all(
+          batch.map(p => dc.getMasterVersions(id, { page: p, perPage: PER_PAGE, sort: "released", sortOrder: "asc" }) as Promise<any>)
+        );
+        for (const r of results) {
+          const chunk = r?.versions ?? [];
+          collected.push(...chunk);
+        }
+      }
     }
     const versions = collected.map((v: any) => ({
       id:           v.id,
@@ -4472,7 +4502,12 @@ app.get("/master-versions/:id", async (req, res) => {
       majorFormats: v.major_formats ?? [],
       url:          v.resource_url ? `https://www.discogs.com/release/${v.id}` : null,
     }));
-    res.json({ versions });
+    const payload = { versions };
+    if (Number.isFinite(idNum) && idNum > 0) {
+      cacheRelease(idNum, "master-versions", payload).catch(() => {});
+    }
+    res.setHeader("X-SeaDisco-Cache", "miss");
+    res.json(payload);
   } catch (err: any) {
     console.error(`[master-versions/${id}] Error:`, err?.message ?? err);
     res.status(500).json({ error: err?.message ?? "Failed to load versions", versions: [] });

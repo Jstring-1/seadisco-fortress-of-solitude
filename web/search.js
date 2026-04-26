@@ -1509,7 +1509,7 @@ function searchBioArtist(event, el) {
 const _SH_KEY = "sd_search_history";
 const _SH_MAX = 50; // max entries per field
 let _shData = {};
-try { _shData = JSON.parse(localStorage.getItem(_SH_KEY) || "{}"); } catch { _shData = {}; }
+_shData = getStorageJSON(_SH_KEY, {});
 let _shActiveField = null;
 
 function _shSave() { localStorage.setItem(_SH_KEY, JSON.stringify(_shData)); }
