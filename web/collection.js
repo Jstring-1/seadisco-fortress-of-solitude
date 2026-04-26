@@ -146,11 +146,16 @@ function addNavTab(view) {
     // Enable swap-to-collection button
     const swapBtn = document.getElementById("swap-to-collection-btn");
     if (swapBtn) { swapBtn.disabled = false; swapBtn.title = "Search your collection with these criteria"; }
-    // Update auth tab to show Account
+    // Update auth tab to show Account. iconNav-safe: when the tab
+    // contains [icon SVG][label span], setting textContent on the
+    // whole tab would nuke the icon. Update only the .nav-label span
+    // if it exists; otherwise fall back to plain text.
     const authTab = document.getElementById("nav-auth-tab");
     if (authTab) {
-      authTab.textContent = "Account";
-      authTab.title = "";
+      authTab.title = "Account";
+      const labelSpan = authTab.querySelector(".nav-label");
+      if (labelSpan) labelSpan.textContent = "Account";
+      else authTab.textContent = "Account";
     }
   }
 }
