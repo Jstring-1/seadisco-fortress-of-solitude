@@ -5870,6 +5870,22 @@ footer {
 .blues-hover-list li { padding: 0.1rem 0; }
 .blues-hover-year { color: var(--accent); font-weight: 600; margin-right: 0.4em; min-width: 2.5em; display: inline-block; }
 
+/* Clickable references inside the popup — alias / collaborator names
+   open a SeaDisco artist search in a new tab; release titles open the
+   master/release modal in a new tab. Subtle by default, accent on hover. */
+.blues-hover-link {
+  color: var(--text);
+  text-decoration: none;
+  border-bottom: 1px dotted var(--accent-dim);
+  cursor: pointer;
+}
+.blues-hover-link:hover {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+.blues-hover-list a.blues-hover-link { display: inline-block; width: 100%; }
+.blues-hover-list a.blues-hover-link:hover { background: var(--bg-hover, transparent); }
+
 .blues-image-overlay {
   position: fixed;
   inset: 0;
