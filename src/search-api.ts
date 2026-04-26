@@ -2684,25 +2684,37 @@ async function _fetchArchiveMeta(identifier: string): Promise<{ streamUrl: strin
 }
 
 async function _fetchArchiveCollection(collectionId: string): Promise<ArchiveItem[]> {
-  // Step 1: search for items in the collection. Public API, CORS-friendly.
-  // Cap rows=300 — first-load cost is paid once and cached for ~5 years;
-  // client paginates with a Load-more button. Collections larger than
-  // this would need a server-side paging strategy.
-  const searchUrl = `https://archive.org/advancedsearch.php?q=collection%3A${encodeURIComponent(collectionId)}&fl[]=identifier,title,date,description&rows=300&page=1&output=json&sort[]=title+asc`;
-  const r = await loggedFetch("archive", searchUrl, {
-    headers: { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "application/json" },
-    context: "archive-search",
-  });
-  if (!r.ok) throw new Error(`archive.org HTTP ${r.status}`);
-  const body = await r.json() as any;
-  const docs: any[] = (body?.response?.docs ?? []).filter((d: any) => d?.identifier);
-  // Step 2: per-item metadata in parallel batches of 10. Was sequential
-  // before, taking 50+ seconds for a 100-item collection — long enough
-  // for the proxy to time out before the response could land.
+  // Step 1: page through every item in the collection. archive.org's
+  // search API caps each page at 1000; we walk page-by-page until
+  // we've collected `numFound` records.
+  const PAGE_ROWS = 1000;
+  const allDocs: any[] = [];
+  let page = 1;
+  let numFound = 0;
+  while (true) {
+    const searchUrl = `https://archive.org/advancedsearch.php?q=collection%3A${encodeURIComponent(collectionId)}&fl[]=identifier,title,date,description&rows=${PAGE_ROWS}&page=${page}&output=json&sort[]=title+asc`;
+    const r = await loggedFetch("archive", searchUrl, {
+      headers: { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "application/json" },
+      context: "archive-search",
+    });
+    if (!r.ok) throw new Error(`archive.org HTTP ${r.status}`);
+    const body = await r.json() as any;
+    const docs: any[] = (body?.response?.docs ?? []).filter((d: any) => d?.identifier);
+    if (page === 1) numFound = body?.response?.numFound ?? docs.length;
+    allDocs.push(...docs);
+    if (allDocs.length >= numFound || !docs.length) break;
+    page++;
+    if (page > 20) break; // 20,000-item ceiling; reality check
+  }
+  // Step 2: per-item metadata in parallel batches of 10. Walks the
+  // entire collection to resolve mp3 URLs for each item. Slow (one
+  // round-trip per item, 10 in parallel) but only runs once on cache
+  // miss / weekly scheduled refresh / admin manual trigger — not on
+  // user requests.
   const PARALLEL = 10;
   const items: ArchiveItem[] = [];
-  for (let i = 0; i < docs.length; i += PARALLEL) {
-    const batch = docs.slice(i, i + PARALLEL);
+  for (let i = 0; i < allDocs.length; i += PARALLEL) {
+    const batch = allDocs.slice(i, i + PARALLEL);
     const metas = await Promise.all(batch.map((d: any) => _fetchArchiveMeta(d.identifier)));
     batch.forEach((d: any, j: number) => {
       const m = metas[j] ?? { streamUrl: "", duration: "" };
@@ -2720,29 +2732,84 @@ async function _fetchArchiveCollection(collectionId: string): Promise<ArchiveIte
   return items;
 }
 
+// Refetch the collection and write to cache. Used by both the weekly
+// scheduled refresh and the admin manual trigger. Logs how many items
+// were stored so admin can sanity-check.
+async function _refreshArchiveCache(collectionId: string, cacheKey: number): Promise<{ count: number }> {
+  console.log(`[archive] refreshing collection "${collectionId}" cache…`);
+  const t0 = Date.now();
+  const items = await _fetchArchiveCollection(collectionId);
+  const payload = { items, fetchedAt: new Date().toISOString() };
+  await cacheRelease(cacheKey, "master-versions", payload);
+  const ms = Date.now() - t0;
+  console.log(`[archive] refresh complete: ${items.length} items in ${ms}ms`);
+  return { count: items.length };
+}
+
+// Boot the weekly refresh schedule. Runs once at startup if the cache
+// is empty or stale, then every 24h checks and refetches if older than
+// 7 days. setInterval is fine for this — Node.js keeps the process
+// alive past the interval; if Railway restarts the container we just
+// pick up where the cron schedule left off (cache_at carries the truth).
+const _ARCHIVE_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // every 24h check
+const _ARCHIVE_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;  // refresh if >7d old
+async function _maybeRefreshArchive() {
+  try {
+    // Inspect the cached payload's own fetchedAt timestamp (written
+    // by _refreshArchiveCache). Falls back to refresh if the row
+    // doesn't exist yet, has malformed data, or is older than 7 days.
+    const cached = await getCachedRelease(_ARCHIVE_AADAM_CACHE_KEY, "master-versions");
+    const fetchedAt = cached?.fetchedAt ? Date.parse(cached.fetchedAt) : 0;
+    const ageMs = Date.now() - fetchedAt;
+    if (!fetchedAt || ageMs > _ARCHIVE_STALE_AFTER_MS) {
+      await _refreshArchiveCache(_ARCHIVE_AADAM_COLLECTION, _ARCHIVE_AADAM_CACHE_KEY);
+    }
+  } catch (err: any) {
+    console.error("[archive] scheduled refresh failed:", err?.message ?? err);
+  }
+}
+// Fire once at startup (in background — don't block boot) + every 24h.
+if (process.env.APP_DB_URL) {
+  setTimeout(() => { _maybeRefreshArchive(); }, 5000);
+  setInterval(() => { _maybeRefreshArchive(); }, _ARCHIVE_REFRESH_INTERVAL_MS);
+}
+
 // GET /api/archive/aadamjacobs — admin-only listing of the curated
-// Aadam Jacobs live shows collection on archive.org.
+// Aadam Jacobs live shows collection on archive.org. Reads from the
+// DB cache only — never fetches from archive.org on a user request.
+// The cache is populated by the weekly scheduled refresh (above) or
+// by an admin manual trigger via POST /api/admin/archive/refresh.
 app.get("/api/archive/aadamjacobs", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
-  const noCache = req.query.nocache === "1";
-  if (!noCache) {
-    const cached = await getCachedRelease(_ARCHIVE_AADAM_CACHE_KEY, "master-versions", _ARCHIVE_CACHE_TTL_S);
-    if (cached?.items) {
-      res.setHeader("X-SeaDisco-Cache", "hit");
-      res.json(cached);
-      return;
-    }
+  const cached = await getCachedRelease(_ARCHIVE_AADAM_CACHE_KEY, "master-versions", _ARCHIVE_CACHE_TTL_S);
+  if (cached?.items) {
+    res.setHeader("X-SeaDisco-Cache", "hit");
+    res.json(cached);
+    return;
   }
+  // Cache miss (e.g. very first hit before scheduled refresh has run).
+  // Trigger an on-demand refresh so the user gets data; subsequent
+  // requests serve from cache.
   try {
-    const items = await _fetchArchiveCollection(_ARCHIVE_AADAM_COLLECTION);
-    const payload = { items, fetchedAt: new Date().toISOString() };
-    cacheRelease(_ARCHIVE_AADAM_CACHE_KEY, "master-versions", payload).catch(() => {});
+    const { count } = await _refreshArchiveCache(_ARCHIVE_AADAM_COLLECTION, _ARCHIVE_AADAM_CACHE_KEY);
+    const fresh = await getCachedRelease(_ARCHIVE_AADAM_CACHE_KEY, "master-versions");
     res.setHeader("X-SeaDisco-Cache", "miss");
-    res.json(payload);
+    res.json(fresh ?? { items: [], fetchedAt: new Date().toISOString(), count });
   } catch (e: any) {
     console.error("[archive/aadamjacobs]", e?.message ?? e);
     res.status(502).json({ error: String(e?.message ?? e) });
   }
+});
+
+// POST /api/admin/archive/refresh — admin manual trigger to re-fetch
+// the archive.org collection and overwrite the DB cache. Returns
+// 202 Accepted immediately; refresh runs in the background.
+app.post("/api/admin/archive/refresh", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  res.status(202).json({ ok: true, message: "Refresh started; check /api/archive/aadamjacobs in a few seconds for the updated cache." });
+  _refreshArchiveCache(_ARCHIVE_AADAM_COLLECTION, _ARCHIVE_AADAM_CACHE_KEY).catch((err) => {
+    console.error("[archive/refresh]", err?.message ?? err);
+  });
 });
 
 // ── Play queue (cross-source: LOC + YouTube) ────────────────────────────
