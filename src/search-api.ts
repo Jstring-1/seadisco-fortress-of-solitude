@@ -2325,9 +2325,10 @@ function _normalizeLocResult(r: any): any {
 
 // GET /api/loc/search — proxy with rate limiting and response caching
 app.get("/api/loc/search", async (req, res) => {
-  // Open to any signed-in user. The locLimiter (token bucket below) and
-  // _locCache keep LOC-side load bounded across all callers.
-  const userId = await requireUser(req, res);
+  // Admin-only: the entire LOC surface (search, lookup, saves, info popup)
+  // is gated to ADMIN_CLERK_ID. The frontend hides every LOC affordance
+  // for non-admins; the server is the source of truth.
+  const userId = await requireAdmin(req, res);
   if (!userId) return;
 
   const { url, cacheKey } = _buildLocSearchUrl(req);
@@ -2418,7 +2419,7 @@ app.get("/api/loc/search", async (req, res) => {
 // the recipient having to re-run the search that originally surfaced
 // the item. Same rate limiter as /api/loc/search.
 app.get("/api/loc/lookup", async (req, res) => {
-  const userId = await requireUser(req, res);
+  const userId = await requireAdmin(req, res);
   if (!userId) return;
   const id = typeof req.query.id === "string" ? req.query.id : "";
   // Validate: must be a loc.gov item URL. Anything else gets a 400 so
@@ -2482,7 +2483,7 @@ app.get("/api/loc/lookup", async (req, res) => {
 
 // GET /api/user/loc-saves — list the current user's saved LOC items
 app.get("/api/user/loc-saves", async (req, res) => {
-  const userId = await requireUser(req, res);
+  const userId = await requireAdmin(req, res);
   if (!userId) return;
   try {
     const items = await getLocSaves(userId);
@@ -2494,7 +2495,7 @@ app.get("/api/user/loc-saves", async (req, res) => {
 
 // GET /api/user/loc-saves/ids — lightweight list of saved IDs (for toggling star state)
 app.get("/api/user/loc-saves/ids", async (req, res) => {
-  const userId = await requireUser(req, res);
+  const userId = await requireAdmin(req, res);
   if (!userId) return;
   try {
     const ids = await getLocSaveIds(userId);
@@ -2507,7 +2508,7 @@ app.get("/api/user/loc-saves/ids", async (req, res) => {
 // POST /api/user/loc-saves — save an item
 // Body: { locId, title, streamUrl, data }
 app.post("/api/user/loc-saves", express.json({ limit: "64kb" }), async (req, res) => {
-  const userId = await requireUser(req, res);
+  const userId = await requireAdmin(req, res);
   if (!userId) return;
   const { locId, title = null, streamUrl = null, data = {} } = req.body ?? {};
   if (typeof locId !== "string" || !locId) {
@@ -2528,7 +2529,7 @@ app.post("/api/user/loc-saves", express.json({ limit: "64kb" }), async (req, res
 // Body: { locId }
 // (DELETE with a URL param was avoided because LOC IDs are full URLs with slashes)
 app.delete("/api/user/loc-saves", express.json(), async (req, res) => {
-  const userId = await requireUser(req, res);
+  const userId = await requireAdmin(req, res);
   if (!userId) return;
   const locId = typeof req.body?.locId === "string"
     ? req.body.locId
@@ -2549,7 +2550,7 @@ app.delete("/api/user/loc-saves", express.json(), async (req, res) => {
 
 // GET /api/user/wiki-saves — list the current user's saved Wikipedia articles
 app.get("/api/user/wiki-saves", async (req, res) => {
-  const userId = await requireUser(req, res);
+  const userId = await requireAdmin(req, res);
   if (!userId) return;
   try {
     const items = await getWikiSaves(userId);
@@ -2561,7 +2562,7 @@ app.get("/api/user/wiki-saves", async (req, res) => {
 
 // GET /api/user/wiki-saves/ids — lightweight list of saved titles for ★ state
 app.get("/api/user/wiki-saves/ids", async (req, res) => {
-  const userId = await requireUser(req, res);
+  const userId = await requireAdmin(req, res);
   if (!userId) return;
   try {
     const ids = await getWikiSaveIds(userId);
@@ -2574,7 +2575,7 @@ app.get("/api/user/wiki-saves/ids", async (req, res) => {
 // POST /api/user/wiki-saves — save an article
 // Body: { title, url?, snippet?, thumbnail?, data? }
 app.post("/api/user/wiki-saves", express.json({ limit: "64kb" }), async (req, res) => {
-  const userId = await requireUser(req, res);
+  const userId = await requireAdmin(req, res);
   if (!userId) return;
   const { title, url = null, snippet = null, thumbnail = null, data = {} } = req.body ?? {};
   if (typeof title !== "string" || !title.trim()) {
@@ -2598,7 +2599,7 @@ app.post("/api/user/wiki-saves", express.json({ limit: "64kb" }), async (req, re
 // DELETE /api/user/wiki-saves — remove a single save
 // Body: { title }
 app.delete("/api/user/wiki-saves", express.json(), async (req, res) => {
-  const userId = await requireUser(req, res);
+  const userId = await requireAdmin(req, res);
   if (!userId) return;
   const title = typeof req.body?.title === "string"
     ? req.body.title.trim()
@@ -3900,7 +3901,7 @@ Return ONLY a valid JSON object, no markdown, no explanation.`;
 // (Wikipedia's <span class="searchmatch"> highlight markup preserved).
 // Supports paging via offset so the frontend can implement "Load more".
 app.get("/api/wikipedia/search", async (req, res) => {
-  if (!await requireUser(req, res)) return;
+  if (!await requireAdmin(req, res)) return;
   const q = ((req.query.q as string) ?? "").trim();
   if (!q) { res.status(400).json({ error: "Missing q" }); return; }
   // Clamp limit to Wikipedia's 50/page ceiling and a sensible default of 20.
@@ -3940,7 +3941,7 @@ app.get("/api/wikipedia/search", async (req, res) => {
 // in-app popup. Default returns only the lead section (fast); pass full=1 to
 // load the entire article body so users can read it without leaving SeaDisco.
 app.get("/api/wikipedia/lookup", async (req, res) => {
-  if (!await requireUser(req, res)) return;
+  if (!await requireAdmin(req, res)) return;
   const q = ((req.query.q as string) ?? "").trim();
   if (!q) { res.status(400).json({ error: "Missing q" }); return; }
   const full = req.query.full === "1" || req.query.full === "true";

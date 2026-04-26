@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260425a" />
+  <link rel="stylesheet" href="/style.css?v=20260425e" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260425a"></script>
+<script defer src="/shared.js?v=20260425e"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
@@ -222,6 +222,20 @@
               <option value="tape-cream">Tape Cream (sepia paper · rust)</option>
               <option value="paperback">Paperback (sage · dusty rose · cream)</option>
             </optgroup>
+            <optgroup label="Neutral · accent · font">
+              <option value="paper-ink">Paper Ink (white · grey · sans)</option>
+              <option value="paper-blue">Paper Blue (white · deep blue · serif)</option>
+              <option value="paper-rose">Paper Rose (cream · rose · serif)</option>
+              <option value="paper-forest">Paper Forest (soft white · forest · slab)</option>
+              <option value="stone-violet">Stone Violet (warm grey · violet · humanist)</option>
+              <option value="stone-sun">Stone Sun (grey · gold · geometric)</option>
+              <option value="noir-white">Noir White (black · white · mono)</option>
+              <option value="graphite-amber">Graphite Amber (charcoal · amber · sans)</option>
+              <option value="graphite-cyan">Graphite Cyan (charcoal · cyan · mono)</option>
+              <option value="graphite-coral">Graphite Coral (charcoal · coral · serif)</option>
+              <option value="slate-violet">Slate Violet (slate · violet · geometric)</option>
+              <option value="slate-emerald">Slate Emerald (slate · emerald · slab)</option>
+            </optgroup>
           </select>
         </div>
         <div id="theme-preview" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:0.8rem"></div>
@@ -274,7 +288,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260425a"></script>
+<script defer src="/modal.js?v=20260425e"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -313,6 +327,22 @@ const _themes = [
   { id: "neon-wax",         label: "Neon Wax",              swatches: ["#0d0a18", "#18142a", "#c060f0", "#d8d4ff", "#00e5ff"] },
   { id: "tape-cream",       label: "Tape Cream",            swatches: ["#f4ecd8", "#faf5e4", "#8b3a1f", "#3a2a16", "#a87832"] },
   { id: "paperback",        label: "Paperback",             swatches: ["#f0ebe1", "#f8f4ea", "#6b8068", "#423832", "#c1716e"] },
+  // Neutral · accent · font — restrained bg/text, color comes from
+  // accent + a different typeface per theme. The `font` field is the
+  // CSS font stack so the preview card renders in the same typeface
+  // the theme would apply site-wide.
+  { id: "paper-ink",        label: "Paper Ink",             swatches: ["#ffffff", "#fafafa", "#1a1a1a", "#1a1a1a", "#6a6a6a"], font: "system-ui, -apple-system, 'Segoe UI', sans-serif" },
+  { id: "paper-blue",       label: "Paper Blue",            swatches: ["#ffffff", "#fafbfd", "#0050a0", "#1a1a1a", "#b8000a"], font: "Georgia, 'Iowan Old Style', 'Times New Roman', serif" },
+  { id: "paper-rose",       label: "Paper Rose",            swatches: ["#faf8f4", "#fdfcf8", "#b04d6a", "#2a2418", "#5a7d4a"], font: "'Iowan Old Style', 'Charter', 'Palatino Linotype', Georgia, serif" },
+  { id: "paper-forest",     label: "Paper Forest",          swatches: ["#f7faf6", "#fafdfa", "#2d5a3d", "#1a2418", "#8a6a18"], font: "'Rockwell', 'Roboto Slab', 'Slabo 27px', 'Calisto MT', Georgia, serif" },
+  { id: "stone-violet",     label: "Stone Violet",          swatches: ["#ececea", "#f2f2f0", "#5a3aa0", "#1a1a1a", "#b87020"], font: "'Verdana', 'Geneva', 'Tahoma', sans-serif" },
+  { id: "stone-sun",        label: "Stone Sun",             swatches: ["#efefee", "#f5f5f4", "#b89020", "#1a1a1a", "#2a6080"], font: "'Avenir Next', 'Avenir', 'Futura', 'Trebuchet MS', sans-serif" },
+  { id: "noir-white",       label: "Noir White",            swatches: ["#000000", "#0a0a0a", "#ffffff", "#f0f0f0", "#aaaaaa"], font: "'SF Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, Consolas, 'Courier New', monospace" },
+  { id: "graphite-amber",   label: "Graphite Amber",        swatches: ["#1a1a1a", "#1f1f1f", "#ffb84a", "#e0e0e0", "#88c5e0"], font: "system-ui, -apple-system, 'Segoe UI', sans-serif" },
+  { id: "graphite-cyan",    label: "Graphite Cyan",         swatches: ["#1a1a1a", "#1f1f1f", "#00d4d0", "#e0e0e0", "#ff8a4a"], font: "'SF Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, Consolas, 'Courier New', monospace" },
+  { id: "graphite-coral",   label: "Graphite Coral",        swatches: ["#1a1a1a", "#1f1f1f", "#ff7878", "#e0e0e0", "#d4b84a"], font: "Georgia, 'Iowan Old Style', 'Times New Roman', serif" },
+  { id: "slate-violet",     label: "Slate Violet",          swatches: ["#1c1d22", "#22232a", "#b070ff", "#d8d8e0", "#50d0a0"], font: "'Avenir Next', 'Avenir', 'Futura', 'Trebuchet MS', sans-serif" },
+  { id: "slate-emerald",    label: "Slate Emerald",         swatches: ["#1c1d22", "#22232a", "#50d68a", "#d8d8e0", "#ff8a50"], font: "'Rockwell', 'Roboto Slab', 'Slabo 27px', 'Calisto MT', Georgia, serif" },
 ];
 
 function initThemePicker() {
@@ -332,8 +362,12 @@ function initThemePicker() {
   grid.innerHTML = _themes.map(t => {
     const isActive = t.id === current;
     const [bg, surface, accent, text, hi] = t.swatches;
+    // Apply the theme's font to the preview card so users can see the
+    // typeface change before committing. Themes without a `font` field
+    // fall back to the inherited admin-page font.
+    const fontStyle = t.font ? `font-family:${t.font.replace(/"/g, "&quot;")};` : "";
     return `
-      <div class="theme-preview-card${isActive ? " is-active" : ""}" onclick="applyThemeChoice('${t.id}')" style="cursor:pointer;border:2px solid ${isActive ? accent : "var(--border)"};border-radius:8px;padding:0.8rem;background:${bg};transition:border-color 0.15s">
+      <div class="theme-preview-card${isActive ? " is-active" : ""}" onclick="applyThemeChoice('${t.id}')" style="cursor:pointer;border:2px solid ${isActive ? accent : "var(--border)"};border-radius:8px;padding:0.8rem;background:${bg};transition:border-color 0.15s;${fontStyle}">
         <div style="color:${text};font-weight:700;font-size:0.92rem;margin-bottom:0.35rem">${t.label}${isActive ? " ✓" : ""}</div>
         <div style="background:${surface};border:1px solid ${accent};border-radius:4px;padding:0.55rem;color:${text};font-size:0.78rem">
           <div style="color:${accent};font-weight:600;font-size:0.82rem;margin-bottom:0.2rem">Sample header</div>

@@ -294,6 +294,19 @@ html { overflow-x: hidden; }
      neon-wax        Synthwave violet/cyan/magenta dark
      tape-cream      Sepia paper light — vintage typewriter / liner notes
      paperback       Sage / dusty rose / off-white light — book design
+     ── Neutral-bg + accent + font ────────────────────────────────
+     paper-ink       White + grey accent + system sans
+     paper-blue      White + deep blue + classic serif (Georgia)
+     paper-rose      Cream + dusty rose + modern serif (Iowan/Charter)
+     paper-forest    Soft white + forest green + slab serif (Rockwell)
+     stone-violet    Warm grey + violet + humanist sans (Verdana)
+     stone-sun       Light grey + sun gold + geometric sans (Avenir/Futura)
+     noir-white      Pure black + white-only + monospace
+     graphite-amber  Charcoal + amber + system sans
+     graphite-cyan   Charcoal + electric cyan + monospace
+     graphite-coral  Charcoal + coral + classic serif
+     slate-violet    Cool slate + electric violet + geometric sans
+     slate-emerald   Cool slate + emerald + slab serif
    ══════════════════════════════════════════════════════════════════════ */
 
 :root,
@@ -826,10 +839,548 @@ html { overflow-x: hidden; }
   --input-h:         28px;
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   NEUTRAL-BG THEMES — restrained backgrounds (white/cream/grey/black/
+   charcoal), with personality coming from the accent color + a distinct
+   typeface set via --font. Six lights + six darks paired with serif,
+   slab serif, mono, geometric, humanist, and system sans fonts.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ── Light: Paper Ink (white + grey accent + system sans) ─────────── */
+:root[data-theme="paper-ink"] {
+  color-scheme: light;
+  --bg:              #ffffff;
+  --bg-elevated:     #f5f5f5;
+  --bg-hover:        #ececec;
+  --surface:         #fafafa;
+  --surface-raised:  #ffffff;
+  --surface-sunken:  #ececec;
+  --border:          #d8d8d8;
+  --border-strong:   #aaaaaa;
+  --border-soft:     #e8e8e8;
+  --fg:              #0a0a0a;
+  --text:            #1a1a1a;
+  --muted:           #6a6a6a;
+  --muted-dim:       #909090;
+  --text-disabled:   #b8b8b8;
+  --accent:          #1a1a1a;
+  --accent-hover:    #4a4a4a;
+  --accent-dim:      #555555;
+  --accent2:         #4a4a4a;
+  --accent-hi:       #6a6a6a;
+  --accent-soft:     #ececec;
+  --success:         #2a6a30;
+  --success-bg:      #d8e8d8;
+  --success-border:  #a8c8a0;
+  --warning:         #6a4a18;
+  --warning-bg:      #f0e0c0;
+  --warning-border:  #c0a070;
+  --danger:          #6a1a1a;
+  --danger-bright:   #8a2a2a;
+  --danger-bg:       #f0d0d0;
+  --danger-border:   #c89090;
+  --inventory:       #4a4a4a;
+  --inventory-bg:    #ececec;
+  --inventory-border:#b8b8b8;
+  --favorite:        #1a1a1a;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+  --font:            system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* ── Light: Paper Blue (white + deep blue + classic serif) ────────── */
+:root[data-theme="paper-blue"] {
+  color-scheme: light;
+  --bg:              #ffffff;
+  --bg-elevated:     #f4f5f8;
+  --bg-hover:        #ebedf0;
+  --surface:         #fafbfd;
+  --surface-raised:  #ffffff;
+  --surface-sunken:  #ebedf0;
+  --border:          #d4d8de;
+  --border-strong:   #aab0b8;
+  --border-soft:     #e4e6ea;
+  --fg:              #0a0a0a;
+  --text:            #1a1a1a;
+  --muted:           #5a6470;
+  --muted-dim:       #8590a0;
+  --text-disabled:   #b0b8c0;
+  --accent:          #0050a0;
+  --accent-hover:    #0070d0;
+  --accent-dim:      #003570;
+  --accent2:         #0070d0;
+  --accent-hi:       #b8000a;
+  --accent-soft:     #d8e4f0;
+  --success:         #1a6a2a;
+  --success-bg:      #d8e8d8;
+  --success-border:  #a8c8a0;
+  --warning:         #8a5a18;
+  --warning-bg:      #f0e0c0;
+  --warning-border:  #c0a070;
+  --danger:          #b8000a;
+  --danger-bright:   #d02030;
+  --danger-bg:       #f0d4d4;
+  --danger-border:   #c89090;
+  --inventory:       #8a5a18;
+  --inventory-bg:    #f0e0c0;
+  --inventory-border:#c0a070;
+  --favorite:        #b8000a;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+  --font:            Georgia, "Iowan Old Style", "Times New Roman", serif;
+}
+
+/* ── Light: Paper Rose (cream + dusty rose + modern serif) ────────── */
+:root[data-theme="paper-rose"] {
+  color-scheme: light;
+  --bg:              #faf8f4;
+  --bg-elevated:     #f0eee8;
+  --bg-hover:        #e6e2d8;
+  --surface:         #fdfcf8;
+  --surface-raised:  #ffffff;
+  --surface-sunken:  #ece8de;
+  --border:          #d8d2c4;
+  --border-strong:   #aaa498;
+  --border-soft:     #e6e2d4;
+  --fg:              #1a1410;
+  --text:            #2a2418;
+  --muted:           #6a604e;
+  --muted-dim:       #8a7e6a;
+  --text-disabled:   #b0a890;
+  --accent:          #b04d6a;
+  --accent-hover:    #c66880;
+  --accent-dim:      #802a48;
+  --accent2:         #c66880;
+  --accent-hi:       #5a7d4a;
+  --accent-soft:     #f0d8de;
+  --success:         #5a7d4a;
+  --success-bg:      #dee4d0;
+  --success-border:  #a8b890;
+  --warning:         #a07832;
+  --warning-bg:      #f0e0b8;
+  --warning-border:  #c0a062;
+  --danger:          #b04050;
+  --danger-bright:   #d05068;
+  --danger-bg:       #f0d4d8;
+  --danger-border:   #c89090;
+  --inventory:       #a07832;
+  --inventory-bg:    #f0e0b8;
+  --inventory-border:#c0a062;
+  --favorite:        #b04d6a;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+  --font:            "Iowan Old Style", "Charter", "Palatino Linotype", Georgia, serif;
+}
+
+/* ── Light: Paper Forest (soft white + forest green + slab serif) ── */
+:root[data-theme="paper-forest"] {
+  color-scheme: light;
+  --bg:              #f7faf6;
+  --bg-elevated:     #ecf0eb;
+  --bg-hover:        #e0e6df;
+  --surface:         #fafdfa;
+  --surface-raised:  #ffffff;
+  --surface-sunken:  #e6ece4;
+  --border:          #d0d8ce;
+  --border-strong:   #a8b0a4;
+  --border-soft:     #e0e6de;
+  --fg:              #0a1a0e;
+  --text:            #1a2418;
+  --muted:           #5a685e;
+  --muted-dim:       #7a887e;
+  --text-disabled:   #b0b8ae;
+  --accent:          #2d5a3d;
+  --accent-hover:    #3a7050;
+  --accent-dim:      #1a3a25;
+  --accent2:         #3a7050;
+  --accent-hi:       #8a6a18;
+  --accent-soft:     #d8e8d8;
+  --success:         #2d5a3d;
+  --success-bg:      #d8e8d8;
+  --success-border:  #a8c8a0;
+  --warning:         #8a6a18;
+  --warning-bg:      #f0e0b8;
+  --warning-border:  #c0a062;
+  --danger:          #8a2828;
+  --danger-bright:   #a83838;
+  --danger-bg:       #f0d4d4;
+  --danger-border:   #c89090;
+  --inventory:       #8a6a18;
+  --inventory-bg:    #f0e0b8;
+  --inventory-border:#c0a062;
+  --favorite:        #8a6a18;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+  --font:            "Rockwell", "Roboto Slab", "Slabo 27px", "Calisto MT", Georgia, serif;
+}
+
+/* ── Light: Stone Violet (warm grey + violet + humanist sans) ─────── */
+:root[data-theme="stone-violet"] {
+  color-scheme: light;
+  --bg:              #ececea;
+  --bg-elevated:     #e0e0de;
+  --bg-hover:        #d4d4d2;
+  --surface:         #f2f2f0;
+  --surface-raised:  #f8f8f6;
+  --surface-sunken:  #d8d8d6;
+  --border:          #c4c4c0;
+  --border-strong:   #989894;
+  --border-soft:     #d8d8d4;
+  --fg:              #0a0a0a;
+  --text:            #1a1a1a;
+  --muted:           #5a5a58;
+  --muted-dim:       #80807e;
+  --text-disabled:   #aeaeab;
+  --accent:          #5a3aa0;
+  --accent-hover:    #7050b8;
+  --accent-dim:      #3a2070;
+  --accent2:         #7050b8;
+  --accent-hi:       #b87020;
+  --accent-soft:     #e0d8ec;
+  --success:         #2a6a30;
+  --success-bg:      #d8e8d8;
+  --success-border:  #a8c8a0;
+  --warning:         #8a5a18;
+  --warning-bg:      #f0e0c0;
+  --warning-border:  #c0a070;
+  --danger:          #a02020;
+  --danger-bright:   #c83030;
+  --danger-bg:       #f0d4d4;
+  --danger-border:   #c89090;
+  --inventory:       #b87020;
+  --inventory-bg:    #f0e0c0;
+  --inventory-border:#c0a070;
+  --favorite:        #5a3aa0;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+  --font:            "Verdana", "Geneva", "Tahoma", sans-serif;
+}
+
+/* ── Light: Stone Sun (light grey + sun gold + geometric sans) ────── */
+:root[data-theme="stone-sun"] {
+  color-scheme: light;
+  --bg:              #efefee;
+  --bg-elevated:     #e4e4e2;
+  --bg-hover:        #d8d8d6;
+  --surface:         #f5f5f4;
+  --surface-raised:  #fbfbfa;
+  --surface-sunken:  #dcdcda;
+  --border:          #c8c8c4;
+  --border-strong:   #9c9c98;
+  --border-soft:     #dcdcd8;
+  --fg:              #0a0a0a;
+  --text:            #1a1a1a;
+  --muted:           #5e5e5c;
+  --muted-dim:       #828280;
+  --text-disabled:   #b0b0ad;
+  --accent:          #b89020;
+  --accent-hover:    #d4a838;
+  --accent-dim:      #80600c;
+  --accent2:         #d4a838;
+  --accent-hi:       #2a6080;
+  --accent-soft:     #ece0b8;
+  --success:         #2a6a30;
+  --success-bg:      #d8e8d8;
+  --success-border:  #a8c8a0;
+  --warning:         #b89020;
+  --warning-bg:      #ece0b8;
+  --warning-border:  #c0a060;
+  --danger:          #a02020;
+  --danger-bright:   #c83030;
+  --danger-bg:       #f0d4d4;
+  --danger-border:   #c89090;
+  --inventory:       #b89020;
+  --inventory-bg:    #ece0b8;
+  --inventory-border:#c0a060;
+  --favorite:        #b89020;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+  --font:            "Avenir Next", "Avenir", "Futura", "Trebuchet MS", sans-serif;
+}
+
+/* ── Dark: Noir White (pure black + white-only + monospace) ──────── */
+:root[data-theme="noir-white"] {
+  color-scheme: dark;
+  --bg:              #000000;
+  --bg-elevated:     #0e0e0e;
+  --bg-hover:        #1a1a1a;
+  --surface:         #0a0a0a;
+  --surface-raised:  #1a1a1a;
+  --surface-sunken:  #000000;
+  --border:          #2e2e2e;
+  --border-strong:   #5a5a5a;
+  --border-soft:     #1a1a1a;
+  --fg:              #ffffff;
+  --text:            #f0f0f0;
+  --muted:           #888888;
+  --muted-dim:       #666666;
+  --text-disabled:   #444444;
+  --accent:          #ffffff;
+  --accent-hover:    #ffffff;
+  --accent-dim:      #aaaaaa;
+  --accent2:         #d0d0d0;
+  --accent-hi:       #aaaaaa;
+  --accent-soft:     #2a2a2a;
+  --success:         #b0b0b0;
+  --success-bg:      #1a1a1a;
+  --success-border:  #3a3a3a;
+  --warning:         #c8c8c8;
+  --warning-bg:      #2a2a2a;
+  --warning-border:  #4a4a4a;
+  --danger:          #ffffff;
+  --danger-bright:   #ffffff;
+  --danger-bg:       #2a2a2a;
+  --danger-border:   #5a5a5a;
+  --inventory:       #b0b0b0;
+  --inventory-bg:    #1f1f1f;
+  --inventory-border:#3a3a3a;
+  --favorite:        #ffffff;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+  --font:            "SF Mono", "JetBrains Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, "Courier New", monospace;
+}
+
+/* ── Dark: Graphite Amber (charcoal + amber + system sans) ───────── */
+:root[data-theme="graphite-amber"] {
+  color-scheme: dark;
+  --bg:              #1a1a1a;
+  --bg-elevated:     #242424;
+  --bg-hover:        #2e2e2e;
+  --surface:         #1f1f1f;
+  --surface-raised:  #292929;
+  --surface-sunken:  #131313;
+  --border:          #353535;
+  --border-strong:   #555555;
+  --border-soft:     #252525;
+  --fg:              #f0f0f0;
+  --text:            #e0e0e0;
+  --muted:           #909090;
+  --muted-dim:       #707070;
+  --text-disabled:   #4a4a4a;
+  --accent:          #ffb84a;
+  --accent-hover:    #ffce72;
+  --accent-dim:      #a07418;
+  --accent2:         #ffce72;
+  --accent-hi:       #88c5e0;
+  --accent-soft:     #2e2410;
+  --success:         #6ec070;
+  --success-bg:      #1c2a1a;
+  --success-border:  #3a5a3a;
+  --warning:         #ffb84a;
+  --warning-bg:      #2e2410;
+  --warning-border:  #5a4520;
+  --danger:          #e06060;
+  --danger-bright:   #ff8080;
+  --danger-bg:       #2e1414;
+  --danger-border:   #5a2828;
+  --inventory:       #ffb84a;
+  --inventory-bg:    #2e2410;
+  --inventory-border:#5a4520;
+  --favorite:        #ffb84a;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+  --font:            system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* ── Dark: Graphite Cyan (charcoal + electric cyan + monospace) ──── */
+:root[data-theme="graphite-cyan"] {
+  color-scheme: dark;
+  --bg:              #1a1a1a;
+  --bg-elevated:     #242424;
+  --bg-hover:        #2e2e2e;
+  --surface:         #1f1f1f;
+  --surface-raised:  #292929;
+  --surface-sunken:  #131313;
+  --border:          #353535;
+  --border-strong:   #555555;
+  --border-soft:     #252525;
+  --fg:              #f0f0f0;
+  --text:            #e0e0e0;
+  --muted:           #909090;
+  --muted-dim:       #707070;
+  --text-disabled:   #4a4a4a;
+  --accent:          #00d4d0;
+  --accent-hover:    #4ae8e4;
+  --accent-dim:      #008885;
+  --accent2:         #4ae8e4;
+  --accent-hi:       #ff8a4a;
+  --accent-soft:     #0a2a2a;
+  --success:         #6ec070;
+  --success-bg:      #1c2a1a;
+  --success-border:  #3a5a3a;
+  --warning:         #d4b84a;
+  --warning-bg:      #2e2410;
+  --warning-border:  #5a4520;
+  --danger:          #e06060;
+  --danger-bright:   #ff8080;
+  --danger-bg:       #2e1414;
+  --danger-border:   #5a2828;
+  --inventory:       #ff8a4a;
+  --inventory-bg:    #2e1a10;
+  --inventory-border:#5a3520;
+  --favorite:        #00d4d0;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+  --font:            "SF Mono", "JetBrains Mono", "Fira Code", "Cascadia Code", Menlo, Consolas, "Courier New", monospace;
+}
+
+/* ── Dark: Graphite Coral (charcoal + coral + classic serif) ─────── */
+:root[data-theme="graphite-coral"] {
+  color-scheme: dark;
+  --bg:              #1a1a1a;
+  --bg-elevated:     #242424;
+  --bg-hover:        #2e2e2e;
+  --surface:         #1f1f1f;
+  --surface-raised:  #292929;
+  --surface-sunken:  #131313;
+  --border:          #353535;
+  --border-strong:   #555555;
+  --border-soft:     #252525;
+  --fg:              #f0f0f0;
+  --text:            #e0e0e0;
+  --muted:           #909090;
+  --muted-dim:       #707070;
+  --text-disabled:   #4a4a4a;
+  --accent:          #ff7878;
+  --accent-hover:    #ff9a9a;
+  --accent-dim:      #a83838;
+  --accent2:         #ff9a9a;
+  --accent-hi:       #d4b84a;
+  --accent-soft:     #2e1414;
+  --success:         #6ec070;
+  --success-bg:      #1c2a1a;
+  --success-border:  #3a5a3a;
+  --warning:         #d4b84a;
+  --warning-bg:      #2e2410;
+  --warning-border:  #5a4520;
+  --danger:          #ff7878;
+  --danger-bright:   #ff9a9a;
+  --danger-bg:       #2e1414;
+  --danger-border:   #5a2828;
+  --inventory:       #d4b84a;
+  --inventory-bg:    #2e2410;
+  --inventory-border:#5a4520;
+  --favorite:        #ff7878;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+  --font:            Georgia, "Iowan Old Style", "Times New Roman", serif;
+}
+
+/* ── Dark: Slate Violet (cool slate + electric violet + geometric) ─ */
+:root[data-theme="slate-violet"] {
+  color-scheme: dark;
+  --bg:              #1c1d22;
+  --bg-elevated:     #26282e;
+  --bg-hover:        #30323a;
+  --surface:         #22232a;
+  --surface-raised:  #2c2e36;
+  --surface-sunken:  #14151a;
+  --border:          #383a44;
+  --border-strong:   #5a5d6a;
+  --border-soft:     #28292f;
+  --fg:              #f0f0f5;
+  --text:            #d8d8e0;
+  --muted:           #8a8a98;
+  --muted-dim:       #6a6a78;
+  --text-disabled:   #3a3a45;
+  --accent:          #b070ff;
+  --accent-hover:    #c490ff;
+  --accent-dim:      #6a40a0;
+  --accent2:         #c490ff;
+  --accent-hi:       #50d0a0;
+  --accent-soft:     #2a1c4a;
+  --success:         #50d0a0;
+  --success-bg:      #1c2a26;
+  --success-border:  #3a5a4a;
+  --warning:         #d4b84a;
+  --warning-bg:      #2e2410;
+  --warning-border:  #5a4520;
+  --danger:          #e06080;
+  --danger-bright:   #ff80a0;
+  --danger-bg:       #2e1418;
+  --danger-border:   #5a2838;
+  --inventory:       #d4b84a;
+  --inventory-bg:    #2e2410;
+  --inventory-border:#5a4520;
+  --favorite:        #b070ff;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+  --font:            "Avenir Next", "Avenir", "Futura", "Trebuchet MS", sans-serif;
+}
+
+/* ── Dark: Slate Emerald (cool slate + emerald + slab serif) ─────── */
+:root[data-theme="slate-emerald"] {
+  color-scheme: dark;
+  --bg:              #1c1d22;
+  --bg-elevated:     #26282e;
+  --bg-hover:        #30323a;
+  --surface:         #22232a;
+  --surface-raised:  #2c2e36;
+  --surface-sunken:  #14151a;
+  --border:          #383a44;
+  --border-strong:   #5a5d6a;
+  --border-soft:     #28292f;
+  --fg:              #f0f0f5;
+  --text:            #d8d8e0;
+  --muted:           #8a8a98;
+  --muted-dim:       #6a6a78;
+  --text-disabled:   #3a3a45;
+  --accent:          #50d68a;
+  --accent-hover:    #78e8a8;
+  --accent-dim:      #2a8a50;
+  --accent2:         #78e8a8;
+  --accent-hi:       #ff8a50;
+  --accent-soft:     #1c3a2a;
+  --success:         #50d68a;
+  --success-bg:      #1c3a2a;
+  --success-border:  #3a6a4a;
+  --warning:         #d4b84a;
+  --warning-bg:      #2e2410;
+  --warning-border:  #5a4520;
+  --danger:          #e06060;
+  --danger-bright:   #ff8080;
+  --danger-bg:       #2e1414;
+  --danger-border:   #5a2828;
+  --inventory:       #ff8a50;
+  --inventory-bg:    #2e1a10;
+  --inventory-border:#5a3520;
+  --favorite:        #50d68a;
+  --link:            var(--accent);
+  --panel:           var(--surface);
+  --radius:          6px;
+  --input-h:         28px;
+  --font:            "Rockwell", "Roboto Slab", "Slabo 27px", "Calisto MT", Georgia, serif;
+}
+
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: system-ui, -apple-system, sans-serif;
+  /* --font lets each theme swap the typeface — defaults to the system
+     stack when a theme doesn't override it. The new "neutral-bg + colored
+     accent + distinctive font" themes set --font in their :root block. */
+  font-family: var(--font, system-ui, -apple-system, sans-serif);
   min-height: 100vh;
   overflow-x: hidden;
 }
@@ -3210,6 +3761,15 @@ button.wiki-link-btn:active {
   box-shadow: 0 4px 16px rgba(0,0,0,0.5);
   overflow: hidden;
 }
+/* Flipped above the toggle when the default downward placement would
+   cover a text input below it. JS adds .drop-up on open if it detects
+   a colliding input or a viewport overflow. */
+.saved-search-dropdown.drop-up {
+  top: auto;
+  bottom: calc(100% + 4px);
+  /* Heavier shadow above so it's clearly elevated over the toggle */
+  box-shadow: 0 -4px 16px rgba(0,0,0,0.5);
+}
 .ss-header {
   display: flex;
   justify-content: space-between;
@@ -5150,37 +5710,44 @@ a.profile-stat-link:hover .profile-stat-num { color: var(--accent); }
 }
 .loc-remove-btn:disabled { opacity: 0.35; cursor: wait; }
 
-/* ── LOC audio bar (fixed bottom) ─────────────────────────────────────
-   Visually aligned with the YouTube mini-player bar (.mini-player-bar)
-   so the two persistent players read as a single style language. Same
-   dark surface, same border, same z-index layer. */
+/* ── LOC audio bar — mirrors .mini-player exactly ─────────────────────
+   The bar shape, padding, gap, button sizing/colors, and hover states
+   are copied from .mini-player / .mini-player-bar / .mini-player-controls
+   so the LOC and YouTube persistent players are visually identical
+   except for the icon (♪ vs none) and the expand-panel content. The
+   native <audio> element only appears in the expanded panel. */
 .loc-audio-bar {
+  display: none;
   position: fixed;
+  bottom: 0;
   left: 0;
   right: 0;
-  bottom: 0;
   z-index: 300;
-  display: none;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 0.6rem 0.65rem;
   background: #111;
   border-top: 1px solid #2a2a2a;
   box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.6);
-  min-height: 48px;
+  font-family: inherit;
 }
-.loc-audio-bar.is-visible { display: flex; }
-.loc-audio-bar-info {
+.loc-audio-bar.is-visible { display: block; }
+.loc-audio-bar-row {
   display: flex;
   align-items: center;
+  padding: 0.5rem 0.6rem 0.65rem;
   gap: 0.4rem;
+  min-height: 48px;
+}
+.loc-audio-bar-info {
+  flex: 1;
   min-width: 0;
-  flex: 0 1 260px;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  overflow: hidden;
 }
 .loc-audio-bar-icon {
   color: var(--accent);
-  font-size: 1rem;
+  font-size: 0.9rem;
   flex-shrink: 0;
 }
 .loc-audio-bar-title {
@@ -5189,49 +5756,49 @@ a.profile-stat-link:hover .profile-stat-num { color: var(--accent); }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
   font-weight: 600;
-  min-width: 0;
 }
-.loc-audio {
-  flex: 1;
-  height: 32px;
-  min-width: 0;
-  /* Native audio controls inherit OS theming; on Webkit/Chromium tint the
-     panel to match the dark bar. */
-  filter: invert(0.85) hue-rotate(180deg);
-}
-.loc-audio-bar-close {
-  background: none;
-  border: none;
-  color: #aaa;
-  font-size: 1rem;
-  line-height: 1;
-  cursor: pointer;
-  padding: 0.25rem 0.45rem;
-  border-radius: 4px;
-}
-.loc-audio-bar-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
-.loc-audio-bar-queue-nav,
-.loc-audio-bar-actions {
+.loc-audio-bar-controls {
   display: flex;
   align-items: center;
   gap: 0.15rem;
   flex-shrink: 0;
 }
-.loc-audio-bar-save.is-saved { color: var(--favorite); }
-.loc-audio-bar-nav {
+/* Buttons styled identically to .mini-player-controls button */
+.loc-audio-bar-nav,
+.loc-audio-bar-close {
   background: none;
   border: none;
   color: #aaa;
-  font-size: 0.7rem;
-  line-height: 1;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.45rem;
   cursor: pointer;
-  padding: 0.35rem 0.5rem;
   border-radius: 4px;
-  font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
-.loc-audio-bar-nav:hover:not(:disabled) { color: #fff; background: rgba(255,255,255,0.1); }
-.loc-audio-bar-nav:disabled { opacity: 0.3; cursor: not-allowed; }
+.loc-audio-bar-nav:hover:not(:disabled),
+.loc-audio-bar-close:hover { color: #fff; background: rgba(255,255,255,0.1); }
+.loc-audio-bar-nav:disabled { opacity: 0.3; cursor: default; }
+.loc-audio-bar-save.is-saved { color: var(--favorite); }
+#loc-audio-close { font-size: 1.1rem; }
+#loc-audio-expand { transition: transform 0.2s; }
+.loc-audio-bar.expanded #loc-audio-expand { transform: rotate(180deg); }
+/* Expanded panel hosts the native <audio> scrubber so users CAN seek;
+   collapsed by default to match the YouTube mini-player's compact mode. */
+.loc-audio-bar-expanded {
+  display: none;
+  padding: 0 0.6rem 0.5rem;
+}
+.loc-audio-bar.expanded .loc-audio-bar-expanded { display: block; }
+.loc-audio-native {
+  width: 100%;
+  height: 36px;
+  /* Tint the OS-native control to read on the dark bar. WebKit/Chromium
+     respect this; Firefox renders its own dark control by default. */
+  filter: invert(0.85) hue-rotate(180deg);
+}
 
 /* ── LOC info popup overlay ───────────────────────────────────────── */
 .loc-info-overlay {
