@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260413f" />
+  <link rel="stylesheet" href="/style.css?v=20260413g" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260413f"></script>
+<script defer src="/shared.js?v=20260413g"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true }));</script>
 
 <main>
@@ -268,7 +268,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260413f"></script>
+<script defer src="/modal.js?v=20260413g"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1133,13 +1133,24 @@ function bluesDbRenderList() {
     tr.style.borderBottom = "1px solid var(--border)";
     tr.querySelectorAll("td").forEach(td => td.style.padding = "0.35rem 0.5rem");
   });
-  // Wire hover popups on cells flagged with data-hover-type. Single
-  // shared popup element lives at body level and is repositioned per
-  // hovered cell. Mouse-leave hides it.
+  // Wire hover popups on cells flagged with data-hover-type. Hide is
+  // debounced so the cursor can travel from the trigger cell into the
+  // popup (to scroll long bios / release lists) without flicker. The
+  // popup itself cancels the hide on mouseenter and reschedules it on
+  // mouseleave (wired below in _bluesEnsureHoverPopup).
   list.querySelectorAll("[data-hover-type]").forEach(el => {
-    el.addEventListener("mouseenter", () => _bluesHoverShow(el));
-    el.addEventListener("mouseleave", _bluesHoverHide);
+    el.addEventListener("mouseenter", () => { _bluesHoverCancelHide(); _bluesHoverShow(el); });
+    el.addEventListener("mouseleave", _bluesHoverScheduleHide);
   });
+}
+
+let _bluesHoverHideTimer = null;
+function _bluesHoverScheduleHide() {
+  if (_bluesHoverHideTimer) clearTimeout(_bluesHoverHideTimer);
+  _bluesHoverHideTimer = setTimeout(_bluesHoverHide, 140);
+}
+function _bluesHoverCancelHide() {
+  if (_bluesHoverHideTimer) { clearTimeout(_bluesHoverHideTimer); _bluesHoverHideTimer = null; }
 }
 
 // Build the popup HTML for whichever cell is being hovered. Pulls
@@ -1196,6 +1207,10 @@ function _bluesHoverShow(target) {
     popup = document.createElement("div");
     popup.id = "blues-hover-popup";
     document.body.appendChild(popup);
+    // Keep popup alive while cursor is over it (so scrollable bios /
+    // release lists are usable); reschedule the hide on leave.
+    popup.addEventListener("mouseenter", _bluesHoverCancelHide);
+    popup.addEventListener("mouseleave", _bluesHoverScheduleHide);
   }
   popup.innerHTML = html;
   popup.style.display = "block";

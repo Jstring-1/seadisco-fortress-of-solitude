@@ -5,9 +5,8 @@ function showSignInWidget(c) {
   document.getElementById("loading-section").style.display = "none";
   document.getElementById("signed-out-section").style.display = "block";
   const mount = document.getElementById("clerk-sign-in");
-  // SeaDisco is invite-only — the account view mounts the sign-in form
-  // (not sign-up) so approved users can sign in. Visitors who aren't yet
-  // approved get redirected to the waitlist by the localization link.
+  // Public mode — mountSignIn shows the sign-in form with a built-in
+  // "Sign up" link for new visitors (Clerk handles the toggle).
   const opts = {
     afterSignInUrl: "/?v=account",
     afterSignUpUrl: "/?v=account",

@@ -317,26 +317,24 @@ const SEADISCO_CLERK_APPEARANCE = {
   },
 };
 
-// SeaDisco is invite-only. Every Clerk widget that might otherwise say
-// "Create your account" / "Sign up" is rewritten to nudge new visitors
-// toward the waitlist instead. Keys match Clerk's default localization
-// structure so any unspecified strings fall back to the English defaults.
-// NOTE: Clerk-js applies localization from the options passed to
-// Clerk.load(), not per-component mount calls — see loadClerkInstance().
+// Public mode — registration is open. Localization just tunes the
+// default Clerk copy to SeaDisco wording. Keys match Clerk's default
+// structure so any unspecified strings fall back to English defaults.
+// Clerk-js applies localization from Clerk.load() — see loadClerkInstance().
 const SEADISCO_CLERK_LOCALIZATION = {
   signIn: {
     start: {
       title:      "Sign in to SeaDisco",
       subtitle:   "Welcome back",
-      actionText: "Not approved yet?",
-      actionLink: "Join the waitlist",
+      actionText: "Don't have an account?",
+      actionLink: "Sign up",
     },
   },
   signUp: {
     start: {
-      title:      "Join the waitlist",
-      subtitle:   "SeaDisco is invite-only — we'll be in touch when a spot opens up.",
-      actionText: "Already approved?",
+      title:      "Create your SeaDisco account",
+      subtitle:   "Sign up to sync your Discogs collection, wantlist, and favorites.",
+      actionText: "Already have an account?",
       actionLink: "Sign in",
     },
   },
@@ -418,7 +416,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260413f";
+  const SITE_VERSION = "build 20260413g";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
