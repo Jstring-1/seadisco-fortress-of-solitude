@@ -379,24 +379,24 @@ async function openSignInModal() {
 }
 
 // ── Inline nav icons (line-art vinyl set; uses currentColor) ────────────
-// 24×24 viewBox so they scale cleanly down to 18px and up to 32px.
-// fill="none" + stroke="currentColor" so each theme tints them via the
-// nav tab's color — works on light, dark, and accent-colored themes.
+// 24×24 viewBox; SVGs have no fixed width/height so the .nav-icon
+// container's CSS sizing wins. fill="none" + stroke="currentColor" so
+// each theme tints them via the nav tab's color.
 const _SD_NAV_ICONS = {
   // Magnifier over a vinyl record
-  search: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><circle cx="10" cy="10" r="3.2"/><circle cx="10" cy="10" r="0.7" fill="currentColor"/><path d="m15 15 5 5"/></svg>`,
+  search: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="10" cy="10" r="6.5"/><circle cx="10" cy="10" r="3.2"/><circle cx="10" cy="10" r="0.7" fill="currentColor"/><path d="m15 15 5 5"/></svg>`,
   // Two stacked vinyl records (3/4 view) for Collection
-  collection: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="10" cy="12" r="7"/><circle cx="10" cy="12" r="2.5"/><circle cx="10" cy="12" r="0.6" fill="currentColor"/><path d="M16 6.5c2.5 1.2 4 3.6 4 6.5s-1.5 5.3-4 6.5"/><path d="M14 5.2c.7-.1 1.4-.2 2-.2"/></svg>`,
+  collection: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="10" cy="12" r="7"/><circle cx="10" cy="12" r="2.5"/><circle cx="10" cy="12" r="0.6" fill="currentColor"/><path d="M16 6.5c2.5 1.2 4 3.6 4 6.5s-1.5 5.3-4 6.5"/><path d="M14 5.2c.7-.1 1.4-.2 2-.2"/></svg>`,
   // Vinyl with a small ribbon/banner across the top for Wantlist
-  wantlist: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="6.5"/><circle cx="12" cy="13" r="2.4"/><circle cx="12" cy="13" r="0.6" fill="currentColor"/><path d="M9 3h6v5l-3-2-3 2z"/></svg>`,
+  wantlist: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="6.5"/><circle cx="12" cy="13" r="2.4"/><circle cx="12" cy="13" r="0.6" fill="currentColor"/><path d="M9 3h6v5l-3-2-3 2z"/></svg>`,
   // Small vinyl plus three horizontal lines (track listing) for Lists
-  lists: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="6" r="0.6" fill="currentColor"/><path d="M11 6h9"/><path d="M3 12h17"/><path d="M3 18h17"/></svg>`,
+  lists: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="6" r="0.6" fill="currentColor"/><path d="M11 6h9"/><path d="M3 12h17"/><path d="M3 18h17"/></svg>`,
   // Crate with vinyl tops poking out for Inventory
-  inventory: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="3.5"/><circle cx="9" cy="9" r="0.6" fill="currentColor"/><circle cx="15" cy="9.5" r="3"/><circle cx="15" cy="9.5" r="0.6" fill="currentColor"/><path d="M3 14h18v6H3z"/><path d="M3 17h18"/></svg>`,
+  inventory: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="9" r="3.5"/><circle cx="9" cy="9" r="0.6" fill="currentColor"/><circle cx="15" cy="9.5" r="3"/><circle cx="15" cy="9.5" r="0.6" fill="currentColor"/><path d="M3 14h18v6H3z"/><path d="M3 17h18"/></svg>`,
   // Vinyl with a heart in the center for Favorites
-  favorites: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="7"/><path d="M12 16.2c-1-.7-3.2-2-3.2-3.7 0-1 .8-1.8 1.8-1.8.7 0 1.1.4 1.4.8.3-.4.7-.8 1.4-.8 1 0 1.8.8 1.8 1.8 0 1.7-2.2 3-3.2 3.7Z"/></svg>`,
+  favorites: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="7"/><path d="M12 16.2c-1-.7-3.2-2-3.2-3.7 0-1 .8-1.8 1.8-1.8.7 0 1.1.4 1.4.8.3-.4.7-.8 1.4-.8 1 0 1.8.8 1.8 1.8 0 1.7-2.2 3-3.2 3.7Z"/></svg>`,
   // Person silhouette with two small vinyl circles as headphones for Account
-  account: `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="6" cy="9" r="2.5"/><circle cx="6" cy="9" r="0.6" fill="currentColor"/><circle cx="18" cy="9" r="2.5"/><circle cx="18" cy="9" r="0.6" fill="currentColor"/><path d="M6 9c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M5 21c1-3.5 4-5 7-5s6 1.5 7 5"/></svg>`,
+  account: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="6" cy="9" r="2.5"/><circle cx="6" cy="9" r="0.6" fill="currentColor"/><circle cx="18" cy="9" r="2.5"/><circle cx="18" cy="9" r="0.6" fill="currentColor"/><path d="M6 9c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M5 21c1-3.5 4-5 7-5s6 1.5 7 5"/></svg>`,
 };
 
 // ── Shared header injection ──────────────────────────────────────────────
@@ -449,7 +449,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260425i";
+  const SITE_VERSION = "build 20260425k";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
