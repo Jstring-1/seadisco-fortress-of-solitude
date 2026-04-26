@@ -40,8 +40,15 @@ function _hasSearch(p) { return p.get("q") || p.get("a") || p.get("ar") || p.get
     }
   } else if (rawView === "account") {
     switchView("account", true);
-  } else if (rawView === "info" || rawView === "privacy" || rawView === "terms" || rawView === "wiki") {
+  } else if (rawView === "info" || rawView === "privacy" || rawView === "terms") {
     switchView(rawView, true);
+  } else if (rawView === "wiki") {
+    // Wiki SPA page is auth-gated — the underlying /api/wikipedia/*
+    // endpoints already require auth, but the page itself was world-
+    // readable. Redirect signed-out visitors to the account view.
+    await authReadyPromise;
+    if (!window._clerk?.user) { showToast("Sign in to use Wikipedia search", "error"); switchView("account", true); }
+    else switchView("wiki", true);
   } else if (rawView === "loc") {
     await authReadyPromise;
     if (!window._clerk?.user) { showToast("Sign in to browse LOC", "error"); switchView("account", true); }
