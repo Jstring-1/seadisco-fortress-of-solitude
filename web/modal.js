@@ -336,9 +336,13 @@ function _renderLightbox() {
   document.getElementById("lightbox-next").style.display = single ? "none" : "";
 }
 
-document.getElementById("modal-overlay").addEventListener("click", e => {
-  if (e.target === document.getElementById("modal-overlay")) closeModal();
-});
+(function () {
+  const overlay = document.getElementById("modal-overlay");
+  if (!overlay) return; // admin.html doesn't render this element
+  overlay.addEventListener("click", e => {
+    if (e.target === overlay) closeModal();
+  });
+})();
 
 // ── Version popup ─────────────────────────────────────────────────────────
 async function openVersionPopup(event, releaseId) {
@@ -380,9 +384,16 @@ function closeVersionPopup() {
   history.replaceState({}, "", u.toString());
 }
 
-document.getElementById("version-overlay").addEventListener("click", e => {
-  if (e.target === document.getElementById("version-overlay")) closeVersionPopup();
-});
+// admin.html loads modal.js too but doesn't have the version-overlay
+// element. Guard the listener attach so the missing element doesn't
+// throw a TypeError at module load and abort the rest of modal.js.
+(function () {
+  const overlay = document.getElementById("version-overlay");
+  if (!overlay) return;
+  overlay.addEventListener("click", e => {
+    if (e.target === overlay) closeVersionPopup();
+  });
+})();
 
 // ── Bio full popup ────────────────────────────────────────────────────────
 function openBioFull(event) {
@@ -421,9 +432,13 @@ function closeBioFull() {
   history.replaceState({}, "", u.toString());
 }
 
-document.getElementById("bio-full-overlay").addEventListener("click", e => {
-  if (e.target === document.getElementById("bio-full-overlay")) closeBioFull();
-});
+(function () {
+  const overlay = document.getElementById("bio-full-overlay");
+  if (!overlay) return;
+  overlay.addEventListener("click", e => {
+    if (e.target === overlay) closeBioFull();
+  });
+})();
 
 // ── Wikipedia popup ──────────────────────────────────────────────────────────
 // Opens a stacked popup over any underlying modal/version popup. Music keeps
