@@ -1968,15 +1968,17 @@ function openVideo(event, url) {
   // don't apply yesterday's title to today's video.
   const queueMeta = window._queueDispatchYtMeta;
   delete window._queueDispatchYtMeta;
-  // trackLinks is set in the DOM-scrape branch and consumed below for
-  // index lookup; in the queue-driven branch it stays empty and the
-  // clickedIdx logic falls through to URL indexOf.
+  // trackLinks + container are set in the DOM-scrape branch and
+  // consumed below (clickedIdx lookup, _videoQueueContainerId).
+  // Hoist to function scope so the queue-driven branch (where they
+  // stay at their defaults) doesn't trigger ReferenceError.
   let trackLinks = [];
+  let container = null;
   if (queueMeta) {
     window._videoQueue     = [url];
     window._videoQueueMeta = [queueMeta];
   } else {
-    const container = clickedEl?.closest?.("#album-info, #version-info")
+    container = clickedEl?.closest?.("#album-info, #version-info")
       || (document.getElementById("version-overlay")?.classList.contains("open") ? document.getElementById("version-info") : null)
       || (document.getElementById("modal-overlay")?.classList.contains("open") ? document.getElementById("album-info") : null)
       || document;
