@@ -252,6 +252,18 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS user_archive_saves_user_time_idx ON user_archive_saves (clerk_user_id, saved_at DESC)`);
 
+  // ── Site-wide app settings (admin-controlled) ────────────────────────────
+  // Simple key/value store for global config (theme, feature flags, etc.).
+  // Currently used for the site-wide theme: admin picks a theme on /admin
+  // and it applies to every visitor.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key        TEXT PRIMARY KEY,
+      value      TEXT,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
   // ── Wikipedia article saves (Wikipedia SPA "Saved" tab) ──────────────────
   // Mirrors user_loc_saves so users can bookmark articles without bouncing
   // through search again. Title is the canonical Wikipedia title (used to
@@ -3306,6 +3318,7 @@ export async function getTableRowCounts(): Promise<Array<{ table: string; rows: 
     'user_wiki_saves', 'user_play_queue', 'saved_searches', 'feedback',
     'release_cache', 'price_cache', 'price_history',
     'blues_artists', 'api_request_log', 'oauth_request_tokens',
+    'app_settings',
   ];
   const counts = await Promise.all(
     tables.map(async (t) => {
@@ -3318,4 +3331,23 @@ export async function getTableRowCounts(): Promise<Array<{ table: string; rows: 
     })
   );
   return counts;
+}
+
+// ── App settings (key/value) ─────────────────────────────────────────────
+export async function getAppSetting(key: string): Promise<string | null> {
+  try {
+    const r = await getPool().query(
+      `SELECT value FROM app_settings WHERE key = $1 LIMIT 1`,
+      [key]
+    );
+    return r.rows[0]?.value ?? null;
+  } catch { return null; }
+}
+
+export async function setAppSetting(key: string, value: string | null): Promise<void> {
+  await getPool().query(
+    `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, NOW())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+    [key, value]
+  );
 }

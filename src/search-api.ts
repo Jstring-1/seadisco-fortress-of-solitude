@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, getAppSetting, setAppSetting, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 
 
@@ -414,6 +414,25 @@ app.get("/account", (req, res) => {
 // clerk-js. This lets the Clerk bundle start downloading before shared.js
 // even parses, saving ~300–500ms on cold page loads.
 const _htmlCache = new Map<string, string>();
+
+// Site-wide theme — admin sets it on /admin → Theme tab. Loaded from
+// the app_settings table at startup and refreshed whenever admin
+// changes it via POST /api/admin/site-theme. Injected directly into
+// every page's HTML so there's no flash of unstyled theme.
+let _siteTheme: string = "";
+async function _refreshSiteTheme(): Promise<void> {
+  try {
+    const v = await getAppSetting("site_theme");
+    _siteTheme = (typeof v === "string" && /^[a-z0-9-]{1,40}$/.test(v)) ? v : "";
+  } catch {}
+  _htmlCache.clear(); // force re-template with new theme
+}
+// Kick off the initial load — no await; HTML serves before this lands
+// will use the localStorage fallback in the bootstrap script.
+if (process.env.APP_DB_URL) {
+  setTimeout(() => { _refreshSiteTheme().catch(() => {}); }, 100);
+}
+
 function _buildClerkInject(): string {
   if (!authPk) return "";
   try {
@@ -432,6 +451,10 @@ function _loadHtmlTemplated(relPath: string): string | null {
     const full = path.join(__dirname, "../web", relPath);
     let html = fs.readFileSync(full, "utf8");
     html = html.replace(/<!--CLERK_SCRIPT_INJECT-->/g, _clerkInject);
+    // Inject the site-wide theme into every page so the bootstrap
+    // script in <head> can apply it before the stylesheet parses.
+    // The placeholder is read by the inline IIFE that sets data-theme.
+    html = html.replace(/<!--SD_THEME_INJECT-->/g, _siteTheme);
     _htmlCache.set(relPath, html);
     return html;
   } catch { return null; }
@@ -3559,6 +3582,34 @@ app.use("/api/admin", (req, res, next) => {
   if (entry.count >= 30) { res.status(429).json({ error: "Rate limited" }); return; }
   entry.count++;
   next();
+});
+
+// GET /api/site-theme — public read of the current global theme (used
+// by clients to verify their cached HTML matches the live setting).
+// Admin's setting controls every visitor's theme.
+app.get("/api/site-theme", async (_req, res) => {
+  res.setHeader("Cache-Control", "no-cache");
+  res.json({ theme: _siteTheme });
+});
+
+// POST /api/admin/site-theme — admin sets the global theme. Body:
+// { theme: "amber-dark" } (validated against a slug pattern). Updates
+// the DB row, the in-memory cache, and invalidates the HTML template
+// cache so the next page load re-templates with the new theme.
+app.post("/api/admin/site-theme", express.json({ limit: "1kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const theme = String(req.body?.theme ?? "").trim();
+  if (!/^[a-z0-9-]{1,40}$/.test(theme)) {
+    res.status(400).json({ error: "invalid theme id" });
+    return;
+  }
+  try {
+    await setAppSetting("site_theme", theme);
+    await _refreshSiteTheme();
+    res.json({ ok: true, theme: _siteTheme });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
 });
 
 // GET /api/admin/feedback — inbox, only for admin user
