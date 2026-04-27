@@ -97,7 +97,16 @@ async function queueAdd(items, opts) {
       body: JSON.stringify({ items: arr, mode }),
     });
     if (!r.ok) {
-      if (typeof showToast === "function") showToast("Could not add to queue", "error");
+      // Surface the server's actual error so we can diagnose instead
+      // of always showing the generic "Could not add to queue".
+      const errBody = await r.text().catch(() => "");
+      console.warn("[queue] POST /api/user/play-queue failed:", r.status, errBody);
+      if (typeof showToast === "function") {
+        const msg = r.status === 401 ? "Sign in to use the queue"
+                  : r.status === 400 ? `Queue rejected: ${errBody.slice(0, 100)}`
+                  : `Could not add to queue (HTTP ${r.status})`;
+        showToast(msg, "error");
+      }
       return false;
     }
     _queue = null; // invalidate cache; next read refetches
