@@ -1455,6 +1455,12 @@ async function _locRemoveSavedFromCard(btn) {
 
 async function _locPlay(item) {
   if (!item?.streamUrl) return;
+  // LOC / archive streams from external CDNs — won't load offline.
+  // Refuse cleanly so the bar isn't left showing the wrong track.
+  if (!navigator.onLine) {
+    if (typeof showToast === "function") showToast("Playback needs a connection", "error");
+    return;
+  }
   // Unified persistent bar — was a separate #loc-audio-bar element;
   // now LOC playback shares the .mini-player chrome with YouTube and
   // dispatches via window._currentEngine.

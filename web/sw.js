@@ -25,7 +25,7 @@
 //   Everything else → passthrough. We don't cache search results,
 //     marketplace, AI calls, queue endpoints, etc.
 
-const SW_VERSION = "v1-20260427.1119";
+const SW_VERSION = "v1-20260427.1153";
 const SHELL_CACHE = `sd-shell-${SW_VERSION}`;
 const API_CACHE   = `sd-api-${SW_VERSION}`;
 const IMG_CACHE   = `sd-img-${SW_VERSION}`;
@@ -59,13 +59,17 @@ const SHELL_URLS = [
 // API endpoints whose responses we cache for offline read. Keep
 // strictly to the user's own library — never cache search results
 // (would surface stale/wrong data) or anything authenticated for a
-// different user.
+// different user. Real paths are under /api/user/… (the earlier
+// /api/collection etc. patterns matched nothing — the page actually
+// requests /api/user/collection).
 const API_CACHE_PATTERNS = [
-  /^\/api\/collection(?:\b|\?)/,
-  /^\/api\/wantlist(?:\b|\?)/,
-  /^\/api\/inventory(?:\b|\?)/,
-  /^\/api\/lists(?:\b|\?)/,
   /^\/api\/user\/profile(?:\b|$)/,
+  /^\/api\/user\/folders(?:\b|\?|$|\/)/,
+  /^\/api\/user\/facets(?:\b|\?)/,
+  /^\/api\/user\/collection(?:\b|\?)/,
+  /^\/api\/user\/wantlist(?:\b|\?)/,
+  /^\/api\/user\/inventory(?:\b|\?)/,
+  /^\/api\/user\/lists(?:\b|\?|$|\/)/,
 ];
 
 const IMG_HOST_PATTERNS = [

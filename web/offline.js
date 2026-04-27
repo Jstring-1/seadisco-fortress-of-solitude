@@ -30,12 +30,21 @@
 
 (function () {
   const FLAG_KEY = "sd_offline_enabled";
+  // Endpoints whose responses we cache for offline reads. Keep
+  // strictly to the user's own library — never cache search results
+  // (they'd surface stale/wrong data) or anything authenticated for
+  // a different user. NOTE: the real paths are under /api/user/…
+  // (the earlier /api/collection etc. paths were wrong; nothing
+  // was actually being cached, which is why the offline collection
+  // view was empty).
   const LIBRARY_PATTERNS = [
-    /^\/api\/collection(?:\b|\?)/,
-    /^\/api\/wantlist(?:\b|\?)/,
-    /^\/api\/inventory(?:\b|\?)/,
-    /^\/api\/lists(?:\b|\?)/,
     /^\/api\/user\/profile(?:\b|$)/,
+    /^\/api\/user\/folders(?:\b|\?|$|\/)/,
+    /^\/api\/user\/facets(?:\b|\?)/,
+    /^\/api\/user\/collection(?:\b|\?)/,
+    /^\/api\/user\/wantlist(?:\b|\?)/,
+    /^\/api\/user\/inventory(?:\b|\?)/,
+    /^\/api\/user\/lists(?:\b|\?|$|\/)/,
   ];
 
   let _deferredInstallPrompt = null;
@@ -182,17 +191,31 @@
   // Walk through the user's library endpoints and warm both IDB and
   // the SW's API cache. Reports progress via the callback so the
   // Account UI can show a progress bar.
+  // The exact URLs collection.js / etc. call. IDB cache lookup is
+  // by URL, so what we sync MUST match what the page later requests.
+  // Each library kind syncs page 1 (96 items) — enough for browsing
+  // a typical collection offline. Power users on page 2+ get a
+  // "no cache for this page" miss; re-syncing while online would be
+  // a future enhancement (sync-all-pages loop).
   const SYNC_ENDPOINTS = [
-    { url: "/api/user/profile",            label: "Profile" },
-    { url: "/api/collection?per_page=500", label: "Collection" },
-    { url: "/api/wantlist?per_page=500",   label: "Wantlist" },
-    { url: "/api/inventory?per_page=500",  label: "Inventory" },
-    { url: "/api/lists",                   label: "Lists" },
+    { url: "/api/user/profile",                       label: "Profile" },
+    { url: "/api/user/folders",                       label: "Folders" },
+    { url: "/api/user/facets?type=collection",        label: "Collection facets" },
+    { url: "/api/user/facets?type=wantlist",          label: "Wantlist facets" },
+    { url: "/api/user/facets?type=inventory",         label: "Inventory facets" },
+    { url: "/api/user/collection?page=1&per_page=96", label: "Collection" },
+    { url: "/api/user/wantlist?page=1&per_page=96",   label: "Wantlist" },
+    { url: "/api/user/inventory?page=1&per_page=96",  label: "Inventory" },
+    { url: "/api/user/lists",                         label: "Lists" },
   ];
   async function syncNow(onProgress) {
     if (!window.apiFetch) return { ok: false, reason: "no-fetch" };
     let done = 0;
-    const total = SYNC_ENDPOINTS.length;
+    // Lists are dynamic — we sync the index then each list's items.
+    // Pre-flight to figure out the actual total work units so the
+    // progress bar reflects reality.
+    let listIds = [];
+    const total = SYNC_ENDPOINTS.length; // base; lists/items added below
     for (const ep of SYNC_ENDPOINTS) {
       onProgress?.({ done, total, label: ep.label });
       try {
@@ -201,14 +224,34 @@
           try {
             const json = await r.clone().json();
             await window.sdIdb.libraryPut(_normalizeUrl(ep.url), json);
+            // After /api/user/lists succeeds, capture its list IDs
+            // so we can fetch each list's items in the loop below.
+            if (ep.url === "/api/user/lists" && Array.isArray(json?.lists)) {
+              listIds = json.lists.map(l => l.id).filter(Boolean);
+            }
           } catch {}
         }
       } catch { /* skip — partial is fine */ }
       done++;
       onProgress?.({ done, total, label: ep.label });
     }
+    // Fetch each list's items so list view works offline.
+    for (const id of listIds) {
+      const url = `/api/user/lists/${id}/items`;
+      onProgress?.({ done, total: total + listIds.length, label: `List ${id}` });
+      try {
+        const r = await window.apiFetch(url);
+        if (r.ok && window.sdIdb) {
+          try {
+            const json = await r.clone().json();
+            await window.sdIdb.libraryPut(_normalizeUrl(url), json);
+          } catch {}
+        }
+      } catch {}
+      done++;
+    }
     if (window.sdIdb) await window.sdIdb.metaSet("lastSyncAt", Date.now());
-    return { ok: true, done, total };
+    return { ok: true, done, total: total + listIds.length };
   }
 
   // ── Storage stats ───────────────────────────────────────────────────
