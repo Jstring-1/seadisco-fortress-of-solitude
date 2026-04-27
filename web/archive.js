@@ -337,9 +337,13 @@ function _archiveRowHtml(it, i, opts = {}) {
   const dataAttrs = opts.savedView
     ? ` data-stream="${escHtml(it.streamUrl || "")}" data-title="${escHtml(it.title || "")}" data-date="${escHtml(it.date || "")}"`
     : "";
+  // Clicking the title/main area opens the rich info popup. The
+  // actions column (▶ / ＋ / ★ / Open) keeps its own click handlers
+  // and event-bubbling stops at .archive-row-actions to avoid
+  // triggering the popup as a side effect.
   return `
     <div class="archive-row" data-id="${safeId}"${dataAttrs}>
-      <div class="archive-row-main">
+      <div class="archive-row-main" onclick="_archiveOpenInfoPopup('${safeId.replace(/'/g, "\\'")}')" style="cursor:pointer">
         <div class="archive-row-title">${safeTitle}</div>
         ${safeDate ? `<div class="archive-row-date">${safeDate}</div>` : ""}
         ${safeDesc ? `<div class="archive-row-desc">${safeDesc}${it.description && it.description.length > 280 ? "…" : ""}</div>` : ""}
@@ -492,6 +496,271 @@ function archiveQueueSavedFromRow(btn) {
   if (typeof queueAddLoc === "function") queueAddLoc(_archiveItemToLoc(it));
 }
 
+// ── Archive item info popup ──────────────────────────────────────────
+// Click a row's title (or the new ⓘ button) to open a rich Discogs-
+// style popup with creator / date / description / per-track play
+// buttons / subjects / license / cover art / archive.org link. Server
+// fetches /metadata/{id} and curates the response (1d cache).
+let _archiveInfoCache = new Map(); // identifier → curated metadata
+let _archiveInfoCurrentId = null;
+
+async function _archiveOpenInfoPopup(identifier) {
+  if (!identifier) return;
+  const overlay = document.getElementById("archive-info-overlay");
+  const body    = document.getElementById("archive-info-body");
+  if (!overlay || !body) return;
+  _archiveInfoCurrentId = identifier;
+  overlay.classList.add("open");
+  body.innerHTML = `<div class="loc-empty">Loading…</div>`;
+  let data = _archiveInfoCache.get(identifier);
+  if (!data) {
+    try {
+      const r = await apiFetch(`/api/archive/item/${encodeURIComponent(identifier)}`);
+      if (!r.ok) {
+        body.innerHTML = `<div class="loc-empty">Could not load item details (HTTP ${r.status}).</div>`;
+        return;
+      }
+      data = await r.json();
+      _archiveInfoCache.set(identifier, data);
+    } catch {
+      body.innerHTML = `<div class="loc-empty">Could not load item details.</div>`;
+      return;
+    }
+  }
+  // If the user navigated/closed before the fetch landed, drop this render.
+  if (_archiveInfoCurrentId !== identifier) return;
+  body.innerHTML = _archiveInfoPopupHtml(data);
+}
+
+function _archiveCloseInfoPopup() {
+  const overlay = document.getElementById("archive-info-overlay");
+  if (overlay) overlay.classList.remove("open");
+  _archiveInfoCurrentId = null;
+}
+
+// Format archive.org duration strings — they're sometimes "MM:SS",
+// sometimes raw seconds like "245.32". Normalize to "M:SS" or "H:MM:SS".
+function _archiveFmtDuration(s) {
+  if (!s) return "";
+  if (/^\d+:\d+/.test(s)) return s; // already formatted
+  const num = parseFloat(s);
+  if (!Number.isFinite(num) || num <= 0) return "";
+  const total = Math.floor(num);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = total % 60;
+  if (h) return `${h}:${m < 10 ? "0" : ""}${m}:${sec < 10 ? "0" : ""}${sec}`;
+  return `${m}:${sec < 10 ? "0" : ""}${sec}`;
+}
+
+function _archiveInfoPopupHtml(d) {
+  const esc = (v) => escHtml(String(v ?? ""));
+  const isSaved = !!_archiveSavedIds?.has(d.identifier);
+  const playable = !!d.primaryStreamUrl;
+
+  // Header: cover image + title block (creator / date / venue / runtime).
+  // Falls back to a placeholder div if the image 404s — archive.org's
+  // services/img endpoint serves a generic icon for items with no
+  // explicit thumbnail, but we keep an onerror guard anyway.
+  const coverHtml = d.coverUrl
+    ? `<img class="archive-info-cover" src="${esc(d.coverUrl)}" alt="" onerror="this.style.display='none'">`
+    : `<div class="archive-info-cover archive-info-cover-empty">♪</div>`;
+
+  const creatorLine = (d.creator?.length)
+    ? `<div class="archive-info-creator">${d.creator.map(c => entityLookupLinkHtml("artist", c, { title: `Lookup options for ${c}` })).join(", ")}</div>`
+    : "";
+
+  const metaBits = [];
+  if (d.date)     metaBits.push(esc(d.date));
+  if (d.venue)    metaBits.push(esc(d.venue));
+  if (d.coverage) metaBits.push(esc(d.coverage));
+  if (d.runtime)  metaBits.push(esc(d.runtime));
+  const metaLine = metaBits.length
+    ? `<div class="archive-info-meta-line">${metaBits.join('<span class="archive-info-meta-sep"> · </span>')}</div>`
+    : "";
+
+  // Action buttons row — Play (top-of-item), Queue All, Save, Open on
+  // archive.org. Mirrors the LOC popup's action bar.
+  const playBtn = playable
+    ? `<button type="button" class="archive-btn archive-btn-play" onclick="_archiveInfoPlayPrimary('${esc(d.identifier).replace(/'/g, "\\'")}')">▶ Play</button>`
+    : `<button type="button" class="archive-btn archive-btn-play is-disabled" disabled>▶ No stream</button>`;
+  const queueBtn = playable
+    ? `<button type="button" class="archive-btn archive-btn-queue" onclick="_archiveInfoQueueAll('${esc(d.identifier).replace(/'/g, "\\'")}')">＋ Queue all tracks</button>`
+    : "";
+  const saveBtn = `<button type="button" class="archive-btn archive-save-btn${isSaved ? " is-saved" : ""}" onclick="_archiveInfoToggleSave(this, '${esc(d.identifier).replace(/'/g, "\\'")}')">${isSaved ? "★ Saved" : "☆ Save"}</button>`;
+  const linkBtn = `<a class="archive-btn archive-btn-link" href="${esc(d.itemUrl)}" target="_blank" rel="noopener">Open on archive.org ↗</a>`;
+
+  // Description — long-form. Collapsible if very long.
+  const descHtml = d.description
+    ? `<div class="archive-info-desc">${esc(d.description).replace(/\n+/g, "<br>")}</div>`
+    : "";
+
+  // Audio file list — each row gets a ▶ play button + a ➕ queue.
+  // Hidden when there's nothing playable.
+  const filesHtml = d.audioFiles?.length
+    ? `<div class="archive-info-files">
+        <div class="archive-info-section-head">${d.audioFiles.length} audio file${d.audioFiles.length === 1 ? "" : "s"}</div>
+        ${d.audioFiles.map((f, i) => {
+          const fname = esc(f.name).replace(/\.(mp3|m4a|flac|ogg|wav)$/i, "");
+          const dur = _archiveFmtDuration(f.length);
+          const trackLabel = f.title || fname;
+          return `<div class="archive-info-file-row">
+            <button class="archive-info-file-play" data-i="${i}" onclick="_archiveInfoPlayFile('${esc(d.identifier).replace(/'/g, "\\'")}', ${i})" title="Play this file">▶</button>
+            <button class="archive-info-file-queue" data-i="${i}" onclick="_archiveInfoQueueFile('${esc(d.identifier).replace(/'/g, "\\'")}', ${i})" title="Add to queue">＋</button>
+            <span class="archive-info-file-title">${esc(trackLabel)}</span>
+            ${dur ? `<span class="archive-info-file-dur">${dur}</span>` : ""}
+            ${f.format ? `<span class="archive-info-file-fmt">${esc(f.format)}</span>` : ""}
+          </div>`;
+        }).join("")}
+      </div>`
+    : "";
+
+  // Detail grid — subjects, language, license, taper, source, etc.
+  const detailRows = [];
+  if (d.subject?.length)  detailRows.push(["Subjects",  d.subject.slice(0, 30).map(s => `<a class="archive-info-tag" href="https://archive.org/search.php?query=subject:%22${encodeURIComponent(s)}%22" target="_blank" rel="noopener">${esc(s)}</a>`).join(" ")]);
+  if (d.language?.length) detailRows.push(["Language",  d.language.map(esc).join(", ")]);
+  if (d.taper)            detailRows.push(["Taper",     esc(d.taper)]);
+  if (d.source)           detailRows.push(["Source",    esc(d.source)]);
+  if (d.uploader)         detailRows.push(["Uploaded by", `<a href="https://archive.org/details/@${encodeURIComponent(d.uploader)}" target="_blank" rel="noopener">${esc(d.uploader)}</a>`]);
+  if (d.addeddate)        detailRows.push(["Added",     esc(d.addeddate.slice(0, 10))]);
+  if (d.licenseurl)       detailRows.push(["License",   `<a href="${esc(d.licenseurl)}" target="_blank" rel="noopener">${esc(d.licenseurl.replace(/^https?:\/\//, ""))}</a>`]);
+  if (d.collection?.length) {
+    const colls = d.collection.slice(0, 8).map(c => `<a class="archive-info-tag" href="https://archive.org/details/${encodeURIComponent(c)}" target="_blank" rel="noopener">${esc(c)}</a>`).join(" ");
+    detailRows.push(["Collections", colls]);
+  }
+  const detailGridHtml = detailRows.length
+    ? `<div class="archive-info-detail-grid">${detailRows.map(([label, val]) => `<div class="archive-info-detail-label">${esc(label)}</div><div class="archive-info-detail-val">${val}</div>`).join("")}</div>`
+    : "";
+
+  // Reviews / ratings (when present).
+  const ratingHtml = (d.avgRating || d.reviews)
+    ? `<div class="archive-info-rating">${d.avgRating ? `★ ${parseFloat(d.avgRating).toFixed(2)}` : ""}${d.reviews ? ` <span style="color:#666">(${d.reviews} review${d.reviews === 1 ? "" : "s"})</span>` : ""}</div>`
+    : "";
+
+  return `
+    <div class="archive-info-head">
+      ${coverHtml}
+      <div class="archive-info-head-text">
+        <h2 class="archive-info-title">${esc(d.title)}</h2>
+        ${creatorLine}
+        ${metaLine}
+        ${ratingHtml}
+        <div class="archive-info-actions">${playBtn}${queueBtn}${saveBtn}${linkBtn}</div>
+      </div>
+    </div>
+    ${descHtml}
+    ${filesHtml}
+    ${detailGridHtml}
+  `;
+}
+
+// Action handlers used by the popup's inline onclicks.
+function _archiveInfoLookup(id) {
+  return _archiveInfoCache.get(id);
+}
+function _archiveInfoPlayPrimary(id) {
+  const d = _archiveInfoLookup(id);
+  if (!d?.primaryStreamUrl) return;
+  if (typeof _locPlay === "function") _locPlay({
+    id, title: d.title, streamUrl: d.primaryStreamUrl, streamType: "mp3",
+    contributors: d.creator?.length ? d.creator : ["Aadam Jacobs"],
+    image: d.coverUrl || "", year: (d.date || "").slice(0, 4),
+  });
+}
+function _archiveInfoQueueAll(id) {
+  const d = _archiveInfoLookup(id);
+  if (!d?.audioFiles?.length) return;
+  const items = d.audioFiles.map(f => ({
+    source: "loc",
+    externalId: `${id}#${encodeURIComponent(f.name)}`,
+    data: {
+      title: f.title || f.name.replace(/\.(mp3|m4a|flac|ogg|wav)$/i, ""),
+      artist: d.creator?.[0] || "Aadam Jacobs",
+      streamUrl: f.streamUrl,
+      streamType: "mp3",
+      image: d.coverUrl || "",
+      year: (d.date || "").slice(0, 4),
+    },
+  }));
+  if (typeof queueAdd === "function") queueAdd(items, { mode: "append" });
+}
+function _archiveInfoPlayFile(id, idx) {
+  const d = _archiveInfoLookup(id);
+  const f = d?.audioFiles?.[idx];
+  if (!f?.streamUrl) return;
+  if (typeof _locPlay === "function") _locPlay({
+    id: `${id}#${f.name}`,
+    title: f.title || f.name,
+    streamUrl: f.streamUrl,
+    streamType: "mp3",
+    contributors: d.creator?.length ? d.creator : ["Aadam Jacobs"],
+    image: d.coverUrl || "",
+    year: (d.date || "").slice(0, 4),
+  });
+}
+function _archiveInfoQueueFile(id, idx) {
+  const d = _archiveInfoLookup(id);
+  const f = d?.audioFiles?.[idx];
+  if (!f?.streamUrl) return;
+  if (typeof queueAddLoc === "function") queueAddLoc({
+    id: `${id}#${f.name}`,
+    title: f.title || f.name,
+    streamUrl: f.streamUrl,
+    streamType: "mp3",
+    contributors: d.creator?.length ? d.creator : ["Aadam Jacobs"],
+    image: d.coverUrl || "",
+    year: (d.date || "").slice(0, 4),
+  });
+}
+async function _archiveInfoToggleSave(btn, id) {
+  // Reuse the same archiveToggleSave path, but the popup's button isn't
+  // inside an .archive-row — emulate the row dataset by stamping data-id
+  // on the button itself for the closest('.archive-row') lookup. Easiest:
+  // create a synthetic row wrapper for the toggle call and revert text.
+  if (!window._clerk?.user) {
+    if (typeof showToast === "function") showToast("Sign in to save items", "error");
+    return;
+  }
+  if (!_archiveSavedIds) _archiveSavedIds = new Set();
+  const saving = !_archiveSavedIds.has(id);
+  _archiveSavedIds[saving ? "add" : "delete"](id);
+  btn.classList.toggle("is-saved", saving);
+  btn.textContent = saving ? "★ Saved" : "☆ Save";
+  const d = _archiveInfoLookup(id);
+  try {
+    if (saving) {
+      const r = await apiFetch("/api/user/archive-saves", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          archiveId: id, title: d?.title || "", streamUrl: d?.primaryStreamUrl || "",
+          data: d ? { title: d.title, date: d.date, description: d.description, itemUrl: d.itemUrl, streamUrl: d.primaryStreamUrl, image: d.coverUrl } : {},
+        }),
+      });
+      if (!r.ok) throw new Error(`save failed (${r.status})`);
+      showToast?.("Saved");
+    } else {
+      const r = await apiFetch("/api/user/archive-saves", {
+        method: "DELETE", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archiveId: id }),
+      });
+      if (!r.ok) throw new Error(`remove failed (${r.status})`);
+      showToast?.("Removed from Saved");
+      if (_archiveSavedItems) _archiveSavedItems = _archiveSavedItems.filter(i => i.identifier !== id);
+      if (_archiveTab === "saved") _archiveRenderSavedRows();
+    }
+    // Sync any in-list ★ button for this id.
+    document.querySelectorAll(`.archive-row[data-id="${CSS.escape(id)}"] .archive-save-btn`).forEach(el => {
+      el.classList.toggle("is-saved", saving);
+      el.textContent = saving ? "★" : "☆";
+    });
+  } catch (e) {
+    _archiveSavedIds[saving ? "delete" : "add"](id);
+    btn.classList.toggle("is-saved", !saving);
+    btn.textContent = !saving ? "★ Saved" : "☆ Save";
+    showToast?.(e?.message || "Action failed", "error");
+  }
+}
+
 // Globals for inline onclicks in the rendered list
 window.initArchiveView          = initArchiveView;
 window.archivePlayItem          = archivePlayItem;
@@ -506,3 +775,10 @@ window._archiveOnSortChange       = _archiveOnSortChange;
 window._archiveOnSavedFilterInput = _archiveOnSavedFilterInput;
 window._archiveOnSavedSortChange  = _archiveOnSavedSortChange;
 window._archiveSwitchTab          = _archiveSwitchTab;
+window._archiveOpenInfoPopup      = _archiveOpenInfoPopup;
+window._archiveCloseInfoPopup     = _archiveCloseInfoPopup;
+window._archiveInfoPlayPrimary    = _archiveInfoPlayPrimary;
+window._archiveInfoQueueAll       = _archiveInfoQueueAll;
+window._archiveInfoPlayFile       = _archiveInfoPlayFile;
+window._archiveInfoQueueFile      = _archiveInfoQueueFile;
+window._archiveInfoToggleSave     = _archiveInfoToggleSave;
