@@ -150,7 +150,14 @@ async function _ensureAdminFlag() {
   //    pre-warmed above so the first frame loads fast.
   if (videoParam) {
     const playUrl = `https://www.youtube.com/watch?v=${videoParam}`;
-    if (openParam || versionParam) {
+    // For signed-out users we don't bother waiting for a tracklist to
+    // appear — they can't add to the queue from popup buttons anyway,
+    // and waiting 8s when the album modal fails to open (e.g. /release
+    // 401s for an uncached release) made shared share-links feel
+    // broken. Play immediately and let the modal open in the background
+    // if it can.
+    const isAnon = !window._clerk?.user;
+    if ((openParam || versionParam) && !isAnon) {
       let waited = 0;
       const poll = setInterval(() => {
         waited += 200;

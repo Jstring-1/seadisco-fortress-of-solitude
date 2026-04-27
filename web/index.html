@@ -49,7 +49,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260427.1003" />
+  <link rel="stylesheet" href="/style.css?v=20260427.1012" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -87,7 +87,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260427.1003"></script>
+<script defer src="/shared.js?v=20260427.1012"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -838,8 +838,8 @@
       <span id="mini-player-status" class="mini-player-status"></span>
     </div>
     <div class="mini-player-controls">
-      <button id="mini-share" onclick="sharePlayerUrl()" title="Copy share link" style="display:none;font-size:0.8rem">🔗</button>
-      <button id="mini-album" onclick="openPlayerRelease()" title="Open this album" style="display:none;font-size:0.8rem">💿</button>
+      <button id="mini-share" class="mini-needs-release" onclick="sharePlayerUrl()" title="Copy share link" style="font-size:0.8rem">🔗</button>
+      <button id="mini-album" class="mini-needs-release" onclick="openPlayerRelease()" title="Open this album" style="font-size:0.8rem">💿</button>
       <!-- LOC-only buttons; show only when engine is loc -->
       <button id="mini-loc-save" class="mini-loc-only" onclick="_locToggleSaveFromBar()" title="Save this item" disabled>☆</button>
       <button id="mini-loc-info" class="mini-loc-only" onclick="_locOpenFromBar()" title="Open info popup" disabled>&#9432;</button>
@@ -896,21 +896,21 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260427.1003"></script>
-<script defer src="/search.js?v=20260427.1003"></script>
-<script defer src="/collection.js?v=20260427.1003"></script>
-<script defer src="/account.js?v=20260427.1003"></script>
-<script defer src="/orders.js?v=20260427.1003"></script>
+<script defer src="/utils.js?v=20260427.1012"></script>
+<script defer src="/search.js?v=20260427.1012"></script>
+<script defer src="/collection.js?v=20260427.1012"></script>
+<script defer src="/account.js?v=20260427.1012"></script>
+<script defer src="/orders.js?v=20260427.1012"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260427.1003"></script>
-<script defer src="/app.js?v=20260427.1003"></script>
+<script defer src="/modal.js?v=20260427.1012"></script>
+<script defer src="/app.js?v=20260427.1012"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/inventory-editor.js?v=20260427.1003"></script>
-<script defer src="/loc.js?v=20260427.1003"></script>
-<script defer src="/archive.js?v=20260427.1003"></script>
-<script defer src="/youtube.js?v=20260427.1003"></script>
-<script defer src="/queue.js?v=20260427.1003"></script>
+<script defer src="/inventory-editor.js?v=20260427.1012"></script>
+<script defer src="/loc.js?v=20260427.1012"></script>
+<script defer src="/archive.js?v=20260427.1012"></script>
+<script defer src="/youtube.js?v=20260427.1012"></script>
+<script defer src="/queue.js?v=20260427.1012"></script>
 
 </body>
 </html>

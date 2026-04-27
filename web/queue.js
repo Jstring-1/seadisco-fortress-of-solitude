@@ -62,6 +62,13 @@ let _queuePlayingExternalId = null;
 async function _queueLoad(force = false) {
   if (_queue && !force) return _queue;
   if (_queueLoading) return _queue ?? [];
+  // Signed-out users have no server queue. Don't fire a request that
+  // would 401, and don't clobber a local-only "queue of one" that
+  // _queueOnExternalPlay may have populated for the playing track.
+  if (!window._clerk?.user) {
+    _queue = Array.isArray(_queue) ? _queue : [];
+    return _queue;
+  }
   _queueLoading = true;
   try {
     const r = await apiFetch("/api/user/play-queue");
@@ -400,6 +407,32 @@ function _queueOnExternalPlay(itemPayload) {
   // the externalId as playing — if the track is already in the queue
   // (server-side), the existing row lights up; if it's not, no row
   // lights up and that's fine, the bar still shows what's playing.
+  // Signed-out users can't have a server-backed queue, but we still
+  // want the playing track to surface in the drawer ("queue of one").
+  // Maintain a local-only _queue for anon: replace contents with the
+  // single playing item; ＋ buttons elsewhere still 401 / show a
+  // "Sign in" toast as before.
+  const isAnon = !window._clerk?.user;
+  if (isAnon) {
+    const data = itemPayload.data || {};
+    const optimistic = {
+      position: 1,
+      source: itemPayload.source,
+      externalId: itemPayload.externalId,
+      data: {
+        title: data.title || `Track ${itemPayload.externalId}`,
+        artist: data.artist || "",
+        albumTitle: data.albumTitle || "",
+        image: data.image || "",
+      },
+    };
+    _queue = [optimistic];
+    _queueCurrentPosition = 1;
+    _queuePlayingExternalId = String(itemPayload.externalId);
+    if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
+    _refreshPlayerNavButtons();
+    return false;
+  }
   const data = itemPayload.data || {};
   const hasMeta = !!(data.title || data.artist || data.albumTitle);
   if (!hasMeta) {
