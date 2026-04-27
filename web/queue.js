@@ -289,15 +289,23 @@ function _queueCycleRepeat() {
 
 function _queueGetRepeat() { return _queueRepeat; }
 
-// Update the drawer's repeat button — icon + active class. Safe to call
-// when the drawer hasn't been built yet (no-ops).
+// Update the drawer's repeat button — distinct icon AND distinct color
+// per state. Uses monochrome glyphs (NOT emoji like 🔁/🔂) because CSS
+// `color` doesn't affect emoji rendering on most platforms — that's why
+// the previous off/all states both looked blue. Safe to call when the
+// drawer hasn't been built yet (no-ops).
 function _renderRepeatBtn() {
   const btn = _queueDrawerEl?.querySelector(".queue-drawer-repeat");
   if (!btn) return;
-  // 🔁 = cycle (off/all), 🔂 = single-track loop. Active class drives
-  // the accent color so "off" reads as muted.
-  btn.textContent = _queueRepeat === "one" ? "🔂" : "🔁";
-  btn.classList.toggle("active", _queueRepeat !== "off");
+  // Three distinct shapes:
+  //   off → "→" (linear arrow, doesn't suggest looping)
+  //   all → "↻" (full loop)
+  //   one → "↻" + a small "1" badge in superscript
+  btn.innerHTML = _queueRepeat === "off" ? "→"
+                : _queueRepeat === "all" ? "↻"
+                :                          '↻<span class="queue-repeat-1">1</span>';
+  btn.classList.remove("repeat-off", "repeat-all", "repeat-one");
+  btn.classList.add(`repeat-${_queueRepeat}`);
   btn.title = _queueRepeat === "off" ? "Repeat: off (click to cycle)"
             : _queueRepeat === "all" ? "Repeat: all (click to cycle)"
             :                          "Repeat: one (click to cycle)";
@@ -313,7 +321,7 @@ function _ensureQueueDrawer() {
     <div class="queue-drawer-head">
       <span class="queue-drawer-title">Up Next</span>
       <span class="queue-drawer-count" id="queue-drawer-count"></span>
-      <button type="button" class="queue-drawer-repeat" onclick="_queueCycleRepeat()" title="Repeat">🔁</button>
+      <button type="button" class="queue-drawer-repeat repeat-off" onclick="_queueCycleRepeat()" title="Repeat: off (click to cycle)">→</button>
       <button type="button" class="queue-drawer-clear" onclick="queueClear()" title="Clear queue">Clear</button>
       <button type="button" class="queue-drawer-close" onclick="queueToggleDrawer()" title="Close">×</button>
     </div>
