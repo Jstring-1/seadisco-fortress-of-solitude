@@ -361,6 +361,40 @@ function _queueOnExternalPlay(itemPayload) {
     }
     return false;
   }
+  // No-metadata fast path — used by the URL bootstrap (?vd=…) where
+  // openVideo has no clicked .track-link to scrape, and the queue-meta
+  // handoff slot is empty. Inserting an "Untitled" entry was creating
+  // duplicate queue rows (one Untitled + one with the real metadata
+  // from a prior session) AND making two rows light up as "playing"
+  // because the externalId predicate matched both. Instead, just mark
+  // the externalId as playing — if the track is already in the queue
+  // (server-side), the existing row lights up; if it's not, no row
+  // lights up and that's fine, the bar still shows what's playing.
+  const data = itemPayload.data || {};
+  const hasMeta = !!(data.title || data.artist || data.albumTitle);
+  if (!hasMeta) {
+    _queuePlayingExternalId = String(itemPayload.externalId);
+    // If queue is already loaded, point _queueCurrentPosition at the
+    // existing row (if any) so prev/next nav works. Otherwise lazy-load
+    // and patch up once the data lands.
+    const apply = () => {
+      const ex = Array.isArray(_queue)
+        ? _queue.find(it => String(it.externalId) === String(itemPayload.externalId))
+        : null;
+      _queueCurrentPosition = ex ? ex.position : null;
+      if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
+      _refreshPlayerNavButtons();
+    };
+    if (Array.isArray(_queue)) {
+      apply();
+    } else {
+      _queueLoad().then(() => {
+        // Race-safe: only apply if the played externalId is still us.
+        if (String(_queuePlayingExternalId) === String(itemPayload.externalId)) apply();
+      }).catch(() => {});
+    }
+    return false;
+  }
   // If the played item is already in the queue, MOVE it to the head
   // rather than leaving it at its current position with a different
   // marker. Every play re-orders the queue with the played track at
