@@ -302,34 +302,51 @@ async function initAuth({ onSignedIn, onSignedOut, onError, onReady } = {}) {
 }
 
 // ── Shared Clerk theme + sign-in modal helper ───────────────────────────
-// Dark amber theme matching the SeaDisco palette. Used by the splash
-// waitlist mount and the openSignInModal() helper so every Clerk widget
-// looks consistent.
-const SEADISCO_CLERK_APPEARANCE = {
-  variables: {
-    colorBackground:      "#15120e",
-    colorInputBackground: "#0e0c08",
-    colorInputText:       "#e8dcc8",
-    colorText:            "#e8dcc8",
-    colorTextSecondary:   "#a89880",
-    colorPrimary:         "#ff6b35",
-    colorDanger:          "#e05050",
-    colorNeutral:         "#a89880",
-    borderRadius:         "6px",
-    fontFamily:           "system-ui, -apple-system, sans-serif",
-  },
-  elements: {
-    card:             "background:#15120e; border:1px solid #2e2518; box-shadow:none;",
-    headerTitle:      "color:#e8dcc8;",
-    headerSubtitle:   "color:#8a7d6b;",
-    formFieldLabel:   "color:#8a7d6b;",
-    formFieldInput:   "background:#0e0c08; border:1px solid #2e2518; color:#e8dcc8;",
-    footerActionLink: "color:#ff6b35;",
-    // Note: Clerk's footer is hidden inside #splash-waitlist-mount via a
-    // real CSS rule in style.css (.cl-footer display:none). The appearance
-    // API's inline style approach doesn't beat Clerk's own CSS specificity.
-  },
-};
+// Built dynamically from the active CSS theme variables so the sign-in
+// / sign-up modal matches whichever site theme admin has set. Re-read
+// at modal-open time (themes can change between visits).
+function _seaDiscoBuildClerkAppearance() {
+  const css = (name, fallback) => {
+    try {
+      const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+      return v || fallback;
+    } catch { return fallback; }
+  };
+  const bg      = css("--bg",      "#15120e");
+  const surface = css("--surface", "#0e0c08");
+  const text    = css("--text",    "#e8dcc8");
+  const muted   = css("--muted",   "#a89880");
+  const accent  = css("--accent",  "#ff6b35");
+  const border  = css("--border",  "#2e2518");
+  return {
+    variables: {
+      colorBackground:      bg,
+      colorInputBackground: surface,
+      colorInputText:       text,
+      colorText:            text,
+      colorTextSecondary:   muted,
+      colorPrimary:         accent,
+      colorDanger:          "#e05050",
+      colorNeutral:         muted,
+      borderRadius:         "6px",
+      fontFamily:           "system-ui, -apple-system, sans-serif",
+    },
+    elements: {
+      card:             `background:${bg}; border:1px solid ${border}; box-shadow:0 8px 30px rgba(0,0,0,0.5);`,
+      headerTitle:      `color:${text};`,
+      headerSubtitle:   `color:${muted};`,
+      formFieldLabel:   `color:${muted};`,
+      formFieldInput:   `background:${surface}; border:1px solid ${border}; color:${text};`,
+      footerActionLink: `color:${accent};`,
+      socialButtonsBlockButton: `background:${surface}; border:1px solid ${border}; color:${text};`,
+      formButtonPrimary: `background:${accent}; color:${bg}; border:none;`,
+      // Clerk's footer "Secured by" is hidden via .cl-footer in style.css.
+    },
+  };
+}
+// Backwards-compat constant — some sites read this directly. Build
+// once at script load using whatever theme is applied at that moment.
+const SEADISCO_CLERK_APPEARANCE = _seaDiscoBuildClerkAppearance();
 
 // Public mode — registration is open. Localization just tunes the
 // default Clerk copy to SeaDisco wording. Keys match Clerk's default
@@ -376,7 +393,9 @@ async function openSignInModal() {
       // loadClerkInstance(). Per-component localization is ignored by the
       // vanilla-JS SDK.
       c.openSignIn({
-        appearance: SEADISCO_CLERK_APPEARANCE,
+        // Rebuild from current theme at open time so a theme switch
+        // mid-session is reflected the next time the modal opens.
+        appearance: _seaDiscoBuildClerkAppearance(),
         afterSignInUrl: location.pathname + location.search,
         afterSignUpUrl: location.pathname + location.search,
       });
@@ -464,7 +483,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260426ay";
+  const SITE_VERSION = "build 20260426az";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -612,7 +631,10 @@ function renderSharedFooter(opts) {
     </div>
     <div style="color:#555;font-style:italic;margin-bottom:0.3rem">DISCLAIMER: AI be funky sometimes</div>
     <div>Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Discogs</a> and <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Claude</a></div>
-    <div style="margin-top:0.3rem">&copy; 2026 SeaDisco &nbsp;&middot;&nbsp; Music data courtesy of Discogs API &nbsp;&middot;&nbsp; Not affiliated with Discogs &nbsp;&middot;&nbsp; Jimmy Witherfork Strikes Again</div>`;
+    <div style="margin-top:0.3rem">Music data courtesy of Discogs</div>
+    <div>Not affiliated with Discogs</div>
+    <div>Jimmy Witherfork Strikes Again</div>
+    <div style="margin-top:0.3rem">&copy; 2026 SeaDisco</div>`;
 
   // Wire the live href-sync system so footer link hrefs always reflect
   // the current location.search. Idempotent — only patches history once.

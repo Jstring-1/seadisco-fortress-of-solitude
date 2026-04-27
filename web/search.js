@@ -1182,13 +1182,32 @@ async function loadRandomRecords(more) {
   const wrap = document.getElementById("random-records");
   if (!grid || !wrap) return;
 
-  // First call (or full reload): rebuild from localStorage history
+  // First call (or full reload): rebuild from localStorage history.
+  // For logged-out users with no local history (and signed-in users
+  // with empty history), fall back to a random sample of admin's
+  // favorites — gives anon visitors a curated set of records to
+  // browse on the home page instead of nothing.
   if (!more) {
     _loadHistoryIntoRandom();
     _randomShown = 0;
-    // Update header title — always "Recent" now
     const titleEl = document.getElementById("random-records-title");
-    if (titleEl) titleEl.textContent = "Recent";
+    if (!_randomAll.length) {
+      try {
+        const r = await fetch("/api/admin-favorites/sample?limit=24", { cache: "no-store" });
+        if (r.ok) {
+          const j = await r.json();
+          if (Array.isArray(j?.items) && j.items.length) {
+            // Mark these so the dismiss × is hidden — they aren't in
+            // the user's local history and removing one from there
+            // would be a no-op.
+            _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
+            if (titleEl) titleEl.textContent = "Suggested";
+          }
+        }
+      } catch { /* fall through to empty */ }
+    } else {
+      if (titleEl) titleEl.textContent = "Recent";
+    }
     if (!_randomAll.length) {
       wrap.style.display = "none";
       return;
@@ -1203,9 +1222,10 @@ async function loadRandomRecords(more) {
   const html = slice.map((item, i) => {
     const card = renderCard(item, _randomShown + i);
     const safeId = escHtml(String(item.id));
-    return `<div class="recent-wrap" data-hist-id="${safeId}">${card}` +
-      `<button class="recent-dismiss" onclick="removeFromHistory(event,'${safeId}')" title="Remove from history">✕</button>` +
-      `</div>`;
+    const dismiss = item._isSuggested
+      ? "" // suggested cards aren't in local history; the × would no-op
+      : `<button class="recent-dismiss" onclick="removeFromHistory(event,'${safeId}')" title="Remove from history">✕</button>`;
+    return `<div class="recent-wrap" data-hist-id="${safeId}">${card}${dismiss}</div>`;
   }).join("");
   grid.querySelector(".random-load-more")?.remove();
   if (more) {

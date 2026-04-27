@@ -3612,6 +3612,58 @@ app.use("/api/admin", (req, res, next) => {
   next();
 });
 
+// GET /api/admin-favorites/sample — public read of a random sample of
+// admin's favorites. Used as default content on the logged-out home
+// page so anonymous visitors land on a curated set of records to
+// browse instead of an empty "Recent" strip. Cached 5 minutes
+// in-memory (admin's library doesn't change minute-to-minute).
+let _adminFavSampleCache: { ts: number; items: any[] } | null = null;
+const _ADMIN_FAV_TTL_MS = 5 * 60 * 1000;
+app.get("/api/admin-favorites/sample", async (req, res) => {
+  const limit = Math.min(48, Math.max(1, parseInt(String(req.query?.limit ?? "24"), 10) || 24));
+  res.setHeader("Cache-Control", "public, max-age=300");
+  // Serve from cache when fresh.
+  if (_adminFavSampleCache && Date.now() - _adminFavSampleCache.ts < _ADMIN_FAV_TTL_MS) {
+    const cached = _adminFavSampleCache.items;
+    const sample = cached.slice().sort(() => Math.random() - 0.5).slice(0, limit);
+    res.json({ items: sample });
+    return;
+  }
+  if (!ADMIN_CLERK_ID) { res.json({ items: [] }); return; }
+  try {
+    // Pull all admin favorites once (capped at 500 — typical admin
+    // libraries are well below). Random shuffle + slice gives the
+    // sample. The data column has the card snapshot we need
+    // (title/artist/year/image) so no Discogs round-trips are
+    // required to render.
+    const rows = await getFavorites(ADMIN_CLERK_ID, 500, 0);
+    const items = rows.map((row: any) => {
+      const d = row.data ?? {};
+      return {
+        id: row.discogs_id,
+        type: row.entity_type,
+        title: d.title ?? "",
+        year:  d.year  ?? "",
+        country: d.country ?? "",
+        cover_image: d.cover_image ?? d.thumb ?? "",
+        thumb:       d.thumb ?? d.cover_image ?? "",
+        format: d.format ?? [],
+        label:  d.label  ?? [],
+        genre:  d.genre  ?? [],
+        style:  d.style  ?? [],
+        master_id: d.master_id ?? null,
+        ...d,
+      };
+    });
+    _adminFavSampleCache = { ts: Date.now(), items };
+    const sample = items.slice().sort(() => Math.random() - 0.5).slice(0, limit);
+    res.json({ items: sample });
+  } catch (e: any) {
+    console.error("[admin-favorites/sample]", e?.message ?? e);
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
 // GET /api/site-theme — public read of the current global theme (used
 // by clients to verify their cached HTML matches the live setting).
 // Admin's setting controls every visitor's theme.
