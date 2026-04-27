@@ -2077,10 +2077,17 @@ function openVideo(event, url) {
   //   1. Queue dispatch meta — auto-advance from the cross-source queue
   //   2. Clicked track row's data-release-* attrs — most reliable
   //   3. Current ?op= URL param — works when modal is still open
-  //   4. Leave previous _playerRelease* untouched (don't clobber on a
-  //      bootstrap play that has no context — we'd rather keep the
-  //      stale-but-correct context than wipe the disc icon).
+  //
+  // If the call has clear context (queue dispatch OR a real click) we
+  // OVERWRITE _playerReleaseId — including clearing it when the new
+  // track lacks release context, so the disc icon doesn't keep pointing
+  // at the previous album as the queue advances through tracks. We
+  // only fall back to "leave previous untouched" for the bootstrap
+  // case (no event, no queueMeta) where preserving the prior album
+  // link is preferable to losing it.
   let _rType = "", _rId = "";
+  const isQueueDispatch = !!queueMeta;
+  const isUserClick     = !!clickedEl?.dataset?.video;
   if (queueMeta?.releaseType && queueMeta?.releaseId) {
     _rType = queueMeta.releaseType; _rId = String(queueMeta.releaseId);
   } else if (clickedEl?.dataset?.releaseType && clickedEl?.dataset?.releaseId) {
@@ -2096,7 +2103,14 @@ function openVideo(event, url) {
     window._playerReleaseType = _rType;
     window._playerReleaseId   = _rId;
     window._playerReleaseUrl  = `https://www.discogs.com/${_rType}/${_rId}`;
+  } else if (isQueueDispatch || isUserClick) {
+    // Explicit context exists but had no release info — clear so the
+    // disc icon doesn't dangle on the previous album.
+    window._playerReleaseType = null;
+    window._playerReleaseId   = null;
+    window._playerReleaseUrl  = null;
   }
+  // else: bootstrap path — leave _playerRelease* untouched.
   setVideoUrl(id);
   const mp = document.getElementById("mini-player");
   mp.classList.add("open");
