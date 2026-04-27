@@ -383,7 +383,20 @@ function _queueOnExternalPlay(itemPayload) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items: [itemPayload], mode: "next" }),
       });
-      if (!r.ok) return;
+      if (!r.ok) {
+        // Silent failure was masking real issues — the optimistic
+        // insert appears to work locally, but a fresh _queueLoad
+        // from server later wipes it. Log + toast so the user knows
+        // their play didn't make it into the persisted queue.
+        const errBody = await r.text().catch(() => "");
+        console.warn("[queue] external-play insert POST failed:", r.status, errBody);
+        if (r.status === 401) {
+          if (typeof showToast === "function") showToast("Sign in to keep tracks in your queue", "error");
+        } else {
+          if (typeof showToast === "function") showToast(`Couldn't add to queue (HTTP ${r.status})`, "error");
+        }
+        return;
+      }
       _queue = null;
       await _queueLoad(true);
       // After reconcile, find the item by externalId — race-safe
@@ -394,7 +407,9 @@ function _queueOnExternalPlay(itemPayload) {
       }
       if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
       _refreshPlayerNavButtons();
-    } catch { /* server drift; local optimistic state remains usable */ }
+    } catch (e) {
+      console.warn("[queue] external-play insert threw:", e);
+    }
   })();
   return false; // don't suppress; engine still plays directly
 }
