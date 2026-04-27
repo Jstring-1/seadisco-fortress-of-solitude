@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- SeaDisco PWA icon — vinyl-disc motif on the brand background.
+       Single SVG used at any size; browsers scale it. The maskable
+       safe area is the inner 80% (the disc); decorative bleed
+       fills the corners. -->
+  <rect width="512" height="512" fill="#15120e"/>
+  <circle cx="256" cy="256" r="200" fill="#1c1916" stroke="#3a3027" stroke-width="2"/>
+  <circle cx="256" cy="256" r="180" fill="none" stroke="#2a2520" stroke-width="1"/>
+  <circle cx="256" cy="256" r="160" fill="none" stroke="#2a2520" stroke-width="1"/>
+  <circle cx="256" cy="256" r="140" fill="none" stroke="#2a2520" stroke-width="1"/>
+  <circle cx="256" cy="256" r="120" fill="none" stroke="#2a2520" stroke-width="1"/>
+  <circle cx="256" cy="256" r="100" fill="none" stroke="#2a2520" stroke-width="1"/>
+  <circle cx="256" cy="256" r="78"  fill="#e8a020"/>
+  <circle cx="256" cy="256" r="14"  fill="#15120e"/>
+  <text x="256" y="244" text-anchor="middle" font-family="-apple-system,Segoe UI,Roboto,sans-serif" font-size="22" font-weight="700" fill="#15120e" letter-spacing="2">SEA</text>
+  <text x="256" y="298" text-anchor="middle" font-family="-apple-system,Segoe UI,Roboto,sans-serif" font-size="22" font-weight="700" fill="#15120e" letter-spacing="2">DISCO</text>
+</svg>

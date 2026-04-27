@@ -70,6 +70,10 @@ async function showAuthSection() {
   }
 
   if (data?.hasToken) { loadProfilePanel(); loadSyncStatus(); if (typeof loadOrdersSection === "function") loadOrdersSection(); renderMarketplaceScopeBanner(); }
+  // Surface the offline-access section. Independent of the OAuth /
+  // hasToken state — it just caches whatever the user can already see
+  // when signed in. Re-rendered on reconnect by offline.js.
+  if (typeof renderOfflineSection === "function") renderOfflineSection();
 
   // Clean up OAuth success redirect param (UI is already refreshed above)
   const urlParams = new URLSearchParams(location.search);
@@ -378,6 +382,179 @@ async function deleteAccount() {
 }
 
 // ── SPA entry point: called by switchView("account") ────────────────────
+// ── Offline access section ───────────────────────────────────────────
+// Driven by web/offline.js (window.sdOffline). Re-renders on
+// enable/disable/sync/install events so the status line stays fresh.
+function _fmtBytes(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "0 MB";
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 100) return `${Math.round(mb)} MB`;
+  if (mb >= 1)   return `${mb.toFixed(1)} MB`;
+  const kb = bytes / 1024;
+  return `${Math.round(kb)} KB`;
+}
+function _fmtAgo(ts) {
+  if (!ts) return "never";
+  const diff = Date.now() - Number(ts);
+  if (diff < 60_000)        return "just now";
+  if (diff < 3_600_000)     return `${Math.floor(diff / 60_000)} min ago`;
+  if (diff < 86_400_000)    return `${Math.floor(diff / 3_600_000)} h ago`;
+  return `${Math.floor(diff / 86_400_000)} d ago`;
+}
+
+async function renderOfflineSection() {
+  const wrap = document.getElementById("offline-section");
+  const body = document.getElementById("offline-section-body");
+  if (!wrap || !body) return;
+  if (!window.sdOffline) {
+    wrap.style.display = "none";
+    return;
+  }
+  wrap.style.display = "block";
+  const enabled  = window.sdOffline.isEnabled();
+  const stats    = await window.sdOffline.getStorageStats();
+  const installed = window.sdOffline.isInstalled();
+  const canInstall = window.sdOffline.canInstall();
+
+  const sizeBlurb = enabled
+    ? `${stats.records.toLocaleString()} record${stats.records === 1 ? "" : "s"} · ${_fmtBytes(stats.totalBytes || stats.libraryBytes)}`
+    : `Currently off — your library is fetched live each visit.`;
+  const lastSync = enabled
+    ? `Last synced ${_fmtAgo(stats.lastSyncAt)}`
+    : "";
+
+  // Install-as-app sub-row: shown only when offline mode is enabled
+  // (prerequisite for an installable PWA in our setup) AND the
+  // browser actually offered an install prompt this session.
+  let installRow = "";
+  if (enabled) {
+    if (installed) {
+      installRow = `<div style="font-size:0.82rem;color:var(--muted);margin-top:0.6rem">Running as an installed app.</div>`;
+    } else if (canInstall) {
+      installRow = `
+        <div style="margin-top:0.6rem;display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap">
+          <button type="button" onclick="offlineInstallApp()" style="font-size:0.82rem;padding:0.35rem 0.9rem;background:var(--bg-elevated);border:1px solid var(--border);color:var(--text);border-radius:5px;cursor:pointer">Install as app</button>
+          <span style="font-size:0.78rem;color:var(--muted)">Adds a desktop / home-screen icon. Same site, opens in its own window.</span>
+        </div>`;
+    } else {
+      installRow = `<div style="font-size:0.78rem;color:var(--muted);margin-top:0.6rem">Tip: in Safari iOS, use Share → Add to Home Screen to install.</div>`;
+    }
+  }
+
+  body.innerHTML = `
+    <p style="font-size:0.84rem;color:var(--muted);margin:0 0 0.7rem">
+      Download your collection, wantlist, lists, and inventory to this device so you can browse them when you're offline. Read-only — adding or editing still needs a connection.
+    </p>
+    <label class="offline-toggle" style="display:inline-flex;align-items:center;gap:0.55rem;cursor:pointer;user-select:none">
+      <input type="checkbox" ${enabled ? "checked" : ""} onchange="${enabled ? "disableOffline" : "enableOffline"}(this)" style="width:1rem;height:1rem;accent-color:var(--accent);cursor:pointer">
+      <span style="font-size:0.88rem">${enabled ? "Offline access is on" : "Enable offline access"}</span>
+    </label>
+    <div id="offline-progress" style="margin-top:0.6rem;font-size:0.82rem;color:var(--muted);display:none"></div>
+    <div style="font-size:0.82rem;color:var(--muted);margin-top:0.5rem">${escHtml(sizeBlurb)}${lastSync ? ` · ${escHtml(lastSync)}` : ""}</div>
+    ${enabled ? `
+      <div style="margin-top:0.6rem;display:flex;gap:0.6rem;flex-wrap:wrap">
+        <button type="button" onclick="offlineSyncNow(this)" style="font-size:0.82rem;padding:0.3rem 0.85rem;background:var(--accent);color:#000;border:none;border-radius:5px;cursor:pointer;font-weight:600">Sync now</button>
+        <button type="button" onclick="offlineClearCache(this)" style="font-size:0.82rem;padding:0.3rem 0.85rem;background:none;border:1px solid var(--border);color:var(--muted);border-radius:5px;cursor:pointer">Clear cache</button>
+      </div>
+    ` : ""}
+    ${installRow}
+  `;
+}
+window._sdOfflineRenderAccount = renderOfflineSection;
+
+async function enableOffline(checkboxEl) {
+  if (checkboxEl) checkboxEl.disabled = true;
+  const progress = document.getElementById("offline-progress");
+  if (progress) { progress.style.display = "block"; progress.textContent = "Enabling offline access…"; }
+  try {
+    await window.sdOffline.enable((p) => {
+      if (progress) progress.textContent = `Downloading ${p.label}… (${p.done} / ${p.total})`;
+    });
+    if (typeof showToast === "function") showToast("Offline access enabled");
+  } catch (e) {
+    if (typeof showToast === "function") showToast("Could not enable offline access", "error");
+  } finally {
+    if (progress) progress.style.display = "none";
+    if (checkboxEl) checkboxEl.disabled = false;
+    renderOfflineSection();
+  }
+}
+window.enableOffline = enableOffline;
+
+async function disableOffline(checkboxEl) {
+  if (!confirm("Turn off offline access and clear cached data on this device?")) {
+    if (checkboxEl) checkboxEl.checked = true;
+    return;
+  }
+  if (checkboxEl) checkboxEl.disabled = true;
+  try {
+    await window.sdOffline.disable();
+    if (typeof showToast === "function") showToast("Offline access turned off");
+  } finally {
+    if (checkboxEl) checkboxEl.disabled = false;
+    renderOfflineSection();
+  }
+}
+window.disableOffline = disableOffline;
+
+async function offlineSyncNow(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = "Syncing…"; }
+  const progress = document.getElementById("offline-progress");
+  if (progress) { progress.style.display = "block"; progress.textContent = "Refreshing…"; }
+  try {
+    await window.sdOffline.syncNow((p) => {
+      if (progress) progress.textContent = `Refreshing ${p.label}… (${p.done} / ${p.total})`;
+    });
+    if (typeof showToast === "function") showToast("Library re-synced");
+  } catch {
+    if (typeof showToast === "function") showToast("Sync failed — try again", "error");
+  } finally {
+    if (progress) progress.style.display = "none";
+    if (btn) { btn.disabled = false; btn.textContent = "Sync now"; }
+    renderOfflineSection();
+  }
+}
+window.offlineSyncNow = offlineSyncNow;
+
+async function offlineClearCache(btn) {
+  if (!confirm("Clear cached library and images on this device? Offline access will stay on (re-sync to populate again).")) return;
+  if (btn) { btn.disabled = true; btn.textContent = "Clearing…"; }
+  try {
+    if (window.sdIdb) {
+      await window.sdIdb.libraryClear();
+      await window.sdIdb.metaClear();
+    }
+    // Ask the SW to wipe its caches without unregistering.
+    try {
+      const ctrl = navigator.serviceWorker?.controller;
+      if (ctrl) ctrl.postMessage({ type: "SD_CLEAR_CACHES" });
+    } catch {}
+    if (typeof showToast === "function") showToast("Cache cleared");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Clear cache"; }
+    renderOfflineSection();
+  }
+}
+window.offlineClearCache = offlineClearCache;
+
+async function offlineInstallApp() {
+  if (!window.sdOffline?.canInstall?.()) return;
+  const r = await window.sdOffline.promptInstall();
+  if (r.outcome === "accepted" && typeof showToast === "function") {
+    showToast("Installed");
+  }
+  renderOfflineSection();
+}
+window.offlineInstallApp = offlineInstallApp;
+
+// On reconnect, refresh the visible Account view's offline section
+// (storage estimates may have changed after a background SW update).
+window._sdOfflineRefreshOnReconnect = () => {
+  if (document.getElementById("account-view")?.style.display !== "none") {
+    renderOfflineSection();
+  }
+};
+
 function initAccountView() {
   const clerk = window._clerk;
   if (clerk?.user) {

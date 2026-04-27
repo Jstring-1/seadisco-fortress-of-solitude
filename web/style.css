@@ -6457,6 +6457,51 @@ body.player-open .queue-drawer.open { bottom: 102px; }
    truth that the inline cascade can't override. */
 .mini-player .mini-needs-release { display: none !important; }
 .mini-player.has-release .mini-needs-release { display: inline-block !important; }
+
+/* Offline / connection banner — fixed-top strip surfaced by
+   web/offline.js when the user has opted in to offline mode and the
+   device is currently offline. Only visible when both conditions
+   hold (controlled via body.is-offline + the banner element being
+   in the DOM at all). */
+.offline-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 9999;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.8rem;
+  background: rgba(80, 50, 20, 0.95);
+  color: #ffd89b;
+  font-size: 0.8rem;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid rgba(232, 160, 32, 0.5);
+  pointer-events: none;
+}
+body.is-offline .offline-banner { display: flex; }
+.offline-banner-dot {
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  background: #ffb84d;
+  box-shadow: 0 0 6px rgba(255, 184, 77, 0.7);
+  animation: offline-pulse 2s ease-in-out infinite;
+}
+@keyframes offline-pulse {
+  0%, 100% { opacity: 0.6; }
+  50%      { opacity: 1; }
+}
+/* Disable in-app actions that require connectivity while offline.
+   Visual cue only — handlers themselves should also reject the
+   call if it'd 401/timeout. */
+body.is-offline .offline-disabled,
+body.is-offline button.offline-disabled {
+  opacity: 0.4 !important;
+  pointer-events: none !important;
+}
 .mini-player.idle-queue .mini-progress { display: none; }
 .mini-idle-count {
   color: var(--muted);
