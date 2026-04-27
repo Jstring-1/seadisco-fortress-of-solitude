@@ -1480,10 +1480,13 @@ function updateVideoNavButtons() {
   const titleEl  = document.getElementById("mini-player-title");
   const ytHasNext = idx < queue.length - 1;
   const xqHasNext = (typeof _queueHasNext === "function") ? _queueHasNext() : false;
+  const xqHasPrev = (typeof window._queueHasPrev === "function") ? window._queueHasPrev() : false;
+  const ytHasPrev = idx > 0;
   const nextDisabled = !(ytHasNext || xqHasNext);
-  if (prevBtn)  prevBtn.disabled  = idx <= 0;
+  const prevDisabled = !(ytHasPrev || xqHasPrev);
+  if (prevBtn)  prevBtn.disabled  = prevDisabled;
   if (nextBtn)  nextBtn.disabled  = nextDisabled;
-  if (miniPrev) miniPrev.disabled = idx <= 0;
+  if (miniPrev) miniPrev.disabled = prevDisabled;
   if (miniNext) miniNext.disabled = nextDisabled;
   if (titleEl) {
     const meta = (window._videoQueueMeta ?? [])[idx];
@@ -1727,6 +1730,22 @@ window._startYtProgressLoop  = _startYtProgressLoop;
 window._stopYtProgressLoop   = _stopYtProgressLoop;
 window.playerSeekFrom        = playerSeekFrom;
 function playerPrev() {
+  // Cross-source queue takes precedence over engine-internal prev:
+  // a user-curated queue should drive both directions of navigation.
+  if (typeof _queuePlayPrev === "function") {
+    Promise.resolve(_queuePlayPrev()).then(handled => {
+      if (handled) return;
+      // Fall through to engine-internal prev (LOC's per-item track
+      // queue or YT's _videoQueue) when the cross-source queue can't
+      // step back any further.
+      if (window._currentEngine === "loc" && typeof _locPlayPrevInQueue === "function") _locPlayPrevInQueue();
+      else if (typeof videoPrev === "function") videoPrev();
+    }).catch(() => {
+      if (window._currentEngine === "loc" && typeof _locPlayPrevInQueue === "function") _locPlayPrevInQueue();
+      else if (typeof videoPrev === "function") videoPrev();
+    });
+    return;
+  }
   if (window._currentEngine === "loc") {
     if (typeof _locPlayPrevInQueue === "function") _locPlayPrevInQueue();
     return;
