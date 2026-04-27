@@ -150,13 +150,11 @@ function queueAddYt(videoId, meta, opts) {
   }], opts);
 }
 
-// Bulk-add every YT-matched track from an album popup tracklist. Reads
-// the per-row data attributes that renderModal writes (data-yt-url,
-// data-track, data-artist, data-album). Always uses mode "append" so
-// the album plays in order after whatever's already queued.
+// Bulk-add every YT-matched track from an album popup tracklist.
+// Routes through queueAddAlbumOrPlay so it stays consistent with the
+// Play-album button: if the album is already queued, no-op (toast);
+// otherwise append all tracks to the tail.
 async function queueAddAlbum(btn) {
-  // Find the nearest tracklist container so we only grab THIS popup's
-  // tracks, not any other tracklist that might be in the DOM.
   const scope = btn?.closest("#album-info, #version-info, .tracklist") || document;
   const rows  = scope.querySelectorAll(".queue-add-icon[data-yt-url]");
   if (!rows.length) {
@@ -182,9 +180,8 @@ async function queueAddAlbum(btn) {
     if (typeof showToast === "function") showToast("No playable tracks on this album", "error");
     return false;
   }
-  // Visually mark each row as queued
   rows.forEach(el => el.classList.add("queued"));
-  return queueAdd(items, { mode: "append" });
+  return queueAddAlbumOrPlay(items, { mode: "append" });
 }
 
 // ── Queue navigation hooks ──────────────────────────────────────────
@@ -596,6 +593,52 @@ async function queuePlayHead() {
 // is loaded yet but items are queued, and by the drawer's ▶ Play head
 // button. Picks the head and starts playing it; reuses _queuePlayNext
 // but ensures we don't accidentally consume something before any
+// ── Album-level helpers (Play album / Queue album) ─────────────────
+// Single source of truth for the two album-level actions across the
+// Discogs modal, archive popup, and any future surface. Both check
+// whether the album is already represented in the queue (by its first
+// track's externalId — every track in a given album shares an
+// identifying prefix, so the first-track lookup is a reliable proxy)
+// and behave smartly:
+//
+//   "play"   → if already queued, queueJumpTo the first track in
+//              place; otherwise queueAdd(items, "next") + queuePlayHead
+//              (insert at head, play first; existing queue continues
+//              after this album ends).
+//   "append" → if already queued, no-op (with toast); otherwise
+//              queueAdd(items, "append") (add to tail without
+//              interrupting playback).
+//
+// `items` is an array of queue-shaped objects: { source, externalId, data }.
+async function queueAddAlbumOrPlay(items, opts) {
+  if (!Array.isArray(items) || !items.length) return false;
+  if (!window._clerk?.user) {
+    if (typeof showToast === "function") showToast("Sign in to use the queue", "error");
+    return false;
+  }
+  const mode = opts?.mode === "append" ? "append" : "play";
+  await _queueLoad(true);
+  const firstId = String(items[0].externalId ?? "");
+  const existing = (_queue || []).find(it => String(it.externalId) === firstId);
+  if (existing) {
+    if (mode === "play") {
+      // Album already in queue — jump to the first track in place.
+      await queueJumpTo(existing.position);
+      return true;
+    }
+    // mode "append" — already queued, no-op.
+    if (typeof showToast === "function") showToast("Already in queue");
+    return false;
+  }
+  if (mode === "play") {
+    await queueAdd(items, { mode: "next" });
+    await queuePlayHead();
+    return true;
+  }
+  await queueAdd(items, { mode: "append" });
+  return true;
+}
+
 // ── Tiny "+ queue" icon helpers used by site-wide adders ────────────
 // Returns inline HTML for a small ➕ button. `kind` is "loc" or "yt"
 // for tooltip clarity; click handler is attached separately by callers.
@@ -720,6 +763,7 @@ window._queueGetCurrentPosition = () => _queueCurrentPosition;
 window._queueGetRepeat = _queueGetRepeat;
 window._queueCycleRepeat = _queueCycleRepeat;
 window.queuePlayHead = queuePlayHead;
+window.queueAddAlbumOrPlay = queueAddAlbumOrPlay;
 window._queueRefreshIdleBar = _queueRefreshIdleBar;
 window._refreshPlayerNavButtons = _refreshPlayerNavButtons;
 // On script load: if the user has queued items from a previous
