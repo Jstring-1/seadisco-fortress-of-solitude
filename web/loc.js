@@ -1433,6 +1433,11 @@ async function _locPlay(item) {
   const myToken = ++_locPlayToken;
   const isCurrent = () => myToken === _locPlayToken;
 
+  // Drop any "Now playing" mark on the queue drawer — _queuePlayNext
+  // re-applies it AFTER calling us if this call originated from the
+  // queue. Non-queue callers leave it cleared (correct behavior).
+  if (typeof window._queueOnExternalPlay === "function") window._queueOnExternalPlay();
+
   // Stop any YouTube playback so we don't double-play
   try { if (typeof closeVideo === "function") closeVideo(); } catch {}
 

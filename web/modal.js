@@ -1536,9 +1536,21 @@ function _setPlayerEngine(name) {
   // Source icon next to the title
   const icon = document.getElementById("mini-player-source-icon");
   if (icon) icon.textContent = name === "loc" ? "♪" : (name === "yt" ? "▶" : "");
+  // When the engine clears (audio stopped), let the idle-queue logic
+  // re-surface the bar if there are still items queued.
+  if (name == null && typeof window._queueRefreshIdleBar === "function") {
+    setTimeout(() => window._queueRefreshIdleBar(), 0);
+  }
 }
 
 function playerTogglePause() {
+  // Idle-queue mode: bar is showing because the queue has items but
+  // nothing is loaded yet. ▶ kicks off playback from the queue head.
+  const bar = document.getElementById("mini-player");
+  if (bar?.classList.contains("idle-queue")) {
+    if (typeof queuePlayHead === "function") queuePlayHead();
+    return;
+  }
   if (window._currentEngine === "loc") {
     const a = document.getElementById("loc-audio");
     if (!a || !a.src) return;
@@ -1732,6 +1744,16 @@ function playerNext() {
   if (typeof playNextVideo === "function") playNextVideo();
 }
 function playerClose() {
+  // Closing the bar in idle-queue state suppresses auto-show until the
+  // user queues something new (otherwise dismissing the bar would
+  // immediately re-open it the moment the queue cache reloads).
+  const bar = document.getElementById("mini-player");
+  if (bar?.classList.contains("idle-queue")) {
+    if (typeof _queueMarkIdleClosed === "function") _queueMarkIdleClosed();
+    bar.classList.remove("open", "idle-queue");
+    document.body.classList.remove("player-open");
+    return;
+  }
   if (window._currentEngine === "loc") {
     if (typeof _locClosePlayer === "function") _locClosePlayer();
     return;
@@ -1809,6 +1831,9 @@ window.playAlbumAndQueue = playAlbumAndQueue;
 
 function openVideo(event, url) {
   if (event) { event.preventDefault(); event.stopPropagation(); }
+  // Drop any "Now playing" mark on the queue drawer — _queuePlayNext
+  // re-applies it AFTER calling us if this call came from the queue.
+  if (typeof window._queueOnExternalPlay === "function") window._queueOnExternalPlay();
   // Starting YouTube playback should stop the LOC audio bar so we
   // don't play both simultaneously. _locPlay already does the reverse.
   try { if (typeof _locClosePlayer === "function") _locClosePlayer(); } catch {}

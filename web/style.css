@@ -6257,6 +6257,116 @@ body.player-open .queue-drawer.open { bottom: 102px; }
 }
 .queue-row-remove:hover { color: var(--danger-bright, #ff6b6b); background: rgba(255,255,255,0.06); }
 
+/* ── Album thumbnail on each queue row ────────────────────────────────
+   LOC/archive items snapshot data.image at queue-add time; YT items
+   fall back to YouTube's mqdefault thumbnail. The wrapper carries the
+   small source-color badge in the corner so users can see LOC-vs-YT
+   without reading text. */
+.queue-row-thumb-wrap {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+.queue-row-thumb {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 4px;
+  background: rgba(255,255,255,0.05);
+  display: block;
+}
+.queue-row-thumb.thumb-broken { display: none; }
+.queue-row-thumb-empty {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  color: var(--accent);
+  background: rgba(255,255,255,0.05);
+}
+.queue-row-source-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #111;
+  pointer-events: none;
+}
+.queue-row-source-loc { background: #6ddf70; }
+.queue-row-source-yt  { background: #c43d3d; }
+
+/* ── Now-playing row indication ───────────────────────────────────────
+   The currently-playing item stays in the queue (we no longer consume
+   on play; only on track-end). It gets a left accent stripe, a tinted
+   row background, an animated equalizer overlay on the thumb, and a
+   tiny "Now playing" label above the title. */
+.queue-row.is-playing {
+  background: rgba(255,255,255,0.04);
+  border-left: 3px solid var(--accent);
+  padding-left: calc(0.55rem - 3px);
+}
+.queue-row.is-playing .queue-row-title { color: var(--accent); }
+.queue-row-now-playing {
+  font-size: 0.6rem;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+  display: block;
+  margin-bottom: 0.05rem;
+}
+/* Three little vertical bars overlaid on the thumb that "dance" while
+   the track is playing — visually distinguishes the playing row from
+   any other selected/hover state. Pure CSS, no JS keepalive. */
+.queue-row-eq {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
+  background: rgba(0,0,0,0.45);
+  border-radius: 4px;
+  padding: 5px;
+  pointer-events: none;
+}
+.queue-row-eq i {
+  width: 3px;
+  background: var(--accent);
+  display: block;
+  border-radius: 1px;
+  animation: queue-eq-bounce 0.9s ease-in-out infinite;
+}
+.queue-row-eq i:nth-child(1) { animation-delay: -0.3s; }
+.queue-row-eq i:nth-child(2) { animation-delay: -0.6s; }
+.queue-row-eq i:nth-child(3) { animation-delay: -0.1s; }
+@keyframes queue-eq-bounce {
+  0%, 100% { height: 25%; }
+  50%      { height: 90%; }
+}
+
+/* ── Idle-queue mini-player surface ───────────────────────────────────
+   Shown when the queue has items but no engine is loaded yet. Hides
+   engine-specific controls so the bar doesn't display dead buttons —
+   only the title (head-item preview), ▶ (kicks off queuePlayHead),
+   ☰ (opens drawer), and × (dismiss + suppress until next add) remain. */
+.mini-player.idle-queue #mini-prev,
+.mini-player.idle-queue #mini-next,
+.mini-player.idle-queue #mini-loc-save,
+.mini-player.idle-queue #mini-loc-info,
+.mini-player.idle-queue #mini-share,
+.mini-player.idle-queue #mini-album,
+.mini-player.idle-queue #mini-expand,
+.mini-player.idle-queue .repeat-btn { display: none; }
+.mini-player.idle-queue .mini-progress { display: none; }
+.mini-idle-count {
+  color: var(--muted);
+  font-size: 0.7rem;
+  margin-left: 0.4em;
+}
+
 /* Tiny ➕ "add to queue" icon, used inline next to track titles, on
    LOC card thumbnails, and in info popups. Matches the existing
    .track-loc-icon footprint so it doesn't crowd track rows. */
