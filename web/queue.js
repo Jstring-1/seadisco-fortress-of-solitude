@@ -51,6 +51,12 @@ let _repeatRefillInFlight = false;
 //       the drawer immediately — no visual feedback that "this is what's
 //       on now")
 let _queueCurrentPosition = null;
+// Snapshot of the currently-playing item's externalId. Position-based
+// matching breaks during the brief window when an optimistic insert
+// hasn't been reconciled with a concurrent _queueLoad (URL-based
+// playback at page boot is the common trigger). Falling back to
+// externalId match keeps the indicator stable across that window.
+let _queuePlayingExternalId = null;
 
 // ── Fetch / cache ───────────────────────────────────────────────────
 async function _queueLoad(force = false) {
@@ -232,6 +238,7 @@ async function _queuePlayNext() {
   await _queueLoad();
   if (!_queue?.length) {
     _queueCurrentPosition = null;
+    _queuePlayingExternalId = null;
     _refreshPlayerNavButtons();
     if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
     return false;
@@ -249,6 +256,7 @@ async function _queuePlayNext() {
   if (!next) {
     // End of queue, no repeat: clear playing mark but keep items.
     _queueCurrentPosition = null;
+    _queuePlayingExternalId = null;
     _refreshPlayerNavButtons();
     if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
     return false;
@@ -291,6 +299,7 @@ async function _queuePlayItem(entry) {
     setTimeout(() => { _queueDispatching = false; }, 0);
   }
   _queueCurrentPosition = entry.position;
+  _queuePlayingExternalId = entry.externalId ?? null;
   if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
   _refreshPlayerNavButtons();
   return true;
@@ -318,9 +327,23 @@ function _queueOnExternalPlay(itemPayload) {
   if (!itemPayload) {
     if (_queueCurrentPosition != null) {
       _queueCurrentPosition = null;
+      _queuePlayingExternalId = null;
       if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
     }
     return false;
+  }
+  // If the played item is already in the queue, don't double-insert —
+  // just mark it as the playing position. Common case: URL-based load
+  // resumes a track that's still in the user's saved queue.
+  if (Array.isArray(_queue)) {
+    const existing = _queue.find(it => String(it.externalId) === String(itemPayload.externalId));
+    if (existing) {
+      _queueCurrentPosition = existing.position;
+      _queuePlayingExternalId = String(itemPayload.externalId);
+      if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
+      _refreshPlayerNavButtons();
+      return false;
+    }
   }
   // SYNCHRONOUSLY update local state before the engine call returns
   // control: optimistically insert the new item at a synthetic position
@@ -339,6 +362,7 @@ function _queueOnExternalPlay(itemPayload) {
   const optimistic = { position: tempPos, source: itemPayload.source, externalId: itemPayload.externalId, data: itemPayload.data || {} };
   _queue = [optimistic, ...existing];
   _queueCurrentPosition = tempPos;
+  _queuePlayingExternalId = String(itemPayload.externalId);
   if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
   _refreshPlayerNavButtons();
   // Now fire the server insert in the background and reconcile our
@@ -353,9 +377,8 @@ function _queueOnExternalPlay(itemPayload) {
       if (!r.ok) return;
       _queue = null;
       await _queueLoad(true);
-      // After reconcile, the new item is at the actual head. Match by
-      // externalId in case a race re-ordered things; fall back to the
-      // first row if the lookup misses.
+      // After reconcile, find the item by externalId — race-safe
+      // even if a concurrent _queueLoad reordered the list.
       if (_queue?.length) {
         const head = _queue.find(it => String(it.externalId) === String(itemPayload.externalId)) ?? _queue[0];
         if (head) _queueCurrentPosition = head.position;
@@ -467,7 +490,12 @@ async function _renderQueueDrawer() {
   listEl.innerHTML = _queue.map(it => {
     const safeTitle  = escHtml(it.data?.title || "Untitled");
     const safeArtist = escHtml(it.data?.artist || "");
-    const isPlaying  = it.position === _queueCurrentPosition;
+    // Position-match is the primary check; externalId is a race-safe
+    // fallback for the brief window between an optimistic insert and
+    // the server reconcile (otherwise URL-based playback at boot
+    // would leave the indicator off until the POST round-trips).
+    const isPlaying  = (it.position === _queueCurrentPosition)
+      || (_queuePlayingExternalId && String(it.externalId) === _queuePlayingExternalId);
     // Source badge (small colored dot in the thumb corner) tells LOC
     // vs YT apart at a glance; the row's `now playing` mark is a
     // separate visual on top.
@@ -571,7 +599,7 @@ async function queueRemove(position) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ position }),
     });
-    if (wasPlaying) _queueCurrentPosition = null;
+    if (wasPlaying) { _queueCurrentPosition = null; _queuePlayingExternalId = null; }
     _queue = null;
     await _queueLoad(true);
     _refreshPlayerNavButtons();
@@ -601,6 +629,7 @@ async function queueClear() {
     });
     _queue = [];
     _queueCurrentPosition = null;
+    _queuePlayingExternalId = null;
     // Stop whatever's playing — clearing the queue is a "stop everything"
     // gesture. playerClose dispatches to the active engine (LOC or YT)
     // and tears the bar down; safe to call when nothing is playing.

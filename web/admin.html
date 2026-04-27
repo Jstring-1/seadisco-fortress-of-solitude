@@ -11,12 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260426at" />
+  <link rel="stylesheet" href="/style.css?v=20260426au" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260426at"></script>
+<script defer src="/utils.js?v=20260426au"></script>
+<script defer src="/shared.js?v=20260426au"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true, iconNav: true }));</script>
 
 <main>
@@ -208,9 +209,10 @@
       <!-- Theme picker -->
       <div class="admin-tab-panel" id="panel-theme" style="display:none">
         <h2 style="margin:0 0 0.5rem">Theme</h2>
-        <p style="font-size:0.82rem;color:var(--muted);margin:0 0 1rem">
-          Theme is stored in your browser (localStorage, key <code>sd-theme</code>). Switching applies instantly site-wide.
+        <p style="font-size:0.82rem;color:var(--muted);margin:0 0 0.5rem">
+          Theme is saved server-side and applies to every visitor (logged-in or anonymous, any browser). Local <code>sd-theme</code> in localStorage is just a fallback.
         </p>
+        <div id="site-theme-status" style="font-size:0.78rem;color:var(--muted);margin:0 0 1rem;font-family:ui-monospace,monospace"></div>
         <!-- View-as-user toggle: hides every admin-only affordance on
              the main site (W icons, 🏛 LOC track icons, blues + adders,
              admin-only nav surfaces) so the admin can preview the site
@@ -311,7 +313,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260426at"></script>
+<script defer src="/modal.js?v=20260426au"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -381,6 +383,26 @@ function toggleAdminAsUser(checkbox) {
   location.reload();
 }
 
+// Fetch the server's current site-wide theme and surface it in the
+// status line so admin can see exactly what's persisted (separate
+// from whatever localStorage thinks).
+async function _refreshSiteThemeStatus() {
+  const statusEl = document.getElementById("site-theme-status");
+  if (!statusEl) return;
+  try {
+    const r = await fetch("/api/site-theme", { cache: "no-store" });
+    if (!r.ok) {
+      statusEl.textContent = `Site-wide theme endpoint returned ${r.status}`;
+      return;
+    }
+    const j = await r.json();
+    const live = j?.theme || "(unset — using default)";
+    statusEl.textContent = `Sitewide: ${live}`;
+  } catch (e) {
+    statusEl.textContent = `Site-wide theme endpoint failed: ${e}`;
+  }
+}
+
 function initThemePicker() {
   // Migrate stale theme IDs (renamed/removed in earlier reorgs) to the
   // brand default so users with localStorage from before this update
@@ -424,27 +446,42 @@ function initThemePicker() {
       </div>
     `;
   }).join("");
+  // Show what the server thinks the live sitewide theme is.
+  _refreshSiteThemeStatus();
 }
 
-function applyThemeChoice(themeId) {
+async function applyThemeChoice(themeId) {
   if (!themeId || !_themes.find(t => t.id === themeId)) return;
   try { localStorage.setItem("sd-theme", themeId); } catch {}
   document.documentElement.setAttribute("data-theme", themeId);
   // Persist sitewide so every visitor (including logged-out users
   // and other browsers) sees this theme on their next page load.
-  // Fire-and-forget; the local apply above gives instant feedback.
-  apiFetch("/api/admin/site-theme", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ theme: themeId }),
-  }).then(r => {
-    if (typeof showToast === "function") {
-      if (r?.ok) showToast("Theme applied site-wide");
-      else showToast("Saved locally; site-wide save failed", "error");
+  // Awaited so admin sees a clear status — silent failures here were
+  // making "why isn't the theme propagating?" untraceable.
+  const statusEl = document.getElementById("site-theme-status");
+  if (statusEl) statusEl.textContent = "Saving site-wide…";
+  try {
+    const r = await apiFetch("/api/admin/site-theme", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ theme: themeId }),
+    });
+    if (!r.ok) {
+      const err = await r.text().catch(() => String(r.status));
+      console.warn("[admin] site theme save failed:", r.status, err);
+      if (statusEl) statusEl.textContent = `❌ Site-wide save failed (HTTP ${r.status}). Local only.`;
+      if (typeof showToast === "function") showToast(`Site-wide save failed (${r.status})`, "error");
+      return;
     }
-  }).catch(() => {
-    if (typeof showToast === "function") showToast("Saved locally; site-wide save failed", "error");
-  });
+    const j = await r.json().catch(() => ({}));
+    console.log("[admin] site theme saved:", j);
+    if (statusEl) statusEl.textContent = `✓ Sitewide: ${j.theme || themeId}`;
+    if (typeof showToast === "function") showToast("Theme applied site-wide");
+  } catch (e) {
+    console.warn("[admin] site theme save threw:", e);
+    if (statusEl) statusEl.textContent = `❌ Site-wide save errored: ${e}. Local only.`;
+    if (typeof showToast === "function") showToast(`Site-wide save errored: ${e}`, "error");
+  }
   // Re-render the preview grid so the active highlight moves
   initThemePicker();
 }
