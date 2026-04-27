@@ -962,6 +962,17 @@ window._queuePlayPrev = _queuePlayPrev;
 window._queueHasPlayable = _queueHasPlayable;
 window._queueOnExternalPlay = _queueOnExternalPlay;
 window._queueGetCurrentPosition = () => _queueCurrentPosition;
+// Stop button on the media bar uses this to "forget" what was playing
+// without clearing the queue itself. Re-renders so the now-playing
+// row indicator clears immediately, and re-runs the idle-bar logic so
+// the bar resurfaces in queue-head idle mode if items remain.
+window._queueClearPlayingMark = () => {
+  _queueCurrentPosition = null;
+  _queuePlayingExternalId = null;
+  if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
+  _refreshPlayerNavButtons();
+  setTimeout(() => { try { _queueRefreshIdleBar(); } catch {} }, 0);
+};
 window._queueGetRepeat = _queueGetRepeat;
 window._queueCycleRepeat = _queueCycleRepeat;
 window.queuePlayHead = queuePlayHead;
