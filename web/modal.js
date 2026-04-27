@@ -1462,6 +1462,14 @@ function _createYTPlayer(id) {
         else if (e.data === 0) {
           // Guard against late "ended" events from a previous video on a reused player
           if (vtoken !== _ytVideoToken) return;
+          // Don't double-fire if the tail-watch in _updateMiniProgress
+          // already fired ended for this token.
+          if (_ytEndFiredToken === _ytVideoToken) {
+            updatePlayerStatus("ended");
+            if (typeof _stopYtProgressLoop === "function") _stopYtProgressLoop();
+            return;
+          }
+          _ytEndFiredToken = _ytVideoToken;
           updatePlayerStatus("ended"); onVideoEnded();
           if (typeof _stopYtProgressLoop === "function") _stopYtProgressLoop();
         }
@@ -1729,7 +1737,24 @@ function _updateMiniProgress() {
   if (knob) knob.style.left = `${pct}%`;
   if (cur) cur.textContent = _formatProgressTime(_miniDragging ? fraction * p.duration : p.current);
   if (tot) tot.textContent = _formatProgressTime(p.duration);
+  // Fallback end detection: YouTube's onStateChange sometimes never
+  // fires state=0 (ended), so onVideoEnded never runs and the queue
+  // doesn't auto-advance. If the YT engine's currentTime has reached
+  // duration - 0.5s while a track is loaded, fire ended manually.
+  // Guarded by _ytEndFiredToken so we don't double-fire when the real
+  // event eventually does arrive.
+  if (window._currentEngine === "yt" && !_miniDragging && _ytHasPlayed
+      && p.duration > 0 && (p.duration - p.current) <= 0.5
+      && _ytEndFiredToken !== _ytVideoToken) {
+    _ytEndFiredToken = _ytVideoToken;
+    console.debug("[yt-tail] firing manual onVideoEnded", { current: p.current, duration: p.duration });
+    try { onVideoEnded(); } catch {}
+  }
 }
+// Tracks the most-recent _ytVideoToken we've manually fired ended for,
+// so the tail-watch in _updateMiniProgress can't fire twice for the
+// same track. Reset implicitly by token comparisons.
+let _ytEndFiredToken = -1;
 
 // Pointer-driven drag scrubbing. Tap = single click → instant seek.
 // Drag = update visual fraction live, fire the actual seek on pointerup
