@@ -1805,17 +1805,18 @@ window._trackQueueAdd = _trackQueueAdd;
 // _videoQueue afterward so auto-advance only runs through the
 // cross-source queue (otherwise both would advance and tracks would
 // double-up).
-function playAlbumAndQueue(triggerEl, firstUrl) {
-  if (typeof openVideo === "function") openVideo(null, firstUrl);
+// Discogs album modal: ▶ Play album. Routes through the shared
+// queueAddAlbumOrPlay so the behavior matches the archive popup —
+// already-queued albums jump in place, otherwise queueAdd at head +
+// play first. Existing queue continues after.
+async function playAlbumAndQueue(triggerEl, _firstUrl) {
   const scope = triggerEl?.closest("#album-info, #version-info, .tracklist") || document;
   const rows  = scope.querySelectorAll(".queue-add-icon[data-yt-url]");
-  if (rows.length <= 1) return;
   const items = [];
-  for (let i = 1; i < rows.length; i++) {
-    const el = rows[i];
+  rows.forEach(el => {
     const url = el.dataset.ytUrl || "";
     const id  = (typeof extractYouTubeId === "function") ? extractYouTubeId(url) : "";
-    if (!id) continue;
+    if (!id) return;
     items.push({
       source: "yt",
       externalId: id,
@@ -1826,13 +1827,13 @@ function playAlbumAndQueue(triggerEl, firstUrl) {
       },
     });
     el.classList.add("queued");
-  }
-  if (items.length && typeof queueAdd === "function") {
-    queueAdd(items, { mode: "append" });
+  });
+  if (!items.length) return;
+  if (typeof queueAddAlbumOrPlay === "function") {
+    await queueAddAlbumOrPlay(items, { mode: "play" });
     // Drop the per-album _videoQueue so the cross-source queue is the
-    // sole driver of auto-advance. Without this, playNextVideo would
-    // advance via the cross-source queue first AND THEN _videoQueue
-    // would also advance on the next "ended", duplicating tracks.
+    // sole driver of auto-advance — otherwise playNextVideo would
+    // advance via both, duplicating tracks.
     window._videoQueue = [];
     window._videoQueueIndex = 0;
   }

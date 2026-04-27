@@ -736,48 +736,42 @@ function _archiveInfoPopupHtml(d) {
 function _archiveInfoLookup(id) {
   return _archiveInfoCache.get(id);
 }
-// "▶ Play album" — queue every track at the head of the queue and
-// start playing the first one. Existing queue items remain (they
-// play after this album's tracks finish).
+// Build the queue-shaped item list for an archive item. Shared by
+// the ▶ Play and ＋ Queue handlers so dedup-by-externalId in
+// queueAddAlbumOrPlay sees consistent ids.
+function _archiveItemsForAlbum(id, d) {
+  return d.audioFiles.map(f => ({
+    source: "loc",
+    externalId: `${id}#${f.name}`,
+    data: {
+      title:      f.title || f.name.replace(/\.[^.]+$/, ""),
+      artist:     d.creator?.[0] || "Aadam Jacobs",
+      streamUrl:  f.streamUrl,
+      streamType: "mp3",
+      image:      d.coverUrl || "",
+      year:       (d.date || "").slice(0, 4),
+    },
+  }));
+}
+// "▶ Play album" — if not yet in queue, queue all tracks at head and
+// start playing the first; if already queued, jump to the first track
+// in place (no duplicate insert).
 async function _archiveInfoPlayPrimary(id) {
   const d = _archiveInfoLookup(id);
   if (!d?.audioFiles?.length) {
     if (typeof showToast === "function") showToast("This item has no playable audio", "error");
     return;
   }
-  const items = d.audioFiles.map(f => ({
-    source: "loc",
-    externalId: `${id}#${f.name}`,
-    data: {
-      title:      f.title || f.name.replace(/\.[^.]+$/, ""),
-      artist:     d.creator?.[0] || "Aadam Jacobs",
-      streamUrl:  f.streamUrl,
-      streamType: "mp3",
-      image:      d.coverUrl || "",
-      year:       (d.date || "").slice(0, 4),
-    },
-  }));
-  if (typeof queueAdd === "function") await queueAdd(items, { mode: "next" });
-  if (typeof queuePlayHead === "function") queuePlayHead();
+  const items = _archiveItemsForAlbum(id, d);
+  if (typeof queueAddAlbumOrPlay === "function") await queueAddAlbumOrPlay(items, { mode: "play" });
 }
-// "＋ Queue all tracks" — append the album to the end of the queue
-// without interrupting current playback.
-function _archiveInfoQueueAll(id) {
+// "＋ Queue all tracks" — append the album to the queue tail without
+// interrupting current playback. No-op (with toast) if already queued.
+async function _archiveInfoQueueAll(id) {
   const d = _archiveInfoLookup(id);
   if (!d?.audioFiles?.length) return;
-  const items = d.audioFiles.map(f => ({
-    source: "loc",
-    externalId: `${id}#${f.name}`,
-    data: {
-      title:      f.title || f.name.replace(/\.[^.]+$/, ""),
-      artist:     d.creator?.[0] || "Aadam Jacobs",
-      streamUrl:  f.streamUrl,
-      streamType: "mp3",
-      image:      d.coverUrl || "",
-      year:       (d.date || "").slice(0, 4),
-    },
-  }));
-  if (typeof queueAdd === "function") queueAdd(items, { mode: "append" });
+  const items = _archiveItemsForAlbum(id, d);
+  if (typeof queueAddAlbumOrPlay === "function") await queueAddAlbumOrPlay(items, { mode: "append" });
 }
 function _archiveInfoPlayFile(id, idx) {
   const d = _archiveInfoLookup(id);

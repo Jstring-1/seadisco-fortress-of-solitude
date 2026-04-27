@@ -873,8 +873,12 @@ function _locCloseInfoPopup() {
 function _locPushPopupUrlState(locIdOrNull) {
   if (typeof history?.replaceState !== "function") return;
   const qs = new URLSearchParams(location.search);
-  qs.set("v", "loc");
+  // The info popup is only opened from the LOC page, so preserve
+  // (don't force) the existing v param. If the user is here from a
+  // shared URL or already on /?v=loc, we leave it alone; if v isn't
+  // set yet, only set it when we know we're on the LOC view.
   if (locIdOrNull) qs.set("li", locIdOrNull); else qs.delete("li");
+  if (qs.get("v") === "loc" || locIdOrNull) qs.set("v", "loc");
   const next = "/?" + qs.toString();
   if (location.pathname + location.search !== next) {
     history.replaceState({}, "", next);
@@ -883,9 +887,13 @@ function _locPushPopupUrlState(locIdOrNull) {
 function _locPushPlayUrlState(locIdOrNull) {
   if (typeof history?.replaceState !== "function") return;
   const qs = new URLSearchParams(location.search);
-  qs.set("v", "loc");
+  // Audio plays globally — clicking ▶ on an archive item from /?q=foo
+  // shouldn't redirect the URL into LOC view. Only manage the lp
+  // playback id; leave the v param alone so the user's current view
+  // (search, archive, records, etc.) is preserved across plays.
   if (locIdOrNull) qs.set("lp", locIdOrNull); else qs.delete("lp");
-  const next = "/?" + qs.toString();
+  const tail = qs.toString();
+  const next = location.pathname + (tail ? "?" + tail : "");
   if (location.pathname + location.search !== next) {
     history.replaceState({}, "", next);
   }
