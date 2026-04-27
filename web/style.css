@@ -4677,15 +4677,26 @@ button.wiki-link-btn:active {
    visible card edge. The appearance API's `elements.card` style
    string is overridden by Clerk's own CSS in some builds, so we
    reinforce with !important rules targeting the actual rendered
-   classes. .cl-modalContent wraps the card; .cl-card is the inner
-   panel. Both get a clear border + shadow + rounded corners so the
-   modal stands out against the dimmed page underneath. */
-.cl-modalContent .cl-card,
+   classes. .cl-modalContent is the OUTER positioning wrapper;
+   .cl-card is the actual rendered panel the user sees. Earlier we
+   styled BOTH, which produced a double-border effect (one ring on
+   the wrapper, another on the card just inside it). Now only
+   .cl-card gets the visible chrome; the wrapper stays transparent
+   so it doesn't draw a second ring. */
 .cl-modalContent.cl-modalContent {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+.cl-modalContent .cl-card {
   border: 1px solid rgba(255, 255, 255, 0.22) !important;
   border-radius: 10px !important;
   box-shadow: 0 12px 48px rgba(0, 0, 0, 0.75) !important;
   background: var(--bg, #15120e) !important;
+  /* Clip any internal element (input rows, footer) that tries to
+     extend past the card's rounded corners — was the source of the
+     "white field bleeds outside the dark card" artifact. */
+  overflow: hidden !important;
 }
 /* Slightly brighter overlay backdrop so the dimmed page reads as
    a clear "behind the modal" surface and the modal pops forward. */
