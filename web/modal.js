@@ -1568,6 +1568,18 @@ function _setPlayerEngine(name) {
   // engine (name=null) hands control back to _queueRefreshIdleBar.
   if (name) {
     mp.classList.remove("idle-queue");
+    // Clear the idle-queue text artifacts ("ready · click ▶") and
+    // reset the playpause icon to its default ⏸ — the engine's own
+    // state handlers (LOC's _locUpdatePlayPauseBtn / YT's
+    // updatePlayerStatus) will swap in the correct icon as soon as
+    // playback state arrives.
+    const statusEl = document.getElementById("mini-player-status");
+    if (statusEl) statusEl.textContent = "";
+    const ppBtn = document.getElementById("mini-playpause");
+    if (ppBtn) {
+      ppBtn.innerHTML = "&#9208;"; // ⏸
+      ppBtn.title = "Pause";
+    }
   }
   // Source icon next to the title
   const icon = document.getElementById("mini-player-source-icon");
