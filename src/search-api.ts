@@ -4989,11 +4989,13 @@ const _MASTER_CACHE_TTL_S  = 60 * 60 * 24 * 7;     // 7 days
 const _ARTIST_CACHE_TTL_S  = 60 * 60 * 24 * 7;     // 7 days
 
 app.get("/release/:id", async (req, res) => {
-  if (!await requireUser(req, res)) return;
   const id = parseInt(req.params.id, 10);
-  // Cache HIT: serve immediately, no Discogs round-trip. Big win for
-  // shared URLs and repeat opens (popular masters/releases hit by
-  // multiple users serve from cache instead of burning rate-limit slots).
+  // Cache hit serves to ANYONE (signed-in or anon) — cached release
+  // data is already public via shared URLs, and serving the cache to
+  // logged-out visitors lets shared/popup-restore links render
+  // correctly without requiring sign-in. Cache miss still requires
+  // a signed-in user with an OAuth connection (Discogs upstream
+  // can't be hit without a token).
   const noCache = req.query.nocache === "1";
   if (!noCache) {
     const cached = await getCachedRelease(id, "release", _RELEASE_CACHE_TTL_S);
@@ -5003,6 +5005,7 @@ app.get("/release/:id", async (req, res) => {
       return;
     }
   }
+  if (!await requireUser(req, res)) return;
   const dc = await getDiscogsForRequest(req);
   if (!dc) { res.status(503).json({ error: "No Discogs OAuth connection" }); return; }
   try {
@@ -5016,9 +5019,8 @@ app.get("/release/:id", async (req, res) => {
   }
 });
 
-// GET /master/:id
+// GET /master/:id — cache hit serves to anon, miss requires sign-in.
 app.get("/master/:id", async (req, res) => {
-  if (!await requireUser(req, res)) return;
   const id = parseInt(req.params.id, 10);
   const noCache = req.query.nocache === "1";
   if (!noCache) {
@@ -5029,6 +5031,7 @@ app.get("/master/:id", async (req, res) => {
       return;
     }
   }
+  if (!await requireUser(req, res)) return;
   const dc = await getDiscogsForRequest(req);
   if (!dc) { res.status(503).json({ error: "No Discogs OAuth connection" }); return; }
   try {

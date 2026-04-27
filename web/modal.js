@@ -44,6 +44,11 @@ const _historyKey = "sd_history";
 const _HISTORY_MAX = 576;
 function _recordHistory(id, type) {
   if (!id || !type) return;
+  // Don't record history for anon users — they should always see the
+  // "Suggested" strip (admin's curated favorites), not their own
+  // browse trail. The trail accumulates in localStorage and would
+  // otherwise replace Suggested on the home page.
+  if (!window._clerk?.user) return;
   let item;
   try {
     const entry = (typeof itemCache !== "undefined" ? itemCache.get(String(id)) : null);
