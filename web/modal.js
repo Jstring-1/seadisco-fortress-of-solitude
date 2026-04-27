@@ -1025,19 +1025,14 @@ document.addEventListener("keydown", e => {
   }
 }, true);
 
-// Admin-only "+" icon — adds the given Discogs artist to the Blues DB.
-// Hidden when the artist's ID is already in window._adminBluesIds (the
-// set is preloaded in shared.js after admin auth). Returns "" for
-// non-admins or when the artist is already in the DB so it folds out
-// of the inline icon row cleanly.
-function bluesAddIcon(discogsId, name) {
-  if (!window._isAdmin) return "";
-  const id = Number(discogsId);
-  if (!Number.isFinite(id) || id <= 0) return "";
-  if (window._adminBluesIds && window._adminBluesIds.has(id)) return "";
-  const safeName = String(name || "").replace(/'/g, "\\'");
-  return `<a href="#" class="blues-add-icon" data-blues-id="${id}" onclick="event.preventDefault();_bluesAddArtist(${id},'${escHtml(safeName)}',this)" title="Add ${escHtml(name)} to Blues DB">+</a>`;
-}
+// Admin-only "+" icon — used to add Discogs artists to the Blues DB
+// inline. Disabled per admin request: blues-DB curation now happens
+// manually via the /admin Blues panel rather than from search results
+// / album popup credit lines. Kept as a no-op so the call sites
+// don't need to be deleted (and so it can be flipped back on later
+// without touching every caller). _bluesAddArtist below is also kept
+// since it's still wired to the admin panel's own add flow.
+function bluesAddIcon(_discogsId, _name) { return ""; }
 
 async function _bluesAddArtist(discogsId, name, anchor) {
   try {

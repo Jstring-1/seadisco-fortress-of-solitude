@@ -807,17 +807,11 @@ function renderCard(item, index) {
   //   • the artist isn't already in the DB (cached names lookup)
   // MUST be a <span> not <a>, because the entire card is wrapped in
   // an outer <a> and nested anchors are invalid HTML (browsers auto-
-  // close the outer one at the inner one, blowing up later cards).
+  // Inline "add to Blues DB" + button on artist cards is disabled
+  // per admin request — curation happens via /admin → Blues panel
+  // manually. The detection logic and _bluesAddArtistByName helper
+  // remain so flipping this back on later is one line.
   let bluesAddBtn = "";
-  if (window._isAdmin && artist && Array.isArray(item.genre)
-      && item.genre.some(g => String(g).toLowerCase() === "blues")) {
-    const lc = String(artist).trim().toLowerCase();
-    const inDb = window._adminBluesNames?.has?.(lc);
-    if (!inDb) {
-      const safe = artist.replace(/'/g, "\\'");
-      bluesAddBtn = `<span class="blues-add-icon card-blues-add" role="button" tabindex="0" data-blues-name="${escHtml(artist)}" onclick="event.preventDefault();event.stopPropagation();_bluesAddArtistByName('${escHtml(safe)}',this)" title="Add ${escHtml(artist)} to Blues DB">+</span> `;
-    }
-  }
   return `
     <a ${cardAttrs}${animStyle}>
       ${thumbWrap}
