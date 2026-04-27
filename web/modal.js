@@ -1560,6 +1560,15 @@ function _setPlayerEngine(name) {
   mp.classList.remove("engine-yt", "engine-loc");
   if (name === "yt")  mp.classList.add("engine-yt");
   if (name === "loc") mp.classList.add("engine-loc");
+  // Whenever an engine becomes active, drop idle-queue immediately —
+  // otherwise the progress strip stays hidden, the play button keeps
+  // routing through queuePlayHead instead of toggling actual audio,
+  // and engine-source-only buttons (LOC save/info, YT share/album)
+  // stay hidden because their show-rules don't match. Clearing the
+  // engine (name=null) hands control back to _queueRefreshIdleBar.
+  if (name) {
+    mp.classList.remove("idle-queue");
+  }
   // Source icon next to the title
   const icon = document.getElementById("mini-player-source-icon");
   if (icon) icon.textContent = name === "loc" ? "♪" : (name === "yt" ? "▶" : "");
