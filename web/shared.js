@@ -491,7 +491,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260427a";
+  const SITE_VERSION = "build 20260427b";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -765,9 +765,12 @@ function _handleLookupClick(el, ev) {
   openLookupPopup(ev, scope, label, ctx);
 }
 
-// "Search SeaDisco" handler — preserves the previous text-click behavior
-// (general SeaDisco search). Closes any open modal/popup first so the
-// user lands on the search results page cleanly.
+// "Search SeaDisco" handler — drops the user on the main search page
+// with the right field populated for the scope:
+//   track   → main query field (free-text)
+//   artist  → f-artist field, advanced panel open
+//   release → main query field
+//   label   → f-label field, advanced panel open
 function _lookupSearchSeaDisco(scope, label) {
   if (typeof closeModal === "function") { try { closeModal(); } catch {} }
   if (typeof _locCloseInfoPopup === "function") { try { _locCloseInfoPopup(); } catch {} }
@@ -775,10 +778,15 @@ function _lookupSearchSeaDisco(scope, label) {
   if (typeof switchView === "function") { try { switchView("search"); } catch {} }
   setTimeout(() => {
     if (scope === "artist") {
-      const artistEl = document.getElementById("f-artist");
-      if (artistEl) artistEl.value = label;
+      const el = document.getElementById("f-artist");
+      if (el) el.value = label;
+      if (typeof toggleAdvanced === "function") { try { toggleAdvanced(true); } catch {} }
+    } else if (scope === "label") {
+      const el = document.getElementById("f-label");
+      if (el) el.value = label;
       if (typeof toggleAdvanced === "function") { try { toggleAdvanced(true); } catch {} }
     } else {
+      // track / release / unknown — generic free-text query
       const qEl = document.getElementById("query");
       if (qEl) qEl.value = label;
     }
@@ -788,41 +796,62 @@ function _lookupSearchSeaDisco(scope, label) {
 
 // Render and position the popup. Wikipedia and LOC are now open to
 // anonymous callers (per-IP rate-limited server-side), so all buttons
-// show for everyone.
+// show for everyone. Buttons are ordered:
+//   1. In-app actions (SeaDisco / collection / Wikipedia / LOC)
+//   2. Visual separator
+//   3. External links (YouTube, Discogs.com) with a ↗ indicator
 function openLookupPopup(ev, scope, label, ctx) {
   _closeLookupPopup();
   if (!label) return;
   const trackArtist = ctx?.trackArtist || "";
 
-  // Build the YouTube search query: for tracks, include artist for
-  // disambiguation; for artists, the bare name is the right query.
+  // Build the YouTube search query — scope-aware for disambiguation.
   const ytQ = scope === "track" && trackArtist
     ? `"${trackArtist}" "${label}"`
     : `"${label}"`;
   const ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(ytQ)}`;
-  // Discogs.com fallback link — useful when the user wants the upstream
-  // record page (e.g. for label info we don't surface). Always shown
-  // because Discogs is non-admin.
-  const dcQ = scope === "artist" ? label : (trackArtist ? `${trackArtist} ${label}` : label);
+  // Discogs.com fallback link.
+  const dcQ = scope === "artist" || scope === "label"
+    ? label
+    : (trackArtist ? `${trackArtist} ${label}` : label);
   const dcUrl = `https://www.discogs.com/search?q=${encodeURIComponent(dcQ)}&type=all`;
 
-  const buttons = [];
-  buttons.push({ key: "sd",    icon: "🔎", text: "Search SeaDisco" });
-  buttons.push({ key: "coll",  icon: "⌕",  text: scope === "artist" ? "Search my collection" : "Search my records" });
-  buttons.push({ key: "yt",    icon: "▶",  text: "YouTube",  url: ytUrl });
-  buttons.push({ key: "dc",    icon: "◎",  text: "Discogs.com", url: dcUrl });
-  buttons.push({ key: "wiki",  icon: "W",  text: "Wikipedia" });
-  buttons.push({ key: "loc",   icon: "🏛", text: "Library of Congress" });
+  // In-app group — always present
+  const internal = [];
+  internal.push({ key: "sd",   icon: "🔎", text: "Search SeaDisco" });
+  internal.push({ key: "coll", icon: "⌕",  text:
+    scope === "artist" ? "Search my collection" :
+    scope === "label"  ? "Search my labels"     :
+    scope === "release" ? "Search my records"   :
+                          "Search my records" });
+  internal.push({ key: "wiki", icon: "W",  text: "Wikipedia" });
+  // LOC for tracks / artists only — release / label scopes don't map
+  // cleanly to LOC's catalog model, so we skip the option there.
+  if (scope === "track" || scope === "artist") {
+    internal.push({ key: "loc", icon: "🏛", text: "Library of Congress" });
+  }
+
+  // External group — always at the bottom with a ↗ indicator
+  const external = [
+    { key: "yt", icon: "▶", text: "YouTube",      url: ytUrl },
+    { key: "dc", icon: "◎", text: "Discogs.com",  url: dcUrl },
+  ];
+
+  // Combine for index addressing of action buttons (keeps indices
+  // stable so the click delegate can resolve any clicked button).
+  const buttons = [...internal, ...external];
 
   const wrap = document.createElement("div");
   wrap.className = "lookup-popup";
   wrap.innerHTML = `
     <div class="lookup-popup-head" title="${escHtml(label)}">${escHtml(label)}</div>
     <div class="lookup-popup-list">
-      ${buttons.map((b, i) => b.url
-        ? `<a href="${escHtml(b.url)}" target="_blank" rel="noopener" class="lookup-popup-btn" data-i="${i}"><span class="lookup-popup-icon">${b.icon}</span>${escHtml(b.text)}</a>`
-        : `<button type="button" class="lookup-popup-btn" data-i="${i}"><span class="lookup-popup-icon">${b.icon}</span>${escHtml(b.text)}</button>`
-      ).join("")}
+      ${internal.map((b, i) => `<button type="button" class="lookup-popup-btn" data-i="${i}"><span class="lookup-popup-icon">${b.icon}</span>${escHtml(b.text)}</button>`).join("")}
+      ${external.length ? `<div class="lookup-popup-sep" aria-hidden="true"></div>` : ""}
+      ${external.map((b, idx) => {
+        const i = internal.length + idx;
+        return `<a href="${escHtml(b.url)}" target="_blank" rel="noopener" class="lookup-popup-btn lookup-popup-external" data-i="${i}"><span class="lookup-popup-icon">${b.icon}</span>${escHtml(b.text)}<span class="lookup-popup-ext-indicator" aria-hidden="true">↗</span></a>`;
+      }).join("")}
     </div>
   `;
   document.body.appendChild(wrap);
@@ -856,13 +885,27 @@ function openLookupPopup(ev, scope, label, ctx) {
         if (b.key === "sd")    _lookupSearchSeaDisco(scope, label);
         else if (b.key === "coll") {
           if (typeof searchCollectionFor === "function") {
-            searchCollectionFor(scope === "artist" ? "cw-artist" : "cw-query", label);
+            const cwField =
+              scope === "artist"  ? "cw-artist"  :
+              scope === "label"   ? "cw-label"   :
+              scope === "release" ? "cw-release" :
+                                    "cw-query";
+            searchCollectionFor(cwField, label);
           }
         }
         else if (b.key === "wiki") {
-          // Quote phrase for exact-match Wikipedia search; tracks add
-          // " song" so song-itself articles outrank artist hits.
-          const q = scope === "track" ? `"${label}" song` : `"${label}"`;
+          // Quote phrase for exact-match Wikipedia search. Append a
+          // hint term so the right kind of article surfaces:
+          //   track   → "X" song
+          //   release → "X" album
+          //   label   → "X" record label
+          //   artist  → "X" (no hint — Wikipedia's own ranking handles it)
+          const hint =
+            scope === "track"   ? "song" :
+            scope === "release" ? "album" :
+            scope === "label"   ? "record label" :
+                                  "";
+          const q = hint ? `"${label}" ${hint}` : `"${label}"`;
           if (typeof openWikiPopup === "function") openWikiPopup(q);
         }
         else if (b.key === "loc") {
