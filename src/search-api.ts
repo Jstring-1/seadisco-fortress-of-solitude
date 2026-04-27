@@ -2869,35 +2869,39 @@ async function _fetchArchiveCollection(collectionId: string): Promise<ArchiveIte
     return numFound;
   };
 
-  await runQuery(`collection:${collectionId}`,    "collection");
-  await runQuery(`uploader:${collectionId}*`,     "uploader");
-  await runQuery(`addedby:${collectionId}*`,      "addedby");
-  await runQuery(`creator:${collectionId}`,       "creator");
+  // Wrap each query in try/catch so a transient network/parse failure
+  // on one field doesn't kill the whole refresh — we want partial
+  // results over none.
+  const safeQuery = async (q: string, label: string) => {
+    try { await runQuery(q, label); } catch (e: any) {
+      console.warn(`[archive] ${label} threw — skipping (${e?.message ?? e})`);
+    }
+  };
+  await safeQuery(`collection:${collectionId}`,    "collection");
+  await safeQuery(`uploader:${collectionId}*`,     "uploader");
+  await safeQuery(`addedby:${collectionId}*`,      "addedby");
+  await safeQuery(`creator:${collectionId}`,       "creator");
   console.log(`[archive] union total unique=${seen.size}`);
   const allDocs = Array.from(seen.values());
-  // Step 2: per-item metadata in parallel batches of 10. Walks the
-  // entire collection to resolve mp3 URLs for each item. Slow (one
-  // round-trip per item, 10 in parallel) but only runs once on cache
-  // miss / weekly scheduled refresh / admin manual trigger — not on
-  // user requests.
-  const PARALLEL = 10;
-  const items: ArchiveItem[] = [];
-  for (let i = 0; i < allDocs.length; i += PARALLEL) {
-    const batch = allDocs.slice(i, i + PARALLEL);
-    const metas = await Promise.all(batch.map((d: any) => _fetchArchiveMeta(d.identifier)));
-    batch.forEach((d: any, j: number) => {
-      const m = metas[j] ?? { streamUrl: "", duration: "" };
-      items.push({
-        identifier:  d.identifier,
-        title:       String(d.title ?? d.identifier),
-        date:        Array.isArray(d.date) ? d.date[0] : (d.date ?? ""),
-        description: Array.isArray(d.description) ? d.description.join(" ") : (d.description ?? ""),
-        itemUrl:     `https://archive.org/details/${encodeURIComponent(d.identifier)}`,
-        streamUrl:   m.streamUrl,
-        duration:    m.duration,
-      });
-    });
-  }
+  // Build basic item records WITHOUT per-item streamUrl. The previous
+  // version walked archive.org's /metadata/{id} for every doc to
+  // pre-resolve stream URLs — that took 5+ minutes for 2,541 items
+  // and meant the cache wasn't written until everything completed,
+  // so users saw the old cache (often empty) the whole time.
+  //
+  // Stream URLs are now resolved on demand by the existing
+  // GET /api/archive/item/:id endpoint (24h memory cache) when a
+  // user clicks ▶ or ＋ on a row. Trades one extra round trip per
+  // play for a refresh that completes in seconds instead of minutes.
+  const items: ArchiveItem[] = allDocs.map((d: any) => ({
+    identifier:  d.identifier,
+    title:       String(d.title ?? d.identifier),
+    date:        Array.isArray(d.date) ? d.date[0] : (d.date ?? ""),
+    description: Array.isArray(d.description) ? d.description.join(" ") : (d.description ?? ""),
+    itemUrl:     `https://archive.org/details/${encodeURIComponent(d.identifier)}`,
+    streamUrl:   "",  // resolved lazily by /api/archive/item/:id
+    duration:    "",
+  }));
   return items;
 }
 
@@ -2915,8 +2919,11 @@ async function _fetchArchiveCollection(collectionId: string): Promise<ArchiveIte
 //       (aadamjacobs@archive.org), bare username doesn't match
 //   v6: tried single-OR query — got mangled by URL encoding, returned 0
 //   v7: split into per-field queries with client-side dedupe; logs
-//       numFound per field so railway logs show what each contributes
-const _ARCHIVE_CACHE_SCHEMA = 7;
+//       numFound per field
+//   v8: dropped per-item metadata fetch from refresh (was making the
+//       whole refresh take 5+ minutes); streams are now lazy-resolved
+//       client-side via /api/archive/item/:id when user clicks ▶
+const _ARCHIVE_CACHE_SCHEMA = 8;
 
 async function _refreshArchiveCache(collectionId: string, cacheKey: number): Promise<{ count: number }> {
   console.log(`[archive] refreshing collection "${collectionId}" cache…`);
