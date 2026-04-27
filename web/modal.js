@@ -1608,7 +1608,7 @@ function playerTogglePause() {
   const engine = window._currentEngine;
   // Diagnostic — helps confirm which branch fires when playback
   // misbehaves. Logged at debug level so it's only in the console.
-  console.debug("[playerTogglePause]", { isIdle, engine, hasYt: !!window.ytPlayer });
+  console.debug("[playerTogglePause]", { isIdle, engine, hasYt: !!ytPlayer });
   // Idle-queue mode: bar is showing because the queue has items but
   // nothing is loaded yet. ▶ kicks off playback from the queue head.
   if (isIdle) {
@@ -1630,7 +1630,11 @@ function playerTogglePause() {
     // YT player can be null briefly if the API was still loading
     // when openVideo was first called. If we have a queue with a
     // current position, kick that off so the click isn't a no-op.
-    if (!window.ytPlayer || typeof window.ytPlayer.getPlayerState !== "function") {
+    // Note: ytPlayer is module-scoped, NOT window.ytPlayer (which is
+    // always undefined). Earlier check used window.ytPlayer and was
+    // ALWAYS falling through to queuePlayHead → loadVideoById →
+    // restart. That was the entire pause-restarts-the-track bug.
+    if (!ytPlayer || typeof ytPlayer.getPlayerState !== "function") {
       if (typeof queuePlayHead === "function") queuePlayHead();
       return;
     }
