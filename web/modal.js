@@ -203,8 +203,20 @@ function openModal(event, id, type, discogsUrl) {
   const cachedItem = (typeof itemCache !== 'undefined' ? itemCache.get(String(id)) : null) ?? { type, id };
   const endpoint = type === "master" ? "master" : "release";
   Promise.all([
-    apiFetch(`${API}/${endpoint}/${id}`).then(r => r.json()),
-    apiFetch(`${API}/marketplace-stats/${id}?type=${type}`).then(r => r.json()).catch(() => null),
+    apiFetch(`${API}/${endpoint}/${id}`).then(async r => {
+      // Anon users get 401 on cache-miss for /release|/master. Don't
+      // surface a partial-empty modal: hand back a synthesized record
+      // built from cachedItem so renderAlbumInfo has SOMETHING to
+      // render (cover, title, artist, year, format), plus a
+      // _signInForMore flag so the modal can show a CTA instead of
+      // letting fields silently fall to empty strings.
+      if (!r.ok) {
+        const reason = r.status === 401 ? "auth" : "error";
+        return { _signInForMore: reason, _httpStatus: r.status, ...cachedItem };
+      }
+      return r.json();
+    }),
+    apiFetch(`${API}/marketplace-stats/${id}?type=${type}`).then(r => r.ok ? r.json() : null).catch(() => null),
   ])
     .then(([d, stats]) => {
       document.getElementById("modal-loading").style.display = "none";
@@ -2404,6 +2416,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
              : `<div class="album-cover-placeholder">♪</div>`}
       <div class="album-meta">
         ${typeLabel ? `<div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.3rem"><div class="album-type-badge" style="cursor:pointer;user-select:none" onclick="navigator.clipboard.writeText('${escHtml(String(releaseId))}');this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy ID">${escHtml(typeLabel)}</div><button class="popup-share-inline" onclick="sharePopup(this)" title="Copy share link">share</button></div>` : ""}
+        ${d._signInForMore ? `<div style="font-size:0.75rem;color:var(--muted);background:rgba(255,255,255,0.04);border-left:2px solid var(--accent);padding:0.4rem 0.6rem;border-radius:4px;margin-bottom:0.5rem">Sign in to load full release details (tracklist, credits, marketplace).</div>` : ""}
         <h2>${entityLookupLinkHtml("release", title, { className: "modal-title-link", title: `Lookup options for "${title}"` })}</h2>
         ${artistEntries.length ? `<div class="album-artist">${artistEntries.map(({ id: aId, name: n }) => `${entityLookupLinkHtml("artist", n, { className: "modal-artist-link", title: `Lookup options for ${n}` })}${bluesAddIcon(aId, n)}`).join(", ")}</div>` : ""}
         ${detailRows ? `<div class="album-detail-grid">${detailRows}</div>` : ""}
