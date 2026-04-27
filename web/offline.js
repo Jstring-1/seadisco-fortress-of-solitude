@@ -348,11 +348,13 @@
     const out = {
       enabled: isEnabled(),
       records: 0,
-      libraryBytes: 0,
-      cacheBytes: 0,
-      totalBytes: 0,
+      libraryBytes: 0,    // IDB JSON for the user's library endpoints
+      shellBytes: 0,      // Cache API: HTML/JS/CSS app shell
+      apiCacheBytes: 0,   // Cache API: SW's API response cache
+      imageBytes: 0,      // Cache API: cover images
+      totalBytes: 0,      // Sum of the above (deterministic, our caches only)
+      quotaBytes: null,   // Browser quota ceiling
       lastSyncAt: null,
-      quotaBytes: null,
     };
     if (window.sdIdb) {
       try {
@@ -362,15 +364,42 @@
       } catch {}
       try { out.lastSyncAt = await window.sdIdb.metaGet("lastSyncAt"); } catch {}
     }
-    // Cache API + total estimate via storage.estimate() — gives us
-    // image cache size implicitly (everything else our SW caches is
-    // tiny).
+    // Sum bytes from each of OUR named caches. navigator.storage.estimate()
+    // reports the whole origin (Clerk, GA, browser bookkeeping, etc.) and
+    // drifts by hundreds of KB across calls — confusing on a status line
+    // that's supposed to reflect "what offline mode is using." We measure
+    // exactly the sd-* caches plus the IDB library, and only that.
+    if (typeof caches !== "undefined") {
+      try {
+        const cacheNames = (await caches.keys()).filter(k => k.startsWith("sd-"));
+        const sizes = await Promise.all(cacheNames.map(async (name) => {
+          let bytes = 0;
+          try {
+            const cache = await caches.open(name);
+            const reqs = await cache.keys();
+            for (const req of reqs) {
+              try {
+                const r = await cache.match(req);
+                if (!r) continue;
+                const blob = await r.blob();
+                bytes += blob.size;
+              } catch {}
+            }
+          } catch {}
+          return { name, bytes };
+        }));
+        for (const { name, bytes } of sizes) {
+          if (name.startsWith("sd-shell-")) out.shellBytes += bytes;
+          else if (name.startsWith("sd-api-")) out.apiCacheBytes += bytes;
+          else if (name.startsWith("sd-img-")) out.imageBytes += bytes;
+        }
+      } catch {}
+    }
+    out.totalBytes = out.libraryBytes + out.shellBytes + out.apiCacheBytes + out.imageBytes;
     if (navigator.storage?.estimate) {
       try {
         const est = await navigator.storage.estimate();
-        out.totalBytes = est.usage || 0;
         out.quotaBytes = est.quota || null;
-        out.cacheBytes = Math.max(0, (est.usage || 0) - out.libraryBytes);
       } catch {}
     }
     return out;

@@ -416,12 +416,22 @@ async function renderOfflineSection() {
   const installed = window.sdOffline.isInstalled();
   const canInstall = window.sdOffline.canInstall();
 
-  // The "records" number was confusing — it counted IDB rows (one per
-  // cached endpoint, ~10), not actual albums. Show MB used and the
-  // list of what's been synced instead.
-  const sizeBlurb = enabled
-    ? `Storage: ${_fmtBytes(stats.totalBytes || stats.libraryBytes)} (${stats.records} cached library file${stats.records === 1 ? "" : "s"})`
-    : `Currently off — your library is fetched live each visit.`;
+  // Show only what offline mode actually uses, broken down so the
+  // user knows what's growing. Prior version used navigator.storage
+  // .estimate() which reports the whole origin's quota — drifted by
+  // hundreds of KB on every sync, made the line look like things
+  // were leaking.
+  let sizeBlurb;
+  if (!enabled) {
+    sizeBlurb = "Currently off — your library is fetched live each visit.";
+  } else {
+    const parts = [];
+    parts.push(`Library ${_fmtBytes(stats.libraryBytes)}`);
+    if (stats.imageBytes)    parts.push(`images ${_fmtBytes(stats.imageBytes)}`);
+    if (stats.shellBytes)    parts.push(`app ${_fmtBytes(stats.shellBytes)}`);
+    if (stats.apiCacheBytes) parts.push(`api ${_fmtBytes(stats.apiCacheBytes)}`);
+    sizeBlurb = `${parts.join(" · ")}  (total ${_fmtBytes(stats.totalBytes)})`;
+  }
   const lastSync = enabled
     ? `Last synced ${_fmtAgo(stats.lastSyncAt)}`
     : "";
