@@ -461,7 +461,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260426x";
+  const SITE_VERSION = "build 20260426y";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -505,11 +505,29 @@ function renderSharedHeader(opts) {
 }
 
 // ── Shared footer injection ──────────────────────────────────────────────
+// Build a /?v=… href that preserves the user's current query params so a
+// click on (say) "Wikipedia" while a search query is on the URL keeps
+// the q=… intact. Drops view-local transient params that don't make
+// sense in the new view (kept in sync with VIEW_LOCAL_PARAMS in
+// switchView).
+function _seaDiscoBuildViewHref(view) {
+  let qs;
+  try { qs = new URLSearchParams(location.search); } catch { qs = new URLSearchParams(); }
+  ["tab", "li", "lp", "nocache"].forEach(k => qs.delete(k));
+  if (view === "search") {
+    qs.delete("v");
+    const tail = qs.toString();
+    return tail ? `/?${tail}` : "/";
+  }
+  qs.set("v", view);
+  return `/?${qs.toString()}`;
+}
+
 function renderSharedFooter(opts) {
   const isSPA = opts?.spa;
   const link = (label, view) => {
-    if (isSPA) return `<a href="javascript:void(0)" onclick="switchView('${view}')">${label}</a>`;
-    const href = view === "search" ? "/" : `/?v=${view}`;
+    const href = _seaDiscoBuildViewHref(view);
+    if (isSPA) return `<a href="${href}" onclick="event.preventDefault();switchView('${view}');return false">${label}</a>`;
     return `<a href="${href}">${label}</a>`;
   };
 
@@ -518,10 +536,11 @@ function renderSharedFooter(opts) {
   // When signed out, mirror the navbar record-tab behavior: pop the in-page
   // sign-in modal instead of trying to load a records view that requires auth.
   const recLink = (label, tab) => {
+    const href = _seaDiscoBuildViewHref(tab);
     if (isSPA) {
-      return `<a href="/?v=${tab}" onclick="event.preventDefault();if(!window._clerk?.user){openSignInModal();return false}_cwTab='${tab}';switchView('records');return false">${label}</a>`;
+      return `<a href="${href}" onclick="event.preventDefault();if(!window._clerk?.user){openSignInModal();return false}_cwTab='${tab}';switchView('records');return false">${label}</a>`;
     }
-    return `<a href="/?v=${tab}">${label}</a>`;
+    return `<a href="${href}">${label}</a>`;
   };
 
   const footer = document.querySelector("footer");
@@ -540,20 +559,14 @@ function renderSharedFooter(opts) {
       <div class="footer-col">
         <h4>SeaDisco</h4>
         ${isSPA
-          ? `<a href="/?v=account" onclick="event.preventDefault();openSignInModal();return false;">Account</a>`
-          : `<a href="/?v=account">Account</a>`}
+          ? `<a href="${_seaDiscoBuildViewHref("account")}" onclick="event.preventDefault();openSignInModal();return false;">Account</a>`
+          : `<a href="${_seaDiscoBuildViewHref("account")}">Account</a>`}
         ${link("Info", "info")}
         ${link("Privacy Policy", "privacy")}
         ${link("Terms of Service", "terms")}
-        ${isSPA
-          ? `<a id="footer-loc-link" href="javascript:void(0)" onclick="switchView('loc')">LOC</a>`
-          : `<a id="footer-loc-link" href="/?v=loc">LOC</a>`}
-        ${isSPA
-          ? `<a id="footer-wiki-link" href="javascript:void(0)" onclick="switchView('wiki')">Wikipedia</a>`
-          : `<a id="footer-wiki-link" href="/?v=wiki">Wikipedia</a>`}
-        ${isSPA
-          ? `<a id="footer-archive-link" href="javascript:void(0)" onclick="switchView('archive')">Archive</a>`
-          : `<a id="footer-archive-link" href="/?v=archive">Archive</a>`}
+        ${link("LOC",       "loc")}
+        ${link("Wikipedia", "wiki")}
+        ${link("Archive",   "archive")}
         <a id="footer-admin-link" href="/admin" style="display:none">Admin</a>
       </div>
     </div>
