@@ -7920,6 +7920,52 @@ a:focus-visible {
   transform: translateY(-1px);
 }
 
+/* ── YouTube popup overlay (small modal launched from album / version
+   popups so users don't lose context). Layered above the modal-overlay
+   z-index so it sits on top of any open Discogs popup. */
+#youtube-popup-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: rgba(0, 0, 0, 0.65);
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+#youtube-popup-overlay.open { display: flex; }
+#youtube-popup-box {
+  position: relative;
+  width: min(720px, calc(100vw - 2rem));
+  max-height: calc(100vh - 3rem);
+  background: var(--bg-elev, var(--bg, #15120e));
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 8px;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.7);
+  padding: 1rem;
+  overflow-y: auto;
+}
+.youtube-popup-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-right: 2rem; /* leave room for the × close button */
+}
+#youtube-popup-overlay .loc-info-close {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.5rem;
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 1.4rem;
+  cursor: pointer;
+  line-height: 1;
+}
+#youtube-popup-overlay .loc-info-close:hover { color: var(--text); }
+#youtube-popup-fullpage:hover { color: var(--accent) !important; }
+
 /* ── YouTube view list ────────────────────────────────────────────────
    Each result is a flex row: thumbnail · title/channel/desc · actions.
    Reuses .archive-row / .archive-btn rules where possible so the
