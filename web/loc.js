@@ -818,19 +818,19 @@ async function _locOpenInfoPopup(locId) {
   // gets its own clickable link + magnifiers (same pattern as the
   // album-credits in the main search modal).
   const titleRaw = item.title || "Untitled";
-  const titleJs  = esc(titleRaw).replace(/'/g, "\\'");
-  const titleEl  = `
+  // Title and contributor links now route through the unified lookup
+  // popup (SeaDisco / collection / YouTube / Wikipedia / LOC) instead
+  // of having three separate inline ⌕ magnifiers per row. Removes a
+  // lot of horizontal noise from the LOC info popup.
+  const primaryArtist = contributors[0] || "";
+  const titleEl = `
     <div class="loc-info-title">
-      <a href="#" class="loc-title-link" onclick="event.preventDefault();_locSearchByKeyword('${titleJs}')" title="Search LOC for this title">${esc(titleRaw)}</a>
-      <a href="#" class="album-title-search loc-credit-discogs" onclick="event.preventDefault();_locSearchDiscogsByName('${titleJs}')" title="Search Discogs for this title">⌕</a>
-      <a href="#" class="album-title-search loc-credit-collection" onclick="event.preventDefault();_locSearchCollectionByName('${titleJs}')" title="Search your collection for this title">⌕</a>
+      ${entityLookupLinkHtml("track", titleRaw, { className: "loc-title-link", trackArtist: primaryArtist, title: `Lookup options for "${titleRaw}"` })}
     </div>`;
   const artistEl = contributors.length
-    ? `<div class="loc-info-artist">${contributors.map(c => {
-        const n = esc(c);
-        const jsN = n.replace(/'/g, "\\'");
-        return `<a href="#" class="credit-name loc-credit-name" onclick="event.preventDefault();_locSearchByName('${jsN}')" title="Search LOC for ${n}">${n}</a><a href="#" class="album-title-search loc-credit-discogs" onclick="event.preventDefault();_locSearchDiscogsByName('${jsN}')" title="Search Discogs for ${n}">⌕</a><a href="#" class="album-title-search loc-credit-collection" onclick="event.preventDefault();_locSearchCollectionByName('${jsN}')" title="Search your collection for ${n}">⌕</a>`;
-      }).join('<span class="credit-sep"> · </span>')}</div>`
+    ? `<div class="loc-info-artist">${contributors.map(c =>
+        entityLookupLinkHtml("artist", c, { className: "credit-name loc-credit-name", title: `Lookup options for ${c}` })
+      ).join('<span class="credit-sep"> · </span>')}</div>`
     : "";
 
   body.innerHTML = `
@@ -984,10 +984,18 @@ function _locPlayQueueCurrent() {
 }
 
 function _locPlayNextInQueue() {
-  if (!_locQueue) return;
-  if (_locQueue.index + 1 >= _locQueue.items.length) return;
-  _locQueue.index++;
-  _locPlayQueueCurrent();
+  // If we're in a multi-track LOC item with more tracks left, advance
+  // within it. Otherwise (single-track item, or at the end of a multi-
+  // track item) fall through to the cross-source queue so the Next
+  // button can hand off to a queued YouTube or LOC item.
+  if (_locQueue && _locQueue.index + 1 < _locQueue.items.length) {
+    _locQueue.index++;
+    _locPlayQueueCurrent();
+    return;
+  }
+  if (typeof _queuePlayNext === "function") {
+    Promise.resolve(_queuePlayNext()).catch(() => {});
+  }
 }
 
 function _locPlayPrevInQueue() {
@@ -1540,6 +1548,16 @@ function _locToggleExpand() {
 // internal multi-track LOC queue (for albums with multiple tracks
 // inside a single LOC item).
 async function _locOnTrackEnded() {
+  // Cross-source repeat-one: replay current LOC track without consuming
+  // anything from the queue. Honored before queue handoff so the user
+  // who toggled "repeat one" never falls through to the next item.
+  if (typeof window._queueGetRepeat === "function" && window._queueGetRepeat() === "one") {
+    const audio = document.getElementById("loc-audio");
+    if (audio && audio.src) {
+      try { audio.currentTime = 0; await audio.play(); } catch {}
+      return;
+    }
+  }
   if (typeof _queuePlayNext === "function") {
     const handled = await _queuePlayNext();
     if (handled) return;
