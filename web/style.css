@@ -1548,6 +1548,9 @@ body {
 /* Record tabs — disabled state + per-tab hover/active colors */
 .nav-tab-top.nav-rec-disabled { color: #555; cursor: pointer; }
 .nav-tab-top.nav-rec-disabled:hover { color: var(--accent); }
+/* Hide Inventory / Lists tabs entirely when the user has zero of them.
+   Set by _updateEmptyRecordTabs() once /api/user/discogs-ids resolves. */
+.nav-tab-top.nav-rec-empty { display: none !important; }
 .nav-tab-top[data-rtab="collection"]:hover,
 .nav-tab-top[data-rtab="collection"].active  { color: #6ddf70; }
 .nav-tab-top[data-rtab="wantlist"]:hover,

@@ -1699,6 +1699,22 @@ async function triggerSync(type = "both") {
 // Used by modal-from-URL to wait for badge data before rendering.
 window._discogsIdsReady = new Promise(r => { window._resolveDiscogsIds = r; });
 
+// Hide nav tabs for record types the user has zero of. Inventory and
+// Lists are the only two that hide — Collection / Wantlist / Favorites
+// are universal CTAs even when empty (the empty-state encourages adding
+// the first item). Inventory only matters to sellers; Lists only
+// matter to users who curate them on Discogs.
+function _updateEmptyRecordTabs() {
+  const invCount  = (window._inventoryIds?.size) ?? 0;
+  const listCount = window._listMembership ? Object.keys(window._listMembership).length : 0;
+  document.querySelectorAll('.nav-tab-top[data-rtab="inventory"]').forEach(el => {
+    el.classList.toggle("nav-rec-empty", invCount === 0);
+  });
+  document.querySelectorAll('.nav-tab-top[data-rtab="lists"]').forEach(el => {
+    el.classList.toggle("nav-rec-empty", listCount === 0);
+  });
+}
+
 async function loadDiscogsIds() {
   try {
     const r = await apiFetch("/api/user/discogs-ids");
@@ -1715,6 +1731,7 @@ async function loadDiscogsIds() {
       window._wantlistMasterCounts   = data.wantlistMasterCounts   ?? {};   // { masterId: distinctReleaseCount }
       window._defaultAddFolderId = Number(data.defaultAddFolderId) || 1;
       window._userCurrency = data.currency || "USD";
+      try { _updateEmptyRecordTabs(); } catch { /* ignore */ }
       const cb = document.getElementById("hide-owned");
       const lbl = document.getElementById("hide-owned-label");
       if (cb && cb.disabled) {
