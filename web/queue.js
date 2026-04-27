@@ -252,12 +252,22 @@ async function _queuePlayNext() {
     if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
     return false;
   }
-  const currentIdx = _queueCurrentPosition != null
+  // Position-first lookup is the normal path; externalId fallback
+  // catches the race where the optimistic-insert reconcile lagged
+  // and _queueCurrentPosition still holds the synthetic fractional
+  // value while _queue has the real server position. Without this
+  // fallback findIndex returns -1 and the `currentIdx < 0 ? _queue[0]`
+  // path replays the head — which is exactly the just-finished track
+  // — instead of advancing.
+  let currentIdx = _queueCurrentPosition != null
     ? _queue.findIndex(it => it.position === _queueCurrentPosition)
     : -1;
+  if (currentIdx < 0 && _queuePlayingExternalId != null) {
+    currentIdx = _queue.findIndex(it => String(it.externalId) === String(_queuePlayingExternalId));
+  }
   let next = currentIdx >= 0 && currentIdx + 1 < _queue.length
     ? _queue[currentIdx + 1]
-    : (currentIdx < 0 ? _queue[0] : null);
+    : null;
   // Repeat-all: wrap to the first item.
   if (!next && _queueRepeat === "all" && _queue.length) {
     next = _queue[0];
@@ -494,7 +504,7 @@ function _ensureQueueDrawer() {
       <span class="queue-drawer-count" id="queue-drawer-count"></span>
       <button type="button" class="queue-drawer-repeat repeat-off" onclick="_queueCycleRepeat()" title="Repeat: off (click to cycle)">→</button>
       <button type="button" class="queue-drawer-clear" onclick="queueClear()" title="Clear queue">Clear</button>
-      <button type="button" class="queue-drawer-close" onclick="queueToggleDrawer()" title="Close">×</button>
+      <button type="button" class="queue-drawer-close" onclick="queueToggleDrawer()" title="Close">&#9660;</button>
     </div>
     <div class="queue-drawer-list" id="queue-drawer-list"></div>
   `;
@@ -689,6 +699,9 @@ async function queueClear() {
     if (typeof playerClose === "function") {
       try { playerClose(); } catch {}
     }
+    // Collapse the drawer — there's nothing left to manage and the
+    // empty-state placeholder isn't useful enough to keep it open.
+    if (_queueDrawerEl) _queueDrawerEl.classList.remove("open");
     _renderQueueDrawer();
   } catch {
     if (typeof showToast === "function") showToast("Could not clear queue", "error");

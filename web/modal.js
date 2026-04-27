@@ -1874,7 +1874,10 @@ function _trackQueueAdd(el) {
     albumTitle:  el.dataset.album   || "",
   };
   if (typeof queueAddYt === "function") {
-    queueAddYt(videoId, meta);
+    // ＋ button = add to the tail of the queue. The "play now"
+    // affordance is the ▶ button, which goes through openVideo and
+    // inserts at head via queueAddAlbumOrPlay's "play" mode.
+    queueAddYt(videoId, meta, { mode: "append" });
     el.classList.add("queued");
     el.title = "Already added — click queue button to view";
   }
@@ -2104,9 +2107,21 @@ function toggleVideoPause() {
   if (!ytPlayer || typeof ytPlayer.getPlayerState !== "function") return;
   let state = -1;
   try { state = ytPlayer.getPlayerState(); } catch {}
+  console.debug("[toggleVideoPause]", { state });
+  // YT.PlayerState: -1=unstarted, 0=ended, 1=playing, 2=paused,
+  // 3=buffering, 5=cued. Calling playVideo() from -1/0/5 starts the
+  // video from frame zero — that's the "pause click restarts the
+  // track" symptom. Only flip play↔pause when the player is in an
+  // actively-running or actively-paused state; in the ambiguous
+  // states we treat the click as a pause attempt (safer no-op
+  // than a surprise restart).
   try {
-    if (state === 1) ytPlayer.pauseVideo();
-    else ytPlayer.playVideo();
+    if (state === 1 || state === 3) {
+      ytPlayer.pauseVideo();
+    } else if (state === 2) {
+      ytPlayer.playVideo();
+    }
+    // else: -1 / 0 / 5 — leave the player alone.
   } catch {}
 }
 

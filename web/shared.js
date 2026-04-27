@@ -491,7 +491,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260427.0858";
+  const SITE_VERSION = "build 20260427.0911";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -842,13 +842,17 @@ function openLookupPopup(ev, scope, label, ctx) {
   // scope-appropriate search options.
   const internal = [];
   internal.push({ key: "copy", icon: "⎘", text: "Copy to clipboard" });
-  internal.push({ key: "sd",   icon: "🔎", text: "Search SeaDisco" });
+  // SeaDisco / collection use the same line-art SVGs as the navbar so
+  // the popup feels like an extension of the nav. Wrapped in a span
+  // tagged `lookup-popup-icon-svg` so CSS forces white stroke (the
+  // navbar tints them per-tab; here we want a plain white icon).
+  internal.push({ key: "sd",   icon: `<span class="lookup-popup-icon-svg">${_SD_NAV_ICONS.search || "🔎"}</span>`, text: "Search SeaDisco" });
   // "Search my collection" only for scopes that can actually be saved
   // to a Discogs collection (releases only — labels and tracks can't
   // be saved as entities, just searched against). Labels are dropped
   // entirely per request; track/release/artist still get the option.
   if (scope !== "label" && scope !== "catno") {
-    internal.push({ key: "coll", icon: "⌕", text:
+    internal.push({ key: "coll", icon: `<span class="lookup-popup-icon-svg">${_SD_NAV_ICONS.collection || "⌕"}</span>`, text:
       scope === "artist"  ? "Search my collection" :
                             "Search my records" });
   }

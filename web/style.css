@@ -8064,6 +8064,21 @@ a:focus-visible {
   color: var(--accent);
   overflow: hidden;
 }
+/* SVG icon variant — used by the SeaDisco search / Collection rows so
+   they reuse the navbar's vinyl line-art set. Forced white (the nav
+   tints them per-tab, here we want a plain monochrome icon) and
+   sized to fill the icon column. */
+.lookup-popup-icon .lookup-popup-icon-svg {
+  display: inline-flex;
+  width: 1.05rem;
+  height: 1.05rem;
+  color: #fff;
+}
+.lookup-popup-icon .lookup-popup-icon-svg svg {
+  width: 100%;
+  height: 100%;
+  stroke: #fff;
+}
 /* Visual separator between in-app actions and external links. */
 .lookup-popup-sep {
   height: 1px;
