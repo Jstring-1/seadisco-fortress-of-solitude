@@ -318,7 +318,12 @@ function _archiveRowHtml(it, i, opts = {}) {
   const safeDate  = escHtml(it.date || "");
   const safeDesc  = escHtml(String(it.description || "").slice(0, 280));
   const safeId    = escHtml(it.identifier);
-  const playable  = !!it.streamUrl;
+  // Cache no longer pre-resolves stream URLs (refresh used to take
+  // 5+ min walking per-item metadata). We optimistically render Play /
+  // Queue buttons enabled for every row; the click handler resolves
+  // the stream on demand via /api/archive/item/:id and shows a toast
+  // if the item turns out to have no audio.
+  const playable  = true;
   const isSaved   = !!_archiveSavedIds?.has(it.identifier);
   const saveBtn = `<button type="button" class="archive-btn archive-save-btn${isSaved ? " is-saved" : ""}" onclick="archiveToggleSave(this)" title="${isSaved ? "Remove from Saved" : "Save to your list"}">${isSaved ? "★" : "☆"}</button>`;
   // Saved-view rows get distinct play/queue handlers that source from
@@ -456,16 +461,45 @@ function _archiveItemToLoc(it) {
   };
 }
 
-function archivePlayItem(idx) {
-  const it = _archiveList?.[idx];
-  if (!it?.streamUrl) return;
-  if (typeof _locPlay === "function") _locPlay(_archiveItemToLoc(it));
+// Resolve an archive item's primary stream URL on demand. The
+// collection-list cache stores items WITHOUT stream URLs (resolving
+// them all at refresh time was too slow); we look the URL up via
+// /api/archive/item/:id which has its own 24h memory cache. Mutates
+// the item in-place so subsequent plays don't re-fetch.
+async function _archiveResolveStream(it) {
+  if (!it?.identifier) return null;
+  if (it.streamUrl) return it;
+  try {
+    const r = await apiFetch(`/api/archive/item/${encodeURIComponent(it.identifier)}`);
+    if (!r.ok) return null;
+    const j = await r.json();
+    if (!j?.primaryStreamUrl) return null;
+    it.streamUrl = j.primaryStreamUrl;
+    it.duration  = j.audioFiles?.[0]?.length || "";
+    return it;
+  } catch { return null; }
 }
 
-function archiveQueueItem(idx) {
+async function archivePlayItem(idx) {
   const it = _archiveList?.[idx];
-  if (!it?.streamUrl) return;
-  if (typeof queueAddLoc === "function") queueAddLoc(_archiveItemToLoc(it));
+  if (!it) return;
+  const resolved = await _archiveResolveStream(it);
+  if (!resolved?.streamUrl) {
+    if (typeof showToast === "function") showToast("This item has no playable stream", "error");
+    return;
+  }
+  if (typeof _locPlay === "function") _locPlay(_archiveItemToLoc(resolved));
+}
+
+async function archiveQueueItem(idx) {
+  const it = _archiveList?.[idx];
+  if (!it) return;
+  const resolved = await _archiveResolveStream(it);
+  if (!resolved?.streamUrl) {
+    if (typeof showToast === "function") showToast("This item has no playable stream", "error");
+    return;
+  }
+  if (typeof queueAddLoc === "function") queueAddLoc(_archiveItemToLoc(resolved));
 }
 
 // Saved-row variants — the row knows its own data via data-* attrs
@@ -482,18 +516,28 @@ function _archiveItemFromRow(rowEl) {
   };
 }
 
-function archivePlaySavedFromRow(btn) {
+async function archivePlaySavedFromRow(btn) {
   const row = btn?.closest(".archive-row");
   const it = _archiveItemFromRow(row);
-  if (!it?.streamUrl) return;
-  if (typeof _locPlay === "function") _locPlay(_archiveItemToLoc(it));
+  if (!it) return;
+  const resolved = await _archiveResolveStream(it);
+  if (!resolved?.streamUrl) {
+    if (typeof showToast === "function") showToast("This item has no playable stream", "error");
+    return;
+  }
+  if (typeof _locPlay === "function") _locPlay(_archiveItemToLoc(resolved));
 }
 
-function archiveQueueSavedFromRow(btn) {
+async function archiveQueueSavedFromRow(btn) {
   const row = btn?.closest(".archive-row");
   const it = _archiveItemFromRow(row);
-  if (!it?.streamUrl) return;
-  if (typeof queueAddLoc === "function") queueAddLoc(_archiveItemToLoc(it));
+  if (!it) return;
+  const resolved = await _archiveResolveStream(it);
+  if (!resolved?.streamUrl) {
+    if (typeof showToast === "function") showToast("This item has no playable stream", "error");
+    return;
+  }
+  if (typeof queueAddLoc === "function") queueAddLoc(_archiveItemToLoc(resolved));
 }
 
 // ── Archive item info popup ──────────────────────────────────────────
