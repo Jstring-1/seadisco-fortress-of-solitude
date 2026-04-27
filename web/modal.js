@@ -1514,14 +1514,29 @@ function _createYTPlayer(id) {
           if (typeof _startYtProgressLoop === "function") _startYtProgressLoop();
           // If no track meta (e.g. loaded from URL param), grab title from YT player
           const meta = (window._videoQueueMeta ?? [])[window._videoQueueIndex ?? 0];
+          let msTitle = meta?.track || "";
+          let msAlbum = meta?.album || "";
+          let msArtist = meta?.artist || "";
           if (!meta || (!meta.track && !meta.album && !meta.artist)) {
             try {
               const vd = ytPlayer.getVideoData?.();
               if (vd?.title) {
                 const titleEl = document.getElementById("mini-player-title");
                 if (titleEl) titleEl.innerHTML = `<span class="vt-track">${escHtml(vd.title)}</span>`;
+                if (!msTitle) msTitle = vd.title;
+                if (!msArtist) msArtist = vd.author || "";
               }
             } catch {}
+          }
+          // Push to the OS media session so the lock-screen / Bluetooth
+          // controls show track info + cover art.
+          if (typeof _mediaSessionUpdate === "function") {
+            _mediaSessionUpdate({
+              title:  msTitle || "YouTube",
+              artist: msArtist,
+              album:  msAlbum,
+              artwork: id ? `https://i.ytimg.com/vi/${encodeURIComponent(id)}/hqdefault.jpg` : "",
+            });
           }
         }
         else if (e.data === 2) {
@@ -1817,6 +1832,12 @@ function _updateMiniProgress() {
   if (knob) knob.style.left = `${pct}%`;
   if (cur) cur.textContent = _formatProgressTime(_miniDragging ? fraction * p.duration : p.current);
   if (tot) tot.textContent = _formatProgressTime(p.duration);
+  // Mirror position to the OS media session so the lock-screen
+  // scrubber stays in sync with playback. Throttled implicitly by
+  // the existing 500 ms YT poll / LOC timeupdate cadence.
+  if (typeof _mediaSessionUpdatePosition === "function") {
+    _mediaSessionUpdatePosition();
+  }
   // Fallback end detection: YouTube's onStateChange sometimes never
   // fires state=0 (ended), so onVideoEnded never runs and the queue
   // doesn't auto-advance. If the YT engine's currentTime has reached
@@ -2328,7 +2349,105 @@ function syncPlayPauseBtn(state) {
   const isPlaying = state === "playing" || state === "buffering";
   btn.textContent = isPlaying ? "\u23F8" : "\u25B6";
   btn.title = isPlaying ? "Pause" : "Play";
+  // Mirror the play/pause state to the OS media session so the
+  // lock-screen / notification / Bluetooth-headset controls show
+  // the right icon and fire the right action when tapped.
+  if ("mediaSession" in navigator) {
+    try {
+      navigator.mediaSession.playbackState =
+        state === "playing"   ? "playing"
+      : state === "buffering" ? "playing"
+      : state === "paused"    ? "paused"
+      :                         "none";
+    } catch {}
+  }
 }
+
+// ── Media Session ──────────────────────────────────────────────────────
+// Hooks the OS-level media controls (Android lock-screen / notification,
+// macOS Now Playing, Bluetooth-headset prev/play/next, in-car infotainment).
+// Only fires for browsers that implement the API; degrades silently
+// elsewhere. Called from both engines whenever a track changes:
+//   - YT engine: on state=1 in onStateChange (_createYTPlayer)
+//   - LOC engine: on _locPlay start (loc.js)
+// Action handlers route to the existing playerTogglePause / playerPrev /
+// playerNext / playerStop entry points so the OS controls hit the same
+// code paths as the in-page buttons.
+function _mediaSessionUpdate(meta) {
+  if (!("mediaSession" in navigator)) return;
+  try {
+    const title  = meta?.title  || "Unknown track";
+    const artist = meta?.artist || "";
+    const album  = meta?.album  || "";
+    const art    = meta?.artwork
+      ? [
+          { src: meta.artwork, sizes: "96x96",   type: "image/jpeg" },
+          { src: meta.artwork, sizes: "192x192", type: "image/jpeg" },
+          { src: meta.artwork, sizes: "256x256", type: "image/jpeg" },
+          { src: meta.artwork, sizes: "384x384", type: "image/jpeg" },
+          { src: meta.artwork, sizes: "512x512", type: "image/jpeg" },
+        ]
+      : [];
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title, artist, album, artwork: art,
+    });
+  } catch (e) {
+    console.warn("[mediaSession] metadata set failed:", e);
+  }
+}
+function _mediaSessionBindActions() {
+  if (!("mediaSession" in navigator)) return;
+  if (window._sdMediaSessionBound) return;
+  window._sdMediaSessionBound = true;
+  const safe = (fn) => { try { fn?.(); } catch (e) { console.warn("[mediaSession]", e); } };
+  try {
+    navigator.mediaSession.setActionHandler("play",           () => safe(window.playerTogglePause));
+    navigator.mediaSession.setActionHandler("pause",          () => safe(window.playerTogglePause));
+    navigator.mediaSession.setActionHandler("previoustrack",  () => safe(window.playerPrev));
+    navigator.mediaSession.setActionHandler("nexttrack",      () => safe(window.playerNext));
+    navigator.mediaSession.setActionHandler("stop",           () => safe(window.playerStop));
+    navigator.mediaSession.setActionHandler("seekbackward", (details) => {
+      _seekRelativeSec(-(details?.seekOffset || 10));
+    });
+    navigator.mediaSession.setActionHandler("seekforward", (details) => {
+      _seekRelativeSec(+(details?.seekOffset || 10));
+    });
+    navigator.mediaSession.setActionHandler("seekto", (details) => {
+      if (typeof details?.seekTime !== "number") return;
+      const p = _playerReadProgress?.();
+      if (!p?.duration) return;
+      _playerSeekToFraction?.(details.seekTime / p.duration);
+    });
+  } catch (e) {
+    console.warn("[mediaSession] action bind failed:", e);
+  }
+}
+function _seekRelativeSec(deltaSec) {
+  const p = _playerReadProgress?.();
+  if (!p?.duration) return;
+  const target = Math.max(0, Math.min(p.duration, (p.current || 0) + deltaSec));
+  _playerSeekToFraction?.(target / p.duration);
+}
+// Push the current scrub position to the media session so lock-screen
+// scrubbers and Bluetooth seek controls work. Called from the
+// progress-update loop (_updateMiniProgress) for both engines.
+function _mediaSessionUpdatePosition() {
+  if (!("mediaSession" in navigator) || !navigator.mediaSession.setPositionState) return;
+  const p = _playerReadProgress?.();
+  if (!p?.duration || !Number.isFinite(p.duration)) return;
+  try {
+    navigator.mediaSession.setPositionState({
+      duration: p.duration,
+      position: Math.max(0, Math.min(p.duration, p.current || 0)),
+      playbackRate: 1,
+    });
+  } catch {}
+}
+// Bind action handlers as soon as the script loads (idempotent).
+_mediaSessionBindActions();
+window._mediaSessionUpdate         = _mediaSessionUpdate;
+window._mediaSessionBindActions    = _mediaSessionBindActions;
+window._mediaSessionUpdatePosition = _mediaSessionUpdatePosition;
 
 function openPlayerRelease() {
   const rType = window._playerReleaseType;
