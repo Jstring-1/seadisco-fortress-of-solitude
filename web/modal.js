@@ -1856,6 +1856,29 @@ function playerClose() {
   }
   if (typeof closeVideo === "function") closeVideo();
 }
+
+// ⏹ button on the media bar — stop whatever's playing and forget the
+// current track + progress. The queue itself is preserved (use Clear
+// in the drawer to wipe the queue). After this, the bar returns to
+// idle-queue mode showing the head item if any remain, or hides if
+// the queue is empty. Distinct from playerClose() which only stops
+// the engine but leaves _queueCurrentPosition pointing at the row
+// that was playing — the next ▶ would resume mid-queue rather than
+// restart from the head.
+function playerStop() {
+  // Tear down whichever engine is active.
+  if (typeof playerClose === "function") {
+    try { playerClose(); } catch {}
+  }
+  // Drop the now-playing mark + position so the queue forgets what
+  // was playing. _queueClearPlayingMark also re-runs the idle-bar
+  // logic on the next tick, so the bar either shows the queue head
+  // or hides if the queue is empty.
+  if (typeof window._queueClearPlayingMark === "function") {
+    try { window._queueClearPlayingMark(); } catch {}
+  }
+}
+window.playerStop = playerStop;
 // Bar info-area click. For YT: open the album modal if known. For LOC:
 // open the info popup for the playing item. Falls back to expand toggle.
 function playerInfoClick() {
