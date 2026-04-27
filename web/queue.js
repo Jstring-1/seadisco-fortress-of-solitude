@@ -221,92 +221,134 @@ async function _queueConsume(position) {
 }
 
 // Auto-advance entry point — called by both the LOC track-ended handler
-// AND the YT onStateChange handler when the current track ends. If the
-// queue has items, play the head; otherwise return false so the caller
-// falls back to its own internal next-track logic.
-//
-// Repeat-one is handled BEFORE this function is called (by each
-// engine's track-ended handler) — they seek-and-replay without
-// consuming, so this code path doesn't need to know about it.
+// AND the YT onStateChange handler when the current track ends. With
+// the new "queue is a playlist" model, items aren't consumed on play;
+// we just advance _queueCurrentPosition through the queue. Removal
+// only happens via the explicit × button (queueRemove). Repeat-all
+// wraps to the first item; repeat-one is handled by the engine's
+// own track-ended handler (seek+play, never reaches here).
 async function _queuePlayNext() {
-  // The previously-playing item just ended (or the user clicked Next
-  // before it ended). Consume it now — the row stays in the drawer
-  // with a "▶ Now playing" badge for the entire duration of playback,
-  // and only disappears when we move on. Push to repeat-history first
-  // so a later repeat-all cycle can re-seed it.
-  if (_queueCurrentPosition != null) {
-    const played = (_queue || []).find(it => it.position === _queueCurrentPosition);
-    if (played) {
-      _repeatHistory.push({
-        source: played.source,
-        externalId: played.externalId,
-        data: { ...(played.data || {}) },
-      });
-    }
-    _queueConsume(_queueCurrentPosition).catch(() => {});
+  await _queueLoad();
+  if (!_queue?.length) {
     _queueCurrentPosition = null;
-  }
-
-  let next = await _queueShiftNext();
-  // Repeat-all: when the live queue drains, push session history back
-  // onto the server queue (in original play order) and pick up the new
-  // head. Guarded by _repeatRefillInFlight so a rapid double track-end
-  // can't double-refill.
-  if (!next && _queueRepeat === "all" && _repeatHistory.length && !_repeatRefillInFlight) {
-    _repeatRefillInFlight = true;
-    try {
-      const refill = _repeatHistory.slice();
-      _repeatHistory = [];
-      await queueAdd(refill, { mode: "append" });
-      next = await _queueShiftNext();
-    } finally {
-      _repeatRefillInFlight = false;
-    }
-  }
-  if (!next) {
     _refreshPlayerNavButtons();
     if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
     return false;
   }
-
-  // Build engine-specific play payload. Snapshotted from the queue
-  // entry so the play call doesn't race a subsequent _queue refetch.
-  const playItem = next.source === "loc"
-    ? {
-        id:           next.externalId,
-        title:        next.data?.title || "",
-        streamUrl:    next.data?.streamUrl || "",
-        streamType:   next.data?.streamType || "",
-        contributors: next.data?.artist ? [next.data.artist] : [],
-        image:        next.data?.image || "",
-        year:         next.data?.year || "",
-      }
-    : null;
-  // _locPlay / openVideo both call _queueOnExternalPlay() at their
-  // entry, which clears _queueCurrentPosition. We re-set it AFTER
-  // dispatching so queue-driven plays remain marked while non-queue
-  // plays don't show a stale "now playing" row.
-  if (next.source === "loc") {
-    if (typeof _locPlay === "function") _locPlay(playItem);
-  } else if (next.source === "yt") {
-    const url = `https://www.youtube.com/watch?v=${encodeURIComponent(next.externalId)}`;
-    if (typeof openVideo === "function") openVideo(null, url);
-  } else {
+  const currentIdx = _queueCurrentPosition != null
+    ? _queue.findIndex(it => it.position === _queueCurrentPosition)
+    : -1;
+  let next = currentIdx >= 0 && currentIdx + 1 < _queue.length
+    ? _queue[currentIdx + 1]
+    : (currentIdx < 0 ? _queue[0] : null);
+  // Repeat-all: wrap to the first item.
+  if (!next && _queueRepeat === "all" && _queue.length) {
+    next = _queue[0];
+  }
+  if (!next) {
+    // End of queue, no repeat: clear playing mark but keep items.
+    _queueCurrentPosition = null;
+    _refreshPlayerNavButtons();
+    if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
     return false;
   }
-  _queueCurrentPosition = next.position;
+  return _queuePlayItem(next);
+}
+
+// Internal: play a queue entry by dispatching to its engine and then
+// re-applying the now-playing mark. Used by _queuePlayNext, queueJumpTo,
+// and queuePlayHead. Sets _queueDispatching so the external-play hook
+// fired by _locPlay/openVideo doesn't re-insert the same item.
+let _queueDispatching = false;
+async function _queuePlayItem(entry) {
+  const playItem = entry.source === "loc"
+    ? {
+        id:           entry.externalId,
+        title:        entry.data?.title || "",
+        streamUrl:    entry.data?.streamUrl || "",
+        streamType:   entry.data?.streamType || "",
+        contributors: entry.data?.artist ? [entry.data.artist] : [],
+        image:        entry.data?.image || "",
+        year:         entry.data?.year || "",
+      }
+    : null;
+  _queueDispatching = true;
+  try {
+    if (entry.source === "loc") {
+      if (typeof _locPlay === "function") _locPlay(playItem);
+    } else if (entry.source === "yt") {
+      const url = `https://www.youtube.com/watch?v=${encodeURIComponent(entry.externalId)}`;
+      if (typeof openVideo === "function") openVideo(null, url);
+    } else {
+      return false;
+    }
+  } finally {
+    // Engine dispatchers are sync (they kick off async work but return
+    // immediately). Clear the flag on the next tick so any synchronous
+    // _queueOnExternalPlay hook is suppressed but later track-end-driven
+    // calls aren't.
+    setTimeout(() => { _queueDispatching = false; }, 0);
+  }
+  _queueCurrentPosition = entry.position;
   if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
   _refreshPlayerNavButtons();
   return true;
 }
 
-// Called from _locPlay and openVideo at the start of every play call so
-// non-queue plays drop the "now playing" mark. _queuePlayNext re-sets
-// the mark right after dispatching, so queue-driven plays preserve it.
-function _queueOnExternalPlay() {
-  if (_queueCurrentPosition == null) return;
-  _queueCurrentPosition = null;
-  if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
+// Called from _locPlay and openVideo at the start of every play call.
+// If the play is "external" (i.e. the user clicked ▶ on a card outside
+// the queue) AND the queue has items, we want the new track to push
+// to the head of the queue and become the now-playing item — that
+// way the queue continues from there when the new track ends instead
+// of being abandoned. Returns true if the caller should suppress its
+// normal play (we'll handle it via queue insertion); false otherwise.
+//
+// Without item info we can only clear the now-playing mark — that's
+// the fall-through path used when the engine's own internal queue is
+// driving (e.g. _videoQueueIndex auto-advance inside the YT modal,
+// where we don't want to re-queue the next album track).
+function _queueOnExternalPlay(itemPayload) {
+  // Re-entry guard: when _queuePlayItem dispatches a play call, the
+  // engine's own _queueOnExternalPlay hook fires inside the same tick.
+  // Skip — _queuePlayItem is already managing currentPosition + queue
+  // state, and we don't want to re-insert the item we just picked.
+  if (_queueDispatching) return false;
+  // No item payload → just clear the mark (legacy callers)
+  if (!itemPayload) {
+    if (_queueCurrentPosition != null) {
+      _queueCurrentPosition = null;
+      if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
+    }
+    return false;
+  }
+  // Item payload + non-empty queue → insert at head, mark as playing,
+  // let the calling _locPlay/openVideo continue with playback (the
+  // server-side mode:"next" insert is async but the local engine call
+  // doesn't depend on it; we sync up _queueCurrentPosition once the
+  // insert lands).
+  _queueLoad().then(async () => {
+    if (!_queue?.length) {
+      _queueCurrentPosition = null;
+      if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
+      return;
+    }
+    // Insert at head (mode "next" shifts existing positions down).
+    try {
+      const r = await apiFetch("/api/user/play-queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: [itemPayload], mode: "next" }),
+      });
+      if (!r.ok) { _queueCurrentPosition = null; return; }
+    } catch { _queueCurrentPosition = null; return; }
+    _queue = null;
+    await _queueLoad(true);
+    // The newly-inserted item is the new head (lowest position).
+    if (_queue?.length) _queueCurrentPosition = _queue[0].position;
+    if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
+    _refreshPlayerNavButtons();
+  }).catch(() => {});
+  return false; // don't suppress; engine still plays directly
 }
 
 // ── Repeat toggle ────────────────────────────────────────────────────
@@ -423,7 +465,6 @@ async function _renderQueueDrawer() {
           ${isPlaying ? `<span class="queue-row-eq" aria-hidden="true"><i></i><i></i><i></i></span>` : ""}
         </span>
         <button class="queue-row-play" onclick="queueJumpTo(${it.position})" title="${isPlaying ? "Currently playing" : "Play this now"}">
-          ${isPlaying ? `<span class="queue-row-now-playing">Now playing</span>` : ""}
           <span class="queue-row-title">${safeTitle}</span>
           ${safeArtist ? `<span class="queue-row-artist">${safeArtist}</span>` : ""}
         </button>
@@ -481,18 +522,22 @@ async function _bindSortable() {
 
 // ── Public actions ──────────────────────────────────────────────────
 async function queueRemove(position) {
+  const wasPlaying = _queueCurrentPosition === position;
   try {
     await apiFetch("/api/user/play-queue", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ position }),
     });
-    // If the removed row was the now-playing one, clear the mark.
-    // Playback itself keeps going (the audio element / YT iframe still
-    // owns the stream); the queue just no longer claims this item.
-    if (_queueCurrentPosition === position) _queueCurrentPosition = null;
+    if (wasPlaying) _queueCurrentPosition = null;
     _queue = null;
+    await _queueLoad(true);
+    _refreshPlayerNavButtons();
     _renderQueueDrawer();
+    // If the removed row was the now-playing one, audio keeps playing
+    // (the engine still owns its stream); the queue just no longer
+    // claims this position. The next track-end will pick the new
+    // first-after-current via _queuePlayNext.
   } catch {
     if (typeof showToast === "function") showToast("Could not remove from queue", "error");
   }
@@ -522,68 +567,32 @@ async function queueJumpTo(position) {
   if (!_queue?.length) return;
   const target = _queue.find(it => it.position === position);
   if (!target) return;
-  // No-op: clicking a row that's already playing shouldn't restart it.
-  if (_queueCurrentPosition === position) return;
-  // Consume everything BEFORE the target — the target itself remains
-  // in the queue with a "Now playing" mark. Also drop the previously-
-  // playing position (if any) since we're about to abandon it.
-  const toDrop = _queue
-    .filter(it => it.position < position)
-    .map(it => it.position);
-  if (_queueCurrentPosition != null && _queueCurrentPosition !== position && !toDrop.includes(_queueCurrentPosition)) {
-    toDrop.push(_queueCurrentPosition);
-  }
-  for (const p of toDrop) {
-    try {
-      await apiFetch("/api/user/play-queue", {
-        method: "DELETE",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ position: p }),
-      });
-    } catch {}
-  }
-  // Trigger play (which clears _queueCurrentPosition via the external-
-  // play hook), then re-set it to the target so the drawer shows the
-  // mark on the right row.
-  if (target.source === "loc") {
-    const item = {
-      id: target.externalId,
-      title: target.data?.title || "",
-      streamUrl: target.data?.streamUrl || "",
-      streamType: target.data?.streamType || "",
-      contributors: target.data?.artist ? [target.data.artist] : [],
-      image: target.data?.image || "",
-    };
-    if (typeof _locPlay === "function") _locPlay(item);
-  } else if (target.source === "yt") {
-    const url = `https://www.youtube.com/watch?v=${encodeURIComponent(target.externalId)}`;
-    if (typeof openVideo === "function") openVideo(null, url);
-  }
-  _queueCurrentPosition = position;
-  _queue = null;
-  if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
+  if (_queueCurrentPosition === position) return; // already playing
+  // No consumption — items only leave the queue via × (queueRemove)
+  // or Clear (queueClear). Just play the target and update the mark.
+  await _queuePlayItem(target);
 }
 
 // Public "play queue" action — used by the mini-player ▶ when nothing
 // is loaded yet but items are queued, and by the drawer's ▶ Play head
-// button. Picks the head and starts playing it; reuses _queuePlayNext
-// but ensures we don't accidentally consume something before any
-// "previous" item exists. Idempotent if the queue head is already the
-// currently-playing position.
+// button. Plays the queue head if no current position; otherwise resumes
+// the currently-marked position. Idempotent.
 async function queuePlayHead() {
   await _queueLoad(true);
   if (!_queue?.length) {
     if (typeof showToast === "function") showToast("Queue is empty", "error");
     return false;
   }
-  const head = _queue[0];
-  if (head && head.position === _queueCurrentPosition) return true; // already playing
-  // Force _queuePlayNext to start fresh from the current head:
-  // no "previous" to consume yet on first play.
-  _queueCurrentPosition = null;
-  return _queuePlayNext();
+  const target = _queueCurrentPosition != null
+    ? (_queue.find(it => it.position === _queueCurrentPosition) ?? _queue[0])
+    : _queue[0];
+  return _queuePlayItem(target);
 }
 
+// Public "play queue" action — used by the mini-player ▶ when nothing
+// is loaded yet but items are queued, and by the drawer's ▶ Play head
+// button. Picks the head and starts playing it; reuses _queuePlayNext
+// but ensures we don't accidentally consume something before any
 // ── Tiny "+ queue" icon helpers used by site-wide adders ────────────
 // Returns inline HTML for a small ➕ button. `kind` is "loc" or "yt"
 // for tooltip clarity; click handler is attached separately by callers.
@@ -597,14 +606,16 @@ function queueAddIconHtml(kind = "yt") {
 // so it returns instantly. Initial reads return false until the cache
 // is hydrated; queueAdd/Remove/Clear all invalidate the cache and
 // re-fire button state via _refreshPlayerNavButtons below.
-// Returns true if there's a queued item OTHER than the now-playing
-// head. The currently-playing position lives in the queue (we don't
-// consume on play anymore — only on track-end), so a queue with only
-// the playing item should NOT light up the Next button.
+// Returns true if there's an item AFTER the currently-playing position
+// in the queue (the Next button moves through the playlist; it
+// doesn't navigate back to items before the current position).
+// Repeat-all makes Next always available so users can wrap manually.
 function _queueHasNext() {
   if (!Array.isArray(_queue) || _queue.length === 0) return false;
   if (_queueCurrentPosition == null) return true;
-  return _queue.some(it => it.position !== _queueCurrentPosition);
+  if (_queueRepeat === "all") return true;
+  const idx = _queue.findIndex(it => it.position === _queueCurrentPosition);
+  return idx >= 0 && idx + 1 < _queue.length;
 }
 
 // True if the queue has at least one item that ISN'T currently

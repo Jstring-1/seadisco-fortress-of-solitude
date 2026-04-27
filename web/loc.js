@@ -1443,10 +1443,25 @@ async function _locPlay(item) {
   const myToken = ++_locPlayToken;
   const isCurrent = () => myToken === _locPlayToken;
 
-  // Drop any "Now playing" mark on the queue drawer — _queuePlayNext
-  // re-applies it AFTER calling us if this call originated from the
-  // queue. Non-queue callers leave it cleared (correct behavior).
-  if (typeof window._queueOnExternalPlay === "function") window._queueOnExternalPlay();
+  // Cross-source queue interrupt hook. If the queue has items, we
+  // pass the new track's payload so it can be inserted at the queue
+  // head and become the now-playing item — that way the queue
+  // continues from there when the new track ends. With no payload
+  // (or empty queue), this just clears the old now-playing mark.
+  if (typeof window._queueOnExternalPlay === "function") {
+    window._queueOnExternalPlay({
+      source: "loc",
+      externalId: item.id,
+      data: {
+        title:      item.title || "",
+        artist:     Array.isArray(item.contributors) ? item.contributors.join(", ") : "",
+        image:      item.image || "",
+        streamUrl:  item.streamUrl || "",
+        streamType: item.streamType || "",
+        year:       item.year || "",
+      },
+    });
+  }
 
   // Stop any YouTube playback so we don't double-play
   try { if (typeof closeVideo === "function") closeVideo(); } catch {}

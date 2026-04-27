@@ -1828,9 +1828,29 @@ window.playAlbumAndQueue = playAlbumAndQueue;
 
 function openVideo(event, url) {
   if (event) { event.preventDefault(); event.stopPropagation(); }
-  // Drop any "Now playing" mark on the queue drawer — _queuePlayNext
-  // re-applies it AFTER calling us if this call came from the queue.
-  if (typeof window._queueOnExternalPlay === "function") window._queueOnExternalPlay();
+  // Cross-source queue interrupt hook. If the queue has items, the
+  // new track gets pushed to head + marked playing so the queue
+  // continues from there when this track ends. We gather title /
+  // artist / album from the clicked track row's data-* attrs (set
+  // by the album modal renderer); falls back to URL-only if there
+  // aren't any (programmatic openVideo calls from the URL bootstrap).
+  if (typeof window._queueOnExternalPlay === "function") {
+    const videoId = (typeof extractYouTubeId === "function") ? extractYouTubeId(url) : "";
+    if (videoId) {
+      const trackEl = event?.target?.closest?.(".track-link");
+      window._queueOnExternalPlay({
+        source: "yt",
+        externalId: videoId,
+        data: {
+          title:      trackEl?.dataset?.track  || "",
+          artist:     trackEl?.dataset?.artist || "",
+          albumTitle: trackEl?.dataset?.album  || "",
+        },
+      });
+    } else {
+      window._queueOnExternalPlay();
+    }
+  }
   // Starting YouTube playback should stop the LOC audio bar so we
   // don't play both simultaneously. _locPlay already does the reverse.
   try { if (typeof _locClosePlayer === "function") _locClosePlayer(); } catch {}
