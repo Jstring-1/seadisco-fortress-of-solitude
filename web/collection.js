@@ -1043,9 +1043,12 @@ function switchRecordsTab(tab, skipPush) {
     loadListsTab();
   } else if (tab === "favorites") {
     if (cwInput) cwInput.placeholder = "Search your favorites\u2026";
-    if (controlsRow) controlsRow.style.display = "none";
-    if (advPanel) advPanel.style.display = "none";
+    // Favorites uses the same advanced search toolbar as collection /
+    // wantlist \u2014 sort dropdown, type radios, advanced filters. The
+    // filtering / sorting itself is client-side (see _favTabFilterSort).
+    if (controlsRow) controlsRow.style.display = "";
     if (folderCloud) folderCloud.style.display = "none";
+    if (exportBtn) exportBtn.style.display = "none"; // CSV export only for collection/wantlist
     loadFavoritesTab();
   }
 }
@@ -1211,26 +1214,97 @@ async function loadFavoritesTab() {
     const r = await apiFetch("/api/user/favorites?limit=200");
     if (!r.ok) throw new Error("Failed to load favorites");
     const data = await r.json();
-    _favTabItems = (data.items ?? []).map(row => row.data);
+    // Preserve created_at + entity_type alongside the snapshot data
+    // so the toolbar's full filter set (sort by added, type radios)
+    // can apply client-side.
+    _favTabItems = (data.items ?? []).map(row => ({
+      ...row.data,
+      _addedAt: row.created_at ? new Date(row.created_at).getTime() : 0,
+      _entityType: row.entity_type ?? row.data?.type ?? "",
+    }));
     renderFavoritesTabGrid();
   } catch (e) {
     setCwStatus("Failed to load favorites: " + e.message);
   }
 }
 
+// Mirror the collection / wantlist toolbar semantics for favorites.
+// All filtering and sorting is client-side because the favorites set
+// is small (capped at 200 in loadFavoritesTab), so no need for a
+// server round-trip per keystroke. Reads exactly the same fields as
+// getCwFilters so sharing the toolbar UI Just Works.
+function _favTabFilterSort(items) {
+  const f = (typeof getCwFilters === "function") ? getCwFilters() : {};
+  const lowMatch = (val, q) => {
+    if (!q) return true;
+    return String(val ?? "").toLowerCase().includes(String(q).toLowerCase());
+  };
+  const arrMatch = (arr, q) => {
+    if (!q) return true;
+    const v = String(q).toLowerCase();
+    return (Array.isArray(arr) ? arr : [arr]).some(x => String(x ?? "").toLowerCase().includes(v));
+  };
+  const filtered = items.filter(it => {
+    if (f.q) {
+      // Free-text search across the most useful fields, like the
+      // existing simple favorites filter did.
+      const hay = [
+        it.title, it.year, it._entityType,
+        ...(Array.isArray(it.label) ? it.label : [it.label]),
+        ...(Array.isArray(it.genre) ? it.genre : [it.genre]),
+        ...(Array.isArray(it.style) ? it.style : [it.style]),
+        ...(Array.isArray(it.format) ? it.format : [it.format]),
+      ].filter(Boolean).join(" ").toLowerCase();
+      if (!hay.includes(String(f.q).toLowerCase())) return false;
+    }
+    if (f.artist) {
+      // Discogs returns artist as part of the title ("Artist - Album")
+      // for releases / masters; for artist entities the title IS the
+      // artist name. Match either.
+      const t = String(it.title ?? "").toLowerCase();
+      if (!t.includes(String(f.artist).toLowerCase())) return false;
+    }
+    if (f.release && !lowMatch(it.title, f.release)) return false;
+    if (f.label   && !arrMatch(it.label,  f.label))   return false;
+    if (f.year    && String(it.year ?? "") !== String(f.year)) return false;
+    if (f.genre   && !arrMatch(it.genre,  f.genre))   return false;
+    if (f.style   && !arrMatch(it.style,  f.style))   return false;
+    if (f.format  && !arrMatch(it.format, f.format))  return false;
+    if (f.type) {
+      // result-type radio uses values "release" / "master" / "master+".
+      // master+ means "masters and standalone releases".
+      const et = (it._entityType || it.type || "").toLowerCase();
+      if (f.type === "release" && et !== "release") return false;
+      if (f.type === "master"  && et !== "master")  return false;
+      if (f.type === "master+" && et !== "master" && et !== "release") return false;
+    }
+    return true;
+  });
+  // Sort — same dropdown values the cw-sort uses for collection/wantlist.
+  const sort = document.getElementById("cw-sort")?.value || "";
+  const titleStr = (it) => String(it?.title ?? "").toLowerCase();
+  const yearNum  = (it) => parseInt(String(it?.year ?? "0"), 10) || 0;
+  const ratingN  = (it) => Number(it?.rating ?? 0);
+  const addedN   = (it) => Number(it?._addedAt ?? 0);
+  const artistStr = (it) => {
+    const t = String(it?.title ?? "");
+    const dash = t.indexOf(" - ");
+    return (dash > 0 ? t.slice(0, dash) : t).toLowerCase();
+  };
+  if (sort === "title")          filtered.sort((a, b) => titleStr(a).localeCompare(titleStr(b)));
+  else if (sort === "year")      filtered.sort((a, b) => yearNum(b)  - yearNum(a));
+  else if (sort === "year_asc")  filtered.sort((a, b) => yearNum(a)  - yearNum(b));
+  else if (sort === "added")     filtered.sort((a, b) => addedN(b)   - addedN(a));
+  else if (sort === "added_asc") filtered.sort((a, b) => addedN(a)   - addedN(b));
+  else if (sort === "rating")    filtered.sort((a, b) => ratingN(b)  - ratingN(a));
+  else                            filtered.sort((a, b) => artistStr(a).localeCompare(artistStr(b)));
+  return filtered;
+}
+
 function renderFavoritesTabGrid() {
-  const q = (document.getElementById("cw-query")?.value ?? "").trim().toLowerCase();
+  const q = (document.getElementById("cw-query")?.value ?? "").trim();
   _favTabQuery = q;
-  let items = _favTabItems;
-  if (q) {
-    items = items.filter(it => {
-      const title = (it.title ?? "").toLowerCase();
-      const label = (it.label ?? []).join(" ").toLowerCase();
-      const genre = (it.genre ?? []).join(" ").toLowerCase();
-      const year = String(it.year ?? "");
-      return title.includes(q) || label.includes(q) || genre.includes(q) || year.includes(q);
-    });
-  }
+  const items = _favTabFilterSort(_favTabItems);
   const grid = document.getElementById("results");
   if (!items.length) {
     setCwStatus("");
