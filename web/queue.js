@@ -613,45 +613,48 @@ async function _bindSortable() {
 
 // ── Public actions ──────────────────────────────────────────────────
 async function queueRemove(position) {
+  // Fully optimistic — update local state + UI immediately, fire the
+  // server DELETE in the background. Avoids the previous 1–2s lag
+  // from awaiting two sequential round trips (DELETE + full queue
+  // refetch). The local state IS the truth for the user; the server
+  // is just durable storage.
   const wasPlaying = _queueCurrentPosition === position;
-  // If we're about to remove the now-playing item, capture what
-  // SHOULD play next BEFORE the delete so we can auto-advance to it.
-  // Server DELETEs leave gaps in positions (no renumbering), so a
-  // simple "item right after current" lookup works.
+  // Capture next-to-play BEFORE the local mutation so auto-advance
+  // can find it (server DELETE leaves gaps; positions are stable).
   let advanceTo = null;
   if (wasPlaying && Array.isArray(_queue)) {
     const idx = _queue.findIndex(it => it.position === position);
     if (idx >= 0 && idx + 1 < _queue.length) {
       advanceTo = _queue[idx + 1];
     } else if (_queueRepeat === "all" && _queue.length > 1) {
-      advanceTo = _queue[0]; // repeat-all: wrap to head
+      advanceTo = _queue[0];
     }
   }
-  try {
-    await apiFetch("/api/user/play-queue", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ position }),
-    });
-    if (wasPlaying) { _queueCurrentPosition = null; _queuePlayingExternalId = null; }
-    _queue = null;
-    await _queueLoad(true);
-    _refreshPlayerNavButtons();
-    _renderQueueDrawer();
-    // Auto-advance / stop based on what the queue had after current.
-    if (wasPlaying) {
-      const fresh = advanceTo ? _queue?.find(it => it.position === advanceTo.position) : null;
-      if (fresh) {
-        await _queuePlayItem(fresh);
-      } else {
-        // Nothing left after the removed track — stop playback so the
-        // current audio doesn't keep going for a row that's gone.
-        if (typeof playerClose === "function") playerClose();
-      }
-    }
-  } catch {
-    if (typeof showToast === "function") showToast("Could not remove from queue", "error");
+  // Local state update — instant UI feedback.
+  if (Array.isArray(_queue)) {
+    _queue = _queue.filter(it => it.position !== position);
   }
+  if (wasPlaying) { _queueCurrentPosition = null; _queuePlayingExternalId = null; }
+  _refreshPlayerNavButtons();
+  _renderQueueDrawer();
+  // Auto-advance synchronously off the local-state copy.
+  if (wasPlaying) {
+    const fresh = advanceTo ? (_queue || []).find(it => it.position === advanceTo.position) : null;
+    if (fresh) {
+      await _queuePlayItem(fresh);
+    } else if (typeof playerClose === "function") {
+      playerClose();
+    }
+  }
+  // Fire DELETE in the background. On failure the local state is
+  // ahead of the server; next page load will re-fetch and reconcile.
+  apiFetch("/api/user/play-queue", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ position }),
+  }).then(r => {
+    if (!r.ok) console.warn("[queue] DELETE failed:", r.status);
+  }).catch(e => console.warn("[queue] DELETE threw:", e));
 }
 
 async function queueClear() {
