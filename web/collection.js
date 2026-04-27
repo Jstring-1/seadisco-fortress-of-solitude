@@ -197,13 +197,25 @@ function switchView(view, skipPushState = false) {
   const archiveView = document.getElementById("archive-view");
   const accountView = document.getElementById("account-view");
   if (!skipPushState) {
+    // Preserve existing query params across view switches — only `v` is
+    // rewritten. Drop view-specific transient state (`tab` from LOC /
+    // archive saved-tabs; `li`/`lp` LOC popup ids; `nocache`) so a click
+    // from LOC's saved tab over to Wikipedia doesn't carry the stale
+    // tab=saved param into the new view.
+    const VIEW_LOCAL_PARAMS = ["tab", "li", "lp", "nocache"];
+    const qs = new URLSearchParams(location.search);
+    VIEW_LOCAL_PARAMS.forEach(k => qs.delete(k));
     if (view === "records") {
       const tab = _cwTab || "collection";
-      history.pushState({ view, tab }, "", "?v=" + tab);
+      qs.set("v", tab);
+      history.pushState({ view, tab }, "", "?" + qs.toString());
     } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive") {
-      history.pushState({ view }, "", "?v=" + view);
+      qs.set("v", view);
+      history.pushState({ view }, "", "?" + qs.toString());
     } else {
-      history.pushState({}, "", location.pathname);
+      qs.delete("v");
+      const tail = qs.toString();
+      history.pushState({}, "", location.pathname + (tail ? "?" + tail : ""));
     }
   }
   if (typeof gtag === "function") {
