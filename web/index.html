@@ -49,7 +49,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260427.0928" />
+  <link rel="stylesheet" href="/style.css?v=20260427.0931" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -87,7 +87,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260427.0928"></script>
+<script defer src="/shared.js?v=20260427.0931"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -418,7 +418,7 @@
   <div id="random-records" class="content-area" style="margin-top:0.5rem;display:none">
     <div id="random-records-header" style="display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin:0 0 0.5rem 0;padding:0 0.15rem">
       <div id="random-records-title" style="font-size:0.78rem;color:var(--muted);letter-spacing:0.04em;text-transform:uppercase">Recent</div>
-      <div style="display:flex;align-items:center;gap:0.5rem;flex-shrink:0">
+      <div id="random-records-controls" style="display:flex;align-items:center;gap:0.5rem;flex-shrink:0">
         <label class="sort-label" style="flex-shrink:0">
           Sort
           <select id="favorites-sort" onchange="sortFavoritesGrid()" style="font-size:0.78rem;padding:0.3rem 0.4rem;color-scheme:dark">
@@ -890,21 +890,21 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260427.0928"></script>
-<script defer src="/search.js?v=20260427.0928"></script>
-<script defer src="/collection.js?v=20260427.0928"></script>
-<script defer src="/account.js?v=20260427.0928"></script>
-<script defer src="/orders.js?v=20260427.0928"></script>
+<script defer src="/utils.js?v=20260427.0931"></script>
+<script defer src="/search.js?v=20260427.0931"></script>
+<script defer src="/collection.js?v=20260427.0931"></script>
+<script defer src="/account.js?v=20260427.0931"></script>
+<script defer src="/orders.js?v=20260427.0931"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260427.0928"></script>
-<script defer src="/app.js?v=20260427.0928"></script>
+<script defer src="/modal.js?v=20260427.0931"></script>
+<script defer src="/app.js?v=20260427.0931"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/inventory-editor.js?v=20260427.0928"></script>
-<script defer src="/loc.js?v=20260427.0928"></script>
-<script defer src="/archive.js?v=20260427.0928"></script>
-<script defer src="/youtube.js?v=20260427.0928"></script>
-<script defer src="/queue.js?v=20260427.0928"></script>
+<script defer src="/inventory-editor.js?v=20260427.0931"></script>
+<script defer src="/loc.js?v=20260427.0931"></script>
+<script defer src="/archive.js?v=20260427.0931"></script>
+<script defer src="/youtube.js?v=20260427.0931"></script>
+<script defer src="/queue.js?v=20260427.0931"></script>
 
 </body>
 </html>

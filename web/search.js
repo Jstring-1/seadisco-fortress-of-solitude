@@ -1185,6 +1185,11 @@ async function loadRandomRecords(more) {
     _loadHistoryIntoRandom();
     _randomShown = 0;
     const titleEl = document.getElementById("random-records-title");
+    // Sort + Clear only make sense for the "Recent" history mode —
+    // suggested cards aren't in local history (sort by Opened means
+    // nothing; Clear is a no-op). Hide the controls in Suggested mode.
+    const controlsEl = document.getElementById("random-records-controls");
+    let isSuggested = false;
     if (!_randomAll.length) {
       try {
         const r = await fetch("/api/admin-favorites/sample?limit=24", { cache: "no-store" });
@@ -1196,12 +1201,14 @@ async function loadRandomRecords(more) {
             // would be a no-op.
             _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
             if (titleEl) titleEl.textContent = "Suggested";
+            isSuggested = true;
           }
         }
       } catch { /* fall through to empty */ }
     } else {
       if (titleEl) titleEl.textContent = "Recent";
     }
+    if (controlsEl) controlsEl.style.display = isSuggested ? "none" : "flex";
     if (!_randomAll.length) {
       wrap.style.display = "none";
       return;
