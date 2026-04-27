@@ -1622,12 +1622,36 @@ async function _locOnTrackEnded() {
 
 // Clicking a card's ▶ overlay on a multi-track item should start the
 // full queue, not just track 1 + end. Update this path too.
-function _locPlayFromCard(btn) {
+async function _locPlayFromCard(btn) {
   const card = btn?.closest(".loc-card, .card");
   if (!card) return;
   const locId = card.dataset.locId;
   const item = locId ? _locItemCache.get(locId) : null;
+  // Multi-track LOC item — queue every track in the cross-source
+  // queue (mode "play") and start the first one. Same UX as the
+  // Discogs album modal and the archive popup, so users get a
+  // consistent "▶ on a card = play the album" mental model.
   if (item && Array.isArray(item.tracks) && item.tracks.length >= 2) {
+    const total = item.tracks.length;
+    const artistStr = Array.isArray(item.contributors) ? item.contributors.join(", ") : "";
+    const items = item.tracks.map((t, i) => ({
+      source: "loc",
+      externalId: `${item.id}#${i}`,
+      data: {
+        title:      t.title || `${item.title || "Track"} (${i + 1}/${total})`,
+        artist:     artistStr,
+        image:      item.image || "",
+        streamUrl:  t.url,
+        streamType: t.streamType || "mp3",
+        year:       item.year || "",
+      },
+    })).filter(qi => qi.data.streamUrl);
+    if (items.length && typeof queueAddAlbumOrPlay === "function") {
+      await queueAddAlbumOrPlay(items, { mode: "play" });
+      return;
+    }
+    // Fallback if helper is missing for some reason — preserve old
+    // single-engine queue behavior so playback still happens.
     _locStartQueue(item, 0);
     return;
   }
