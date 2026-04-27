@@ -642,7 +642,7 @@ async function _renderQueueDrawer() {
           <span class="queue-row-source-badge queue-row-source-${it.source}"></span>
           ${isPlaying ? `<span class="queue-row-eq" aria-hidden="true"><i></i><i></i><i></i></span>` : ""}
         </span>
-        <button class="queue-row-play" onclick="queueJumpTo(null, ${JSON.stringify(String(it.externalId))})" title="${isPlaying ? "Currently playing" : "Play this now"}">
+        <button class="queue-row-play" onclick="queueJumpTo(null,'${escHtml(String(it.externalId)).replace(/'/g, "\\'")}')" title="${isPlaying ? "Currently playing" : "Play this now"}">
           <span class="queue-row-title">${safeTitle}</span>
           ${safeArtist ? `<span class="queue-row-artist">${safeArtist}</span>` : ""}
         </button>
@@ -652,7 +652,7 @@ async function _renderQueueDrawer() {
              make room). Position captured here at render time would
              then point at a different row by the time the click fires.
              externalId is stable across position shifts. -->
-        <button class="queue-row-remove" onclick="queueRemove(null, ${JSON.stringify(String(it.externalId))})" title="Remove from queue">×</button>
+        <button class="queue-row-remove" onclick="queueRemove(null,'${escHtml(String(it.externalId)).replace(/'/g, "\\'")}')" title="Remove from queue">×</button>
       </div>
     `;
   }).join("");
