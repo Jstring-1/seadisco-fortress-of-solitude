@@ -642,11 +642,17 @@ async function _renderQueueDrawer() {
           <span class="queue-row-source-badge queue-row-source-${it.source}"></span>
           ${isPlaying ? `<span class="queue-row-eq" aria-hidden="true"><i></i><i></i><i></i></span>` : ""}
         </span>
-        <button class="queue-row-play" onclick="queueJumpTo(${it.position})" title="${isPlaying ? "Currently playing" : "Play this now"}">
+        <button class="queue-row-play" onclick="queueJumpTo(null, ${JSON.stringify(String(it.externalId))})" title="${isPlaying ? "Currently playing" : "Play this now"}">
           <span class="queue-row-title">${safeTitle}</span>
           ${safeArtist ? `<span class="queue-row-artist">${safeArtist}</span>` : ""}
         </button>
-        <button class="queue-row-remove" onclick="queueRemove(${it.position})" title="Remove from queue">×</button>
+        <!-- Remove targets the row by externalId rather than position.
+             Positions can shift under us when other tracks are inserted
+             via "next" mode (the server shifts everything down by N to
+             make room). Position captured here at render time would
+             then point at a different row by the time the click fires.
+             externalId is stable across position shifts. -->
+        <button class="queue-row-remove" onclick="queueRemove(null, ${JSON.stringify(String(it.externalId))})" title="Remove from queue">×</button>
       </div>
     `;
   }).join("");
@@ -702,18 +708,40 @@ async function _bindSortable() {
 }
 
 // ── Public actions ──────────────────────────────────────────────────
-async function queueRemove(position) {
+// queueRemove can be called with either:
+//   queueRemove(position)              — legacy, position-based
+//   queueRemove(null, externalId)      — new, externalId-based (stable
+//                                        across position shifts caused
+//                                        by concurrent "next"-mode
+//                                        inserts on other rows).
+// We resolve to the live position from `_queue` at click time so the
+// DELETE always targets the row the user actually clicked, even if the
+// queue was reshuffled between render and click.
+async function queueRemove(position, externalId) {
+  let target = null;
+  if (externalId != null && Array.isArray(_queue)) {
+    target = _queue.find(it => String(it.externalId) === String(externalId)) || null;
+  } else if (position != null && Array.isArray(_queue)) {
+    target = _queue.find(it => it.position === position) || null;
+  }
+  // If we couldn't resolve, fall back to the raw position so the call
+  // is at least *something* — the server DELETE will no-op cleanly if
+  // that position is gone.
+  const removePosition = target ? target.position : position;
+  if (removePosition == null) return;
+
   // Fully optimistic — update local state + UI immediately, fire the
   // server DELETE in the background. Avoids the previous 1–2s lag
   // from awaiting two sequential round trips (DELETE + full queue
   // refetch). The local state IS the truth for the user; the server
   // is just durable storage.
-  const wasPlaying = _queueCurrentPosition === position;
+  const wasPlaying = _queueCurrentPosition === removePosition
+    || (target && _queuePlayingExternalId && String(target.externalId) === String(_queuePlayingExternalId));
   // Capture next-to-play BEFORE the local mutation so auto-advance
   // can find it (server DELETE leaves gaps; positions are stable).
   let advanceTo = null;
   if (wasPlaying && Array.isArray(_queue)) {
-    const idx = _queue.findIndex(it => it.position === position);
+    const idx = _queue.findIndex(it => it.position === removePosition);
     if (idx >= 0 && idx + 1 < _queue.length) {
       advanceTo = _queue[idx + 1];
     } else if (_queueRepeat === "all" && _queue.length > 1) {
@@ -722,7 +750,7 @@ async function queueRemove(position) {
   }
   // Local state update — instant UI feedback.
   if (Array.isArray(_queue)) {
-    _queue = _queue.filter(it => it.position !== position);
+    _queue = _queue.filter(it => it.position !== removePosition);
   }
   if (wasPlaying) { _queueCurrentPosition = null; _queuePlayingExternalId = null; }
   _refreshPlayerNavButtons();
@@ -741,7 +769,7 @@ async function queueRemove(position) {
   apiFetch("/api/user/play-queue", {
     method: "DELETE",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ position }),
+    body: JSON.stringify({ position: removePosition }),
   }).then(r => {
     if (!r.ok) console.warn("[queue] DELETE failed:", r.status);
   }).catch(e => console.warn("[queue] DELETE threw:", e));
@@ -775,12 +803,23 @@ async function queueClear() {
 // Click on a queue row jumps directly to that item (consumes preceding
 // items from the queue). Items before the chosen one are dropped server-
 // side too.
-async function queueJumpTo(position) {
+// queueJumpTo can be called with either:
+//   queueJumpTo(position)           — legacy, position-based
+//   queueJumpTo(null, externalId)   — externalId-based (stable across
+//                                     position shifts from concurrent
+//                                     "next"-mode inserts).
+async function queueJumpTo(position, externalId) {
   await _queueLoad(true);
   if (!_queue?.length) return;
-  const target = _queue.find(it => it.position === position);
+  let target = null;
+  if (externalId != null) {
+    target = _queue.find(it => String(it.externalId) === String(externalId)) || null;
+  }
+  if (!target && position != null) {
+    target = _queue.find(it => it.position === position) || null;
+  }
   if (!target) return;
-  if (_queueCurrentPosition === position) return; // already playing
+  if (_queueCurrentPosition === target.position) return; // already playing
   // No consumption — items only leave the queue via × (queueRemove)
   // or Clear (queueClear). Just play the target and update the mark.
   await _queuePlayItem(target);
