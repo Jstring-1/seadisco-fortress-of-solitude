@@ -1547,6 +1547,10 @@ function updateVideoNavButtons() {
   if (albumBtn) albumBtn.style.display = window._playerReleaseId ? "" : "none";
   const shareBtn = document.getElementById("mini-share");
   if (shareBtn) shareBtn.style.display = window._playerReleaseId ? "" : "none";
+  console.debug("[updateVideoNavButtons]", {
+    playerReleaseId: window._playerReleaseId,
+    discIconVisible: !!window._playerReleaseId,
+  });
   highlightPlayingTrack();
 }
 

@@ -820,6 +820,8 @@ function _archiveInfoQueueFile(id, idx) {
   const d = _archiveInfoLookup(id);
   const f = d?.audioFiles?.[idx];
   if (!f?.streamUrl) return;
+  // ＋ button → tail of queue (consistent with YT / LOC ＋). ▶ is
+  // the "play now" affordance and goes through _archiveInfoPlayFile.
   if (typeof queueAddLoc === "function") queueAddLoc({
     id: `${id}#${f.name}`,
     title: f.title || f.name,
@@ -828,7 +830,7 @@ function _archiveInfoQueueFile(id, idx) {
     contributors: d.creator?.length ? d.creator : ["Aadam Jacobs"],
     image: d.coverUrl || "",
     year: (d.date || "").slice(0, 4),
-  });
+  }, { mode: "append" });
 }
 async function _archiveInfoToggleSave(btn, id) {
   // Reuse the same archiveToggleSave path, but the popup's button isn't
