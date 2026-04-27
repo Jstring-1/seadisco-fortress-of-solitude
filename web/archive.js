@@ -470,45 +470,68 @@ function _archiveItemToLoc(it) {
   };
 }
 
-// Resolve an archive item's primary stream URL on demand. The
-// collection-list cache stores items WITHOUT stream URLs (resolving
-// them all at refresh time was too slow); we look the URL up via
-// /api/archive/item/:id which has its own 24h memory cache. Mutates
-// the item in-place so subsequent plays don't re-fetch.
-async function _archiveResolveStream(it) {
-  if (!it?.identifier) return null;
-  if (it.streamUrl) return it;
+// Resolve full archive item metadata (incl. all audio files) via the
+// existing /api/archive/item/:id endpoint, which has its own 24h
+// memory cache. Used by row Play / Queue buttons to enumerate every
+// track in a show, not just the primary stream — matches the popup's
+// "Play album" semantics so a row click ≡ a popup ▶ click.
+async function _archiveResolveMeta(identifier) {
+  if (!identifier) return null;
+  if (_archiveInfoCache.has(identifier)) return _archiveInfoCache.get(identifier);
   try {
-    const r = await apiFetch(`/api/archive/item/${encodeURIComponent(it.identifier)}`);
+    const r = await apiFetch(`/api/archive/item/${encodeURIComponent(identifier)}`);
     if (!r.ok) return null;
     const j = await r.json();
-    if (!j?.primaryStreamUrl) return null;
-    it.streamUrl = j.primaryStreamUrl;
-    it.duration  = j.audioFiles?.[0]?.length || "";
-    return it;
+    _archiveInfoCache.set(identifier, j);
+    return j;
   } catch { return null; }
+}
+
+// Build cross-source queue items for every audio file in an archive
+// show. Each track gets a stable per-file externalId so dedup-by-id
+// in queueAddAlbumOrPlay catches "already in queue" correctly.
+function _archiveItemsFromMeta(d) {
+  if (!Array.isArray(d?.audioFiles)) return [];
+  return d.audioFiles.map(f => ({
+    source: "loc",
+    externalId: `${d.identifier}#${f.name}`,
+    data: {
+      title:      f.title || f.name.replace(/\.[^.]+$/, ""),
+      artist:     d.creator?.[0] || "Aadam Jacobs",
+      streamUrl:  f.streamUrl,
+      streamType: "mp3",
+      image:      d.coverUrl || "",
+      year:       (d.date || "").slice(0, 4),
+    },
+  }));
 }
 
 async function archivePlayItem(idx) {
   const it = _archiveList?.[idx];
-  if (!it) return;
-  const resolved = await _archiveResolveStream(it);
-  if (!resolved?.streamUrl) {
-    if (typeof showToast === "function") showToast("This item has no playable stream", "error");
+  if (!it?.identifier) return;
+  const meta = await _archiveResolveMeta(it.identifier);
+  const items = _archiveItemsFromMeta(meta);
+  if (!items.length) {
+    if (typeof showToast === "function") showToast("This item has no playable audio", "error");
     return;
   }
-  if (typeof _locPlay === "function") _locPlay(_archiveItemToLoc(resolved));
+  if (typeof queueAddAlbumOrPlay === "function") {
+    await queueAddAlbumOrPlay(items, { mode: "play" });
+  }
 }
 
 async function archiveQueueItem(idx) {
   const it = _archiveList?.[idx];
-  if (!it) return;
-  const resolved = await _archiveResolveStream(it);
-  if (!resolved?.streamUrl) {
-    if (typeof showToast === "function") showToast("This item has no playable stream", "error");
+  if (!it?.identifier) return;
+  const meta = await _archiveResolveMeta(it.identifier);
+  const items = _archiveItemsFromMeta(meta);
+  if (!items.length) {
+    if (typeof showToast === "function") showToast("This item has no playable audio", "error");
     return;
   }
-  if (typeof queueAddLoc === "function") queueAddLoc(_archiveItemToLoc(resolved));
+  if (typeof queueAddAlbumOrPlay === "function") {
+    await queueAddAlbumOrPlay(items, { mode: "append" });
+  }
 }
 
 // Saved-row variants — the row knows its own data via data-* attrs
@@ -528,25 +551,31 @@ function _archiveItemFromRow(rowEl) {
 async function archivePlaySavedFromRow(btn) {
   const row = btn?.closest(".archive-row");
   const it = _archiveItemFromRow(row);
-  if (!it) return;
-  const resolved = await _archiveResolveStream(it);
-  if (!resolved?.streamUrl) {
-    if (typeof showToast === "function") showToast("This item has no playable stream", "error");
+  if (!it?.identifier) return;
+  const meta = await _archiveResolveMeta(it.identifier);
+  const items = _archiveItemsFromMeta(meta);
+  if (!items.length) {
+    if (typeof showToast === "function") showToast("This item has no playable audio", "error");
     return;
   }
-  if (typeof _locPlay === "function") _locPlay(_archiveItemToLoc(resolved));
+  if (typeof queueAddAlbumOrPlay === "function") {
+    await queueAddAlbumOrPlay(items, { mode: "play" });
+  }
 }
 
 async function archiveQueueSavedFromRow(btn) {
   const row = btn?.closest(".archive-row");
   const it = _archiveItemFromRow(row);
-  if (!it) return;
-  const resolved = await _archiveResolveStream(it);
-  if (!resolved?.streamUrl) {
-    if (typeof showToast === "function") showToast("This item has no playable stream", "error");
+  if (!it?.identifier) return;
+  const meta = await _archiveResolveMeta(it.identifier);
+  const items = _archiveItemsFromMeta(meta);
+  if (!items.length) {
+    if (typeof showToast === "function") showToast("This item has no playable audio", "error");
     return;
   }
-  if (typeof queueAddLoc === "function") queueAddLoc(_archiveItemToLoc(resolved));
+  if (typeof queueAddAlbumOrPlay === "function") {
+    await queueAddAlbumOrPlay(items, { mode: "append" });
+  }
 }
 
 // ── Archive item info popup ──────────────────────────────────────────

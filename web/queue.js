@@ -322,17 +322,6 @@ function _queueOnExternalPlay(itemPayload) {
     }
     return false;
   }
-  // Only run the interrupt-insert when we already have a hydrated queue
-  // with items. Without items, the new track just plays standalone —
-  // no queue to interrupt. _queue can be null on first interaction;
-  // bail rather than racing the load.
-  if (!Array.isArray(_queue) || _queue.length === 0) {
-    if (_queueCurrentPosition != null) {
-      _queueCurrentPosition = null;
-      if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
-    }
-    return false;
-  }
   // SYNCHRONOUSLY update local state before the engine call returns
   // control: optimistically insert the new item at a synthetic position
   // lower than the current minimum and mark it as playing. Any
@@ -340,13 +329,15 @@ function _queueOnExternalPlay(itemPayload) {
   // stale "ended" from the YT player as it swaps video) reads this
   // updated state — without it, _queuePlayNext would advance from the
   // old _queueCurrentPosition and replay the previously-playing track.
-  const minPos = _queue.reduce((m, it) => Math.min(m, Number(it.position) || 0), Infinity);
-  // Use a fractional position so it can't collide with any server-
-  // assigned integer; gets reconciled to a real position after the
-  // server POST + refetch.
+  // Empty queue also gets the insert: every play becomes a queue head
+  // so the user always has a "back" anchor.
+  const existing = Array.isArray(_queue) ? _queue : [];
+  const minPos = existing.reduce((m, it) => Math.min(m, Number(it.position) || 0), Infinity);
+  // Fractional position can't collide with any server-assigned integer;
+  // gets reconciled to a real position after the server POST + refetch.
   const tempPos = (Number.isFinite(minPos) ? minPos : 1) - 0.5;
   const optimistic = { position: tempPos, source: itemPayload.source, externalId: itemPayload.externalId, data: itemPayload.data || {} };
-  _queue = [optimistic, ..._queue];
+  _queue = [optimistic, ...existing];
   _queueCurrentPosition = tempPos;
   if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
   _refreshPlayerNavButtons();
