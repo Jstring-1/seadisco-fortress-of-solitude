@@ -438,6 +438,11 @@ async function _refreshSiteTheme(): Promise<void> {
 // and lock the cached HTML to no-theme until the next save.
 if (process.env.APP_DB_URL) {
   _dbReady.then(() => _refreshSiteTheme()).catch(() => {});
+  // Periodic refresh so cross-instance saves propagate (Railway can
+  // run >1 worker; an admin POST on instance A won't notify B
+  // directly). 60s is a good balance — fast enough for noticeable
+  // theme switches, slow enough not to thrash the DB.
+  setInterval(() => { _refreshSiteTheme().catch(() => {}); }, 60_000);
 }
 
 function _buildClerkInject(): string {
@@ -452,8 +457,16 @@ function _buildClerkInject(): string {
 }
 const _clerkInject = _buildClerkInject();
 function _loadHtmlTemplated(relPath: string): string | null {
-  const cached = _htmlCache.get(relPath);
-  if (cached) return cached;
+  // Don't cache an empty-themed HTML — if _siteTheme hasn't loaded
+  // yet (DB still warming up, brand-new deploy, etc.) we'd lock in
+  // the no-theme HTML and need a manual save to clear it. Re-template
+  // on every request until _siteTheme is populated; once it's set,
+  // cache normally.
+  const useCache = !!_siteTheme;
+  if (useCache) {
+    const cached = _htmlCache.get(relPath);
+    if (cached) return cached;
+  }
   try {
     const full = path.join(__dirname, "../web", relPath);
     let html = fs.readFileSync(full, "utf8");
@@ -462,15 +475,23 @@ function _loadHtmlTemplated(relPath: string): string | null {
     // script in <head> can apply it before the stylesheet parses.
     // The placeholder is read by the inline IIFE that sets data-theme.
     html = html.replace(/<!--SD_THEME_INJECT-->/g, _siteTheme);
-    _htmlCache.set(relPath, html);
+    if (useCache) _htmlCache.set(relPath, html);
     return html;
   } catch { return null; }
 }
 function _sendHtml(res: express.Response, relPath: string) {
   const html = _loadHtmlTemplated(relPath);
   if (!html) return false;
-  res.setHeader("Cache-Control", "no-cache, must-revalidate");
+  // Stronger cache directive — `no-cache` is browser-honored but some
+  // edge caches (Railway proxies, Cloudflare, etc.) still hold pages.
+  // `no-store` is unambiguous: don't cache anywhere. The HTML is
+  // small and re-fetching is cheap.
+  res.setHeader("Cache-Control", "private, no-store, max-age=0, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
   res.setHeader("Content-Type", "text/html; charset=utf-8");
+  // Diagnostic header — `curl -I https://seadisco.com` will show
+  // exactly which theme the server thinks it's injecting.
+  res.setHeader("X-SeaDisco-Theme", _siteTheme || "(unset)");
   res.send(html);
   return true;
 }
