@@ -318,6 +318,11 @@ function _seaDiscoBuildClerkAppearance() {
   const muted   = css("--muted",   "#a89880");
   const accent  = css("--accent",  "#ff6b35");
   const border  = css("--border",  "#2e2518");
+  // Card border uses a fixed mid-grey rather than --border because
+  // some themes set --border close to --bg, which makes the modal
+  // blend into the page. A subtle but visible grey edge separates
+  // the popup from whatever's behind it on every theme.
+  const cardBorder = "rgba(255, 255, 255, 0.18)";
   return {
     variables: {
       colorBackground:      bg,
@@ -332,7 +337,7 @@ function _seaDiscoBuildClerkAppearance() {
       fontFamily:           "system-ui, -apple-system, sans-serif",
     },
     elements: {
-      card:             `background:${bg}; border:1px solid ${border}; box-shadow:0 8px 30px rgba(0,0,0,0.5);`,
+      card:             `background:${bg}; border:1px solid ${cardBorder}; box-shadow:0 10px 40px rgba(0,0,0,0.7);`,
       headerTitle:      `color:${text};`,
       headerSubtitle:   `color:${muted};`,
       formFieldLabel:   `color:${muted};`,
@@ -483,7 +488,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260426az";
+  const SITE_VERSION = "build 20260426ba";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
