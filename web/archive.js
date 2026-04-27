@@ -169,6 +169,7 @@ function _archiveRenderSavedRows() {
   // Render every saved row — saved lists are typically small (capped at
   // 1000 server-side, expected dozens). No pagination needed.
   rowsEl.innerHTML = view.map(({ it }) => _archiveRowHtml(it, /*idx*/ -1, { savedView: true })).join("");
+  if (typeof _locUpdatePlayingCard === "function") _locUpdatePlayingCard();
 }
 
 function _archiveOnSavedFilterInput(input) {
@@ -291,6 +292,11 @@ function _archiveRenderRowsOnly(opts) {
     : "";
   rowsEl.innerHTML = html + loadMore;
   _updateArchiveCount(view.length);
+  // Reapply the now-playing mark to any freshly-rendered row whose
+  // identifier matches the LOC bar's current item — filter / sort /
+  // load-more all swap row markup, which would otherwise drop the
+  // existing .is-playing class.
+  if (typeof _locUpdatePlayingCard === "function") _locUpdatePlayingCard();
 }
 
 function _updateArchiveCount(filtered) {

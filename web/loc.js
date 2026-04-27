@@ -1054,14 +1054,24 @@ function _locCurrentBarItemId() {
 // changes (via _locUpdateQueueButtons).
 function _locUpdatePlayingCard() {
   const baseId = _locCurrentBarItemId();
-  // Remove from anything that isn't the current item
+  // Remove the is-playing mark from any card / archive-row that no
+  // longer matches. Both surfaces use this function as the single
+  // source of truth — archive rows are played through the same LOC
+  // engine, so the bar's current item id is authoritative here too.
   document.querySelectorAll(".card.is-playing").forEach(el => {
     if (el.dataset.locId !== baseId) el.classList.remove("is-playing");
   });
+  document.querySelectorAll(".archive-row.is-playing").forEach(el => {
+    if (el.dataset.id !== baseId) el.classList.remove("is-playing");
+  });
   if (!baseId) return;
-  // Add to every card matching the current item (could appear in both
-  // Search and Saved grids if they're rendered simultaneously)
+  // Add to every card / archive row matching the current item (could
+  // appear in both Browse and Saved tabs if they're rendered
+  // simultaneously, or LOC Search + Saved on the LOC page).
   document.querySelectorAll(`.card[data-loc-id="${CSS.escape(baseId)}"]`).forEach(el => {
+    el.classList.add("is-playing");
+  });
+  document.querySelectorAll(`.archive-row[data-id="${CSS.escape(baseId)}"]`).forEach(el => {
     el.classList.add("is-playing");
   });
 }
