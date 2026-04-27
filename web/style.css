@@ -7838,7 +7838,7 @@ a:focus-visible {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
   padding: 0.4rem 0;
   font-size: 0.78rem;
-  max-width: 240px;
+  width: 240px;
 }
 .lookup-popup-head {
   padding: 0.2rem 0.7rem 0.35rem;
@@ -7855,7 +7855,9 @@ a:focus-visible {
 .lookup-popup-btn {
   display: flex;
   align-items: center;
-  gap: 0.55rem;
+  justify-content: flex-start;
+  gap: 0.6rem;
+  width: 100%;
   background: none;
   border: none;
   color: #ddd;
@@ -7865,13 +7867,20 @@ a:focus-visible {
   text-align: left;
   text-decoration: none;
   font-family: inherit;
+  white-space: nowrap;
 }
 .lookup-popup-btn:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+/* Icon column has a fixed width so the text labels line up vertically
+   regardless of glyph variation (emoji widths differ per OS).
+   `overflow:hidden` clips wide emoji to the column so they can't push
+   the text right. */
 .lookup-popup-icon {
   display: inline-flex;
-  width: 1.1rem;
+  flex: 0 0 1.3rem;
+  width: 1.3rem;
   justify-content: center;
-  flex-shrink: 0;
+  align-items: center;
   font-size: 0.85rem;
   color: var(--accent);
+  overflow: hidden;
 }
