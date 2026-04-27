@@ -373,6 +373,71 @@ async function _youtubeToggleSave(btn) {
   }
 }
 
+// ── YouTube popup (overlays album / version popups) ─────────────────
+// Mirrors the wiki-popup pattern: a small overlay with search results
+// that doesn't navigate away from the underlying modal. Lets users
+// pick a video / play / queue / save without losing the album popup
+// context. Standalone YouTube searches still go to /?v=youtube via
+// the "Full page ↗" link in the popup header.
+
+let _ytPopupQuery = "";
+
+async function openYoutubePopup(query) {
+  const q = String(query ?? "").trim();
+  if (!q) return;
+  _ytPopupQuery = q;
+  const overlay = document.getElementById("youtube-popup-overlay");
+  const titleEl = document.getElementById("youtube-popup-title");
+  const statusEl = document.getElementById("youtube-popup-status");
+  const resultsEl = document.getElementById("youtube-popup-results");
+  if (!overlay) return;
+  overlay.classList.add("open");
+  if (titleEl) titleEl.textContent = `YouTube · "${q}"`;
+  if (statusEl) statusEl.textContent = "Searching…";
+  if (resultsEl) resultsEl.innerHTML = "";
+  // Sync ★ state once per session.
+  if (_ytSavedIds == null) _youtubeLoadSavedIds();
+  try {
+    const r = await fetch(`/api/youtube/search?q=${encodeURIComponent(q)}`, { cache: "no-store" });
+    if (!r.ok) {
+      const errBody = await r.text().catch(() => "");
+      console.warn("[youtube popup] search failed:", r.status, errBody);
+      if (statusEl) statusEl.textContent = `Search failed (${r.status}).`;
+      return;
+    }
+    const j = await r.json();
+    const items = Array.isArray(j?.items) ? j.items : [];
+    if (statusEl) statusEl.textContent = items.length ? `${items.length} result${items.length === 1 ? "" : "s"}` : "No results.";
+    if (resultsEl) resultsEl.innerHTML = items.map(it => _youtubeRowHtml(it)).join("");
+  } catch (e) {
+    console.warn("[youtube popup] threw:", e);
+    if (statusEl) statusEl.textContent = "Search failed.";
+  }
+}
+
+function closeYoutubePopup() {
+  const overlay = document.getElementById("youtube-popup-overlay");
+  if (overlay) overlay.classList.remove("open");
+}
+
+// "Full page ↗" link click — close the popup, navigate to the
+// standalone /?v=youtube view with the same query so the user can
+// browse paginated results / use the Saved tab.
+function _youtubePopupOpenFullPage() {
+  const q = _ytPopupQuery;
+  closeYoutubePopup();
+  if (typeof switchView === "function") {
+    try { switchView("youtube"); } catch {}
+    setTimeout(() => {
+      const qInput = document.getElementById("youtube-view-q");
+      if (qInput) qInput.value = q;
+      if (typeof runYoutubeSearch === "function") runYoutubeSearch(q);
+    }, 30);
+  } else if (q) {
+    location.href = "/?v=youtube&yq=" + encodeURIComponent(q);
+  }
+}
+
 // ── Globals ───────────────────────────────────────────────────────────
 window.initYoutubeView           = initYoutubeView;
 window.runYoutubeSearch          = runYoutubeSearch;
@@ -383,3 +448,6 @@ window._youtubeQueueRow          = _youtubeQueueRow;
 window._youtubeToggleSave        = _youtubeToggleSave;
 window._youtubeOnSavedFilterInput = _youtubeOnSavedFilterInput;
 window._youtubeOnSavedSortChange  = _youtubeOnSavedSortChange;
+window.openYoutubePopup           = openYoutubePopup;
+window.closeYoutubePopup          = closeYoutubePopup;
+window._youtubePopupOpenFullPage  = _youtubePopupOpenFullPage;

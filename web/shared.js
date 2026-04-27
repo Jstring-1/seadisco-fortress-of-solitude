@@ -491,7 +491,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260427q";
+  const SITE_VERSION = "build 20260427r";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -844,14 +844,14 @@ function openLookupPopup(ev, scope, label, ctx) {
     internal.push({ key: "loc", icon: "🏛", text: "Library of Congress" });
   }
 
-  // YouTube is now an IN-APP search — push as an internal action so
-  // it sits with the other in-app options. External group is just
-  // Discogs.com; YT is handled via switchView in the click delegate.
+  // YouTube is now an IN-APP search — popup overlay so users don't
+  // lose context when initiated from an album / version modal.
   if (scope !== "catno") {
     internal.push({ key: "ytapp", icon: "▶", text: "YouTube", _ytQ: ytQ });
   }
+  // External Discogs.com link removed — internal SeaDisco search
+  // covers the same ground without leaving the site.
   const external = [];
-  external.push({ key: "dc", icon: "◎", text: "Discogs.com",  url: dcUrl });
 
   // Combine for index addressing of action buttons (keeps indices
   // stable so the click delegate can resolve any clicked button).
@@ -936,16 +936,21 @@ function openLookupPopup(ev, scope, label, ctx) {
           }
         }
         else if (b.key === "ytapp") {
-          // Switch to the in-app YouTube view with the prebuilt query.
-          // Closes any open modal first so the route lands cleanly.
-          if (typeof closeModal === "function") { try { closeModal(); } catch {} }
-          if (typeof _locCloseInfoPopup === "function") { try { _locCloseInfoPopup(); } catch {} }
-          if (typeof switchView === "function") { try { switchView("youtube"); } catch {} }
-          setTimeout(() => {
-            const qInput = document.getElementById("youtube-view-q");
-            if (qInput) qInput.value = b._ytQ || label;
-            if (typeof runYoutubeSearch === "function") runYoutubeSearch(b._ytQ || label);
-          }, 30);
+          // Open the YouTube search results in a popup overlay so the
+          // album / version modal underneath stays open. Standalone
+          // searches (footer link or "Full page ↗" inside the popup)
+          // still go to /?v=youtube.
+          if (typeof openYoutubePopup === "function") {
+            openYoutubePopup(b._ytQ || label);
+          } else if (typeof switchView === "function") {
+            // Fallback if youtube.js isn't loaded yet.
+            try { switchView("youtube"); } catch {}
+            setTimeout(() => {
+              const qInput = document.getElementById("youtube-view-q");
+              if (qInput) qInput.value = b._ytQ || label;
+              if (typeof runYoutubeSearch === "function") runYoutubeSearch(b._ytQ || label);
+            }, 30);
+          }
         }
         else if (b.key === "wiki") {
           // Quote phrase for exact-match Wikipedia search. Append a
