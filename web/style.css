@@ -4954,8 +4954,14 @@ body:has(.queue-drawer.open) #scroll-top-btn {
   justify-content: center;
   gap: 3rem;
   margin-bottom: 1.5rem;
-  text-align: left;
 }
+/* Columns mirror around the center: left column right-aligned,
+   right column left-aligned, so the two columns visually butt up
+   against the gap. */
+.footer-grid > .footer-col:first-child  { text-align: right; }
+.footer-grid > .footer-col:last-child   { text-align: left; }
+.footer-grid > .footer-col:first-child  h4 { text-align: right; }
+.footer-grid > .footer-col:last-child   h4 { text-align: left; }
 .footer-col h4 {
   font-size: 0.72rem;
   text-transform: uppercase;
