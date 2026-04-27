@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260427o" />
+  <link rel="stylesheet" href="/style.css?v=20260427p" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260427o"></script>
-<script defer src="/shared.js?v=20260427o"></script>
+<script defer src="/utils.js?v=20260427p"></script>
+<script defer src="/shared.js?v=20260427p"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true, iconNav: true }));</script>
 
 <main>
@@ -43,6 +43,7 @@
           <button onclick="adminSyncAll()" id="admin-sync-all-btn" class="admin-btn admin-btn-sync">Sync All</button>
           <button onclick="adminSyncStop()" id="admin-sync-stop-btn" class="admin-btn admin-btn-stop">Stop All</button>
           <button onclick="adminRefreshArchive(this)" id="admin-archive-btn" class="admin-btn">Get archive data</button>
+          <button onclick="adminWarmFavoritesCache(this)" id="admin-warm-fav-btn" class="admin-btn" title="Pre-fetch full release/master detail (tracklist, credits) for every item in your favorites so anon visitors see complete album popups">Warm favorites cache</button>
           <button onclick="toggleApiKill()" id="admin-api-kill-btn" class="admin-btn admin-btn-danger">Kill All</button>
           <button onclick="adminRevokeSessions()" id="admin-revoke-btn" class="admin-btn admin-btn-danger">Logout All</button>
         </div>
@@ -313,7 +314,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260427o"></script>
+<script defer src="/modal.js?v=20260427p"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -708,6 +709,25 @@ async function adminExtrasFetch() {
 // when admin uploads new shows and doesn't want to wait. Returns
 // 202 immediately; we poll the listing endpoint to detect when the
 // new data has landed in DB.
+async function adminWarmFavoritesCache(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = "Warming…"; }
+  try {
+    const r = await apiFetch("/api/admin/warm-favorites-cache", { method: "POST" });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      if (typeof showToast === "function") showToast(`Warm failed: ${err.error || r.status}`, "error");
+      return;
+    }
+    if (typeof showToast === "function") {
+      showToast("Cache warm started — check railway logs for progress (typically 1 req/sec).");
+    }
+  } catch (e) {
+    if (typeof showToast === "function") showToast(`Warm failed: ${e}`, "error");
+  } finally {
+    setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = "Warm favorites cache"; } }, 2000);
+  }
+}
+
 async function adminRefreshArchive(btn) {
   const statusEl = document.getElementById("admin-archive-status");
   const setStatus = (msg) => { if (statusEl) statusEl.textContent = msg; };
