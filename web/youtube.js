@@ -252,7 +252,7 @@ function _youtubeRowHtml(it) {
   const linkBtn = `<a class="archive-btn archive-btn-link" href="https://www.youtube.com/watch?v=${encodeURIComponent(id)}" target="_blank" rel="noopener">Open on YouTube ↗</a>`;
   return `
     <div class="yt-row archive-row" data-vid="${safeId}" data-title="${safeTitle}" data-channel="${safeChannel}" data-thumb="${escHtml(thumb)}">
-      <img class="yt-row-thumb" src="${escHtml(thumb)}" alt="" loading="lazy">
+      <img class="yt-row-thumb" src="${escHtml(thumb)}" alt="" loading="lazy" width="120" height="68" decoding="async">
       <div class="archive-row-main">
         <div class="archive-row-title">${safeTitle}</div>
         ${safeChannel ? `<div class="archive-row-date">${safeChannel}</div>` : ""}

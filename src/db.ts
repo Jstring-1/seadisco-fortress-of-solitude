@@ -8,11 +8,29 @@ function getPool() {
   if (!pool) {
     const connStr = process.env.APP_DB_URL;
     if (!connStr) throw new Error("APP_DB_URL not set");
+    // Explicit pool sizing. Defaults (max:10, no idleTimeoutMillis)
+    // were fine at small scale but caused queue buildup during
+    // sync bursts (every signed-in user can hit /api/user/* in
+    // parallel for collection / wantlist / inventory / lists).
+    // Overridable via env so we can tune without a redeploy.
+    const max = Number(process.env.APP_DB_POOL_MAX ?? 20);
+    const min = Number(process.env.APP_DB_POOL_MIN ?? 2);
+    const idle = Number(process.env.APP_DB_POOL_IDLE_MS ?? 30000);
+    const connTimeout = Number(process.env.APP_DB_POOL_CONN_MS ?? 5000);
     pool = new Pool({
       connectionString: connStr,
       ssl: process.env.DB_CA_CERT
         ? { rejectUnauthorized: true, ca: process.env.DB_CA_CERT }
         : { rejectUnauthorized: false },
+      max,
+      min,
+      idleTimeoutMillis: idle,
+      connectionTimeoutMillis: connTimeout,
+    });
+    pool.on("error", (err) => {
+      // Idle-client errors aren't fatal — log so we notice if Railway
+      // is killing connections in the background.
+      console.warn("[db pool] idle client error:", err?.message ?? err);
     });
   }
   return pool;

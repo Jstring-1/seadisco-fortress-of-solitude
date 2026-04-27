@@ -1,5 +1,60 @@
 // ── Shared utilities for all pages (index, account, admin) ──────────────
 
+// ── Lazy module loader ──────────────────────────────────────────────────
+// Used to defer non-critical view code (archive, youtube, inventory
+// editor) until the user actually navigates into that view. Each path
+// is loaded at most once — repeat calls return the original promise so
+// callers can `await _sdLoadModule(...)` freely.
+//
+// The version param matches the cache-bust version we use in the static
+// <script> tags. Inlined here too so we don't have to thread it through
+// every call site.
+window._sdLoadedModules  = window._sdLoadedModules  || {};
+window._sdModulePromises = window._sdModulePromises || {};
+function _sdLoadModule(srcPath) {
+  if (window._sdLoadedModules[srcPath]) return Promise.resolve();
+  if (window._sdModulePromises[srcPath]) return window._sdModulePromises[srcPath];
+  const v = window._SD_LAZY_VERSION || "";
+  window._sdModulePromises[srcPath] = new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = srcPath + (v ? `?v=${encodeURIComponent(v)}` : "");
+    s.async = false; // preserve order if multiple are loaded back-to-back
+    s.onload  = () => { window._sdLoadedModules[srcPath] = true; resolve(); };
+    s.onerror = () => reject(new Error("Failed to load " + srcPath));
+    document.head.appendChild(s);
+  });
+  return window._sdModulePromises[srcPath];
+}
+window._sdLoadModule = _sdLoadModule;
+
+// Stubs for entry points exported by lazy-loaded modules. These get
+// called from inline onclick handlers built by other (eager) modules.
+// The stub loads the real script and re-dispatches the call once the
+// module's own assignment to window.openYoutubePopup / etc. wins.
+// Tracked via a flag so we don't load + re-call recursively if the
+// real module forgets to override.
+function _sdLazyStub(modulePath, fnName) {
+  return function (...args) {
+    _sdLoadModule(modulePath).then(() => {
+      const fn = window[fnName];
+      // Only re-dispatch if the module actually replaced the stub.
+      if (typeof fn === "function" && fn !== window["_sdStub_" + fnName]) {
+        fn.apply(null, args);
+      }
+    }).catch(err => console.warn("[lazy] " + modulePath + " load failed:", err));
+  };
+}
+if (typeof window.openYoutubePopup !== "function") {
+  const stub = _sdLazyStub("/youtube.js", "openYoutubePopup");
+  window._sdStub_openYoutubePopup = stub;
+  window.openYoutubePopup = stub;
+}
+if (typeof window.openInventoryEditor !== "function") {
+  const stub = _sdLazyStub("/inventory-editor.js", "openInventoryEditor");
+  window._sdStub_openInventoryEditor = stub;
+  window.openInventoryEditor = stub;
+}
+
 // ── Relative time formatting ─────────────────────────────────────────────
 // Single helper covers both "syncedAt" displays (use fallback "never")
 // and generic "ago" labels (default em-dash). Accepts ms-numbers or
@@ -491,7 +546,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260427.1253";
+  const SITE_VERSION = "build 20260427.1301";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
