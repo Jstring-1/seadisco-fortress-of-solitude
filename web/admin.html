@@ -10,12 +10,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260426o" />
+  <link rel="stylesheet" href="/style.css?v=20260426p" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260426o"></script>
+<script defer src="/shared.js?v=20260426p"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true, iconNav: true }));</script>
 
 <main>
@@ -40,9 +40,11 @@
 
           <button onclick="adminSyncAll()" id="admin-sync-all-btn" class="admin-btn admin-btn-sync">Sync All</button>
           <button onclick="adminSyncStop()" id="admin-sync-stop-btn" class="admin-btn admin-btn-stop">Stop All</button>
+          <button onclick="adminRefreshArchive(this)" id="admin-archive-btn" class="admin-btn">Get archive data</button>
           <button onclick="toggleApiKill()" id="admin-api-kill-btn" class="admin-btn admin-btn-danger">Kill All</button>
           <button onclick="adminRevokeSessions()" id="admin-revoke-btn" class="admin-btn admin-btn-danger">Logout All</button>
         </div>
+        <div id="admin-archive-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.35rem"></div>
         <div id="admin-action-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.35rem"></div>
       </div>
 
@@ -111,17 +113,13 @@
           <button class="admin-refresh-btn" onclick="loadDbStats()" title="Refresh">&#8635;</button>
         </div>
         <div id="db-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
-        <!-- Manual archive refresh — the cache auto-updates weekly via
-             a server-side scheduler; this button forces an immediate
-             refetch when admin uploads new shows on archive.org and
-             doesn't want to wait for the weekly cycle. -->
-        <div style="margin-top:1.2rem;padding-top:0.8rem;border-top:1px dashed var(--border)">
-          <h3 style="margin:0 0 0.4rem;font-size:0.92rem">External caches</h3>
-          <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap">
-            <button class="admin-btn" onclick="adminRefreshArchive(this)" title="Re-fetch the Aadam Jacobs archive.org collection now (auto-runs weekly)">Get archive data</button>
-            <span id="admin-archive-status" style="font-size:0.78rem;color:var(--muted)"></span>
-          </div>
-        </div>
+        <!-- Flat all-tables view (toggle to expand). The grouped view
+             above is curated for readability; this is the raw
+             "everything we have" listing. -->
+        <details style="margin-top:1rem">
+          <summary style="cursor:pointer;color:var(--muted);font-size:0.82rem;font-weight:600">All tables (flat list)</summary>
+          <div id="db-stats-flat" style="margin-top:0.6rem;font-size:0.78rem;color:var(--muted)"></div>
+        </details>
       </div>
 
       <!-- LOC Stats -->
@@ -312,7 +310,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260426o"></script>
+<script defer src="/modal.js?v=20260426p"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -705,8 +703,8 @@ async function loadDbStats() {
     const groups = [
       { label: "Users & Auth", tables: ["user_tokens", "oauth_request_tokens"] },
       { label: "Collection & Library", tables: ["user_collection", "user_collection_folders", "user_wantlist", "user_inventory", "user_lists", "user_list_items", "user_orders", "user_order_messages"] },
-      { label: "Pricing", tables: ["price_cache", "price_history", "price_alerts", "triggered_alerts"] },
-      { label: "User Features", tables: ["saved_searches", "user_favorites", "user_recent_views", "user_loc_saves", "user_wiki_saves", "feedback", "release_cache"] },
+      { label: "Pricing", tables: ["price_cache", "price_history"] },
+      { label: "User Features", tables: ["saved_searches", "user_favorites", "user_recent_views", "user_loc_saves", "user_wiki_saves", "user_play_queue", "feedback", "release_cache"] },
       { label: "Curated Data", tables: ["blues_artists"] },
       { label: "System", tables: ["api_request_log"] },
     ];
@@ -736,6 +734,21 @@ async function loadDbStats() {
     }
     html += '</div>';
     el.innerHTML = html;
+
+    // Flat all-tables view inside the <details> below. Sorted by row
+    // count desc so the largest tables surface first.
+    const flatEl = document.getElementById("db-stats-flat");
+    if (flatEl) {
+      const sorted = [...tables].sort((a, b) => (b.rows ?? 0) - (a.rows ?? 0));
+      flatEl.innerHTML = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));column-gap:1rem;row-gap:0.15rem">` +
+        sorted.map(t => {
+          const count = t.rows;
+          const display = count < 0 ? "err" : count.toLocaleString();
+          const color = count < 0 ? "var(--danger)" : count === 0 ? "var(--muted-dim)" : "var(--fg)";
+          return `<div style="display:flex;justify-content:space-between;font-size:0.78rem"><span style="color:var(--muted);font-family:monospace">${t.table}</span><span style="color:${color};font-weight:500">${display}</span></div>`;
+        }).join("") +
+        `</div>`;
+    }
   } catch {
     el.textContent = "Could not load DB stats.";
   }

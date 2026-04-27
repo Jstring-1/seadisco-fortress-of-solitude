@@ -370,34 +370,11 @@ export async function initDb() {
     )
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS price_history_release_date_idx ON price_history (discogs_release_id, recorded_at DESC)`);
-  await getPool().query(`
-    CREATE TABLE IF NOT EXISTS price_alerts (
-      id                  SERIAL PRIMARY KEY,
-      clerk_user_id       TEXT NOT NULL,
-      discogs_release_id  INTEGER NOT NULL,
-      alert_type          TEXT NOT NULL DEFAULT 'below',
-      threshold_price     NUMERIC(10,2) NOT NULL,
-      currency            TEXT DEFAULT 'USD',
-      triggered           BOOLEAN DEFAULT false,
-      triggered_at        TIMESTAMPTZ,
-      created_at          TIMESTAMPTZ DEFAULT NOW(),
-      UNIQUE(clerk_user_id, discogs_release_id, alert_type)
-    )
-  `);
-  await getPool().query(`
-    CREATE TABLE IF NOT EXISTS triggered_alerts (
-      id                  SERIAL PRIMARY KEY,
-      clerk_user_id       TEXT NOT NULL,
-      alert_id            INTEGER REFERENCES price_alerts(id) ON DELETE CASCADE,
-      discogs_release_id  INTEGER NOT NULL,
-      alert_type          TEXT DEFAULT 'below',
-      message             TEXT NOT NULL,
-      current_price       NUMERIC(10,2),
-      dismissed           BOOLEAN DEFAULT false,
-      triggered_at        TIMESTAMPTZ DEFAULT NOW(),
-      created_at          TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
+  // Drop legacy alert tables that were planned but never wired up.
+  // No reads, no writes anywhere in the code; safe to remove. FK
+  // dependency: triggered_alerts → price_alerts, so child first.
+  await getPool().query(`DROP TABLE IF EXISTS triggered_alerts`);
+  await getPool().query(`DROP TABLE IF EXISTS price_alerts`);
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS saved_searches (
       id                  SERIAL PRIMARY KEY,
@@ -821,10 +798,8 @@ export async function getBluesStats(): Promise<{ total: number; lastSeed: string
 // else from every per-user table. Returns row counts per table.
 export async function purgeNonAdminUserData(adminClerkId: string): Promise<Record<string, number>> {
   if (!adminClerkId) throw new Error("adminClerkId required");
-  // Per-user tables, ordered with FK-children first (triggered_alerts → price_alerts).
+  // Per-user tables, ordered with FK-children first.
   const tables = [
-    "triggered_alerts",
-    "price_alerts",
     "user_order_messages",
     "user_orders",
     "user_list_items",
@@ -1115,8 +1090,6 @@ export async function deleteUserData(clerkUserId: string): Promise<void> {
     "user_wiki_saves",
     "user_play_queue",
     "saved_searches",
-    "price_alerts",
-    "triggered_alerts",
     "feedback",
     "user_order_messages",
     "user_orders",
@@ -3238,9 +3211,10 @@ export async function getTableRowCounts(): Promise<Array<{ table: string; rows: 
   const tables = [
     'user_tokens', 'user_collection', 'user_collection_folders', 'user_wantlist',
     'user_inventory', 'user_lists', 'user_list_items', 'user_orders', 'user_order_messages',
-    'user_favorites', 'saved_searches', 'feedback',
-    'release_cache', 'price_cache', 'price_history', 'price_alerts', 'triggered_alerts',
-    'api_request_log', 'oauth_request_tokens',
+    'user_favorites', 'user_recent_views', 'user_loc_saves', 'user_wiki_saves',
+    'user_play_queue', 'saved_searches', 'feedback',
+    'release_cache', 'price_cache', 'price_history',
+    'blues_artists', 'api_request_log', 'oauth_request_tokens',
   ];
   const counts = await Promise.all(
     tables.map(async (t) => {

@@ -2735,11 +2735,16 @@ async function _fetchArchiveCollection(collectionId: string): Promise<ArchiveIte
 // Refetch the collection and write to cache. Used by both the weekly
 // scheduled refresh and the admin manual trigger. Logs how many items
 // were stored so admin can sanity-check.
+// Bump this whenever the cached payload shape or fetch strategy
+// changes; _maybeRefreshArchive will discard older-schema caches and
+// rebuild on next boot. Avoids stuck-stale-cache after deploys.
+const _ARCHIVE_CACHE_SCHEMA = 2;
+
 async function _refreshArchiveCache(collectionId: string, cacheKey: number): Promise<{ count: number }> {
   console.log(`[archive] refreshing collection "${collectionId}" cache…`);
   const t0 = Date.now();
   const items = await _fetchArchiveCollection(collectionId);
-  const payload = { items, fetchedAt: new Date().toISOString() };
+  const payload = { items, fetchedAt: new Date().toISOString(), schemaV: _ARCHIVE_CACHE_SCHEMA };
   await cacheRelease(cacheKey, "master-versions", payload);
   const ms = Date.now() - t0;
   console.log(`[archive] refresh complete: ${items.length} items in ${ms}ms`);
@@ -2755,13 +2760,17 @@ const _ARCHIVE_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // every 24h check
 const _ARCHIVE_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;  // refresh if >7d old
 async function _maybeRefreshArchive() {
   try {
-    // Inspect the cached payload's own fetchedAt timestamp (written
-    // by _refreshArchiveCache). Falls back to refresh if the row
-    // doesn't exist yet, has malformed data, or is older than 7 days.
+    // Inspect the cached payload. Refresh triggers when:
+    //   1. row doesn't exist yet
+    //   2. payload schema is older than current (deploy invalidates)
+    //   3. fetchedAt is older than 7 days
     const cached = await getCachedRelease(_ARCHIVE_AADAM_CACHE_KEY, "master-versions");
     const fetchedAt = cached?.fetchedAt ? Date.parse(cached.fetchedAt) : 0;
     const ageMs = Date.now() - fetchedAt;
-    if (!fetchedAt || ageMs > _ARCHIVE_STALE_AFTER_MS) {
+    const schemaStale = (cached?.schemaV ?? 0) < _ARCHIVE_CACHE_SCHEMA;
+    if (!fetchedAt || schemaStale || ageMs > _ARCHIVE_STALE_AFTER_MS) {
+      console.log(`[archive] refresh trigger:`,
+        !fetchedAt ? "no cache" : schemaStale ? `schema ${cached?.schemaV ?? 0} → ${_ARCHIVE_CACHE_SCHEMA}` : `age ${Math.round(ageMs / 86400000)}d`);
       await _refreshArchiveCache(_ARCHIVE_AADAM_COLLECTION, _ARCHIVE_AADAM_CACHE_KEY);
     }
   } catch (err: any) {
