@@ -6649,6 +6649,32 @@ body.player-open .queue-drawer.open { bottom: 102px; }
 .archive-save-btn:not(.is-saved) { color: var(--muted); }
 .archive-save-btn:hover { color: var(--accent-hi, var(--accent)); }
 
+/* Now-playing indication on archive rows. _locUpdatePlayingCard adds
+   .is-playing to the row whose data-id matches the LOC bar's current
+   item id (archive items play via the LOC engine). Visually mirrors
+   the .queue-row.is-playing treatment: accent left stripe, tinted
+   background, accent title color, and a tiny "▶" pulse to the left
+   of the title. */
+.archive-row.is-playing {
+  background: rgba(255,255,255,0.04);
+  border-left: 3px solid var(--accent);
+  padding-left: calc(var(--archive-row-pad, 0.7rem) - 3px);
+}
+.archive-row.is-playing .archive-row-title {
+  color: var(--accent);
+}
+.archive-row.is-playing .archive-row-title::before {
+  content: "▶";
+  display: inline-block;
+  margin-right: 0.4em;
+  color: var(--accent);
+  animation: archive-row-pulse 1.4s ease-in-out infinite;
+}
+@keyframes archive-row-pulse {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+
 /* ── Archive item info popup ──────────────────────────────────────────
    Shares the .loc-info-overlay + .loc-info-box wrapper styling with the
    LOC popup; everything below targets the curated archive content
