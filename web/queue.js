@@ -553,6 +553,12 @@ async function queueClear() {
     });
     _queue = [];
     _queueCurrentPosition = null;
+    // Stop whatever's playing — clearing the queue is a "stop everything"
+    // gesture. playerClose dispatches to the active engine (LOC or YT)
+    // and tears the bar down; safe to call when nothing is playing.
+    if (typeof playerClose === "function") {
+      try { playerClose(); } catch {}
+    }
     _renderQueueDrawer();
   } catch {
     if (typeof showToast === "function") showToast("Could not clear queue", "error");
