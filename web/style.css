@@ -4889,7 +4889,7 @@ footer {
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.3s, border-color 0.15s;
+  transition: opacity 0.3s, border-color 0.15s, transform 0.2s;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -4900,6 +4900,21 @@ footer {
 }
 #scroll-top-btn:hover {
   border-color: var(--accent);
+}
+/* When the queue drawer is open it occupies the bottom-right corner
+   on top of the scroll-top button. Slide the button to the left of
+   the drawer (drawer width 360px + 1rem gap) so they don't overlap.
+   On screens narrower than the drawer, hide the button instead — the
+   drawer takes up effectively the whole bottom strip. */
+body:has(.queue-drawer.open) #scroll-top-btn {
+  transform: translateX(calc(-360px - 0.5rem));
+}
+@media (max-width: 480px) {
+  body:has(.queue-drawer.open) #scroll-top-btn {
+    opacity: 0;
+    pointer-events: none;
+    transform: none;
+  }
 }
 
 /* ══════════════════════════════════════════════
