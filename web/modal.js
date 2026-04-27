@@ -1359,6 +1359,7 @@ function loadYTVideo(id) {
   window._ytRetried = false;  // reset retry flag for new video
   _ytVideoToken++;
   const vtoken = _ytVideoToken;
+  console.debug("[loadYTVideo]", { id, hasPlayer: !!ytPlayer, apiReady: !!window._ytAPIReady });
   updatePlayerStatus("loading");
   // Timeout: if still "loading" after 8s, mark unavailable and skip
   if (_ytLoadTimer) clearTimeout(_ytLoadTimer);
@@ -1420,11 +1421,15 @@ function updatePlayerStatus(state, errorCode) {
 
 function _createYTPlayer(id) {
   const session = _ytSession;
-  let vtoken = _ytVideoToken;
+  // Don't reassign vtoken inside callbacks — capture once at creation
+  // so onStateChange / onError can compare against the live token
+  // without their captured value getting out from under them.
+  const vtoken = _ytVideoToken;
+  console.debug("[_createYTPlayer]", { id, session, vtoken });
   document.getElementById("video-player").innerHTML = "";
   ytPlayer = new YT.Player("video-player", {
     height: "100%", width: "100%", videoId: id,
-    playerVars: { autoplay: 1, rel: 0 },
+    playerVars: { autoplay: 1, rel: 0, playsinline: 1 },
     events: {
       onStateChange: function(e) {
         if (session !== _ytSession) return;   // player was destroyed/recreated
@@ -1461,8 +1466,9 @@ function _createYTPlayer(id) {
           if (typeof _stopYtProgressLoop === "function") _stopYtProgressLoop();
         }
         else if (e.data === 5) updatePlayerStatus("loading");
-        // Keep vtoken in sync when a new video loads on same player
-        if (e.data === -1 || e.data === 5) vtoken = _ytVideoToken;
+        // (vtoken is now const — captured at player creation; stale
+        // events from a destroyed/recreated player are filtered out
+        // by the session check above.)
       },
       onError: function(e) {
         if (session !== _ytSession) return;   // player was destroyed/recreated
@@ -1956,7 +1962,12 @@ function openVideo(event, url) {
   // the wrong track (whatever was at index 0 of any open album
   // popup's track list).
   const clickedEl = event?.target?.closest?.(".track-link") || event?.target;
+  // Read AND clear the queue-meta handoff slot up front. Reading then
+  // deleting unconditionally prevents leaks: if a second openVideo
+  // fires while a previous queue dispatch's meta is still set, we
+  // don't apply yesterday's title to today's video.
   const queueMeta = window._queueDispatchYtMeta;
+  delete window._queueDispatchYtMeta;
   // trackLinks is set in the DOM-scrape branch and consumed below for
   // index lookup; in the queue-driven branch it stays empty and the
   // clickedIdx logic falls through to URL indexOf.
@@ -1964,7 +1975,6 @@ function openVideo(event, url) {
   if (queueMeta) {
     window._videoQueue     = [url];
     window._videoQueueMeta = [queueMeta];
-    delete window._queueDispatchYtMeta;
   } else {
     const container = clickedEl?.closest?.("#album-info, #version-info")
       || (document.getElementById("version-overlay")?.classList.contains("open") ? document.getElementById("version-info") : null)
