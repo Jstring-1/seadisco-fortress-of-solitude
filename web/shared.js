@@ -464,7 +464,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260426am";
+  const SITE_VERSION = "build 20260426an";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -481,9 +481,9 @@ function renderSharedHeader(opts) {
             ${tab("Search", "search", "search")}
             ${recTab("Collection", "collection", "collection")}
             ${recTab("Wantlist", "wantlist", "wantlist")}
-            ${recTab("Lists", "lists", "lists")}
-            ${recTab("Inventory", "inventory", "inventory")}
             ${recTab("Favorites", "favorites", "favorites")}
+            ${recTab("Inventory", "inventory", "inventory")}
+            ${recTab("Lists", "lists", "lists")}
           </div>
         </div>
       </div>
@@ -592,9 +592,9 @@ function renderSharedFooter(opts) {
         ${link("Search", "search")}
         ${recLink("Collection", "collection")}
         ${recLink("Wantlist", "wantlist")}
+        ${recLink("Favorites", "favorites")}
         ${recLink("Inventory", "inventory")}
         ${recLink("Lists", "lists")}
-        ${recLink("Favorites", "favorites")}
       </div>
       <div class="footer-col">
         <h4>SeaDisco</h4>
