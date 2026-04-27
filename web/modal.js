@@ -1759,17 +1759,11 @@ function playerNext() {
   }
   if (typeof playNextVideo === "function") playNextVideo();
 }
+// Bar has no manual close button anymore — it auto-hides when both
+// the engine is idle and the queue is empty (see _queueRefreshIdleBar).
+// playerClose is kept on window because Clear (and the engine-shutdown
+// paths) still call it programmatically to drop active playback.
 function playerClose() {
-  // Closing the bar in idle-queue state suppresses auto-show until the
-  // user queues something new (otherwise dismissing the bar would
-  // immediately re-open it the moment the queue cache reloads).
-  const bar = document.getElementById("mini-player");
-  if (bar?.classList.contains("idle-queue")) {
-    if (typeof _queueMarkIdleClosed === "function") _queueMarkIdleClosed();
-    bar.classList.remove("open", "idle-queue");
-    document.body.classList.remove("player-open");
-    return;
-  }
   if (window._currentEngine === "loc") {
     if (typeof _locClosePlayer === "function") _locClosePlayer();
     return;
