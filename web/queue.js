@@ -589,7 +589,6 @@ async function queueRemove(position) {
 }
 
 async function queueClear() {
-  if (!confirm("Clear the entire queue?")) return;
   try {
     await apiFetch("/api/user/play-queue", {
       method: "DELETE",
