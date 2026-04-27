@@ -430,10 +430,20 @@ async function renderOfflineSection() {
   } else {
     const parts = [];
     parts.push(`Library ${_fmtBytes(stats.libraryBytes)}`);
-    if (stats.imageBytes)    parts.push(`images ${_fmtBytes(stats.imageBytes)}`);
+    if (stats.imageCount) {
+      // Cross-origin opaque image bytes can't be measured precisely,
+      // so we report count + a ~ prefix on the size estimate.
+      const imgLabel = `${stats.imageCount} cover${stats.imageCount === 1 ? "" : "s"}`;
+      const imgSize  = stats.imageBytesEstimated
+        ? `~${_fmtBytes(stats.imageBytes)}`
+        : _fmtBytes(stats.imageBytes);
+      parts.push(`${imgLabel} ${imgSize}`);
+    } else if (stats.imageBytes) {
+      parts.push(`images ${_fmtBytes(stats.imageBytes)}`);
+    }
     if (stats.shellBytes)    parts.push(`app ${_fmtBytes(stats.shellBytes)}`);
     if (stats.apiCacheBytes) parts.push(`api ${_fmtBytes(stats.apiCacheBytes)}`);
-    sizeBlurb = `${parts.join(" · ")}  (total ${_fmtBytes(stats.totalBytes)})`;
+    sizeBlurb = `${parts.join(" · ")}  (total ${stats.imageBytesEstimated ? "~" : ""}${_fmtBytes(stats.totalBytes)})`;
   }
   const lastSync = enabled
     ? `Last synced ${_fmtAgo(stats.lastSyncAt)}`
@@ -459,7 +469,7 @@ async function renderOfflineSection() {
 
   body.innerHTML = `
     <p style="font-size:0.84rem;color:var(--muted);margin:0 0 0.7rem">
-      Download your collection, wantlist, favorites, lists, and inventory to this device so you can browse them when you're offline. Read-only — adding or editing still needs a connection. Cover images cache as you scroll through them online; ones you haven't viewed yet won't appear offline.
+      Download your collection, wantlist, favorites, lists, and inventory to this device so you can browse them when you're offline. Cover thumbnails are pre-fetched too. Read-only — adding or editing still needs a connection.
     </p>
     <label class="offline-toggle" style="display:inline-flex;align-items:center;gap:0.55rem;cursor:pointer;user-select:none">
       <input type="checkbox" ${enabled ? "checked" : ""} onchange="${enabled ? "disableOffline" : "enableOffline"}(this)" style="width:1rem;height:1rem;accent-color:var(--accent);cursor:pointer">

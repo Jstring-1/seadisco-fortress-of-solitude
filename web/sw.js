@@ -25,7 +25,7 @@
 //   Everything else → passthrough. We don't cache search results,
 //     marketplace, AI calls, queue endpoints, etc.
 
-const SW_VERSION = "v1-20260427.1232";
+const SW_VERSION = "v1-20260427.1238";
 const SHELL_CACHE = `sd-shell-${SW_VERSION}`;
 const API_CACHE   = `sd-api-${SW_VERSION}`;
 const IMG_CACHE   = `sd-img-${SW_VERSION}`;
@@ -200,7 +200,11 @@ async function _cacheFirstWithLimit(req, cacheName, maxBytes) {
   if (cached) return cached;
   try {
     const res = await fetch(req);
-    if (res && res.ok) {
+    // Cross-origin images (Discogs CDN, archive.org thumbs) come back
+    // with type: "opaque" and ok: false because the browser hides the
+    // status code without CORS. They're still cacheable + usable as
+    // <img src>, so accept them too.
+    if (res && (res.ok || res.type === "opaque")) {
       cache.put(req, res.clone());
       // Best-effort LRU sweep — fire-and-forget, no await so the
       // caller doesn't wait on the bookkeeping.

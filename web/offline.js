@@ -339,8 +339,70 @@
       } catch {}
       done++;
     }
+    // Pre-cache cover images. Without this the user goes offline
+    // and sees blank cards for any cover they hadn't scrolled past
+    // online. We collect the unique image URLs from every cached
+    // library response and fetch them through the SW (which caches
+    // each one in sd-img-* on first hit). Bandwidth is bounded by
+    // (a) deduping URLs and (b) capping the in-flight fetch count.
+    try {
+      const urls = await _collectImageUrls();
+      const totalImages = urls.length;
+      if (totalImages) {
+        let imgDone = 0;
+        const concurrency = 6; // matches browser's typical per-origin cap
+        let cursor = 0;
+        async function worker() {
+          while (cursor < urls.length) {
+            const u = urls[cursor++];
+            try {
+              // no-store on the request itself doesn't prevent the SW
+              // from caching the response — the SW's cache.put runs
+              // on its own. We just want to bypass the HTTP cache so
+              // we always get a real response the SW can intercept.
+              await fetch(u, { mode: "no-cors", credentials: "omit" });
+            } catch {}
+            imgDone++;
+            onProgress?.({
+              done: total + listIds.length + imgDone,
+              total: total + listIds.length + totalImages,
+              label: `Caching images… (${imgDone} / ${totalImages})`,
+            });
+          }
+        }
+        await Promise.all(Array.from({ length: concurrency }, () => worker()));
+      }
+    } catch (e) {
+      console.warn("[offline] image pre-cache failed:", e);
+    }
     if (window.sdIdb) await window.sdIdb.metaSet("lastSyncAt", Date.now());
     return { ok: true, done, total: total + listIds.length };
+  }
+
+  // Walk every cached library JSON and pull out unique image URLs
+  // (cover_image, thumb, image, plus a few less-common fields).
+  // Skips empty values, dedups, returns a plain array.
+  async function _collectImageUrls() {
+    if (!window.sdIdb) return [];
+    const rows = await window.sdIdb.libraryAll();
+    const set = new Set();
+    const visit = (node) => {
+      if (!node) return;
+      if (Array.isArray(node)) { for (const v of node) visit(v); return; }
+      if (typeof node !== "object") return;
+      // Common image-bearing keys across the various library shapes.
+      for (const k of ["cover_image", "thumb", "image", "image_url", "imageUrl", "coverArt"]) {
+        const v = node[k];
+        if (typeof v === "string" && /^https?:\/\//i.test(v)) set.add(v);
+      }
+      // Recurse into known container keys so we catch nested items
+      // (e.g. lists has lists[i].items[j]).
+      for (const k of ["items", "lists", "results", "folders"]) {
+        if (node[k]) visit(node[k]);
+      }
+    };
+    for (const row of rows) visit(row.json);
+    return [...set];
   }
 
   // ── Storage stats ───────────────────────────────────────────────────
@@ -369,14 +431,17 @@
     // drifts by hundreds of KB across calls — confusing on a status line
     // that's supposed to reflect "what offline mode is using." We measure
     // exactly the sd-* caches plus the IDB library, and only that.
+    out.imageCount = 0;
     if (typeof caches !== "undefined") {
       try {
         const cacheNames = (await caches.keys()).filter(k => k.startsWith("sd-"));
         const sizes = await Promise.all(cacheNames.map(async (name) => {
           let bytes = 0;
+          let count = 0;
           try {
             const cache = await caches.open(name);
             const reqs = await cache.keys();
+            count = reqs.length;
             for (const req of reqs) {
               try {
                 const r = await cache.match(req);
@@ -386,14 +451,26 @@
               } catch {}
             }
           } catch {}
-          return { name, bytes };
+          return { name, bytes, count };
         }));
-        for (const { name, bytes } of sizes) {
+        for (const { name, bytes, count } of sizes) {
           if (name.startsWith("sd-shell-")) out.shellBytes += bytes;
           else if (name.startsWith("sd-api-")) out.apiCacheBytes += bytes;
-          else if (name.startsWith("sd-img-")) out.imageBytes += bytes;
+          else if (name.startsWith("sd-img-")) {
+            out.imageBytes += bytes;
+            out.imageCount += count;
+          }
         }
       } catch {}
+    }
+    // Cross-origin images come back as opaque responses, which report
+    // blob.size === 0. The bytes are still on disk; the browser just
+    // hides them from us. If we have a count but ~zero bytes, estimate
+    // ~30 KB per cover thumb so the storage line isn't misleadingly
+    // small. Real disk usage is captured by quota estimate elsewhere.
+    if (out.imageCount > 0 && out.imageBytes < out.imageCount * 1024) {
+      out.imageBytes = out.imageCount * 30 * 1024; // ~30 KB/thumb
+      out.imageBytesEstimated = true;
     }
     out.totalBytes = out.libraryBytes + out.shellBytes + out.apiCacheBytes + out.imageBytes;
     if (navigator.storage?.estimate) {
