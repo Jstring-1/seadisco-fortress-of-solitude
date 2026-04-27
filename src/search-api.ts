@@ -143,6 +143,70 @@ class RateLimiter {
 // is bounded (queue full → fast 503 → client governor backs off).
 const locLimiter = new RateLimiter(20, 60_000, 30, "loc");
 
+// ── Per-IP rate limiting (for anonymous callers) ──────────────────────────
+// Used on endpoints we want open to non-logged-in users. Signed-in users
+// bypass this — they hit the global RateLimiter instead. Keeps a simple
+// fixed-window count of timestamps per IP; lazily prunes the entire map
+// once it grows past a threshold so memory stays bounded.
+class PerIpRateLimiter {
+  private buckets = new Map<string, number[]>();
+  constructor(
+    private readonly max: number,
+    private readonly windowMs: number,
+    public readonly label: string,
+  ) {}
+  /** Returns true if allowed and records the timestamp; false if over the limit. */
+  check(ip: string): boolean {
+    const now = Date.now();
+    const cutoff = now - this.windowMs;
+    let arr = this.buckets.get(ip);
+    if (!arr) { arr = []; this.buckets.set(ip, arr); }
+    while (arr.length && arr[0] < cutoff) arr.shift();
+    if (arr.length >= this.max) return false;
+    arr.push(now);
+    if (this.buckets.size > 5000) this._gc();
+    return true;
+  }
+  private _gc() {
+    const cutoff = Date.now() - this.windowMs;
+    for (const [ip, arr] of this.buckets) {
+      while (arr.length && arr[0] < cutoff) arr.shift();
+      if (!arr.length) this.buckets.delete(ip);
+    }
+  }
+}
+
+// LOC: 5/min per anonymous IP (signed-in users still share the 20/min
+// global pool, so a few anons can't starve them).
+const anonLocLimiter  = new PerIpRateLimiter(5,  60_000,        "loc-anon");
+// Wikipedia: 50/hour per IP. Wikimedia's public API is generous to
+// well-behaved User-Agents; this caps abuse without being noticeable
+// during normal browsing.
+const anonWikiLimiter = new PerIpRateLimiter(50, 60 * 60_000,   "wiki-anon");
+
+/** Open gate: allows any caller (anon or authenticated). Anonymous
+ *  callers are rate-limited per IP via the supplied limiter; signed-in
+ *  users pass through unchecked (they pay the global limiter / cache).
+ *  Returns the userId for signed-in callers, "anon" for allowed anons,
+ *  or null when the response has already been sent (rate-limited 429). */
+async function allowAnonRateLimited(
+  req: express.Request,
+  res: express.Response,
+  anonLimiter: PerIpRateLimiter,
+): Promise<string | null> {
+  const userId = await getClerkUserId(req).catch(() => null);
+  if (userId) return userId;
+  const ip = String(req.ip || req.socket.remoteAddress || "unknown").slice(0, 64);
+  if (!anonLimiter.check(ip)) {
+    res.status(429).json({
+      error: "rate_limit",
+      message: "Too many requests from this IP — try again in a minute.",
+    });
+    return null;
+  }
+  return "anon";
+}
+
 // Simple in-memory LRU-ish cache for LOC search responses. Key is the
 // canonicalized query string; value is the raw body + timestamp.
 const _locCache = new Map<string, { ts: number; body: any }>();
@@ -2342,10 +2406,10 @@ function _normalizeLocResult(r: any): any {
 
 // GET /api/loc/search — proxy with rate limiting and response caching
 app.get("/api/loc/search", async (req, res) => {
-  // Admin-only: the entire LOC surface (search, lookup, saves, info popup)
-  // is gated to ADMIN_CLERK_ID. The frontend hides every LOC affordance
-  // for non-admins; the server is the source of truth.
-  const userId = await requireAdmin(req, res);
+  // Open to all callers. Anonymous IPs are throttled at 5/min (per IP);
+  // signed-in users pass through and share the 20/min global pool.
+  // Saves endpoints (POST/DELETE /api/user/loc-saves) remain admin-only.
+  const userId = await allowAnonRateLimited(req, res, anonLocLimiter);
   if (!userId) return;
 
   const { url, cacheKey } = _buildLocSearchUrl(req);
@@ -2436,7 +2500,8 @@ app.get("/api/loc/search", async (req, res) => {
 // the recipient having to re-run the search that originally surfaced
 // the item. Same rate limiter as /api/loc/search.
 app.get("/api/loc/lookup", async (req, res) => {
-  const userId = await requireAdmin(req, res);
+  // Open with same anon throttle as /api/loc/search.
+  const userId = await allowAnonRateLimited(req, res, anonLocLimiter);
   if (!userId) return;
   const id = typeof req.query.id === "string" ? req.query.id : "";
   // Validate: must be a loc.gov item URL. Anything else gets a 400 so
@@ -2500,7 +2565,7 @@ app.get("/api/loc/lookup", async (req, res) => {
 
 // GET /api/user/loc-saves — list the current user's saved LOC items
 app.get("/api/user/loc-saves", async (req, res) => {
-  const userId = await requireAdmin(req, res);
+  const userId = await requireUser(req, res);
   if (!userId) return;
   try {
     const items = await getLocSaves(userId);
@@ -2512,7 +2577,7 @@ app.get("/api/user/loc-saves", async (req, res) => {
 
 // GET /api/user/loc-saves/ids — lightweight list of saved IDs (for toggling star state)
 app.get("/api/user/loc-saves/ids", async (req, res) => {
-  const userId = await requireAdmin(req, res);
+  const userId = await requireUser(req, res);
   if (!userId) return;
   try {
     const ids = await getLocSaveIds(userId);
@@ -2525,7 +2590,7 @@ app.get("/api/user/loc-saves/ids", async (req, res) => {
 // POST /api/user/loc-saves — save an item
 // Body: { locId, title, streamUrl, data }
 app.post("/api/user/loc-saves", express.json({ limit: "64kb" }), async (req, res) => {
-  const userId = await requireAdmin(req, res);
+  const userId = await requireUser(req, res);
   if (!userId) return;
   const { locId, title = null, streamUrl = null, data = {} } = req.body ?? {};
   if (typeof locId !== "string" || !locId) {
@@ -2546,7 +2611,7 @@ app.post("/api/user/loc-saves", express.json({ limit: "64kb" }), async (req, res
 // Body: { locId }
 // (DELETE with a URL param was avoided because LOC IDs are full URLs with slashes)
 app.delete("/api/user/loc-saves", express.json(), async (req, res) => {
-  const userId = await requireAdmin(req, res);
+  const userId = await requireUser(req, res);
   if (!userId) return;
   const locId = typeof req.body?.locId === "string"
     ? req.body.locId
@@ -2568,7 +2633,7 @@ app.delete("/api/user/loc-saves", express.json(), async (req, res) => {
 
 // GET /api/user/archive-saves — list the current user's saved archive items
 app.get("/api/user/archive-saves", async (req, res) => {
-  const userId = await requireAdmin(req, res);
+  const userId = await requireUser(req, res);
   if (!userId) return;
   try {
     const items = await getArchiveSaves(userId);
@@ -2580,7 +2645,7 @@ app.get("/api/user/archive-saves", async (req, res) => {
 
 // GET /api/user/archive-saves/ids — lightweight list of saved IDs
 app.get("/api/user/archive-saves/ids", async (req, res) => {
-  const userId = await requireAdmin(req, res);
+  const userId = await requireUser(req, res);
   if (!userId) return;
   try {
     const ids = await getArchiveSaveIds(userId);
@@ -2593,7 +2658,7 @@ app.get("/api/user/archive-saves/ids", async (req, res) => {
 // POST /api/user/archive-saves — save an archive item
 // Body: { archiveId, title, streamUrl, data }
 app.post("/api/user/archive-saves", express.json({ limit: "64kb" }), async (req, res) => {
-  const userId = await requireAdmin(req, res);
+  const userId = await requireUser(req, res);
   if (!userId) return;
   const { archiveId, title = null, streamUrl = null, data = {} } = req.body ?? {};
   if (typeof archiveId !== "string" || !archiveId) {
@@ -2612,7 +2677,7 @@ app.post("/api/user/archive-saves", express.json({ limit: "64kb" }), async (req,
 // DELETE /api/user/archive-saves — remove a single save
 // Body: { archiveId }
 app.delete("/api/user/archive-saves", express.json(), async (req, res) => {
-  const userId = await requireAdmin(req, res);
+  const userId = await requireUser(req, res);
   if (!userId) return;
   const archiveId = typeof req.body?.archiveId === "string"
     ? req.body.archiveId
@@ -2633,7 +2698,7 @@ app.delete("/api/user/archive-saves", express.json(), async (req, res) => {
 
 // GET /api/user/wiki-saves — list the current user's saved Wikipedia articles
 app.get("/api/user/wiki-saves", async (req, res) => {
-  const userId = await requireAdmin(req, res);
+  const userId = await requireUser(req, res);
   if (!userId) return;
   try {
     const items = await getWikiSaves(userId);
@@ -2645,7 +2710,7 @@ app.get("/api/user/wiki-saves", async (req, res) => {
 
 // GET /api/user/wiki-saves/ids — lightweight list of saved titles for ★ state
 app.get("/api/user/wiki-saves/ids", async (req, res) => {
-  const userId = await requireAdmin(req, res);
+  const userId = await requireUser(req, res);
   if (!userId) return;
   try {
     const ids = await getWikiSaveIds(userId);
@@ -2658,7 +2723,7 @@ app.get("/api/user/wiki-saves/ids", async (req, res) => {
 // POST /api/user/wiki-saves — save an article
 // Body: { title, url?, snippet?, thumbnail?, data? }
 app.post("/api/user/wiki-saves", express.json({ limit: "64kb" }), async (req, res) => {
-  const userId = await requireAdmin(req, res);
+  const userId = await requireUser(req, res);
   if (!userId) return;
   const { title, url = null, snippet = null, thumbnail = null, data = {} } = req.body ?? {};
   if (typeof title !== "string" || !title.trim()) {
@@ -2682,7 +2747,7 @@ app.post("/api/user/wiki-saves", express.json({ limit: "64kb" }), async (req, re
 // DELETE /api/user/wiki-saves — remove a single save
 // Body: { title }
 app.delete("/api/user/wiki-saves", express.json(), async (req, res) => {
-  const userId = await requireAdmin(req, res);
+  const userId = await requireUser(req, res);
   if (!userId) return;
   const title = typeof req.body?.title === "string"
     ? req.body.title.trim()
@@ -2753,12 +2818,21 @@ async function _fetchArchiveCollection(collectionId: string): Promise<ArchiveIte
   // Step 1: page through every item in the collection. archive.org's
   // search API caps each page at 1000; we walk page-by-page until
   // we've collected `numFound` records.
+  //
+  // The aadamjacobs page is a USER page, not a tagged collection — items
+  // are uploaded by that user but rarely also list `aadamjacobs` as a
+  // `collection` value (the collection tag points to subcollections like
+  // "live_music_archive"). The narrow `collection:aadamjacobs` query
+  // therefore only matched ~300 items. Widen to OR uploader: so we
+  // pick up everything that user uploaded — typically thousands.
   const PAGE_ROWS = 1000;
   const allDocs: any[] = [];
   let page = 1;
   let numFound = 0;
+  // q= URL-encoded form of: (collection:aadamjacobs OR uploader:aadamjacobs)
+  const qExpr = encodeURIComponent(`(collection:${collectionId} OR uploader:${collectionId})`);
   while (true) {
-    const searchUrl = `https://archive.org/advancedsearch.php?q=collection%3A${encodeURIComponent(collectionId)}&fl[]=identifier,title,date,description&rows=${PAGE_ROWS}&page=${page}&output=json&sort[]=title+asc`;
+    const searchUrl = `https://archive.org/advancedsearch.php?q=${qExpr}&fl[]=identifier,title,date,description&rows=${PAGE_ROWS}&page=${page}&output=json&sort[]=title+asc`;
     const r = await loggedFetch("archive", searchUrl, {
       headers: { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "application/json" },
       context: "archive-search",
@@ -2804,7 +2878,9 @@ async function _fetchArchiveCollection(collectionId: string): Promise<ArchiveIte
 // Bump this whenever the cached payload shape or fetch strategy
 // changes; _maybeRefreshArchive will discard older-schema caches and
 // rebuild on next boot. Avoids stuck-stale-cache after deploys.
-const _ARCHIVE_CACHE_SCHEMA = 2;
+//   v2: added rows=1000 paging (was rows=300 hardcoded)
+//   v3: query widened from collection:X to (collection:X OR uploader:X)
+const _ARCHIVE_CACHE_SCHEMA = 3;
 
 async function _refreshArchiveCache(collectionId: string, cacheKey: number): Promise<{ count: number }> {
   console.log(`[archive] refreshing collection "${collectionId}" cache…`);
@@ -2849,13 +2925,14 @@ if (process.env.APP_DB_URL) {
   setInterval(() => { _maybeRefreshArchive(); }, _ARCHIVE_REFRESH_INTERVAL_MS);
 }
 
-// GET /api/archive/aadamjacobs — admin-only listing of the curated
+// GET /api/archive/aadamjacobs — public listing of the curated
 // Aadam Jacobs live shows collection on archive.org. Reads from the
 // DB cache only — never fetches from archive.org on a user request.
 // The cache is populated by the weekly scheduled refresh (above) or
 // by an admin manual trigger via POST /api/admin/archive/refresh.
-app.get("/api/archive/aadamjacobs", async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
+// Open to all callers: there's no upstream call to abuse, and the
+// nocache=1 path is also harmless (just re-reads our DB row).
+app.get("/api/archive/aadamjacobs", async (_req, res) => {
   const cached = await getCachedRelease(_ARCHIVE_AADAM_CACHE_KEY, "master-versions", _ARCHIVE_CACHE_TTL_S);
   if (cached?.items) {
     res.setHeader("X-SeaDisco-Cache", "hit");
@@ -4246,7 +4323,10 @@ Return ONLY a valid JSON object, no markdown, no explanation.`;
 // (Wikipedia's <span class="searchmatch"> highlight markup preserved).
 // Supports paging via offset so the frontend can implement "Load more".
 app.get("/api/wikipedia/search", async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
+  // Open to all. Anons throttled at 50/hr per IP; signed-in users pass
+  // through. Wikipedia's public API is generous to well-behaved
+  // User-Agents (we set one — see wikiHeaders below).
+  if (!await allowAnonRateLimited(req, res, anonWikiLimiter)) return;
   const q = ((req.query.q as string) ?? "").trim();
   if (!q) { res.status(400).json({ error: "Missing q" }); return; }
   // Clamp limit to Wikipedia's 50/page ceiling and a sensible default of 20.
@@ -4286,7 +4366,8 @@ app.get("/api/wikipedia/search", async (req, res) => {
 // in-app popup. Default returns only the lead section (fast); pass full=1 to
 // load the entire article body so users can read it without leaving SeaDisco.
 app.get("/api/wikipedia/lookup", async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
+  // Open with same anon throttle as /api/wikipedia/search.
+  if (!await allowAnonRateLimited(req, res, anonWikiLimiter)) return;
   const q = ((req.query.q as string) ?? "").trim();
   if (!q) { res.status(400).json({ error: "Missing q" }); return; }
   const full = req.query.full === "1" || req.query.full === "true";

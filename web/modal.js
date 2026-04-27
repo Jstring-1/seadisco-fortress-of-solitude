@@ -1091,10 +1091,8 @@ async function _bluesAddArtistByName(name, anchor) {
 // quoted phrase isn't the entire query.
 function wikiIcon(query, label = "", extraTerms = "") {
   if (!query) return "";
-  // Wikipedia is admin-only — hide the "W" affordance for non-admins so
-  // there's no broken click into a 403. window._isAdmin is set from
-  // /api/me by shared.js; defaults to false until that resolves.
-  if (!window._isAdmin) return "";
+  // Wikipedia is now open to all callers (anons rate-limited per IP);
+  // no client-side gate needed.
   const phrase = String(query).trim();
   if (!phrase) return "";
   const composed = extraTerms
@@ -1117,9 +1115,8 @@ function wikiIcon(query, label = "", extraTerms = "") {
 //                to play it. Click outside to dismiss.
 function locIcon(trackTitle, artistName) {
   if (!trackTitle) return "";
-  // LOC is admin-only — hide the 🏛 track affordance for non-admins so
-  // there's no broken click into a 403. Mirrors the wikiIcon gate.
-  if (!window._isAdmin) return "";
+  // LOC is now open to all callers (anons throttled at 5/min per IP);
+  // no client-side gate needed.
   const t = String(trackTitle).replace(/'/g, "\\'");
   const a = String(artistName || "").replace(/'/g, "\\'");
   return ` <a href="#" class="track-loc-icon" onclick="locTrackSearch(event, '${escHtml(t)}', '${escHtml(a)}', this)" title="Search Library of Congress for &quot;${escHtml(trackTitle)}&quot; (public-domain recordings)">🏛</a>`;

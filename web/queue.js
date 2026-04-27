@@ -393,14 +393,7 @@ async function _renderQueueDrawer() {
   await _queueLoad(true);
   if (countEl) countEl.textContent = _queue?.length ? `${_queue.length} item${_queue.length === 1 ? "" : "s"}` : "";
   if (!_queue?.length) {
-    // Empty-queue copy varies by audience: admins see all add-paths
-    // (➕ on track rows, LOC items, archive items); regular users only
-    // see the track-row path since LOC and Archive are admin-only.
-    const isAdmin = !!window._isAdmin;
-    const hint = isAdmin
-      ? "Queue empty. Click ➕ on tracks, LOC items, or archive items to add them."
-      : "Queue empty. Click ➕ on any playable track to add it.";
-    listEl.innerHTML = `<div class="queue-empty">${hint}</div>`;
+    listEl.innerHTML = `<div class="queue-empty">Queue empty. Click ➕ on tracks, LOC items, or archive items to add them.</div>`;
     return;
   }
   listEl.innerHTML = _queue.map(it => {
