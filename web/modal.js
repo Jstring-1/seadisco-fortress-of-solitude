@@ -1989,6 +1989,16 @@ window.playAlbumAndQueue = playAlbumAndQueue;
 
 function openVideo(event, url) {
   if (event) { event.preventDefault(); event.stopPropagation(); }
+  // Playback needs a network — YouTube streams from their CDN, LOC
+  // streams from loc.gov / archive.org. While offline the iframe
+  // can't fetch the new video and silently keeps showing whichever
+  // track was loaded last (causing the "queue updates but old track
+  // keeps playing" symptom). Refuse the click cleanly with a toast
+  // so the user knows what's going on.
+  if (!navigator.onLine) {
+    if (typeof showToast === "function") showToast("Playback needs a connection", "error");
+    return;
+  }
   // Cross-source queue interrupt hook. If the queue has items, the
   // new track gets pushed to head + marked playing so the queue
   // continues from there when this track ends. We gather title /
