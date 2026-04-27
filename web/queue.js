@@ -42,6 +42,16 @@ let _queueRepeat = (() => {
 let _repeatHistory = [];
 let _repeatRefillInFlight = false;
 
+// Position of the item currently playing FROM THE QUEUE (or null if the
+// active playback didn't start from the queue, e.g. user clicked ▶ on
+// an album track directly). Used to:
+//   1. Render a "▶ Now playing" badge on that row in the drawer
+//   2. Defer consuming the item until the track actually ends
+//      (was previously consumed at play-start, which removed it from
+//       the drawer immediately — no visual feedback that "this is what's
+//       on now")
+let _queueCurrentPosition = null;
+
 // ── Fetch / cache ───────────────────────────────────────────────────
 async function _queueLoad(force = false) {
   if (_queue && !force) return _queue;
@@ -85,6 +95,9 @@ async function queueAdd(items, opts) {
       return false;
     }
     _queue = null; // invalidate cache; next read refetches
+    // New items invalidate the user's earlier "I closed the idle bar"
+    // suppression — they likely want the bar back so they can press ▶.
+    _queueIdleClosed = false;
     if (typeof showToast === "function") {
       const verb = mode === "next" ? "Playing next" : "Queued";
       const count = arr.length === 1 ? "" : ` (${arr.length})`;
@@ -188,9 +201,16 @@ async function _queueShiftNext() {
   return _queue[0] ?? null;
 }
 
-// Mark an item as played and remove from server queue. Called after
-// the item starts playing successfully via _queuePlayNext.
+// Mark an item as played and remove from server queue. Called when a
+// previously-playing item ends (via _queuePlayNext) or when the user
+// removes/jumps. Updates local cache synchronously so the very next
+// _queueShiftNext sees the new head, then fires the DELETE in the
+// background — server drift is harmless (worst case: a re-load shows
+// the consumed row briefly before the next consume cleans it).
 async function _queueConsume(position) {
+  if (_queue) _queue = _queue.filter(it => it.position !== position);
+  _refreshPlayerNavButtons();
+  if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
   try {
     await apiFetch("/api/user/play-queue", {
       method: "DELETE",
@@ -198,9 +218,6 @@ async function _queueConsume(position) {
       body: JSON.stringify({ position }),
     });
   } catch { /* ignore — server-side will drift */ }
-  if (_queue) _queue = _queue.filter(it => it.position !== position);
-  _refreshPlayerNavButtons();
-  if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
 }
 
 // Auto-advance entry point — called by both the LOC track-ended handler
@@ -212,6 +229,24 @@ async function _queueConsume(position) {
 // engine's track-ended handler) — they seek-and-replay without
 // consuming, so this code path doesn't need to know about it.
 async function _queuePlayNext() {
+  // The previously-playing item just ended (or the user clicked Next
+  // before it ended). Consume it now — the row stays in the drawer
+  // with a "▶ Now playing" badge for the entire duration of playback,
+  // and only disappears when we move on. Push to repeat-history first
+  // so a later repeat-all cycle can re-seed it.
+  if (_queueCurrentPosition != null) {
+    const played = (_queue || []).find(it => it.position === _queueCurrentPosition);
+    if (played) {
+      _repeatHistory.push({
+        source: played.source,
+        externalId: played.externalId,
+        data: { ...(played.data || {}) },
+      });
+    }
+    _queueConsume(_queueCurrentPosition).catch(() => {});
+    _queueCurrentPosition = null;
+  }
+
   let next = await _queueShiftNext();
   // Repeat-all: when the live queue drains, push session history back
   // onto the server queue (in original play order) and pick up the new
@@ -228,13 +263,14 @@ async function _queuePlayNext() {
       _repeatRefillInFlight = false;
     }
   }
-  if (!next) return false;
-  // Snapshot the item BEFORE consume so the play call uses the right
-  // data even if _queue is mutated/refetched mid-flight. Consume runs
-  // fire-and-forget after play starts — the bar title was occasionally
-  // showing the *following* item because consume re-rendered the
-  // drawer (which forced a queue refetch) before _locPlay set the
-  // title from `next`.
+  if (!next) {
+    _refreshPlayerNavButtons();
+    if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
+    return false;
+  }
+
+  // Build engine-specific play payload. Snapshotted from the queue
+  // entry so the play call doesn't race a subsequent _queue refetch.
   const playItem = next.source === "loc"
     ? {
         id:           next.externalId,
@@ -246,6 +282,10 @@ async function _queuePlayNext() {
         year:         next.data?.year || "",
       }
     : null;
+  // _locPlay / openVideo both call _queueOnExternalPlay() at their
+  // entry, which clears _queueCurrentPosition. We re-set it AFTER
+  // dispatching so queue-driven plays remain marked while non-queue
+  // plays don't show a stale "now playing" row.
   if (next.source === "loc") {
     if (typeof _locPlay === "function") _locPlay(playItem);
   } else if (next.source === "yt") {
@@ -254,19 +294,19 @@ async function _queuePlayNext() {
   } else {
     return false;
   }
-  // Record the consumed item in repeat-history so a later "all" cycle
-  // can re-seed the queue. Stored regardless of current repeat mode so
-  // the user can flip the toggle mid-session and not lose history.
-  _repeatHistory.push({
-    source: next.source,
-    externalId: next.externalId,
-    data: { ...(next.data || {}) },
-  });
-  // Fire-and-forget: remove the consumed item from the queue. Failures
-  // here only mean the server queue stays slightly stale; the right
-  // item is already playing.
-  _queueConsume(next.position).catch(() => {});
+  _queueCurrentPosition = next.position;
+  if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
+  _refreshPlayerNavButtons();
   return true;
+}
+
+// Called from _locPlay and openVideo at the start of every play call so
+// non-queue plays drop the "now playing" mark. _queuePlayNext re-sets
+// the mark right after dispatching, so queue-driven plays preserve it.
+function _queueOnExternalPlay() {
+  if (_queueCurrentPosition == null) return;
+  _queueCurrentPosition = null;
+  if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
 }
 
 // ── Repeat toggle ────────────────────────────────────────────────────
@@ -366,13 +406,31 @@ async function _renderQueueDrawer() {
   listEl.innerHTML = _queue.map(it => {
     const safeTitle  = escHtml(it.data?.title || "Untitled");
     const safeArtist = escHtml(it.data?.artist || "");
-    const sourceIcon = it.source === "loc" ? "♪" : "▶";
+    const isPlaying  = it.position === _queueCurrentPosition;
+    // Source badge (small colored dot in the thumb corner) tells LOC
+    // vs YT apart at a glance; the row's `now playing` mark is a
+    // separate visual on top.
     const sourceTitle = it.source === "loc" ? "Library of Congress" : "YouTube";
+    // Pick the thumb URL: archive/LOC items snapshot data.image at
+    // queue-add; YT items fall back to YouTube's auto-thumbnail
+    // (i.ytimg.com is CDN-hosted and respects no-referrer).
+    let thumbUrl = it.data?.image || "";
+    if (!thumbUrl && it.source === "yt") {
+      thumbUrl = `https://i.ytimg.com/vi/${encodeURIComponent(it.externalId)}/mqdefault.jpg`;
+    }
+    const thumbHtml = thumbUrl
+      ? `<img class="queue-row-thumb" src="${escHtml(thumbUrl)}" loading="lazy" alt="" onerror="this.classList.add('thumb-broken')">`
+      : `<span class="queue-row-thumb queue-row-thumb-empty">${it.source === "loc" ? "♪" : "▶"}</span>`;
     return `
-      <div class="queue-row" data-position="${it.position}">
+      <div class="queue-row${isPlaying ? " is-playing" : ""}" data-position="${it.position}">
         <span class="queue-row-handle" title="Drag to reorder">⋮⋮</span>
-        <span class="queue-row-source" title="${sourceTitle}">${sourceIcon}</span>
-        <button class="queue-row-play" onclick="queueJumpTo(${it.position})" title="Play this now">
+        <span class="queue-row-thumb-wrap" title="${sourceTitle}">
+          ${thumbHtml}
+          <span class="queue-row-source-badge queue-row-source-${it.source}"></span>
+          ${isPlaying ? `<span class="queue-row-eq" aria-hidden="true"><i></i><i></i><i></i></span>` : ""}
+        </span>
+        <button class="queue-row-play" onclick="queueJumpTo(${it.position})" title="${isPlaying ? "Currently playing" : "Play this now"}">
+          ${isPlaying ? `<span class="queue-row-now-playing">Now playing</span>` : ""}
           <span class="queue-row-title">${safeTitle}</span>
           ${safeArtist ? `<span class="queue-row-artist">${safeArtist}</span>` : ""}
         </button>
@@ -436,6 +494,10 @@ async function queueRemove(position) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ position }),
     });
+    // If the removed row was the now-playing one, clear the mark.
+    // Playback itself keeps going (the audio element / YT iframe still
+    // owns the stream); the queue just no longer claims this item.
+    if (_queueCurrentPosition === position) _queueCurrentPosition = null;
     _queue = null;
     _renderQueueDrawer();
   } catch {
@@ -452,6 +514,7 @@ async function queueClear() {
       body: JSON.stringify({ clear: true }),
     });
     _queue = [];
+    _queueCurrentPosition = null;
     _renderQueueDrawer();
   } catch {
     if (typeof showToast === "function") showToast("Could not clear queue", "error");
@@ -466,8 +529,17 @@ async function queueJumpTo(position) {
   if (!_queue?.length) return;
   const target = _queue.find(it => it.position === position);
   if (!target) return;
-  // Consume everything up to and including the chosen item
-  const toDrop = _queue.filter(it => it.position <= position).map(it => it.position);
+  // No-op: clicking a row that's already playing shouldn't restart it.
+  if (_queueCurrentPosition === position) return;
+  // Consume everything BEFORE the target — the target itself remains
+  // in the queue with a "Now playing" mark. Also drop the previously-
+  // playing position (if any) since we're about to abandon it.
+  const toDrop = _queue
+    .filter(it => it.position < position)
+    .map(it => it.position);
+  if (_queueCurrentPosition != null && _queueCurrentPosition !== position && !toDrop.includes(_queueCurrentPosition)) {
+    toDrop.push(_queueCurrentPosition);
+  }
   for (const p of toDrop) {
     try {
       await apiFetch("/api/user/play-queue", {
@@ -477,7 +549,9 @@ async function queueJumpTo(position) {
       });
     } catch {}
   }
-  _queue = null;
+  // Trigger play (which clears _queueCurrentPosition via the external-
+  // play hook), then re-set it to the target so the drawer shows the
+  // mark on the right row.
   if (target.source === "loc") {
     const item = {
       id: target.externalId,
@@ -492,7 +566,29 @@ async function queueJumpTo(position) {
     const url = `https://www.youtube.com/watch?v=${encodeURIComponent(target.externalId)}`;
     if (typeof openVideo === "function") openVideo(null, url);
   }
+  _queueCurrentPosition = position;
+  _queue = null;
   if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
+}
+
+// Public "play queue" action — used by the mini-player ▶ when nothing
+// is loaded yet but items are queued, and by the drawer's ▶ Play head
+// button. Picks the head and starts playing it; reuses _queuePlayNext
+// but ensures we don't accidentally consume something before any
+// "previous" item exists. Idempotent if the queue head is already the
+// currently-playing position.
+async function queuePlayHead() {
+  await _queueLoad(true);
+  if (!_queue?.length) {
+    if (typeof showToast === "function") showToast("Queue is empty", "error");
+    return false;
+  }
+  const head = _queue[0];
+  if (head && head.position === _queueCurrentPosition) return true; // already playing
+  // Force _queuePlayNext to start fresh from the current head:
+  // no "previous" to consume yet on first play.
+  _queueCurrentPosition = null;
+  return _queuePlayNext();
 }
 
 // ── Tiny "+ queue" icon helpers used by site-wide adders ────────────
@@ -508,7 +604,20 @@ function queueAddIconHtml(kind = "yt") {
 // so it returns instantly. Initial reads return false until the cache
 // is hydrated; queueAdd/Remove/Clear all invalidate the cache and
 // re-fire button state via _refreshPlayerNavButtons below.
+// Returns true if there's a queued item OTHER than the now-playing
+// head. The currently-playing position lives in the queue (we don't
+// consume on play anymore — only on track-end), so a queue with only
+// the playing item should NOT light up the Next button.
 function _queueHasNext() {
+  if (!Array.isArray(_queue) || _queue.length === 0) return false;
+  if (_queueCurrentPosition == null) return true;
+  return _queue.some(it => it.position !== _queueCurrentPosition);
+}
+
+// True if the queue has at least one item that ISN'T currently
+// playing — used by the mini-player to decide whether to surface
+// itself as "queue-ready" when no audio is loaded yet.
+function _queueHasPlayable() {
   return Array.isArray(_queue) && _queue.length > 0;
 }
 
@@ -522,13 +631,78 @@ function _refreshPlayerNavButtons() {
   if (typeof updateVideoNavButtons === "function") {
     try { updateVideoNavButtons(); } catch {}
   }
+  _queueRefreshIdleBar();
 }
+
+// Idle-queue bar surface: show the persistent mini-player even when no
+// audio is loaded, so long as the queue has items. The bar's ▶ button
+// starts the queue head — that's how users discover playback when they
+// queue items without ever pressing play first. Hidden when an engine
+// becomes active (real playback takes over the bar) and when the queue
+// drains. Honors the user's explicit close — once they hit × on the
+// bar in idle state, we don't re-open it until the queue mutates.
+let _queueIdleClosed = false;
+function _queueRefreshIdleBar() {
+  const bar = document.getElementById("mini-player");
+  if (!bar) return;
+  const engineActive = !!window._currentEngine;
+  const hasItems = Array.isArray(_queue) && _queue.length > 0;
+  if (engineActive) {
+    bar.classList.remove("idle-queue");
+    return;
+  }
+  if (!hasItems || _queueIdleClosed) {
+    bar.classList.remove("idle-queue");
+    if (!engineActive) {
+      bar.classList.remove("open", "expanded");
+      document.body.classList.remove("player-open", "expanded-mini");
+    }
+    return;
+  }
+  // Surface the bar in idle-queue mode. Title shows the head item +
+  // queue count; clicking ▶ runs queuePlayHead().
+  bar.classList.add("open", "idle-queue");
+  document.body.classList.add("player-open");
+  const head = _queue[0];
+  const titleEl = document.getElementById("mini-player-title");
+  if (titleEl) {
+    const t = escHtml(head.data?.title || "Queued");
+    const a = head.data?.artist ? ` · ${escHtml(head.data.artist)}` : "";
+    const more = _queue.length > 1 ? ` <span class="mini-idle-count">(+${_queue.length - 1} queued)</span>` : "";
+    titleEl.innerHTML = `${t}${a}${more}`;
+  }
+  const sourceEl = document.getElementById("mini-player-source-icon");
+  if (sourceEl) sourceEl.textContent = head.source === "loc" ? "♪" : "▶";
+  const statusEl = document.getElementById("mini-player-status");
+  if (statusEl) statusEl.textContent = "ready · click ▶";
+}
+// User closing the bar in idle-queue state suppresses auto-show until
+// they queue something new. Wired from the existing × button via
+// playerClose's "if engine null and idle, set this flag".
+function _queueMarkIdleClosed() { _queueIdleClosed = true; }
+function _queueClearIdleClosed() { _queueIdleClosed = false; }
 
 // ── Globals ─────────────────────────────────────────────────────────
 window._queueHasNext = _queueHasNext;
+window._queueHasPlayable = _queueHasPlayable;
+window._queueOnExternalPlay = _queueOnExternalPlay;
+window._queueGetCurrentPosition = () => _queueCurrentPosition;
 window._queueGetRepeat = _queueGetRepeat;
 window._queueCycleRepeat = _queueCycleRepeat;
+window.queuePlayHead = queuePlayHead;
+window._queueRefreshIdleBar = _queueRefreshIdleBar;
+window._queueMarkIdleClosed = _queueMarkIdleClosed;
+window._queueClearIdleClosed = _queueClearIdleClosed;
 window._refreshPlayerNavButtons = _refreshPlayerNavButtons;
+// On script load: if the user has queued items from a previous
+// session, surface the idle bar once the queue cache hydrates. We
+// kick the load asynchronously so the page renders first, then the
+// _refreshPlayerNavButtons in the load callback brings up the bar.
+document.addEventListener("DOMContentLoaded", () => {
+  setTimeout(() => {
+    _queueLoad(true).then(() => _refreshPlayerNavButtons()).catch(() => {});
+  }, 600);
+});
 window.queueAdd            = queueAdd;
 window.queueAddLoc         = queueAddLoc;
 window.queueAddYt          = queueAddYt;
