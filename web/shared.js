@@ -491,7 +491,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260427g";
+  const SITE_VERSION = "build 20260427i";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -615,7 +615,6 @@ function renderSharedFooter(opts) {
   footer.innerHTML = `
     <div class="footer-grid">
       <div class="footer-col">
-        <h4>Browse</h4>
         ${link("Search", "search")}
         ${recLink("Collection", "collection")}
         ${recLink("Wantlist", "wantlist")}
@@ -624,16 +623,18 @@ function renderSharedFooter(opts) {
         ${recLink("Lists", "lists")}
       </div>
       <div class="footer-col">
-        <h4>SeaDisco</h4>
+        ${link("LOC",       "loc")}
+        ${link("Wikipedia", "wiki")}
+        ${link("Archive",   "archive")}
+        ${link("YouTube",   "youtube")}
+      </div>
+      <div class="footer-col">
         ${isSPA
           ? `<a href="${_seaDiscoBuildViewHref("account")}" data-sd-view="account" onclick="event.preventDefault();openSignInModal();return false;">Account</a>`
           : `<a href="${_seaDiscoBuildViewHref("account")}" data-sd-view="account">Account</a>`}
         ${link("Info", "info")}
         ${link("Privacy Policy", "privacy")}
         ${link("Terms of Service", "terms")}
-        ${link("LOC",       "loc")}
-        ${link("Wikipedia", "wiki")}
-        ${link("Archive",   "archive")}
         <a id="footer-admin-link" href="/admin" style="display:none">Admin</a>
       </div>
     </div>
@@ -806,10 +807,13 @@ function openLookupPopup(ev, scope, label, ctx) {
   const trackArtist = ctx?.trackArtist || "";
 
   // Build the YouTube search query — scope-aware for disambiguation.
+  // We send users to the in-app YouTube view (results play in the
+  // mini-player, can be queued, can be ★-saved) rather than the
+  // external youtube.com/results page.
   const ytQ = scope === "track" && trackArtist
     ? `"${trackArtist}" "${label}"`
     : `"${label}"`;
-  const ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(ytQ)}`;
+  const ytInAppHref = `/?v=youtube&yq=${encodeURIComponent(ytQ)}`;
   // Discogs.com fallback link.
   const dcQ = scope === "artist" || scope === "label"
     ? label
@@ -840,10 +844,13 @@ function openLookupPopup(ev, scope, label, ctx) {
     internal.push({ key: "loc", icon: "🏛", text: "Library of Congress" });
   }
 
-  // External group — at the bottom with a ↗ indicator. Catalog
-  // numbers don't have a meaningful YouTube search; only Discogs.com.
+  // YouTube is now an IN-APP search — push as an internal action so
+  // it sits with the other in-app options. External group is just
+  // Discogs.com; YT is handled via switchView in the click delegate.
+  if (scope !== "catno") {
+    internal.push({ key: "ytapp", icon: "▶", text: "YouTube", _ytQ: ytQ });
+  }
   const external = [];
-  if (scope !== "catno") external.push({ key: "yt", icon: "▶", text: "YouTube", url: ytUrl });
   external.push({ key: "dc", icon: "◎", text: "Discogs.com",  url: dcUrl });
 
   // Combine for index addressing of action buttons (keeps indices
@@ -927,6 +934,18 @@ function openLookupPopup(ev, scope, label, ctx) {
                                     "cw-query";
             searchCollectionFor(cwField, label);
           }
+        }
+        else if (b.key === "ytapp") {
+          // Switch to the in-app YouTube view with the prebuilt query.
+          // Closes any open modal first so the route lands cleanly.
+          if (typeof closeModal === "function") { try { closeModal(); } catch {} }
+          if (typeof _locCloseInfoPopup === "function") { try { _locCloseInfoPopup(); } catch {} }
+          if (typeof switchView === "function") { try { switchView("youtube"); } catch {} }
+          setTimeout(() => {
+            const qInput = document.getElementById("youtube-view-q");
+            if (qInput) qInput.value = b._ytQ || label;
+            if (typeof runYoutubeSearch === "function") runYoutubeSearch(b._ytQ || label);
+          }, 30);
         }
         else if (b.key === "wiki") {
           // Quote phrase for exact-match Wikipedia search. Append a

@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, getAppSetting, setAppSetting, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 
 
@@ -183,6 +183,11 @@ const anonLocLimiter  = new PerIpRateLimiter(5,  60_000,        "loc-anon");
 // well-behaved User-Agents; this caps abuse without being noticeable
 // during normal browsing.
 const anonWikiLimiter = new PerIpRateLimiter(50, 60 * 60_000,   "wiki-anon");
+// YouTube Data API: 30/hour per anon IP. The default daily quota is
+// 10,000 units total and each search.list costs 100 units (so 100
+// searches/day project-wide). Per-IP throttling stops one bot from
+// burning the whole day's quota.
+const anonYoutubeLimiter = new PerIpRateLimiter(30, 60 * 60_000, "youtube-anon");
 
 /** Open gate: allows any caller (anon or authenticated). Anonymous
  *  callers are rate-limited per IP via the supplied limiter; signed-in
@@ -3610,6 +3615,143 @@ app.use("/api/admin", (req, res, next) => {
   if (entry.count >= 30) { res.status(429).json({ error: "Rate limited" }); return; }
   entry.count++;
   next();
+});
+
+// ── YouTube search proxy + saves ─────────────────────────────────────
+// Server-side proxy for the YouTube Data API v3. We never expose the
+// API key to the browser. Results are cached 24h per query so repeat
+// searches don't burn quota. Each search.list call costs 100 quota
+// units; the default project quota is 10,000/day = 100 searches/day,
+// so caching is essential for any meaningful traffic.
+const _youtubeApiKey = process.env.YOUTUBE_API_KEY ?? "";
+const _ytSearchCache = new Map<string, { ts: number; body: any }>();
+const _YT_SEARCH_TTL_MS = 24 * 60 * 60 * 1000;
+const _YT_SEARCH_CACHE_MAX = 500;
+function _ytCacheGet(key: string): any | null {
+  const entry = _ytSearchCache.get(key);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > _YT_SEARCH_TTL_MS) { _ytSearchCache.delete(key); return null; }
+  _ytSearchCache.delete(key);
+  _ytSearchCache.set(key, entry);
+  return entry.body;
+}
+function _ytCacheSet(key: string, body: any) {
+  if (_ytSearchCache.size >= _YT_SEARCH_CACHE_MAX) {
+    const firstKey = _ytSearchCache.keys().next().value;
+    if (firstKey !== undefined) _ytSearchCache.delete(firstKey);
+  }
+  _ytSearchCache.set(key, { ts: Date.now(), body });
+}
+
+// GET /api/youtube/search?q=…&pageToken=…
+//   q          — search query (required)
+//   pageToken  — YouTube pagination cursor (optional)
+// Returns { items: [{videoId, title, channel, channelId, publishedAt,
+// description, thumbnail}], nextPageToken }
+app.get("/api/youtube/search", async (req, res) => {
+  if (!await allowAnonRateLimited(req, res, anonYoutubeLimiter)) return;
+  const q = String(req.query?.q ?? "").trim().slice(0, 200);
+  if (!q) { res.status(400).json({ error: "q required" }); return; }
+  if (!_youtubeApiKey) {
+    res.status(503).json({ error: "youtube_unconfigured", message: "YouTube search isn't configured on this server." });
+    return;
+  }
+  const pageToken = String(req.query?.pageToken ?? "").trim().slice(0, 200);
+  const cacheKey = `${q}|${pageToken}`;
+  const cached = _ytCacheGet(cacheKey);
+  if (cached) { res.setHeader("X-SeaDisco-Cache", "hit"); res.json(cached); return; }
+  try {
+    const params = [
+      "part=snippet",
+      "type=video",
+      "maxResults=24",
+      `q=${encodeURIComponent(q)}`,
+      `key=${encodeURIComponent(_youtubeApiKey)}`,
+    ];
+    if (pageToken) params.push(`pageToken=${encodeURIComponent(pageToken)}`);
+    const url = `https://www.googleapis.com/youtube/v3/search?${params.join("&")}`;
+    const r = await loggedFetch("youtube", url, { context: "youtube-search" });
+    if (!r.ok) {
+      const errText = await r.text().catch(() => "");
+      console.warn("[youtube/search] HTTP", r.status, errText.slice(0, 200));
+      res.status(r.status >= 500 ? 502 : r.status).json({ error: `YouTube API HTTP ${r.status}` });
+      return;
+    }
+    const j: any = await r.json();
+    const items = (Array.isArray(j?.items) ? j.items : [])
+      .filter((it: any) => it?.id?.videoId)
+      .map((it: any) => {
+        const sn = it.snippet ?? {};
+        const thumbs = sn.thumbnails ?? {};
+        const thumb = thumbs.medium?.url ?? thumbs.default?.url ?? thumbs.high?.url ?? "";
+        return {
+          videoId:     String(it.id.videoId),
+          title:       String(sn.title ?? ""),
+          channel:     String(sn.channelTitle ?? ""),
+          channelId:   String(sn.channelId ?? ""),
+          publishedAt: String(sn.publishedAt ?? ""),
+          description: String(sn.description ?? ""),
+          thumbnail:   thumb,
+        };
+      });
+    const body = {
+      items,
+      nextPageToken: j?.nextPageToken ?? null,
+      totalResults: j?.pageInfo?.totalResults ?? null,
+    };
+    _ytCacheSet(cacheKey, body);
+    res.setHeader("X-SeaDisco-Cache", "miss");
+    res.json(body);
+  } catch (e: any) {
+    console.error("[youtube/search]", e?.message ?? e);
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// ── YouTube saves (Saved tab on /?v=youtube) ─────────────────────────
+app.get("/api/user/youtube-saves", async (req, res) => {
+  const userId = await requireUser(req, res);
+  if (!userId) return;
+  try {
+    const items = await getYoutubeSaves(userId);
+    res.json({ items });
+  } catch (e: any) { res.status(500).json({ error: String(e?.message ?? e) }); }
+});
+app.get("/api/user/youtube-saves/ids", async (req, res) => {
+  const userId = await requireUser(req, res);
+  if (!userId) return;
+  try {
+    const ids = await getYoutubeSaveIds(userId);
+    res.json({ ids });
+  } catch (e: any) { res.status(500).json({ error: String(e?.message ?? e) }); }
+});
+app.post("/api/user/youtube-saves", express.json({ limit: "32kb" }), async (req, res) => {
+  const userId = await requireUser(req, res);
+  if (!userId) return;
+  const { videoId, title = null, channel = null, thumbnail = null, data = {} } = req.body ?? {};
+  if (typeof videoId !== "string" || !videoId) { res.status(400).json({ error: "videoId required" }); return; }
+  try {
+    await saveYoutubeVideo(
+      userId, videoId,
+      title     ? String(title).slice(0, 500)     : null,
+      channel   ? String(channel).slice(0, 200)   : null,
+      thumbnail ? String(thumbnail).slice(0, 2000): null,
+      data && typeof data === "object" ? data : {},
+    );
+    res.json({ ok: true });
+  } catch (e: any) { res.status(500).json({ error: String(e?.message ?? e) }); }
+});
+app.delete("/api/user/youtube-saves", express.json(), async (req, res) => {
+  const userId = await requireUser(req, res);
+  if (!userId) return;
+  const videoId = typeof req.body?.videoId === "string"
+    ? req.body.videoId
+    : (typeof req.query?.videoId === "string" ? req.query.videoId : "");
+  if (!videoId) { res.status(400).json({ error: "videoId required" }); return; }
+  try {
+    await deleteYoutubeSave(userId, videoId);
+    res.json({ ok: true });
+  } catch (e: any) { res.status(500).json({ error: String(e?.message ?? e) }); }
 });
 
 // GET /api/admin-favorites/sample — public read of a random sample of

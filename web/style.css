@@ -4957,13 +4957,13 @@ body:has(.queue-drawer.open) #scroll-top-btn {
   gap: 3rem;
   margin-bottom: 1.5rem;
 }
-/* Columns mirror around the center: left column right-aligned,
-   right column left-aligned, so the two columns visually butt up
-   against the gap. */
-.footer-grid > .footer-col:first-child  { text-align: right; }
-.footer-grid > .footer-col:last-child   { text-align: left; }
-.footer-grid > .footer-col:first-child  h4 { text-align: right; }
-.footer-grid > .footer-col:last-child   h4 { text-align: left; }
+/* Three columns aligned around the center: left col right-aligned,
+   middle col centered, right col left-aligned. Visually mirrored
+   around the page midpoint. Column titles (h4) were removed —
+   each column is just a stack of links now. */
+.footer-grid > .footer-col:nth-child(1) { text-align: right; }
+.footer-grid > .footer-col:nth-child(2) { text-align: center; }
+.footer-grid > .footer-col:nth-child(3) { text-align: left; }
 .footer-col h4 {
   font-size: 0.72rem;
   text-transform: uppercase;
@@ -7896,6 +7896,36 @@ a:focus-visible {
   background: var(--accent-hi, var(--accent));
   color: var(--bg);
   transform: translateY(-1px);
+}
+
+/* ── YouTube view list ────────────────────────────────────────────────
+   Each result is a flex row: thumbnail · title/channel/desc · actions.
+   Reuses .archive-row / .archive-btn rules where possible so the
+   look matches the LOC / Archive Saved tabs. */
+.youtube-results-list { display: flex; flex-direction: column; gap: 0.5rem; }
+.yt-row {
+  display: flex;
+  gap: 0.7rem;
+  align-items: flex-start;
+  padding: 0.55rem 0.7rem;
+}
+.yt-row-thumb {
+  width: 160px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 5px;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.05);
+}
+.yt-row .archive-row-actions { flex-direction: column; align-items: flex-end; gap: 0.35rem; }
+.yt-save-btn { font-size: 1rem; line-height: 1; padding: 0.3rem 0.55rem; }
+.yt-save-btn.is-saved { color: var(--accent); }
+.yt-save-btn:not(.is-saved) { color: var(--muted); }
+.yt-save-btn:hover { color: var(--accent-hi, var(--accent)); }
+@media (max-width: 600px) {
+  .yt-row { flex-direction: column; }
+  .yt-row-thumb { width: 100%; height: auto; aspect-ratio: 16 / 9; }
+  .yt-row .archive-row-actions { flex-direction: row; align-items: center; justify-content: flex-start; flex-wrap: wrap; }
 }
 
 /* ── Unified entity-lookup popup ───────────────────────────────────────

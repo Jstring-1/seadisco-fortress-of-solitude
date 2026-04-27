@@ -44,7 +44,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260427g" />
+  <link rel="stylesheet" href="/style.css?v=20260427i" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -82,7 +82,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260427g"></script>
+<script defer src="/shared.js?v=20260427i"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -593,6 +593,44 @@
   </div>
 </div>
 
+<!-- YouTube view — in-app YouTube search + Saved tab. Playback uses
+     the existing mini-player iframe, so clicking ▶ on a result behaves
+     identically to clicking a YouTube link from anywhere else on the
+     site. Saving requires sign-in (any user, not admin-gated). -->
+<div id="youtube-view" class="content-narrow" style="display:none">
+  <div class="loc-header">
+    <h2 class="loc-title">YouTube</h2>
+    <p class="loc-sub">Search YouTube without leaving the site — results play in the mini-player. Save videos to revisit later, queue tracks just like any other source. Powered by the YouTube Data API.</p>
+    <div class="loc-tabs">
+      <button type="button" class="loc-tab loc-tab-search active" onclick="_youtubeSwitchTab('search')">Search</button>
+      <button type="button" class="loc-tab loc-tab-saved" onclick="_youtubeSwitchTab('saved')">Saved</button>
+    </div>
+  </div>
+
+  <div class="youtube-panel youtube-panel-search">
+    <form class="wiki-search-form" onsubmit="event.preventDefault();runYoutubeSearch(document.getElementById('youtube-view-q').value)">
+      <input id="youtube-view-q" type="text" placeholder="Search YouTube" autocomplete="off">
+      <button type="submit">Search</button>
+    </form>
+    <div id="youtube-view-status" class="loc-status"></div>
+    <div id="youtube-view-results" class="youtube-results-list"></div>
+    <div id="youtube-view-pagination" style="display:flex;justify-content:center;margin-top:0.7rem"></div>
+  </div>
+
+  <div class="youtube-panel youtube-panel-saved" style="display:none">
+    <div class="archive-meta-bar">
+      <input type="text" class="archive-filter" placeholder="Filter saved…" oninput="_youtubeOnSavedFilterInput(this)" />
+      <select class="archive-sort" onchange="_youtubeOnSavedSortChange(this)">
+        <option value="recent">Recently saved</option>
+        <option value="title">Title A → Z</option>
+        <option value="channel">Channel A → Z</option>
+      </select>
+      <span class="archive-meta-count"><span id="youtube-saved-count">0</span> saved</span>
+    </div>
+    <div id="youtube-saved-results" class="youtube-results-list"></div>
+  </div>
+</div>
+
 <div id="account-view" style="display:none">
   <div class="account-box">
 
@@ -817,20 +855,21 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260427g"></script>
-<script defer src="/search.js?v=20260427g"></script>
-<script defer src="/collection.js?v=20260427g"></script>
-<script defer src="/account.js?v=20260427g"></script>
-<script defer src="/orders.js?v=20260427g"></script>
+<script defer src="/utils.js?v=20260427i"></script>
+<script defer src="/search.js?v=20260427i"></script>
+<script defer src="/collection.js?v=20260427i"></script>
+<script defer src="/account.js?v=20260427i"></script>
+<script defer src="/orders.js?v=20260427i"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260427g"></script>
-<script defer src="/app.js?v=20260427g"></script>
+<script defer src="/modal.js?v=20260427i"></script>
+<script defer src="/app.js?v=20260427i"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/inventory-editor.js?v=20260427g"></script>
-<script defer src="/loc.js?v=20260427g"></script>
-<script defer src="/archive.js?v=20260427g"></script>
-<script defer src="/queue.js?v=20260427g"></script>
+<script defer src="/inventory-editor.js?v=20260427i"></script>
+<script defer src="/loc.js?v=20260427i"></script>
+<script defer src="/archive.js?v=20260427i"></script>
+<script defer src="/youtube.js?v=20260427i"></script>
+<script defer src="/queue.js?v=20260427i"></script>
 
 </body>
 </html>
