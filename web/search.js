@@ -352,12 +352,15 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
     bioFetch = bioRes ? { json: () => bioRes.json() } : null;
     if (res.status === 401 || res.status === 429) {
       const errData = await res.json().catch(() => ({}));
-      if (errData.error === "no_token") {
+      // auth_required = anon user (no Clerk session)
+      // no_token      = signed-in but Discogs OAuth not connected
+      // Both lead to the same "you need to sign in / connect" CTA.
+      if (errData.error === "no_token" || errData.error === "auth_required") {
         setStatus("");
         document.getElementById("results").innerHTML =
           `<div class="empty-state"><div class="empty-state-icon">🔑</div>` +
-          `<div class="empty-state-title">Sign in to search</div>` +
-          `<div class="empty-state-subtitle"><a href="/?v=account" onclick="switchView('account');return false;" style="color:var(--accent)">Create a free account</a> and connect your Discogs account to start discovering music.</div></div>`;
+          `<div class="empty-state-title">Sign in to search Discogs</div>` +
+          `<div class="empty-state-subtitle"><a href="/?v=account" onclick="switchView('account');return false;" style="color:var(--accent)">Create a free account</a> to search the full Discogs catalog. The track will keep playing.</div></div>`;
         return;
       }
       if (errData.error === "rate_limited") {
