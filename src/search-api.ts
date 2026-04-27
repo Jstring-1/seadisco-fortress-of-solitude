@@ -3045,24 +3045,70 @@ app.get("/api/archive/item/:identifier", async (req, res) => {
     // small AND insulates the client from upstream shape changes.
     const m = meta?.metadata ?? {};
     const filesArr: any[] = Array.isArray(meta?.files) ? meta.files : [];
-    // Audio tracks only: prefer original MP3s; ignore derivatives that
-    // archive.org generates from the original file (those have
-    // `original` pointing to the source). For each, build a stream URL.
-    const audioFiles = filesArr
-      .filter(f => typeof f?.name === "string" && /\.(mp3|m4a|flac|ogg|wav)$/i.test(f.name))
-      .filter(f => !f.original || /\.(mp3)$/i.test(f.name)) // de-dup derivatives
-      .slice(0, 100)
-      .map(f => ({
-        name:    String(f.name),
-        title:   typeof f.title === "string" ? f.title : "",
-        track:   typeof f.track === "string" ? f.track : "",
-        format:  typeof f.format === "string" ? f.format : "",
-        length:  typeof f.length === "string" ? f.length : "",
-        size:    typeof f.size === "string" ? f.size : "",
-        streamUrl: `https://archive.org/download/${encodeURIComponent(id)}/${encodeURIComponent(String(f.name))}`,
-      }));
-    // Pick a primary stream (first MP3) so the bar's ▶ knows what to play.
-    const primaryStream = audioFiles.find(f => /\.mp3$/i.test(f.name)) ?? audioFiles[0] ?? null;
+    // Audio tracks only — and dedupe per-track to one row per logical
+    // recording. archive.org typically stores each track in 3+
+    // formats (FLAC original + MP3/OGG derivatives); the previous
+    // filter kept the original AND the MP3 derivative, which meant
+    // "Queue all tracks" added every track twice. Group files by
+    // their `original` field (derivatives point at the source name;
+    // originals are their own group), then pick the most browser-
+    // friendly format from each group — prefer MP3 since it has
+    // universal <audio> support, fall back to OGG/M4A/etc.
+    const audioCandidates = filesArr.filter(f =>
+      typeof f?.name === "string" && /\.(mp3|m4a|flac|ogg|wav|opus|aac)$/i.test(f.name)
+    );
+    const groups = new Map<string, any[]>();
+    for (const f of audioCandidates) {
+      // Group by both `original` (when present) AND basename-without-
+      // extension so we catch the dedup whether or not archive.org
+      // surfaces the derivative-of relationship in this item's
+      // metadata. track01.flac and track01.mp3 share basename
+      // "track01" → same logical recording.
+      let key: string;
+      if (typeof f.original === "string" && f.original) {
+        key = f.original.replace(/\.[^.]+$/, "").toLowerCase();
+      } else {
+        key = String(f.name).replace(/\.[^.]+$/, "").toLowerCase();
+      }
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key)!.push(f);
+    }
+    const formatPriority = (f: any): number => {
+      const name = String(f.name || "").toLowerCase();
+      if (/\.mp3$/.test(name))  return 1; // best HTML5 <audio> support
+      if (/\.m4a$/.test(name))  return 2;
+      if (/\.ogg$/.test(name))  return 3;
+      if (/\.opus$/.test(name)) return 4;
+      if (/\.aac$/.test(name))  return 5;
+      if (/\.flac$/.test(name)) return 6;
+      if (/\.wav$/.test(name))  return 7;
+      return 99;
+    };
+    const deduped: any[] = [];
+    for (const group of groups.values()) {
+      group.sort((a, b) => formatPriority(a) - formatPriority(b));
+      deduped.push(group[0]);
+    }
+    // Sort by track number then filename so the popup lists in album
+    // order. Track numbers may be "1" or "1/12" — parseInt handles both.
+    deduped.sort((a, b) => {
+      const ta = parseInt(String(a.track || "0"), 10) || 0;
+      const tb = parseInt(String(b.track || "0"), 10) || 0;
+      if (ta !== tb) return ta - tb;
+      return String(a.name).localeCompare(String(b.name));
+    });
+    const audioFiles = deduped.slice(0, 100).map(f => ({
+      name:    String(f.name),
+      title:   typeof f.title === "string" ? f.title : "",
+      track:   typeof f.track === "string" ? f.track : "",
+      format:  typeof f.format === "string" ? f.format : "",
+      length:  typeof f.length === "string" ? f.length : "",
+      size:    typeof f.size === "string" ? f.size : "",
+      streamUrl: `https://archive.org/download/${encodeURIComponent(id)}/${encodeURIComponent(String(f.name))}`,
+    }));
+    // Pick a primary stream — first track in the deduped list (which
+    // is already MP3-preferred and track-ordered).
+    const primaryStream = audioFiles[0] ?? null;
     const arr = (v: any): string[] => Array.isArray(v) ? v.filter((x: any) => typeof x === "string") : (typeof v === "string" ? [v] : []);
     const body = {
       identifier: id,

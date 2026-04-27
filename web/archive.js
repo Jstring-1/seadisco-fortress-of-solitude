@@ -316,7 +316,10 @@ function archiveLoadMore() {
 function _archiveRowHtml(it, i, opts = {}) {
   const safeTitle = escHtml(it.title || it.identifier);
   const safeDate  = escHtml(it.date || "");
-  const safeDesc  = escHtml(String(it.description || "").slice(0, 280));
+  // Row description shows a truncated plaintext preview — strip any
+  // embedded HTML before slicing so we don't leave a half-open tag.
+  const cleanDesc = _archiveCleanDesc(it.description || "");
+  const safeDesc  = escHtml(cleanDesc.slice(0, 280));
   const safeId    = escHtml(it.identifier);
   // Cache no longer pre-resolves stream URLs (refresh used to take
   // 5+ min walking per-item metadata). We optimistically render Play /
@@ -351,7 +354,7 @@ function _archiveRowHtml(it, i, opts = {}) {
       <div class="archive-row-main" onclick="_archiveOpenInfoPopup('${safeId.replace(/'/g, "\\'")}')" style="cursor:pointer">
         <div class="archive-row-title">${safeTitle}</div>
         ${safeDate ? `<div class="archive-row-date">${safeDate}</div>` : ""}
-        ${safeDesc ? `<div class="archive-row-desc">${safeDesc}${it.description && it.description.length > 280 ? "…" : ""}</div>` : ""}
+        ${safeDesc ? `<div class="archive-row-desc">${safeDesc}${cleanDesc.length > 280 ? "…" : ""}</div>` : ""}
       </div>
       <div class="archive-row-actions">${saveBtn}${playBtn}${queueBtn}${linkBtn}</div>
     </div>
@@ -401,7 +404,7 @@ function _renderArchiveList() {
     </div>
     <div class="archive-panel archive-panel-browse" style="display:${showBrowse ? "" : "none"}">
       <div class="archive-meta-bar">
-        <input type="search" class="archive-filter" placeholder="Filter title, date, description…" value="${filterVal}" oninput="_archiveOnFilterInput(this)" />
+        <input type="text" class="archive-filter" placeholder="Filter title, date, description…" value="${filterVal}" oninput="_archiveOnFilterInput(this)" />
         <select class="archive-sort" onchange="_archiveOnSortChange(this)">${sortOpts}</select>
         <span class="archive-meta-count" id="archive-count">${total} item${total === 1 ? "" : "s"}</span>
       </div>
@@ -409,7 +412,7 @@ function _renderArchiveList() {
     </div>
     <div class="archive-panel archive-panel-saved" style="display:${showBrowse ? "none" : ""}">
       <div class="archive-meta-bar">
-        <input type="search" class="archive-filter" placeholder="Filter saved…" value="${savedFilterVal}" oninput="_archiveOnSavedFilterInput(this)" />
+        <input type="text" class="archive-filter" placeholder="Filter saved…" value="${savedFilterVal}" oninput="_archiveOnSavedFilterInput(this)" />
         <select class="archive-sort" onchange="_archiveOnSavedSortChange(this)">${savedSortOpts}</select>
         <span class="archive-meta-count"><span id="archive-saved-count">0</span> saved</span>
       </div>
@@ -582,6 +585,28 @@ function _archiveCloseInfoPopup() {
   _archiveInfoCurrentId = null;
 }
 
+// archive.org descriptions often contain raw HTML — <div> for line
+// breaks, <br>, &nbsp; entities, etc. Render those as plain text with
+// real newlines so the popup doesn't display literal `<div>` markup.
+function _archiveCleanDesc(html) {
+  if (!html) return "";
+  const withBreaks = String(html)
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(?:div|p|li|h[1-6])>/gi, "\n")
+    .replace(/<(?:div|p|li|h[1-6])[^>]*>/gi, "")
+    .replace(/<[^>]+>/g, "");
+  // Decode common entities so &amp; etc. don't show as literal text.
+  const decoded = withBreaks
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'");
+  return decoded.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 // Format archive.org duration strings — they're sometimes "MM:SS",
 // sometimes raw seconds like "245.32". Normalize to "M:SS" or "H:MM:SS".
 function _archiveFmtDuration(s) {
@@ -634,9 +659,12 @@ function _archiveInfoPopupHtml(d) {
   const saveBtn = `<button type="button" class="archive-btn archive-save-btn${isSaved ? " is-saved" : ""}" onclick="_archiveInfoToggleSave(this, '${esc(d.identifier).replace(/'/g, "\\'")}')">${isSaved ? "★ Saved" : "☆ Save"}</button>`;
   const linkBtn = `<a class="archive-btn archive-btn-link" href="${esc(d.itemUrl)}" target="_blank" rel="noopener">Open on archive.org ↗</a>`;
 
-  // Description — long-form. Collapsible if very long.
-  const descHtml = d.description
-    ? `<div class="archive-info-desc">${esc(d.description).replace(/\n+/g, "<br>")}</div>`
+  // Description — strip embedded HTML markup, escape, then convert
+  // newlines to <br>. archive.org item descriptions frequently contain
+  // raw <div>/<br>/&entities; in their `description` field.
+  const descText = _archiveCleanDesc(d.description);
+  const descHtml = descText
+    ? `<div class="archive-info-desc">${escHtml(descText).replace(/\n/g, "<br>")}</div>`
     : "";
 
   // Audio file list — each row gets a ▶ play button + a ➕ queue.
@@ -702,28 +730,45 @@ function _archiveInfoPopupHtml(d) {
 function _archiveInfoLookup(id) {
   return _archiveInfoCache.get(id);
 }
-function _archiveInfoPlayPrimary(id) {
+// "▶ Play album" — queue every track at the head of the queue and
+// start playing the first one. Existing queue items remain (they
+// play after this album's tracks finish).
+async function _archiveInfoPlayPrimary(id) {
   const d = _archiveInfoLookup(id);
-  if (!d?.primaryStreamUrl) return;
-  if (typeof _locPlay === "function") _locPlay({
-    id, title: d.title, streamUrl: d.primaryStreamUrl, streamType: "mp3",
-    contributors: d.creator?.length ? d.creator : ["Aadam Jacobs"],
-    image: d.coverUrl || "", year: (d.date || "").slice(0, 4),
-  });
+  if (!d?.audioFiles?.length) {
+    if (typeof showToast === "function") showToast("This item has no playable audio", "error");
+    return;
+  }
+  const items = d.audioFiles.map(f => ({
+    source: "loc",
+    externalId: `${id}#${f.name}`,
+    data: {
+      title:      f.title || f.name.replace(/\.[^.]+$/, ""),
+      artist:     d.creator?.[0] || "Aadam Jacobs",
+      streamUrl:  f.streamUrl,
+      streamType: "mp3",
+      image:      d.coverUrl || "",
+      year:       (d.date || "").slice(0, 4),
+    },
+  }));
+  if (typeof queueAdd === "function") await queueAdd(items, { mode: "next" });
+  if (typeof queuePlayHead === "function") queuePlayHead();
 }
+// "＋ Queue all tracks" — append the album to the end of the queue
+// without interrupting current playback.
 function _archiveInfoQueueAll(id) {
   const d = _archiveInfoLookup(id);
   if (!d?.audioFiles?.length) return;
   const items = d.audioFiles.map(f => ({
     source: "loc",
-    externalId: `${id}#${encodeURIComponent(f.name)}`,
+    externalId: `${id}#${f.name}`,
     data: {
-      title: f.title || f.name.replace(/\.(mp3|m4a|flac|ogg|wav)$/i, ""),
-      artist: d.creator?.[0] || "Aadam Jacobs",
-      streamUrl: f.streamUrl,
+      title:      f.title || f.name.replace(/\.[^.]+$/, ""),
+      artist:     d.creator?.[0] || "Aadam Jacobs",
+      streamUrl:  f.streamUrl,
       streamType: "mp3",
-      image: d.coverUrl || "",
-      year: (d.date || "").slice(0, 4),
+      image:      d.coverUrl || "",
+      year:       (d.date || "").slice(0, 4),
     },
   }));
   if (typeof queueAdd === "function") queueAdd(items, { mode: "append" });
