@@ -624,6 +624,35 @@ function _queueHasNext() {
   return idx >= 0 && idx + 1 < _queue.length;
 }
 
+// Mirror of _queueHasNext for the Prev button. True if we can step
+// backward through the playlist (currentPosition is past the head, or
+// repeat-all is on so we wrap to the tail).
+function _queueHasPrev() {
+  if (!Array.isArray(_queue) || _queue.length === 0) return false;
+  if (_queueCurrentPosition == null) return false;
+  if (_queueRepeat === "all") return true;
+  const idx = _queue.findIndex(it => it.position === _queueCurrentPosition);
+  return idx > 0;
+}
+
+// Step the queue backward — used by the Prev button on the mini-player
+// when the cross-source queue is the active playback source. Returns
+// true if a prior item was found (and is now playing); false if there's
+// nothing to step back to (caller falls back to engine-internal prev).
+async function _queuePlayPrev() {
+  await _queueLoad();
+  if (!_queue?.length || _queueCurrentPosition == null) return false;
+  const idx = _queue.findIndex(it => it.position === _queueCurrentPosition);
+  if (idx < 0) return false;
+  let prev = idx > 0 ? _queue[idx - 1] : null;
+  // Repeat-all: wrap to the last item.
+  if (!prev && _queueRepeat === "all" && _queue.length) {
+    prev = _queue[_queue.length - 1];
+  }
+  if (!prev) return false;
+  return _queuePlayItem(prev);
+}
+
 // True if the queue has at least one item that ISN'T currently
 // playing — used by the mini-player to decide whether to surface
 // itself as "queue-ready" when no audio is loaded yet.
@@ -694,6 +723,8 @@ function _queueClearIdleClosed() { _queueIdleClosed = false; }
 
 // ── Globals ─────────────────────────────────────────────────────────
 window._queueHasNext = _queueHasNext;
+window._queueHasPrev = _queueHasPrev;
+window._queuePlayPrev = _queuePlayPrev;
 window._queueHasPlayable = _queueHasPlayable;
 window._queueOnExternalPlay = _queueOnExternalPlay;
 window._queueGetCurrentPosition = () => _queueCurrentPosition;

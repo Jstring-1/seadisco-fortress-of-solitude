@@ -1017,7 +1017,8 @@ function _locUpdateQueueButtons() {
     const locHasMore = !!_locQueue && _locQueue.items.length >= 2 && _locQueue.index + 1 < _locQueue.items.length;
     const xqHasNext  = (typeof _queueHasNext === "function") ? _queueHasNext() : false;
     const locHasPrev = !!_locQueue && _locQueue.index > 0;
-    prev.disabled = !locHasPrev;
+    const xqHasPrev  = (typeof window._queueHasPrev === "function") ? window._queueHasPrev() : false;
+    prev.disabled = !(locHasPrev || xqHasPrev);
     next.disabled = !(locHasMore || xqHasNext);
   }
   // Info / save buttons — enabled whenever something is playing
