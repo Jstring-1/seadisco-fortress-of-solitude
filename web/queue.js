@@ -422,8 +422,14 @@ function _queueOnExternalPlay(itemPayload) {
       // After reconcile, find the item by externalId — race-safe
       // even if a concurrent _queueLoad reordered the list.
       if (_queue?.length) {
-        const head = _queue.find(it => String(it.externalId) === String(itemPayload.externalId)) ?? _queue[0];
-        if (head) _queueCurrentPosition = head.position;
+        // Race-safe: only update position if we're still the active
+        // playing externalId. If the user clicked another track during
+        // the round trip, _queuePlayingExternalId has moved on and
+        // we don't want to clobber its position with this stale one.
+        if (String(_queuePlayingExternalId) === String(itemPayload.externalId)) {
+          const head = _queue.find(it => String(it.externalId) === String(itemPayload.externalId)) ?? _queue[0];
+          if (head) _queueCurrentPosition = head.position;
+        }
       }
       if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
       _refreshPlayerNavButtons();
