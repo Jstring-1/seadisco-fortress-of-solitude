@@ -345,7 +345,10 @@ function _archiveRowHtml(it, i, opts = {}) {
   const queueBtn = playable
     ? `<button type="button" class="archive-btn archive-btn-queue" onclick="${queueHandler}" title="Add to play queue">＋ Queue</button>`
     : "";
-  const linkBtn = `<a class="archive-btn archive-btn-link" href="${escHtml(it.itemUrl || ("https://archive.org/details/" + encodeURIComponent(it.identifier)))}" target="_blank" rel="noopener">Open on archive.org ↗</a>`;
+  // External "Open on archive.org" link removed per request — the
+  // info popup ("⓵") and the in-app player cover the same ground
+  // without leaving the site.
+  const linkBtn = "";
   // Stash the data needed for play/queue from the saved view onto the
   // row itself so the saved-row handlers don't need a separate cache.
   const dataAttrs = opts.savedView
