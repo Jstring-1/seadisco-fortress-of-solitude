@@ -3,19 +3,20 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <!-- Theme bootstrap — same as index.html. Must run before any paint. -->
-  <script>(function(){try{var t=localStorage.getItem("sd-theme");if(t&&/^[a-z0-9-]+$/.test(t))document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+  <!-- Theme bootstrap — same as index.html. Must run before any paint.
+       Server-injected site theme wins over local storage. -->
+  <script>(function(){try{var s="<!--SD_THEME_INJECT-->";var t=(s&&/^[a-z0-9-]+$/.test(s))?s:localStorage.getItem("sd-theme");if(t&&/^[a-z0-9-]+$/.test(t))document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
   <title>SeaDisco — Admin</title>
   <meta name="robots" content="noindex, nofollow" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260426aj" />
+  <link rel="stylesheet" href="/style.css?v=20260426ak" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/shared.js?v=20260426aj"></script>
+<script defer src="/shared.js?v=20260426ak"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true, iconNav: true }));</script>
 
 <main>
@@ -310,7 +311,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260426aj"></script>
+<script defer src="/modal.js?v=20260426ak"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -384,7 +385,13 @@ function initThemePicker() {
   // Migrate stale theme IDs (renamed/removed in earlier reorgs) to the
   // brand default so users with localStorage from before this update
   // don't get stuck on a phantom theme that no longer has CSS rules.
-  let current = localStorage.getItem("sd-theme") || "amber-dark";
+  // Prefer the actually-applied theme (documentElement[data-theme],
+  // which the bootstrap script sets from the server-injected site
+  // theme) so the picker highlights the right card even on a fresh
+  // browser where localStorage hasn't been set yet.
+  let current = document.documentElement.getAttribute("data-theme")
+             || localStorage.getItem("sd-theme")
+             || "amber-dark";
   if (!_themes.find(t => t.id === current)) {
     current = "amber-dark";
     try { localStorage.setItem("sd-theme", current); } catch {}
@@ -423,6 +430,21 @@ function applyThemeChoice(themeId) {
   if (!themeId || !_themes.find(t => t.id === themeId)) return;
   try { localStorage.setItem("sd-theme", themeId); } catch {}
   document.documentElement.setAttribute("data-theme", themeId);
+  // Persist sitewide so every visitor (including logged-out users
+  // and other browsers) sees this theme on their next page load.
+  // Fire-and-forget; the local apply above gives instant feedback.
+  apiFetch("/api/admin/site-theme", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ theme: themeId }),
+  }).then(r => {
+    if (typeof showToast === "function") {
+      if (r?.ok) showToast("Theme applied site-wide");
+      else showToast("Saved locally; site-wide save failed", "error");
+    }
+  }).catch(() => {
+    if (typeof showToast === "function") showToast("Saved locally; site-wide save failed", "error");
+  });
   // Re-render the preview grid so the active highlight moves
   initThemePicker();
 }
@@ -706,7 +728,7 @@ async function loadDbStats() {
       { label: "Pricing", tables: ["price_cache", "price_history"] },
       { label: "User Features", tables: ["saved_searches", "user_favorites", "user_recent_views", "user_loc_saves", "user_archive_saves", "user_wiki_saves", "user_play_queue", "feedback", "release_cache"] },
       { label: "Curated Data", tables: ["blues_artists"] },
-      { label: "System", tables: ["api_request_log"] },
+      { label: "System", tables: ["api_request_log", "app_settings"] },
     ];
 
     const countMap = {};

@@ -4,8 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <!-- Theme bootstrap — runs before stylesheet parses so no flash of
-       unstyled theme. Admin picks the theme in /admin → Theme tab. -->
-  <script>(function(){try{var t=localStorage.getItem("sd-theme");if(t&&/^[a-z0-9-]+$/.test(t))document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
+       unstyled theme. The server replaces SD_THEME_INJECT with the
+       admin-chosen site-wide theme (set on /admin → Theme tab). When
+       set, that wins over any per-browser localStorage choice so
+       admin's pick applies to every visitor. localStorage is just a
+       fallback for environments where the server doesn't substitute. -->
+  <script>(function(){try{var s="<!--SD_THEME_INJECT-->";var t=(s&&/^[a-z0-9-]+$/.test(s))?s:localStorage.getItem("sd-theme");if(t&&/^[a-z0-9-]+$/.test(t))document.documentElement.setAttribute("data-theme",t);}catch(e){}})();</script>
   <title>SeaDisco — Music Discovery Platform | Search, Collection &amp; Wantlist</title>
   <meta name="description" content="SeaDisco — music discovery powered by Discogs. Search, manage your collection and wantlist, rate releases, and connect via OAuth." />
   <meta name="keywords" content="discogs search, vinyl search, music discovery, vinyl collection, wantlist, record search, jazz, blues, world music, audiophile, OAuth, Discogs OAuth" />
@@ -40,7 +44,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260426aj" />
+  <link rel="stylesheet" href="/style.css?v=20260426ak" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -78,7 +82,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260426aj"></script>
+<script defer src="/shared.js?v=20260426ak"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -813,20 +817,20 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260426aj"></script>
-<script defer src="/search.js?v=20260426aj"></script>
-<script defer src="/collection.js?v=20260426aj"></script>
-<script defer src="/account.js?v=20260426aj"></script>
-<script defer src="/orders.js?v=20260426aj"></script>
+<script defer src="/utils.js?v=20260426ak"></script>
+<script defer src="/search.js?v=20260426ak"></script>
+<script defer src="/collection.js?v=20260426ak"></script>
+<script defer src="/account.js?v=20260426ak"></script>
+<script defer src="/orders.js?v=20260426ak"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260426aj"></script>
-<script defer src="/app.js?v=20260426aj"></script>
+<script defer src="/modal.js?v=20260426ak"></script>
+<script defer src="/app.js?v=20260426ak"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/inventory-editor.js?v=20260426aj"></script>
-<script defer src="/loc.js?v=20260426aj"></script>
-<script defer src="/archive.js?v=20260426aj"></script>
-<script defer src="/queue.js?v=20260426aj"></script>
+<script defer src="/inventory-editor.js?v=20260426ak"></script>
+<script defer src="/loc.js?v=20260426ak"></script>
+<script defer src="/archive.js?v=20260426ak"></script>
+<script defer src="/queue.js?v=20260426ak"></script>
 
 </body>
 </html>
