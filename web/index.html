@@ -65,7 +65,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260427.1238" />
+  <link rel="stylesheet" href="/style.css?v=20260427.1253" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -103,7 +103,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260427.1238"></script>
+<script defer src="/shared.js?v=20260427.1253"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -492,25 +492,30 @@
 
 <div id="privacy-view" class="content-narrow" style="display:none">
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">Privacy Policy</h2>
-  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: April 24, 2026</p>
+  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: April 27, 2026</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">What We Collect</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you create an account, we store your email address (provided by our authentication provider, Clerk) and, if you connect your Discogs account, the OAuth access credentials returned by Discogs.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you sync your Discogs account, we store a local copy of your collection, wantlist, marketplace inventory (listings), list metadata, list items, and — if you sell on Discogs — your seller order history including buyer usernames, shipping addresses, order items, totals, and the full message thread for each order. This includes per-copy metadata for your collection items (folder assignment, rating, instance notes, and date added) so that multiple owned copies of the same release can be tracked independently. We also cache your Discogs profile information (username, avatar, location, marketplace currency, and account stats including seller/buyer ratings) for display on the Account page.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">If you favorite albums, artists, or labels, those selections and their display data (title, artwork URL, type) are stored with your account. If you save searches, those search parameters are stored with your account. If you submit feedback, your email and message are stored.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">We log API usage for operational monitoring. Your IP address is used for rate limiting anonymous users but is not persisted to the database. Google Analytics receives search terms you enter along with standard page view data. When you use the AI search feature, your search query is sent to Anthropic (Claude) to generate recommendations.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">We store a small set of cross-device preferences (e.g. whether you've enabled offline access) so your settings follow you when you sign in on another device.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">We log API usage for operational monitoring. Your IP address is used for rate limiting both anonymous and signed-in users but is not persisted to the database. Google Analytics receives search terms you enter along with standard page view data. When you use the AI search feature, your search query is sent to Anthropic (Claude) to generate recommendations.</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Offline Access (Opt-In)</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">If you turn on offline access from the Account page, your browser downloads a copy of your collection, wantlist, favorites, lists, inventory, and cover thumbnails into your browser's IndexedDB and Cache Storage. This data lives only on the device you enabled it on; it isn't transmitted anywhere. Disabling offline access (or clearing your browser storage) wipes the local copy. The download itself is opt-in — nothing is cached on your device until you toggle it on.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Third-Party Services</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">SeaDisco integrates with the following third-party services:</p>
   <ul style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem;padding-left:1.2rem">
     <li><strong style="color:#ccc">Discogs</strong> — music database searches, collection syncing, and collection actions, using your OAuth authorization</li>
     <li><strong style="color:#ccc">Clerk</strong> — authentication and account management</li>
-    <li><strong style="color:#ccc">Anthropic (Claude)</strong> — AI-powered search recommendations and genre descriptions; your search query text is sent to Anthropic's API when using AI features</li>
+    <li><strong style="color:#ccc">Anthropic (Claude)</strong> — AI-powered search recommendations and genre descriptions. Your search query text is sent to Anthropic's API when using AI features. AI responses can be wrong, incomplete, or hallucinatory — verify anything important. Don't include personal or sensitive information in AI search queries.</li>
     <li><strong style="color:#ccc">Google Analytics</strong> — usage statistics including search terms to help us improve the site</li>
   </ul>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">OAuth Authorization</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">If you connect via OAuth, SeaDisco receives limited access to your Discogs account through the standard OAuth 1.0a flow. We store the resulting access token and secret to make API requests on your behalf. We do not receive or store your Discogs password. You can disconnect OAuth at any time from the Account page, which immediately revokes our access.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">If you connect via OAuth, SeaDisco receives access to your Discogs account through the standard OAuth 1.0a flow. We store the resulting access token and secret to make API requests on your behalf. We do not receive or store your Discogs password. You can disconnect OAuth at any time from the Account page, which immediately revokes our access.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">When connected, SeaDisco can read your collection, wantlist, lists, marketplace inventory, and orders, and — only when you explicitly trigger an action in the UI — create, edit, or delete marketplace listings, change folder assignments, ratings, and notes, and send messages to buyers. Every write goes to Discogs at the moment you click; nothing is queued or scheduled.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">How We Use Your Data</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Your Discogs OAuth credentials are used solely to make API requests to Discogs on your behalf — searching, syncing your collection, managing your collection/wantlist, creating and editing marketplace listings, and updating seller orders and messages. Every write action (rating a release, moving a folder, editing a listing, changing an order's status, sending a reply to a buyer) is only sent to Discogs when you explicitly trigger it in the UI. We never share your credentials with any other service or third party. Your collection data, inventory, orders, and favorites are used only to display your records and personalize your experience within SeaDisco.</p>
@@ -525,8 +530,9 @@
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Temporary operational data is also pruned automatically: API logs and search caches.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0">You can delete your account at any time from the Account tab. Deleting your account <strong style="color:#ccc">permanently removes all of your data</strong> from our database, including your email, Discogs credentials, collection, wantlist, marketplace inventory, lists, list items, seller orders, order messages, favorites, saved searches, feedback, and profile data. Your Clerk authentication account is also deleted. This action is immediate and irreversible — there is no way to recover your data after deletion. Note that deleting your SeaDisco account does <strong style="color:#ccc">not</strong> alter anything on Discogs itself — your Discogs account, listings, and orders are untouched.</p>
 
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Cookies</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco uses cookies for authentication (via Clerk), analytics (via Google Analytics), and a temporary CSRF protection cookie during the Discogs OAuth flow. We do not use advertising or tracking cookies, and we do not sell any data.</p>
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Cookies &amp; Local Storage</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">SeaDisco uses cookies for authentication (via Clerk), analytics (via Google Analytics), and a temporary CSRF protection cookie during the Discogs OAuth flow. We do not use advertising or tracking cookies, and we do not sell any data.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">Your browser's localStorage is used for non-sensitive UI state (theme, recently viewed cards, filter and sort preferences, the offline-access toggle). If you opt in to offline access, your library is also stored in your browser's IndexedDB and Cache Storage on that device only. Clearing browser data wipes all of it.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Contact</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">If you have questions about this policy, use the "Send feedback" button on the <a href="/?v=account" onclick="switchView('account');return false;" style="color:#5a9aaa">Account</a> page.</p>
@@ -534,7 +540,7 @@
 
 <div id="terms-view" class="content-narrow" style="display:none">
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">Terms of Service</h2>
-  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: April 24, 2026</p>
+  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: April 27, 2026</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Acceptance</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">By using SeaDisco, you agree to these terms. If you don't agree, please don't use the site.</p>
@@ -543,7 +549,8 @@
   <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco is a music discovery tool that searches the Discogs database (including Masters+ mode for finding orphan releases), provides AI-powered recommendations (via Anthropic's Claude), and helps you browse and manage your vinyl collection, wantlist, favorites, lists, marketplace inventory, and seller orders. It is a personal project provided as-is.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Account Access</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco accounts are open to anyone with an email address. We reserve the right to suspend or remove accounts at our sole discretion, with or without notice, particularly for abuse, automated scraping, or violations of these terms or Discogs' own terms of service.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">SeaDisco is invite-only. Total user count is capped, and accounts that go unused for 6 months are hibernated (synced data cleared; the account itself remains until explicitly deleted). When the cap is full, hibernated accounts can't be reactivated until a slot opens. Contact the admin to reactivate or for an invite.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">We reserve the right to suspend or remove accounts at our sole discretion, with or without notice, particularly for abuse, automated scraping, or violations of these terms or Discogs' own terms of service.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Marketplace Actions</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you use SeaDisco to create, edit, or delete a Discogs marketplace listing, to change the status of a seller order, or to send a message to a buyer, those actions are forwarded to Discogs and take effect immediately on your Discogs account. <strong style="color:#ccc">You are solely responsible for the listings you publish, the prices and conditions you set, the order statuses you change, and the messages you send.</strong> SeaDisco is a convenience interface to the Discogs marketplace — Discogs' own Seller Terms, fees, and refund/cancellation policies still apply, and your obligations to buyers are governed entirely by your agreement with Discogs.</p>
@@ -554,17 +561,18 @@
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Acceptable Use</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Don't abuse the service. This includes but is not limited to:</p>
-  <ul style="font-size:0.84rem;color:#aaa;margin:0;padding-left:1.2rem">
+  <ul style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem;padding-left:1.2rem">
     <li>Automated scraping or excessive API usage beyond normal browsing</li>
     <li>Attempting to access other users' data</li>
     <li>Using the service to violate Discogs' own terms of service</li>
   </ul>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco rate-limits requests per IP address to prevent abuse and to stay within the upstream API quotas (Discogs, YouTube, Anthropic, Library of Congress, archive.org). If you hit a limit, the affected feature will return an error for a short window and then recover; please don't retry in a tight loop.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Third-Party Content</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">Search results, album artwork, and AI recommendations are sourced from third parties (Discogs, Anthropic/Claude). SeaDisco does not own or control this content. All trademarks and copyrights belong to their respective owners. AI-generated content may be inaccurate.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">Search results, album artwork, audio streams, and AI recommendations are sourced from third parties — Discogs (release data + cover art), Anthropic/Claude (AI), Library of Congress + Internet Archive (audio + metadata), Wikipedia (articles), YouTube (video search + playback). Cover art remains subject to Discogs' licensing terms. SeaDisco does not own or control any of this content. All trademarks and copyrights belong to their respective owners. AI-generated content may be inaccurate.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Availability &amp; Warranty</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco is provided "as is" without warranties of any kind. We don't guarantee uptime, accuracy of search results, or availability of any feature. The service may change or shut down at any time.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco is a personal project, provided "as is" without warranties of any kind. There is no SLA, no uptime guarantee, and no commitment that any feature will keep working or that the service will keep running. Features may be added, changed, or removed; the service may go offline temporarily or permanently with little or no notice. Hibernation and account deletion can result in data loss — keep your own backup of anything you can't lose.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Limitation of Liability</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco and its operators are not liable for any damages arising from your use of the service, including but not limited to lost data, missed events, or inaccurate pricing information.</p>
@@ -922,28 +930,28 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260427.1238"></script>
-<script defer src="/search.js?v=20260427.1238"></script>
-<script defer src="/collection.js?v=20260427.1238"></script>
-<script defer src="/account.js?v=20260427.1238"></script>
-<script defer src="/orders.js?v=20260427.1238"></script>
+<script defer src="/utils.js?v=20260427.1253"></script>
+<script defer src="/search.js?v=20260427.1253"></script>
+<script defer src="/collection.js?v=20260427.1253"></script>
+<script defer src="/account.js?v=20260427.1253"></script>
+<script defer src="/orders.js?v=20260427.1253"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260427.1238"></script>
-<script defer src="/app.js?v=20260427.1238"></script>
+<script defer src="/modal.js?v=20260427.1253"></script>
+<script defer src="/app.js?v=20260427.1253"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/inventory-editor.js?v=20260427.1238"></script>
-<script defer src="/loc.js?v=20260427.1238"></script>
-<script defer src="/archive.js?v=20260427.1238"></script>
-<script defer src="/youtube.js?v=20260427.1238"></script>
-<script defer src="/queue.js?v=20260427.1238"></script>
+<script defer src="/inventory-editor.js?v=20260427.1253"></script>
+<script defer src="/loc.js?v=20260427.1253"></script>
+<script defer src="/archive.js?v=20260427.1253"></script>
+<script defer src="/youtube.js?v=20260427.1253"></script>
+<script defer src="/queue.js?v=20260427.1253"></script>
 <!-- Offline support — opt-in via the Account page toggle. idb.js
      defines window.sdIdb (IndexedDB wrapper); offline.js wires
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260427.1238"></script>
-<script defer src="/offline.js?v=20260427.1238"></script>
+<script defer src="/idb.js?v=20260427.1253"></script>
+<script defer src="/offline.js?v=20260427.1253"></script>
 
 </body>
 </html>
