@@ -514,7 +514,17 @@ app.get("/admin.html", (_req, res, next) => { if (!_sendHtml(res, "admin.html"))
 app.use(express.static(path.join(__dirname, "../web"), {
   extensions: ["html"],
   setHeaders(res, filePath) {
-    if (/\.(js|css|webp|png|ico|woff2?)$/i.test(filePath)) {
+    // Service worker MUST revalidate on every navigation — otherwise
+    // a stale SW would never pick up new code. Special-case before
+    // the generic JS rule below.
+    if (/[\\/]sw\.js$/i.test(filePath)) {
+      res.setHeader("Cache-Control", "no-cache, must-revalidate");
+      res.setHeader("Service-Worker-Allowed", "/");
+    } else if (/\.webmanifest$/i.test(filePath)) {
+      // Manifest changes infrequently but should still revalidate so
+      // PWA install metadata stays current.
+      res.setHeader("Cache-Control", "public, max-age=3600");
+    } else if (/\.(js|css|webp|png|ico|woff2?)$/i.test(filePath)) {
       res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
     } else if (/\.html$/i.test(filePath)) {
       res.setHeader("Cache-Control", "no-cache, must-revalidate");
