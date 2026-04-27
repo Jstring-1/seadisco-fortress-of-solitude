@@ -3754,6 +3754,57 @@ app.delete("/api/user/youtube-saves", express.json(), async (req, res) => {
   } catch (e: any) { res.status(500).json({ error: String(e?.message ?? e) }); }
 });
 
+// POST /api/admin/warm-favorites-cache — admin-only. Walks every
+// release / master in the admin's favorites and fetches its full
+// detail page via admin's Discogs OAuth, caching server-side. Anon
+// users on the home page who click a Suggested card then get the
+// full tracklist + credits from the cache instead of a stripped
+// "sign in for more" stub. Throttled to ~1 req/sec to spread out
+// the API quota; returns as soon as the warm job kicks off (status
+// is logged to railway).
+app.post("/api/admin/warm-favorites-cache", async (req, res) => {
+  const userId = await requireAdmin(req, res);
+  if (!userId) return;
+  const dc = await getDiscogsClientForUser(userId);
+  if (!dc) { res.status(503).json({ error: "Admin has no Discogs OAuth connection" }); return; }
+  res.status(202).json({ ok: true, message: "Warm cache started; check railway logs." });
+  // Background job — no `await` on the response side.
+  (async () => {
+    try {
+      const favs = await getFavorites(userId, 1000, 0);
+      let warmed = 0;
+      let skipped = 0;
+      let failed = 0;
+      const targets = favs.filter((row: any) =>
+        row.entity_type === "release" || row.entity_type === "master"
+      );
+      console.log(`[warm-favorites] starting for ${targets.length} items`);
+      for (const row of targets) {
+        const id = Number(row.discogs_id);
+        const type = row.entity_type as "release" | "master";
+        if (!Number.isFinite(id) || id <= 0) { skipped++; continue; }
+        try {
+          const cached = await getCachedRelease(id, type, _RELEASE_CACHE_TTL_S);
+          if (cached) { skipped++; continue; }
+          const result = type === "release"
+            ? await dc.getRelease(String(id))
+            : await dc.getMasterRelease(String(id));
+          await cacheRelease(id, type, result as object);
+          warmed++;
+          // Throttle ~1 req/sec to avoid burning the rate-limit pool.
+          await new Promise(r => setTimeout(r, 1000));
+        } catch (e: any) {
+          failed++;
+          console.warn(`[warm-favorites] ${type}/${id} failed:`, e?.message ?? e);
+        }
+      }
+      console.log(`[warm-favorites] done: warmed=${warmed} cached=${skipped} failed=${failed}`);
+    } catch (e: any) {
+      console.error(`[warm-favorites] crashed:`, e?.message ?? e);
+    }
+  })();
+});
+
 // GET /api/admin-favorites/sample — public read of a random sample of
 // admin's favorites. Used as default content on the logged-out home
 // page so anonymous visitors land on a curated set of records to
