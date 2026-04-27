@@ -6078,7 +6078,8 @@ body.player-open .queue-drawer.open { bottom: 102px; }
   flex: 1;
 }
 .queue-drawer-clear,
-.queue-drawer-close {
+.queue-drawer-close,
+.queue-drawer-repeat {
   background: none;
   border: none;
   color: #888;
@@ -6087,9 +6088,14 @@ body.player-open .queue-drawer.open { bottom: 102px; }
   border-radius: 4px;
   font-size: 0.72rem;
 }
-.queue-drawer-close { font-size: 1.1rem; }
+.queue-drawer-close  { font-size: 1.1rem; }
+.queue-drawer-repeat { font-size: 0.95rem; line-height: 1; }
 .queue-drawer-clear:hover,
-.queue-drawer-close:hover { color: #fff; background: rgba(255,255,255,0.08); }
+.queue-drawer-close:hover,
+.queue-drawer-repeat:hover  { color: #fff; background: rgba(255,255,255,0.08); }
+/* Repeat button lights up in the accent color when a mode is active
+   (one or all). "off" leaves it muted so the toggle reads at a glance. */
+.queue-drawer-repeat.active { color: var(--accent); }
 
 .queue-drawer-list {
   overflow-y: auto;
@@ -6424,6 +6430,41 @@ body.player-open .queue-drawer.open { bottom: 102px; }
   border-color: var(--accent);
   color: var(--accent);
 }
+/* Browse / Saved tab switcher — mirrors the LOC tab look. */
+.archive-tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.7rem;
+  border-bottom: 1px solid var(--border);
+}
+.archive-tab {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0.5rem 0.95rem;
+  border-bottom: 2px solid transparent;
+  font-size: 0.85rem;
+  font-weight: 500;
+  font-family: inherit;
+  margin-bottom: -1px;
+}
+.archive-tab:hover { color: var(--text); }
+.archive-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+/* ★ save toggle on each archive row. Outline by default; filled in
+   the accent color once saved so the user can scan the list for
+   their bookmarks at a glance. */
+.archive-save-btn {
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.3rem 0.55rem;
+}
+.archive-save-btn.is-saved { color: var(--accent); }
+.archive-save-btn:not(.is-saved) { color: var(--muted); }
+.archive-save-btn:hover { color: var(--accent-hi, var(--accent)); }
 .archive-row-date {
   font-size: 0.75rem;
   color: var(--accent-hi, var(--accent));
@@ -7431,4 +7472,64 @@ a:focus-visible {
   background: var(--accent-hi, var(--accent));
   color: var(--bg);
   transform: translateY(-1px);
+}
+
+/* ── Unified entity-lookup popup ───────────────────────────────────────
+   Floating menu that opens when a track-title or artist-name link is
+   clicked. Positioned by JS at the click point, clamped to viewport.
+   Replaces the inline cluster of W / 🏛 / 📺 icons that used to hang
+   next to every entity link. */
+.entity-lookup-link {
+  color: inherit;
+  text-decoration: underline dotted;
+  text-decoration-color: rgba(255, 255, 255, 0.25);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+.entity-lookup-link:hover { color: var(--accent); text-decoration-color: var(--accent); }
+.lookup-popup {
+  position: fixed;
+  z-index: 9999;
+  background: var(--bg-elev, #1a1a1a);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+  padding: 0.4rem 0;
+  font-size: 0.78rem;
+  max-width: 240px;
+}
+.lookup-popup-head {
+  padding: 0.2rem 0.7rem 0.35rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: #aaa;
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lookup-popup-list { display: flex; flex-direction: column; }
+.lookup-popup-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  background: none;
+  border: none;
+  color: #ddd;
+  cursor: pointer;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.78rem;
+  text-align: left;
+  text-decoration: none;
+  font-family: inherit;
+}
+.lookup-popup-btn:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+.lookup-popup-icon {
+  display: inline-flex;
+  width: 1.1rem;
+  justify-content: center;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  color: var(--accent);
 }

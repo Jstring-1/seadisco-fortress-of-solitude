@@ -461,7 +461,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260426q";
+  const SITE_VERSION = "build 20260426r";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -630,3 +630,180 @@ function renderSharedFooter(opts) {
     } catch { /* hidden by default — fine */ }
   })();
 }
+
+// ── Unified entity-lookup popup ──────────────────────────────────────────
+// One small floating menu replaces the cluster of W / 🏛 / 📺 icons that
+// used to hang next to every track-title or artist-name link. The text
+// itself is now the trigger: click it, pick a search target. Play (▶)
+// and Queue (➕) stay as separate inline icons because they're actions,
+// not lookups, and burying them behind a click would slow common use.
+//
+// Public API:
+//   entityLookupLinkHtml(scope, label, opts)  — inline anchor markup
+//   openLookupPopup(ev, scope, label, ctx)    — programmatic open
+//   _handleLookupClick(el, ev)                — event delegate for anchors
+//
+// scope: "track" | "artist"
+// ctx:   { trackArtist?: string }   (for tracks, used to scope YT / LOC)
+
+let _lookupPopupEl = null;
+let _lookupOutsideHandler = null;
+
+function _closeLookupPopup() {
+  if (_lookupPopupEl) { _lookupPopupEl.remove(); _lookupPopupEl = null; }
+  if (_lookupOutsideHandler) {
+    document.removeEventListener("mousedown", _lookupOutsideHandler, true);
+    _lookupOutsideHandler = null;
+  }
+}
+
+// Build the anchor HTML for a clickable entity-text link. Embeds scope
+// + label (+ optional trackArtist) as data-* so a single global click
+// handler can reconstruct the popup without each render site having to
+// emit a custom inline JS literal.
+function entityLookupLinkHtml(scope, label, opts = {}) {
+  if (!label) return "";
+  const safeLabel  = escHtml(label);
+  const artistAttr = opts.trackArtist ? ` data-lk-artist="${escHtml(opts.trackArtist)}"` : "";
+  const titleAttr  = opts.title       ? ` title="${escHtml(opts.title)}"`              : "";
+  const cls = ["entity-lookup-link", opts.className || ""].filter(Boolean).join(" ");
+  return `<a href="#" class="${cls}" data-lk-scope="${escHtml(scope)}" data-lk-label="${safeLabel}"${artistAttr} onclick="event.preventDefault();event.stopPropagation();_handleLookupClick(this,event);return false"${titleAttr}>${safeLabel}</a>`;
+}
+
+function _handleLookupClick(el, ev) {
+  const scope = el.dataset.lkScope || "track";
+  const label = el.dataset.lkLabel || "";
+  const ctx   = { trackArtist: el.dataset.lkArtist || "" };
+  openLookupPopup(ev, scope, label, ctx);
+}
+
+// "Search SeaDisco" handler — preserves the previous text-click behavior
+// (general SeaDisco search). Closes any open modal/popup first so the
+// user lands on the search results page cleanly.
+function _lookupSearchSeaDisco(scope, label) {
+  if (typeof closeModal === "function") { try { closeModal(); } catch {} }
+  if (typeof _locCloseInfoPopup === "function") { try { _locCloseInfoPopup(); } catch {} }
+  if (typeof clearForm === "function") { try { clearForm(); } catch {} }
+  if (typeof switchView === "function") { try { switchView("search"); } catch {} }
+  setTimeout(() => {
+    if (scope === "artist") {
+      const artistEl = document.getElementById("f-artist");
+      if (artistEl) artistEl.value = label;
+      if (typeof toggleAdvanced === "function") { try { toggleAdvanced(true); } catch {} }
+    } else {
+      const qEl = document.getElementById("query");
+      if (qEl) qEl.value = label;
+    }
+    if (typeof doSearch === "function") doSearch(1);
+  }, 30);
+}
+
+// Render and position the popup. Buttons available depend on scope and
+// admin status; non-admins don't see Wikipedia / LOC at all.
+function openLookupPopup(ev, scope, label, ctx) {
+  _closeLookupPopup();
+  if (!label) return;
+  const isAdmin = !!window._isAdmin;
+  const trackArtist = ctx?.trackArtist || "";
+
+  // Build the YouTube search query: for tracks, include artist for
+  // disambiguation; for artists, the bare name is the right query.
+  const ytQ = scope === "track" && trackArtist
+    ? `"${trackArtist}" "${label}"`
+    : `"${label}"`;
+  const ytUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(ytQ)}`;
+  // Discogs.com fallback link — useful when the user wants the upstream
+  // record page (e.g. for label info we don't surface). Always shown
+  // because Discogs is non-admin.
+  const dcQ = scope === "artist" ? label : (trackArtist ? `${trackArtist} ${label}` : label);
+  const dcUrl = `https://www.discogs.com/search?q=${encodeURIComponent(dcQ)}&type=all`;
+
+  const buttons = [];
+  buttons.push({ key: "sd",    icon: "🔎", text: "Search SeaDisco" });
+  buttons.push({ key: "coll",  icon: "⌕",  text: scope === "artist" ? "Search my collection" : "Search my records" });
+  buttons.push({ key: "yt",    icon: "▶",  text: "YouTube",  url: ytUrl });
+  buttons.push({ key: "dc",    icon: "◎",  text: "Discogs.com", url: dcUrl });
+  if (isAdmin) {
+    buttons.push({ key: "wiki", icon: "W",  text: "Wikipedia" });
+    buttons.push({ key: "loc",  icon: "🏛", text: "Library of Congress" });
+  }
+
+  const wrap = document.createElement("div");
+  wrap.className = "lookup-popup";
+  wrap.innerHTML = `
+    <div class="lookup-popup-head" title="${escHtml(label)}">${escHtml(label)}</div>
+    <div class="lookup-popup-list">
+      ${buttons.map((b, i) => b.url
+        ? `<a href="${escHtml(b.url)}" target="_blank" rel="noopener" class="lookup-popup-btn" data-i="${i}"><span class="lookup-popup-icon">${b.icon}</span>${escHtml(b.text)}</a>`
+        : `<button type="button" class="lookup-popup-btn" data-i="${i}"><span class="lookup-popup-icon">${b.icon}</span>${escHtml(b.text)}</button>`
+      ).join("")}
+    </div>
+  `;
+  document.body.appendChild(wrap);
+  _lookupPopupEl = wrap;
+
+  // Position near the click; clamp so the popup stays in-viewport.
+  const popupW = 220;
+  const popupH = 32 * buttons.length + 36;
+  const x = (ev?.clientX ?? window.innerWidth / 2);
+  const y = (ev?.clientY ?? window.innerHeight / 2);
+  const left = Math.min(window.innerWidth  - popupW - 8, Math.max(8, x));
+  const top  = Math.min(window.innerHeight - popupH - 8, Math.max(8, y + 6));
+  wrap.style.position = "fixed";
+  wrap.style.left = `${left}px`;
+  wrap.style.top  = `${top}px`;
+  wrap.style.width = `${popupW}px`;
+
+  // Wire button actions
+  wrap.querySelectorAll(".lookup-popup-btn").forEach(el => {
+    const i = +el.dataset.i;
+    const b = buttons[i];
+    if (b.url) {
+      // Plain anchor — let it navigate; just dismiss the popup after.
+      el.addEventListener("click", () => setTimeout(_closeLookupPopup, 30));
+      return;
+    }
+    el.addEventListener("click", e => {
+      e.preventDefault();
+      _closeLookupPopup();
+      try {
+        if (b.key === "sd")    _lookupSearchSeaDisco(scope, label);
+        else if (b.key === "coll") {
+          if (typeof searchCollectionFor === "function") {
+            searchCollectionFor(scope === "artist" ? "cw-artist" : "cw-query", label);
+          }
+        }
+        else if (b.key === "wiki") {
+          // Quote phrase for exact-match Wikipedia search; tracks add
+          // " song" so song-itself articles outrank artist hits.
+          const q = scope === "track" ? `"${label}" song` : `"${label}"`;
+          if (typeof openWikiPopup === "function") openWikiPopup(q);
+        }
+        else if (b.key === "loc") {
+          if (scope === "track" && typeof locTrackSearch === "function") {
+            locTrackSearch(e, label, trackArtist || "");
+          } else if (typeof _locSearchByName === "function") {
+            _locSearchByName(label);
+          }
+        }
+      } catch (err) { console.error("lookup action failed:", err); }
+    });
+  });
+
+  // Dismiss on outside click (deferred so the originating click doesn't
+  // immediately close the popup we just opened).
+  setTimeout(() => {
+    _lookupOutsideHandler = (e) => {
+      if (!_lookupPopupEl) return;
+      if (_lookupPopupEl.contains(e.target)) return;
+      _closeLookupPopup();
+    };
+    document.addEventListener("mousedown", _lookupOutsideHandler, true);
+  }, 0);
+}
+
+// Expose globals
+window.entityLookupLinkHtml = entityLookupLinkHtml;
+window.openLookupPopup      = openLookupPopup;
+window._handleLookupClick   = _handleLookupClick;
+window._closeLookupPopup    = _closeLookupPopup;

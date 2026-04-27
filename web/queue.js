@@ -20,6 +20,28 @@ let _queueDrawerEl = null;
 let _sortableLoaded = null; // Promise once we begin lazy-loading Sortable.js
 let _drawerSortable = null; // Sortable instance currently bound
 
+// ── Repeat state ────────────────────────────────────────────────────
+// Three modes:
+//   "off": queue plays through, then stops
+//   "one": current track replays forever (engine-side seek+play; we
+//          don't actually consume from the queue)
+//   "all": when the queue drains, items consumed during this session
+//          are re-queued (server-side append) so the cycle continues
+// Persisted in localStorage so the user's preference survives reloads.
+const _REPEAT_KEY = "sd_queue_repeat";
+const _REPEAT_VALID = new Set(["off", "one", "all"]);
+let _queueRepeat = (() => {
+  try {
+    const v = localStorage.getItem(_REPEAT_KEY);
+    return _REPEAT_VALID.has(v) ? v : "off";
+  } catch { return "off"; }
+})();
+// Items consumed during this session (used for repeat-all refill).
+// Each entry is { source, externalId, data } — the same shape queueAdd
+// expects, minus position which the server reassigns.
+let _repeatHistory = [];
+let _repeatRefillInFlight = false;
+
 // ── Fetch / cache ───────────────────────────────────────────────────
 async function _queueLoad(force = false) {
   if (_queue && !force) return _queue;
@@ -185,8 +207,27 @@ async function _queueConsume(position) {
 // AND the YT onStateChange handler when the current track ends. If the
 // queue has items, play the head; otherwise return false so the caller
 // falls back to its own internal next-track logic.
+//
+// Repeat-one is handled BEFORE this function is called (by each
+// engine's track-ended handler) — they seek-and-replay without
+// consuming, so this code path doesn't need to know about it.
 async function _queuePlayNext() {
-  const next = await _queueShiftNext();
+  let next = await _queueShiftNext();
+  // Repeat-all: when the live queue drains, push session history back
+  // onto the server queue (in original play order) and pick up the new
+  // head. Guarded by _repeatRefillInFlight so a rapid double track-end
+  // can't double-refill.
+  if (!next && _queueRepeat === "all" && _repeatHistory.length && !_repeatRefillInFlight) {
+    _repeatRefillInFlight = true;
+    try {
+      const refill = _repeatHistory.slice();
+      _repeatHistory = [];
+      await queueAdd(refill, { mode: "append" });
+      next = await _queueShiftNext();
+    } finally {
+      _repeatRefillInFlight = false;
+    }
+  }
   if (!next) return false;
   // Snapshot the item BEFORE consume so the play call uses the right
   // data even if _queue is mutated/refetched mid-flight. Consume runs
@@ -213,11 +254,53 @@ async function _queuePlayNext() {
   } else {
     return false;
   }
+  // Record the consumed item in repeat-history so a later "all" cycle
+  // can re-seed the queue. Stored regardless of current repeat mode so
+  // the user can flip the toggle mid-session and not lose history.
+  _repeatHistory.push({
+    source: next.source,
+    externalId: next.externalId,
+    data: { ...(next.data || {}) },
+  });
   // Fire-and-forget: remove the consumed item from the queue. Failures
   // here only mean the server queue stays slightly stale; the right
   // item is already playing.
   _queueConsume(next.position).catch(() => {});
   return true;
+}
+
+// ── Repeat toggle ────────────────────────────────────────────────────
+// Cycles off → all → one → off. Returns the new mode so callers can
+// update their UI without a separate read.
+function _queueCycleRepeat() {
+  const order = ["off", "all", "one"];
+  const idx = order.indexOf(_queueRepeat);
+  _queueRepeat = order[(idx + 1) % order.length];
+  try { localStorage.setItem(_REPEAT_KEY, _queueRepeat); } catch {}
+  _renderRepeatBtn();
+  if (typeof showToast === "function") {
+    const msg = _queueRepeat === "off" ? "Repeat off"
+              : _queueRepeat === "one" ? "Repeat one"
+              :                          "Repeat all";
+    showToast(msg);
+  }
+  return _queueRepeat;
+}
+
+function _queueGetRepeat() { return _queueRepeat; }
+
+// Update the drawer's repeat button — icon + active class. Safe to call
+// when the drawer hasn't been built yet (no-ops).
+function _renderRepeatBtn() {
+  const btn = _queueDrawerEl?.querySelector(".queue-drawer-repeat");
+  if (!btn) return;
+  // 🔁 = cycle (off/all), 🔂 = single-track loop. Active class drives
+  // the accent color so "off" reads as muted.
+  btn.textContent = _queueRepeat === "one" ? "🔂" : "🔁";
+  btn.classList.toggle("active", _queueRepeat !== "off");
+  btn.title = _queueRepeat === "off" ? "Repeat: off (click to cycle)"
+            : _queueRepeat === "all" ? "Repeat: all (click to cycle)"
+            :                          "Repeat: one (click to cycle)";
 }
 
 // ── Drawer UI ───────────────────────────────────────────────────────
@@ -230,6 +313,7 @@ function _ensureQueueDrawer() {
     <div class="queue-drawer-head">
       <span class="queue-drawer-title">Up Next</span>
       <span class="queue-drawer-count" id="queue-drawer-count"></span>
+      <button type="button" class="queue-drawer-repeat" onclick="_queueCycleRepeat()" title="Repeat">🔁</button>
       <button type="button" class="queue-drawer-clear" onclick="queueClear()" title="Clear queue">Clear</button>
       <button type="button" class="queue-drawer-close" onclick="queueToggleDrawer()" title="Close">×</button>
     </div>
@@ -237,6 +321,7 @@ function _ensureQueueDrawer() {
   `;
   document.body.appendChild(wrap);
   _queueDrawerEl = wrap;
+  _renderRepeatBtn();
   return wrap;
 }
 
@@ -433,6 +518,8 @@ function _refreshPlayerNavButtons() {
 
 // ── Globals ─────────────────────────────────────────────────────────
 window._queueHasNext = _queueHasNext;
+window._queueGetRepeat = _queueGetRepeat;
+window._queueCycleRepeat = _queueCycleRepeat;
 window._refreshPlayerNavButtons = _refreshPlayerNavButtons;
 window.queueAdd            = queueAdd;
 window.queueAddLoc         = queueAddLoc;

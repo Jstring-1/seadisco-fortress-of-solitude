@@ -235,6 +235,23 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS user_loc_saves_user_time_idx ON user_loc_saves (clerk_user_id, saved_at DESC)`);
 
+  // ── Archive.org item saves (Archive view) ────────────────────────────────
+  // Mirrors user_loc_saves — admins can bookmark items from the archive.org
+  // collection (Aadam Jacobs live-show recordings) and revisit them in a
+  // dedicated "Saved" tab on the archive page.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_archive_saves (
+      clerk_user_id TEXT        NOT NULL,
+      archive_id    TEXT        NOT NULL,   -- archive.org item identifier (slug)
+      title         TEXT,
+      stream_url    TEXT,                   -- primary playable audio URL (mp3 or hls)
+      data          JSONB       NOT NULL,   -- full card snapshot (date/desc/itemUrl)
+      saved_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (clerk_user_id, archive_id)
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS user_archive_saves_user_time_idx ON user_archive_saves (clerk_user_id, saved_at DESC)`);
+
   // ── Wikipedia article saves (Wikipedia SPA "Saved" tab) ──────────────────
   // Mirrors user_loc_saves so users can bookmark articles without bouncing
   // through search again. Title is the canonical Wikipedia title (used to
@@ -811,6 +828,7 @@ export async function purgeNonAdminUserData(adminClerkId: string): Promise<Recor
     "user_favorites",
     "user_recent_views",
     "user_loc_saves",
+    "user_archive_saves",
     "user_wiki_saves",
     "user_play_queue",
     "saved_searches",
@@ -1087,6 +1105,7 @@ export async function deleteUserData(clerkUserId: string): Promise<void> {
     "user_favorites",
     "user_recent_views",
     "user_loc_saves",
+    "user_archive_saves",
     "user_wiki_saves",
     "user_play_queue",
     "saved_searches",
@@ -1766,6 +1785,78 @@ export async function getLocSaveIds(clerkUserId: string): Promise<string[]> {
     [clerkUserId]
   );
   return r.rows.map(row => row.loc_id);
+}
+
+// ── Archive.org item saves ────────────────────────────────────────────
+// Same shape and cap as LOC saves; just a different table. Archive is
+// admin-only on the wire — only admin users can hit the saves
+// endpoints — but the DB layer doesn't enforce that (the API does).
+const ARCHIVE_SAVES_MAX_PER_USER = 1000;
+
+export async function saveArchiveItem(
+  clerkUserId: string,
+  archiveId: string,
+  title: string | null,
+  streamUrl: string | null,
+  data: object
+): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    `INSERT INTO user_archive_saves (clerk_user_id, archive_id, title, stream_url, data, saved_at)
+     VALUES ($1, $2, $3, $4, $5, NOW())
+     ON CONFLICT (clerk_user_id, archive_id)
+     DO UPDATE SET title = EXCLUDED.title, stream_url = EXCLUDED.stream_url,
+                   data = EXCLUDED.data, saved_at = NOW()`,
+    [clerkUserId, archiveId, title, streamUrl, JSON.stringify(data)]
+  );
+  await pool.query(
+    `DELETE FROM user_archive_saves
+     WHERE clerk_user_id = $1
+       AND archive_id NOT IN (
+         SELECT archive_id FROM user_archive_saves
+         WHERE clerk_user_id = $1
+         ORDER BY saved_at DESC
+         LIMIT ${ARCHIVE_SAVES_MAX_PER_USER}
+       )`,
+    [clerkUserId]
+  );
+}
+
+export async function getArchiveSaves(
+  clerkUserId: string,
+  limit: number = 500
+): Promise<Array<{ archiveId: string; title: string | null; streamUrl: string | null; data: any; savedAt: string }>> {
+  const capped = Math.min(Math.max(1, limit), 1000);
+  const r = await getPool().query(
+    `SELECT archive_id, title, stream_url, data, saved_at
+     FROM user_archive_saves
+     WHERE clerk_user_id = $1
+     ORDER BY saved_at DESC
+     LIMIT $2`,
+    [clerkUserId, capped]
+  );
+  return r.rows.map(row => ({
+    archiveId: row.archive_id,
+    title: row.title,
+    streamUrl: row.stream_url,
+    data: row.data ?? {},
+    savedAt: row.saved_at,
+  }));
+}
+
+export async function deleteArchiveSave(clerkUserId: string, archiveId: string): Promise<void> {
+  await getPool().query(
+    `DELETE FROM user_archive_saves WHERE clerk_user_id = $1 AND archive_id = $2`,
+    [clerkUserId, archiveId]
+  );
+}
+
+export async function getArchiveSaveIds(clerkUserId: string): Promise<string[]> {
+  const r = await getPool().query(
+    `SELECT archive_id FROM user_archive_saves WHERE clerk_user_id = $1`,
+    [clerkUserId]
+  );
+  return r.rows.map(row => row.archive_id);
 }
 
 // ── Wikipedia article saves ───────────────────────────────────────────
@@ -3211,8 +3302,8 @@ export async function getTableRowCounts(): Promise<Array<{ table: string; rows: 
   const tables = [
     'user_tokens', 'user_collection', 'user_collection_folders', 'user_wantlist',
     'user_inventory', 'user_lists', 'user_list_items', 'user_orders', 'user_order_messages',
-    'user_favorites', 'user_recent_views', 'user_loc_saves', 'user_wiki_saves',
-    'user_play_queue', 'saved_searches', 'feedback',
+    'user_favorites', 'user_recent_views', 'user_loc_saves', 'user_archive_saves',
+    'user_wiki_saves', 'user_play_queue', 'saved_searches', 'feedback',
     'release_cache', 'price_cache', 'price_history',
     'blues_artists', 'api_request_log', 'oauth_request_tokens',
   ];

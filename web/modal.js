@@ -1727,6 +1727,13 @@ function _playNextVideoInternal() {
 }
 
 function onVideoEnded() {
+  // Cross-source repeat-one (toggled in the queue drawer) takes
+  // precedence over the per-album _ytRepeat setting — it's the
+  // user's most recent intent. Replay without advancing the queue.
+  if (typeof window._queueGetRepeat === "function" && window._queueGetRepeat() === "one" && ytPlayer) {
+    try { ytPlayer.seekTo(0); ytPlayer.playVideo(); } catch {}
+    return;
+  }
   if (_ytRepeat === "one" && ytPlayer) {
     ytPlayer.seekTo(0);
     ytPlayer.playVideo();
@@ -1906,11 +1913,11 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
       // Display + search both keep the original disambiguated name
       // (e.g. "Smith (4)") so popup search links resolve the exact
       // contributor instead of merging with same-named artists.
-      const nameEl = a.id
-        ? `<a href="#" class="modal-internal-link credit-name" data-alt-name="${escHtml(a.name)}" data-alt-id="${a.id}" onclick="selectAltArtist(event,this);closeModal()" title="Search for ${escHtml(a.name)}">${escHtml(a.name)}</a>`
-        : `<span class="credit-name">${escHtml(a.name)}</span>`;
-      const searchIcon = ` <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(a.name.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(a.name)}" style="font-size:1.1em">⌕</a>${wikiIcon(stripDupSuffix(a.name), a.name)}${bluesAddIcon(a.id, a.name)}`;
-      // Role parentheses come right after the name; ⌕/W/+ go AFTER the role.
+      // Credit name uses the unified lookup popup (SeaDisco / collection
+      // / YouTube / Wiki / LOC). The blues-DB add icon stays inline as
+      // an admin mutation, not a search.
+      const nameEl = entityLookupLinkHtml("artist", a.name, { className: "credit-name", title: `Lookup options for ${a.name}` });
+      const searchIcon = bluesAddIcon(a.id, a.name);
       return `<span class="credit-item">${nameEl}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}${searchIcon}</span>`;
     });
   const notes       = d.notes ? stripDiscogsMarkup(d.notes) : "";
@@ -2062,37 +2069,20 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         const playCell = url
           ? `<a class="track-play-btn track-link" href="#" data-video="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" onclick="openVideo(event,'${url.replace(/'/g, "\\'")}')" title="Play this track">▶</a>`
           : "";
-        // Track title is now a Discogs new-search link for the track name.
+        // Track title now opens the unified lookup popup (SeaDisco /
+        // collection / YouTube / Wikipedia / LOC) instead of going
+        // straight to a Discogs search. Reduces inline icon clutter —
+        // the W / 🏛 / 📺 icons that used to follow the title are now
+        // options in that popup.
         const titleLink = t.title
-          ? `<a href="#" class="track-title-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('query').value='${escHtml(trackSearchQ)}';doSearch(1)" title="Search Discogs for &quot;${escHtml(t.title)}&quot;">${escHtml(t.title)}</a>`
+          ? entityLookupLinkHtml("track", t.title, { className: "track-title-link", trackArtist, title: `Lookup options for "${t.title}"` })
           : "";
-        // Magnifying glass searches the user's records for the track (orange via .track-search-icon).
-        const searchIcon = t.title
-          ? ` <a class="track-search-icon" href="#" onclick="event.preventDefault();searchCollectionFor('cw-query','${escHtml(trackSearchQ)}')" title="Search your records for &quot;${escHtml(t.title)}&quot;">⌕</a>`
-          : "";
-        // W → wiki popup for the track title. Search becomes
-        // `"Track Title" song` so results surface ANY Wikipedia article
-        // mentioning the song — covers cases where the song is famous
-        // but the article isn't filed under our artist (covers, samples,
-        // chart history, song-itself articles, etc.).
-        const wikiW = t.title
-          ? wikiIcon(t.title, t.title, "song")
-          : "";
-        // 🏛 → search Library of Congress for a public-domain audio match
-        // for this track + artist. Click runs a backend search; if exactly
-        // one playable match comes back it starts in the LOC bar, else
-        // a small floating list of matches is rendered.
-        const locL = t.title
-          ? locIcon(t.title, trackArtist || "")
-          : "";
-        // External YouTube search at the end of the title row. Shown for
-        // every track (even ones with an in-app ▶) because embedded
-        // playback sometimes fails or the video is unavailable in the
-        // user's region — a one-click fallback to a YouTube search keeps
-        // listening uninterrupted.
-        const ytSearchEnd = t.title
-          ? ` <a class="track-yt-search-end" href="https://www.youtube.com/results?search_query=${ytQuery}" target="_blank" rel="noopener" title="Search on YouTube"><svg width="14" height="10" viewBox="0 0 16 11" fill="none" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="11" rx="2.5" fill="#8a2a22"/><path d="M6.5 3L11 5.5L6.5 8V3Z" fill="#e8dcc8"/></svg></a>`
-          : "";
+        // searchIcon / wikiW / locL / ytSearchEnd were retired here —
+        // those affordances live in the lookup popup now.
+        const searchIcon = "";
+        const wikiW = "";
+        const locL = "";
+        const ytSearchEnd = "";
         // ➕ → add this YouTube-matched track to the cross-source play
         // queue. Only renders when the row has a confirmed YT URL match
         // (otherwise there's nothing to queue from this row).
@@ -2101,13 +2091,12 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
           : "";
         const trackCredits = (t.extraartists ?? []).length
           ? `<div class="track-credits">${t.extraartists.map(a => {
-              const nameEl = a.id
-                ? `<a href="#" class="modal-internal-link credit-name" data-alt-name="${escHtml(a.name)}" data-alt-id="${a.id}" onclick="selectAltArtist(event,this);closeModal()" title="Search for ${escHtml(a.name)}">${escHtml(a.name)}</a>`
-                : `<span class="credit-name">${escHtml(a.name)}</span>`;
-              const credSearchIcon = ` <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(a.name.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(a.name)}" style="font-size:1.1em">\u2315</a>${wikiIcon(stripDupSuffix(a.name), a.name)}${bluesAddIcon(a.id, a.name)}`;
-              // Role parentheses come right after the name; the inventory \u2315
-              // and wiki W icons go AFTER the role so the line reads
-              // "Name (Role) \u2315 W +" instead of "Name \u2315 W (Role) +".
+              const nameEl = entityLookupLinkHtml("artist", a.name, { className: "credit-name", title: `Lookup options for ${a.name}` });
+              const credSearchIcon = `${bluesAddIcon(a.id, a.name)}`;
+              // Role parentheses come right after the name; the blues-DB
+              // admin mutation (if any) trails. The \u2315 / W / \ud83c\udfdb / YT
+              // icons that used to live here are now in the lookup
+              // popup that opens when the credit name is clicked.
               return `${nameEl}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}${credSearchIcon}`;
             }).join('<span class="credit-sep"> · </span>')}</div>`
           : "";
@@ -2149,7 +2138,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
       <div class="album-meta">
         ${typeLabel ? `<div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.3rem"><div class="album-type-badge" style="cursor:pointer;user-select:none" onclick="navigator.clipboard.writeText('${escHtml(String(releaseId))}');this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy ID">${escHtml(typeLabel)}</div><button class="popup-share-inline" onclick="sharePopup(this)" title="Copy share link">share</button></div>` : ""}
         <h2><a href="#" class="modal-title-link" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">${escHtml(title)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">⌕</a></h2>
-        ${artistEntries.length ? `<div class="album-artist">${artistEntries.map(({ id: aId, name: n }) => `<a href="#" class="modal-artist-link" data-artist="${escHtml(n)}" onclick="searchArtistFromModal(event,this)" title="Search for ${escHtml(n)}">${escHtml(n)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-artist','${escHtml(n.replace(/'/g, "\\'"))}')" title="Search your collection for ${escHtml(n)}">⌕</a>${wikiIcon(stripDupSuffix(n), n)}${bluesAddIcon(aId, n)}`).join(", ")}</div>` : ""}
+        ${artistEntries.length ? `<div class="album-artist">${artistEntries.map(({ id: aId, name: n }) => `${entityLookupLinkHtml("artist", n, { className: "modal-artist-link", title: `Lookup options for ${n}` })}${bluesAddIcon(aId, n)}`).join(", ")}</div>` : ""}
         ${detailRows ? `<div class="album-detail-grid">${detailRows}</div>` : ""}
         ${(() => {
           const r = d.community?.rating;
