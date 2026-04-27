@@ -2379,6 +2379,64 @@ body.modal-open  { overflow: hidden; }
   gap: 0.4rem;
   min-height: 48px;
 }
+/* Click/drag-to-seek progress strip below the bar. Slim by default, grows
+   on hover so the click target is reasonable on desktop. The knob is
+   only rendered while dragging so there's no extra visual noise during
+   normal playback (the fill alone shows position). */
+.mini-progress {
+  position: relative;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  margin: 0 0.6rem 0.3rem;
+  border-radius: 2px;
+  transition: height 0.12s ease;
+  user-select: none;
+  /* Hide entirely until the player has a known duration */
+  display: none;
+}
+.mini-player.has-duration .mini-progress { display: block; }
+.mini-progress:hover,
+.mini-progress.is-dragging { height: 8px; }
+.mini-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 2px;
+  pointer-events: none;
+  transition: width 0.12s linear;
+}
+.mini-progress.is-dragging .mini-progress-fill { transition: none; }
+.mini-progress-knob {
+  position: absolute;
+  top: 50%;
+  width: 12px;
+  height: 12px;
+  background: var(--accent);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.mini-progress:hover .mini-progress-knob,
+.mini-progress.is-dragging .mini-progress-knob { opacity: 1; }
+.mini-progress-times {
+  position: absolute;
+  top: -16px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.62rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.mini-progress:hover .mini-progress-times,
+.mini-progress.is-dragging .mini-progress-times { opacity: 1; }
 .mini-player-info {
   flex: 1;
   min-width: 0;
