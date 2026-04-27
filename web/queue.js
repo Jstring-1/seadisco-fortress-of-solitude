@@ -341,17 +341,27 @@ function _queueOnExternalPlay(itemPayload) {
     }
     return false;
   }
-  // If the played item is already in the queue, don't double-insert —
-  // just mark it as the playing position. Common case: URL-based load
-  // resumes a track that's still in the user's saved queue.
+  // If the played item is already in the queue, MOVE it to the head
+  // rather than leaving it at its current position with a different
+  // marker. Every play re-orders the queue with the played track at
+  // the top — that's the consistent mental model: "the bar shows
+  // what's playing, the queue shows what's next, the played track
+  // is always at the top."
   if (Array.isArray(_queue)) {
     const existing = _queue.find(it => String(it.externalId) === String(itemPayload.externalId));
     if (existing) {
-      _queueCurrentPosition = existing.position;
-      _queuePlayingExternalId = String(itemPayload.externalId);
-      if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
-      _refreshPlayerNavButtons();
-      return false;
+      const oldPosition = existing.position;
+      // Remove from local cache; the upcoming optimistic-insert path
+      // will prepend a fresh copy at the head.
+      _queue = _queue.filter(it => it.position !== oldPosition);
+      // Drop the old server row in the background so the queue
+      // doesn't end up with two copies after reconcile.
+      apiFetch("/api/user/play-queue", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ position: oldPosition }),
+      }).catch(() => {});
+      // Fall through to the optimistic-insert path below.
     }
   }
   // SYNCHRONOUSLY update local state before the engine call returns
