@@ -4672,6 +4672,24 @@ button.wiki-link-btn:active {
 #splash-waitlist-mount .cl-footerActionLink {
   display: none !important;
 }
+
+/* Clerk modal (openSignInModal / openSignUpModal) — give it a
+   visible card edge. The appearance API's `elements.card` style
+   string is overridden by Clerk's own CSS in some builds, so we
+   reinforce with !important rules targeting the actual rendered
+   classes. .cl-modalContent wraps the card; .cl-card is the inner
+   panel. Both get a clear border + shadow + rounded corners so the
+   modal stands out against the dimmed page underneath. */
+.cl-modalContent .cl-card,
+.cl-modalContent.cl-modalContent {
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.75) !important;
+  background: var(--bg, #15120e) !important;
+}
+/* Slightly brighter overlay backdrop so the dimmed page reads as
+   a clear "behind the modal" surface and the modal pops forward. */
+.cl-modalBackdrop { background: rgba(0, 0, 0, 0.65) !important; }
 .user-email { color: #aaa; font-size: 0.85rem; margin-bottom: 1.2rem; }
 .section-divider { border: none; border-top: 1px solid #333; margin: 1.5rem 0; }
 

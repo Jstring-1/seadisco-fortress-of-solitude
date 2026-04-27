@@ -1908,17 +1908,20 @@ function openVideo(event, url) {
   // popup's track list).
   const clickedEl = event?.target?.closest?.(".track-link") || event?.target;
   const queueMeta = window._queueDispatchYtMeta;
+  // trackLinks is set in the DOM-scrape branch and consumed below for
+  // index lookup; in the queue-driven branch it stays empty and the
+  // clickedIdx logic falls through to URL indexOf.
+  let trackLinks = [];
   if (queueMeta) {
     window._videoQueue     = [url];
     window._videoQueueMeta = [queueMeta];
-    // Consumed — clear so a later non-queue play doesn't pick this up.
     delete window._queueDispatchYtMeta;
   } else {
     const container = clickedEl?.closest?.("#album-info, #version-info")
       || (document.getElementById("version-overlay")?.classList.contains("open") ? document.getElementById("version-info") : null)
       || (document.getElementById("modal-overlay")?.classList.contains("open") ? document.getElementById("album-info") : null)
       || document;
-    const trackLinks = [...container.querySelectorAll(".track-link[data-video]")];
+    trackLinks = [...container.querySelectorAll(".track-link[data-video]")];
     window._videoQueue      = trackLinks.map(a => a.dataset.video);
     window._videoQueueMeta  = trackLinks.map(a => ({
       track:  a.dataset.track  || "",
