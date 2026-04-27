@@ -1719,10 +1719,13 @@ window._discogsIdsReady = new Promise(r => { window._resolveDiscogsIds = r; });
 function _updateEmptyRecordTabs() {
   const invCount  = (window._inventoryIds?.size) ?? 0;
   const listCount = window._listMembership ? Object.keys(window._listMembership).length : 0;
-  document.querySelectorAll('.nav-tab-top[data-rtab="inventory"]').forEach(el => {
+  // Hide both the navbar tab AND the matching footer link so the
+  // footer mirrors the nav exactly — no dangling "Inventory" link
+  // for users who have zero inventory items, etc.
+  document.querySelectorAll('.nav-tab-top[data-rtab="inventory"], footer a[data-sd-view="inventory"]').forEach(el => {
     el.classList.toggle("nav-rec-empty", invCount === 0);
   });
-  document.querySelectorAll('.nav-tab-top[data-rtab="lists"]').forEach(el => {
+  document.querySelectorAll('.nav-tab-top[data-rtab="lists"], footer a[data-sd-view="lists"]').forEach(el => {
     el.classList.toggle("nav-rec-empty", listCount === 0);
   });
 }

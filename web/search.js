@@ -733,8 +733,23 @@ function renderCard(item, index) {
       badges += `<span class="card-badge badge-collection${colActive ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();openModal(event,'${releaseId}','master','')" title="${colTitle}">${navIcon("collection")}${colSup}</span>`;
       badges += `<span class="card-badge badge-wantlist${wantActive ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();openModal(event,'${releaseId}','master','')" title="${wantTitle}">${navIcon("wantlist")}${wantSup}</span>`;
     }
-    // Lists badge — placeholder visible whenever the user has any
-    // lists at all. Active when this release is in one or more.
+  }
+  // Favorite badge — always rendered (placeholder when not favorited).
+  // Order: collection, wantlist, favorites, inventory, lists — matches
+  // the navbar tab order.
+  const favKey = `${type}:${item.id}`;
+  const isFav = window._favoriteKeys?.has(favKey);
+  if (type && item.id)
+    badges += `<span class="card-badge badge-favorite${isFav ? " is-favorite" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,${item.id},'${type}')" title="${isFav ? "Remove from favorites" : "Add to favorites"}">${navIcon("favorites")}</span>`;
+  if (releaseId && isReleaseOrMaster) {
+    // Inventory badge — placeholder visible whenever the user has any
+    // inventory items. Active when this release is one of them.
+    if (userHasInventory) {
+      const inInv = window._inventoryIds?.has(releaseId);
+      const iTitle = inInv ? "In your inventory" : "Not in your inventory";
+      badges += `<span class="card-badge badge-inventory${inInv ? " is-active" : ""}" title="${iTitle}">${navIcon("inventory")}</span>`;
+    }
+    // Lists badge — same placeholder rule.
     if (userHasLists) {
       const lists = window._listMembership?.[releaseId];
       const inList = !!(lists && lists.length);
@@ -742,17 +757,7 @@ function renderCard(item, index) {
       const lTitle = inList ? `In list: ${escHtml(names)}` : "Not in any of your lists";
       badges += `<span class="card-badge badge-list${inList ? " is-active" : ""}" title="${lTitle}">${navIcon("lists")}</span>`;
     }
-    // Inventory badge — same placeholder rule.
-    if (userHasInventory) {
-      const inInv = window._inventoryIds?.has(releaseId);
-      const iTitle = inInv ? "In your inventory" : "Not in your inventory";
-      badges += `<span class="card-badge badge-inventory${inInv ? " is-active" : ""}" title="${iTitle}">${navIcon("inventory")}</span>`;
-    }
   }
-  const favKey = `${type}:${item.id}`;
-  const isFav = window._favoriteKeys?.has(favKey);
-  if (type && item.id)
-    badges += `<span class="card-badge badge-favorite${isFav ? " is-favorite" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,${item.id},'${type}')" title="${isFav ? "Remove from favorites" : "Add to favorites"}">${navIcon("favorites")}</span>`;
 
   // Multi-instance "(N)" badge at lower-left — shown when user owns multiple copies
   // of the same release. Clicking opens a popover listing each instance.

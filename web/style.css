@@ -1551,9 +1551,11 @@ body {
    point at them, and hover gives clear feedback. */
 .nav-tab-top.nav-rec-disabled { color: #555; cursor: pointer; }
 .nav-tab-top.nav-rec-disabled:hover { color: var(--accent); }
-/* Hide Inventory / Lists tabs entirely when the user has zero of them.
-   Set by _updateEmptyRecordTabs() once /api/user/discogs-ids resolves. */
-.nav-tab-top.nav-rec-empty { display: none !important; }
+/* Hide Inventory / Lists tabs (and matching footer links) entirely
+   when the user has zero of them. Set by _updateEmptyRecordTabs()
+   once /api/user/discogs-ids resolves. */
+.nav-tab-top.nav-rec-empty,
+footer a.nav-rec-empty { display: none !important; }
 .nav-tab-top[data-rtab="collection"],
 .nav-tab-top[data-rtab="collection"].active  { color: #6ddf70; }
 .nav-tab-top[data-rtab="collection"]:hover   { color: #888; }
@@ -4474,12 +4476,14 @@ button.wiki-link-btn:active {
   display: block;
   stroke-width: 1.5;
 }
-/* Fixed slot positions — 22px stride for the slightly larger icons. */
+/* Fixed slot positions — 22px stride for the slightly larger icons.
+   Order matches the navbar: collection / wantlist / favorites /
+   inventory / lists. */
 .badge-collection { top: 4px;   cursor: pointer; }
 .badge-wantlist   { top: 26px;  cursor: pointer; }
-.badge-list       { top: 48px; }
+.badge-favorite   { top: 48px;  cursor: pointer; }
 .badge-inventory  { top: 70px; }
-.badge-favorite   { top: 92px; cursor: pointer; }
+.badge-list       { top: 92px; }
 /* Active per-tab colors — match the navbar palette. */
 .badge-collection.is-active { color: #6ddf70; }
 .badge-wantlist.is-active   { color: #f0c95c; }
