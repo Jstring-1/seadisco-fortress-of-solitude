@@ -245,6 +245,12 @@ async function _queueConsume(position) {
 // own track-ended handler (seek+play, never reaches here).
 async function _queuePlayNext() {
   await _queueLoad();
+  console.debug("[_queuePlayNext] start", {
+    queueLen: _queue?.length ?? 0,
+    currentPos: _queueCurrentPosition,
+    currentExt: _queuePlayingExternalId,
+    repeat: _queueRepeat,
+  });
   if (!_queue?.length) {
     _queueCurrentPosition = null;
     _queuePlayingExternalId = null;
@@ -311,9 +317,14 @@ async function _queuePlayItem(entry) {
       // picks up a wrong track or nothing — the bar's title
       // would show the wrong song. Cleared on consume.
       window._queueDispatchYtMeta = {
-        track:  entry.data?.title       || "",
-        album:  entry.data?.albumTitle  || "",
-        artist: entry.data?.artist      || "",
+        track:       entry.data?.title       || "",
+        album:       entry.data?.albumTitle  || "",
+        artist:      entry.data?.artist      || "",
+        // Release context: openVideo uses these to set _playerReleaseId
+        // so the mini-player's disc icon stays linked across queue
+        // auto-advances even when the original album modal is closed.
+        releaseType: entry.data?.releaseType || "",
+        releaseId:   entry.data?.releaseId   || "",
       };
       const url = `https://www.youtube.com/watch?v=${encodeURIComponent(entry.externalId)}`;
       if (typeof openVideo === "function") openVideo(null, url);

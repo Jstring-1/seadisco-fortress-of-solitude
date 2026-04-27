@@ -1876,6 +1876,11 @@ function _trackQueueAdd(el) {
     title:       el.dataset.track   || "",
     artist:      el.dataset.artist  || "",
     albumTitle:  el.dataset.album   || "",
+    // Release context: lets the disc-icon ("Open this album") in the
+    // mini-player keep working even when this track is reached via
+    // queue auto-advance (no DOM scrape, no ?op= URL param).
+    releaseType: el.dataset.releaseType || "",
+    releaseId:   el.dataset.releaseId   || "",
   };
   if (typeof queueAddYt === "function") {
     // ＋ button = add to the tail of the queue. The "play now"
@@ -1945,9 +1950,16 @@ function openVideo(event, url) {
         source: "yt",
         externalId: videoId,
         data: {
-          title:      trackEl?.dataset?.track  || "",
-          artist:     trackEl?.dataset?.artist || "",
-          albumTitle: trackEl?.dataset?.album  || "",
+          title:       trackEl?.dataset?.track       || "",
+          artist:      trackEl?.dataset?.artist      || "",
+          albumTitle:  trackEl?.dataset?.album       || "",
+          // Release context flows into the queue entry's data so that
+          // when the queue auto-advances later (no DOM context, no
+          // ?op= URL), _queuePlayItem can hand it back via the queue
+          // dispatch meta and the disc icon ("Open this album") still
+          // links to the right release.
+          releaseType: trackEl?.dataset?.releaseType || "",
+          releaseId:   trackEl?.dataset?.releaseId   || "",
         },
       });
     } else {
@@ -2007,13 +2019,30 @@ function openVideo(event, url) {
   // URL (findVideo() can fuzzy-match neighbouring tracks to the same video) or
   // when both an album and version popup are open at once.
   window._videoQueueContainerId = container?.id || "";
-  // Save the currently open release so the player bar can reopen it
-  const opParam = new URLSearchParams(location.search).get("op");
-  if (opParam && opParam.includes(":")) {
-    const [pType, pId] = [opParam.slice(0, opParam.indexOf(":")), opParam.slice(opParam.indexOf(":") + 1)];
-    window._playerReleaseType = pType;
-    window._playerReleaseId   = pId;
-    window._playerReleaseUrl  = `https://www.discogs.com/${pType}/${pId}`;
+  // Remember the release this track belongs to so the disc icon
+  // ("Open this album") can reopen it. Priority order:
+  //   1. Queue dispatch meta — auto-advance from the cross-source queue
+  //   2. Clicked track row's data-release-* attrs — most reliable
+  //   3. Current ?op= URL param — works when modal is still open
+  //   4. Leave previous _playerRelease* untouched (don't clobber on a
+  //      bootstrap play that has no context — we'd rather keep the
+  //      stale-but-correct context than wipe the disc icon).
+  let _rType = "", _rId = "";
+  if (queueMeta?.releaseType && queueMeta?.releaseId) {
+    _rType = queueMeta.releaseType; _rId = String(queueMeta.releaseId);
+  } else if (clickedEl?.dataset?.releaseType && clickedEl?.dataset?.releaseId) {
+    _rType = clickedEl.dataset.releaseType; _rId = String(clickedEl.dataset.releaseId);
+  } else {
+    const opParam = new URLSearchParams(location.search).get("op");
+    if (opParam && opParam.includes(":")) {
+      _rType = opParam.slice(0, opParam.indexOf(":"));
+      _rId   = opParam.slice(opParam.indexOf(":") + 1);
+    }
+  }
+  if (_rType && _rId) {
+    window._playerReleaseType = _rType;
+    window._playerReleaseId   = _rId;
+    window._playerReleaseUrl  = `https://www.discogs.com/${_rType}/${_rId}`;
   }
   setVideoUrl(id);
   const mp = document.getElementById("mini-player");
@@ -2073,6 +2102,12 @@ function _playNextVideoInternal() {
 }
 
 function onVideoEnded() {
+  console.debug("[onVideoEnded]", {
+    queueRepeat: typeof window._queueGetRepeat === "function" ? window._queueGetRepeat() : "n/a",
+    ytRepeat: _ytRepeat,
+    videoQueueIdx: window._videoQueueIndex,
+    videoQueueLen: (window._videoQueue ?? []).length,
+  });
   // Cross-source repeat-one (toggled in the queue drawer) takes
   // precedence over the per-album _ytRepeat setting — it's the
   // user's most recent intent. Replay without advancing the queue.
@@ -2429,7 +2464,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         // external YouTube-search fallback was moved to the end of the
         // title cell, after the wiki W icon.
         const playCell = url
-          ? `<a class="track-play-btn track-link" href="#" data-video="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" onclick="openVideo(event,'${url.replace(/'/g, "\\'")}')" title="Play this track">▶</a>`
+          ? `<a class="track-play-btn track-link" href="#" data-video="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" data-release-type="${escHtml(entityType || "")}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="openVideo(event,'${url.replace(/'/g, "\\'")}')" title="Play this track">▶</a>`
           : "";
         // Track title now opens the unified lookup popup (SeaDisco /
         // collection / YouTube / Wikipedia / LOC) instead of going
@@ -2449,7 +2484,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         // queue. Only renders when the row has a confirmed YT URL match
         // (otherwise there's nothing to queue from this row).
         const queueAdd = url
-          ? ` <a href="#" class="queue-add-icon" data-yt-url="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" onclick="event.preventDefault();_trackQueueAdd(this);return false" title="Add to play queue">＋</a>`
+          ? ` <a href="#" class="queue-add-icon" data-yt-url="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" data-release-type="${escHtml(entityType || "")}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackQueueAdd(this);return false" title="Add to play queue">＋</a>`
           : "";
         const trackCredits = (t.extraartists ?? []).length
           ? `<div class="track-credits">${t.extraartists.map(a => {
