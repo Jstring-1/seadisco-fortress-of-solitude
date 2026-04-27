@@ -360,10 +360,13 @@ async function submitFeedback() {
 
 async function signOut() {
   await window._clerk?.signOut();
-  // Stay in SPA — just go back to search view and clear auth state
   _cachedToken = null;
   _cachedTokenAt = 0;
-  switchView("search");
+  // Hard reload to "/" so the suggested cards / nav state rebuild
+  // fresh as a signed-out user. Staying in the SPA left the prior
+  // user's recents visible until something else triggered a refetch
+  // (and could expose stale signed-in data on a shared device).
+  location.replace("/");
 }
 
 async function deleteAccount() {
