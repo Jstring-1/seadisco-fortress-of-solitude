@@ -418,11 +418,49 @@ async function applyAuthState(clerk) {
   }
 }
 
-initAuth({
-  onSignedIn: applyAuthState,
-  onSignedOut: applyAuthState,
-  onReady: () => _authReady(),
-});
+// Offline-mode boot path — set by the inline script in index.html's
+// <head> based on localStorage flag + navigator.onLine. When true,
+// Clerk can't validate the session (its API is unreachable), so we
+// skip auth entirely and stub a "signed-in offline" state. The
+// apiFetch wrapper in offline.js falls back to IDB for the user's
+// library endpoints, so collection / wantlist / inventory / lists
+// keep working. Mutations + search + AI gracefully fail (network
+// errors). Real auth resumes the next time the user is online.
+if (window._sdOfflineMode) {
+  window._clerk = { user: { id: "offline-user" }, session: null };
+  // Resolve auth-related promises so URL-driven popup restoration
+  // doesn't hang waiting for a signed-in state we'll never get.
+  if (window._resolveDiscogsIds) window._resolveDiscogsIds();
+  _authReady();
+  // Manually surface the library nav tabs since we won't be calling
+  // /api/user/token (which is what normally reveals them).
+  setTimeout(() => {
+    try { addNavTab("wanted"); } catch {}
+    try { addNavTab("collection"); } catch {}
+    try { addNavTab("wantlist"); } catch {}
+  }, 0);
+  // Replace the Account-tab label so it's clear we're not signed in
+  // for real, just running off cached data.
+  const navBtn = document.getElementById("nav-auth-tab");
+  if (navBtn) {
+    const labelSpan = navBtn.querySelector(".nav-label");
+    const txt = "Offline";
+    if (labelSpan) labelSpan.textContent = txt; else navBtn.textContent = txt;
+    navBtn.title = "You're offline — using cached library";
+  }
+  // Hide the splash / sign-in CTA on the home view since "sign in"
+  // can't actually do anything offline.
+  document.documentElement.classList.add("sd-offline-mode");
+  if (typeof _applySplashVisibility === "function") {
+    try { _applySplashVisibility(window._clerk); } catch {}
+  }
+} else {
+  initAuth({
+    onSignedIn: applyAuthState,
+    onSignedOut: applyAuthState,
+    onReady: () => _authReady(),
+  });
+}
 
 // Service worker removed — no sw.js exists
 
