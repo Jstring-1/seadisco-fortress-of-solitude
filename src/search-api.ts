@@ -2819,20 +2819,19 @@ async function _fetchArchiveCollection(collectionId: string): Promise<ArchiveIte
   // search API caps each page at 1000; we walk page-by-page until
   // we've collected `numFound` records.
   //
-  // The aadamjacobs page is a USER page, not a tagged collection — items
-  // are uploaded by that user but rarely also list `aadamjacobs` as a
-  // `collection` value (the collection tag points to subcollections like
-  // "live_music_archive"). The narrow `collection:aadamjacobs` query
-  // therefore only matched ~300 items. Widen to OR uploader: so we
-  // pick up everything that user uploaded — typically thousands.
+  // The previous "only 300 items" symptom was our old hardcoded
+  // rows=300 with no paging — NOT an archive.org filter limitation.
+  // With rows=1000 + page=N walking, the canonical
+  // `collection:aadamjacobs` query returns the full set
+  // (RSS feed at /services/collection-rss.php?collection=aadamjacobs
+  // confirms the same item count as the search API for the same
+  // collection tag).
   const PAGE_ROWS = 1000;
   const allDocs: any[] = [];
   let page = 1;
   let numFound = 0;
-  // q= URL-encoded form of: (collection:aadamjacobs OR uploader:aadamjacobs)
-  const qExpr = encodeURIComponent(`(collection:${collectionId} OR uploader:${collectionId})`);
   while (true) {
-    const searchUrl = `https://archive.org/advancedsearch.php?q=${qExpr}&fl[]=identifier,title,date,description&rows=${PAGE_ROWS}&page=${page}&output=json&sort[]=title+asc`;
+    const searchUrl = `https://archive.org/advancedsearch.php?q=collection%3A${encodeURIComponent(collectionId)}&fl[]=identifier,title,date,description&rows=${PAGE_ROWS}&page=${page}&output=json&sort[]=title+asc`;
     const r = await loggedFetch("archive", searchUrl, {
       headers: { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "application/json" },
       context: "archive-search",
@@ -2879,8 +2878,11 @@ async function _fetchArchiveCollection(collectionId: string): Promise<ArchiveIte
 // changes; _maybeRefreshArchive will discard older-schema caches and
 // rebuild on next boot. Avoids stuck-stale-cache after deploys.
 //   v2: added rows=1000 paging (was rows=300 hardcoded)
-//   v3: query widened from collection:X to (collection:X OR uploader:X)
-const _ARCHIVE_CACHE_SCHEMA = 3;
+//   v3: tried (collection:X OR uploader:X) — wrong, picked up
+//       items from unrelated collections that same uploader posted
+//   v4: reverted to canonical collection:X (paging now works
+//       correctly; the original 300 cap was our rows=300 bug)
+const _ARCHIVE_CACHE_SCHEMA = 4;
 
 async function _refreshArchiveCache(collectionId: string, cacheKey: number): Promise<{ count: number }> {
   console.log(`[archive] refreshing collection "${collectionId}" cache…`);
