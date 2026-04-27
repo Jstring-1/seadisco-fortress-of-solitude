@@ -306,11 +306,13 @@ function _youtubeQueueRow(btn) {
   const it = _youtubeRowDataFromBtn(btn);
   if (!it?.videoId) return;
   if (typeof queueAddYt === "function") {
+    // ＋ button → tail of queue. ▶ is the "play now" path and is
+    // handled by _youtubePlayRow above.
     queueAddYt(it.videoId, {
       title:  it.title  || "",
       artist: it.channel || "",
       image:  it.thumb  || "",
-    });
+    }, { mode: "append" });
   }
 }
 

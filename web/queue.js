@@ -67,7 +67,26 @@ async function _queueLoad(force = false) {
     const r = await apiFetch("/api/user/play-queue");
     if (!r.ok) { _queue = []; return _queue; }
     const j = await r.json();
-    _queue = Array.isArray(j?.items) ? j.items : [];
+    let items = Array.isArray(j?.items) ? j.items : [];
+    // Client-side dedup by externalId: when a track is re-played, the
+    // old DB row is DELETEd in the background while a fresh row is
+    // INSERTed at the head. If the reload races ahead of the DELETE,
+    // both rows are present and both light up as "now playing"
+    // (the indicator predicate matches externalId). Keep the
+    // lowest-position copy — that's the one the just-played row
+    // settled into after the server's "next"-mode shift.
+    if (items.length) {
+      const seen = new Set();
+      const deduped = [];
+      for (const it of items) {
+        const key = String(it.externalId ?? "");
+        if (key && seen.has(key)) continue;
+        if (key) seen.add(key);
+        deduped.push(it);
+      }
+      items = deduped;
+    }
+    _queue = items;
     return _queue;
   } catch {
     _queue = _queue ?? [];

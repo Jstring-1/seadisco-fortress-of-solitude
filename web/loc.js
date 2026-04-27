@@ -929,7 +929,10 @@ async function _locQueueFromInfo(locId) {
     if (typeof showToast === "function") showToast("Could not load item", "error");
     return;
   }
-  if (typeof queueAddLoc === "function") queueAddLoc(item);
+  // ＋ button = add to the tail of the queue (consistent with the
+  // YT track ＋). The "play now" affordance is the ▶ button which
+  // routes through _locPlayFromInfo, not this path.
+  if (typeof queueAddLoc === "function") queueAddLoc(item, { mode: "append" });
   else if (typeof showToast === "function") showToast("Queue not available", "error");
 }
 window._locQueueFromInfo = _locQueueFromInfo;
