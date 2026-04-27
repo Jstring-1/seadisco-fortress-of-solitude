@@ -344,7 +344,10 @@ function _seaDiscoBuildClerkAppearance() {
       formFieldInput:   `background:${surface}; border:1px solid ${border}; color:${text};`,
       footerActionLink: `color:${accent};`,
       socialButtonsBlockButton: `background:${surface}; border:1px solid ${border}; color:${text};`,
-      formButtonPrimary: `background:${accent}; color:${bg}; border:none;`,
+      // Primary "Continue" / "Sign in" button — fixed white text on
+      // accent background. The previous `color:${bg}` was blending
+      // in on themes where --bg was close to --accent in luminance.
+      formButtonPrimary: `background:${accent}; color:#fff; border:none; font-weight:600;`,
       // Clerk's footer "Secured by" is hidden via .cl-footer in style.css.
     },
   };
@@ -488,7 +491,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260426ba";
+  const SITE_VERSION = "build 20260426bb";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
