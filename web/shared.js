@@ -461,7 +461,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260426v";
+  const SITE_VERSION = "build 20260426w";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -546,14 +546,14 @@ function renderSharedFooter(opts) {
         ${link("Privacy Policy", "privacy")}
         ${link("Terms of Service", "terms")}
         ${isSPA
-          ? `<a id="footer-loc-link" href="javascript:void(0)" onclick="switchView('loc')" style="display:none">LOC</a>`
-          : `<a id="footer-loc-link" href="/?v=loc" style="display:none">LOC</a>`}
+          ? `<a id="footer-loc-link" href="javascript:void(0)" onclick="switchView('loc')">LOC</a>`
+          : `<a id="footer-loc-link" href="/?v=loc">LOC</a>`}
         ${isSPA
-          ? `<a id="footer-wiki-link" href="javascript:void(0)" onclick="switchView('wiki')" style="display:none">Wikipedia</a>`
-          : `<a id="footer-wiki-link" href="/?v=wiki" style="display:none">Wikipedia</a>`}
+          ? `<a id="footer-wiki-link" href="javascript:void(0)" onclick="switchView('wiki')">Wikipedia</a>`
+          : `<a id="footer-wiki-link" href="/?v=wiki">Wikipedia</a>`}
         ${isSPA
-          ? `<a id="footer-archive-link" href="javascript:void(0)" onclick="switchView('archive')" style="display:none">Archive</a>`
-          : `<a id="footer-archive-link" href="/?v=archive" style="display:none">Archive</a>`}
+          ? `<a id="footer-archive-link" href="javascript:void(0)" onclick="switchView('archive')">Archive</a>`
+          : `<a id="footer-archive-link" href="/?v=archive">Archive</a>`}
         <a id="footer-admin-link" href="/admin" style="display:none">Admin</a>
       </div>
     </div>
@@ -698,12 +698,12 @@ function _lookupSearchSeaDisco(scope, label) {
   }, 30);
 }
 
-// Render and position the popup. Buttons available depend on scope and
-// admin status; non-admins don't see Wikipedia / LOC at all.
+// Render and position the popup. Wikipedia and LOC are now open to
+// anonymous callers (per-IP rate-limited server-side), so all buttons
+// show for everyone.
 function openLookupPopup(ev, scope, label, ctx) {
   _closeLookupPopup();
   if (!label) return;
-  const isAdmin = !!window._isAdmin;
   const trackArtist = ctx?.trackArtist || "";
 
   // Build the YouTube search query: for tracks, include artist for
@@ -723,10 +723,8 @@ function openLookupPopup(ev, scope, label, ctx) {
   buttons.push({ key: "coll",  icon: "⌕",  text: scope === "artist" ? "Search my collection" : "Search my records" });
   buttons.push({ key: "yt",    icon: "▶",  text: "YouTube",  url: ytUrl });
   buttons.push({ key: "dc",    icon: "◎",  text: "Discogs.com", url: dcUrl });
-  if (isAdmin) {
-    buttons.push({ key: "wiki", icon: "W",  text: "Wikipedia" });
-    buttons.push({ key: "loc",  icon: "🏛", text: "Library of Congress" });
-  }
+  buttons.push({ key: "wiki",  icon: "W",  text: "Wikipedia" });
+  buttons.push({ key: "loc",   icon: "🏛", text: "Library of Congress" });
 
   const wrap = document.createElement("div");
   wrap.className = "lookup-popup";

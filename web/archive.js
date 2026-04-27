@@ -27,16 +27,12 @@ let _archiveSavedSort = "recent";  // recent | title | date-asc | date-desc
 async function initArchiveView(forceRefresh = false) {
   const root = document.getElementById("archive-view");
   if (!root) return;
-  // Admin gate — server enforces; this is the UX guard.
-  if (!window._isAdmin) {
-    root.innerHTML = `<div class="loc-empty" style="padding:3rem 1rem">
-      <div style="font-size:1rem;color:var(--text);margin-bottom:0.5rem">Archive page is admin-only.</div>
-    </div>`;
-    return;
-  }
-  // Load saved IDs in the background once per session so the ★ badge on
-  // every row reflects current state without a per-row API round-trip.
-  if (_archiveSavedIds == null) _archiveLoadSavedIds();
+  // Archive page is now open to all callers (the GET endpoint reads
+  // from our DB cache only, no upstream call). Saving requires
+  // sign-in: _archiveLoadSavedIds 401s for anons and falls back to
+  // an empty Set, which just hides the ★ as already-saved (the click
+  // handler will still try and surface a "sign in" toast).
+  if (window._clerk?.user && _archiveSavedIds == null) _archiveLoadSavedIds();
 
   // Honor ?tab=saved in the URL so saved-list links are shareable.
   try {
@@ -189,6 +185,12 @@ async function archiveToggleSave(btn) {
   const row = btn?.closest(".archive-row");
   const id = row?.dataset.id;
   if (!id) return;
+  // Saving requires sign-in (the endpoint is requireUser-gated). Surface
+  // a friendlier message than a "save failed (401)" toast.
+  if (!window._clerk?.user) {
+    if (typeof showToast === "function") showToast("Sign in to save items", "error");
+    return;
+  }
   if (!_archiveSavedIds) _archiveSavedIds = new Set();
   const saving = !_archiveSavedIds.has(id);
   // Optimistic toggle
