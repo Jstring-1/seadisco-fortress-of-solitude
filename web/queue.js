@@ -74,25 +74,14 @@ async function _queueLoad(force = false) {
     const r = await apiFetch("/api/user/play-queue");
     if (!r.ok) { _queue = []; return _queue; }
     const j = await r.json();
-    let items = Array.isArray(j?.items) ? j.items : [];
-    // Client-side dedup by externalId: when a track is re-played, the
-    // old DB row is DELETEd in the background while a fresh row is
-    // INSERTed at the head. If the reload races ahead of the DELETE,
-    // both rows are present and both light up as "now playing"
-    // (the indicator predicate matches externalId). Keep the
-    // lowest-position copy — that's the one the just-played row
-    // settled into after the server's "next"-mode shift.
-    if (items.length) {
-      const seen = new Set();
-      const deduped = [];
-      for (const it of items) {
-        const key = String(it.externalId ?? "");
-        if (key && seen.has(key)) continue;
-        if (key) seen.add(key);
-        deduped.push(it);
-      }
-      items = deduped;
-    }
+    const items = Array.isArray(j?.items) ? j.items : [];
+    // Keep ALL server rows here (no dedup). Earlier we deduped at load
+    // time to avoid duplicate rows in the drawer, but that hid the
+    // dupes from queueRemove — the user would click × and only one
+    // dupe got deleted, so the row reappeared on next reload until
+    // every dupe was clicked individually. Now dedup happens only at
+    // render (see _renderQueueDrawer) and queueRemove deletes every
+    // matching position.
     _queue = items;
     return _queue;
   } catch {
@@ -639,12 +628,27 @@ async function _renderQueueDrawer() {
   }
   const prevScroll = listEl.scrollTop;
   await _queueLoad(true);
-  if (countEl) countEl.textContent = _queue?.length ? `${_queue.length} item${_queue.length === 1 ? "" : "s"}` : "";
   if (!_queue?.length) {
+    if (countEl) countEl.textContent = "";
     listEl.innerHTML = `<div class="queue-empty">Queue empty. Click ➕ on tracks, LOC items, or archive items to add them.</div>`;
     return;
   }
-  listEl.innerHTML = _queue.map(it => {
+  // Render-time dedup: server can have multiple rows for the same
+  // externalId (e.g., a re-played track inserted before the prior
+  // DELETE landed). Show only the lowest-position copy in the drawer
+  // so the user sees a single row per track, but keep _queue itself
+  // un-deduped so queueRemove can sweep every server-side dupe in
+  // one click.
+  const seen = new Set();
+  const visible = [];
+  for (const it of _queue) {
+    const key = String(it.externalId ?? "");
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    visible.push(it);
+  }
+  if (countEl) countEl.textContent = `${visible.length} item${visible.length === 1 ? "" : "s"}`;
+  listEl.innerHTML = visible.map(it => {
     const safeTitle  = escHtml(it.data?.title || "Untitled");
     const safeArtist = escHtml(it.data?.artist || "");
     // Position-match is the primary check; externalId is a race-safe
@@ -751,39 +755,40 @@ async function _bindSortable() {
 // DELETE always targets the row the user actually clicked, even if the
 // queue was reshuffled between render and click.
 async function queueRemove(position, externalId) {
-  let target = null;
+  // Resolve the set of server rows to drop. When called with an
+  // externalId, sweep EVERY row matching it — the server can have
+  // dupes (re-played track inserted before the prior DELETE landed)
+  // and a single click should remove all of them, not just one.
+  // Falls back to a single-position delete for legacy callers.
+  let positionsToDrop = [];
   if (externalId != null && Array.isArray(_queue)) {
-    target = _queue.find(it => String(it.externalId) === String(externalId)) || null;
-  } else if (position != null && Array.isArray(_queue)) {
-    target = _queue.find(it => it.position === position) || null;
+    positionsToDrop = _queue
+      .filter(it => String(it.externalId) === String(externalId))
+      .map(it => it.position);
+  } else if (position != null) {
+    positionsToDrop = [position];
   }
-  // If we couldn't resolve, fall back to the raw position so the call
-  // is at least *something* — the server DELETE will no-op cleanly if
-  // that position is gone.
-  const removePosition = target ? target.position : position;
-  if (removePosition == null) return;
+  if (!positionsToDrop.length) return;
 
-  // Fully optimistic — update local state + UI immediately, fire the
-  // server DELETE in the background. Avoids the previous 1–2s lag
-  // from awaiting two sequential round trips (DELETE + full queue
-  // refetch). The local state IS the truth for the user; the server
-  // is just durable storage.
-  const wasPlaying = _queueCurrentPosition === removePosition
-    || (target && _queuePlayingExternalId && String(target.externalId) === String(_queuePlayingExternalId));
+  // Was any of the swept rows the currently-playing one?
+  const wasPlaying = positionsToDrop.includes(_queueCurrentPosition)
+    || (externalId != null && _queuePlayingExternalId && String(externalId) === String(_queuePlayingExternalId));
   // Capture next-to-play BEFORE the local mutation so auto-advance
-  // can find it (server DELETE leaves gaps; positions are stable).
+  // can find it.
   let advanceTo = null;
   if (wasPlaying && Array.isArray(_queue)) {
-    const idx = _queue.findIndex(it => it.position === removePosition);
-    if (idx >= 0 && idx + 1 < _queue.length) {
-      advanceTo = _queue[idx + 1];
-    } else if (_queueRepeat === "all" && _queue.length > 1) {
-      advanceTo = _queue[0];
-    }
+    // Find the first row in queue order whose externalId differs
+    // from the one being removed.
+    const removingExt = externalId != null ? String(externalId) : null;
+    const next = _queue.find(it =>
+      !positionsToDrop.includes(it.position)
+      && (removingExt == null || String(it.externalId) !== removingExt));
+    if (next) advanceTo = next;
+    else if (_queueRepeat === "all" && _queue.length) advanceTo = _queue[0];
   }
   // Local state update — instant UI feedback.
   if (Array.isArray(_queue)) {
-    _queue = _queue.filter(it => it.position !== removePosition);
+    _queue = _queue.filter(it => !positionsToDrop.includes(it.position));
   }
   if (wasPlaying) { _queueCurrentPosition = null; _queuePlayingExternalId = null; }
   _refreshPlayerNavButtons();
@@ -797,15 +802,17 @@ async function queueRemove(position, externalId) {
       playerClose();
     }
   }
-  // Fire DELETE in the background. On failure the local state is
-  // ahead of the server; next page load will re-fetch and reconcile.
-  apiFetch("/api/user/play-queue", {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ position: removePosition }),
-  }).then(r => {
-    if (!r.ok) console.warn("[queue] DELETE failed:", r.status);
-  }).catch(e => console.warn("[queue] DELETE threw:", e));
+  // Fire one DELETE per server-side row in the background. Parallel
+  // is fine — the server endpoint is idempotent per (user, position).
+  for (const p of positionsToDrop) {
+    apiFetch("/api/user/play-queue", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ position: p }),
+    }).then(r => {
+      if (!r.ok) console.warn("[queue] DELETE failed:", r.status);
+    }).catch(e => console.warn("[queue] DELETE threw:", e));
+  }
 }
 
 async function queueClear() {
