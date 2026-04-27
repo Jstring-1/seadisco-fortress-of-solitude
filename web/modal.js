@@ -1336,6 +1336,11 @@ function ensureYTAPI() {
   s.src = "https://www.youtube.com/iframe_api";
   document.head.appendChild(s);
 }
+// Preload YT API at page boot so the first click on a track ▶
+// finds a ready API and creates the player synchronously inside the
+// click handler — avoids the autoplay-blocked first-play that
+// happens when the API has to download mid-click.
+document.addEventListener("DOMContentLoaded", () => { try { ensureYTAPI(); } catch {} });
 
 function setVideoUrl(id) {
   const u = new URL(window.location.href);
@@ -1592,20 +1597,43 @@ function _setPlayerEngine(name) {
 }
 
 function playerTogglePause() {
+  const bar = document.getElementById("mini-player");
+  const isIdle = bar?.classList.contains("idle-queue");
+  const engine = window._currentEngine;
+  // Diagnostic — helps confirm which branch fires when playback
+  // misbehaves. Logged at debug level so it's only in the console.
+  console.debug("[playerTogglePause]", { isIdle, engine, hasYt: !!window.ytPlayer });
   // Idle-queue mode: bar is showing because the queue has items but
   // nothing is loaded yet. ▶ kicks off playback from the queue head.
-  const bar = document.getElementById("mini-player");
-  if (bar?.classList.contains("idle-queue")) {
+  if (isIdle) {
     if (typeof queuePlayHead === "function") queuePlayHead();
     return;
   }
-  if (window._currentEngine === "loc") {
+  if (engine === "loc") {
     const a = document.getElementById("loc-audio");
-    if (!a || !a.src) return;
+    if (!a || !a.src) {
+      // Edge case: engine is "loc" but no src loaded. Fall back to
+      // queuePlayHead so the click still does something useful.
+      if (typeof queuePlayHead === "function") queuePlayHead();
+      return;
+    }
     if (a.paused) a.play().catch(() => {}); else a.pause();
     return;
   }
-  if (typeof toggleVideoPause === "function") toggleVideoPause();
+  if (engine === "yt") {
+    // YT player can be null briefly if the API was still loading
+    // when openVideo was first called. If we have a queue with a
+    // current position, kick that off so the click isn't a no-op.
+    if (!window.ytPlayer || typeof window.ytPlayer.getPlayerState !== "function") {
+      if (typeof queuePlayHead === "function") queuePlayHead();
+      return;
+    }
+    if (typeof toggleVideoPause === "function") toggleVideoPause();
+    return;
+  }
+  // No engine active and not idle — this shouldn't happen, but if
+  // it does, try to recover by playing the queue head.
+  if (typeof queuePlayHead === "function") queuePlayHead();
 }
 
 // ── Click/drag-to-seek progress strip ───────────────────────────────────
