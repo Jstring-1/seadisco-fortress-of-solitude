@@ -37,6 +37,22 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="manifest" href="/site.webmanifest">
+  <!-- Offline-mode boot detection — runs synchronously BEFORE any
+       deferred script. app.js reads window._sdOfflineMode to skip
+       Clerk init + sign-in flow when the user is offline + has
+       opted in to caching. Without this, a signed-in user
+       reloading offline lands on the sign-in page because Clerk
+       can't validate the session. -->
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem("sd_offline_enabled") === "1" && !navigator.onLine) {
+          window._sdOfflineMode = true;
+          document.documentElement.classList.add("sd-offline-mode");
+        }
+      } catch {}
+    })();
+  </script>
   <meta name="theme-color" content="#080706">
   <link rel="preconnect" href="https://api.discogs.com" crossorigin />
   <link rel="preconnect" href="https://i.discogs.com" crossorigin />
@@ -49,7 +65,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260427.1108" />
+  <link rel="stylesheet" href="/style.css?v=20260427.1119" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -87,7 +103,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260427.1108"></script>
+<script defer src="/shared.js?v=20260427.1119"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -906,28 +922,28 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260427.1108"></script>
-<script defer src="/search.js?v=20260427.1108"></script>
-<script defer src="/collection.js?v=20260427.1108"></script>
-<script defer src="/account.js?v=20260427.1108"></script>
-<script defer src="/orders.js?v=20260427.1108"></script>
+<script defer src="/utils.js?v=20260427.1119"></script>
+<script defer src="/search.js?v=20260427.1119"></script>
+<script defer src="/collection.js?v=20260427.1119"></script>
+<script defer src="/account.js?v=20260427.1119"></script>
+<script defer src="/orders.js?v=20260427.1119"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260427.1108"></script>
-<script defer src="/app.js?v=20260427.1108"></script>
+<script defer src="/modal.js?v=20260427.1119"></script>
+<script defer src="/app.js?v=20260427.1119"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/inventory-editor.js?v=20260427.1108"></script>
-<script defer src="/loc.js?v=20260427.1108"></script>
-<script defer src="/archive.js?v=20260427.1108"></script>
-<script defer src="/youtube.js?v=20260427.1108"></script>
-<script defer src="/queue.js?v=20260427.1108"></script>
+<script defer src="/inventory-editor.js?v=20260427.1119"></script>
+<script defer src="/loc.js?v=20260427.1119"></script>
+<script defer src="/archive.js?v=20260427.1119"></script>
+<script defer src="/youtube.js?v=20260427.1119"></script>
+<script defer src="/queue.js?v=20260427.1119"></script>
 <!-- Offline support — opt-in via the Account page toggle. idb.js
      defines window.sdIdb (IndexedDB wrapper); offline.js wires
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260427.1108"></script>
-<script defer src="/offline.js?v=20260427.1108"></script>
+<script defer src="/idb.js?v=20260427.1119"></script>
+<script defer src="/offline.js?v=20260427.1119"></script>
 
 </body>
 </html>
