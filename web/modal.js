@@ -1402,6 +1402,10 @@ function _createYTPlayer(id) {
         // YT.PlayerState: -1=unstarted, 0=ended, 1=playing, 2=paused, 3=buffering, 5=cued
         if (e.data === 1) {
           _ytHasPlayed = true; updatePlayerStatus("playing"); window._ytRetried = false;
+          // Begin polling for YT progress (timeupdate-equivalent — the
+          // iframe API doesn't fire one) so the mini-progress strip
+          // animates without us hand-rolling rAF.
+          if (typeof _startYtProgressLoop === "function") _startYtProgressLoop();
           // If no track meta (e.g. loaded from URL param), grab title from YT player
           const meta = (window._videoQueueMeta ?? [])[window._videoQueueIndex ?? 0];
           if (!meta || (!meta.track && !meta.album && !meta.artist)) {
@@ -1414,12 +1418,18 @@ function _createYTPlayer(id) {
             } catch {}
           }
         }
-        else if (e.data === 2) updatePlayerStatus("paused");
+        else if (e.data === 2) {
+          updatePlayerStatus("paused");
+          // Stop polling while paused — saves a few wakes/sec; fill
+          // resumes from the last known position when play resumes.
+          if (typeof _stopYtProgressLoop === "function") _stopYtProgressLoop();
+        }
         else if (e.data === 3) updatePlayerStatus("buffering");
         else if (e.data === 0) {
           // Guard against late "ended" events from a previous video on a reused player
           if (vtoken !== _ytVideoToken) return;
           updatePlayerStatus("ended"); onVideoEnded();
+          if (typeof _stopYtProgressLoop === "function") _stopYtProgressLoop();
         }
         else if (e.data === 5) updatePlayerStatus("loading");
         // Keep vtoken in sync when a new video loads on same player
@@ -1537,6 +1547,176 @@ function playerTogglePause() {
   }
   if (typeof toggleVideoPause === "function") toggleVideoPause();
 }
+
+// ── Click/drag-to-seek progress strip ───────────────────────────────────
+// Single dispatcher reads the current engine and asks it for currentTime
+// + duration; same code path drives both LOC <audio> playback and the
+// YouTube IFrame Player. _ytProgressTimer is a setInterval kept active
+// only while a YT video is playing — see playYTVideo / onPlayerStateChange.
+let _ytProgressTimer = null;
+let _miniDragging = false;
+let _miniDragFraction = 0;
+
+function _formatProgressTime(s) {
+  if (!Number.isFinite(s) || s < 0) return "0:00";
+  const total = Math.floor(s);
+  const m = Math.floor(total / 60);
+  const sec = total % 60;
+  return `${m}:${sec < 10 ? "0" : ""}${sec}`;
+}
+
+// Read currentTime + duration from whichever engine is active.
+// Returns { current, duration } in seconds, or null if unknown.
+function _playerReadProgress() {
+  if (window._currentEngine === "loc") {
+    const a = document.getElementById("loc-audio");
+    if (!a || !a.duration || !Number.isFinite(a.duration)) return null;
+    return { current: a.currentTime || 0, duration: a.duration };
+  }
+  if (window._currentEngine === "yt" && typeof ytPlayer !== "undefined" && ytPlayer) {
+    try {
+      const dur = ytPlayer.getDuration?.() ?? 0;
+      const cur = ytPlayer.getCurrentTime?.() ?? 0;
+      if (!Number.isFinite(dur) || dur <= 0) return null;
+      return { current: cur, duration: dur };
+    } catch { return null; }
+  }
+  return null;
+}
+
+function _playerSeekToFraction(f) {
+  const p = _playerReadProgress();
+  if (!p) return;
+  const target = Math.max(0, Math.min(p.duration, f * p.duration));
+  if (window._currentEngine === "loc") {
+    const a = document.getElementById("loc-audio");
+    try { if (a) a.currentTime = target; } catch {}
+    return;
+  }
+  if (window._currentEngine === "yt" && typeof ytPlayer !== "undefined" && ytPlayer) {
+    try { ytPlayer.seekTo?.(target, true); } catch {}
+  }
+}
+
+// Refresh the visible fill + time labels from current engine state.
+// Called from LOC's timeupdate event AND from a YT-polling interval.
+// While the user is mid-drag, the fill follows the drag fraction
+// instead of the engine's currentTime so the UI doesn't fight them.
+function _updateMiniProgress() {
+  const fill   = document.getElementById("mini-progress-fill");
+  const knob   = document.getElementById("mini-progress-knob");
+  const cur    = document.getElementById("mini-progress-current");
+  const tot    = document.getElementById("mini-progress-total");
+  const player = document.getElementById("mini-player");
+  if (!fill || !player) return;
+  const p = _playerReadProgress();
+  if (!p) {
+    player.classList.remove("has-duration");
+    fill.style.width = "0%";
+    if (knob) knob.style.left = "0%";
+    if (cur) cur.textContent = "0:00";
+    if (tot) tot.textContent = "0:00";
+    return;
+  }
+  player.classList.add("has-duration");
+  const fraction = _miniDragging
+    ? _miniDragFraction
+    : (p.duration > 0 ? p.current / p.duration : 0);
+  const pct = Math.max(0, Math.min(1, fraction)) * 100;
+  fill.style.width = `${pct}%`;
+  if (knob) knob.style.left = `${pct}%`;
+  if (cur) cur.textContent = _formatProgressTime(_miniDragging ? fraction * p.duration : p.current);
+  if (tot) tot.textContent = _formatProgressTime(p.duration);
+}
+
+// Pointer-driven drag scrubbing. Tap = single click → instant seek.
+// Drag = update visual fraction live, fire the actual seek on pointerup
+// so audio doesn't jitter as the user moves.
+function _miniProgressFractionAt(ev) {
+  const strip = document.getElementById("mini-progress");
+  if (!strip) return 0;
+  const r = strip.getBoundingClientRect();
+  return Math.max(0, Math.min(1, (ev.clientX - r.left) / r.width));
+}
+function _onMiniProgressDown(ev) {
+  if (ev.button != null && ev.button !== 0) return; // left-click / touch only
+  const strip = document.getElementById("mini-progress");
+  if (!strip) return;
+  _miniDragging = true;
+  _miniDragFraction = _miniProgressFractionAt(ev);
+  strip.classList.add("is-dragging");
+  _updateMiniProgress();
+  try { strip.setPointerCapture?.(ev.pointerId); } catch {}
+  ev.preventDefault();
+}
+function _onMiniProgressMove(ev) {
+  if (!_miniDragging) return;
+  _miniDragFraction = _miniProgressFractionAt(ev);
+  _updateMiniProgress();
+}
+function _onMiniProgressUp(ev) {
+  if (!_miniDragging) return;
+  _miniDragging = false;
+  const strip = document.getElementById("mini-progress");
+  if (strip) strip.classList.remove("is-dragging");
+  _playerSeekToFraction(_miniDragFraction);
+  _updateMiniProgress();
+}
+
+// Wire pointer events once on first script load. The strip is in the
+// DOM from page load (hidden via CSS until duration is known) so we can
+// attach now. Falls back to clicking via the existing onclick handler
+// for browsers without PointerEvents (rare; caps the regression).
+function _bindMiniProgress() {
+  const strip = document.getElementById("mini-progress");
+  if (!strip || strip.dataset.bound === "1") return;
+  strip.dataset.bound = "1";
+  strip.addEventListener("pointerdown", _onMiniProgressDown);
+  strip.addEventListener("pointermove", _onMiniProgressMove);
+  strip.addEventListener("pointerup",   _onMiniProgressUp);
+  strip.addEventListener("pointercancel", _onMiniProgressUp);
+  // Hook LOC's audio events so the bar refreshes without a polling
+  // loop while it's the active engine. YT uses _startYtProgressLoop
+  // because its iframe API doesn't fire timeupdate events.
+  const a = document.getElementById("loc-audio");
+  if (a && !a.dataset.miniBound) {
+    a.dataset.miniBound = "1";
+    a.addEventListener("timeupdate",     _updateMiniProgress);
+    a.addEventListener("loadedmetadata", _updateMiniProgress);
+    a.addEventListener("durationchange", _updateMiniProgress);
+    a.addEventListener("seeked",         _updateMiniProgress);
+    a.addEventListener("ended",          _updateMiniProgress);
+  }
+}
+document.addEventListener("DOMContentLoaded", _bindMiniProgress);
+// In case scripts load late after DOMContentLoaded already fired:
+if (document.readyState !== "loading") _bindMiniProgress();
+
+// YT-side polling. Started from onPlayerReady / onPlayerStateChange when
+// playback begins; stopped when playback ends or the bar closes.
+function _startYtProgressLoop() {
+  if (_ytProgressTimer) return;
+  _ytProgressTimer = setInterval(_updateMiniProgress, 500);
+  _updateMiniProgress();
+}
+function _stopYtProgressLoop() {
+  if (_ytProgressTimer) { clearInterval(_ytProgressTimer); _ytProgressTimer = null; }
+}
+
+// Click handler kept on the strip for non-pointer fallbacks. With
+// pointer events bound above, click is largely redundant — but it
+// lets the inline onclick="" attribute (if anything still triggers it)
+// behave correctly. No-ops while a drag is in progress.
+function playerSeekFrom(ev) {
+  if (_miniDragging) return;
+  const f = _miniProgressFractionAt(ev);
+  _playerSeekToFraction(f);
+}
+
+window._updateMiniProgress   = _updateMiniProgress;
+window._startYtProgressLoop  = _startYtProgressLoop;
+window._stopYtProgressLoop   = _stopYtProgressLoop;
+window.playerSeekFrom        = playerSeekFrom;
 function playerPrev() {
   if (window._currentEngine === "loc") {
     if (typeof _locPlayPrevInQueue === "function") _locPlayPrevInQueue();
@@ -1809,6 +1989,13 @@ function closeVideo() {
   _ytSession++;                             // invalidate any pending callbacks
   if (_ytPollId) { clearInterval(_ytPollId); _ytPollId = null; }
   if (_ytLoadTimer) { clearTimeout(_ytLoadTimer); _ytLoadTimer = null; }
+  if (typeof _stopYtProgressLoop === "function") _stopYtProgressLoop();
+  // Reset the progress strip so it doesn't linger at the closed video's
+  // last position when a new track loads (LOC's loadedmetadata event
+  // already covers re-init for that engine).
+  if (typeof _updateMiniProgress === "function") {
+    setTimeout(_updateMiniProgress, 0);
+  }
   const mp = document.getElementById("mini-player");
   mp.classList.remove("open", "expanded");
   // Only clear the engine if we're actually closing a YT session (not

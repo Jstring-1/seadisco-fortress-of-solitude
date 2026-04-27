@@ -1611,6 +1611,9 @@ function _locClosePlayer() {
   _locNowPlaying = null;
   _locQueue = null;
   _locUpdateQueueButtons();
+  // Reset the shared progress strip — LOC's audio events stop firing
+  // once the src is cleared, so a one-shot poke is needed.
+  if (typeof _updateMiniProgress === "function") _updateMiniProgress();
   // Drop the now-playing param from the URL so the shareable link
   // doesn't keep pointing at a track the user has stopped.
   _locPushPlayUrlState(null);

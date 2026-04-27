@@ -40,7 +40,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260426r" />
+  <link rel="stylesheet" href="/style.css?v=20260426s" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -78,7 +78,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260426r"></script>
+<script defer src="/shared.js?v=20260426s"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -765,6 +765,18 @@
       <button id="mini-close" onclick="playerClose()" title="Close player">&times;</button>
     </div>
   </div>
+  <!-- Click-to-seek progress strip. Spans the full width below the bar.
+       Shared between LOC + YT via dispatchers in modal.js. Pointerdown
+       on the strip starts a drag-scrub; the actual seek fires on
+       pointerup so seeking while paused doesn't jump audio mid-frame. -->
+  <div id="mini-progress" class="mini-progress" title="Click or drag to seek">
+    <div id="mini-progress-fill" class="mini-progress-fill"></div>
+    <div id="mini-progress-knob" class="mini-progress-knob"></div>
+    <div class="mini-progress-times">
+      <span id="mini-progress-current">0:00</span>
+      <span id="mini-progress-total">0:00</span>
+    </div>
+  </div>
   <div id="mini-player-expanded" class="mini-player-expanded">
     <!-- YouTube engine — visible when .mini-player.engine-yt -->
     <div id="video-box" class="mini-engine-yt">
@@ -792,20 +804,20 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260426r"></script>
-<script defer src="/search.js?v=20260426r"></script>
-<script defer src="/collection.js?v=20260426r"></script>
-<script defer src="/account.js?v=20260426r"></script>
-<script defer src="/orders.js?v=20260426r"></script>
+<script defer src="/utils.js?v=20260426s"></script>
+<script defer src="/search.js?v=20260426s"></script>
+<script defer src="/collection.js?v=20260426s"></script>
+<script defer src="/account.js?v=20260426s"></script>
+<script defer src="/orders.js?v=20260426s"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260426r"></script>
-<script defer src="/app.js?v=20260426r"></script>
+<script defer src="/modal.js?v=20260426s"></script>
+<script defer src="/app.js?v=20260426s"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/inventory-editor.js?v=20260426r"></script>
-<script defer src="/loc.js?v=20260426r"></script>
-<script defer src="/archive.js?v=20260426r"></script>
-<script defer src="/queue.js?v=20260426r"></script>
+<script defer src="/inventory-editor.js?v=20260426s"></script>
+<script defer src="/loc.js?v=20260426s"></script>
+<script defer src="/archive.js?v=20260426s"></script>
+<script defer src="/queue.js?v=20260426s"></script>
 
 </body>
 </html>
