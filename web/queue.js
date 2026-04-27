@@ -447,7 +447,17 @@ async function _renderQueueDrawer() {
   const listEl = wrap.querySelector("#queue-drawer-list");
   const countEl = wrap.querySelector("#queue-drawer-count");
   if (!listEl) return;
-  listEl.innerHTML = `<div class="queue-empty">Loading…</div>`;
+  // Only flash the "Loading…" placeholder on a cold drawer open
+  // (when no rows are rendered yet). On subsequent re-renders (after
+  // add / remove / play-next), keep the existing list visible until
+  // the new data is in hand — feels much smoother than blanking the
+  // whole drawer for each update. Scroll position is also preserved
+  // by capturing scrollTop before the swap and restoring after.
+  const hadRows = !!listEl.querySelector(".queue-row");
+  if (!hadRows) {
+    listEl.innerHTML = `<div class="queue-empty">Loading…</div>`;
+  }
+  const prevScroll = listEl.scrollTop;
   await _queueLoad(true);
   if (countEl) countEl.textContent = _queue?.length ? `${_queue.length} item${_queue.length === 1 ? "" : "s"}` : "";
   if (!_queue?.length) {
@@ -488,6 +498,9 @@ async function _renderQueueDrawer() {
       </div>
     `;
   }).join("");
+  // Restore scroll position so an add/remove doesn't yank the user
+  // back to the top of a long queue.
+  if (prevScroll > 0) listEl.scrollTop = prevScroll;
   _bindSortable();
 }
 
