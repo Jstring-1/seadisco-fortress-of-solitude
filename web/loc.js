@@ -607,7 +607,7 @@ function _locRenderCard(item, opts) {
   const labelSafe  = esc(label);
   const metaSafe   = metaParts.map(esc).join(" · ");
   const thumb = item.image
-    ? `<img src="${esc(item.image)}" alt="${titleSafe}" loading="lazy"/>`
+    ? `<img src="${esc(item.image)}" alt="${titleSafe}" loading="lazy" width="300" height="300" decoding="async"/>`
     : `<div class="thumb-placeholder">♪</div>`;
 
   // Mirror the main search page's card layout so LOC results look like

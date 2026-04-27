@@ -530,7 +530,15 @@ function _queueOnExternalPlay(itemPayload) {
       if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
       _refreshPlayerNavButtons();
     } catch (e) {
+      // Network failure (offline, DNS, etc.) — the local optimistic
+      // insert already happened so the queue drawer looks right, but
+      // the row never made it to the server and a fresh tab won't see
+      // it. Surface a soft warning so the user knows their queue is
+      // session-only until reconnection.
       console.warn("[queue] external-play insert threw:", e);
+      if (typeof showToast === "function") {
+        showToast("Couldn't save queue — local only until you reconnect", "error");
+      }
     }
   })();
   return false; // don't suppress; engine still plays directly
@@ -669,7 +677,7 @@ async function _renderQueueDrawer() {
       thumbUrl = `https://i.ytimg.com/vi/${encodeURIComponent(it.externalId)}/mqdefault.jpg`;
     }
     const thumbHtml = thumbUrl
-      ? `<img class="queue-row-thumb" src="${escHtml(thumbUrl)}" loading="lazy" alt="" onerror="this.classList.add('thumb-broken')">`
+      ? `<img class="queue-row-thumb" src="${escHtml(thumbUrl)}" loading="lazy" width="40" height="40" decoding="async" alt="" onerror="this.classList.add('thumb-broken')">`
       : `<span class="queue-row-thumb queue-row-thumb-empty">${it.source === "loc" ? "♪" : "▶"}</span>`;
     return `
       <div class="queue-row${isPlaying ? " is-playing" : ""}" data-position="${it.position}">

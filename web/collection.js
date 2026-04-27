@@ -291,13 +291,21 @@ function switchView(view, skipPushState = false) {
     if (mainForm) mainForm.style.display = "none";
     if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
+    // archive.js is lazy-loaded — fetch it on first nav, then init.
+    // Subsequent navigations hit the cached promise and skip the load.
     if (typeof initArchiveView === "function") initArchiveView();
+    else if (typeof window._sdLoadModule === "function") {
+      window._sdLoadModule("/archive.js").then(() => window.initArchiveView?.()).catch(() => {});
+    }
   } else if (view === "youtube") {
     if (youtubeView) youtubeView.style.display = "block";
     if (mainForm) mainForm.style.display = "none";
     if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
     if (typeof initYoutubeView === "function") initYoutubeView();
+    else if (typeof window._sdLoadModule === "function") {
+      window._sdLoadModule("/youtube.js").then(() => window.initYoutubeView?.()).catch(() => {});
+    }
   } else if (view === "wiki") {
     if (wikiView) wikiView.style.display = "block";
     if (mainForm) mainForm.style.display = "none";
