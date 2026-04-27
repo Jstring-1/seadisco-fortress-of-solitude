@@ -2819,44 +2819,62 @@ async function _fetchArchiveCollection(collectionId: string): Promise<ArchiveIte
   // archive.org's search API caps each page at 1000; we walk page-by-
   // page until we've collected `numFound` records.
   //
-  // The query unions four fields — different items use different ones
-  // depending on how they were uploaded / catalogued:
+  // We try four fields independently and union the results, because
+  // different items use different fields depending on how they were
+  // catalogued:
   //   collection:NAME — items explicitly tagged with this collection
-  //   uploader:NAME*  — uploader field stores an email (aadamjacobs@…)
+  //   uploader:NAME*  — `uploader` stores an email (aadamjacobs@…)
   //                     so we need a wildcard for the username prefix
-  //   addedby:NAME*   — `addedby` stores the same email-form value
+  //   addedby:NAME*   — same email-form as uploader
   //   creator:NAME    — creator field on items by this artist
   //
-  // collection:aadamjacobs alone matched only ~300 items; uploader:NAME
-  // (without the wildcard) matched 0 because of the email-form value.
-  // The OR union catches all 2,541 items the user sees on the website.
-  // numFound is logged so the next refresh's count can be sanity-
-  // checked against the website's displayed total.
+  // Querying separately (rather than one big OR expression) is more
+  // robust: a single OR query was returning 0 items in production —
+  // probably because of how archive.org parses the URL-encoded
+  // parens / wildcards. Per-field queries each parse cleanly, and
+  // we dedupe by identifier client-side.
   const PAGE_ROWS = 1000;
-  const allDocs: any[] = [];
-  let page = 1;
-  let numFound = 0;
-  // Build the q= expression. The asterisks need to survive URL encoding
-  // (they're unreserved per RFC 3986; encodeURIComponent leaves them).
-  const qExpr = `(collection:${collectionId} OR uploader:${collectionId}* OR addedby:${collectionId}* OR creator:${collectionId})`;
-  while (true) {
-    const searchUrl = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(qExpr)}&fl[]=identifier,title,date,description&rows=${PAGE_ROWS}&page=${page}&output=json&sort[]=title+asc`;
-    const r = await loggedFetch("archive", searchUrl, {
-      headers: { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "application/json" },
-      context: "archive-search",
-    });
-    if (!r.ok) throw new Error(`archive.org HTTP ${r.status}`);
-    const body = await r.json() as any;
-    const docs: any[] = (body?.response?.docs ?? []).filter((d: any) => d?.identifier);
-    if (page === 1) {
-      numFound = body?.response?.numFound ?? docs.length;
-      console.log(`[archive] q="${qExpr}" numFound=${numFound}`);
+  const seen = new Map<string, any>();
+
+  // Run one paged search for a single q= expression and merge unique
+  // docs into `seen`. Logs numFound per query so railway logs show
+  // exactly what each field contributed.
+  const runQuery = async (q: string, label: string) => {
+    let page = 1;
+    let numFound = 0;
+    let pageCount = 0;
+    while (true) {
+      const url = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(q)}&fl[]=identifier,title,date,description&rows=${PAGE_ROWS}&page=${page}&output=json&sort[]=identifier+asc`;
+      const r = await loggedFetch("archive", url, {
+        headers: { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "application/json" },
+        context: `archive-search-${label}`,
+      });
+      if (!r.ok) {
+        console.warn(`[archive] ${label} HTTP ${r.status} — skipping this field`);
+        return 0;
+      }
+      const body = await r.json() as any;
+      const docs: any[] = (body?.response?.docs ?? []).filter((d: any) => d?.identifier);
+      if (page === 1) numFound = body?.response?.numFound ?? docs.length;
+      let added = 0;
+      for (const d of docs) {
+        if (!seen.has(d.identifier)) { seen.set(d.identifier, d); added++; }
+      }
+      pageCount += docs.length;
+      if (pageCount >= numFound || !docs.length) break;
+      page++;
+      if (page > 20) break;
     }
-    allDocs.push(...docs);
-    if (allDocs.length >= numFound || !docs.length) break;
-    page++;
-    if (page > 20) break; // 20,000-item ceiling; reality check
-  }
+    console.log(`[archive] ${label} numFound=${numFound} returned=${pageCount}`);
+    return numFound;
+  };
+
+  await runQuery(`collection:${collectionId}`,    "collection");
+  await runQuery(`uploader:${collectionId}*`,     "uploader");
+  await runQuery(`addedby:${collectionId}*`,      "addedby");
+  await runQuery(`creator:${collectionId}`,       "creator");
+  console.log(`[archive] union total unique=${seen.size}`);
+  const allDocs = Array.from(seen.values());
   // Step 2: per-item metadata in parallel batches of 10. Walks the
   // entire collection to resolve mp3 URLs for each item. Slow (one
   // round-trip per item, 10 in parallel) but only runs once on cache
@@ -2895,10 +2913,10 @@ async function _fetchArchiveCollection(collectionId: string): Promise<ArchiveIte
 //   v4: reverted to collection:X — confirmed too narrow (300 vs 2541)
 //   v5: tried uploader:X — returned 0 because uploader stores email
 //       (aadamjacobs@archive.org), bare username doesn't match
-//   v6: union of (collection:X OR uploader:X* OR addedby:X* OR
-//       creator:X) with wildcards on the email-form fields. Logs
-//       numFound on first page so refreshes can be sanity-checked.
-const _ARCHIVE_CACHE_SCHEMA = 6;
+//   v6: tried single-OR query — got mangled by URL encoding, returned 0
+//   v7: split into per-field queries with client-side dedupe; logs
+//       numFound per field so railway logs show what each contributes
+const _ARCHIVE_CACHE_SCHEMA = 7;
 
 async function _refreshArchiveCache(collectionId: string, cacheKey: number): Promise<{ count: number }> {
   console.log(`[archive] refreshing collection "${collectionId}" cache…`);
