@@ -49,7 +49,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260427.0854" />
+  <link rel="stylesheet" href="/style.css?v=20260427.0858" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -87,7 +87,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260427.0854"></script>
+<script defer src="/shared.js?v=20260427.0858"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -710,6 +710,21 @@
           </div>
           <button onclick="deleteAccount()" class="danger-btn" style="font-size:0.82rem;padding:0.3rem 0.7rem">Delete account</button>
         </div>
+
+        <!-- Site-wide credits / disclaimer — moved here from the
+             persistent footer so the bottom of every page stays clean.
+             Surfaced once, under the Account view's sign-out row. -->
+        <div style="font-size:0.78rem;color:var(--muted);line-height:1.6;margin-top:1.4rem;text-align:center">
+          <div>Powered by
+            <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:var(--muted)">Discogs</a> ·
+            <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:var(--muted)">Claude</a> ·
+            <a href="https://www.loc.gov" target="_blank" rel="noopener" style="color:var(--muted)">Library of Congress</a> ·
+            <a href="https://archive.org" target="_blank" rel="noopener" style="color:var(--muted)">Archive.org</a> ·
+            <a href="https://www.wikipedia.org" target="_blank" rel="noopener" style="color:var(--muted)">Wikipedia</a> ·
+            <a href="https://www.youtube.com" target="_blank" rel="noopener" style="color:var(--muted)">YouTube</a>
+          </div>
+          <div style="margin-top:0.3rem">Music data courtesy of Discogs · not affiliated with Discogs</div>
+        </div>
       </div>
     </div>
 
@@ -875,21 +890,21 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260427.0854"></script>
-<script defer src="/search.js?v=20260427.0854"></script>
-<script defer src="/collection.js?v=20260427.0854"></script>
-<script defer src="/account.js?v=20260427.0854"></script>
-<script defer src="/orders.js?v=20260427.0854"></script>
+<script defer src="/utils.js?v=20260427.0858"></script>
+<script defer src="/search.js?v=20260427.0858"></script>
+<script defer src="/collection.js?v=20260427.0858"></script>
+<script defer src="/account.js?v=20260427.0858"></script>
+<script defer src="/orders.js?v=20260427.0858"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260427.0854"></script>
-<script defer src="/app.js?v=20260427.0854"></script>
+<script defer src="/modal.js?v=20260427.0858"></script>
+<script defer src="/app.js?v=20260427.0858"></script>
 <!-- Deferred scripts — loaded after page is interactive -->
-<script defer src="/inventory-editor.js?v=20260427.0854"></script>
-<script defer src="/loc.js?v=20260427.0854"></script>
-<script defer src="/archive.js?v=20260427.0854"></script>
-<script defer src="/youtube.js?v=20260427.0854"></script>
-<script defer src="/queue.js?v=20260427.0854"></script>
+<script defer src="/inventory-editor.js?v=20260427.0858"></script>
+<script defer src="/loc.js?v=20260427.0858"></script>
+<script defer src="/archive.js?v=20260427.0858"></script>
+<script defer src="/youtube.js?v=20260427.0858"></script>
+<script defer src="/queue.js?v=20260427.0858"></script>
 
 </body>
 </html>

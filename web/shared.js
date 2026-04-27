@@ -491,7 +491,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260427.0854";
+  const SITE_VERSION = "build 20260427.0858";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -591,11 +591,31 @@ function _seaDiscoInstallFooterHrefSync() {
 
 function renderSharedFooter(opts) {
   const isSPA = opts?.spa;
+  // Hover hints for every footer link — describes what the destination
+  // does so the labels (which are necessarily terse for the layout)
+  // aren't the only signal.
+  const HINTS = {
+    search:     "Search Discogs releases, masters, artists, labels, AI",
+    collection: "Your Discogs collection (synced)",
+    wantlist:   "Your Discogs wantlist (synced)",
+    favorites:  "Albums, artists, and labels you've favorited",
+    inventory:  "Your seller listings on Discogs",
+    lists:      "Your Discogs lists",
+    loc:        "Search Library of Congress audio (free, public-domain)",
+    wiki:       "Search Wikipedia in-app — save articles to read later",
+    archive:    "Live concert recordings from archive.org",
+    youtube:    "Search YouTube in-app — play in the mini-bar, save videos",
+    account:    "Sign in / manage your account",
+    info:       "About SeaDisco",
+    privacy:    "Privacy policy",
+    terms:      "Terms of service",
+  };
   // data-sd-view marks the link for the live href-sync system below.
   const link = (label, view) => {
     const href = _seaDiscoBuildViewHref(view);
-    if (isSPA) return `<a href="${href}" data-sd-view="${view}" onclick="event.preventDefault();switchView('${view}');return false">${label}</a>`;
-    return `<a href="${href}" data-sd-view="${view}">${label}</a>`;
+    const tip = HINTS[view] || "";
+    if (isSPA) return `<a href="${href}" data-sd-view="${view}" title="${escHtml(tip)}" onclick="event.preventDefault();switchView('${view}');return false">${label}</a>`;
+    return `<a href="${href}" data-sd-view="${view}" title="${escHtml(tip)}">${label}</a>`;
   };
 
   // Records-tab links: in SPA mode, route through switchView('records') with the
@@ -604,10 +624,11 @@ function renderSharedFooter(opts) {
   // sign-in modal instead of trying to load a records view that requires auth.
   const recLink = (label, tab) => {
     const href = _seaDiscoBuildViewHref(tab);
+    const tip = HINTS[tab] || "";
     if (isSPA) {
-      return `<a href="${href}" data-sd-view="${tab}" onclick="event.preventDefault();if(!window._clerk?.user){openSignInModal();return false}_cwTab='${tab}';switchView('records');return false">${label}</a>`;
+      return `<a href="${href}" data-sd-view="${tab}" title="${escHtml(tip)}" onclick="event.preventDefault();if(!window._clerk?.user){openSignInModal();return false}_cwTab='${tab}';switchView('records');return false">${label}</a>`;
     }
-    return `<a href="${href}" data-sd-view="${tab}">${label}</a>`;
+    return `<a href="${href}" data-sd-view="${tab}" title="${escHtml(tip)}">${label}</a>`;
   };
 
   const footer = document.querySelector("footer");
@@ -630,18 +651,15 @@ function renderSharedFooter(opts) {
       </div>
       <div class="footer-col">
         ${isSPA
-          ? `<a href="${_seaDiscoBuildViewHref("account")}" data-sd-view="account" onclick="event.preventDefault();openSignInModal();return false;">Account</a>`
-          : `<a href="${_seaDiscoBuildViewHref("account")}" data-sd-view="account">Account</a>`}
+          ? `<a href="${_seaDiscoBuildViewHref("account")}" data-sd-view="account" title="${escHtml(HINTS.account)}" onclick="event.preventDefault();openSignInModal();return false;">Account</a>`
+          : `<a href="${_seaDiscoBuildViewHref("account")}" data-sd-view="account" title="${escHtml(HINTS.account)}">Account</a>`}
         ${link("Info", "info")}
         ${link("Privacy Policy", "privacy")}
         ${link("Terms of Service", "terms")}
-        <a id="footer-admin-link" href="/admin" style="display:none">Admin</a>
+        <a id="footer-admin-link" href="/admin" title="Admin dashboard" style="display:none">Admin</a>
       </div>
     </div>
     <div style="color:#555;font-style:italic;margin-bottom:0.3rem">DISCLAIMER: AI be funky sometimes</div>
-    <div>Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Discogs</a> and <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Claude</a></div>
-    <div style="margin-top:0.3rem">Music data courtesy of Discogs</div>
-    <div>Not affiliated with Discogs</div>
     <div>Jimmy Witherfork Strikes Again</div>
     <div style="margin-top:0.3rem">&copy; 2026 SeaDisco</div>`;
 
