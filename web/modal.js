@@ -1887,21 +1887,33 @@ function openVideo(event, url) {
   const id = extractYouTubeId(url);
   if (!id) { window.open(url, "_blank", "noopener"); return; }
   // Scope queue to the popup container the clicked track belongs to,
-  // so we don't mix tracks from different albums
+  // so we don't mix tracks from different albums.
+  //
+  // Queue-driven plays (cross-source queue advancing to a YT item)
+  // pass meta via window._queueDispatchYtMeta because there's no
+  // .track-link DOM to scrape — without this hook the title showed
+  // the wrong track (whatever was at index 0 of any open album
+  // popup's track list).
   const clickedEl = event?.target?.closest?.(".track-link") || event?.target;
-  // Scope to the popup the track was clicked in; if called programmatically (no event),
-  // prefer the version popup if open, then main modal, then fall back to document
-  const container = clickedEl?.closest?.("#album-info, #version-info")
-    || (document.getElementById("version-overlay")?.classList.contains("open") ? document.getElementById("version-info") : null)
-    || (document.getElementById("modal-overlay")?.classList.contains("open") ? document.getElementById("album-info") : null)
-    || document;
-  const trackLinks = [...container.querySelectorAll(".track-link[data-video]")];
-  window._videoQueue      = trackLinks.map(a => a.dataset.video);
-  window._videoQueueMeta  = trackLinks.map(a => ({
-    track:  a.dataset.track  || "",
-    album:  a.dataset.album  || "",
-    artist: a.dataset.artist || "",
-  }));
+  const queueMeta = window._queueDispatchYtMeta;
+  if (queueMeta) {
+    window._videoQueue     = [url];
+    window._videoQueueMeta = [queueMeta];
+    // Consumed — clear so a later non-queue play doesn't pick this up.
+    delete window._queueDispatchYtMeta;
+  } else {
+    const container = clickedEl?.closest?.("#album-info, #version-info")
+      || (document.getElementById("version-overlay")?.classList.contains("open") ? document.getElementById("version-info") : null)
+      || (document.getElementById("modal-overlay")?.classList.contains("open") ? document.getElementById("album-info") : null)
+      || document;
+    const trackLinks = [...container.querySelectorAll(".track-link[data-video]")];
+    window._videoQueue      = trackLinks.map(a => a.dataset.video);
+    window._videoQueueMeta  = trackLinks.map(a => ({
+      track:  a.dataset.track  || "",
+      album:  a.dataset.album  || "",
+      artist: a.dataset.artist || "",
+    }));
+  }
   // Use the clicked element's position in the list (not indexOf, which fails with duplicate URLs)
   const clickedTrack = event?.target?.closest?.(".track-link");
   const clickedIdx = clickedTrack ? trackLinks.indexOf(clickedTrack) : -1;
