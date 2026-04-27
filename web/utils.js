@@ -97,7 +97,15 @@ function renderBioMarkup(text) {
       parts.push(escHtml(text.slice(lastIndex, match.index)));
     }
     const name = match[1];
-    parts.push(`<a href="#" class="bio-artist-link" onclick="searchBioArtist(event,this)" data-artist="${escHtml(name)}">${escHtml(name)}</a>`);
+    // Bio prose [a=Name] markers route to the same lookup popup as
+    // the relations list, so a click on any artist mention in the
+    // bio offers Search SeaDisco / Collection / Wikipedia / YouTube /
+    // LOC instead of just a Discogs search.
+    parts.push(
+      typeof entityLookupLinkHtml === "function"
+        ? entityLookupLinkHtml("artist", name, { className: "bio-artist-link", title: `Lookup options for ${name}` })
+        : `<a href="#" class="bio-artist-link" data-artist="${escHtml(name)}">${escHtml(name)}</a>`
+    );
     lastIndex = match.index + match[0].length;
   }
   if (lastIndex < text.length) parts.push(escHtml(text.slice(lastIndex)));
@@ -231,12 +239,21 @@ function _storeRelPopup(items, isLinks) {
 function _relArtistLink(a, opts) {
   // Accept either a string name OR an {id, name} object. Always escapes.
   const name = typeof a === "string" ? a : (a?.name ?? "");
-  const id   = typeof a === "object" && a?.id ? a.id : null;
   if (!name) return "";
-  const safe = escHtml(name);
-  const idAttr = id ? ` data-artist-id="${id}"` : "";
-  const extra = opts?.extraOnclick ? `;${opts.extraOnclick}` : "";
-  return `<a href="#" class="bio-artist-link" onclick="searchBioArtist(event,this)${extra}" data-artist="${safe}"${idAttr}>${safe}</a>`;
+  // Route through the unified lookup popup so members / groups /
+  // aliases / namevariations all surface the same options menu
+  // (Search SeaDisco / Collection / Wikipedia / YouTube / LOC) used
+  // elsewhere on the site. entityLookupLinkHtml stamps the necessary
+  // data-* attrs and onclick wiring; we just add the existing
+  // bio-artist-link class so the CSS still picks it up.
+  if (typeof entityLookupLinkHtml !== "function") {
+    // Fallback for the rare case shared.js hasn't loaded yet.
+    return `<a href="#" class="bio-artist-link" data-artist="${escHtml(name)}">${escHtml(name)}</a>`;
+  }
+  return entityLookupLinkHtml("artist", name, {
+    className: "bio-artist-link",
+    title: `Lookup options for ${name}`,
+  });
 }
 function _relUrlLink(u) {
   const safe = escHtml(u);
