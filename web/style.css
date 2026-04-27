@@ -2307,7 +2307,9 @@ button {
 button:hover:not(.nav-tab-top) { background: var(--accent2); }
 button:disabled { background: var(--accent-dim); cursor: not-allowed; }
 
-#search-btn { width: 120px; flex-shrink: 0; }
+/* Match the records page Search button — content-fit width with a
+   sensible minimum, no fixed 120px override. */
+#search-btn { flex-shrink: 0; }
 
 /* Advanced panel — smooth open/close via max-height transition */
 #advanced-panel {
