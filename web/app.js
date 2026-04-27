@@ -60,13 +60,10 @@ async function _ensureAdminFlag() {
     switchView("account", true);
   } else if (rawView === "info" || rawView === "privacy" || rawView === "terms") {
     switchView(rawView, true);
-  } else if (rawView === "wiki" || rawView === "loc" || rawView === "archive") {
-    // Wikipedia, LOC, and Archive are admin-only — server endpoints
-    // all use requireAdmin. Redirect non-admins quietly to search.
-    await authReadyPromise;
-    if (!window._clerk?.user) { switchView("account", true); }
-    else if (!await _ensureAdminFlag()) { switchView("search", true); }
-    else switchView(rawView, true);
+  } else if (rawView === "wiki" || rawView === "loc" || rawView === "archive" || rawView === "youtube") {
+    // Wiki / LOC / Archive / YouTube are public to anonymous users
+    // (server endpoints rate-limit per IP). Just enter the view.
+    switchView(rawView, true);
   } else if (rawView === "records" || rawView === "wanted") {
     await authReadyPromise;
     if (!window._clerk?.user) { showToast("Sign in to view your records", "error"); switchView("account", true); }
@@ -83,6 +80,13 @@ async function _ensureAdminFlag() {
     restoreFromParams(p);
     await authReadyPromise;
     doSearch(_getPage(p), true);
+  } else {
+    // Bare /  (or any URL with no recognized view param): render the
+    // default search view so loadRandomRecords fires and the
+    // "Suggested" / "Recent" strip populates. Without this, anon
+    // users on a hard refresh saw an empty home page until they
+    // clicked the logo (which routes through goHome → switchView).
+    switchView("search", true);
   }
 
   // ── Restore stacked popups from URL ────────────────────────────────────
