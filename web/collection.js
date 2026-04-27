@@ -352,8 +352,13 @@ function switchView(view, skipPushState = false) {
     switchRecordsTab(_cwTab || "collection", true);
   } else {
     if (searchView) searchView.style.display = "";
-    // Invite-only: hide the search form for signed-out users (splash takes its place)
-    if (mainForm) mainForm.style.display = window._clerk?.user ? "" : "none";
+    // Search is public — show the form for everyone (signed-in or
+    // anon). The earlier `_clerk?.user ? "" : "none"` gate was a
+    // leftover from the invite-only waitlist era and was racing
+    // with Clerk auth resolution: depending on whether _clerk had
+    // hydrated yet, anon users sometimes saw "Suggested" cards
+    // with no search form, sometimes the form with no cards.
+    if (mainForm) mainForm.style.display = "";
     if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
     bridgeCwToSearch();
