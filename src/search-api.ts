@@ -391,10 +391,13 @@ async function getDiscogsClientForUser(userId: string): Promise<DiscogsClient | 
   });
 }
 
-// Boot DB if a connection string is configured
-if (process.env.APP_DB_URL) {
-  initDb().catch(err => console.error("DB init failed:", err));
-}
+// Boot DB if a connection string is configured. _dbReady resolves
+// once the schema migrations have run so other startup tasks
+// (site-theme load, etc.) can wait for tables to exist before
+// querying them.
+const _dbReady: Promise<void> = process.env.APP_DB_URL
+  ? initDb().then(() => { console.log("[startup] DB schema ready"); }).catch(err => { console.error("DB init failed:", err); })
+  : Promise.resolve();
 
 const app = express();
 app.set("trust proxy", 1); // trust exactly 1 hop (Railway's reverse proxy)
@@ -424,13 +427,17 @@ async function _refreshSiteTheme(): Promise<void> {
   try {
     const v = await getAppSetting("site_theme");
     _siteTheme = (typeof v === "string" && /^[a-z0-9-]{1,40}$/.test(v)) ? v : "";
-  } catch {}
+    console.log(`[startup] site theme loaded: "${_siteTheme || "(unset)"}"`);
+  } catch (e: any) {
+    console.error("[startup] site theme load failed:", e?.message ?? e);
+  }
   _htmlCache.clear(); // force re-template with new theme
 }
-// Kick off the initial load — no await; HTML serves before this lands
-// will use the localStorage fallback in the bootstrap script.
+// Wait for the schema migration before reading — querying
+// app_settings before initDb finishes would silently return null
+// and lock the cached HTML to no-theme until the next save.
 if (process.env.APP_DB_URL) {
-  setTimeout(() => { _refreshSiteTheme().catch(() => {}); }, 100);
+  _dbReady.then(() => _refreshSiteTheme()).catch(() => {});
 }
 
 function _buildClerkInject(): string {
@@ -3606,8 +3613,10 @@ app.post("/api/admin/site-theme", express.json({ limit: "1kb" }), async (req, re
   try {
     await setAppSetting("site_theme", theme);
     await _refreshSiteTheme();
+    console.log(`[admin] site theme set to "${theme}" (effective: "${_siteTheme}")`);
     res.json({ ok: true, theme: _siteTheme });
   } catch (e: any) {
+    console.error("[admin] site theme save failed:", e?.message ?? e);
     res.status(500).json({ error: String(e?.message ?? e) });
   }
 });
