@@ -412,6 +412,9 @@ const _SD_NAV_ICONS = {
   // Person silhouette with two small vinyl circles as headphones for Account
   account: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="6" cy="9" r="2.5"/><circle cx="6" cy="9" r="0.6" fill="currentColor"/><circle cx="18" cy="9" r="2.5"/><circle cx="18" cy="9" r="0.6" fill="currentColor"/><path d="M6 9c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M5 21c1-3.5 4-5 7-5s6 1.5 7 5"/></svg>`,
 };
+// Expose icons globally so card badges (and any future surfaces) can
+// reuse the same line-art set without duplicating SVG markup.
+window._sdNavIconSvg = function (key) { return _SD_NAV_ICONS[key] || ""; };
 
 // ── Shared header injection ──────────────────────────────────────────────
 function renderSharedHeader(opts) {
@@ -461,7 +464,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260426ak";
+  const SITE_VERSION = "build 20260426al";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
