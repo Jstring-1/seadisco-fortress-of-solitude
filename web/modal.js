@@ -538,7 +538,7 @@ async function _renderWikiPopupSearch(q, contentEl) {
             <a href="#" class="wiki-result-title" onclick="event.preventDefault();openWikiArticle('${escHtml(safeTitle)}','${escHtml(safeQ)}')" title="Open in popup">${escHtml(rec.title || "")}</a>
             ${_wikiSaveBtnHtml(rec.title || "")}
           </div>
-          <div class="wiki-result-snippet">${rec.snippet || ""}…</div>
+          <div class="wiki-result-snippet">${_sanitizeWikiSnippet(rec.snippet || "")}…</div>
         </div>`;
     }).join("");
   } catch (err) {
@@ -783,8 +783,22 @@ function _wikiResultRowHtml(rec) {
         <a href="#" class="wiki-result-title" onclick="event.preventDefault();openWikiArticle('${escHtml(safeTitle)}','')" title="Open article">${escHtml(rec.title || "")}</a>
         ${_wikiSaveBtnHtml(rec.title || "")}
       </div>
-      <div class="wiki-result-snippet">${rec.snippet || ""}…</div>
+      <div class="wiki-result-snippet">${_sanitizeWikiSnippet(rec.snippet || "")}…</div>
     </div>`;
+}
+
+// Wikipedia returns search snippets containing <span class="searchmatch">
+// highlights. We escape everything else (so an attacker can't inject
+// scripts via a poisoned wiki page title), then re-allow ONLY that
+// known-safe highlight span. Anything else is rendered as text.
+function _sanitizeWikiSnippet(raw) {
+  const escaped = escHtml(String(raw));
+  // After escaping, real highlights look like
+  //   &lt;span class=&quot;searchmatch&quot;&gt;…&lt;/span&gt;
+  // Re-render those exact tags (and the matching closing tag) only.
+  return escaped
+    .replace(/&lt;span class=&quot;searchmatch&quot;&gt;/g, '<span class="searchmatch">')
+    .replace(/&lt;\/span&gt;/g, '</span>');
 }
 
 // ── Saved-articles state ────────────────────────────────────────────

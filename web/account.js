@@ -362,10 +362,32 @@ async function signOut() {
   await window._clerk?.signOut();
   _cachedToken = null;
   _cachedTokenAt = 0;
+  // Wipe the user-scoped client-side state so the next sign-in
+  // (or anonymous browse on a shared device) doesn't see the
+  // prior account's history / visited cards / saved searches.
+  // Offline-cache flag stays so toggling it on/off via the Account
+  // page is the only way to manage that — sign-out shouldn't
+  // surprise-clear a user's downloaded library.
+  try {
+    const KEEP = new Set([
+      "sd_offline_enabled",
+      "sd_offline_prompt_dismissed",
+      "tracklist-open",
+      "sd_theme",
+    ]);
+    const drop = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      // Drop anything in our user-scoped namespaces.
+      if (KEEP.has(k)) continue;
+      if (k.startsWith("sd_") || k.startsWith("cw-") || k === "_visited") drop.push(k);
+    }
+    drop.forEach(k => localStorage.removeItem(k));
+  } catch {}
   // Hard reload to "/" so the suggested cards / nav state rebuild
   // fresh as a signed-out user. Staying in the SPA left the prior
-  // user's recents visible until something else triggered a refetch
-  // (and could expose stale signed-in data on a shared device).
+  // user's recents visible until something else triggered a refetch.
   location.replace("/");
 }
 

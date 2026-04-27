@@ -80,9 +80,12 @@ html { overflow-x: hidden; }
 /* ── Mobile (≤ 640px) ── */
 @media (max-width: 640px) {
   #site-header { padding: 0.4rem 0.75rem; margin-bottom: 0; }
-  #site-header img { height: 32px; }
-  /* Mobile logo stays compact — desktop 2.7rem would dominate */
-  .text-logo { font-size: 1.4rem; }
+  #site-header img { height: 22px; }
+  /* Mobile logo trimmed ~35% (1.4rem → 0.9rem) so it leaves more
+     room next to the hamburger and doesn't dominate above-the-fold
+     on small phones. */
+  .text-logo { font-size: 0.9rem; }
+  .header-version { font-size: 0.55rem; }
 
   #header-bar {
     flex-direction: column;
@@ -1693,16 +1696,21 @@ footer a.nav-rec-empty { display: none !important; }
 /* ─ Mobile nav ─────────────────────────────────────────────────────────── */
 @media (max-width: 640px) {
   #main-nav { padding: 0; }
+  /* Hamburger sits top-right on mobile (was top-left). Right-side
+     placement matches platform convention on iOS/Android and keeps
+     the logo readable on the left without the button bumping into
+     the SeaDISCOgs wordmark. */
   #nav-hamburger {
     display: flex !important;
     position: fixed;
     top: 1rem;
-    left: 1rem;
+    right: 1rem;
     z-index: 500;
     background: var(--surface);
     border-color: var(--accent);
   }
-  #nav-tabs-wrap { position: fixed; top: 3.5rem; left: 1rem; z-index: 500; min-width: 200px; }
+  /* Drawer panel anchors to the same edge as the hamburger. */
+  #nav-tabs-wrap { position: fixed; top: 3.5rem; right: 1rem; z-index: 500; min-width: 200px; }
   #main-nav-tabs {
     display: none !important;
     flex-direction: column;

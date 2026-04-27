@@ -673,8 +673,12 @@ function renderCard(item, index) {
 
   const metaParts = [year, type, country].filter(Boolean);
 
+  // width/height attrs let the browser reserve layout space before
+  // the image arrives, eliminating the cumulative-layout-shift jolt
+  // when a grid of cards loads. The 300×300 ratio matches the .card
+  // CSS aspect-ratio; actual display size still comes from CSS.
   const thumb = item.cover_image
-    ? `<img src="${item.cover_image}" alt="${escHtml(title)}" loading="lazy" />`
+    ? `<img src="${item.cover_image}" alt="${escHtml(title)}" loading="lazy" width="300" height="300" decoding="async" />`
     : `<div class="thumb-placeholder">♪</div>`;
 
   const isRelease = type === "release" || type === "master";
