@@ -2815,23 +2815,32 @@ async function _fetchArchiveMeta(identifier: string): Promise<{ streamUrl: strin
 }
 
 async function _fetchArchiveCollection(collectionId: string): Promise<ArchiveItem[]> {
-  // Step 1: page through every item uploaded by this archive.org user.
+  // Step 1: page through every item belonging to this archive.org user.
   // archive.org's search API caps each page at 1000; we walk page-by-
   // page until we've collected `numFound` records.
   //
-  // We use uploader:NAME, NOT collection:NAME — `aadamjacobs` is an
-  // archive.org USER, not a curated collection. Items they upload get
-  // tagged with downstream collection names (e.g. `live_music_archive`)
-  // rather than `aadamjacobs` itself, so `collection:aadamjacobs` only
-  // matched the small subset tagged with that exact collection (~300).
-  // `uploader:aadamjacobs` matches everything they uploaded (~2,541),
-  // matching what the user sees on the /details/aadamjacobs page.
+  // The query unions four fields — different items use different ones
+  // depending on how they were uploaded / catalogued:
+  //   collection:NAME — items explicitly tagged with this collection
+  //   uploader:NAME*  — uploader field stores an email (aadamjacobs@…)
+  //                     so we need a wildcard for the username prefix
+  //   addedby:NAME*   — `addedby` stores the same email-form value
+  //   creator:NAME    — creator field on items by this artist
+  //
+  // collection:aadamjacobs alone matched only ~300 items; uploader:NAME
+  // (without the wildcard) matched 0 because of the email-form value.
+  // The OR union catches all 2,541 items the user sees on the website.
+  // numFound is logged so the next refresh's count can be sanity-
+  // checked against the website's displayed total.
   const PAGE_ROWS = 1000;
   const allDocs: any[] = [];
   let page = 1;
   let numFound = 0;
+  // Build the q= expression. The asterisks need to survive URL encoding
+  // (they're unreserved per RFC 3986; encodeURIComponent leaves them).
+  const qExpr = `(collection:${collectionId} OR uploader:${collectionId}* OR addedby:${collectionId}* OR creator:${collectionId})`;
   while (true) {
-    const searchUrl = `https://archive.org/advancedsearch.php?q=uploader%3A${encodeURIComponent(collectionId)}&fl[]=identifier,title,date,description&rows=${PAGE_ROWS}&page=${page}&output=json&sort[]=title+asc`;
+    const searchUrl = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(qExpr)}&fl[]=identifier,title,date,description&rows=${PAGE_ROWS}&page=${page}&output=json&sort[]=title+asc`;
     const r = await loggedFetch("archive", searchUrl, {
       headers: { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "application/json" },
       context: "archive-search",
@@ -2839,7 +2848,10 @@ async function _fetchArchiveCollection(collectionId: string): Promise<ArchiveIte
     if (!r.ok) throw new Error(`archive.org HTTP ${r.status}`);
     const body = await r.json() as any;
     const docs: any[] = (body?.response?.docs ?? []).filter((d: any) => d?.identifier);
-    if (page === 1) numFound = body?.response?.numFound ?? docs.length;
+    if (page === 1) {
+      numFound = body?.response?.numFound ?? docs.length;
+      console.log(`[archive] q="${qExpr}" numFound=${numFound}`);
+    }
     allDocs.push(...docs);
     if (allDocs.length >= numFound || !docs.length) break;
     page++;
@@ -2881,8 +2893,12 @@ async function _fetchArchiveCollection(collectionId: string): Promise<ArchiveIte
 //   v3: tried (collection:X OR uploader:X) — works but unnecessarily
 //       wide; v5 below uses uploader: alone
 //   v4: reverted to collection:X — confirmed too narrow (300 vs 2541)
-//   v5: settled on uploader:X — aadamjacobs is a user, not a collection
-const _ARCHIVE_CACHE_SCHEMA = 5;
+//   v5: tried uploader:X — returned 0 because uploader stores email
+//       (aadamjacobs@archive.org), bare username doesn't match
+//   v6: union of (collection:X OR uploader:X* OR addedby:X* OR
+//       creator:X) with wildcards on the email-form fields. Logs
+//       numFound on first page so refreshes can be sanity-checked.
+const _ARCHIVE_CACHE_SCHEMA = 6;
 
 async function _refreshArchiveCache(collectionId: string, cacheKey: number): Promise<{ count: number }> {
   console.log(`[archive] refreshing collection "${collectionId}" cache…`);
