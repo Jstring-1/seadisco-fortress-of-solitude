@@ -1872,12 +1872,35 @@ app.put("/api/user/settings/default-folder", express.json(), async (req, res) =>
   }
 });
 
-// POST /api/user/collection/remove — remove release from collection
+// POST /api/user/collection/remove — remove release from collection.
+// instanceId is required by Discogs (a user can have multiple copies),
+// but the client doesn't always know it — e.g. the green-circle dot in
+// the master-release version list only has the releaseId in scope. When
+// instanceId is missing OR null we look up the user's first instance
+// from local state and use that. Multi-instance users with the
+// dedicated modal button still pass an explicit instanceId.
 app.post("/api/user/collection/remove", express.json(), async (req, res) => {
   const ctx = await requireUsernameAndToken(req, res);
   if (!ctx) return;
-  const { releaseId, instanceId, folderId = 1 } = req.body ?? {};
-  if (!releaseId || !instanceId) { res.status(400).json({ error: "releaseId and instanceId required" }); return; }
+  const body = req.body ?? {};
+  const releaseId = body.releaseId;
+  let   instanceId = body.instanceId;
+  let   folderId   = body.folderId ?? 1;
+  if (!releaseId) { res.status(400).json({ error: "releaseId required" }); return; }
+  // Fallback lookup when the caller didn't supply an instanceId.
+  if (!instanceId) {
+    try {
+      const inst = await getCollectionInstance(ctx.userId, Number(releaseId));
+      if (inst?.instanceId) {
+        instanceId = inst.instanceId;
+        // Also use the actual stored folderId — most callers default
+        // to 1 ("Uncategorized") but Discogs returns 404 if the
+        // release isn't in folder 1 specifically.
+        if (inst.folderId) folderId = inst.folderId;
+      }
+    } catch { /* fall through to error below */ }
+  }
+  if (!instanceId) { res.status(400).json({ error: "release not in collection (no instance found)" }); return; }
   try {
     const url = `https://api.discogs.com/users/${encodeURIComponent(ctx.username)}/collection/folders/${folderId}/releases/${releaseId}/instances/${instanceId}`;
     const r = await loggedFetch("discogs", url, { method: "DELETE", headers: ctx.client.buildHeaders("DELETE", url), context: "collection-remove" });
