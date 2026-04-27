@@ -1513,6 +1513,16 @@ async function _locPlay(item) {
   bar.classList.add("open");
   if (typeof _setPlayerEngine === "function") _setPlayerEngine("loc");
   document.body.classList.add("player-open");
+  // Push to the OS media session so the lock-screen / Bluetooth /
+  // notification controls show track info + cover art for LOC items.
+  if (typeof window._mediaSessionUpdate === "function") {
+    window._mediaSessionUpdate({
+      title:   item.title || "Library of Congress",
+      artist:  Array.isArray(item.contributors) ? item.contributors.join(", ") : "",
+      album:   item.year ? String(item.year) : "Library of Congress",
+      artwork: item.image || "",
+    });
+  }
   // Reflect now-playing in the URL — share/copy the link and the
   // recipient lands with the same track queued in the bar.
   _locPushPlayUrlState(item.id);
