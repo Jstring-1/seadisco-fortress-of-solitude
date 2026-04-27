@@ -858,6 +858,14 @@ function _queueRefreshIdleBar() {
   if (sourceEl) sourceEl.textContent = head.source === "loc" ? "♪" : "▶";
   const statusEl = document.getElementById("mini-player-status");
   if (statusEl) statusEl.textContent = "ready · click ▶";
+  // Default playpause icon is ⏸; in idle-queue mode no audio is loaded
+  // so showing pause is misleading. Switch to ▶ — clicking it kicks
+  // off queuePlayHead via the existing playerTogglePause guard.
+  const ppBtn = document.getElementById("mini-playpause");
+  if (ppBtn) {
+    ppBtn.innerHTML = "&#9654;";  // ▶
+    ppBtn.title = "Play queue";
+  }
 }
 
 // ── Globals ─────────────────────────────────────────────────────────

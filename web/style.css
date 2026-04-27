@@ -6406,17 +6406,16 @@ body.player-open .queue-drawer.open { bottom: 102px; }
 
 /* ── Idle-queue mini-player surface ───────────────────────────────────
    Shown when the queue has items but no engine is loaded yet. Hides
-   engine-specific controls so the bar doesn't display dead buttons —
-   only the title (head-item preview), ▶ (kicks off queuePlayHead),
-   ☰ (opens drawer), and × (dismiss + suppress until next add) remain. */
-.mini-player.idle-queue #mini-prev,
-.mini-player.idle-queue #mini-next,
+   only the engine-source-specific controls (LOC save / info, YT
+   share / album link) — the cross-source nav (prev / next / queue /
+   expand / repeat) stays visible so the user sees the full toolbar
+   from the start instead of having buttons appear once a track
+   starts. The progress strip stays hidden because there's no
+   duration to scrub yet. */
 .mini-player.idle-queue #mini-loc-save,
 .mini-player.idle-queue #mini-loc-info,
 .mini-player.idle-queue #mini-share,
-.mini-player.idle-queue #mini-album,
-.mini-player.idle-queue #mini-expand,
-.mini-player.idle-queue .repeat-btn { display: none; }
+.mini-player.idle-queue #mini-album { display: none; }
 .mini-player.idle-queue .mini-progress { display: none; }
 .mini-idle-count {
   color: var(--muted);
