@@ -6449,6 +6449,14 @@ body.player-open .queue-drawer.open { bottom: 102px; }
 .mini-player.idle-queue #mini-loc-info,
 .mini-player.idle-queue #mini-share,
 .mini-player.idle-queue #mini-album { display: none; }
+/* Disc + share buttons need a known release context to do anything
+   meaningful. JS adds .has-release to the mini-player when
+   _playerReleaseId is set; without it, hide. !important is used
+   because openPlayerRelease()/sharePlayerUrl() previously toggled
+   inline `style.display` and we want a single CSS-driven source of
+   truth that the inline cascade can't override. */
+.mini-player .mini-needs-release { display: none !important; }
+.mini-player.has-release .mini-needs-release { display: inline-block !important; }
 .mini-player.idle-queue .mini-progress { display: none; }
 .mini-idle-count {
   color: var(--muted);

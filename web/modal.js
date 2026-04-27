@@ -1550,11 +1550,12 @@ function updateVideoNavButtons() {
       } catch {}
     }
   }
-  // Show/hide album + share buttons based on whether we have a release to reopen
-  const albumBtn = document.getElementById("mini-album");
-  if (albumBtn) albumBtn.style.display = window._playerReleaseId ? "" : "none";
-  const shareBtn = document.getElementById("mini-share");
-  if (shareBtn) shareBtn.style.display = window._playerReleaseId ? "" : "none";
+  // Show/hide album + share buttons based on whether we have a release
+  // to reopen. Class-based — CSS rule .mini-player.has-release flips
+  // visibility for all .mini-needs-release children. Avoids inline
+  // `style.display` fights with the HTML's initial inline style.
+  const mp = document.getElementById("mini-player");
+  if (mp) mp.classList.toggle("has-release", !!window._playerReleaseId);
   console.debug("[updateVideoNavButtons]", {
     playerReleaseId: window._playerReleaseId,
     discIconVisible: !!window._playerReleaseId,
@@ -2280,11 +2281,9 @@ function closeVideo() {
   u.searchParams.delete("vd");
   u.searchParams.delete("vp");
   history.replaceState({}, "", u.toString());
-  // Hide album + share buttons
-  const albumBtn = document.getElementById("mini-album");
-  if (albumBtn) albumBtn.style.display = "none";
-  const shareBtn = document.getElementById("mini-share");
-  if (shareBtn) shareBtn.style.display = "none";
+  // Hide album + share buttons via the class-based flag
+  const mpClose = document.getElementById("mini-player");
+  if (mpClose) mpClose.classList.remove("has-release");
   // Clear playing track highlights
   document.querySelectorAll(".track-link.now-playing").forEach(el => el.classList.remove("now-playing"));
   window._playerReleaseType = null;
@@ -2487,7 +2486,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const playableCount = playableUrls.length;
   const firstPlayableUrl = playableUrls[0] || "";
   const playableMeta = playableCount
-    ? `<span class="tracklist-playable">(${playableCount}${firstPlayableUrl ? ` <a href="#" class="tracklist-play-all" onclick="event.preventDefault();event.stopPropagation();playAlbumAndQueue(this,'${firstPlayableUrl.replace(/'/g, "\\'")}')" title="Play the first track and queue the rest of the album">▶</a>` : ""}${playableCount >= 1 ? ` <a href="#" class="tracklist-queue-album" onclick="event.preventDefault();event.stopPropagation();queueAddAlbum(this)" title="Add all playable tracks to your queue">＋ Queue album</a>` : ""})</span>`
+    ? `<span class="tracklist-playable">(${playableCount}${firstPlayableUrl ? ` <a href="#" class="tracklist-play-all" onclick="event.preventDefault();event.stopPropagation();playAlbumAndQueue(this,'${firstPlayableUrl.replace(/'/g, "\\'")}')" title="Play the first track and queue the rest of the album">▶</a>` : ""}${playableCount >= 1 ? ` <a href="#" class="tracklist-queue-album" onclick="event.preventDefault();event.stopPropagation();queueAddAlbum(this)" title="Add all playable tracks to the bottom of your queue">＋</a>` : ""})</span>`
     : "";
   const tracklistOpen = localStorage.getItem("tracklist-open") !== "false";
   const trackHTML = tracks.length ? `
