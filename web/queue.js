@@ -95,9 +95,6 @@ async function queueAdd(items, opts) {
       return false;
     }
     _queue = null; // invalidate cache; next read refetches
-    // New items invalidate the user's earlier "I closed the idle bar"
-    // suppression — they likely want the bar back so they can press ▶.
-    _queueIdleClosed = false;
     if (typeof showToast === "function") {
       const verb = mode === "next" ? "Playing next" : "Queued";
       const count = arr.length === 1 ? "" : ` (${arr.length})`;
@@ -676,11 +673,10 @@ function _refreshPlayerNavButtons() {
 // Idle-queue bar surface: show the persistent mini-player even when no
 // audio is loaded, so long as the queue has items. The bar's ▶ button
 // starts the queue head — that's how users discover playback when they
-// queue items without ever pressing play first. Hidden when an engine
-// becomes active (real playback takes over the bar) and when the queue
-// drains. Honors the user's explicit close — once they hit × on the
-// bar in idle state, we don't re-open it until the queue mutates.
-let _queueIdleClosed = false;
+// queue items without ever pressing play first. Auto-hidden when both
+// the engine is idle AND the queue is empty (the bar has no manual
+// close button anymore — the queue's × button is the only way to
+// drop items).
 function _queueRefreshIdleBar() {
   const bar = document.getElementById("mini-player");
   if (!bar) return;
@@ -690,12 +686,10 @@ function _queueRefreshIdleBar() {
     bar.classList.remove("idle-queue");
     return;
   }
-  if (!hasItems || _queueIdleClosed) {
-    bar.classList.remove("idle-queue");
-    if (!engineActive) {
-      bar.classList.remove("open", "expanded");
-      document.body.classList.remove("player-open", "expanded-mini");
-    }
+  if (!hasItems) {
+    // Truly nothing to show — hide the bar.
+    bar.classList.remove("idle-queue", "open", "expanded");
+    document.body.classList.remove("player-open", "expanded-mini");
     return;
   }
   // Surface the bar in idle-queue mode. Title shows the head item +
@@ -715,11 +709,6 @@ function _queueRefreshIdleBar() {
   const statusEl = document.getElementById("mini-player-status");
   if (statusEl) statusEl.textContent = "ready · click ▶";
 }
-// User closing the bar in idle-queue state suppresses auto-show until
-// they queue something new. Wired from the existing × button via
-// playerClose's "if engine null and idle, set this flag".
-function _queueMarkIdleClosed() { _queueIdleClosed = true; }
-function _queueClearIdleClosed() { _queueIdleClosed = false; }
 
 // ── Globals ─────────────────────────────────────────────────────────
 window._queueHasNext = _queueHasNext;
@@ -732,8 +721,6 @@ window._queueGetRepeat = _queueGetRepeat;
 window._queueCycleRepeat = _queueCycleRepeat;
 window.queuePlayHead = queuePlayHead;
 window._queueRefreshIdleBar = _queueRefreshIdleBar;
-window._queueMarkIdleClosed = _queueMarkIdleClosed;
-window._queueClearIdleClosed = _queueClearIdleClosed;
 window._refreshPlayerNavButtons = _refreshPlayerNavButtons;
 // On script load: if the user has queued items from a previous
 // session, surface the idle bar once the queue cache hydrates. We

@@ -461,7 +461,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260426ag";
+  const SITE_VERSION = "build 20260426ah";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -523,12 +523,49 @@ function _seaDiscoBuildViewHref(view) {
   return `/?${qs.toString()}`;
 }
 
+// Walk every footer link tagged with data-sd-view and rewrite its href
+// to reflect the CURRENT location.search. Click handlers already work
+// correctly in SPA mode (switchView reads location.search fresh), but
+// middle-click / right-click → copy-link / Open-in-new-tab use the
+// href attribute directly — so we keep that attribute in sync with
+// every history change.
+function _updateFooterHrefs() {
+  const footer = document.querySelector("footer");
+  if (!footer) return;
+  footer.querySelectorAll("a[data-sd-view]").forEach(a => {
+    const v = a.dataset.sdView;
+    if (v) a.href = _seaDiscoBuildViewHref(v);
+  });
+}
+// Hook history.pushState / replaceState + popstate so any URL change
+// from anywhere in the SPA propagates to the footer link hrefs. Patch
+// is idempotent — only applied once per page load even if
+// renderSharedFooter is called multiple times.
+function _seaDiscoInstallFooterHrefSync() {
+  if (window._sdFooterHrefSyncInstalled) return;
+  window._sdFooterHrefSyncInstalled = true;
+  const origPush    = history.pushState;
+  const origReplace = history.replaceState;
+  history.pushState = function (...args) {
+    const r = origPush.apply(this, args);
+    try { _updateFooterHrefs(); } catch {}
+    return r;
+  };
+  history.replaceState = function (...args) {
+    const r = origReplace.apply(this, args);
+    try { _updateFooterHrefs(); } catch {}
+    return r;
+  };
+  window.addEventListener("popstate", () => { try { _updateFooterHrefs(); } catch {} });
+}
+
 function renderSharedFooter(opts) {
   const isSPA = opts?.spa;
+  // data-sd-view marks the link for the live href-sync system below.
   const link = (label, view) => {
     const href = _seaDiscoBuildViewHref(view);
-    if (isSPA) return `<a href="${href}" onclick="event.preventDefault();switchView('${view}');return false">${label}</a>`;
-    return `<a href="${href}">${label}</a>`;
+    if (isSPA) return `<a href="${href}" data-sd-view="${view}" onclick="event.preventDefault();switchView('${view}');return false">${label}</a>`;
+    return `<a href="${href}" data-sd-view="${view}">${label}</a>`;
   };
 
   // Records-tab links: in SPA mode, route through switchView('records') with the
@@ -538,9 +575,9 @@ function renderSharedFooter(opts) {
   const recLink = (label, tab) => {
     const href = _seaDiscoBuildViewHref(tab);
     if (isSPA) {
-      return `<a href="${href}" onclick="event.preventDefault();if(!window._clerk?.user){openSignInModal();return false}_cwTab='${tab}';switchView('records');return false">${label}</a>`;
+      return `<a href="${href}" data-sd-view="${tab}" onclick="event.preventDefault();if(!window._clerk?.user){openSignInModal();return false}_cwTab='${tab}';switchView('records');return false">${label}</a>`;
     }
-    return `<a href="${href}">${label}</a>`;
+    return `<a href="${href}" data-sd-view="${tab}">${label}</a>`;
   };
 
   const footer = document.querySelector("footer");
@@ -559,8 +596,8 @@ function renderSharedFooter(opts) {
       <div class="footer-col">
         <h4>SeaDisco</h4>
         ${isSPA
-          ? `<a href="${_seaDiscoBuildViewHref("account")}" onclick="event.preventDefault();openSignInModal();return false;">Account</a>`
-          : `<a href="${_seaDiscoBuildViewHref("account")}">Account</a>`}
+          ? `<a href="${_seaDiscoBuildViewHref("account")}" data-sd-view="account" onclick="event.preventDefault();openSignInModal();return false;">Account</a>`
+          : `<a href="${_seaDiscoBuildViewHref("account")}" data-sd-view="account">Account</a>`}
         ${link("Info", "info")}
         ${link("Privacy Policy", "privacy")}
         ${link("Terms of Service", "terms")}
@@ -573,6 +610,11 @@ function renderSharedFooter(opts) {
     <div style="color:#555;font-style:italic;margin-bottom:0.3rem">DISCLAIMER: AI be funky sometimes</div>
     <div>Powered by <a href="https://www.discogs.com" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Discogs</a> and <a href="https://www.anthropic.com" target="_blank" rel="noopener" style="color:var(--muted);text-decoration:none">Claude</a></div>
     <div style="margin-top:0.3rem">&copy; 2026 SeaDisco &nbsp;&middot;&nbsp; Music data courtesy of Discogs API &nbsp;&middot;&nbsp; Not affiliated with Discogs &nbsp;&middot;&nbsp; Jimmy Witherfork Strikes Again</div>`;
+
+  // Wire the live href-sync system so footer link hrefs always reflect
+  // the current location.search. Idempotent — only patches history once.
+  _seaDiscoInstallFooterHrefSync();
+  _updateFooterHrefs();
 
   // Reveal admin-only footer links (Admin + LOC) when /api/me confirms the
   // current Clerk session is the admin user. /api/me returns { signedIn,
