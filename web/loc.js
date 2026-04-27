@@ -1084,17 +1084,22 @@ function _locUpdatePlayingCard() {
   });
 }
 
-// Bar button: open the info popup for whatever is playing.
-// Archive.org items are played through this same engine but don't have
-// LOC metadata behind them, so we route those to archive.org's own
-// detail page instead of trying (and failing) the LOC lookup proxy.
+// Bar button: open the info popup for whatever is playing. The two
+// engine-share-the-LOC-engine surfaces route to different popups:
+//   • LOC IDs (http(s) URLs) → _locOpenInfoPopup (LOC detail panel)
+//   • Archive identifiers (bare slugs) → _archiveOpenInfoPopup
+//     (the rich in-app archive popup with file list, save toggle,
+//     description, etc.) — earlier this used to open archive.org in
+//     a new tab, but the in-app popup is a better experience.
 function _locOpenFromBar() {
   const id = _locCurrentBarItemId();
   if (!id) return;
-  // LOC IDs are http(s) URLs (e.g. "http://www.loc.gov/item/..."),
-  // archive items are bare slugs (e.g. "aadamjacobs2024-01-15"). The
-  // simplest discriminator is "does it start with a protocol?".
   if (!/^https?:\/\//i.test(id)) {
+    if (typeof window._archiveOpenInfoPopup === "function") {
+      window._archiveOpenInfoPopup(id);
+      return;
+    }
+    // archive.js not loaded yet (rare): fall back to the external page
     try { window.open(`https://archive.org/details/${encodeURIComponent(id)}`, "_blank", "noopener"); } catch {}
     return;
   }
