@@ -7967,3 +7967,20 @@ a:focus-visible {
   color: var(--accent);
   overflow: hidden;
 }
+/* Visual separator between in-app actions and external links. */
+.lookup-popup-sep {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 0.35rem 0.7rem;
+}
+/* ↗ glyph after the label on external-link rows so users can tell
+   at a glance which options leave the site. Pushed to the right
+   edge with margin-left:auto. */
+.lookup-popup-external .lookup-popup-ext-indicator {
+  margin-left: auto;
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 0.75rem;
+}
+.lookup-popup-external:hover .lookup-popup-ext-indicator {
+  color: rgba(255, 255, 255, 0.7);
+}

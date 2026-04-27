@@ -2272,10 +2272,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const isMaster = searchResult.type === "master";
   const catnoEsc = catno.replace(/'/g, "\\'");
   const detailRows = [
-    labelNames.length ? `<span class="detail-label">Label</span><span>${labelNames.map(n => {
-      const esc = n.replace(/'/g, "\\'");
-      return `<a href="#" class="modal-internal-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('f-label').value='${escHtml(esc)}';applyEntityLinkDefaults();toggleAdvanced(true);doSearch(1)" title="Search for ${escHtml(n)} releases">${escHtml(n)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-label','${escHtml(esc)}')" title="Search your collection for ${escHtml(n)}">⌕</a>${wikiIcon(stripDupSuffix(n), n, "record label")}`;
-    }).join(", ")}</span>` : "",
+    labelNames.length ? `<span class="detail-label">Label</span><span>${labelNames.map(n => entityLookupLinkHtml("label", n, { className: "modal-internal-link", title: `Lookup options for ${n}` })).join(", ")}</span>` : "",
     (labels && labelCodeRow) ? labelCodeRow : "",
     (!isMaster && catno) ? `<span class="detail-label">Cat#</span><span><a href="#" class="modal-internal-link catno-link" onclick="event.preventDefault();closeModal();clearForm();document.getElementById('query').value='${escHtml(catnoEsc)}';doSearch(1)" title="Search for this catalog number">${escHtml(catno)}</a> <a href="#" class="catno-collection-search" onclick="event.preventDefault();searchCollectionFor('cw-query','${escHtml(catnoEsc)}')" title="Search your collection for ${escHtml(catno)}">⌕</a></span>` : "",
     (!isMaster && formats) ? `<span class="detail-label">Format</span><span>${escHtml(formats)}</span>` : "",
@@ -2395,7 +2392,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
              : `<div class="album-cover-placeholder">♪</div>`}
       <div class="album-meta">
         ${typeLabel ? `<div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.3rem"><div class="album-type-badge" style="cursor:pointer;user-select:none" onclick="navigator.clipboard.writeText('${escHtml(String(releaseId))}');this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy ID">${escHtml(typeLabel)}</div><button class="popup-share-inline" onclick="sharePopup(this)" title="Copy share link">share</button></div>` : ""}
-        <h2><a href="#" class="modal-title-link" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">${escHtml(title)}</a> <a href="#" class="album-title-search" onclick="event.preventDefault();searchCollectionFor('cw-release','${escHtml(title.replace(/'/g, "\\'"))}')" title="Search your collection for this release">⌕</a></h2>
+        <h2>${entityLookupLinkHtml("release", title, { className: "modal-title-link", title: `Lookup options for "${title}"` })}</h2>
         ${artistEntries.length ? `<div class="album-artist">${artistEntries.map(({ id: aId, name: n }) => `${entityLookupLinkHtml("artist", n, { className: "modal-artist-link", title: `Lookup options for ${n}` })}${bluesAddIcon(aId, n)}`).join(", ")}</div>` : ""}
         ${detailRows ? `<div class="album-detail-grid">${detailRows}</div>` : ""}
         ${(() => {
