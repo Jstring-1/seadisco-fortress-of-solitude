@@ -416,8 +416,11 @@ async function renderOfflineSection() {
   const installed = window.sdOffline.isInstalled();
   const canInstall = window.sdOffline.canInstall();
 
+  // The "records" number was confusing — it counted IDB rows (one per
+  // cached endpoint, ~10), not actual albums. Show MB used and the
+  // list of what's been synced instead.
   const sizeBlurb = enabled
-    ? `${stats.records.toLocaleString()} record${stats.records === 1 ? "" : "s"} · ${_fmtBytes(stats.totalBytes || stats.libraryBytes)}`
+    ? `Storage: ${_fmtBytes(stats.totalBytes || stats.libraryBytes)} (${stats.records} cached library file${stats.records === 1 ? "" : "s"})`
     : `Currently off — your library is fetched live each visit.`;
   const lastSync = enabled
     ? `Last synced ${_fmtAgo(stats.lastSyncAt)}`
@@ -443,7 +446,7 @@ async function renderOfflineSection() {
 
   body.innerHTML = `
     <p style="font-size:0.84rem;color:var(--muted);margin:0 0 0.7rem">
-      Download your collection, wantlist, lists, and inventory to this device so you can browse them when you're offline. Read-only — adding or editing still needs a connection.
+      Download your collection, wantlist, favorites, lists, and inventory to this device so you can browse them when you're offline. Read-only — adding or editing still needs a connection. Cover images cache as you scroll through them online; ones you haven't viewed yet won't appear offline.
     </p>
     <label class="offline-toggle" style="display:inline-flex;align-items:center;gap:0.55rem;cursor:pointer;user-select:none">
       <input type="checkbox" ${enabled ? "checked" : ""} onchange="${enabled ? "disableOffline" : "enableOffline"}(this)" style="width:1rem;height:1rem;accent-color:var(--accent);cursor:pointer">

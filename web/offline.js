@@ -45,11 +45,21 @@
     /^\/api\/user\/wantlist(?:\b|\?)/,
     /^\/api\/user\/inventory(?:\b|\?)/,
     /^\/api\/user\/lists(?:\b|\?|$|\/)/,
+    /^\/api\/user\/favorites(?:\b|\?)/,
   ];
 
   let _deferredInstallPrompt = null;
   let _swReg = null;
 
+  // Per-device "offline access is on for this device" flag.
+  // Distinct from the SERVER-side preference (window.sdOffline.serverPref)
+  // which tracks "this user wants offline on any device they sign in to."
+  // The two combine like this:
+  //   server pref true + local flag true  → fully on, sync as usual
+  //   server pref true + local flag false → cross-device prompt: "Cache here?"
+  //   server pref false                   → local flag is the only signal
+  // _setEnabled writes the LOCAL flag only; updateServerPref writes the
+  // server side. enable()/disable() do both.
   function isEnabled() {
     try { return localStorage.getItem(FLAG_KEY) === "1"; } catch { return false; }
   }
@@ -58,6 +68,41 @@
       if (on) localStorage.setItem(FLAG_KEY, "1");
       else    localStorage.removeItem(FLAG_KEY);
     } catch {}
+  }
+
+  // Per-device flag: "user already saw the cross-device prompt and said
+  // not now / declined." Suppresses the prompt for this device only.
+  // They can still flip the toggle manually from Account.
+  const PROMPT_SHOWN_KEY = "sd_offline_prompt_dismissed";
+  function _wasPromptDismissed() {
+    try { return localStorage.getItem(PROMPT_SHOWN_KEY) === "1"; } catch { return false; }
+  }
+  function _markPromptDismissed() {
+    try { localStorage.setItem(PROMPT_SHOWN_KEY, "1"); } catch {}
+  }
+
+  // ── Server-side preference ─────────────────────────────────────────
+  async function getServerPref() {
+    if (!window.apiFetch) return null;
+    try {
+      const r = await window.apiFetch("/api/user/preferences");
+      if (!r.ok) return null;
+      const j = await r.json();
+      return (j?.prefs && typeof j.prefs === "object") ? j.prefs : {};
+    } catch { return null; }
+  }
+  async function setServerPref(patch) {
+    if (!window.apiFetch) return null;
+    try {
+      const r = await window.apiFetch("/api/user/preferences", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ patch }),
+      });
+      if (!r.ok) return null;
+      const j = await r.json();
+      return j?.prefs ?? null;
+    } catch { return null; }
   }
 
   function _isLibraryUrl(url) {
@@ -72,6 +117,35 @@
       const u = url.startsWith("http") ? new URL(url) : new URL(url, location.origin);
       return u.pathname + u.search;
     } catch { return url; }
+  }
+  // Strip filter/sort params for an offline-fallback lookup against
+  // the canonical synced URL. We keep page + per_page (these define
+  // the synced URL); everything else gets dropped. Returns null if
+  // the URL isn't a library endpoint we sync.
+  function _trimToBaseLibraryUrl(url) {
+    try {
+      const u = url.startsWith("http") ? new URL(url) : new URL(url, location.origin);
+      const path = u.pathname;
+      // Keep the same set of synced paths the SYNC_ENDPOINTS uses.
+      const isPaginatedLib =
+        /^\/api\/user\/(?:collection|wantlist|inventory)$/i.test(path);
+      const isFavorites = path === "/api/user/favorites";
+      const isFacets    = path === "/api/user/facets";
+      if (isPaginatedLib) {
+        const page    = u.searchParams.get("page")     || "1";
+        const perPage = u.searchParams.get("per_page") || "96";
+        return `${path}?page=${page}&per_page=${perPage}`;
+      }
+      if (isFavorites) {
+        // Synced as ?limit=200; fall back regardless of caller's limit.
+        return `${path}?limit=200`;
+      }
+      if (isFacets) {
+        const type = u.searchParams.get("type") || "";
+        return `${path}?type=${encodeURIComponent(type)}`;
+      }
+      return null;
+    } catch { return null; }
   }
 
   // ── Connection banner ───────────────────────────────────────────────
@@ -173,7 +247,21 @@
         // Network failed entirely. If this was a library GET and the
         // user has enabled offline mode, serve from IDB.
         if (isLib && method === "GET" && isEnabled() && window.sdIdb) {
-          const row = await window.sdIdb.libraryGet(_normalizeUrl(url));
+          // 1. Exact URL match (filters + sort + page identical to
+          //    something we synced).
+          let row = await window.sdIdb.libraryGet(_normalizeUrl(url));
+          // 2. Fallback: drop optional filter/sort params and try
+          //    the canonical synced URL. Wantlist / inventory pages
+          //    accumulate `&sort=artist:asc` etc. on first render
+          //    even when no filter is set, so the exact URL wouldn't
+          //    match the synced default. The synced URL had only
+          //    page + per_page; rebuild that and look it up.
+          if (!row?.json) {
+            const trimmed = _trimToBaseLibraryUrl(url);
+            if (trimmed && trimmed !== _normalizeUrl(url)) {
+              row = await window.sdIdb.libraryGet(trimmed);
+            }
+          }
           if (row?.json) {
             return new Response(JSON.stringify(row.json), {
               status: 200,
@@ -206,6 +294,7 @@
     { url: "/api/user/collection?page=1&per_page=96", label: "Collection" },
     { url: "/api/user/wantlist?page=1&per_page=96",   label: "Wantlist" },
     { url: "/api/user/inventory?page=1&per_page=96",  label: "Inventory" },
+    { url: "/api/user/favorites?limit=200",           label: "Favorites" },
     { url: "/api/user/lists",                         label: "Lists" },
   ];
   async function syncNow(onProgress) {
@@ -288,8 +377,15 @@
   }
 
   // ── Enable / disable ───────────────────────────────────────────────
+  // enable() / disable() are user-initiated (Account toggle, prompt
+  // accept). Both update the LOCAL flag immediately and the SERVER
+  // preference in the background. Server-side write failure is non-
+  // fatal; the local toggle still works for this device.
   async function enable(onProgress) {
     _setEnabled(true);
+    setServerPref({ offlineEnabled: true }).catch(() => {});
+    // Clear the prompt-dismissed marker — they're saying yes now.
+    try { localStorage.removeItem(PROMPT_SHOWN_KEY); } catch {}
     await _registerSw();
     _ensureBanner();
     _onConnectionChange(navigator.onLine);
@@ -297,6 +393,7 @@
   }
   async function disable() {
     _setEnabled(false);
+    setServerPref({ offlineEnabled: false }).catch(() => {});
     await _clearAllCaches();
     if (window.sdIdb) {
       try { await window.sdIdb.libraryClear(); } catch {}
@@ -306,6 +403,47 @@
     document.body.classList.remove("is-offline");
     const banner = document.getElementById("offline-banner");
     if (banner) banner.remove();
+  }
+
+  // ── Cross-device prompt ────────────────────────────────────────────
+  // Called after Clerk has resolved a signed-in user, while online,
+  // when offlineEnabled is true server-side but the local flag isn't
+  // set. Renders a one-time non-blocking banner asking to cache on
+  // this device. Stays out of the way if the user dismisses it.
+  function _showCrossDevicePrompt() {
+    if (document.getElementById("sd-offline-cross-prompt")) return;
+    const wrap = document.createElement("div");
+    wrap.id = "sd-offline-cross-prompt";
+    wrap.className = "sd-offline-cross-prompt";
+    wrap.innerHTML = `
+      <span class="sd-offline-cross-msg">Offline access is on for your account. Cache your library on this device too?</span>
+      <button type="button" class="sd-offline-cross-yes">Yes</button>
+      <button type="button" class="sd-offline-cross-no">Not now</button>
+    `;
+    document.body.appendChild(wrap);
+    const dismiss = (mark) => {
+      if (mark) _markPromptDismissed();
+      wrap.remove();
+    };
+    wrap.querySelector(".sd-offline-cross-yes").addEventListener("click", async () => {
+      const btn = wrap.querySelector(".sd-offline-cross-yes");
+      btn.disabled = true; btn.textContent = "Syncing…";
+      try { await enable(); } catch {}
+      dismiss(false);
+      if (typeof window._sdOfflineRenderAccount === "function") {
+        try { window._sdOfflineRenderAccount(); } catch {}
+      }
+    });
+    wrap.querySelector(".sd-offline-cross-no").addEventListener("click", () => dismiss(true));
+  }
+  async function _maybePromptCrossDevice() {
+    if (isEnabled()) return;          // already on locally
+    if (_wasPromptDismissed()) return; // user said not now on this device
+    if (!navigator.onLine) return;     // wait until back online
+    if (!window._clerk?.user) return;  // need a real signed-in user
+    if (window._sdOfflineMode) return; // already in offline-boot mode
+    const prefs = await getServerPref();
+    if (prefs?.offlineEnabled) _showCrossDevicePrompt();
   }
 
   // ── Install prompt ─────────────────────────────────────────────────
@@ -369,6 +507,23 @@
       // Just reflect the offline state visually without showing the
       // banner (which is reserved for when caching's actually on).
       document.body.classList.toggle("is-offline", !navigator.onLine);
+    }
+    // Cross-device prompt: poll briefly for Clerk to resolve, then
+    // ask the server if this user has offlineEnabled set elsewhere.
+    // If so, surface the "Cache on this device too?" banner. Skipped
+    // entirely if the local flag is already on or the user has
+    // dismissed the prompt before.
+    if (!isEnabled() && !_wasPromptDismissed()) {
+      let waited = 0;
+      const iv = setInterval(() => {
+        waited += 250;
+        if (window._clerk?.user) {
+          clearInterval(iv);
+          _maybePromptCrossDevice().catch(() => {});
+        } else if (waited >= 10000) {
+          clearInterval(iv);
+        }
+      }, 250);
     }
   });
 

@@ -283,6 +283,20 @@ export async function initDb() {
     )
   `);
 
+  // ── Per-user preferences ──────────────────────────────────────────────
+  // Cross-device user prefs (currently: { offlineEnabled }). Stored as a
+  // JSONB blob per user so we can extend with new keys without schema
+  // migrations. Read on every page load to surface a one-time "cache on
+  // this device too?" prompt when offlineEnabled is true server-side
+  // but the device hasn't been opted in locally.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_preferences (
+      clerk_user_id TEXT PRIMARY KEY,
+      prefs         JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
   // ── Wikipedia article saves (Wikipedia SPA "Saved" tab) ──────────────────
   // Mirrors user_loc_saves so users can bookmark articles without bouncing
   // through search again. Title is the canonical Wikipedia title (used to
@@ -863,6 +877,7 @@ export async function purgeNonAdminUserData(adminClerkId: string): Promise<Recor
     "user_youtube_saves",
     "user_wiki_saves",
     "user_play_queue",
+    "user_preferences",
     "saved_searches",
     "feedback",
     "oauth_request_tokens",
@@ -1141,6 +1156,7 @@ export async function deleteUserData(clerkUserId: string): Promise<void> {
     "user_youtube_saves",
     "user_wiki_saves",
     "user_play_queue",
+    "user_preferences",
     "saved_searches",
     "feedback",
     "user_order_messages",
@@ -3453,4 +3469,32 @@ export async function setAppSetting(key: string, value: string | null): Promise<
      ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
     [key, value]
   );
+}
+
+// ── User preferences (cross-device) ───────────────────────────────────
+// Returns the prefs JSON for a user, or {} if no row. Never throws —
+// missing rows or DB hiccups are treated as "no prefs set."
+export async function getUserPrefs(clerkUserId: string): Promise<Record<string, any>> {
+  try {
+    const r = await getPool().query(
+      `SELECT prefs FROM user_preferences WHERE clerk_user_id = $1 LIMIT 1`,
+      [clerkUserId]
+    );
+    const row = r.rows[0]?.prefs;
+    return row && typeof row === "object" ? row : {};
+  } catch { return {}; }
+}
+
+// Merge-update a user's prefs. Pass partial keys; existing keys not in
+// the patch are preserved. Returns the post-merge prefs.
+export async function setUserPrefs(clerkUserId: string, patch: Record<string, any>): Promise<Record<string, any>> {
+  const current = await getUserPrefs(clerkUserId);
+  const merged = { ...current, ...patch };
+  await getPool().query(
+    `INSERT INTO user_preferences (clerk_user_id, prefs, updated_at)
+     VALUES ($1, $2::jsonb, NOW())
+     ON CONFLICT (clerk_user_id) DO UPDATE SET prefs = EXCLUDED.prefs, updated_at = NOW()`,
+    [clerkUserId, JSON.stringify(merged)]
+  );
+  return merged;
 }
