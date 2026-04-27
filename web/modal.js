@@ -2213,14 +2213,15 @@ function openVideo(event, url) {
     window._playerReleaseType = _rType;
     window._playerReleaseId   = _rId;
     window._playerReleaseUrl  = `https://www.discogs.com/${_rType}/${_rId}`;
-  } else if (isQueueDispatch || isUserClick) {
-    // Explicit context exists but had no release info — clear so the
-    // disc icon doesn't dangle on the previous album.
-    window._playerReleaseType = null;
-    window._playerReleaseId   = null;
-    window._playerReleaseUrl  = null;
   }
-  // else: bootstrap path — leave _playerRelease* untouched.
+  // else: leave _playerRelease* untouched. Earlier we cleared on
+  // explicit-context-without-release so the disc icon wouldn't dangle
+  // on the previous album, but for queue items saved before the
+  // release-context fields existed (or any track played from a
+  // surface that doesn't carry album info) that flip-hid the disc
+  // icon constantly. Showing the previous album link is the lesser
+  // evil — at least the disc icon always points at *some* opened
+  // album the user has been browsing.
   setVideoUrl(id);
   const mp = document.getElementById("mini-player");
   mp.classList.add("open");
