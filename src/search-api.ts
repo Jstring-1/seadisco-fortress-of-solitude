@@ -2953,6 +2953,112 @@ app.get("/api/archive/aadamjacobs", async (_req, res) => {
   }
 });
 
+// GET /api/archive/item/:identifier — rich metadata for a single
+// archive.org item (powers the in-app info popup). Open to all
+// callers; we cache responses 1 day in-memory to avoid hammering
+// archive.org during browsing. Anonymous IPs share the LOC anon
+// limiter so anons can't burn through the whole metadata API.
+const _archiveItemCache = new Map<string, { ts: number; body: any }>();
+const _ARCHIVE_ITEM_TTL_MS = 24 * 60 * 60 * 1000;
+const _ARCHIVE_ITEM_CACHE_MAX = 500;
+function _archiveItemCacheGet(id: string): any | null {
+  const entry = _archiveItemCache.get(id);
+  if (!entry) return null;
+  if (Date.now() - entry.ts > _ARCHIVE_ITEM_TTL_MS) { _archiveItemCache.delete(id); return null; }
+  _archiveItemCache.delete(id);
+  _archiveItemCache.set(id, entry);
+  return entry.body;
+}
+function _archiveItemCacheSet(id: string, body: any) {
+  if (_archiveItemCache.size >= _ARCHIVE_ITEM_CACHE_MAX) {
+    const firstKey = _archiveItemCache.keys().next().value;
+    if (firstKey !== undefined) _archiveItemCache.delete(firstKey);
+  }
+  _archiveItemCache.set(id, { ts: Date.now(), body });
+}
+app.get("/api/archive/item/:identifier", async (req, res) => {
+  if (!await allowAnonRateLimited(req, res, anonLocLimiter)) return;
+  const id = String(req.params.identifier ?? "").trim();
+  // Validate: archive.org identifiers are slug-safe ([A-Za-z0-9._-]+).
+  // Reject anything else so we don't proxy arbitrary URLs through here.
+  if (!id || !/^[A-Za-z0-9._-]+$/.test(id) || id.length > 200) {
+    res.status(400).json({ error: "invalid identifier" }); return;
+  }
+  const cached = _archiveItemCacheGet(id);
+  if (cached) { res.setHeader("X-SeaDisco-Cache", "hit"); res.json(cached); return; }
+  try {
+    const r = await loggedFetch("archive", `https://archive.org/metadata/${encodeURIComponent(id)}`, {
+      headers: { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "application/json" },
+      context: "archive-item",
+    });
+    if (!r.ok) {
+      res.status(r.status >= 500 ? 502 : r.status).json({ error: `archive.org HTTP ${r.status}` });
+      return;
+    }
+    const meta: any = await r.json();
+    // Curate the response: archive.org's raw metadata is huge (full
+    // file manifest, derivatives, download counts per format, etc.).
+    // We trim to what the popup actually renders, which keeps payloads
+    // small AND insulates the client from upstream shape changes.
+    const m = meta?.metadata ?? {};
+    const filesArr: any[] = Array.isArray(meta?.files) ? meta.files : [];
+    // Audio tracks only: prefer original MP3s; ignore derivatives that
+    // archive.org generates from the original file (those have
+    // `original` pointing to the source). For each, build a stream URL.
+    const audioFiles = filesArr
+      .filter(f => typeof f?.name === "string" && /\.(mp3|m4a|flac|ogg|wav)$/i.test(f.name))
+      .filter(f => !f.original || /\.(mp3)$/i.test(f.name)) // de-dup derivatives
+      .slice(0, 100)
+      .map(f => ({
+        name:    String(f.name),
+        title:   typeof f.title === "string" ? f.title : "",
+        track:   typeof f.track === "string" ? f.track : "",
+        format:  typeof f.format === "string" ? f.format : "",
+        length:  typeof f.length === "string" ? f.length : "",
+        size:    typeof f.size === "string" ? f.size : "",
+        streamUrl: `https://archive.org/download/${encodeURIComponent(id)}/${encodeURIComponent(String(f.name))}`,
+      }));
+    // Pick a primary stream (first MP3) so the bar's ▶ knows what to play.
+    const primaryStream = audioFiles.find(f => /\.mp3$/i.test(f.name)) ?? audioFiles[0] ?? null;
+    const arr = (v: any): string[] => Array.isArray(v) ? v.filter((x: any) => typeof x === "string") : (typeof v === "string" ? [v] : []);
+    const body = {
+      identifier: id,
+      title:       String(m.title ?? id),
+      creator:     arr(m.creator),
+      date:        typeof m.date === "string" ? m.date : (Array.isArray(m.date) ? m.date[0] : ""),
+      year:        typeof m.year === "string" ? m.year : (Array.isArray(m.year) ? m.year[0] : ""),
+      description: typeof m.description === "string" ? m.description : (Array.isArray(m.description) ? m.description.join("\n\n") : ""),
+      subject:     arr(m.subject),
+      uploader:    typeof m.uploader === "string" ? m.uploader : "",
+      runtime:     typeof m.runtime === "string" ? m.runtime : "",
+      language:    arr(m.language),
+      licenseurl:  typeof m.licenseurl === "string" ? m.licenseurl : "",
+      mediatype:   typeof m.mediatype === "string" ? m.mediatype : "",
+      collection:  arr(m.collection),
+      venue:       typeof m.venue === "string" ? m.venue : "",
+      coverage:    typeof m.coverage === "string" ? m.coverage : "",
+      source:      typeof m.source === "string" ? m.source : "",
+      taper:       typeof m.taper === "string" ? m.taper : "",
+      notes:       typeof m.notes === "string" ? m.notes : "",
+      addeddate:   typeof m.addeddate === "string" ? m.addeddate : "",
+      // Stats — these live at the top level, not under metadata.
+      downloads:    typeof meta?.item_size === "number" ? meta.item_size : null,
+      itemSizeBytes: typeof meta?.item_size === "number" ? meta.item_size : null,
+      reviews:      meta?.reviews?.info?.num_reviews ?? null,
+      avgRating:    meta?.reviews?.info?.avg_rating ?? null,
+      itemUrl:      `https://archive.org/details/${encodeURIComponent(id)}`,
+      coverUrl:     `https://archive.org/services/img/${encodeURIComponent(id)}`,
+      audioFiles,
+      primaryStreamUrl: primaryStream?.streamUrl ?? "",
+    };
+    _archiveItemCacheSet(id, body);
+    res.setHeader("X-SeaDisco-Cache", "miss");
+    res.json(body);
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
 // POST /api/admin/archive/refresh — admin manual trigger to re-fetch
 // the archive.org collection and overwrite the DB cache. Returns
 // 202 Accepted immediately; refresh runs in the background.
