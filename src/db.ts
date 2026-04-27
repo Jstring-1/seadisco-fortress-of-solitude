@@ -252,6 +252,25 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS user_archive_saves_user_time_idx ON user_archive_saves (clerk_user_id, saved_at DESC)`);
 
+  // ── YouTube video saves (YouTube SPA "Saved" tab) ────────────────────────
+  // Mirrors the LOC / Archive saves shape. Video ID is the canonical
+  // Discogs-independent identifier; title / channel / thumbnail / data
+  // are a snapshot for the Saved tab card render so re-running the
+  // YouTube search isn't required to display the user's library.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_youtube_saves (
+      clerk_user_id TEXT        NOT NULL,
+      video_id      TEXT        NOT NULL,   -- YouTube videoId (11 chars)
+      title         TEXT,
+      channel       TEXT,
+      thumbnail     TEXT,
+      data          JSONB       NOT NULL,
+      saved_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (clerk_user_id, video_id)
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS user_youtube_saves_user_time_idx ON user_youtube_saves (clerk_user_id, saved_at DESC)`);
+
   // ── Site-wide app settings (admin-controlled) ────────────────────────────
   // Simple key/value store for global config (theme, feature flags, etc.).
   // Currently used for the site-wide theme: admin picks a theme on /admin
@@ -841,6 +860,7 @@ export async function purgeNonAdminUserData(adminClerkId: string): Promise<Recor
     "user_recent_views",
     "user_loc_saves",
     "user_archive_saves",
+    "user_youtube_saves",
     "user_wiki_saves",
     "user_play_queue",
     "saved_searches",
@@ -1118,6 +1138,7 @@ export async function deleteUserData(clerkUserId: string): Promise<void> {
     "user_recent_views",
     "user_loc_saves",
     "user_archive_saves",
+    "user_youtube_saves",
     "user_wiki_saves",
     "user_play_queue",
     "saved_searches",
@@ -1869,6 +1890,77 @@ export async function getArchiveSaveIds(clerkUserId: string): Promise<string[]> 
     [clerkUserId]
   );
   return r.rows.map(row => row.archive_id);
+}
+
+// ── YouTube video saves ───────────────────────────────────────────────
+const YOUTUBE_SAVES_MAX_PER_USER = 1000;
+
+export async function saveYoutubeVideo(
+  clerkUserId: string,
+  videoId: string,
+  title: string | null,
+  channel: string | null,
+  thumbnail: string | null,
+  data: object
+): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    `INSERT INTO user_youtube_saves (clerk_user_id, video_id, title, channel, thumbnail, data, saved_at)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW())
+     ON CONFLICT (clerk_user_id, video_id)
+     DO UPDATE SET title = EXCLUDED.title, channel = EXCLUDED.channel,
+                   thumbnail = EXCLUDED.thumbnail, data = EXCLUDED.data, saved_at = NOW()`,
+    [clerkUserId, videoId, title, channel, thumbnail, JSON.stringify(data)]
+  );
+  await pool.query(
+    `DELETE FROM user_youtube_saves
+     WHERE clerk_user_id = $1
+       AND video_id NOT IN (
+         SELECT video_id FROM user_youtube_saves
+         WHERE clerk_user_id = $1
+         ORDER BY saved_at DESC
+         LIMIT ${YOUTUBE_SAVES_MAX_PER_USER}
+       )`,
+    [clerkUserId]
+  );
+}
+
+export async function getYoutubeSaves(
+  clerkUserId: string,
+  limit: number = 500
+): Promise<Array<{ videoId: string; title: string | null; channel: string | null; thumbnail: string | null; data: any; savedAt: string }>> {
+  const capped = Math.min(Math.max(1, limit), 1000);
+  const r = await getPool().query(
+    `SELECT video_id, title, channel, thumbnail, data, saved_at
+     FROM user_youtube_saves
+     WHERE clerk_user_id = $1
+     ORDER BY saved_at DESC
+     LIMIT $2`,
+    [clerkUserId, capped]
+  );
+  return r.rows.map(row => ({
+    videoId:   row.video_id,
+    title:     row.title,
+    channel:   row.channel,
+    thumbnail: row.thumbnail,
+    data:      row.data ?? {},
+    savedAt:   row.saved_at,
+  }));
+}
+
+export async function deleteYoutubeSave(clerkUserId: string, videoId: string): Promise<void> {
+  await getPool().query(
+    `DELETE FROM user_youtube_saves WHERE clerk_user_id = $1 AND video_id = $2`,
+    [clerkUserId, videoId]
+  );
+}
+
+export async function getYoutubeSaveIds(clerkUserId: string): Promise<string[]> {
+  const r = await getPool().query(
+    `SELECT video_id FROM user_youtube_saves WHERE clerk_user_id = $1`,
+    [clerkUserId]
+  );
+  return r.rows.map(row => row.video_id);
 }
 
 // ── Wikipedia article saves ───────────────────────────────────────────
@@ -3326,7 +3418,7 @@ export async function getTableRowCounts(): Promise<Array<{ table: string; rows: 
     'user_tokens', 'user_collection', 'user_collection_folders', 'user_wantlist',
     'user_inventory', 'user_lists', 'user_list_items', 'user_orders', 'user_order_messages',
     'user_favorites', 'user_recent_views', 'user_loc_saves', 'user_archive_saves',
-    'user_wiki_saves', 'user_play_queue', 'saved_searches', 'feedback',
+    'user_youtube_saves', 'user_wiki_saves', 'user_play_queue', 'saved_searches', 'feedback',
     'release_cache', 'price_cache', 'price_history',
     'blues_artists', 'api_request_log', 'oauth_request_tokens',
     'app_settings',
