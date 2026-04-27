@@ -491,7 +491,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260427e";
+  const SITE_VERSION = "build 20260427f";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -786,7 +786,7 @@ function _lookupSearchSeaDisco(scope, label) {
       if (el) el.value = label;
       if (typeof toggleAdvanced === "function") { try { toggleAdvanced(true); } catch {} }
     } else {
-      // track / release / unknown — generic free-text query
+      // track / release / catno / unknown — generic free-text query
       const qEl = document.getElementById("query");
       if (qEl) qEl.value = label;
     }
@@ -816,26 +816,35 @@ function openLookupPopup(ev, scope, label, ctx) {
     : (trackArtist ? `${trackArtist} ${label}` : label);
   const dcUrl = `https://www.discogs.com/search?q=${encodeURIComponent(dcQ)}&type=all`;
 
-  // In-app group — always present
+  // In-app group — universal "copy to clipboard" first, then the
+  // scope-appropriate search options.
   const internal = [];
+  internal.push({ key: "copy", icon: "⎘", text: "Copy to clipboard" });
   internal.push({ key: "sd",   icon: "🔎", text: "Search SeaDisco" });
-  internal.push({ key: "coll", icon: "⌕",  text:
-    scope === "artist" ? "Search my collection" :
-    scope === "label"  ? "Search my labels"     :
-    scope === "release" ? "Search my records"   :
-                          "Search my records" });
-  internal.push({ key: "wiki", icon: "W",  text: "Wikipedia" });
-  // LOC for tracks / artists only — release / label scopes don't map
-  // cleanly to LOC's catalog model, so we skip the option there.
+  // "Search my collection" only for scopes that can actually be saved
+  // to a Discogs collection (releases only — labels and tracks can't
+  // be saved as entities, just searched against). Labels are dropped
+  // entirely per request; track/release/artist still get the option.
+  if (scope !== "label" && scope !== "catno") {
+    internal.push({ key: "coll", icon: "⌕", text:
+      scope === "artist"  ? "Search my collection" :
+                            "Search my records" });
+  }
+  // Wikipedia / LOC don't make sense for catalog numbers.
+  if (scope !== "catno") {
+    internal.push({ key: "wiki", icon: "W",  text: "Wikipedia" });
+  }
+  // LOC for tracks / artists only — release / label / catno scopes
+  // don't map cleanly to LOC's catalog model.
   if (scope === "track" || scope === "artist") {
     internal.push({ key: "loc", icon: "🏛", text: "Library of Congress" });
   }
 
-  // External group — always at the bottom with a ↗ indicator
-  const external = [
-    { key: "yt", icon: "▶", text: "YouTube",      url: ytUrl },
-    { key: "dc", icon: "◎", text: "Discogs.com",  url: dcUrl },
-  ];
+  // External group — at the bottom with a ↗ indicator. Catalog
+  // numbers don't have a meaningful YouTube search; only Discogs.com.
+  const external = [];
+  if (scope !== "catno") external.push({ key: "yt", icon: "▶", text: "YouTube", url: ytUrl });
+  external.push({ key: "dc", icon: "◎", text: "Discogs.com",  url: dcUrl });
 
   // Combine for index addressing of action buttons (keeps indices
   // stable so the click delegate can resolve any clicked button).
@@ -882,12 +891,38 @@ function openLookupPopup(ev, scope, label, ctx) {
       e.preventDefault();
       _closeLookupPopup();
       try {
-        if (b.key === "sd")    _lookupSearchSeaDisco(scope, label);
+        if (b.key === "copy") {
+          // Universal copy-to-clipboard. Prefer the modern async API;
+          // fall back to a hidden textarea + execCommand for older
+          // browsers / non-secure contexts. Toast confirms either way.
+          const tryToast = (msg, type) => {
+            if (typeof showToast === "function") showToast(msg, type);
+          };
+          (async () => {
+            try {
+              if (navigator.clipboard?.writeText) {
+                await navigator.clipboard.writeText(label);
+              } else {
+                const ta = document.createElement("textarea");
+                ta.value = label;
+                ta.style.position = "fixed";
+                ta.style.left = "-1000px";
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand("copy");
+                ta.remove();
+              }
+              tryToast("Copied to clipboard");
+            } catch {
+              tryToast("Could not copy", "error");
+            }
+          })();
+        }
+        else if (b.key === "sd")    _lookupSearchSeaDisco(scope, label);
         else if (b.key === "coll") {
           if (typeof searchCollectionFor === "function") {
             const cwField =
               scope === "artist"  ? "cw-artist"  :
-              scope === "label"   ? "cw-label"   :
               scope === "release" ? "cw-release" :
                                     "cw-query";
             searchCollectionFor(cwField, label);

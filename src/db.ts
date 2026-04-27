@@ -1995,13 +1995,24 @@ export async function appendPlayQueue(
       );
       startPos = (r.rows[0]?.maxp ?? 0) + 1;
     } else {
-      // "next": shift all existing positions down by items.length, then
-      // place the new items at 1..N. Updates run highest-first so the
-      // PK uniqueness constraint never collides mid-update.
+      // "next": shift all existing positions down by items.length so
+      // the new items can occupy 1..N. The naive
+      //   UPDATE ... SET position = position + $2
+      // hits a unique-constraint violation in PostgreSQL because the
+      // PK (clerk_user_id, position) is checked per-row mid-statement
+      // — going from [1, 2, 3] → [3, 4, 5] tries to write 3 while 3
+      // still exists. Workaround: two passes through a negative
+      // intermediate range that can't collide with valid positive
+      // positions:
+      //   pass 1: position → -position - 1   ([1,2,3] → [-2,-3,-4])
+      //   pass 2: position → -position - 1 + N ([-2,-3,-4] → [N+1,…])
+      // Final: existing rows shifted down by N, slots 1..N free.
       await client.query(
-        `UPDATE user_play_queue
-            SET position = position + $2
-          WHERE clerk_user_id = $1`,
+        `UPDATE user_play_queue SET position = -position - 1 WHERE clerk_user_id = $1`,
+        [clerkUserId]
+      );
+      await client.query(
+        `UPDATE user_play_queue SET position = -position - 1 + $2 WHERE clerk_user_id = $1`,
         [clerkUserId, items.length]
       );
       startPos = 1;
