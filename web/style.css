@@ -2273,11 +2273,15 @@ select {
   color: var(--muted);
   font-family: inherit;
   font-size: 0.78rem;
-  height: var(--input-h);
-  padding: 0 0.5rem;
-  /* line-height intentionally omitted — native <select> elements center
-     text via the browser's own layout, and forcing line-height equal to
-     the box height clips the baseline on Chrome/Edge. */
+  /* Theme fonts with tall vertical metrics (some serifs / display
+     fonts) overflow the bottom of the box at the previous fixed
+     28px height — descenders + browser default line-height push
+     past the inner area. min-height + auto height + explicit
+     line-height keeps text vertically centered without clipping
+     on any theme. */
+  min-height: var(--input-h);
+  line-height: 1.4;
+  padding: 0.2rem 0.5rem;
   box-sizing: border-box;
   outline: none;
   cursor: pointer;
