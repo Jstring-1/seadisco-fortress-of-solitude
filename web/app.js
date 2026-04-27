@@ -432,28 +432,44 @@ if (window._sdOfflineMode) {
   // doesn't hang waiting for a signed-in state we'll never get.
   if (window._resolveDiscogsIds) window._resolveDiscogsIds();
   _authReady();
-  // Manually surface the library nav tabs since we won't be calling
-  // /api/user/token (which is what normally reveals them).
-  setTimeout(() => {
-    try { addNavTab("wanted"); } catch {}
-    try { addNavTab("collection"); } catch {}
-    try { addNavTab("wantlist"); } catch {}
-  }, 0);
-  // Replace the Account-tab label so it's clear we're not signed in
-  // for real, just running off cached data.
-  const navBtn = document.getElementById("nav-auth-tab");
-  if (navBtn) {
-    const labelSpan = navBtn.querySelector(".nav-label");
-    const txt = "Offline";
-    if (labelSpan) labelSpan.textContent = txt; else navBtn.textContent = txt;
-    navBtn.title = "You're offline — using cached library";
-  }
   // Hide the splash / sign-in CTA on the home view since "sign in"
   // can't actually do anything offline.
   document.documentElement.classList.add("sd-offline-mode");
   if (typeof _applySplashVisibility === "function") {
     try { _applySplashVisibility(window._clerk); } catch {}
   }
+  // Wire the navbar AFTER renderSharedHeader has painted it — that
+  // happens at DOMContentLoaded. Two things to override:
+  //  - records tabs (Collection / Wantlist / Favorites / Inventory /
+  //    Lists) start with onclick="showRecordSignIn(...)" which routes
+  //    through openSignInModal → switchView("account"). With our
+  //    stubbed Clerk that path lands on a half-broken Account view
+  //    no matter which tab the user clicked.
+  //  - the auth tab's openSignInModal call also lands on Account
+  //    when _clerk.user is truthy. We want it to go directly there
+  //    too, but at least relabeled and with no detour through Clerk.
+  document.addEventListener("DOMContentLoaded", () => {
+    // addNavTab("collection") enables the whole records row in one
+    // shot — iterates every #nav-row-records .nav-tab-top[data-rtab]
+    // and rebinds onclick to set _cwTab + switchView("records").
+    // Without this, the default onclick is showRecordSignIn() which
+    // routes to openSignInModal → switchView("account"), so every
+    // navbar click in offline mode lands on a half-broken Account
+    // view regardless of which tab was actually clicked.
+    try { addNavTab("collection"); } catch {}
+    // Auth tab: relabel + bypass openSignInModal (which would also
+    // hop us to Account view via Clerk's user-route fallback). Go
+    // straight to the account view so the user can find the offline
+    // toggle to turn it off if they want.
+    const navBtn = document.getElementById("nav-auth-tab");
+    if (navBtn) {
+      const labelSpan = navBtn.querySelector(".nav-label");
+      const txt = "Offline";
+      if (labelSpan) labelSpan.textContent = txt; else navBtn.textContent = txt;
+      navBtn.title = "You're offline — using cached library";
+      navBtn.onclick = (e) => { e.preventDefault?.(); switchView("account"); };
+    }
+  });
 } else {
   initAuth({
     onSignedIn: applyAuthState,
