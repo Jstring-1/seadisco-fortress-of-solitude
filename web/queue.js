@@ -295,6 +295,16 @@ async function _queuePlayItem(entry) {
     if (entry.source === "loc") {
       if (typeof _locPlay === "function") _locPlay(playItem);
     } else if (entry.source === "yt") {
+      // Hand the queue's title/artist/album to openVideo via a
+      // module-level handoff slot. Without this, openVideo's DOM
+      // scrape (looking for .track-link rows in album popups)
+      // picks up a wrong track or nothing — the bar's title
+      // would show the wrong song. Cleared on consume.
+      window._queueDispatchYtMeta = {
+        track:  entry.data?.title       || "",
+        album:  entry.data?.albumTitle  || "",
+        artist: entry.data?.artist      || "",
+      };
       const url = `https://www.youtube.com/watch?v=${encodeURIComponent(entry.externalId)}`;
       if (typeof openVideo === "function") openVideo(null, url);
     } else {
