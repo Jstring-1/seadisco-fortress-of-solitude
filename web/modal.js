@@ -1382,7 +1382,10 @@ function loadYTVideo(id) {
     const statusEl = document.getElementById("mini-player-status");
     if (statusEl && (statusEl.textContent === "loading…" || statusEl.textContent === "buffering…")) {
       updatePlayerStatus("unavailable");
-      setTimeout(() => { if (vtoken === _ytVideoToken) playNextVideo(); }, 1500);
+      // Stuck at "loading…" for 8s = the video probably isn't going
+      // to come up (deleted, geo-blocked, embed disabled). Prune from
+      // queue + advance so we don't keep retrying it on every cycle.
+      _ytPruneUnavailable(id, /*advance=*/true);
     }
   }, 8000);
   if (ytPlayer && typeof ytPlayer.loadVideoById === "function") {
@@ -1431,6 +1434,61 @@ function updatePlayerStatus(state, errorCode) {
   el.textContent = info.text;
   el.className = "mini-player-status " + info.cls;
   syncPlayPauseBtn(state);
+}
+
+// Drop a YouTube videoId from the cross-source queue (every position
+// matching the id) when the player can't load it — deleted video,
+// geo-blocked, embed-disabled, or stuck at "loading…" for 8 s. With
+// `advance` true, we kick off auto-advance afterward so the user
+// doesn't sit on a dead row. Toast lets them know what happened.
+//
+// Two advance paths:
+//   - If the dead track is the currently-playing row, queueRemove
+//     internally calls _queuePlayItem on the next track. That's
+//     the happy path.
+//   - If queueRemove can't infer "playing" (e.g. cross-source mark
+//     drifted), we fall back to playNextVideo() so the player still
+//     moves forward.
+function _ytPruneUnavailable(videoId, advance) {
+  if (!videoId) return;
+  if (typeof showToast === "function") {
+    showToast("Track unavailable — skipping", "error");
+  }
+  // Was the dead track sitting in the cross-source queue? If yes,
+  // queueRemove(null, externalId) sweeps every matching position AND
+  // auto-advances to the next queue row when the removed one was
+  // the playing row. If no — the play was a one-off (URL share,
+  // album modal click without queueing), and we fall back to
+  // playNextVideo so the per-album _videoQueue still advances.
+  const queueHadIt =
+    Array.isArray(window._queue) /* not exposed, fall through */ ? false :
+    (typeof window._queueGetCurrentPosition === "function" &&
+     typeof queueRemove === "function");
+  let queueRemoveTriggered = false;
+  try {
+    if (typeof queueRemove === "function") {
+      queueRemove(null, String(videoId));
+      queueRemoveTriggered = true;
+    }
+  } catch (e) {
+    console.warn("[yt-prune] queueRemove threw:", e);
+  }
+  if (!advance) return;
+  // If queueRemove handled the advance (dead row was playing), we'd
+  // double-advance by also calling playNextVideo. Detect this by
+  // checking whether the engine has switched away from yt OR the
+  // ytPlayer is now loading a different video. Crude but effective:
+  // wait 1500ms for queueRemove's async _queuePlayItem to dispatch,
+  // then only fall through to playNextVideo if nothing else fired.
+  const tokenAtSchedule = _ytVideoToken;
+  setTimeout(() => {
+    // If _ytVideoToken changed, something else (queueRemove's
+    // auto-advance) already started loading a new video — leave it
+    // alone. Same if engine flipped to LOC.
+    if (_ytVideoToken !== tokenAtSchedule) return;
+    if (window._currentEngine !== "yt") return;
+    if (typeof playNextVideo === "function") playNextVideo();
+  }, 1500);
 }
 
 function _createYTPlayer(id) {
@@ -1502,7 +1560,12 @@ function _createYTPlayer(id) {
         const code = e?.data;
         if (code === 100 || code === 101 || code === 150) {
           updatePlayerStatus("unavailable");
-          setTimeout(() => { if (vtoken === _ytVideoToken) playNextVideo(); }, 2000);
+          // Removed from queue here so the user doesn't keep hitting
+          // the same dead track on every cycle. Advance happens
+          // either through queueRemove's wasPlaying auto-advance
+          // (if the dead track was the playing row) or via
+          // playNextVideo as a fallback.
+          _ytPruneUnavailable(id, /*advance=*/true);
         } else if (code === 5 && !window._ytRetried) {
           // HTML5 error can be transient — retry once
           window._ytRetried = true;
@@ -1516,7 +1579,9 @@ function _createYTPlayer(id) {
         } else {
           window._ytRetried = false;
           updatePlayerStatus("error");
-          setTimeout(() => { if (vtoken === _ytVideoToken) playNextVideo(); }, 2000);
+          // Generic errors (code 2 = invalid id, code 5 after retry,
+          // or anything else): treat as unavailable, prune + advance.
+          _ytPruneUnavailable(id, /*advance=*/true);
         }
       },
       onReady: function() {
