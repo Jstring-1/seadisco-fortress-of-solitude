@@ -100,11 +100,18 @@ async function queueAdd(items, opts) {
       const count = arr.length === 1 ? "" : ` (${arr.length})`;
       showToast(`${verb}${count}`);
     }
-    // Refetch in the background so the bar's prev/next state can
-    // reflect the new queue immediately without waiting for the user
-    // to open the drawer.
-    _queueLoad(true).then(() => _refreshPlayerNavButtons()).catch(() => {});
-    if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
+    // Serialize the refresh: previously this ran two concurrent
+    // _queueLoad(true) calls (one for nav buttons, one inside
+    // _renderQueueDrawer). The second call hit the _queueLoading
+    // guard and returned `[]`, so the drawer rendered an empty list
+    // even though the server had the new items. Single load now,
+    // shared across both consumers.
+    if (_queueDrawerEl?.classList.contains("open")) {
+      await _renderQueueDrawer(); // does its own _queueLoad(true)
+    } else {
+      await _queueLoad(true);
+    }
+    _refreshPlayerNavButtons();
     return true;
   } catch {
     if (typeof showToast === "function") showToast("Could not add to queue", "error");
@@ -315,33 +322,57 @@ function _queueOnExternalPlay(itemPayload) {
     }
     return false;
   }
-  // Item payload + non-empty queue → insert at head, mark as playing,
-  // let the calling _locPlay/openVideo continue with playback (the
-  // server-side mode:"next" insert is async but the local engine call
-  // doesn't depend on it; we sync up _queueCurrentPosition once the
-  // insert lands).
-  _queueLoad().then(async () => {
-    if (!_queue?.length) {
+  // Only run the interrupt-insert when we already have a hydrated queue
+  // with items. Without items, the new track just plays standalone —
+  // no queue to interrupt. _queue can be null on first interaction;
+  // bail rather than racing the load.
+  if (!Array.isArray(_queue) || _queue.length === 0) {
+    if (_queueCurrentPosition != null) {
       _queueCurrentPosition = null;
       if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
-      return;
     }
-    // Insert at head (mode "next" shifts existing positions down).
+    return false;
+  }
+  // SYNCHRONOUSLY update local state before the engine call returns
+  // control: optimistically insert the new item at a synthetic position
+  // lower than the current minimum and mark it as playing. Any
+  // track-end event that fires DURING the async server insert (e.g. a
+  // stale "ended" from the YT player as it swaps video) reads this
+  // updated state — without it, _queuePlayNext would advance from the
+  // old _queueCurrentPosition and replay the previously-playing track.
+  const minPos = _queue.reduce((m, it) => Math.min(m, Number(it.position) || 0), Infinity);
+  // Use a fractional position so it can't collide with any server-
+  // assigned integer; gets reconciled to a real position after the
+  // server POST + refetch.
+  const tempPos = (Number.isFinite(minPos) ? minPos : 1) - 0.5;
+  const optimistic = { position: tempPos, source: itemPayload.source, externalId: itemPayload.externalId, data: itemPayload.data || {} };
+  _queue = [optimistic, ..._queue];
+  _queueCurrentPosition = tempPos;
+  if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
+  _refreshPlayerNavButtons();
+  // Now fire the server insert in the background and reconcile our
+  // synthetic position to the real server-assigned one.
+  (async () => {
     try {
       const r = await apiFetch("/api/user/play-queue", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ items: [itemPayload], mode: "next" }),
       });
-      if (!r.ok) { _queueCurrentPosition = null; return; }
-    } catch { _queueCurrentPosition = null; return; }
-    _queue = null;
-    await _queueLoad(true);
-    // The newly-inserted item is the new head (lowest position).
-    if (_queue?.length) _queueCurrentPosition = _queue[0].position;
-    if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
-    _refreshPlayerNavButtons();
-  }).catch(() => {});
+      if (!r.ok) return;
+      _queue = null;
+      await _queueLoad(true);
+      // After reconcile, the new item is at the actual head. Match by
+      // externalId in case a race re-ordered things; fall back to the
+      // first row if the lookup misses.
+      if (_queue?.length) {
+        const head = _queue.find(it => String(it.externalId) === String(itemPayload.externalId)) ?? _queue[0];
+        if (head) _queueCurrentPosition = head.position;
+      }
+      if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
+      _refreshPlayerNavButtons();
+    } catch { /* server drift; local optimistic state remains usable */ }
+  })();
   return false; // don't suppress; engine still plays directly
 }
 
@@ -517,6 +548,19 @@ async function _bindSortable() {
 // ── Public actions ──────────────────────────────────────────────────
 async function queueRemove(position) {
   const wasPlaying = _queueCurrentPosition === position;
+  // If we're about to remove the now-playing item, capture what
+  // SHOULD play next BEFORE the delete so we can auto-advance to it.
+  // Server DELETEs leave gaps in positions (no renumbering), so a
+  // simple "item right after current" lookup works.
+  let advanceTo = null;
+  if (wasPlaying && Array.isArray(_queue)) {
+    const idx = _queue.findIndex(it => it.position === position);
+    if (idx >= 0 && idx + 1 < _queue.length) {
+      advanceTo = _queue[idx + 1];
+    } else if (_queueRepeat === "all" && _queue.length > 1) {
+      advanceTo = _queue[0]; // repeat-all: wrap to head
+    }
+  }
   try {
     await apiFetch("/api/user/play-queue", {
       method: "DELETE",
@@ -528,10 +572,17 @@ async function queueRemove(position) {
     await _queueLoad(true);
     _refreshPlayerNavButtons();
     _renderQueueDrawer();
-    // If the removed row was the now-playing one, audio keeps playing
-    // (the engine still owns its stream); the queue just no longer
-    // claims this position. The next track-end will pick the new
-    // first-after-current via _queuePlayNext.
+    // Auto-advance / stop based on what the queue had after current.
+    if (wasPlaying) {
+      const fresh = advanceTo ? _queue?.find(it => it.position === advanceTo.position) : null;
+      if (fresh) {
+        await _queuePlayItem(fresh);
+      } else {
+        // Nothing left after the removed track — stop playback so the
+        // current audio doesn't keep going for a row that's gone.
+        if (typeof playerClose === "function") playerClose();
+      }
+    }
   } catch {
     if (typeof showToast === "function") showToast("Could not remove from queue", "error");
   }

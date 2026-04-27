@@ -1543,24 +1543,32 @@ body {
   align-items: center;
   align-self: stretch;
 }
-.nav-tab-top:hover           { color: var(--text); background: none; }
+.nav-tab-top:hover           { color: #888; background: none; }
 .nav-tab-top.active          { color: var(--accent); font-weight: 600; }
-/* Record tabs — disabled state + per-tab hover/active colors */
+/* Record tabs — disabled state + per-tab default/active colors. The
+   nav now starts colored per category and de-saturates to grey on
+   hover — that way the icons read at a glance without needing to
+   point at them, and hover gives clear feedback. */
 .nav-tab-top.nav-rec-disabled { color: #555; cursor: pointer; }
 .nav-tab-top.nav-rec-disabled:hover { color: var(--accent); }
 /* Hide Inventory / Lists tabs entirely when the user has zero of them.
    Set by _updateEmptyRecordTabs() once /api/user/discogs-ids resolves. */
 .nav-tab-top.nav-rec-empty { display: none !important; }
-.nav-tab-top[data-rtab="collection"]:hover,
+.nav-tab-top[data-rtab="collection"],
 .nav-tab-top[data-rtab="collection"].active  { color: #6ddf70; }
-.nav-tab-top[data-rtab="wantlist"]:hover,
+.nav-tab-top[data-rtab="collection"]:hover   { color: #888; }
+.nav-tab-top[data-rtab="wantlist"],
 .nav-tab-top[data-rtab="wantlist"].active    { color: #f0c95c; }
-.nav-tab-top[data-rtab="lists"]:hover,
+.nav-tab-top[data-rtab="wantlist"]:hover     { color: #888; }
+.nav-tab-top[data-rtab="lists"],
 .nav-tab-top[data-rtab="lists"].active       { color: #a0ccf0; }
-.nav-tab-top[data-rtab="inventory"]:hover,
+.nav-tab-top[data-rtab="lists"]:hover        { color: #888; }
+.nav-tab-top[data-rtab="inventory"],
 .nav-tab-top[data-rtab="inventory"].active   { color: #cda0f5; }
-.nav-tab-top[data-rtab="favorites"]:hover,
-.nav-tab-top[data-rtab="favorites"].active   { color: var(--accent); }
+.nav-tab-top[data-rtab="inventory"]:hover    { color: #888; }
+.nav-tab-top[data-rtab="favorites"],
+.nav-tab-top[data-rtab="favorites"].active   { color: #ff7eb6; }
+.nav-tab-top[data-rtab="favorites"]:hover    { color: #888; }
 
 /* ── Icon-nav variant (admin page test bed) ─────────────────────────────
    When renderSharedHeader is called with iconNav:true the tab markup is
@@ -4441,58 +4449,80 @@ button.wiki-link-btn:active {
    right edge so relative position conveys meaning (top=C, then W, L, I).
    All badges share the same 16px footprint so masters showing a count
    sit perfectly aligned with plain release dots. */
+/* Card badges are now line-art icons matching the navbar's per-tab
+   set (collection / wantlist / lists / inventory / favorites).
+   Active state = full per-category color; inactive = a faded
+   placeholder so the order stays consistent across cards. */
 .card-badge {
   position: absolute;
   right: 0;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  font-size: 0;
-  overflow: hidden;
-  text-indent: -999px;
-  border: 1.5px solid;
-  box-shadow: 0 0 0 1px rgba(0,0,0,0.45);
-  pointer-events: auto;
-  box-sizing: border-box;
-}
-/* Fixed slot positions — 20px stride keeps the 16px dots from kissing. */
-.badge-collection { top: 4px;   background: #6ddf70; border-color: #2a4a2b; opacity: 0; transition: opacity 0.15s; cursor: pointer; }
-.badge-wantlist   { top: 24px;  background: #f0c95c; border-color: #4a3e1e; opacity: 0; transition: opacity 0.15s; cursor: pointer; }
-.badge-list       { top: 44px;  background: #a0ccf0; border-color: #2a3a4a; }
-.badge-inventory  { top: 64px;  background: #cda0f5; border-color: #3a2a4a; }
-/* Favorite: orange dot — same style as other badge dots */
-.badge-favorite {
-  top: 84px; cursor: pointer; opacity: 0; transition: opacity 0.15s;
-  background: var(--accent); border-color: #4a2a12;
-}
-.badge-favorite:hover { background: var(--accent2); }
-/* Active badges always visible */
-.badge-collection.is-active,
-.badge-wantlist.is-active,
-.badge-favorite.is-favorite { opacity: 1; }
-/* Master-card variants showing the count of owned versions inside the
-   dot. Same footprint as the base badge — only the text becomes visible. */
-.card-badge.has-count {
-  font-size: 9px;
-  font-weight: 800;
-  font-family: system-ui, -apple-system, sans-serif;
-  text-indent: 0;
-  overflow: visible;
-  display: flex;
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  line-height: 1;
-  color: #0a0a0a;
-  text-shadow: 0 0 1px rgba(255, 255, 255, 0.45);
+  background: rgba(0, 0, 0, 0.42);
+  border-radius: 4px;
+  pointer-events: auto;
+  box-sizing: border-box;
+  color: rgba(255, 255, 255, 0.18);
+  transition: color 0.15s, opacity 0.15s, background 0.15s;
 }
-/* Show inactive C/W/F on hover — only on devices that support hover (not touch) */
+.card-badge svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+  stroke-width: 1.5;
+}
+/* Fixed slot positions — 22px stride for the slightly larger icons. */
+.badge-collection { top: 4px;   cursor: pointer; }
+.badge-wantlist   { top: 26px;  cursor: pointer; }
+.badge-list       { top: 48px; }
+.badge-inventory  { top: 70px; }
+.badge-favorite   { top: 92px; cursor: pointer; }
+/* Active per-tab colors — match the navbar palette. */
+.badge-collection.is-active { color: #6ddf70; }
+.badge-wantlist.is-active   { color: #f0c95c; }
+.badge-list.is-active       { color: #a0ccf0; }
+.badge-inventory.is-active  { color: #cda0f5; }
+.badge-favorite.is-favorite { color: #ff7eb6; } /* matching pink */
+.badge-favorite:hover       { color: #ff7eb6; }
+.card-badge:hover           { background: rgba(0, 0, 0, 0.65); }
+/* C / W / F always rendered; L / I always rendered when the user
+   has any items in that category. Inactive placeholders fade in on
+   hover so they don't fight with cover art. */
+.badge-collection:not(.is-active),
+.badge-wantlist:not(.is-active),
+.badge-favorite:not(.is-favorite) { opacity: 0; }
+.badge-list:not(.is-active),
+.badge-inventory:not(.is-active)  { opacity: 0; }
 @media (hover: hover) {
-  .card:hover .badge-collection,
-  .card:hover .badge-wantlist,
-  .card:hover .badge-favorite { opacity: 1; }
+  .card:hover .card-badge { opacity: 1; }
   .card:hover .badge-collection:not(.is-active),
-  .card:hover .badge-wantlist:not(.is-active) { opacity: 0.55; }
-  .card:hover .badge-favorite:not(.is-favorite) { opacity: 0.55; }
+  .card:hover .badge-wantlist:not(.is-active),
+  .card:hover .badge-favorite:not(.is-favorite),
+  .card:hover .badge-list:not(.is-active),
+  .card:hover .badge-inventory:not(.is-active) { opacity: 0.6; }
+}
+/* Active badges are visible at all times so users can scan a grid
+   for "what's already in my collection". */
+.badge-collection.is-active,
+.badge-wantlist.is-active,
+.badge-list.is-active,
+.badge-inventory.is-active,
+.badge-favorite.is-favorite { opacity: 1; }
+/* Superscript count badges for master cards (e.g. "C₃" = 3 versions). */
+.card-badge-count {
+  position: absolute;
+  top: -3px;
+  right: -4px;
+  font-size: 0.55rem;
+  font-weight: 800;
+  background: var(--bg, #111);
+  color: currentColor;
+  border-radius: 7px;
+  padding: 0 3px;
+  line-height: 1.2;
 }
 
 /* Favorite button in modal */
