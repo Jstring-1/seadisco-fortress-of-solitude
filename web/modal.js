@@ -2256,7 +2256,16 @@ function openVideo(event, url) {
   } else if (clickedEl?.dataset?.releaseType && clickedEl?.dataset?.releaseId) {
     _rType = clickedEl.dataset.releaseType; _rId = String(clickedEl.dataset.releaseId);
   } else {
-    const opParam = new URLSearchParams(location.search).get("op");
+    // Fallback URL params: ?op= is the live "currently-open modal"
+    // param (openModal sets it). ?vp= is the "video parent popup"
+    // breadcrumb that setVideoUrl writes whenever a track plays
+    // from inside a popup, and is what's preserved in shareable
+    // URLs when the modal has since closed. On URL bootstrap with
+    // ?vd=…&vp=…, ?op= often hasn't been written yet by openModal
+    // (it races a 3 s discogs-ids promise) — fall back to ?vp=
+    // so the disc icon resolves to the right album immediately.
+    const params  = new URLSearchParams(location.search);
+    const opParam = params.get("op") || params.get("vp");
     if (opParam && opParam.includes(":")) {
       _rType = opParam.slice(0, opParam.indexOf(":"));
       _rId   = opParam.slice(opParam.indexOf(":") + 1);
