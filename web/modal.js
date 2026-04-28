@@ -1666,15 +1666,20 @@ function updateVideoNavButtons() {
       } catch {}
     }
   }
-  // Show/hide album + share buttons based on whether we have a release
-  // to reopen. Class-based — CSS rule .mini-player.has-release flips
-  // visibility for all .mini-needs-release children. Avoids inline
-  // `style.display` fights with the HTML's initial inline style.
+  // Show/hide album + share buttons. Engine-aware: YT needs a release
+  // ID, LOC needs a loaded item. See openPlayerRelease for the
+  // engine-aware click dispatch. Class-based via CSS rule
+  // .mini-player.has-release.
   const mp = document.getElementById("mini-player");
-  if (mp) mp.classList.toggle("has-release", !!window._playerReleaseId);
+  if (mp) {
+    const hasOpenable = (window._currentEngine === "loc" && !!window._locNowPlaying)
+                     || (!!window._playerReleaseId);
+    mp.classList.toggle("has-release", hasOpenable);
+  }
   console.debug("[updateVideoNavButtons]", {
     playerReleaseId: window._playerReleaseId,
-    discIconVisible: !!window._playerReleaseId,
+    engine:          window._currentEngine,
+    discIconVisible: !!window._playerReleaseId || (window._currentEngine === "loc" && !!window._locNowPlaying),
   });
   highlightPlayingTrack();
 }
@@ -1721,12 +1726,17 @@ function _setPlayerEngine(name) {
       ppBtn.title = "Pause";
     }
   }
-  // Sync the disc-icon-visibility class to whatever _playerReleaseId
-  // currently holds. updateVideoNavButtons does this on every YT play,
-  // but LOC plays don't go through that path — without this line a
-  // YT track's release would carry over visually to a subsequent
-  // LOC track that has no Discogs ID.
-  mp.classList.toggle("has-release", !!window._playerReleaseId);
+  // Sync the disc-icon-visibility class. The icon's click handler
+  // now dispatches by engine, so the visibility rule is "do we have
+  // SOMETHING to open for the current track?":
+  //   YT  → _playerReleaseId is set
+  //   LOC → an item is loaded (always — _locPlay sets _locNowPlaying
+  //         before _setPlayerEngine, so the LOC info popup is always
+  //         openable while LOC is the active engine)
+  // updateVideoNavButtons re-syncs YT separately on every YT play.
+  const hasOpenable = (name === "loc" && !!window._locNowPlaying)
+                   || (!!window._playerReleaseId);
+  mp.classList.toggle("has-release", hasOpenable);
   // Source icon next to the title
   const icon = document.getElementById("mini-player-source-icon");
   if (icon) icon.textContent = name === "loc" ? "♪" : (name === "yt" ? "▶" : "");
@@ -2479,14 +2489,18 @@ window._mediaSessionUpdate         = _mediaSessionUpdate;
 window._mediaSessionBindActions    = _mediaSessionBindActions;
 window._mediaSessionUpdatePosition = _mediaSessionUpdatePosition;
 
-// Disc-icon click: open the album for the currently-playing track,
-// but ONLY if we already know the release ID. No live searches —
-// the icon's visibility is the contract: if it's there, clicking
-// it opens the right album. If we don't know the release, the icon
-// is hidden by the .has-release class gate (see openVideo +
-// updateVideoNavButtons), and the user waits for the next track
-// to have explicit context before the icon comes back.
+// Disc-icon click: open the source-of-truth page for the currently-
+// playing track. Engine-aware:
+//   YT  → Discogs release/master modal (needs _playerReleaseId)
+//   LOC → Library of Congress info popup (needs _locNowPlaying)
+// The icon's visibility (.has-release class) is the contract: if
+// it's there, clicking it opens the right thing. If we can't be
+// sure what to open, the icon is hidden and waits for the next
+// track. No live searches.
 function openPlayerRelease() {
+  if (window._currentEngine === "loc" && typeof _locOpenFromBar === "function") {
+    try { _locOpenFromBar(); return; } catch {}
+  }
   const rType = window._playerReleaseType;
   const rId   = window._playerReleaseId;
   const rUrl  = window._playerReleaseUrl;
