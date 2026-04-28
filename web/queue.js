@@ -183,6 +183,11 @@ function queueAddYt(videoId, meta, opts) {
       albumTitle: meta?.albumTitle || "",
       image: meta?.image || "",
       durationSec: meta?.durationSec || null,
+      // Release context: kept on the queue entry so queue auto-
+      // advance can hand it to openVideo via _queueDispatchYtMeta
+      // and keep the disc icon pointing at the right album.
+      releaseType: meta?.releaseType || "",
+      releaseId:   meta?.releaseId   || "",
     },
   }], opts);
 }
@@ -207,9 +212,13 @@ async function queueAddAlbum(btn) {
       source: "yt",
       externalId: id,
       data: {
-        title:      el.dataset.track  || "",
-        artist:     el.dataset.artist || "",
-        albumTitle: el.dataset.album  || "",
+        title:       el.dataset.track       || "",
+        artist:      el.dataset.artist      || "",
+        albumTitle:  el.dataset.album       || "",
+        // Release context so the disc icon stays accurate when the
+        // queue auto-advances through these tracks later.
+        releaseType: el.dataset.releaseType || "",
+        releaseId:   el.dataset.releaseId   || "",
       },
     });
   });

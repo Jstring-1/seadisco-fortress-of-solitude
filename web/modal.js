@@ -2090,9 +2090,13 @@ async function playAlbumAndQueue(triggerEl, _firstUrl) {
       source: "yt",
       externalId: id,
       data: {
-        title:      el.dataset.track  || "",
-        artist:     el.dataset.artist || "",
-        albumTitle: el.dataset.album  || "",
+        title:       el.dataset.track       || "",
+        artist:      el.dataset.artist      || "",
+        albumTitle:  el.dataset.album       || "",
+        // Release context so the disc icon stays accurate when the
+        // queue auto-advances through these tracks later.
+        releaseType: el.dataset.releaseType || "",
+        releaseId:   el.dataset.releaseId   || "",
       },
     });
     el.classList.add("queued");
