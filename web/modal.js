@@ -2220,11 +2220,22 @@ function openVideo(event, url) {
   let _rType = "", _rId = "";
   const isQueueDispatch = !!queueMeta;
   const isUserClick     = !!clickedEl?.dataset?.video;
+  // Strict priority — each path only consults sources that genuinely
+  // belong to the track being played:
+  //   queueMeta  ← carried with the queue entry, exact match
+  //   clickedEl  ← scraped from the row the user just clicked
+  //   ?op= URL   ← only safe for URL bootstrap (modal opened at the
+  //                same time as ?vd= was set). For queue dispatches
+  //                or fresh user clicks the user may have opened a
+  //                DIFFERENT album in the modal since, so ?op= would
+  //                point at the wrong record.
   if (queueMeta?.releaseType && queueMeta?.releaseId) {
     _rType = queueMeta.releaseType; _rId = String(queueMeta.releaseId);
   } else if (clickedEl?.dataset?.releaseType && clickedEl?.dataset?.releaseId) {
     _rType = clickedEl.dataset.releaseType; _rId = String(clickedEl.dataset.releaseId);
-  } else {
+  } else if (!isQueueDispatch && !isUserClick) {
+    // Bootstrap path only — no event, no queue meta, just a URL
+    // that has both ?vd= and ?op= set. Trust ?op=.
     const opParam = new URLSearchParams(location.search).get("op");
     if (opParam && opParam.includes(":")) {
       _rType = opParam.slice(0, opParam.indexOf(":"));
@@ -2236,15 +2247,10 @@ function openVideo(event, url) {
     window._playerReleaseId   = _rId;
     window._playerReleaseUrl  = `https://www.discogs.com/${_rType}/${_rId}`;
   } else if (isQueueDispatch || isUserClick) {
-    // Explicit play context (queue auto-advance OR a real click)
-    // but no release info attached to it = we don't know what
-    // album this track is from. Clear so the disc icon doesn't
-    // dangle on a stale album the user opened earlier and link
-    // them to the wrong record. They can re-add the track via the
-    // newer ＋ buttons (which carry release context) to get the
-    // disc icon back. URL-bootstrap plays (no event, no queueMeta)
-    // still leave _playerRelease* untouched so deep-link shares
-    // can keep their context.
+    // Explicit play context but no release info attached. Clear so
+    // the disc icon doesn't dangle on a stale album. Re-adding the
+    // track via the newer ＋ buttons (which carry release context)
+    // restores the icon.
     window._playerReleaseType = null;
     window._playerReleaseId   = null;
     window._playerReleaseUrl  = null;
