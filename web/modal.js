@@ -1375,19 +1375,22 @@ function loadYTVideo(id) {
   const vtoken = _ytVideoToken;
   console.debug("[loadYTVideo]", { id, hasPlayer: !!ytPlayer, apiReady: !!window._ytAPIReady });
   updatePlayerStatus("loading");
-  // Timeout: if still "loading" after 8s, mark unavailable and skip
+  // Stall watchdog: if the video hasn't reached the playing state by
+  // 5s, treat it as unavailable and skip. We check _ytHasPlayed
+  // instead of the status-text string because that flag is set once
+  // and only by the YT state=1 callback — the previous text-based
+  // check could miss intermediate states like "ended" / "error" if
+  // the YT player swallowed them. 5s is the sweet spot: any healthy
+  // video starts within a couple of seconds; anything taking longer
+  // is probably broken (deleted / geo-blocked / embed-disabled / no
+  // network). Was 8s; that felt stalled.
   if (_ytLoadTimer) clearTimeout(_ytLoadTimer);
   _ytLoadTimer = setTimeout(() => {
     if (vtoken !== _ytVideoToken) return;  // a different video was loaded since
-    const statusEl = document.getElementById("mini-player-status");
-    if (statusEl && (statusEl.textContent === "loading…" || statusEl.textContent === "buffering…")) {
-      updatePlayerStatus("unavailable");
-      // Stuck at "loading…" for 8s = the video probably isn't going
-      // to come up (deleted, geo-blocked, embed disabled). Prune from
-      // queue + advance so we don't keep retrying it on every cycle.
-      _ytPruneUnavailable(id, /*advance=*/true);
-    }
-  }, 8000);
+    if (_ytHasPlayed) return;              // it actually started
+    updatePlayerStatus("unavailable");
+    _ytPruneUnavailable(id, /*advance=*/true);
+  }, 5000);
   if (ytPlayer && typeof ytPlayer.loadVideoById === "function") {
     ytPlayer.loadVideoById(id);
     return;
