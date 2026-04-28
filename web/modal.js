@@ -2255,15 +2255,15 @@ function openVideo(event, url) {
     _rType = queueMeta.releaseType; _rId = String(queueMeta.releaseId);
   } else if (clickedEl?.dataset?.releaseType && clickedEl?.dataset?.releaseId) {
     _rType = clickedEl.dataset.releaseType; _rId = String(clickedEl.dataset.releaseId);
-  } else {
-    // Fallback URL params: ?op= is the live "currently-open modal"
-    // param (openModal sets it). ?vp= is the "video parent popup"
-    // breadcrumb that setVideoUrl writes whenever a track plays
-    // from inside a popup, and is what's preserved in shareable
-    // URLs when the modal has since closed. On URL bootstrap with
-    // ?vd=…&vp=…, ?op= often hasn't been written yet by openModal
-    // (it races a 3 s discogs-ids promise) — fall back to ?vp=
-    // so the disc icon resolves to the right album immediately.
+  } else if (!window._sdFirstOpenVideoDone) {
+    // URL fallback ONLY on the very first openVideo of the page —
+    // the bootstrap path where ?vp= / ?op= were set in the same
+    // share-link as ?vd= and genuinely refer to the playing track.
+    // Subsequent calls (queue auto-advance, modal-driven plays
+    // after the user opened other albums) must NOT consult these
+    // URL params — the user may have opened a different album in
+    // the modal since, in which case ?op= / ?vp= now point to
+    // something unrelated to the playing track.
     const params  = new URLSearchParams(location.search);
     const opParam = params.get("op") || params.get("vp");
     if (opParam && opParam.includes(":")) {
@@ -2271,6 +2271,7 @@ function openVideo(event, url) {
       _rId   = opParam.slice(opParam.indexOf(":") + 1);
     }
   }
+  window._sdFirstOpenVideoDone = true;
   if (_rType && _rId) {
     window._playerReleaseType = _rType;
     window._playerReleaseId   = _rId;
