@@ -2221,17 +2221,13 @@ function openVideo(event, url) {
   // only fall back to "leave previous untouched" for the bootstrap
   // case (no event, no queueMeta) where preserving the prior album
   // link is preferable to losing it.
-  // Resolve the album to link the disc icon at, in priority order:
-  //   queueMeta  ← carried with the queue entry, exact match
-  //   clickedEl  ← scraped from the row the user just clicked
-  //   ?op= URL   ← whatever album modal is currently open
-  // If none yields anything, leave the prior _playerRelease* alone —
-  // hiding the icon when we just don't have info is worse than
-  // showing the user's most recent album context. (Trade-off: when
-  // the user opens a different album modal mid-playback, the icon
-  // may briefly link to that until a track with explicit context
-  // plays. Closing the popup and the icon goes back to whatever was
-  // last set explicitly.)
+  // Each openVideo is a fresh track — wipe the cached release ID so
+  // the disc icon's click handler does a fresh search if we can't
+  // populate it from explicit context. If we DO have context
+  // (queueMeta / track-link / ?op= URL), set it and skip the search.
+  window._playerReleaseType = null;
+  window._playerReleaseId   = null;
+  window._playerReleaseUrl  = null;
   let _rType = "", _rId = "";
   if (queueMeta?.releaseType && queueMeta?.releaseId) {
     _rType = queueMeta.releaseType; _rId = String(queueMeta.releaseId);
@@ -2249,8 +2245,6 @@ function openVideo(event, url) {
     window._playerReleaseId   = _rId;
     window._playerReleaseUrl  = `https://www.discogs.com/${_rType}/${_rId}`;
   }
-  // Else: leave _playerRelease* untouched. Disc icon stays pointed at
-  // the last known album rather than disappearing.
   setVideoUrl(id);
   const mp = document.getElementById("mini-player");
   mp.classList.add("open");
@@ -2479,14 +2473,83 @@ window._mediaSessionUpdate         = _mediaSessionUpdate;
 window._mediaSessionBindActions    = _mediaSessionBindActions;
 window._mediaSessionUpdatePosition = _mediaSessionUpdatePosition;
 
-function openPlayerRelease() {
-  const rType = window._playerReleaseType;
-  const rId   = window._playerReleaseId;
-  const rUrl  = window._playerReleaseUrl;
-  if (rType && rId) {
+// Disc-icon click: open the album for the currently-playing track.
+// Strategy:
+//   1. If we already know the release (queue entry's releaseType/Id,
+//      track-click's data-release-*, or URL bootstrap's ?op=) just
+//      open that — no round-trip.
+//   2. Otherwise look at what's playing (YT video title + artist, or
+//      LOC contributors + title) and search Discogs for a master.
+//      Open the first hit.
+//   3. Tell the user if neither path finds a release.
+//
+// Net: the disc icon always reflects the actual playing track, no
+// matter how it ended up in the player. No more drift, no more "why
+// is this opening album X when Y is playing?"
+async function openPlayerRelease(btn) {
+  // Optimistic: if we've got a release ID already, skip the search.
+  if (window._playerReleaseId && window._playerReleaseType) {
+    openModal(null, window._playerReleaseId, window._playerReleaseType, window._playerReleaseUrl || "");
+    return;
+  }
+  // Pull title + artist from whichever engine is active.
+  let title = "", artist = "";
+  if (window._currentEngine === "yt") {
+    // Try the queue meta first (most reliable), then the YT player's
+    // own getVideoData (channel name + video title).
+    const meta = (window._videoQueueMeta ?? [])[window._videoQueueIndex ?? 0] || {};
+    title  = meta.track  || meta.album || "";
+    artist = meta.artist || "";
+    if ((!title || !artist) && typeof ytPlayer?.getVideoData === "function") {
+      try {
+        const vd = ytPlayer.getVideoData() || {};
+        if (!title)  title  = vd.title  || "";
+        if (!artist) artist = vd.author || "";
+      } catch {}
+    }
+  } else if (window._currentEngine === "loc") {
+    const it = window._locNowPlaying || {};
+    title  = it.title || "";
+    artist = Array.isArray(it.contributors) ? it.contributors[0] : (it.contributors || "");
+  }
+  if (!title) {
+    if (typeof showToast === "function") showToast("No track playing", "error");
+    return;
+  }
+  // Loading state on the button so the click feels acknowledged.
+  if (btn) { btn.disabled = true; btn.style.opacity = "0.5"; }
+  try {
+    // master-type search with separate artist/q fields hits the
+    // existing /search endpoint. Take the first hit.
+    const params = new URLSearchParams({ type: "master", q: title });
+    if (artist) params.set("artist", artist);
+    const r = await apiFetch(`/search?${params.toString()}`);
+    if (!r.ok) {
+      if (typeof showToast === "function") showToast("Couldn't search Discogs (HTTP " + r.status + ")", "error");
+      return;
+    }
+    const data = await r.json();
+    const first = (data?.results || [])[0];
+    if (!first) {
+      if (typeof showToast === "function") showToast("No matching release found on Discogs", "error");
+      return;
+    }
+    const rType = first.type === "master" ? "master" : "release";
+    const rId   = first.id;
+    const rUrl  = `https://www.discogs.com/${rType}/${rId}`;
+    // Cache so subsequent clicks (same track) skip the search.
+    window._playerReleaseType = rType;
+    window._playerReleaseId   = rId;
+    window._playerReleaseUrl  = rUrl;
     openModal(null, rId, rType, rUrl);
+  } catch (e) {
+    console.warn("[openPlayerRelease] search failed:", e);
+    if (typeof showToast === "function") showToast("Couldn't look up this track's album", "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.style.opacity = ""; }
   }
 }
+window.openPlayerRelease = openPlayerRelease;
 
 function sharePlayerUrl() {
   const u = new URL(window.location.origin);
