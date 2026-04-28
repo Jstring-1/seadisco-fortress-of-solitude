@@ -1420,8 +1420,15 @@ function loadYTVideo(id) {
 }
 
 function updatePlayerStatus(state, errorCode) {
-  // Clear load timeout once we get a definitive state
-  if (state !== "loading" && state !== "buffering" && _ytLoadTimer) { clearTimeout(_ytLoadTimer); _ytLoadTimer = null; }
+  // Don't clear _ytLoadTimer here. It used to be cleared on any
+  // non-loading/non-buffering state to "shortcut" the watchdog, but
+  // that disarmed the safety net for failure modes where the player
+  // briefly hits "paused" / "ended" without ever reaching "playing"
+  // (autoplay-blocked, region-locked-without-error, embed-disabled
+  // silent failures). The watchdog body already gates on
+  // _ytHasPlayed so it's a no-op when the video genuinely played;
+  // letting it always run to 5 s ensures stuck loads still get
+  // pruned. closeVideo() still clears it on real teardown.
   const el = document.getElementById("mini-player-status");
   if (!el) return;
   const map = {
@@ -1552,6 +1559,18 @@ function _createYTPlayer(id) {
         else if (e.data === 0) {
           // Guard against late "ended" events from a previous video on a reused player
           if (vtoken !== _ytVideoToken) return;
+          // "Ended" before "playing" ever fired = silent failure (the
+          // video never actually started — usually region-blocked or
+          // embed-disabled in a way that doesn't trigger onError).
+          // Treat the same as an unavailable error: prune the dead
+          // track from the queue + advance, so we don't leave it
+          // sitting in the queue to retry forever.
+          if (!_ytHasPlayed) {
+            updatePlayerStatus("unavailable");
+            _ytPruneUnavailable(id, /*advance=*/true);
+            if (typeof _stopYtProgressLoop === "function") _stopYtProgressLoop();
+            return;
+          }
           // Don't double-fire if the tail-watch in _updateMiniProgress
           // already fired ended for this token.
           if (_ytEndFiredToken === _ytVideoToken) {
