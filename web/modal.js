@@ -1359,9 +1359,20 @@ document.addEventListener("DOMContentLoaded", () => { try { ensureYTAPI(); } cat
 function setVideoUrl(id) {
   const u = new URL(window.location.href);
   u.searchParams.set("vd", id);
-  // Store the video's source release so page reload can reopen the right popup
-  const op = u.searchParams.get("op");
-  if (op) u.searchParams.set("vp", op);
+  // Sync ?vp= ("video parent popup") to the playing track's release.
+  // Set just before this call by openVideo (window._playerReleaseType/Id),
+  // so as the queue advances ?vp= points to the *current* track's
+  // album — not whatever popup happened to be open. Sharing the URL
+  // mid-queue gives the recipient the same track + album combo the
+  // sender is hearing. If the new track has no known release, drop
+  // ?vp= so a stale prior value doesn't linger.
+  const rType = window._playerReleaseType;
+  const rId   = window._playerReleaseId;
+  if (rType && rId) {
+    u.searchParams.set("vp", `${rType}:${rId}`);
+  } else {
+    u.searchParams.delete("vp");
+  }
   history.replaceState({}, "", u.toString());
 }
 
