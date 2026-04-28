@@ -1737,6 +1737,12 @@ function _setPlayerEngine(name) {
   const hasOpenable = (name === "loc" && !!window._locNowPlaying)
                    || (!!window._playerReleaseId);
   mp.classList.toggle("has-release", hasOpenable);
+  console.debug("[setPlayerEngine]", {
+    engine: name,
+    locNowPlaying: !!window._locNowPlaying,
+    playerReleaseId: window._playerReleaseId,
+    discIconVisible: hasOpenable,
+  });
   // Source icon next to the title
   const icon = document.getElementById("mini-player-source-icon");
   if (icon) icon.textContent = name === "loc" ? "♪" : (name === "yt" ? "▶" : "");
