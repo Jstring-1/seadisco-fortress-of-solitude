@@ -635,7 +635,14 @@ async function _renderQueueDrawer() {
     listEl.innerHTML = `<div class="queue-empty">Loading…</div>`;
   }
   const prevScroll = listEl.scrollTop;
-  await _queueLoad(true);
+  // Use the cached _queue when available — queueRemove / queueAdd /
+  // optimistic-insert paths set the local snapshot to the truth they
+  // want the user to see, then fire the server call in the background.
+  // A force-reload here would race the DELETE/POST and re-show the row
+  // the user just removed (or hide one they just added). _queueLoad(false)
+  // returns the cache when populated, fetches only when null (cold drawer
+  // open clears _queue first via queueToggleDrawer).
+  await _queueLoad(false);
   if (!_queue?.length) {
     if (countEl) countEl.textContent = "";
     listEl.innerHTML = `<div class="queue-empty">Queue empty. Click ➕ on tracks, LOC items, or archive items to add them.</div>`;
