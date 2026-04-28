@@ -2508,19 +2508,31 @@ window._mediaSessionUpdatePosition = _mediaSessionUpdatePosition;
 // playing track. Engine-aware:
 //   YT  → Discogs release/master modal (needs _playerReleaseId)
 //   LOC → Library of Congress info popup (needs _locNowPlaying)
-// The icon's visibility (.has-release class) is the contract: if
-// it's there, clicking it opens the right thing. If we can't be
-// sure what to open, the icon is hidden and waits for the next
-// track. No live searches.
+// The icon is ALWAYS visible while an engine is active — but dimmed
+// (opacity 0.35) when we don't have the info to open anything. A
+// click on the dimmed icon shows a brief toast explaining why.
 function openPlayerRelease() {
-  if (window._currentEngine === "loc" && typeof _locOpenFromBar === "function") {
-    try { _locOpenFromBar(); return; } catch {}
+  if (window._currentEngine === "loc") {
+    if (typeof _locOpenFromBar === "function") {
+      try { _locOpenFromBar(); return; } catch {}
+    }
+    if (typeof showToast === "function") {
+      showToast("No info available for this track", "info", 2500);
+    }
+    return;
   }
   const rType = window._playerReleaseType;
   const rId   = window._playerReleaseId;
   const rUrl  = window._playerReleaseUrl;
   if (rType && rId) {
     openModal(null, rId, rType, rUrl);
+    return;
+  }
+  // YT track without a known Discogs release. Tell the user instead
+  // of silently doing nothing — the dim icon already telegraphs the
+  // "no link" state visually.
+  if (typeof showToast === "function") {
+    showToast("Album info not available for this track", "info", 2500);
   }
 }
 window.openPlayerRelease = openPlayerRelease;
