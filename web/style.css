@@ -6457,18 +6457,13 @@ body.player-open .queue-drawer.open { bottom: 102px; }
 .mini-player.idle-queue #mini-loc-info,
 .mini-player.idle-queue #mini-share,
 .mini-player.idle-queue #mini-album { display: none; }
-/* Disc + share buttons show whenever an engine is active (the user
-   has something playing). The disc icon's click handler does a
-   live Discogs search for the playing track if no release is cached
-   yet, so the icon being visible no longer requires us to know the
-   release upfront. The .has-release class is still applied (modal.js
-   sets it when _playerReleaseId is known) to skip the search step,
-   but visibility is gated only on engine-active state.
-   .idle-queue (no engine) still hides the buttons. */
+/* Disc + share buttons need a known release ID to do anything
+   meaningful — clicking opens the modal for that release, no
+   searches. modal.js's updateVideoNavButtons toggles .has-release
+   on the mini-player whenever _playerReleaseId is set; without it,
+   hide. !important defeats any leftover inline display: cascade. */
 .mini-player .mini-needs-release { display: none !important; }
-.mini-player.engine-yt .mini-needs-release,
-.mini-player.engine-loc .mini-needs-release { display: inline-block !important; }
-.mini-player.idle-queue .mini-needs-release { display: none !important; }
+.mini-player.has-release .mini-needs-release { display: inline-block !important; }
 
 /* Offline / connection banner — fixed-top strip surfaced by
    web/offline.js when the user has opted in to offline mode and the
