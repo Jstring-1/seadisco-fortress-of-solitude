@@ -546,7 +546,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260428.1242";
+  const SITE_VERSION = "build 20260428.1303";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -715,12 +715,46 @@ function renderSharedFooter(opts) {
       </div>
     </div>
     <div style="color:#555;font-style:italic;margin-bottom:0.3rem">DISCLAIMER: AI be funky sometimes</div>
-    <div>Jimmy Witherfork Strikes Again</div>
+    <div><a href="#" onclick="_seaDiscoOpenJimmy(event);return false;" style="color:inherit;text-decoration:none;cursor:pointer" title="Jimmy Witherfork">Jimmy Witherfork Strikes Again</a></div>
     <div style="margin-top:0.3rem">&copy; 2026 SeaDisco</div>`;
 
   // Wire the live href-sync system so footer link hrefs always reflect
   // the current location.search. Idempotent — only patches history once.
   _seaDiscoInstallFooterHrefSync();
+
+  // Easter-egg popup for the footer's "Jimmy Witherfork Strikes Again"
+  // line — opens a small overlay with a single link to SlantFinder.pro.
+  if (typeof window._seaDiscoOpenJimmy !== "function") {
+    window._seaDiscoOpenJimmy = function (ev) {
+      if (ev) { ev.preventDefault?.(); ev.stopPropagation?.(); }
+      // Toggle: clicking again closes the popup.
+      const existing = document.getElementById("sd-jimmy-popup");
+      if (existing) { existing.remove(); return; }
+      const el = document.createElement("div");
+      el.id = "sd-jimmy-popup";
+      el.innerHTML = `
+        <a href="https://slantfinder.pro" target="_blank" rel="noopener" id="sd-jimmy-link">SlantFinder.pro ↗</a>
+      `;
+      document.body.appendChild(el);
+      // Position near the click; clamp to viewport.
+      const popupW = 200, popupH = 44;
+      const x = (ev?.clientX ?? window.innerWidth / 2) - popupW / 2;
+      const y = (ev?.clientY ?? window.innerHeight - 60) - popupH - 8;
+      el.style.left = `${Math.min(window.innerWidth  - popupW - 8, Math.max(8, x))}px`;
+      el.style.top  = `${Math.min(window.innerHeight - popupH - 8, Math.max(8, y))}px`;
+      // Dismiss on outside click (deferred so the originating click
+      // doesn't immediately close the popup we just opened).
+      setTimeout(() => {
+        const handler = (e) => {
+          if (!document.getElementById("sd-jimmy-popup")) return;
+          if (e.target.closest("#sd-jimmy-popup")) return;
+          el.remove();
+          document.removeEventListener("mousedown", handler, true);
+        };
+        document.addEventListener("mousedown", handler, true);
+      }, 0);
+    };
+  }
   _updateFooterHrefs();
 
   // Reveal admin-only footer links (Admin + LOC) when /api/me confirms the
