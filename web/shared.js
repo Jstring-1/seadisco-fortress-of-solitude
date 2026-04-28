@@ -546,7 +546,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260428.1047";
+  const SITE_VERSION = "build 20260428.1242";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -714,7 +714,9 @@ function renderSharedFooter(opts) {
         <a id="footer-admin-link" href="/admin" title="Admin dashboard" style="display:none">Admin</a>
       </div>
     </div>
-    <div style="margin-top:0.3rem">A personal project &middot; &copy; 2026 SeaDisco</div>`;
+    <div style="color:#555;font-style:italic;margin-bottom:0.3rem">DISCLAIMER: AI be funky sometimes</div>
+    <div>Jimmy Witherfork Strikes Again</div>
+    <div style="margin-top:0.3rem">&copy; 2026 SeaDisco</div>`;
 
   // Wire the live href-sync system so footer link hrefs always reflect
   // the current location.search. Idempotent — only patches history once.
