@@ -466,6 +466,34 @@ function _queueOnExternalPlay(itemPayload) {
     const existing = _queue.find(it => String(it.externalId) === String(itemPayload.externalId));
     if (existing) {
       const oldPosition = existing.position;
+      // Inherit any richer metadata from the existing queue entry
+      // before we drop it. URL bootstraps (?vd=) call openVideo with
+      // empty data because there's no clicked track row to scrape;
+      // the existing queue entry might have full release context
+      // (releaseType / releaseId etc.) saved from when it was added.
+      // Without this merge, the optimistic-insert below would
+      // overwrite that with empty strings and the disc icon would
+      // hide for the rest of the session.
+      const existingData = existing.data || {};
+      const newData = itemPayload.data || {};
+      itemPayload.data = {
+        ...existingData,
+        ...Object.fromEntries(
+          Object.entries(newData).filter(([_, v]) => v !== "" && v != null)
+        ),
+      };
+      // Push the merged data into the queue-dispatch meta slot so
+      // openVideo's existing queueMeta path picks up the release
+      // context for THIS play (without it, openVideo's release
+      // resolver runs before the optimistic insert lands and finds
+      // nothing).
+      window._queueDispatchYtMeta = {
+        track:       itemPayload.data.title       || "",
+        album:       itemPayload.data.albumTitle  || "",
+        artist:      itemPayload.data.artist      || "",
+        releaseType: itemPayload.data.releaseType || "",
+        releaseId:   itemPayload.data.releaseId   || "",
+      };
       // Remove from local cache; the upcoming optimistic-insert path
       // will prepend a fresh copy at the head.
       _queue = _queue.filter(it => it.position !== oldPosition);
