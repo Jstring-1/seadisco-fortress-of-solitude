@@ -423,32 +423,11 @@ app.get("/account", (req, res) => {
 // even parses, saving ~300–500ms on cold page loads.
 const _htmlCache = new Map<string, string>();
 
-// Site-wide theme — admin sets it on /admin → Theme tab. Loaded from
-// the app_settings table at startup and refreshed whenever admin
-// changes it via POST /api/admin/site-theme. Injected directly into
-// every page's HTML so there's no flash of unstyled theme.
-let _siteTheme: string = "";
-async function _refreshSiteTheme(): Promise<void> {
-  try {
-    const v = await getAppSetting("site_theme");
-    _siteTheme = (typeof v === "string" && /^[a-z0-9-]{1,40}$/.test(v)) ? v : "";
-    console.log(`[startup] site theme loaded: "${_siteTheme || "(unset)"}"`);
-  } catch (e: any) {
-    console.error("[startup] site theme load failed:", e?.message ?? e);
-  }
-  _htmlCache.clear(); // force re-template with new theme
-}
-// Wait for the schema migration before reading — querying
-// app_settings before initDb finishes would silently return null
-// and lock the cached HTML to no-theme until the next save.
-if (process.env.APP_DB_URL) {
-  _dbReady.then(() => _refreshSiteTheme()).catch(() => {});
-  // Periodic refresh so cross-instance saves propagate (Railway can
-  // run >1 worker; an admin POST on instance A won't notify B
-  // directly). 60s is a good balance — fast enough for noticeable
-  // theme switches, slow enough not to thrash the DB.
-  setInterval(() => { _refreshSiteTheme().catch(() => {}); }, 60_000);
-}
+// Site-wide theme is locked to noir-white. The admin theme picker
+// was removed; we no longer query app_settings for "site_theme"
+// or accept POST /api/admin/site-theme writes. The constant is
+// injected into every page's HTML at the SD_THEME_INJECT placeholder.
+const _siteTheme: string = "noir-white";
 
 function _buildClerkInject(): string {
   if (!authPk) return "";
@@ -3935,26 +3914,12 @@ app.get("/api/site-theme", async (_req, res) => {
   res.json({ theme: _siteTheme });
 });
 
-// POST /api/admin/site-theme — admin sets the global theme. Body:
-// { theme: "amber-dark" } (validated against a slug pattern). Updates
-// the DB row, the in-memory cache, and invalidates the HTML template
-// cache so the next page load re-templates with the new theme.
+// POST /api/admin/site-theme — kept as a stub returning the locked
+// theme so any leftover client code (cached admin.html, scripts) gets
+// a non-error response. The site theme is now fixed to "noir-white".
 app.post("/api/admin/site-theme", express.json({ limit: "1kb" }), async (req, res) => {
   if (!await requireAdmin(req, res)) return;
-  const theme = String(req.body?.theme ?? "").trim();
-  if (!/^[a-z0-9-]{1,40}$/.test(theme)) {
-    res.status(400).json({ error: "invalid theme id" });
-    return;
-  }
-  try {
-    await setAppSetting("site_theme", theme);
-    await _refreshSiteTheme();
-    console.log(`[admin] site theme set to "${theme}" (effective: "${_siteTheme}")`);
-    res.json({ ok: true, theme: _siteTheme });
-  } catch (e: any) {
-    console.error("[admin] site theme save failed:", e?.message ?? e);
-    res.status(500).json({ error: String(e?.message ?? e) });
-  }
+  res.json({ ok: true, theme: _siteTheme, locked: true });
 });
 
 // GET /api/admin/feedback — inbox, only for admin user

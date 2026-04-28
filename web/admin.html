@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260427.1955" />
+  <link rel="stylesheet" href="/style.css?v=20260427.2054" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260427.1955"></script>
-<script defer src="/shared.js?v=20260427.1955"></script>
+<script defer src="/utils.js?v=20260427.2054"></script>
+<script defer src="/shared.js?v=20260427.2054"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true, iconNav: true }));</script>
 
 <main>
@@ -65,7 +65,7 @@
         <button class="admin-tab" onclick="switchAdminTab('db-stats')">Database</button>
         <button class="admin-tab" onclick="switchAdminTab('loc-stats')">LOC</button>
         <button class="admin-tab" onclick="switchAdminTab('blues-db')">Blues DB</button>
-        <button class="admin-tab" onclick="switchAdminTab('theme')">Theme</button>
+        <button class="admin-tab" onclick="switchAdminTab('theme')">View</button>
       </div>
 
       <!-- Collection Stats -->
@@ -207,15 +207,16 @@
         </div>
       </div>
 
-      <!-- Theme picker -->
+      <!-- View-as-user (theme picker removed — site theme is locked to
+           Noir White site-wide). The view-as-user toggle remains here so
+           the admin can preview the site without admin affordances. -->
       <div class="admin-tab-panel" id="panel-theme" style="display:none">
-        <h2 style="margin:0 0 0.5rem">Theme</h2>
-        <p style="font-size:0.82rem;color:var(--muted);margin:0 0 0.5rem">
-          Theme is saved server-side and applies to every visitor (logged-in or anonymous, any browser). Local <code>sd-theme</code> in localStorage is just a fallback.
+        <h2 style="margin:0 0 0.5rem">View</h2>
+        <p style="font-size:0.82rem;color:var(--muted);margin:0 0 1rem">
+          Site theme is locked to <strong>Noir White</strong> (black · white · mono).
         </p>
-        <div id="site-theme-status" style="font-size:0.78rem;color:var(--muted);margin:0 0 1rem;font-family:ui-monospace,monospace"></div>
         <!-- View-as-user toggle: hides every admin-only affordance on
-             the main site (W icons, 🏛 LOC track icons, blues + adders,
+             the main site (W icons, LOC track icons, blues + adders,
              admin-only nav surfaces) so the admin can preview the site
              as a regular user sees it. The footer Admin link stays
              visible and a small fixed chip in the corner of the main
@@ -227,44 +228,6 @@
           </label>
           <span style="font-size:0.72rem;color:var(--muted)">Hides admin-only icons + tabs everywhere except <code>/admin</code>.</span>
         </div>
-        <div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:1rem">
-          <label for="theme-select" style="font-size:0.82rem;color:var(--text);font-weight:600">Active theme:</label>
-          <select id="theme-select" onchange="applyThemeChoice(this.value)" style="min-width:240px">
-            <optgroup label="Standard">
-              <option value="amber-dark">Amber Dark (SeaDisco — default)</option>
-              <option value="dark-default">Dark (neutral · blue link)</option>
-              <option value="light-default">Light (white · blue link)</option>
-            </optgroup>
-            <optgroup label="Designer Classics">
-              <option value="solarized-dark">Solarized Dark (teal-base · blue · yellow)</option>
-              <option value="solarized-light">Solarized Light (cream · blue · yellow)</option>
-              <option value="monokai">Monokai (warm dark · magenta · green)</option>
-            </optgroup>
-            <optgroup label="Themed">
-              <option value="slate-dark">Slate (cool steel · teal)</option>
-              <option value="mossy-dark">Mossy (deep forest · warm gold)</option>
-              <option value="vinyl-black">Vinyl Black (jukebox red · gold)</option>
-              <option value="neon-wax">Neon Wax (violet · cyan · magenta)</option>
-              <option value="tape-cream">Tape Cream (sepia paper · rust)</option>
-              <option value="paperback">Paperback (sage · dusty rose · cream)</option>
-            </optgroup>
-            <optgroup label="Neutral · accent · font">
-              <option value="paper-ink">Paper Ink (white · grey · sans)</option>
-              <option value="paper-blue">Paper Blue (white · deep blue · serif)</option>
-              <option value="paper-rose">Paper Rose (cream · rose · serif)</option>
-              <option value="paper-forest">Paper Forest (soft white · forest · slab)</option>
-              <option value="stone-violet">Stone Violet (warm grey · violet · humanist)</option>
-              <option value="stone-sun">Stone Sun (grey · gold · geometric)</option>
-              <option value="noir-white">Noir White (black · white · mono)</option>
-              <option value="graphite-amber">Graphite Amber (charcoal · amber · sans)</option>
-              <option value="graphite-cyan">Graphite Cyan (charcoal · cyan · mono)</option>
-              <option value="graphite-coral">Graphite Coral (charcoal · coral · serif)</option>
-              <option value="slate-violet">Slate Violet (slate · violet · geometric)</option>
-              <option value="slate-emerald">Slate Emerald (slate · emerald · slab)</option>
-            </optgroup>
-          </select>
-        </div>
-        <div id="theme-preview" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:0.8rem"></div>
       </div>
 
     </div>
@@ -314,7 +277,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260427.1955"></script>
+<script defer src="/modal.js?v=20260427.2054"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -332,48 +295,10 @@ const _adminTabLoaders = {
   'theme': () => initThemePicker(),
 };
 
-// ── Theme picker ──────────────────────────────────────────────────────
-// Order matches the dropdown: Standard → Designer Classics → Themed.
-// Each entry's `swatches` are [bg, surface, accent, text, accent-hi] —
-// rendered as the 5 dots in the preview card and used to draw the
-// "Sample header / Body text · ★ highlight" preview.
-const _themes = [
-  // Standard
-  { id: "amber-dark",       label: "Amber Dark (SeaDisco)", swatches: ["#080706", "#15120e", "#ff6b35", "#e8dcc8", "#e8d44d"] },
-  { id: "dark-default",     label: "Dark",                  swatches: ["#0d1117", "#161b22", "#58a6ff", "#c9d1d9", "#7ee787"] },
-  { id: "light-default",    label: "Light",                 swatches: ["#ffffff", "#f6f8fa", "#0969da", "#1f2328", "#1a7f37"] },
-  // Designer Classics
-  { id: "solarized-dark",   label: "Solarized Dark",        swatches: ["#002b36", "#073642", "#268bd2", "#93a1a1", "#b58900"] },
-  { id: "solarized-light",  label: "Solarized Light",       swatches: ["#fdf6e3", "#eee8d5", "#268bd2", "#586e75", "#b58900"] },
-  { id: "monokai",          label: "Monokai",               swatches: ["#272822", "#2d2e27", "#f92672", "#f8f8f2", "#a6e22e"] },
-  // Themed
-  { id: "slate-dark",       label: "Slate Dark",            swatches: ["#0f1418", "#161c24", "#2fa8a0", "#c8d0dc", "#d4b84a"] },
-  { id: "mossy-dark",       label: "Mossy Dark",            swatches: ["#0d140e", "#121c13", "#6b9248", "#c8d4b8", "#d4a843"] },
-  { id: "vinyl-black",      label: "Vinyl Black",           swatches: ["#0a0a0a", "#141414", "#d63333", "#e0e0e0", "#f0c95c"] },
-  { id: "neon-wax",         label: "Neon Wax",              swatches: ["#0d0a18", "#18142a", "#c060f0", "#d8d4ff", "#00e5ff"] },
-  { id: "tape-cream",       label: "Tape Cream",            swatches: ["#f4ecd8", "#faf5e4", "#8b3a1f", "#3a2a16", "#a87832"] },
-  { id: "paperback",        label: "Paperback",             swatches: ["#f0ebe1", "#f8f4ea", "#6b8068", "#423832", "#c1716e"] },
-  // Neutral · accent · font — restrained bg/text, color comes from
-  // accent + a different typeface per theme. The `font` field is the
-  // CSS font stack so the preview card renders in the same typeface
-  // the theme would apply site-wide.
-  { id: "paper-ink",        label: "Paper Ink",             swatches: ["#ffffff", "#fafafa", "#1a1a1a", "#1a1a1a", "#6a6a6a"], font: "system-ui, -apple-system, 'Segoe UI', sans-serif" },
-  { id: "paper-blue",       label: "Paper Blue",            swatches: ["#ffffff", "#fafbfd", "#0050a0", "#1a1a1a", "#b8000a"], font: "Georgia, 'Iowan Old Style', 'Times New Roman', serif" },
-  { id: "paper-rose",       label: "Paper Rose",            swatches: ["#faf8f4", "#fdfcf8", "#b04d6a", "#2a2418", "#5a7d4a"], font: "'Iowan Old Style', 'Charter', 'Palatino Linotype', Georgia, serif" },
-  { id: "paper-forest",     label: "Paper Forest",          swatches: ["#f7faf6", "#fafdfa", "#2d5a3d", "#1a2418", "#8a6a18"], font: "'Rockwell', 'Roboto Slab', 'Slabo 27px', 'Calisto MT', Georgia, serif" },
-  { id: "stone-violet",     label: "Stone Violet",          swatches: ["#ececea", "#f2f2f0", "#5a3aa0", "#1a1a1a", "#b87020"], font: "'Verdana', 'Geneva', 'Tahoma', sans-serif" },
-  { id: "stone-sun",        label: "Stone Sun",             swatches: ["#efefee", "#f5f5f4", "#b89020", "#1a1a1a", "#2a6080"], font: "'Avenir Next', 'Avenir', 'Futura', 'Trebuchet MS', sans-serif" },
-  { id: "noir-white",       label: "Noir White",            swatches: ["#000000", "#0a0a0a", "#ffffff", "#f0f0f0", "#5fe8e0"], font: "'Optima', 'Optima Nova', 'Avenir Next', 'Avenir', 'Futura', 'Trebuchet MS', 'Geneva', 'Helvetica Neue', system-ui, sans-serif" },
-  { id: "graphite-amber",   label: "Graphite Amber",        swatches: ["#1a1a1a", "#1f1f1f", "#ffb84a", "#e0e0e0", "#88c5e0"], font: "system-ui, -apple-system, 'Segoe UI', sans-serif" },
-  { id: "graphite-cyan",    label: "Graphite Cyan",         swatches: ["#1a1a1a", "#1f1f1f", "#00d4d0", "#e0e0e0", "#ff8a4a"], font: "'SF Mono', 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Menlo, Consolas, 'Courier New', monospace" },
-  { id: "graphite-coral",   label: "Graphite Coral",        swatches: ["#1a1a1a", "#1f1f1f", "#ff7878", "#e0e0e0", "#d4b84a"], font: "Georgia, 'Iowan Old Style', 'Times New Roman', serif" },
-  { id: "slate-violet",     label: "Slate Violet",          swatches: ["#1c1d22", "#22232a", "#b070ff", "#d8d8e0", "#50d0a0"], font: "'Avenir Next', 'Avenir', 'Futura', 'Trebuchet MS', sans-serif" },
-  { id: "slate-emerald",    label: "Slate Emerald",         swatches: ["#1c1d22", "#22232a", "#50d68a", "#d8d8e0", "#ff8a50"], font: "'Rockwell', 'Roboto Slab', 'Slabo 27px', 'Calisto MT', Georgia, serif" },
-];
-
-// View-as-user toggle. Stored in localStorage so the override survives
-// page loads. Reload after flipping so every cached admin-flag read in
-// memory (fetched via _ensureAdminFlag, etc.) picks up the new state.
+// ── View-as-user toggle ───────────────────────────────────────────────
+// Theme picker removed; site theme is locked to Noir White (server-side
+// in src/search-api.ts). The View tab in admin keeps just this
+// admin-only toggle.
 function toggleAdminAsUser(checkbox) {
   try {
     if (checkbox.checked) localStorage.setItem("sd-admin-as-user", "1");
@@ -384,107 +309,12 @@ function toggleAdminAsUser(checkbox) {
   location.reload();
 }
 
-// Fetch the server's current site-wide theme and surface it in the
-// status line so admin can see exactly what's persisted (separate
-// from whatever localStorage thinks).
-async function _refreshSiteThemeStatus() {
-  const statusEl = document.getElementById("site-theme-status");
-  if (!statusEl) return;
-  try {
-    const r = await fetch("/api/site-theme", { cache: "no-store" });
-    if (!r.ok) {
-      statusEl.textContent = `Site-wide theme endpoint returned ${r.status}`;
-      return;
-    }
-    const j = await r.json();
-    const live = j?.theme || "(unset — using default)";
-    statusEl.textContent = `Sitewide: ${live}`;
-  } catch (e) {
-    statusEl.textContent = `Site-wide theme endpoint failed: ${e}`;
-  }
-}
-
+// Site theme is locked to noir-white. The View tab now only carries
+// the View-as-user toggle; this function survives just to restore
+// that checkbox's state when the View panel mounts.
 function initThemePicker() {
-  // Migrate stale theme IDs (renamed/removed in earlier reorgs) to the
-  // brand default so users with localStorage from before this update
-  // don't get stuck on a phantom theme that no longer has CSS rules.
-  // Prefer the actually-applied theme (documentElement[data-theme],
-  // which the bootstrap script sets from the server-injected site
-  // theme) so the picker highlights the right card even on a fresh
-  // browser where localStorage hasn't been set yet.
-  let current = document.documentElement.getAttribute("data-theme")
-             || localStorage.getItem("sd-theme")
-             || "amber-dark";
-  if (!_themes.find(t => t.id === current)) {
-    current = "amber-dark";
-    try { localStorage.setItem("sd-theme", current); } catch {}
-    document.documentElement.setAttribute("data-theme", current);
-  }
-  // Restore the view-as-user checkbox state from localStorage.
   const asUserCb = document.getElementById("admin-as-user-toggle");
   if (asUserCb) asUserCb.checked = localStorage.getItem("sd-admin-as-user") === "1";
-  const select = document.getElementById("theme-select");
-  if (select) select.value = current;
-  const grid = document.getElementById("theme-preview");
-  if (!grid) return;
-  grid.innerHTML = _themes.map(t => {
-    const isActive = t.id === current;
-    const [bg, surface, accent, text, hi] = t.swatches;
-    // Apply the theme's font to the preview card so users can see the
-    // typeface change before committing. Themes without a `font` field
-    // fall back to the inherited admin-page font.
-    const fontStyle = t.font ? `font-family:${t.font.replace(/"/g, "&quot;")};` : "";
-    return `
-      <div class="theme-preview-card${isActive ? " is-active" : ""}" onclick="applyThemeChoice('${t.id}')" style="cursor:pointer;border:2px solid ${isActive ? accent : "var(--border)"};border-radius:8px;padding:0.8rem;background:${bg};transition:border-color 0.15s;${fontStyle}">
-        <div style="color:${text};font-weight:700;font-size:0.92rem;margin-bottom:0.35rem">${t.label}${isActive ? " ✓" : ""}</div>
-        <div style="background:${surface};border:1px solid ${accent};border-radius:4px;padding:0.55rem;color:${text};font-size:0.78rem">
-          <div style="color:${accent};font-weight:600;font-size:0.82rem;margin-bottom:0.2rem">Sample header</div>
-          <div>Body text · <span style="color:${hi}">★ highlight</span></div>
-        </div>
-        <div style="display:flex;gap:0.25rem;margin-top:0.5rem">
-          ${t.swatches.map(c => `<span style="width:1.3rem;height:1.3rem;border-radius:50%;background:${c};border:1px solid rgba(0,0,0,0.3)"></span>`).join("")}
-        </div>
-      </div>
-    `;
-  }).join("");
-  // Show what the server thinks the live sitewide theme is.
-  _refreshSiteThemeStatus();
-}
-
-async function applyThemeChoice(themeId) {
-  if (!themeId || !_themes.find(t => t.id === themeId)) return;
-  try { localStorage.setItem("sd-theme", themeId); } catch {}
-  document.documentElement.setAttribute("data-theme", themeId);
-  // Persist sitewide so every visitor (including logged-out users
-  // and other browsers) sees this theme on their next page load.
-  // Awaited so admin sees a clear status — silent failures here were
-  // making "why isn't the theme propagating?" untraceable.
-  const statusEl = document.getElementById("site-theme-status");
-  if (statusEl) statusEl.textContent = "Saving site-wide…";
-  try {
-    const r = await apiFetch("/api/admin/site-theme", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ theme: themeId }),
-    });
-    if (!r.ok) {
-      const err = await r.text().catch(() => String(r.status));
-      console.warn("[admin] site theme save failed:", r.status, err);
-      if (statusEl) statusEl.textContent = `❌ Site-wide save failed (HTTP ${r.status}). Local only.`;
-      if (typeof showToast === "function") showToast(`Site-wide save failed (${r.status})`, "error");
-      return;
-    }
-    const j = await r.json().catch(() => ({}));
-    console.log("[admin] site theme saved:", j);
-    if (statusEl) statusEl.textContent = `✓ Sitewide: ${j.theme || themeId}`;
-    if (typeof showToast === "function") showToast("Theme applied site-wide");
-  } catch (e) {
-    console.warn("[admin] site theme save threw:", e);
-    if (statusEl) statusEl.textContent = `❌ Site-wide save errored: ${e}. Local only.`;
-    if (typeof showToast === "function") showToast(`Site-wide save errored: ${e}`, "error");
-  }
-  // Re-render the preview grid so the active highlight moves
-  initThemePicker();
 }
 const _adminTabLoaded = {};
 
