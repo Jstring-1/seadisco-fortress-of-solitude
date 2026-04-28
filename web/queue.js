@@ -788,18 +788,42 @@ async function queueRemove(position, externalId) {
   // Was any of the swept rows the currently-playing one?
   const wasPlaying = positionsToDrop.includes(_queueCurrentPosition)
     || (externalId != null && _queuePlayingExternalId && String(externalId) === String(_queuePlayingExternalId));
-  // Capture next-to-play BEFORE the local mutation so auto-advance
-  // can find it.
+  // Capture next-to-play BEFORE the local mutation. Walk FORWARD from
+  // the playing row's index — _queue.find() returned the first
+  // non-removed row in queue order, which is queue[0] = the queue's
+  // beginning, not the row immediately after the one we're killing.
+  // That made removing a mid-queue playing track restart playback
+  // from the top.
   let advanceTo = null;
   if (wasPlaying && Array.isArray(_queue)) {
-    // Find the first row in queue order whose externalId differs
-    // from the one being removed.
     const removingExt = externalId != null ? String(externalId) : null;
-    const next = _queue.find(it =>
-      !positionsToDrop.includes(it.position)
-      && (removingExt == null || String(it.externalId) !== removingExt));
-    if (next) advanceTo = next;
-    else if (_queueRepeat === "all" && _queue.length) advanceTo = _queue[0];
+    // Locate the playing row's index. Prefer position match, fall
+    // back to externalId so optimistic-insert fractional positions
+    // still resolve.
+    let curIdx = _queue.findIndex(it => it.position === _queueCurrentPosition);
+    if (curIdx < 0 && _queuePlayingExternalId != null) {
+      curIdx = _queue.findIndex(it => String(it.externalId) === String(_queuePlayingExternalId));
+    }
+    // Walk forward from there; skip every position we're removing
+    // and (if removing by externalId) every row sharing that id.
+    if (curIdx >= 0) {
+      for (let i = curIdx + 1; i < _queue.length; i++) {
+        const it = _queue[i];
+        if (positionsToDrop.includes(it.position)) continue;
+        if (removingExt && String(it.externalId) === removingExt) continue;
+        advanceTo = it;
+        break;
+      }
+    }
+    // Wrap around for repeat-all when nothing follows.
+    if (!advanceTo && _queueRepeat === "all" && _queue.length) {
+      for (const it of _queue) {
+        if (positionsToDrop.includes(it.position)) continue;
+        if (removingExt && String(it.externalId) === removingExt) continue;
+        advanceTo = it;
+        break;
+      }
+    }
   }
   // Local state update — instant UI feedback.
   if (Array.isArray(_queue)) {
