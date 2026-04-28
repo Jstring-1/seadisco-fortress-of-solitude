@@ -1399,6 +1399,23 @@ function loadYTVideo(id) {
   _ytLoadTimer = setTimeout(() => {
     if (vtoken !== _ytVideoToken) return;  // a different video was loaded since
     if (_ytHasPlayed) return;              // it actually started
+    // Distinguish "actually unavailable" from "autoplay-blocked".
+    // YT.PlayerState 5 (cued) means the iframe loaded the video
+    // but the browser's autoplay policy refused to start it — most
+    // common on first-visit URL bootstraps where the user hasn't
+    // interacted with the domain yet. Treating that as "unavailable"
+    // and pruning was wrong (the track is fine; the user just needs
+    // to click play). State -1 (unstarted) is the same situation
+    // before YT has even reported a state.
+    let state = -1;
+    try { state = ytPlayer?.getPlayerState?.() ?? -1; } catch {}
+    if (state === 5 || state === -1) {
+      updatePlayerStatus("paused");
+      if (typeof showToast === "function") {
+        showToast("Tap ▶ to start playback", "info", 4000);
+      }
+      return;
+    }
     updatePlayerStatus("unavailable");
     _ytPruneUnavailable(id, /*advance=*/true);
   }, 5000);
@@ -2390,21 +2407,28 @@ function toggleVideoPause() {
   if (!ytPlayer || typeof ytPlayer.getPlayerState !== "function") return;
   let state = -1;
   try { state = ytPlayer.getPlayerState(); } catch {}
-  console.debug("[toggleVideoPause]", { state });
+  console.debug("[toggleVideoPause]", { state, hasPlayed: _ytHasPlayed });
   // YT.PlayerState: -1=unstarted, 0=ended, 1=playing, 2=paused,
-  // 3=buffering, 5=cued. Calling playVideo() from -1/0/5 starts the
-  // video from frame zero — that's the "pause click restarts the
-  // track" symptom. Only flip play↔pause when the player is in an
-  // actively-running or actively-paused state; in the ambiguous
-  // states we treat the click as a pause attempt (safer no-op
-  // than a surprise restart).
+  // 3=buffering, 5=cued.
   try {
     if (state === 1 || state === 3) {
       ytPlayer.pauseVideo();
-    } else if (state === 2) {
+      return;
+    }
+    if (state === 2) {
+      ytPlayer.playVideo();
+      return;
+    }
+    // States -1 (unstarted) and 5 (cued):
+    //   - If the video has never played, this is autoplay-blocked
+    //     (browser refused to start without a user gesture). The
+    //     click IS the gesture — start playback.
+    //   - If the video HAS played and we're now in -1/5/0, calling
+    //     playVideo() would restart from frame zero (the "pause
+    //     click restarts the track" bug). No-op in that case.
+    if (!_ytHasPlayed && (state === -1 || state === 5)) {
       ytPlayer.playVideo();
     }
-    // else: -1 / 0 / 5 — leave the player alone.
   } catch {}
 }
 
