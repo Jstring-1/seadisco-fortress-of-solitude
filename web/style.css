@@ -6457,13 +6457,26 @@ body.player-open .queue-drawer.open { bottom: 102px; }
 .mini-player.idle-queue #mini-loc-info,
 .mini-player.idle-queue #mini-share,
 .mini-player.idle-queue #mini-album { display: none; }
-/* Disc + share buttons need a known release ID to do anything
-   meaningful — clicking opens the modal for that release, no
-   searches. modal.js's updateVideoNavButtons toggles .has-release
-   on the mini-player whenever _playerReleaseId is set; without it,
-   hide. !important defeats any leftover inline display: cascade. */
+/* Disc + share buttons:
+   - Hidden when nothing's playing (idle-queue / no engine).
+   - VISIBLE while an engine is active. Dimmed if we don't know the
+     release ID for this track (clicking is a no-op + toast); full
+     opacity once .has-release is on the mini-player.
+   This keeps the disc icon as a consistent presence in the bar
+   while still telegraphing whether it'll do anything when clicked. */
 .mini-player .mini-needs-release { display: none !important; }
-.mini-player.has-release .mini-needs-release { display: inline-block !important; }
+.mini-player.engine-yt .mini-needs-release,
+.mini-player.engine-loc .mini-needs-release {
+  display: inline-block !important;
+  opacity: 0.35;
+  cursor: default;
+  transition: opacity 0.15s;
+}
+.mini-player.has-release .mini-needs-release {
+  opacity: 1;
+  cursor: pointer;
+}
+.mini-player.idle-queue .mini-needs-release { display: none !important; }
 
 /* Offline / connection banner — fixed-top strip surfaced by
    web/offline.js when the user has opted in to offline mode and the
