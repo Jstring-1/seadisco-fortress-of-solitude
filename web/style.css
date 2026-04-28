@@ -6478,6 +6478,27 @@ body.player-open .queue-drawer.open { bottom: 102px; }
 }
 .mini-player.idle-queue .mini-needs-release { display: none !important; }
 
+/* Jimmy Witherfork easter-egg popup — surfaces from the footer line
+   click. Tiny floating panel with a single external link. */
+#sd-jimmy-popup {
+  position: fixed;
+  z-index: 9998;
+  background: var(--bg-elevated, #15120e);
+  border: 1px solid var(--border, #2e2e2e);
+  border-radius: 6px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  padding: 0.6rem 0.9rem;
+  font-size: 0.82rem;
+  text-align: center;
+  min-width: 180px;
+}
+#sd-jimmy-popup #sd-jimmy-link {
+  color: var(--accent, #ffffff);
+  text-decoration: none;
+  font-weight: 600;
+}
+#sd-jimmy-popup #sd-jimmy-link:hover { text-decoration: underline; }
+
 /* Offline / connection banner — fixed-top strip surfaced by
    web/offline.js when the user has opted in to offline mode and the
    device is currently offline. Only visible when both conditions
