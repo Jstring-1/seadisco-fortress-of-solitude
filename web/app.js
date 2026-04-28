@@ -145,30 +145,18 @@ async function _ensureAdminFlag() {
     }
   }
 
-  // 5) Video bar — start playing as soon as a tracklist exists so the queue
-  //    is correct. We poll quickly (already 200ms cadence). YT API was
-  //    pre-warmed above so the first frame loads fast.
+  // 5) Video bar — URL ?vd= takes precedence over saved-queue
+  //    auto-surface. Play immediately so the user gets the track they
+  //    asked for without a flash of the prior queue's idle bar. The
+  //    earlier "wait up to 8s for the tracklist to mount" gate was
+  //    only useful for the per-album _videoQueue scoping; with the
+  //    cross-source queue carrying its own metadata the wait isn't
+  //    worth the perceptible delay (and during that wait queue.js's
+  //    idle-bar timer fired first, briefly showing the saved queue
+  //    head — wrong precedence).
   if (videoParam) {
     const playUrl = `https://www.youtube.com/watch?v=${videoParam}`;
-    // For signed-out users we don't bother waiting for a tracklist to
-    // appear — they can't add to the queue from popup buttons anyway,
-    // and waiting 8s when the album modal fails to open (e.g. /release
-    // 401s for an uncached release) made shared share-links feel
-    // broken. Play immediately and let the modal open in the background
-    // if it can.
-    const isAnon = !window._clerk?.user;
-    if ((openParam || versionParam) && !isAnon) {
-      let waited = 0;
-      const poll = setInterval(() => {
-        waited += 200;
-        if (document.querySelector(".track-link[data-video]") || waited >= 8000) {
-          clearInterval(poll);
-          try { openVideo(null, playUrl); } catch {}
-        }
-      }, 200);
-    } else {
-      setTimeout(() => { try { openVideo(null, playUrl); } catch {} }, 300);
-    }
+    setTimeout(() => { try { openVideo(null, playUrl); } catch {} }, 0);
   }
 
   // 6) Restore AI search panel if shared.

@@ -1128,9 +1128,28 @@ window._refreshPlayerNavButtons = _refreshPlayerNavButtons;
 // session, surface the idle bar once the queue cache hydrates. We
 // kick the load asynchronously so the page renders first, then the
 // _refreshPlayerNavButtons in the load callback brings up the bar.
+//
+// SKIP this when the URL is requesting media playback (?vd=…) —
+// app.js will fire openVideo for that URL within the same tick, so
+// the engine becomes "yt" and _queueRefreshIdleBar would correctly
+// no-op. The race used to land the idle bar with the saved queue
+// head briefly visible before the URL track took over; URL-driven
+// media should take precedence with no flicker.
 document.addEventListener("DOMContentLoaded", () => {
+  let urlPlayingSomething = false;
+  try {
+    const p = new URLSearchParams(location.search);
+    urlPlayingSomething = !!(p.get("vd") || p.get("ld")); // ?vd= YouTube, ?ld= LOC
+  } catch {}
   setTimeout(() => {
-    _queueLoad(true).then(() => _refreshPlayerNavButtons()).catch(() => {});
+    _queueLoad(true).then(() => {
+      // Idle-bar surface is harmless when an engine is already
+      // active (it early-returns), but avoid the timing-window
+      // flicker by skipping it entirely when the URL was already
+      // asking for media to play.
+      if (urlPlayingSomething) return;
+      _refreshPlayerNavButtons();
+    }).catch(() => {});
   }, 600);
 });
 window.queueAdd            = queueAdd;
