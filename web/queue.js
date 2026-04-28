@@ -319,6 +319,13 @@ async function _queuePlayNext() {
 // fired by _locPlay/openVideo doesn't re-insert the same item.
 let _queueDispatching = false;
 async function _queuePlayItem(entry) {
+  console.debug("[_queuePlayItem]", {
+    source: entry.source,
+    externalId: entry.externalId,
+    title: entry.data?.title,
+    releaseType: entry.data?.releaseType || "(missing)",
+    releaseId:   entry.data?.releaseId   || "(missing)",
+  });
   const playItem = entry.source === "loc"
     ? {
         id:           entry.externalId,
