@@ -2221,25 +2221,23 @@ function openVideo(event, url) {
   // only fall back to "leave previous untouched" for the bootstrap
   // case (no event, no queueMeta) where preserving the prior album
   // link is preferable to losing it.
-  let _rType = "", _rId = "";
-  const isQueueDispatch = !!queueMeta;
-  const isUserClick     = !!clickedEl?.dataset?.video;
-  // Strict priority — each path only consults sources that genuinely
-  // belong to the track being played:
+  // Resolve the album to link the disc icon at, in priority order:
   //   queueMeta  ← carried with the queue entry, exact match
   //   clickedEl  ← scraped from the row the user just clicked
-  //   ?op= URL   ← only safe for URL bootstrap (modal opened at the
-  //                same time as ?vd= was set). For queue dispatches
-  //                or fresh user clicks the user may have opened a
-  //                DIFFERENT album in the modal since, so ?op= would
-  //                point at the wrong record.
+  //   ?op= URL   ← whatever album modal is currently open
+  // If none yields anything, leave the prior _playerRelease* alone —
+  // hiding the icon when we just don't have info is worse than
+  // showing the user's most recent album context. (Trade-off: when
+  // the user opens a different album modal mid-playback, the icon
+  // may briefly link to that until a track with explicit context
+  // plays. Closing the popup and the icon goes back to whatever was
+  // last set explicitly.)
+  let _rType = "", _rId = "";
   if (queueMeta?.releaseType && queueMeta?.releaseId) {
     _rType = queueMeta.releaseType; _rId = String(queueMeta.releaseId);
   } else if (clickedEl?.dataset?.releaseType && clickedEl?.dataset?.releaseId) {
     _rType = clickedEl.dataset.releaseType; _rId = String(clickedEl.dataset.releaseId);
-  } else if (!isQueueDispatch && !isUserClick) {
-    // Bootstrap path only — no event, no queue meta, just a URL
-    // that has both ?vd= and ?op= set. Trust ?op=.
+  } else {
     const opParam = new URLSearchParams(location.search).get("op");
     if (opParam && opParam.includes(":")) {
       _rType = opParam.slice(0, opParam.indexOf(":"));
@@ -2250,15 +2248,9 @@ function openVideo(event, url) {
     window._playerReleaseType = _rType;
     window._playerReleaseId   = _rId;
     window._playerReleaseUrl  = `https://www.discogs.com/${_rType}/${_rId}`;
-  } else if (isQueueDispatch || isUserClick) {
-    // Explicit play context but no release info attached. Clear so
-    // the disc icon doesn't dangle on a stale album. Re-adding the
-    // track via the newer ＋ buttons (which carry release context)
-    // restores the icon.
-    window._playerReleaseType = null;
-    window._playerReleaseId   = null;
-    window._playerReleaseUrl  = null;
   }
+  // Else: leave _playerRelease* untouched. Disc icon stays pointed at
+  // the last known album rather than disappearing.
   setVideoUrl(id);
   const mp = document.getElementById("mini-player");
   mp.classList.add("open");
