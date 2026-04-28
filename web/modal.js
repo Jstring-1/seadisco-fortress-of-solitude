@@ -1721,6 +1721,12 @@ function _setPlayerEngine(name) {
       ppBtn.title = "Pause";
     }
   }
+  // Sync the disc-icon-visibility class to whatever _playerReleaseId
+  // currently holds. updateVideoNavButtons does this on every YT play,
+  // but LOC plays don't go through that path — without this line a
+  // YT track's release would carry over visually to a subsequent
+  // LOC track that has no Discogs ID.
+  mp.classList.toggle("has-release", !!window._playerReleaseId);
   // Source icon next to the title
   const icon = document.getElementById("mini-player-source-icon");
   if (icon) icon.textContent = name === "loc" ? "♪" : (name === "yt" ? "▶" : "");
@@ -2473,80 +2479,19 @@ window._mediaSessionUpdate         = _mediaSessionUpdate;
 window._mediaSessionBindActions    = _mediaSessionBindActions;
 window._mediaSessionUpdatePosition = _mediaSessionUpdatePosition;
 
-// Disc-icon click: open the album for the currently-playing track.
-// Strategy:
-//   1. If we already know the release (queue entry's releaseType/Id,
-//      track-click's data-release-*, or URL bootstrap's ?op=) just
-//      open that — no round-trip.
-//   2. Otherwise look at what's playing (YT video title + artist, or
-//      LOC contributors + title) and search Discogs for a master.
-//      Open the first hit.
-//   3. Tell the user if neither path finds a release.
-//
-// Net: the disc icon always reflects the actual playing track, no
-// matter how it ended up in the player. No more drift, no more "why
-// is this opening album X when Y is playing?"
-async function openPlayerRelease(btn) {
-  // Optimistic: if we've got a release ID already, skip the search.
-  if (window._playerReleaseId && window._playerReleaseType) {
-    openModal(null, window._playerReleaseId, window._playerReleaseType, window._playerReleaseUrl || "");
-    return;
-  }
-  // Pull title + artist from whichever engine is active.
-  let title = "", artist = "";
-  if (window._currentEngine === "yt") {
-    // Try the queue meta first (most reliable), then the YT player's
-    // own getVideoData (channel name + video title).
-    const meta = (window._videoQueueMeta ?? [])[window._videoQueueIndex ?? 0] || {};
-    title  = meta.track  || meta.album || "";
-    artist = meta.artist || "";
-    if ((!title || !artist) && typeof ytPlayer?.getVideoData === "function") {
-      try {
-        const vd = ytPlayer.getVideoData() || {};
-        if (!title)  title  = vd.title  || "";
-        if (!artist) artist = vd.author || "";
-      } catch {}
-    }
-  } else if (window._currentEngine === "loc") {
-    const it = window._locNowPlaying || {};
-    title  = it.title || "";
-    artist = Array.isArray(it.contributors) ? it.contributors[0] : (it.contributors || "");
-  }
-  if (!title) {
-    if (typeof showToast === "function") showToast("No track playing", "error");
-    return;
-  }
-  // Loading state on the button so the click feels acknowledged.
-  if (btn) { btn.disabled = true; btn.style.opacity = "0.5"; }
-  try {
-    // master-type search with separate artist/q fields hits the
-    // existing /search endpoint. Take the first hit.
-    const params = new URLSearchParams({ type: "master", q: title });
-    if (artist) params.set("artist", artist);
-    const r = await apiFetch(`/search?${params.toString()}`);
-    if (!r.ok) {
-      if (typeof showToast === "function") showToast("Couldn't search Discogs (HTTP " + r.status + ")", "error");
-      return;
-    }
-    const data = await r.json();
-    const first = (data?.results || [])[0];
-    if (!first) {
-      if (typeof showToast === "function") showToast("No matching release found on Discogs", "error");
-      return;
-    }
-    const rType = first.type === "master" ? "master" : "release";
-    const rId   = first.id;
-    const rUrl  = `https://www.discogs.com/${rType}/${rId}`;
-    // Cache so subsequent clicks (same track) skip the search.
-    window._playerReleaseType = rType;
-    window._playerReleaseId   = rId;
-    window._playerReleaseUrl  = rUrl;
+// Disc-icon click: open the album for the currently-playing track,
+// but ONLY if we already know the release ID. No live searches —
+// the icon's visibility is the contract: if it's there, clicking
+// it opens the right album. If we don't know the release, the icon
+// is hidden by the .has-release class gate (see openVideo +
+// updateVideoNavButtons), and the user waits for the next track
+// to have explicit context before the icon comes back.
+function openPlayerRelease() {
+  const rType = window._playerReleaseType;
+  const rId   = window._playerReleaseId;
+  const rUrl  = window._playerReleaseUrl;
+  if (rType && rId) {
     openModal(null, rId, rType, rUrl);
-  } catch (e) {
-    console.warn("[openPlayerRelease] search failed:", e);
-    if (typeof showToast === "function") showToast("Couldn't look up this track's album", "error");
-  } finally {
-    if (btn) { btn.disabled = false; btn.style.opacity = ""; }
   }
 }
 window.openPlayerRelease = openPlayerRelease;
