@@ -2139,14 +2139,20 @@ function _shShow(field) {
     drop.appendChild(row);
   });
 
-  const anchor = field.closest("label") || field.parentElement;
-  anchor.style.position = "relative";
-  // Match the field's actual position and width so dropdown doesn't
-  // stretch across flex containers
-  drop.style.left = field.offsetLeft + "px";
-  drop.style.top = (field.offsetTop + field.offsetHeight) + "px";
-  drop.style.width = field.offsetWidth + "px";
-  anchor.appendChild(drop);
+  // Position the dropdown via fixed coordinates from the field's
+  // bounding rect rather than absolute-within-anchor. The earlier
+  // anchor approach (closest label / parentElement + position:
+  // relative) misbehaved on flex containers like .search-row, where
+  // offsetTop/offsetLeft of the input weren't aligned with where the
+  // input visually sat — the dropdown would land on top of the input
+  // instead of below it. position: fixed sidesteps the container
+  // layout entirely.
+  const rect = field.getBoundingClientRect();
+  drop.style.position = "fixed";
+  drop.style.top = `${rect.bottom}px`;
+  drop.style.left = `${rect.left}px`;
+  drop.style.width = `${rect.width}px`;
+  document.body.appendChild(drop);
 }
 
 function _shHide() {
@@ -2176,6 +2182,11 @@ function _shInit() {
       _shHide();
     }
   });
+  // The dropdown is position:fixed so it doesn't reflow with the
+  // page. Close it on scroll / resize so it can't drift away from
+  // the input it's anchored to.
+  window.addEventListener("scroll", _shHide, { passive: true });
+  window.addEventListener("resize", _shHide, { passive: true });
 }
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", _shInit);
 else _shInit();
