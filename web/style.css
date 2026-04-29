@@ -4780,9 +4780,34 @@ button.wiki-link-btn:active {
 .admin-refresh-btn {
   background: none; border: 1px solid #333; border-radius: 4px;
   color: #888; font-size: 1rem; cursor: pointer; padding: 0.1rem 0.4rem;
-  line-height: 1; transition: color 0.15s, border-color 0.15s;
+  line-height: 1; transition: color 0.15s, border-color 0.15s, background 0.2s;
 }
 .admin-refresh-btn:hover { color: var(--accent); border-color: var(--accent); }
+.admin-refresh-btn:disabled { cursor: wait; opacity: 0.7; }
+/* Spin the icon (wrapped in a span) rather than the button so the
+   rounded-rect border doesn't tilt with the animation. */
+@keyframes admin-refresh-spin { to { transform: rotate(360deg); } }
+.admin-refresh-btn .admin-refresh-icon {
+  display: inline-block;
+  line-height: 1;
+  transition: transform 0.2s;
+}
+.admin-refresh-btn.is-refreshing { color: var(--accent); border-color: var(--accent); }
+.admin-refresh-btn.is-refreshing .admin-refresh-icon {
+  animation: admin-refresh-spin 0.8s linear infinite;
+}
+.admin-refresh-btn.just-refreshed {
+  color: #6ddf70;
+  border-color: #6ddf70;
+  background: rgba(109, 223, 112, 0.1);
+}
+.admin-refresh-status {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-style: italic;
+}
+.admin-refresh-status.is-success { color: #6ddf70; font-style: normal; }
+.admin-refresh-status.is-error   { color: var(--danger); font-style: normal; }
 
 /* ── Load More ── */
 .load-more-wrap {
