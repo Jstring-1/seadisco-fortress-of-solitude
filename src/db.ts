@@ -3874,6 +3874,35 @@ export async function getMostContributedAlbums(
   } catch { return []; }
 }
 
+// AI-search exclusion list: a compact set of "Artist - Title" lines
+// pulled from the user's collection + wantlist so the recommendation
+// prompt can tell Claude what to avoid. Capped so the prompt stays
+// within token budget — at 200 lines × ~50 chars = ~10KB which is
+// fine. UNION-distinct keeps a single-line entry per album the user
+// has in either list.
+export async function getAiExclusionTitles(
+  clerkUserId: string,
+  limit = 200
+): Promise<string[]> {
+  try {
+    const r = await getPool().query(
+      `SELECT title FROM (
+         SELECT DISTINCT NULLIF(data->>'title', '') AS title
+           FROM user_collection
+          WHERE clerk_user_id = $1
+         UNION
+         SELECT DISTINCT NULLIF(data->>'title', '') AS title
+           FROM user_wantlist
+          WHERE clerk_user_id = $1
+       ) sub
+       WHERE title IS NOT NULL
+       LIMIT $2`,
+      [clerkUserId, Math.max(1, Math.min(500, limit))]
+    );
+    return r.rows.map(row => String(row.title || "")).filter(Boolean);
+  } catch { return []; }
+}
+
 // ── Personal suggestions: taste profile + library dedup + persistence ──
 //
 // Taste tuples power the per-user background suggestions job. We
