@@ -3922,7 +3922,7 @@ export async function getDismissedSuggestionKeys(clerkUserId: string): Promise<S
 
 export async function getUserPersonalSuggestions(
   clerkUserId: string,
-  limit = 48
+  limit = 1000
 ): Promise<any[]> {
   try {
     const r = await getPool().query(
@@ -3931,7 +3931,7 @@ export async function getUserPersonalSuggestions(
         WHERE clerk_user_id = $1
         ORDER BY score DESC, generated_at DESC
         LIMIT $2`,
-      [clerkUserId, Math.max(1, Math.min(96, limit))]
+      [clerkUserId, Math.max(1, Math.min(1000, limit))]
     );
     return r.rows;
   } catch { return []; }

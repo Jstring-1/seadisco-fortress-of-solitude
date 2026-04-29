@@ -4109,7 +4109,9 @@ app.get("/api/user/personal-suggestions", async (req, res) => {
   const userId = await requireUser(req, res);
   if (!userId) return;
   try {
-    const limit = Math.max(1, Math.min(96, parseInt(String(req.query.limit ?? "48"), 10) || 48));
+    // Default returns the full saved batch (cap 1000) since the home
+    // strip pages through it client-side via Load More.
+    const limit = Math.max(1, Math.min(1000, parseInt(String(req.query.limit ?? "1000"), 10) || 1000));
     const rows = await getUserPersonalSuggestions(userId, limit);
     const items = rows.map(row => ({
       id: row.discogs_id,
@@ -4158,7 +4160,11 @@ async function _runPersonalSuggestionsForUser(userId: string): Promise<{ saved: 
   const dc = await getDiscogsClientForUser(userId);
   if (!dc) return { saved: 0, reason: "no-oauth" };
 
-  const tuples = await getUserTasteTuples(userId, 9);
+  // Wider taste sampling so a user dismissing aggressively doesn't run
+  // out of fresh suggestions. 30 tuples × master+release search × per-
+  // page 25/15 yields ~1200 raw rows pre-dedupe; cap saved at 1000
+  // after sorting.
+  const tuples = await getUserTasteTuples(userId, 30);
   if (!tuples.length) return { saved: 0, reason: "no-taste" };
 
   const ownedMasters = await getUserLibraryMasterIds(userId);
@@ -4226,7 +4232,7 @@ async function _runPersonalSuggestionsForUser(userId: string): Promise<{ saved: 
           style: t.style,
           year: String(t.year),
           format: "Vinyl",
-          perPage: searchType === "master" ? 10 : 6,
+          perPage: searchType === "master" ? 25 : 15,
         }) as any;
         const results = Array.isArray(r?.results) ? r.results : [];
         for (let i = 0; i < results.length; i++) {
@@ -4242,7 +4248,7 @@ async function _runPersonalSuggestionsForUser(userId: string): Promise<{ saved: 
 
   const items = Array.from(candidates.values())
     .sort((a, b) => b.score - a.score)
-    .slice(0, 48);
+    .slice(0, 1000);
   if (!items.length) return { saved: 0, reason: "no-candidates" };
   await replaceUserPersonalSuggestions(userId, items);
   return { saved: items.length };
