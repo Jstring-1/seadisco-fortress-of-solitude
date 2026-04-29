@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260428.2305" />
+  <link rel="stylesheet" href="/style.css?v=20260428.2204" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260428.2305"></script>
-<script defer src="/shared.js?v=20260428.2305"></script>
+<script defer src="/utils.js?v=20260428.2204"></script>
+<script defer src="/shared.js?v=20260428.2204"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true, iconNav: true }));</script>
 
 <main>
@@ -74,7 +74,8 @@
       <div class="admin-tab-panel" id="panel-collection-stats">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
           <h2 style="margin:0">Collection Stats</h2>
-          <button class="admin-refresh-btn" onclick="loadCollectionStats()" title="Refresh">&#8635;</button>
+          <button class="admin-refresh-btn" id="collection-stats-refresh-btn" onclick="_adminClickRefresh(this, loadCollectionStats)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <span id="collection-stats-refresh-status" class="admin-refresh-status"></span>
         </div>
         <div id="collection-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
       </div>
@@ -83,7 +84,8 @@
       <div class="admin-tab-panel" id="panel-sync-status" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
           <h2 style="margin:0">User Sync Status</h2>
-          <button class="admin-refresh-btn" onclick="loadAdminSyncStatus()" title="Refresh">&#8635;</button>
+          <button class="admin-refresh-btn" id="sync-status-refresh-btn" onclick="_adminClickRefresh(this, loadAdminSyncStatus)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <span id="sync-status-refresh-status" class="admin-refresh-status"></span>
         </div>
         <div id="admin-sync-status-list" style="font-size:0.83rem;color:var(--muted)">Loading...</div>
       </div>
@@ -92,7 +94,8 @@
       <div class="admin-tab-panel" id="panel-api-log" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
           <h2 style="margin:0">API Request Log <span id="api-log-range-label" style="font-size:0.75rem;color:var(--muted);font-weight:400">(24h)</span></h2>
-          <button class="admin-refresh-btn" onclick="loadApiLog()" title="Refresh">&#8635;</button>
+          <button class="admin-refresh-btn" id="api-log-refresh-btn" onclick="_adminClickRefresh(this, loadApiLog)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <span id="api-log-refresh-status" class="admin-refresh-status"></span>
         </div>
         <div id="api-stats-summary" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem"></div>
         <div style="margin-bottom:0.5rem;display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center">
@@ -132,7 +135,8 @@
       <div class="admin-tab-panel" id="panel-loc-stats" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
           <h2 style="margin:0">Library of Congress proxy</h2>
-          <button class="admin-refresh-btn" onclick="loadLocStats()" title="Refresh">&#8635;</button>
+          <button class="admin-refresh-btn" id="loc-stats-refresh-btn" onclick="_adminClickRefresh(this, loadLocStats)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <span id="loc-stats-refresh-status" class="admin-refresh-status"></span>
         </div>
         <div id="loc-stats-body" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
       </div>
@@ -141,7 +145,8 @@
       <div class="admin-tab-panel" id="panel-blues-db" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
           <h2 style="margin:0">Pre-1930 Blues Artists</h2>
-          <button class="admin-refresh-btn" onclick="bluesDbLoadList()" title="Refresh">&#8635;</button>
+          <button class="admin-refresh-btn" id="blues-db-refresh-btn" onclick="_adminClickRefresh(this, bluesDbLoadList)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <span id="blues-db-refresh-status" class="admin-refresh-status"></span>
           <!-- Seed-from-Discogs button removed: artists are now added one-at-a-time
                via the "+" icon next to artist names in album/credit popups
                (admin-only, hidden for artists already in the DB). -->
@@ -214,7 +219,8 @@
       <div class="admin-tab-panel" id="panel-submissions" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
           <h2 style="margin:0">Submitted Tracks</h2>
-          <button class="admin-refresh-btn" onclick="loadAdminSubmissions()" title="Refresh">&#8635;</button>
+          <button class="admin-refresh-btn" id="submissions-refresh-btn" onclick="_adminClickRefresh(this, loadAdminSubmissions)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <span id="submissions-refresh-status" class="admin-refresh-status"></span>
           <span id="submissions-count" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
         </div>
         <div id="submissions-list" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
@@ -224,7 +230,8 @@
       <div class="admin-tab-panel" id="panel-suggestions" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
           <h2 style="margin:0">Suggestions</h2>
-          <button class="admin-refresh-btn" onclick="loadAdminSuggestions()" title="Refresh">&#8635;</button>
+          <button class="admin-refresh-btn" id="suggestions-refresh-btn" onclick="_adminClickRefresh(this, loadAdminSuggestions)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <span id="suggestions-refresh-status" class="admin-refresh-status"></span>
           <button class="admin-btn" id="suggestions-run-self-btn" onclick="adminSuggestionsRunSelf()" title="Run the per-user generator for the admin user only">Run for me</button>
           <button class="admin-btn" id="suggestions-run-all-btn" onclick="adminSuggestionsRunAll()" title="Run the per-user generator for every user (background, may take minutes)">Run for everyone</button>
           <span id="suggestions-action-status" style="font-size:0.78rem;color:var(--muted)"></span>
@@ -303,13 +310,63 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260428.2305"></script>
+<script defer src="/modal.js?v=20260428.2204"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
 
 <script>
 let clerk = null;
+
+// Convenience entry point for refresh buttons. Looks up the matching
+// status element by id convention (<btnId>.replace("-btn","-status"))
+// and runs the loader inside _adminWithRefresh — gives every refresh
+// button visual feedback without needing to edit each loader.
+async function _adminClickRefresh(btn, work) {
+  const statusId = (btn?.id || "").replace(/-btn$/, "-status");
+  const statusEl = statusId ? document.getElementById(statusId) : null;
+  return _adminWithRefresh(btn, statusEl, work);
+}
+
+// Visual refresh feedback helper used by every admin loader. Spins
+// the icon, disables the button, drives the status text. Pass the
+// loader's body as `work`. Errors thrown from `work` flip the status
+// to red.
+async function _adminWithRefresh(btn, statusEl, work) {
+  if (btn) {
+    btn.classList.add("is-refreshing");
+    btn.classList.remove("just-refreshed");
+    btn.disabled = true;
+  }
+  if (statusEl) {
+    statusEl.textContent = "Refreshing…";
+    statusEl.classList.remove("is-success", "is-error");
+  }
+  const t0 = performance.now();
+  try {
+    await work();
+    if (statusEl) {
+      const elapsed = Math.round(performance.now() - t0);
+      statusEl.textContent = `Refreshed at ${new Date().toLocaleTimeString()} · ${elapsed}ms`;
+      statusEl.classList.add("is-success");
+      setTimeout(() => { statusEl.classList.remove("is-success"); }, 2500);
+    }
+    if (btn) {
+      btn.classList.add("just-refreshed");
+      setTimeout(() => btn.classList.remove("just-refreshed"), 1200);
+    }
+  } catch (e) {
+    if (statusEl) {
+      statusEl.textContent = "Failed: " + (e?.message || e);
+      statusEl.classList.add("is-error");
+    }
+  } finally {
+    if (btn) {
+      btn.classList.remove("is-refreshing");
+      btn.disabled = false;
+    }
+  }
+}
 
 const _adminTabLoaders = {
   'collection-stats': () => loadCollectionStats(),
