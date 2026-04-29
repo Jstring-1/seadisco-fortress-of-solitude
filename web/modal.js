@@ -2270,15 +2270,38 @@ function _trackYtApplyToDom(targetId, masterId, releaseId, isMaster) {
         decorate(` <a href="#" class="track-yt-admin-delete" data-pos="${escHtml(pos)}" onclick="event.preventDefault();_trackYtAdminDelete(this);return false" title="Admin: remove this user-suggested video">✕</a>`);
       }
     }
-    if (stillNoPlay && window._clerk?.user) {
-      const trackTitle = titleCell.querySelector(".track-title-link")?.textContent || "";
-      const trackArtist = root?.querySelector?.(".album-artist")?.textContent?.split(",")[0]?.trim() || "";
-      const albumTitle  = root?.querySelector?.("h2")?.textContent?.trim() || "";
-      decorate(` <a href="#" class="track-yt-suggest" data-pos="${escHtml(pos)}" data-track="${escHtml(trackTitle)}" data-artist="${escHtml(trackArtist)}" data-album="${escHtml(albumTitle)}" onclick="event.preventDefault();_trackYtOpenSuggest(this);return false" title="Suggest a YouTube video for this track">🎵</a>`);
-    }
+    // Per-row suggest button retired — handled by the album-level
+    // "🎵 N missing" link in the tracklist heading instead.
   });
+  // Refresh the heading "🎵 N missing" link to reflect the post-patch
+  // state. Without this the count is stuck at the render-time value
+  // (which counted overrides as missing because the cache was empty
+  // before the fetch landed).
+  _trackYtRefreshHeadingMissingCount(root);
 }
 window._trackYtApplyToDom = _trackYtApplyToDom;
+
+// Recount missing tracks from the DOM (rows with no .track-link in
+// .track-play-cell, i.e. no playable URL even after the override
+// patch) and update the heading link's text + visibility. If 0
+// missing remain, the link disappears entirely.
+function _trackYtRefreshHeadingMissingCount(root) {
+  if (!root) return;
+  const rows = root.querySelectorAll(".album-tracklist .track[data-pos]");
+  let missing = 0;
+  rows.forEach(row => {
+    if (!row.querySelector(".track-play-cell .track-link")) missing++;
+  });
+  const link = root.querySelector(".tracklist-find-missing");
+  if (!link) return;
+  if (missing < 1 || !window._clerk?.user) {
+    link.style.display = "none";
+    return;
+  }
+  link.style.display = "";
+  link.textContent = `🎵 ${missing} missing`;
+}
+window._trackYtRefreshHeadingMissingCount = _trackYtRefreshHeadingMissingCount;
 
 // Click handler for the per-row 🎵 suggest affordance. Stashes the
 // track context on window so youtube.js's popup can pick it up + show
@@ -2376,7 +2399,7 @@ window._trackYtOpenSuggest = _trackYtOpenSuggest;
 // (any .track row that has data-pos but no .track-link in its
 // .track-play-cell), stashes it on window for youtube.js to consume,
 // then opens the YT popup with q = "Artist" "Album".
-function _trackYtOpenAlbumSuggest(el) {
+async function _trackYtOpenAlbumSuggest(el) {
   if (!window._clerk?.user) {
     if (typeof showToast === "function") showToast("Sign in to suggest videos", "info");
     return;
@@ -2389,6 +2412,20 @@ function _trackYtOpenAlbumSuggest(el) {
   const albumTitle  = popupRoot.querySelector("h2")?.textContent?.trim() || "";
   // First artist from the album-artist line (mirrors per-track flow).
   const albumArtist = popupRoot.querySelector(".album-artist")?.textContent?.split(",")[0]?.trim() || "";
+  // Ensure the override DOM patch has run before we walk the rows —
+  // otherwise tracks with already-saved overrides would still show
+  // as "missing" if the user clicked the heading link before the
+  // initial cache fetch landed. await is cheap when cache is hot.
+  if (typeof window._trackYtKickFetchAndApply === "function") {
+    try {
+      await window._trackYtKickFetchAndApply(
+        popupRoot.id || "album-info",
+        masterId,
+        isMaster ? "" : releaseId,
+        isMaster
+      );
+    } catch {}
+  }
   // Walk every tracklist row, collect the ones with no playable URL.
   const rows = popupRoot.querySelectorAll(".album-tracklist .track[data-pos]");
   const missing = [];
@@ -3241,11 +3278,15 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const playableCount = playableUrls.length;
   const firstPlayableUrl = playableUrls[0] || "";
   // Tracks with a title but no playable URL are candidates for the
-  // album-level "Find missing" affordance. Counted here so the
-  // tracklist heading can show "(N missing)" when ≥2 are missing.
+  // album-level "🎵 N missing" affordance. Threshold is ≥1 since
+  // we removed the per-track suggest button — this is the only path
+  // for users to contribute. The count shown here is the render-time
+  // value (cache may not be populated yet); _trackYtApplyToDom
+  // recounts after the override patch lands so the heading reflects
+  // the true post-patch state.
   const missingCount = tracks.filter(t => t.title && !findVideo(t.title || "", t.position || "")).length;
-  const albumFindMissingLink = (missingCount >= 2 && window._clerk?.user)
-    ? ` <a href="#" class="tracklist-find-missing" onclick="event.preventDefault();event.stopPropagation();_trackYtOpenAlbumSuggest(this);return false" title="Search YouTube once for the whole album and assign videos to all ${missingCount} missing tracks at once">🎵 ${missingCount} missing</a>`
+  const albumFindMissingLink = (missingCount >= 1 && window._clerk?.user)
+    ? ` <a href="#" class="tracklist-find-missing" onclick="event.preventDefault();event.stopPropagation();_trackYtOpenAlbumSuggest(this);return false" title="Search YouTube once for the whole album and assign videos to all missing tracks at once">🎵 ${missingCount} missing</a>`
     : "";
   const playableMeta = playableCount
     ? `<span class="tracklist-playable">(${playableCount}${firstPlayableUrl ? ` <a href="#" class="tracklist-play-all" onclick="event.preventDefault();event.stopPropagation();playAlbumAndQueue(this,'${firstPlayableUrl.replace(/'/g, "\\'")}')" title="Play the first track and queue the rest of the album">▶</a>` : ""}${playableCount >= 1 ? ` <a href="#" class="tracklist-queue-album" onclick="event.preventDefault();event.stopPropagation();queueAddAlbum(this)" title="Add all playable tracks to the bottom of your queue">＋</a>` : ""}${albumFindMissingLink})</span>`
@@ -3319,12 +3360,11 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
                 : ""
             }`
           : "";
-        // "Suggest a YouTube video" affordance — only when the row has
-        // no playable URL at all (neither Discogs nor existing override)
-        // AND the user is signed in. Anon users see nothing.
-        const suggestBtn = (!url && t.title && window._clerk?.user)
-          ? ` <a href="#" class="track-yt-suggest" data-pos="${escHtml(trackPos)}" data-track="${escHtml(t.title || "")}" data-artist="${escHtml(trackArtist)}" data-album="${escHtml(title)}" onclick="event.preventDefault();_trackYtOpenSuggest(this);return false" title="Suggest a YouTube video for this track">🎵</a>`
-          : "";
+        // Per-row "🎵 Suggest a video" affordance retired — replaced
+        // by the album-level "🎵 N missing" link in the tracklist
+        // heading, which opens a single YT search and lets the user
+        // assign multiple tracks at once.
+        const suggestBtn = "";
         const trackCredits = (t.extraartists ?? []).length
           ? `<div class="track-credits">${t.extraartists.map(a => {
               const nameEl = entityLookupLinkHtml("artist", a.name, { className: "credit-name", title: `Lookup options for ${a.name}` });
