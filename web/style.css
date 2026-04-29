@@ -6478,6 +6478,33 @@ body.player-open .queue-drawer.open { bottom: 102px; }
 }
 .mini-player.idle-queue .mini-needs-release { display: none !important; }
 
+/* Queue drawer drag-to-reorder visuals. The default Sortable.js
+   styles are minimal; these give the user clearer "this row is
+   moving / this is the drop slot" feedback. */
+.queue-row {
+  cursor: grab;
+  transition: background-color 0.15s, transform 0.15s;
+}
+.queue-row:active { cursor: grabbing; }
+/* The placeholder slot at the drop target. */
+.queue-row-ghost {
+  opacity: 0.35;
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+/* The row currently being dragged — slight emphasis. */
+.queue-row-chosen {
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+.queue-row-dragging {
+  background: var(--bg-elevated, #15120e) !important;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+  border-radius: 6px;
+}
+/* Buttons inside the row keep pointer cursor regardless. */
+.queue-row .queue-row-play,
+.queue-row .queue-row-remove,
+.queue-row .queue-row-handle { cursor: pointer; }
+
 /* Jimmy Witherfork easter-egg popup — surfaces from the footer line
    click. Tiny floating panel with a single external link. */
 #sd-jimmy-popup {
