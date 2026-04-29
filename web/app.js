@@ -60,10 +60,17 @@ async function _ensureAdminFlag() {
     switchView("account", true);
   } else if (rawView === "info" || rawView === "privacy" || rawView === "terms") {
     switchView(rawView, true);
-  } else if (rawView === "wiki" || rawView === "loc" || rawView === "archive" || rawView === "youtube" || rawView === "picks") {
-    // Wiki / LOC / Archive / YouTube / Picks are public to anonymous
-    // users (server endpoints rate-limit per IP). Just enter the view.
+  } else if (rawView === "wiki" || rawView === "loc" || rawView === "archive" || rawView === "youtube") {
+    // Wiki / LOC / Archive / YouTube are public to anonymous users
+    // (server endpoints rate-limit per IP). Just enter the view.
     switchView(rawView, true);
+  } else if (rawView === "picks") {
+    // Legacy /?v=picks bookmark — Submitted Tracks moved into the
+    // home-strip Recent / Suggestions / Submitted toggle. Land on
+    // search and pre-select the Submitted tab so old links still
+    // do something useful.
+    try { localStorage.setItem("sd_home_strip_mode", "submitted"); } catch {}
+    switchView("search", true);
   } else if (rawView === "records" || rawView === "wanted") {
     await authReadyPromise;
     if (!window._clerk?.user) { showToast("Sign in to view your records", "error"); switchView("account", true); }
@@ -190,7 +197,7 @@ window.addEventListener("popstate", () => {
     if (sort) { const el = document.getElementById("cw-sort"); if (el) el.value = sort; }
     switchView("records", true); return;
   }
-  if (rawView === "records" || rawView === "info" || rawView === "privacy" || rawView === "terms" || rawView === "wanted" || rawView === "account" || rawView === "loc" || rawView === "wiki" || rawView === "picks") {
+  if (rawView === "records" || rawView === "info" || rawView === "privacy" || rawView === "terms" || rawView === "wanted" || rawView === "account" || rawView === "loc" || rawView === "wiki") {
     if (rawView === "records") {
       _cwTab = p.get("tab") || "collection";
       const sort = p.get("s") || p.get("sort");

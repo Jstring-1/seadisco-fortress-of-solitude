@@ -65,7 +65,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260429.0819" />
+  <link rel="stylesheet" href="/style.css?v=20260429.1018" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -103,7 +103,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260429.0819"></script>
+<script defer src="/shared.js?v=20260429.1018"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -460,6 +460,8 @@
         <span id="rr-tab-recent" class="rr-tab rr-tab-active" onclick="_sdSwitchHomeStripTab('recent')">Recent</span>
         <span class="rr-tab-sep">/</span>
         <span id="rr-tab-suggestions" class="rr-tab" onclick="_sdSwitchHomeStripTab('suggestions')">Suggestions</span>
+        <span class="rr-tab-sep">/</span>
+        <span id="rr-tab-submitted" class="rr-tab" onclick="_sdSwitchHomeStripTab('submitted')" title="Albums with crowd-sourced YouTube contributions">Submitted</span>
         <!-- Legacy id kept as a hidden node so older code paths that
              write to it don't blow up; visible state is on the tabs above. -->
         <span id="random-records-title" style="display:none">Recent</span>
@@ -488,36 +490,72 @@
 
 <div id="info-view" class="content-narrow" style="display:none">
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">How SeaDisco Works</h2>
+  <p style="font-size:0.78rem;color:#666;margin-bottom:1rem">A guided tour of every feature. Skim the headings or read top-to-bottom — both work.</p>
 
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Searching</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Search the entire Discogs database by artist, album, label, or any combination. Click <strong style="color:#ccc">Advanced</strong> for targeted fields (Artist, Release, Label, Year, Genre/Style, Format). Narrow by type — <strong style="color:#ccc">Masters</strong> (every pressing grouped), <strong style="color:#ccc">Releases</strong> (individual pressings), or <strong style="color:#ccc">Masters+</strong> (masters plus standalone releases that have no master grouping — useful for finding obscure pressings alongside grouped editions). Sort by relevance, year, title, or label.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Click any card for full details: tracklist with YouTube previews, version finder, pressing info, credits, and photos. From the detail popup you can <strong style="color:#ccc">add/remove items from your collection or wantlist</strong> and <strong style="color:#ccc">rate releases</strong> 1–5 stars. <strong style="color:#ccc">Hide owned</strong> removes synced collection items from results. Select <strong style="color:#ccc">✦ AI</strong> to describe what you want in plain language — Claude returns 12 curated picks with Discogs links.</p>
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Searching Discogs</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Search the entire Discogs database by artist, album, label, or any combination. Click <strong style="color:#ccc">Advanced</strong> for targeted fields (Artist, Release, Label, Year, Genre/Style, Format, Country). Narrow by type — <strong style="color:#ccc">Masters</strong> (every pressing grouped), <strong style="color:#ccc">Releases</strong> (individual pressings), or <strong style="color:#ccc">Masters+</strong> (masters plus standalone releases that have no master grouping — useful for finding obscure pressings alongside grouped editions). Sort by relevance, year, title, or label.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem"><strong style="color:#ccc">Hide owned</strong> removes synced collection items from results so you only see new finds. Switch the result type to <strong style="color:#ccc">✦ AI</strong> and describe what you want in plain language — Claude returns 12 curated picks with Discogs links and a short rationale.</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Hard to Find Mode &amp; No-CDs Toggle</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">In the Advanced panel, the <strong style="color:#ccc">Hard to find</strong> checkbox biases the search toward physical, pre-streaming-era masters: blank Format defaults to Vinyl, blank Year defaults to 1900–1985, sort defaults to least-owned first. Each filter you set explicitly still wins — Hard to find only fills in blanks. Cards in the result grid that don't have any embedded YouTube videos or user-contributed ones get a small purple <strong style="color:#c084fc">🎵</strong> in the corner so you can spot albums where the community could fill the gap.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Next to it, the small CD icon with a red strike <strong style="color:#ccc">💿</strong> excludes CD-family and digital-only formats (CD, CDr, SACD, DVD, File, MP3, FLAC, AAC, USB, streaming, etc.). Useful when you want strictly analog/vinyl-era pressings — anything that's likely on Spotify gets dropped from the visible results. Both toggles re-filter the cached results instantly without re-querying.</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Album Popups</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Click any card for full details: tracklist with YouTube previews, version finder, pressing info, credits, photos, and marketplace stats. From the detail popup you can <strong style="color:#ccc">add/remove from collection or wantlist</strong>, <strong style="color:#ccc">rate releases</strong> 1–5 stars (rating syncs to Discogs), and ★ favorite the album.</p>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">The tracklist is collapsible (setting saved across sessions) with an inline track filter. Credits are filterable too — useful for releases with long personnel lists. Master release popups show all pressings with format and country filter pills (selections persist across popups). If a release belongs to a <strong style="color:#ccc">series</strong>, the series name is clickable — browse all releases in the series with collection/wantlist badges so you can see what you own and what's missing.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Marketplace stats show lowest price, number for sale, and community want/have counts. Click <strong style="color:#ccc">(est)</strong> to see condition-based price estimates from Good through Mint, color-coded by grade.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Every album card shows badge indicators on hover: <strong style="color:#6ddf70">C</strong> (collection), <strong style="color:#f0c95c">W</strong> (wantlist), and <strong style="color:#ff6b35">F</strong> (favorite). Active badges are bright; inactive ones appear dimmed. Click <strong style="color:#6ddf70">C</strong>, <strong style="color:#f0c95c">W</strong>, or <strong style="color:#ff6b35">F</strong> to add/remove directly from any card — no need to open the popup. If an item is in your lists or inventory, <strong style="color:#a0ccf0">L</strong> and <strong style="color:#cda0f5">I</strong> badges appear too.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Marketplace stats show lowest price, number for sale, and community want/have counts. Click <strong style="color:#ccc">(est)</strong> for condition-based price estimates from Good through Mint, color-coded by grade. The "Sell this release" shortcut appears on releases you already own.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Click an artist, label, or track name in any popup for the unified <strong style="color:#ccc">Lookup</strong> menu — search across SeaDisco, your collection, Wikipedia, the Library of Congress, and YouTube without leaving the modal.</p>
 
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Your Records at a Glance</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When signed in, the main search page displays a shuffled grid of album covers drawn from all your data — collection, wantlist, lists, inventory, and favorites. 48 cards are shown at a time with a load-more button for up to 192 total. This gives you a quick visual snapshot of your library every time you visit.</p>
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Card Badges</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Every album card shows quick-action badges: <strong style="color:#6ddf70">C</strong> (collection), <strong style="color:#f0c95c">W</strong> (wantlist), <strong style="color:#ff6b35">F</strong> (favorite). Active badges are bright; inactive ones appear dimmed. Click any badge to add/remove directly without opening the popup. If an item is in your lists or inventory, <strong style="color:#a0ccf0">L</strong> and <strong style="color:#cda0f5">I</strong> badges appear too. Multiple owned copies show a <strong style="color:#ccc">(N)</strong> badge in the corner — click to pick an instance.</p>
 
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Favorites</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Heart any album, artist, or label to add it to your favorites — from the card thumbnail (hover to reveal) or from the detail popup. Favorites are stored in your account and persist across sessions. View all your favorites in the Favorites tab under My Records.</p>
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Music Player &amp; Queue</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">▶ on any track plays it via a docked mini-player at the bottom of the screen. Tracks are streamed from YouTube (when matched) or the Library of Congress's public-domain archive. Click the <strong style="color:#ccc">disc icon</strong> in the bar to re-open the album popup for whatever's currently playing. The bar persists across page navigation, so you can browse other albums while a track keeps playing.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">A <strong style="color:#ccc">cross-source play queue</strong> handles YouTube and LOC tracks together. The ＋ button on any track row, LOC item, or Archive item adds it to the queue tail. The ▶ button on a tracklist heading plays the first track and queues the whole album. Open the queue drawer (queue button in the bar) to drag-rearrange rows, jump to any track, or remove individual items. The queue auto-advances as tracks end and pulls fresh tracks across YouTube ↔ LOC seamlessly.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">On mobile the player surfaces in your OS lock-screen / Bluetooth controls (play/pause/next/previous). Track URLs are shareable — the URL updates as the queue advances, so copying the address bar gives the recipient the exact track you're on with the album-context disc icon ready.</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Submitted Tracks (Community YouTube Contributions)</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Discogs's tracklist sometimes lists tracks but doesn't have a YouTube video on file for them. Signed-in users can fill those gaps. On any tracklist row that's missing a YT match, click the small <strong style="color:#c084fc">🎵</strong> next to the title — it opens a YouTube search popup pre-scoped to "Artist - Track Title - Album". Pick the right video, click <strong style="color:#ccc">✓ Suggest</strong>, and your contribution is saved site-wide. The next user who opens that album popup sees your video already wired up to ▶ play and ＋ queue. First-submission-wins — no approval queue.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">By default a submission from a release popup applies at <strong style="color:#ccc">master scope</strong> (lifts to every pressing of the album) when the master is known. Tracks that have a community contribution show a small 🎵 badge next to the title.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">The dedicated <strong style="color:#ccc">Submitted Tracks</strong> tab in the navbar shows every album the community has contributed videos to — sortable by Most contributions, Fewest, or Most recent. Each card shows a 🎵 N badge with the count. Open the album to use the contributions or add more.</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Recent &amp; Suggestions Feed</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">The home page shows a strip of cards under your search bar with a <strong style="color:#ccc">Recent / Suggestions</strong> toggle.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem"><strong style="color:#ccc">Recent</strong> is your local browsing history — every album popup you opened, ordered by recency. The × on each card removes it from history. The Clear button wipes everything. History syncs across devices when signed in.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem"><strong style="color:#ccc">Suggestions</strong> is a personalized feed generated by a background process that runs hourly. It analyzes the top genre / style / year combinations in your collection + wantlist, then searches Discogs for albums matching that taste profile that you don't already own. Up to 1000 candidates are saved per user — Load More walks through them. The × on a Suggestions card <strong style="color:#ccc">banishes</strong> that album from your feed permanently, so dismissing aggressively doesn't run you out — the next hourly pass refills with fresh picks.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Both feeds share a filter input + sort dropdown (Opened, Year, Title, Artist).</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Companion Tabs</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">SeaDisco includes dedicated views for adjacent music data:</p>
+  <ul style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem;padding-left:1.2rem">
+    <li><strong style="color:#ccc">Library of Congress</strong> — search the LOC's public-domain audio archive (early jazz, blues, folk, spoken word). Save items to a personal Saved tab. Playable inline via the cross-source queue.</li>
+    <li><strong style="color:#ccc">Wikipedia</strong> — search Wikipedia for artists, albums, labels, genres. Save articles. The lookup popup on any artist/label name in an album popup links here in one click.</li>
+    <li><strong style="color:#ccc">Archive.org</strong> — curated live show recordings (jazz, blues, folk). Save individual shows. Playable inline.</li>
+    <li><strong style="color:#ccc">YouTube</strong> — full YouTube search + Saved tab. Star videos to save them; the Saved tab is filterable and sortable.</li>
+  </ul>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">My Records</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Connect your Discogs account via <strong style="color:#ccc">OAuth</strong> (one-click authorization) to sync your full collection, wantlist, inventory, and lists — any size. Sync runs in the background and refreshes automatically each night.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">The Collection and Wantlist tabs have dedicated filters (artist, release, label, year, genre, style, format) with <strong style="color:#ccc">+</strong> (AND), <strong style="color:#ccc">|</strong> (OR), and <strong style="color:#ccc">-</strong> (exclude) operators. <strong style="color:#6ddf70">C</strong> and <strong style="color:#f0c95c">W</strong> badges on every card show which items are in your collection and wantlist.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">The <strong style="color:#ccc">Inventory</strong> tab shows your marketplace listings with full create/edit/delete support — list a new record for sale, change prices, update conditions, or pull a listing. The editor pulls Discogs' own median/low/high price suggestions so you can price with confidence. Each card shows an ✏️ edit and 🗑 delete button, and every release popup for records you own gains a "Sell this release" shortcut. <strong style="color:#ccc">Lists</strong> displays your curated Discogs lists — click any list to browse its items as album cards. Lists and list items are read-only (Discogs does not expose write APIs for lists) and sync every 6 hours alongside your other data.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">The <strong style="color:#ccc">Collection</strong> and <strong style="color:#ccc">Wantlist</strong> tabs have dedicated filters (artist, release, label, year, genre, style, format) with <strong style="color:#ccc">+</strong> (AND), <strong style="color:#ccc">|</strong> (OR), and <strong style="color:#ccc">-</strong> (exclude) operators. <strong style="color:#6ddf70">C</strong> and <strong style="color:#f0c95c">W</strong> badges on every card show what's in your library.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">The <strong style="color:#ccc">Inventory</strong> tab shows your marketplace listings with full create/edit/delete support — list a new record for sale, change prices, update conditions, or pull a listing. The editor pulls Discogs' median/low/high price suggestions so you can price with confidence. Each card shows ✏️ edit and 🗑 delete; every release popup for records you own gains a "Sell this release" shortcut.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem"><strong style="color:#ccc">Lists</strong> displays your curated Discogs lists — click any list to browse its items as album cards. Lists are read-only (Discogs's API doesn't expose writes) and sync every 6 hours.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem"><strong style="color:#ccc">Favorites</strong> shows everything you've ★'d. Favorites are SeaDisco-only (not synced to Discogs) and work for releases, masters, artists, and labels.</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Multiple Copies &amp; Folders</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Own multiple copies of the same release? SeaDisco tracks each copy separately. Cards show a small <strong style="color:#ccc">(N)</strong> badge when you own more than one — click it to pick an instance, and the popup scopes its rating, folder, and notes to that specific copy.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">Click <strong style="color:#ccc">📁</strong> above the Collection filters to manage your Discogs folders — create, rename, or delete folders, and bulk-move items between them. All folder changes sync back to Discogs in real time.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Seller Orders</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">If you sell on the Discogs marketplace, the <strong style="color:#ccc">Account</strong> page shows a Seller Orders panel with every open and recent order. Filter by status, search by buyer or release title, and open any order for full details — items, shipping address, buyer info, and the full message thread. Advance the status through Discogs' seller state machine (New Order → Payment Received → Shipped, etc.) and reply to buyers inline with the 💬 quick-reply composer, or open the detail modal for longer messages. A badge on the section header shows how many orders have unread activity since you last looked.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">The <strong style="color:#ccc">Favorites</strong> tab shows all items you've favorited. The bottom navigation row (<strong style="color:#6ddf70">C</strong>ollection, <strong style="color:#f0c95c">W</strong>antlist, <strong style="color:#a0ccf0">L</strong>ists, <strong style="color:#cda0f5">I</strong>nventory, <strong style="color:#ff6b35">F</strong>avorites) provides quick access to each tab.</p>
 
-  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Collection Actions</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">From any release detail popup, you can add or remove items from your collection, wantlist, and favorites with one click. Rate releases 1–5 stars — ratings sync to your Discogs account. Favorites are SeaDisco-only (not synced to Discogs) and work for releases, masters, artists, and labels. All actions update instantly with optimistic UI and revert gracefully if anything goes wrong. Card badges update in real time to reflect changes.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Own multiple copies of the same release? SeaDisco tracks each copy separately. Cards show a small <strong style="color:#ccc">(N)</strong> badge when you own more than one — click it to pick an instance, and the popup scopes its rating, folder, and notes to that specific copy. Each copy can live in a different folder, carry its own rating, and have its own private notes.</p>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">Click the <strong style="color:#ccc">📁</strong> button above the Collection filters to manage your Discogs folders — create, rename, or delete folders, and bulk-move items between them. All folder changes sync back to Discogs in real time.</p>
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Offline Access</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">From the Account page, opt in to offline access. Your library (collection, wantlist, favorites, lists, inventory, and cover thumbnails) is cached to your browser's IndexedDB and Cache Storage. Reload while offline and the site boots from cache so you can browse and search your records without a connection. Playback still requires the network. Disabling the toggle wipes the local cache.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Saved Searches</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">Save any search and re-run it with one click. Saved searches persist across sessions.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">Save any search and re-run it with one click. Saved searches persist across sessions and sync to your account.</p>
+
+  <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Account &amp; Feedback</h3>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">The Account page handles your Discogs OAuth connection, sync status, offline-access toggle, and account deletion. The "Send feedback" button at the bottom mails the admin directly with whatever you write.</p>
 </div>
 
 <div id="privacy-view" class="content-narrow" style="display:none">
@@ -960,15 +998,15 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260429.0819"></script>
-<script defer src="/search.js?v=20260429.0819"></script>
-<script defer src="/collection.js?v=20260429.0819"></script>
-<script defer src="/account.js?v=20260429.0819"></script>
-<script defer src="/orders.js?v=20260429.0819"></script>
+<script defer src="/utils.js?v=20260429.1018"></script>
+<script defer src="/search.js?v=20260429.1018"></script>
+<script defer src="/collection.js?v=20260429.1018"></script>
+<script defer src="/account.js?v=20260429.1018"></script>
+<script defer src="/orders.js?v=20260429.1018"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260429.0819"></script>
-<script defer src="/app.js?v=20260429.0819"></script>
+<script defer src="/modal.js?v=20260429.1018"></script>
+<script defer src="/app.js?v=20260429.1018"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -977,13 +1015,13 @@
      (switchView for archive/youtube; openInventoryEditor stub for
      the editor). After window.load they're idle-preloaded so a
      subsequent nav into those views is instant. -->
-<script defer src="/loc.js?v=20260429.0819"></script>
-<script defer src="/queue.js?v=20260429.0819"></script>
+<script defer src="/loc.js?v=20260429.1018"></script>
+<script defer src="/queue.js?v=20260429.1018"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260429.0819";
+  window._SD_LAZY_VERSION = "20260429.1018";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1006,8 +1044,8 @@
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260429.0819"></script>
-<script defer src="/offline.js?v=20260429.0819"></script>
+<script defer src="/idb.js?v=20260429.1018"></script>
+<script defer src="/offline.js?v=20260429.1018"></script>
 
 </body>
 </html>
