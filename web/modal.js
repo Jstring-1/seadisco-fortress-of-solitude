@@ -2228,8 +2228,12 @@ function _trackYtApplyToDom(targetId, masterId, releaseId, isMaster) {
       const url = `https://www.youtube.com/watch?v=${ov.video_id}`;
       const titleLink = titleCell.querySelector(".track-title-link");
       const trackTitle = titleLink?.textContent || ov.track_title || "";
-      const trackArtist = row.closest(".album-popup")?.querySelector(".album-artist")?.textContent?.split(",")[0]?.trim() || "";
-      const albumTitle  = row.closest(".album-popup")?.querySelector("h2")?.textContent?.trim() || "";
+      // The popup root is #album-info / #version-info — there's no
+      // .album-popup wrapper, so the previous closest() selector was
+      // returning null and trackArtist was always blank. Use the
+      // root we already have via `root` (the targetId).
+      const trackArtist = root?.querySelector?.(".album-artist")?.textContent?.split(",")[0]?.trim() || "";
+      const albumTitle  = root?.querySelector?.("h2")?.textContent?.trim() || "";
       const entityType  = isMaster ? "master" : "release";
       const playHtml = `<a class="track-play-btn track-link" href="#" data-video="${url}" data-track="${escHtml(trackTitle)}" data-album="${escHtml(albumTitle)}" data-artist="${escHtml(trackArtist)}" data-release-type="${entityType}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="openVideo(event,'${url}')" title="Play this track">▶</a>`;
       if (playCell) playCell.innerHTML = playHtml;
@@ -2268,8 +2272,8 @@ function _trackYtApplyToDom(targetId, masterId, releaseId, isMaster) {
     }
     if (stillNoPlay && window._clerk?.user) {
       const trackTitle = titleCell.querySelector(".track-title-link")?.textContent || "";
-      const trackArtist = row.closest(".album-popup")?.querySelector(".album-artist")?.textContent?.split(",")[0]?.trim() || "";
-      const albumTitle  = row.closest(".album-popup")?.querySelector("h2")?.textContent?.trim() || "";
+      const trackArtist = root?.querySelector?.(".album-artist")?.textContent?.split(",")[0]?.trim() || "";
+      const albumTitle  = root?.querySelector?.("h2")?.textContent?.trim() || "";
       decorate(` <a href="#" class="track-yt-suggest" data-pos="${escHtml(pos)}" data-track="${escHtml(trackTitle)}" data-artist="${escHtml(trackArtist)}" data-album="${escHtml(albumTitle)}" onclick="event.preventDefault();_trackYtOpenSuggest(this);return false" title="Suggest a YouTube video for this track">🎵</a>`);
     }
   });
