@@ -2107,6 +2107,12 @@ function _trackQueueAdd(el) {
     releaseType: el.dataset.releaseType || "",
     releaseId:   el.dataset.releaseId   || "",
   };
+  console.debug("[_trackQueueAdd]", {
+    videoId,
+    title: meta.title,
+    releaseType: meta.releaseType || "(empty)",
+    releaseId:   meta.releaseId   || "(empty)",
+  });
   if (typeof queueAddYt === "function") {
     // ＋ button = add to the tail of the queue. The "play now"
     // affordance is the ▶ button, which goes through openVideo and
