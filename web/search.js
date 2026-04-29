@@ -1638,14 +1638,23 @@ async function loadRandomRecords(more) {
     }
     return;
   }
-  // Each card gets a small X overlay so the user can drop a single item
-  // from their local history without clearing everything.
+  // Each card gets a small X overlay. In Recent mode, × drops the row
+  // from local history. In Suggestions mode, × banishes that
+  // master/release from the user's personal feed forever (server-side
+  // record). On Submitted Tracks (picks mode) we don't show ×.
+  const inSuggestions = !window._sdPicksMode && window._sdHomeStripMode === "suggestions";
   const html = slice.map((item, i) => {
     const card = renderCard(item, _randomShown + i);
     const safeId = escHtml(String(item.id));
-    const dismiss = item._isSuggested
-      ? "" // suggested cards aren't in local history; the × would no-op
-      : `<button class="recent-dismiss" onclick="removeFromHistory(event,'${safeId}')" title="Remove from history">✕</button>`;
+    const safeType = escHtml(String(item.type || "master"));
+    let dismiss = "";
+    if (window._sdPicksMode) {
+      // No dismiss on Submitted Tracks page.
+    } else if (inSuggestions && window._clerk?.user) {
+      dismiss = `<button class="recent-dismiss" onclick="_sdDismissSuggestion(event,'${safeId}','${safeType}')" title="Hide this suggestion forever">✕</button>`;
+    } else if (!item._isSuggested) {
+      dismiss = `<button class="recent-dismiss" onclick="removeFromHistory(event,'${safeId}')" title="Remove from history">✕</button>`;
+    }
     return `<div class="recent-wrap" data-hist-id="${safeId}">${card}${dismiss}</div>`;
   }).join("");
   grid.querySelector(".random-load-more")?.remove();
@@ -1725,6 +1734,38 @@ function removeFromHistory(ev, id) {
     try { apiFetch(`/api/user/recent/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => {}); } catch {}
   }
 }
+
+/** Banish a suggestion from the user's personal feed. Optimistic
+ *  DOM removal + server POST. The next background run will skip the
+ *  banished (id,type) on every subsequent pass. */
+function _sdDismissSuggestion(ev, id, type) {
+  if (ev) { ev.preventDefault(); ev.stopPropagation(); }
+  const safeId = String(id);
+  const safeType = type === "release" ? "release" : "master";
+  // Optimistic removal — drop the card AND the underlying _randomAll
+  // entry so re-render / paging doesn't bring it back.
+  const el = document.querySelector(`.recent-wrap[data-hist-id="${CSS.escape(safeId)}"]`);
+  if (el) el.remove();
+  if (Array.isArray(_randomAll)) {
+    _randomAll = _randomAll.filter(it => !(String(it.id) === safeId && String(it.type) === safeType));
+  }
+  if (!_randomAll.length) {
+    const wrap = document.getElementById("random-records");
+    if (wrap) wrap.style.display = "none";
+  }
+  // Server-side banish — fire-and-forget. If it fails the next page
+  // load will pull the same card back, but the user can dismiss again.
+  if (window._clerk?.user && typeof apiFetch === "function") {
+    try {
+      apiFetch("/api/user/personal-suggestions/dismiss", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: Number(safeId), type: safeType }),
+      }).catch(() => {});
+    } catch {}
+  }
+}
+window._sdDismissSuggestion = _sdDismissSuggestion;
 
 /** Clear-all button — drops all history after confirmation. */
 function clearRecentHistory() {

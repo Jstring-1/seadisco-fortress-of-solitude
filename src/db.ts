@@ -315,6 +315,21 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS track_youtube_overrides_submitted_idx ON track_youtube_overrides (submitted_at DESC)`);
 
+  // ── Per-user "banished" suggestions ──────────────────────────────────────
+  // When a user dismisses a personal-suggestion card with the × button,
+  // the (id,type) is recorded here and the background generator skips it
+  // on every subsequent run. Banishments are permanent unless the user
+  // clears them (no UI for that yet — manual DB op).
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_suggestion_dismissals (
+      clerk_user_id TEXT        NOT NULL,
+      discogs_id    INTEGER     NOT NULL,
+      entity_type   TEXT        NOT NULL,    -- 'master' | 'release'
+      dismissed_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (clerk_user_id, discogs_id, entity_type)
+    )
+  `);
+
   // ── Per-user personal suggestions (background-generated) ─────────────────
   // A scheduled task computes a fresh batch of master/release suggestions
   // for each user once an hour: albums in the user's favorite genre/style
@@ -3868,6 +3883,41 @@ export async function replaceUserPersonalSuggestions(
   } finally {
     client.release();
   }
+}
+
+// Dismissals ("banish this suggestion forever") — record per-user so
+// the generator skips them and any saved row is wiped immediately.
+export async function dismissPersonalSuggestion(
+  clerkUserId: string,
+  discogsId: number,
+  entityType: "master" | "release"
+): Promise<void> {
+  await getPool().query(
+    `INSERT INTO user_suggestion_dismissals (clerk_user_id, discogs_id, entity_type)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (clerk_user_id, discogs_id, entity_type) DO NOTHING`,
+    [clerkUserId, discogsId, entityType]
+  );
+  // Also remove from the saved batch so the card disappears on next render.
+  await getPool().query(
+    `DELETE FROM user_personal_suggestions
+       WHERE clerk_user_id = $1 AND discogs_id = $2 AND entity_type = $3`,
+    [clerkUserId, discogsId, entityType]
+  );
+}
+
+// Returns set of "type:id" strings the user has banished so the
+// generator can skip them in O(1).
+export async function getDismissedSuggestionKeys(clerkUserId: string): Promise<Set<string>> {
+  const out = new Set<string>();
+  try {
+    const r = await getPool().query(
+      `SELECT discogs_id, entity_type FROM user_suggestion_dismissals WHERE clerk_user_id = $1`,
+      [clerkUserId]
+    );
+    for (const row of r.rows) out.add(`${row.entity_type}:${row.discogs_id}`);
+  } catch { /* best effort */ }
+  return out;
 }
 
 export async function getUserPersonalSuggestions(
