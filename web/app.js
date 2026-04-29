@@ -60,9 +60,9 @@ async function _ensureAdminFlag() {
     switchView("account", true);
   } else if (rawView === "info" || rawView === "privacy" || rawView === "terms") {
     switchView(rawView, true);
-  } else if (rawView === "wiki" || rawView === "loc" || rawView === "archive" || rawView === "youtube") {
-    // Wiki / LOC / Archive / YouTube are public to anonymous users
-    // (server endpoints rate-limit per IP). Just enter the view.
+  } else if (rawView === "wiki" || rawView === "loc" || rawView === "archive" || rawView === "youtube" || rawView === "picks") {
+    // Wiki / LOC / Archive / YouTube / Picks are public to anonymous
+    // users (server endpoints rate-limit per IP). Just enter the view.
     switchView(rawView, true);
   } else if (rawView === "records" || rawView === "wanted") {
     await authReadyPromise;
@@ -183,7 +183,7 @@ window.addEventListener("popstate", () => {
     if (sort) { const el = document.getElementById("cw-sort"); if (el) el.value = sort; }
     switchView("records", true); return;
   }
-  if (rawView === "records" || rawView === "info" || rawView === "privacy" || rawView === "terms" || rawView === "wanted" || rawView === "account" || rawView === "loc" || rawView === "wiki") {
+  if (rawView === "records" || rawView === "info" || rawView === "privacy" || rawView === "terms" || rawView === "wanted" || rawView === "account" || rawView === "loc" || rawView === "wiki" || rawView === "picks") {
     if (rawView === "records") {
       _cwTab = p.get("tab") || "collection";
       const sort = p.get("s") || p.get("sort");

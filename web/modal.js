@@ -2147,7 +2147,13 @@ function _trackYtReadCache(masterId, releaseId, isMaster) {
 async function _trackYtFetchOverrides(masterId, releaseId, isMaster) {
   const k = _trackYtCacheKey(masterId, releaseId, isMaster);
   const params = [];
-  if (masterId) params.push(`master_id=${encodeURIComponent(masterId)}`);
+  // For master popups, the master ID IS the popup's releaseId
+  // (the popup IS the master). For release popups, masterId is the
+  // optional d.master_id. Without this fallback, master popups sent
+  // no params and silently returned an empty override map — which
+  // is why some popups didn't display their submitted tracks.
+  const effectiveMasterId = isMaster ? (masterId || releaseId) : masterId;
+  if (effectiveMasterId) params.push(`master_id=${encodeURIComponent(effectiveMasterId)}`);
   // For release popups we still want the master-scope rows — use
   // d.master_id when available, else fall back to release_id only.
   if (!isMaster && releaseId) params.push(`release_id=${encodeURIComponent(releaseId)}`);
@@ -2343,44 +2349,57 @@ function _trackYtOpenSuggest(el) {
 }
 window._trackYtOpenSuggest = _trackYtOpenSuggest;
 
-// Admin: delete a track override. Confirms, hits the admin endpoint,
-// then re-applies the DOM patch so the row reverts to its pre-override
-// state (and shows the 🎵 suggest button if the user is still signed in).
+// Admin: delete a track override. Confirms, hits the admin endpoint
+// using the override's ACTUAL scope (master or release) — not the
+// popup's scope. This matters when a master popup is showing a
+// release-scope override (or vice versa) — admin needs the delete to
+// land regardless of which view they clicked from.
 async function _trackYtAdminDelete(el) {
   if (!window._isAdmin) return;
   const pos = el.dataset.pos || "";
   const row = el.closest(".track");
   const popup = el.closest(".album-popup, .modal-content, #album-info, #version-info") || document;
-  const badge = popup.querySelector(".album-type-badge");
-  if (!pos || !badge) return;
-  const m = /^(Master|Release|Version)\s*:\s*(\d+)/.exec(badge.textContent || "");
-  if (!m) return;
-  const scopeType = m[1].toLowerCase() === "master" ? "master" : "release";
-  const scopeId   = m[2];
+  if (!pos) return;
+  const popupRoot = popup.id ? popup : document.getElementById("album-info") || document.getElementById("version-info");
+  const popupReleaseId = popupRoot?.dataset?.releaseId || "";
+  const popupMasterId  = popupRoot?.dataset?.masterId  || "";
+  const popupIsMaster  = popupRoot?.dataset?.entityType === "master";
+
+  // Look up the override's ACTUAL scope from the in-memory cache. The
+  // map merged master + release rows under the same position key, so
+  // its release_id / release_type tell us where the row really lives.
+  let overrideScopeType = popupIsMaster ? "master" : "release";
+  let overrideScopeId   = popupIsMaster ? popupMasterId || popupReleaseId : popupReleaseId;
+  // Try to find the cached override entry — check master cache key
+  // first, then release cache key.
+  const masterCacheKey  = `master:${popupMasterId || (popupIsMaster ? popupReleaseId : "")}`;
+  const releaseCacheKey = `release:${popupReleaseId}`;
+  const masterMap  = _trackYtOverridesCache.get(masterCacheKey)?.byPosition;
+  const releaseMap = _trackYtOverridesCache.get(releaseCacheKey)?.byPosition;
+  const ov = (releaseMap && releaseMap.get(String(pos))) || (masterMap && masterMap.get(String(pos))) || null;
+  if (ov && ov.release_type && ov.release_id) {
+    overrideScopeType = ov.release_type;
+    overrideScopeId   = String(ov.release_id);
+  }
+  if (!overrideScopeId) return;
+
   if (!confirm(`Remove the user-suggested YouTube video for track "${row?.querySelector('.track-title-link')?.textContent || pos}"?`)) return;
   try {
     const r = await apiFetch("/api/admin/track-yt", {
       method: "DELETE",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ releaseId: scopeId, releaseType: scopeType, trackPosition: pos }),
+      body: JSON.stringify({
+        releaseId:     overrideScopeId,
+        releaseType:   overrideScopeType,
+        trackPosition: pos,
+      }),
     });
     if (!r.ok) throw new Error(`delete failed (${r.status})`);
-    // Drop this entry from the cache so the re-apply pass reflects it.
-    // We don't know which scope it was at; safer to nuke both possible
-    // cache keys for this popup so the next fetch repopulates clean.
+    // Wipe the cache and re-fetch using the popup's full scope so the
+    // re-apply repopulates from both master + release rows.
     _trackYtOverridesCache.clear();
-    const targetId = popup.id || "album-info";
-    // Re-fetch + re-apply against the same popup. masterId arg is
-    // handled by the existing scope: if the popup is a master, scopeId
-    // is the masterId; else it's the releaseId.
-    if (scopeType === "master") {
-      await _trackYtKickFetchAndApply(targetId, scopeId, "", true);
-    } else {
-      // For release popups we don't have d.master_id here, so the
-      // re-fetch will only pick up release-scope rows. Good enough —
-      // master-scope deletes will refresh on the next popup open.
-      await _trackYtKickFetchAndApply(targetId, "", scopeId, false);
-    }
+    const targetId = popupRoot?.id || popup.id || "album-info";
+    await _trackYtKickFetchAndApply(targetId, popupMasterId, popupIsMaster ? "" : popupReleaseId, popupIsMaster);
     if (typeof showToast === "function") showToast("Override removed", "info");
   } catch (e) {
     if (typeof showToast === "function") showToast(e?.message || "Could not remove override", "error");

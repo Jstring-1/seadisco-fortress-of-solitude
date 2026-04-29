@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260428.2113" />
+  <link rel="stylesheet" href="/style.css?v=20260428.2230" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260428.2113"></script>
-<script defer src="/shared.js?v=20260428.2113"></script>
+<script defer src="/utils.js?v=20260428.2230"></script>
+<script defer src="/shared.js?v=20260428.2230"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true, iconNav: true }));</script>
 
 <main>
@@ -65,6 +65,8 @@
         <button class="admin-tab" onclick="switchAdminTab('db-stats')">Database</button>
         <button class="admin-tab" onclick="switchAdminTab('loc-stats')">LOC</button>
         <button class="admin-tab" onclick="switchAdminTab('blues-db')">Blues DB</button>
+        <button class="admin-tab" onclick="switchAdminTab('submissions')">Submissions</button>
+        <button class="admin-tab" onclick="switchAdminTab('suggestions')">Suggestions</button>
         <button class="admin-tab" onclick="switchAdminTab('theme')">View</button>
       </div>
 
@@ -207,6 +209,29 @@
         </div>
       </div>
 
+      <!-- Submitted Tracks (crowd-sourced YT overrides) -->
+      <div class="admin-tab-panel" id="panel-submissions" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
+          <h2 style="margin:0">Submitted Tracks</h2>
+          <button class="admin-refresh-btn" onclick="loadAdminSubmissions()" title="Refresh">&#8635;</button>
+          <span id="submissions-count" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
+        </div>
+        <div id="submissions-list" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
+      </div>
+
+      <!-- Personal suggestions stats + manual triggers -->
+      <div class="admin-tab-panel" id="panel-suggestions" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
+          <h2 style="margin:0">Suggestions</h2>
+          <button class="admin-refresh-btn" onclick="loadAdminSuggestions()" title="Refresh">&#8635;</button>
+          <button class="admin-btn" id="suggestions-run-self-btn" onclick="adminSuggestionsRunSelf()" title="Run the per-user generator for the admin user only">Run for me</button>
+          <button class="admin-btn" id="suggestions-run-all-btn" onclick="adminSuggestionsRunAll()" title="Run the per-user generator for every user (background, may take minutes)">Run for everyone</button>
+          <span id="suggestions-action-status" style="font-size:0.78rem;color:var(--muted)"></span>
+        </div>
+        <p style="font-size:0.78rem;color:var(--muted);margin:0 0 0.6rem">Hourly background job populates each user's personal feed by searching Discogs for masters in their top genre/style/year combos that they don't already own.</p>
+        <div id="suggestions-list" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
+      </div>
+
       <!-- View-as-user (theme picker removed — site theme is locked to
            Noir White site-wide). The view-as-user toggle remains here so
            the admin can preview the site without admin affordances. -->
@@ -277,7 +302,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260428.2113"></script>
+<script defer src="/modal.js?v=20260428.2230"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -292,6 +317,8 @@ const _adminTabLoaders = {
   'db-stats': () => loadDbStats(),
   'loc-stats': () => loadLocStats(),
   'blues-db': () => bluesDbInit(),
+  'submissions': () => loadAdminSubmissions(),
+  'suggestions': () => loadAdminSuggestions(),
   'theme': () => initThemePicker(),
 };
 
@@ -637,7 +664,11 @@ async function loadDbStats() {
         const count = countMap[t] ?? -1;
         const display = count < 0 ? "err" : count.toLocaleString();
         const color = count < 0 ? "var(--danger)" : count === 0 ? "var(--muted-dim)" : "var(--fg)";
-        html += `<div style="display:flex;justify-content:space-between;padding:0.12rem 0;font-size:0.78rem"><span style="color:var(--muted)">${t}</span><span style="color:${color};font-weight:500">${display}</span></div>`;
+        const exists = count >= 0;
+        const nameMarkup = exists
+          ? `<a href="#" onclick="event.preventDefault();adminOpenDbTablePopup('${escHtml(t).replace(/'/g, "\\'")}')" style="color:var(--muted);text-decoration:none;border-bottom:1px dotted transparent" onmouseover="this.style.borderBottomColor='var(--accent)';this.style.color='var(--text)'" onmouseout="this.style.borderBottomColor='transparent';this.style.color='var(--muted)'" title="Show schema, indexes, size">${t}</a>`
+          : `<span style="color:var(--muted)">${t}</span>`;
+        html += `<div style="display:flex;justify-content:space-between;padding:0.12rem 0;font-size:0.78rem">${nameMarkup}<span style="color:${color};font-weight:500">${display}</span></div>`;
       }
       html += `</div>`;
     }
@@ -654,7 +685,11 @@ async function loadDbStats() {
           const count = t.rows;
           const display = count < 0 ? "err" : count.toLocaleString();
           const color = count < 0 ? "var(--danger)" : count === 0 ? "var(--muted-dim)" : "var(--fg)";
-          return `<div style="display:flex;justify-content:space-between;font-size:0.78rem"><span style="color:var(--muted);font-family:monospace">${t.table}</span><span style="color:${color};font-weight:500">${display}</span></div>`;
+          const exists = count >= 0;
+          const nameMarkup = exists
+            ? `<a href="#" onclick="event.preventDefault();adminOpenDbTablePopup('${escHtml(t.table).replace(/'/g, "\\'")}')" style="color:var(--muted);font-family:monospace;text-decoration:none;border-bottom:1px dotted transparent" onmouseover="this.style.borderBottomColor='var(--accent)';this.style.color='var(--text)'" onmouseout="this.style.borderBottomColor='transparent';this.style.color='var(--muted)'" title="Show schema, indexes, size">${t.table}</a>`
+            : `<span style="color:var(--muted);font-family:monospace">${t.table}</span>`;
+          return `<div style="display:flex;justify-content:space-between;font-size:0.78rem">${nameMarkup}<span style="color:${color};font-weight:500">${display}</span></div>`;
         }).join("") +
         `</div>`;
     }
@@ -1901,6 +1936,207 @@ async function bluesDbDeleteFromEditor() {
 }
 
 // toggleMobileNav — now in shared.js
+
+// ── Admin: Submitted Tracks (track YT overrides) ──────────────────────
+async function loadAdminSubmissions() {
+  const el = document.getElementById("submissions-list");
+  const countEl = document.getElementById("submissions-count");
+  if (!el) return;
+  el.textContent = "Loading…";
+  try {
+    const r = await apiFetch("/api/admin/track-yt");
+    if (!r.ok) { el.textContent = "Could not load submissions."; return; }
+    const j = await r.json();
+    const rows = Array.isArray(j?.overrides) ? j.overrides : [];
+    if (countEl) countEl.textContent = `${rows.length} ${rows.length === 1 ? "row" : "rows"}`;
+    if (!rows.length) {
+      el.innerHTML = `<div style="color:var(--muted);padding:1rem;text-align:center">No submissions yet.</div>`;
+      return;
+    }
+    const fmtDate = (d) => d ? new Date(d).toLocaleString() : "—";
+    const trim = (s, n) => { s = String(s || ""); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
+    const head = `<thead style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted);text-align:left">
+      <tr>
+        <th style="padding:0.3rem 0.5rem">When</th>
+        <th style="padding:0.3rem 0.5rem">Scope</th>
+        <th style="padding:0.3rem 0.5rem">Album</th>
+        <th style="padding:0.3rem 0.5rem">Pos</th>
+        <th style="padding:0.3rem 0.5rem">Track</th>
+        <th style="padding:0.3rem 0.5rem">Video</th>
+        <th style="padding:0.3rem 0.5rem">By</th>
+        <th></th>
+      </tr></thead>`;
+    const body = rows.map(o => {
+      const albumLink = `<a href="/?op=${encodeURIComponent(o.release_type + ':' + o.release_id)}" target="_blank" rel="noopener" style="color:#7eb8da;text-decoration:none">${o.release_type}/${escHtml(String(o.release_id))}</a>`;
+      const ytLink = `<a href="https://www.youtube.com/watch?v=${encodeURIComponent(o.video_id)}" target="_blank" rel="noopener" style="color:#7eb8da;text-decoration:none">${escHtml(trim(o.video_title || o.video_id, 40))}</a>`;
+      return `<tr style="border-top:1px solid var(--border);font-size:0.78rem">
+        <td style="padding:0.35rem 0.5rem;color:var(--muted);white-space:nowrap">${escHtml(fmtDate(o.submitted_at))}</td>
+        <td style="padding:0.35rem 0.5rem">${escHtml(o.release_type)}</td>
+        <td style="padding:0.35rem 0.5rem">${albumLink}</td>
+        <td style="padding:0.35rem 0.5rem;font-family:monospace">${escHtml(o.track_position)}</td>
+        <td style="padding:0.35rem 0.5rem">${escHtml(trim(o.track_title || "", 32))}</td>
+        <td style="padding:0.35rem 0.5rem">${ytLink}</td>
+        <td style="padding:0.35rem 0.5rem;color:var(--muted);font-family:monospace;font-size:0.72rem">${escHtml(trim(o.submitted_by, 12))}</td>
+        <td style="padding:0.35rem 0.5rem"><button class="admin-btn admin-btn-danger" onclick="adminDeleteSubmission(this,'${escHtml(o.release_id)}','${escHtml(o.release_type)}','${escHtml(o.track_position).replace(/'/g, "\\'")}')">Delete</button></td>
+      </tr>`;
+    }).join("");
+    el.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">${head}<tbody>${body}</tbody></table></div>`;
+  } catch (e) {
+    el.textContent = "Could not load submissions: " + (e?.message || e);
+  }
+}
+window.loadAdminSubmissions = loadAdminSubmissions;
+
+async function adminDeleteSubmission(btn, releaseId, releaseType, trackPosition) {
+  if (!confirm(`Delete submission for ${releaseType}/${releaseId} pos ${trackPosition}?`)) return;
+  btn.disabled = true;
+  try {
+    const r = await apiFetch("/api/admin/track-yt", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ releaseId, releaseType, trackPosition }),
+    });
+    if (!r.ok) throw new Error(`failed (${r.status})`);
+    loadAdminSubmissions();
+  } catch (e) {
+    btn.disabled = false;
+    alert("Delete failed: " + (e?.message || e));
+  }
+}
+window.adminDeleteSubmission = adminDeleteSubmission;
+
+// ── Admin: Suggestions (background-generated personal feed) ───────────
+async function loadAdminSuggestions() {
+  const el = document.getElementById("suggestions-list");
+  if (!el) return;
+  el.textContent = "Loading…";
+  try {
+    const r = await apiFetch("/api/admin/suggestions-stats");
+    if (!r.ok) { el.textContent = "Could not load suggestions stats."; return; }
+    const j = await r.json();
+    const rows = Array.isArray(j?.users) ? j.users : [];
+    if (!rows.length) {
+      el.innerHTML = `<div style="color:var(--muted);padding:1rem;text-align:center">No saved suggestions yet — wait for the next hourly run or click "Run for me" / "Run for everyone" above.</div>`;
+      return;
+    }
+    const fmtDate = (d) => d ? new Date(d).toLocaleString() : "—";
+    const head = `<thead style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted);text-align:left">
+      <tr>
+        <th style="padding:0.3rem 0.5rem">User</th>
+        <th style="padding:0.3rem 0.5rem">Saved</th>
+        <th style="padding:0.3rem 0.5rem">Last generated</th>
+      </tr></thead>`;
+    const body = rows.map(u => `<tr style="border-top:1px solid var(--border);font-size:0.78rem">
+      <td style="padding:0.35rem 0.5rem;font-family:monospace;font-size:0.72rem;color:var(--muted)">${escHtml(u.clerkUserId)}</td>
+      <td style="padding:0.35rem 0.5rem;font-weight:600">${u.count}</td>
+      <td style="padding:0.35rem 0.5rem;color:var(--muted)">${escHtml(fmtDate(u.lastGeneratedAt))}</td>
+    </tr>`).join("");
+    el.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">${head}<tbody>${body}</tbody></table></div>`;
+  } catch (e) {
+    el.textContent = "Could not load suggestions stats: " + (e?.message || e);
+  }
+}
+window.loadAdminSuggestions = loadAdminSuggestions;
+
+async function adminSuggestionsRunSelf() {
+  const status = document.getElementById("suggestions-action-status");
+  const btn = document.getElementById("suggestions-run-self-btn");
+  if (btn) btn.disabled = true;
+  if (status) status.textContent = "Running for admin…";
+  try {
+    const r = await apiFetch("/api/admin/run-suggestions-for-self", { method: "POST" });
+    if (!r.ok) throw new Error(`failed (${r.status})`);
+    const j = await r.json();
+    if (status) status.textContent = `Saved ${j.saved} suggestions${j.reason ? ` (${j.reason})` : ""}.`;
+    loadAdminSuggestions();
+  } catch (e) {
+    if (status) status.textContent = "Failed: " + (e?.message || e);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+window.adminSuggestionsRunSelf = adminSuggestionsRunSelf;
+
+async function adminSuggestionsRunAll() {
+  if (!confirm("Run the suggestion generator for every user? This pulls Discogs for each user with OAuth and may take several minutes.")) return;
+  const status = document.getElementById("suggestions-action-status");
+  const btn = document.getElementById("suggestions-run-all-btn");
+  if (btn) btn.disabled = true;
+  if (status) status.textContent = "Kicked off in background…";
+  try {
+    const r = await apiFetch("/api/admin/run-suggestions", { method: "POST" });
+    if (!r.ok) throw new Error(`failed (${r.status})`);
+    if (status) status.textContent = "Background run started — refresh in a couple minutes.";
+  } catch (e) {
+    if (status) status.textContent = "Failed: " + (e?.message || e);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+window.adminSuggestionsRunAll = adminSuggestionsRunAll;
+
+// ── Admin: clickable DB table summary popup ────────────────────────────
+// Each table name in the Database tab is clickable; opens an overlay
+// with schema, indexes, row count, on-disk size. Defensive: the
+// /api/admin/db-table endpoint whitelists names against
+// getTableRowCounts so we can pass the raw name.
+async function adminOpenDbTablePopup(tableName) {
+  const overlay = document.getElementById("admin-db-table-overlay") || (() => {
+    const o = document.createElement("div");
+    o.id = "admin-db-table-overlay";
+    o.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.78);z-index:300;display:flex;align-items:center;justify-content:center;padding:2rem 1rem;overflow:auto";
+    o.onclick = e => { if (e.target === o) o.remove(); };
+    document.body.appendChild(o);
+    return o;
+  })();
+  overlay.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(720px,100%);max-height:88vh;overflow:auto;box-shadow:0 8px 28px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.04) inset">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.7rem">
+      <h3 style="margin:0;font-family:monospace;font-size:1rem">${escHtml(tableName)}</h3>
+      <button class="admin-btn" onclick="document.getElementById('admin-db-table-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
+    </div>
+    <div id="admin-db-table-body" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
+  </div>`;
+  try {
+    const r = await apiFetch(`/api/admin/db-table/${encodeURIComponent(tableName)}`);
+    if (!r.ok) throw new Error(`status ${r.status}`);
+    const j = await r.json();
+    const fmtBytes = (b) => {
+      if (!b) return "—";
+      const u = ["B", "KB", "MB", "GB"];
+      let v = b, i = 0;
+      while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+      return `${v.toFixed(v < 10 ? 1 : 0)} ${u[i]}`;
+    };
+    const body = document.getElementById("admin-db-table-body");
+    if (!body) return;
+    const colsHtml = j.columns.map(c =>
+      `<tr style="border-top:1px solid var(--border)">
+        <td style="padding:0.25rem 0.5rem;font-family:monospace;font-size:0.78rem">${escHtml(c.name)}</td>
+        <td style="padding:0.25rem 0.5rem;font-family:monospace;font-size:0.78rem;color:var(--muted)">${escHtml(c.type)}</td>
+        <td style="padding:0.25rem 0.5rem;font-size:0.72rem;color:${c.nullable ? "var(--muted)" : "var(--text)"}">${c.nullable ? "null" : "NOT NULL"}</td>
+        <td style="padding:0.25rem 0.5rem;font-size:0.72rem;color:var(--muted);font-family:monospace">${escHtml(c.default || "")}</td>
+      </tr>`
+    ).join("");
+    const idxHtml = j.indexes.length
+      ? j.indexes.map(i => `<div style="padding:0.2rem 0;font-family:monospace;font-size:0.74rem;color:var(--muted)"><span style="color:var(--text)">${escHtml(i.name)}</span> — ${escHtml(i.definition)}</div>`).join("")
+      : `<div style="color:var(--muted);font-style:italic">No indexes</div>`;
+    body.innerHTML = `
+      <div style="display:flex;gap:1.2rem;flex-wrap:wrap;margin-bottom:0.8rem">
+        <div><span style="color:var(--muted);font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em">Rows</span><br><span style="font-size:1.1rem;font-weight:600">${j.rowCount.toLocaleString()}</span></div>
+        <div><span style="color:var(--muted);font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em">On disk</span><br><span style="font-size:1.1rem;font-weight:600">${fmtBytes(j.totalSizeBytes)}</span></div>
+        <div><span style="color:var(--muted);font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em">Columns</span><br><span style="font-size:1.1rem;font-weight:600">${j.columns.length}</span></div>
+        <div><span style="color:var(--muted);font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em">Indexes</span><br><span style="font-size:1.1rem;font-weight:600">${j.indexes.length}</span></div>
+      </div>
+      <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--accent);margin:0.6rem 0 0.3rem">Schema</div>
+      <table style="width:100%;border-collapse:collapse">${colsHtml}</table>
+      <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--accent);margin:1rem 0 0.3rem">Indexes</div>
+      ${idxHtml}`;
+  } catch (e) {
+    const body = document.getElementById("admin-db-table-body");
+    if (body) body.innerHTML = `<div style="color:var(--danger)">Failed: ${escHtml(String(e?.message || e))}</div>`;
+  }
+}
+window.adminOpenDbTablePopup = adminOpenDbTablePopup;
 </script>
 
 <style>

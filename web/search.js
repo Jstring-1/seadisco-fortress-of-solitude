@@ -720,6 +720,196 @@ function _sdToggleExcludeCd(btn) {
 }
 window._sdToggleExcludeCd = _sdToggleExcludeCd;
 
+// ── Picks mode (community YT contributions) ───────────────────────────
+//
+// switchView('picks') calls _sdEnterPicksMode. This is a sub-mode of
+// the search view: same form/grid, but the home strip is forced to
+// the contributed-favorites endpoint, the Hard-to-find + No-CDs
+// discovery toggles are enabled, and a sort dropdown lets users
+// browse contributions by count (most ↔ fewest ↔ newest).
+//
+// We track which discovery toggles WE flipped on so leaving Picks
+// only undoes our own changes — manual user toggles persist.
+
+function _sdEnterPicksMode() {
+  window._sdPicksMode = true;
+  const flippedH2F = (() => {
+    const cb = document.getElementById("f-hard2find");
+    if (cb && !cb.checked) {
+      cb.checked = true;
+      _sdHard2FindChanged(cb);
+      return true;
+    }
+    return false;
+  })();
+  const flippedCd = (() => {
+    const btn = document.getElementById("f-exclude-cd");
+    if (btn && !btn.classList.contains("active")) {
+      btn.classList.add("active");
+      btn.setAttribute("aria-pressed", "true");
+      return true;
+    }
+    return false;
+  })();
+  window._sdPicksFlipped = { h2f: flippedH2F, cd: flippedCd };
+  // Open the advanced panel so users see the filters they're working
+  // with — Picks mode IS about exploring the filter space.
+  if (typeof toggleAdvanced === "function") {
+    try { toggleAdvanced(true); } catch {}
+  }
+  _sdMountPicksHeader();
+  // Force-reload the strip from the contributed endpoint with the
+  // current sort. Hide the favorites Sort/Clear control row since
+  // those are recent-history-only.
+  const wrap = document.getElementById("random-records");
+  if (wrap) wrap.style.display = "";
+  loadRandomRecords(false);
+}
+window._sdEnterPicksMode = _sdEnterPicksMode;
+
+function _sdExitPicksMode() {
+  // Undo only the toggles WE flipped on — manual user choices stay.
+  const flipped = window._sdPicksFlipped || { h2f: false, cd: false };
+  if (flipped.h2f) {
+    const cb = document.getElementById("f-hard2find");
+    if (cb && cb.checked) {
+      cb.checked = false;
+      _sdHard2FindChanged(cb);
+    }
+  }
+  if (flipped.cd) {
+    const btn = document.getElementById("f-exclude-cd");
+    if (btn && btn.classList.contains("active")) {
+      btn.classList.remove("active");
+      btn.setAttribute("aria-pressed", "false");
+    }
+  }
+  window._sdPicksMode = false;
+  window._sdPicksFlipped = null;
+  const banner = document.getElementById("picks-banner");
+  if (banner) banner.remove();
+}
+window._sdExitPicksMode = _sdExitPicksMode;
+
+// Inject the Picks banner above the home strip if not already
+// present. Holds the explainer + sort dropdown. Idempotent — safe
+// to call on re-entry.
+function _sdMountPicksHeader() {
+  let banner = document.getElementById("picks-banner");
+  if (banner) return; // already mounted
+  const wrap = document.getElementById("random-records");
+  if (!wrap || !wrap.parentNode) return;
+  banner = document.createElement("div");
+  banner.id = "picks-banner";
+  banner.className = "content-area picks-banner";
+  banner.innerHTML = `
+    <div class="picks-banner-inner">
+      <div class="picks-banner-text">
+        <div class="picks-banner-title">🎵 Submitted Tracks</div>
+        <div class="picks-banner-sub">Albums where users have contributed YouTube videos for tracks Discogs didn't have. Open any album to add your own.</div>
+      </div>
+      <label class="picks-sort-label">
+        Sort
+        <select id="picks-sort" onchange="_sdPicksSortChanged()">
+          <option value="most" selected>Most contributions</option>
+          <option value="fewest">Fewest contributions</option>
+          <option value="recent">Most recent</option>
+        </select>
+      </label>
+    </div>
+  `;
+  wrap.parentNode.insertBefore(banner, wrap);
+}
+
+function _sdPicksSortChanged() {
+  if (!window._sdPicksMode) return;
+  loadRandomRecords(false);
+}
+window._sdPicksSortChanged = _sdPicksSortChanged;
+
+// ── Home strip Recent / Suggestions toggle ────────────────────────────
+//
+// Default is "recent" on first load. Persists per-session in
+// localStorage. The Suggestions side reads from
+// /api/user/personal-suggestions for signed-in users (background-
+// generated hourly). For anon users the Suggestions tab falls back to
+// the contributed-favorites sample so it still has content.
+window._sdHomeStripMode = (() => {
+  try { return localStorage.getItem("sd_home_strip_mode") || "recent"; }
+  catch { return "recent"; }
+})();
+window._sdHomeStripFilter = "";
+
+function _sdSwitchHomeStripTab(mode) {
+  const m = mode === "suggestions" ? "suggestions" : "recent";
+  if (window._sdHomeStripMode === m) return;
+  window._sdHomeStripMode = m;
+  try { localStorage.setItem("sd_home_strip_mode", m); } catch {}
+  // Visual tab state
+  const a = document.getElementById("rr-tab-recent");
+  const b = document.getElementById("rr-tab-suggestions");
+  if (a && b) {
+    a.classList.toggle("rr-tab-active", m === "recent");
+    b.classList.toggle("rr-tab-active", m === "suggestions");
+    a.style.color = m === "recent" ? "var(--text)" : "var(--muted)";
+    b.style.color = m === "suggestions" ? "var(--text)" : "var(--muted)";
+  }
+  // Reload strip from the appropriate source.
+  loadRandomRecords(false);
+}
+window._sdSwitchHomeStripTab = _sdSwitchHomeStripTab;
+
+// Filter input on the strip — applies to whatever's currently
+// displayed (recent / suggestions / submitted tracks). Pure
+// client-side: re-renders from _randomAll without re-fetching.
+function _sdHomeStripFilterChanged(input) {
+  window._sdHomeStripFilter = String(input?.value || "").trim().toLowerCase();
+  // Reset paging so the filter applies from the top.
+  _randomShown = 0;
+  const grid = document.getElementById("random-records-grid");
+  if (grid) grid.innerHTML = "";
+  // Render synchronously — no fetch needed.
+  _sdRenderRandomSlice();
+}
+window._sdHomeStripFilterChanged = _sdHomeStripFilterChanged;
+
+// Apply the current filter to _randomAll and return the visible
+// subset. Match against title (handles "Artist - Title" composed),
+// individual artist field, label, year — broad to feel responsive.
+function _sdFilterRandom(items) {
+  const q = window._sdHomeStripFilter || "";
+  if (!q) return items;
+  return items.filter(it => {
+    const hay = [
+      it.title, it.artist, (it.label || []).join(" "),
+      it.country, String(it.year || "")
+    ].filter(Boolean).join(" ").toLowerCase();
+    return hay.includes(q);
+  });
+}
+
+// Render the next slice of _randomAll into the grid, honoring filter
+// + paging. Extracted from loadRandomRecords so the filter input can
+// re-run rendering without a refetch.
+function _sdRenderRandomSlice() {
+  const grid = document.getElementById("random-records-grid");
+  if (!grid) return;
+  const filtered = _sdFilterRandom(_randomAll);
+  const slice = filtered.slice(_randomShown, _randomShown + _RANDOM_PAGE);
+  if (!slice.length && _randomShown === 0) {
+    if (window._sdHomeStripFilter) {
+      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:0.85rem;padding:1rem 0">No matches.</div>`;
+    }
+    return;
+  }
+  for (let i = 0; i < slice.length; i++) {
+    const card = renderCard(slice[i], _randomShown + i);
+    grid.insertAdjacentHTML("beforeend", card);
+  }
+  _randomShown += slice.length;
+}
+window._sdRenderRandomSlice = _sdRenderRandomSlice;
+
 // Module-level cache of (type:id) → hasVideos so a second-page load
 // doesn't re-query items already known. null = not yet checked.
 const _sdHasVideosCache = new Map();
@@ -894,7 +1084,15 @@ function renderCard(item, index) {
   const instanceBadge = (instanceCount > 1 && isRelease)
     ? `<span class="card-instance-badge" onclick="event.preventDefault();event.stopPropagation();openInstancesPopover(event,${item.id})" title="${instanceCount} copies in your collection — click to view">(${instanceCount})</span>`
     : "";
-  const thumbWrap = `<div class="card-thumb-wrap">${thumb}<div class="card-thumb-badges">${badges}</div>${instanceBadge}</div>`;
+  // Contribution-count badge — only on cards from the Picks page (or
+  // anywhere _contributionCount is populated by the server). Shows the
+  // total number of crowd-sourced YT overrides for this album so users
+  // can compare at a glance.
+  const contributionCount = Number(item._contributionCount) || 0;
+  const contributionBadge = contributionCount > 0
+    ? `<span class="card-contribution-badge" title="${contributionCount} user-contributed YouTube ${contributionCount === 1 ? "video" : "videos"} for this album">🎵 ${contributionCount}</span>`
+    : "";
+  const thumbWrap = `<div class="card-thumb-wrap">${thumb}<div class="card-thumb-badges">${badges}</div>${instanceBadge}${contributionBadge}</div>`;
 
   // Rating stars (only for collection/wantlist cards)
   const rating = item._rating ?? 0;
@@ -1309,63 +1507,138 @@ async function loadRandomRecords(more) {
   // favorites — gives anon visitors a curated set of records to
   // browse on the home page instead of nothing.
   if (!more) {
-    _loadHistoryIntoRandom();
     _randomShown = 0;
-    const titleEl = document.getElementById("random-records-title");
-    // Sort + Clear only make sense for the "Recent" history mode —
-    // suggested cards aren't in local history (sort by Opened means
-    // nothing; Clear is a no-op). Hide the controls in Suggested mode.
-    const controlsEl = document.getElementById("random-records-controls");
+    const titleEl = document.getElementById("random-records-title"); // legacy hidden span
+    const tabWrap = document.getElementById("random-records-title-wrap");
+    // Tabs are only shown in normal search mode. Picks mode uses the
+    // picks-banner as its header instead.
+    if (tabWrap) tabWrap.style.display = window._sdPicksMode ? "none" : "";
     let isSuggested = false;
-    if (!_randomAll.length) {
-      // Anon home: prefer masters/releases that the community has
-      // contributed YT overrides to (weighted by count), so the
-      // default landing experience surfaces albums users have been
-      // actively building. Falls back to admin's favorites when no
-      // contributions exist yet (early days, or first-load before
-      // any submissions).
-      let contribFromYt = false;
+    let titleText = "Recent";
+
+    if (window._sdPicksMode) {
+      // ── Picks (Submitted Tracks) page ───────────────────────────
+      // Load contributed-favorites with the page's chosen sort.
+      _randomAll = [];
+      const picksOrder = document.getElementById("picks-sort")?.value || "most";
       try {
-        const r = await fetch("/api/contributed-favorites/sample?limit=24", { cache: "no-store" });
+        const r = await fetch(
+          `/api/contributed-favorites/sample?limit=48&order=${encodeURIComponent(picksOrder)}`,
+          { cache: "no-store" }
+        );
         if (r.ok) {
           const j = await r.json();
           if (Array.isArray(j?.items) && j.items.length) {
             _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
-            if (titleEl) titleEl.textContent = "Community picks";
-            isSuggested = true;
-            contribFromYt = true;
           }
         }
-      } catch { /* fall through to admin-favorites */ }
-      if (!contribFromYt) {
+      } catch { /* leave empty — render placeholder below */ }
+      titleText = "Submitted Tracks";
+      isSuggested = true;
+    } else if (window._sdHomeStripMode === "suggestions") {
+      // ── Suggestions tab on main search ──────────────────────────
+      // Signed-in: per-user background-generated feed. Anon: fall
+      // back to community-picks so the tab still has content.
+      _randomAll = [];
+      if (window._clerk?.user) {
         try {
-          const r = await fetch("/api/admin-favorites/sample?limit=24", { cache: "no-store" });
+          const r = await apiFetch("/api/user/personal-suggestions?limit=48");
           if (r.ok) {
             const j = await r.json();
             if (Array.isArray(j?.items) && j.items.length) {
-              // Mark these so the dismiss × is hidden — they aren't in
-              // the user's local history and removing one from there
-              // would be a no-op.
               _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
-              if (titleEl) titleEl.textContent = "Suggested";
-              isSuggested = true;
             }
           }
-        } catch { /* fall through to empty */ }
+        } catch { /* fall through */ }
       }
+      if (!_randomAll.length) {
+        try {
+          const r = await fetch("/api/contributed-favorites/sample?limit=24&order=most", { cache: "no-store" });
+          if (r.ok) {
+            const j = await r.json();
+            if (Array.isArray(j?.items) && j.items.length) {
+              _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
+            }
+          }
+        } catch { /* leave empty */ }
+      }
+      titleText = "Suggestions";
+      isSuggested = true;
     } else {
-      if (titleEl) titleEl.textContent = "Recent";
+      // ── Recent (default) ────────────────────────────────────────
+      _loadHistoryIntoRandom();
+      if (!_randomAll.length) {
+        // No local history — fall back to community-picks → admin-
+        // favorites so anon users land on something curated.
+        let gotIt = false;
+        try {
+          const r = await fetch("/api/contributed-favorites/sample?limit=24&order=most", { cache: "no-store" });
+          if (r.ok) {
+            const j = await r.json();
+            if (Array.isArray(j?.items) && j.items.length) {
+              _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
+              gotIt = true;
+            }
+          }
+        } catch {}
+        if (!gotIt) {
+          try {
+            const r = await fetch("/api/admin-favorites/sample?limit=24", { cache: "no-store" });
+            if (r.ok) {
+              const j = await r.json();
+              if (Array.isArray(j?.items) && j.items.length) {
+                _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
+              }
+            }
+          } catch {}
+        }
+        titleText = "Recent";
+        isSuggested = true;
+      } else {
+        titleText = "Recent";
+        isSuggested = false;
+      }
     }
-    if (controlsEl) controlsEl.style.display = isSuggested ? "none" : "flex";
+
+    if (titleEl) titleEl.textContent = titleText;
+    // Sort/Clear only make sense in Recent mode with actual local
+    // history. Filter input stays visible across all modes.
+    const sortBtn = document.getElementById("favorites-sort");
+    const clearBtn = document.getElementById("recent-clear-btn");
+    if (sortBtn) sortBtn.style.display = isSuggested ? "none" : "";
+    if (clearBtn) clearBtn.style.display = isSuggested ? "none" : "";
+
     if (!_randomAll.length) {
+      if (window._sdPicksMode) {
+        wrap.style.display = "";
+        grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:0.85rem;padding:2rem 1rem">No community picks yet — open any album and use the 🎵 affordance on a track Discogs missed to be the first to contribute.</div>`;
+        return;
+      }
+      if (window._sdHomeStripMode === "suggestions") {
+        wrap.style.display = "";
+        const isSignedIn = !!window._clerk?.user;
+        grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:0.85rem;padding:2rem 1rem">${
+          isSignedIn
+            ? "No suggestions yet — they're generated hourly from your library's taste profile. Check back soon."
+            : "Sign in to see personalized suggestions, or browse Community picks above."
+        }</div>`;
+        return;
+      }
       wrap.style.display = "none";
       return;
     }
   }
 
-  // Render next page of 48
-  const slice = _randomAll.slice(_randomShown, _randomShown + _RANDOM_PAGE);
-  if (!slice.length) return;
+  // Filter is client-side and re-runs on every render so the visible
+  // grid always matches the current search input.
+  const filteredAll = _sdFilterRandom(_randomAll);
+  const slice = filteredAll.slice(_randomShown, _randomShown + _RANDOM_PAGE);
+  if (!slice.length) {
+    if (!more && window._sdHomeStripFilter) {
+      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:0.85rem;padding:1rem 0">No matches.</div>`;
+    }
+    return;
+  }
   // Each card gets a small X overlay so the user can drop a single item
   // from their local history without clearing everything.
   const html = slice.map((item, i) => {
@@ -1385,7 +1658,7 @@ async function loadRandomRecords(more) {
   _randomShown += slice.length;
 
   // Add load-more if there are more to show
-  if (_randomShown < _randomAll.length) {
+  if (_randomShown < filteredAll.length) {
     grid.insertAdjacentHTML("beforeend",
       `<div class="random-load-more" style="grid-column:1/-1;text-align:center;padding:0.75rem 0">` +
       `<button onclick="loadRandomRecords(true)" style="background:none;border:1px solid var(--border);color:var(--muted);padding:0.4rem 1.2rem;border-radius:var(--radius);cursor:pointer;font-size:0.8rem" ` +
