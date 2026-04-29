@@ -493,6 +493,10 @@ const _SD_NAV_ICONS = {
   favorites: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="13" r="7"/><path d="M12 16.2c-1-.7-3.2-2-3.2-3.7 0-1 .8-1.8 1.8-1.8.7 0 1.1.4 1.4.8.3-.4.7-.8 1.4-.8 1 0 1.8.8 1.8 1.8 0 1.7-2.2 3-3.2 3.7Z"/></svg>`,
   // Person silhouette with two small vinyl circles as headphones for Account
   account: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><circle cx="6" cy="9" r="2.5"/><circle cx="6" cy="9" r="0.6" fill="currentColor"/><circle cx="18" cy="9" r="2.5"/><circle cx="18" cy="9" r="0.6" fill="currentColor"/><path d="M6 9c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M5 21c1-3.5 4-5 7-5s6 1.5 7 5"/></svg>`,
+  // Two-eighth-notes pair for the "Picks" tab — community-contributed
+  // YouTube videos for tracks Discogs missed. Tinted purple via the
+  // tab's color rule so it reads as a distinct contribution surface.
+  picks: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17V5l11-2v12"/><circle cx="6.5" cy="17" r="2.5" fill="currentColor"/><circle cx="17.5" cy="15" r="2.5" fill="currentColor"/></svg>`,
 };
 // Expose icons globally so card badges (and any future surfaces) can
 // reuse the same line-art set without duplicating SVG markup.
@@ -546,7 +550,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260428.2113";
+  const SITE_VERSION = "build 20260428.2230";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -561,9 +565,10 @@ function renderSharedHeader(opts) {
         <div id="main-nav-tabs">
           <div class="nav-row nav-row-top" id="nav-row-records">
             ${tab("Search", "search", "search")}
+            ${recTab("Favorites", "favorites", "favorites")}
+            ${tab("Submitted Tracks", "picks", "picks")}
             ${recTab("Collection", "collection", "collection")}
             ${recTab("Wantlist", "wantlist", "wantlist")}
-            ${recTab("Favorites", "favorites", "favorites")}
             ${recTab("Inventory", "inventory", "inventory")}
             ${recTab("Lists", "lists", "lists")}
           </div>

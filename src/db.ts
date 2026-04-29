@@ -315,6 +315,25 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS track_youtube_overrides_submitted_idx ON track_youtube_overrides (submitted_at DESC)`);
 
+  // ── Per-user personal suggestions (background-generated) ─────────────────
+  // A scheduled task computes a fresh batch of master/release suggestions
+  // for each user once an hour: albums in the user's favorite genre/style
+  // bands, recorded around the user's most-represented years, that the
+  // user doesn't already own and that lack embedded YouTube videos. The
+  // job overwrites the user's row each pass (no append history).
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_personal_suggestions (
+      clerk_user_id TEXT        NOT NULL,
+      discogs_id    INTEGER     NOT NULL,
+      entity_type   TEXT        NOT NULL,    -- 'master' | 'release'
+      score         REAL        NOT NULL DEFAULT 0,  -- ranking heuristic
+      data          JSONB       NOT NULL,    -- card snapshot for render
+      generated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (clerk_user_id, discogs_id, entity_type)
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS user_personal_suggestions_user_idx ON user_personal_suggestions (clerk_user_id, generated_at DESC)`);
+
   // ── Site-wide app settings (admin-controlled) ────────────────────────────
   // Simple key/value store for global config (theme, feature flags, etc.).
   // Currently used for the site-wide theme: admin picks a theme on /admin
@@ -3704,31 +3723,236 @@ export async function getVideoStatusBatch(
 }
 
 // Pull masters/releases that have at least one crowd-sourced YouTube
-// override, ranked by the number of overrides (most-contributed first).
-// Joins release_cache so each row carries the card snapshot needed by
-// the home strip — masters/releases without a cache entry are skipped
-// since there's nothing to render for them. Used to populate the
-// logged-out home page's default cards with contribution-rich albums.
-export async function getMostContributedAlbums(limit = 48): Promise<any[]> {
+// override, joined with release_cache so each row carries the card
+// snapshot the home strip needs (orphan rows are skipped). Order is
+// caller-selectable: "most" (default), "fewest", or "recent" — the
+// last sorts by the most recently submitted override timestamp.
+export async function getMostContributedAlbums(
+  limit = 48,
+  order: "most" | "fewest" | "recent" = "most"
+): Promise<any[]> {
+  let orderBy: string;
+  switch (order) {
+    case "fewest": orderBy = "c.n ASC, c.release_id ASC"; break;
+    case "recent": orderBy = "c.last_at DESC, c.release_id DESC"; break;
+    case "most":
+    default:       orderBy = "c.n DESC, c.release_id DESC"; break;
+  }
   try {
     const r = await getPool().query(
       `WITH counts AS (
-         SELECT release_id, release_type, COUNT(*)::int AS n
+         SELECT release_id, release_type,
+                COUNT(*)::int   AS n,
+                MAX(submitted_at) AS last_at
            FROM track_youtube_overrides
           GROUP BY release_id, release_type
        )
        SELECT c.release_id   AS id,
               c.release_type AS type,
               c.n            AS contribution_count,
+              c.last_at      AS last_contributed_at,
               rc.data        AS data
          FROM counts c
          JOIN release_cache rc
            ON rc.discogs_id = c.release_id::int
           AND rc.type       = c.release_type
-        ORDER BY c.n DESC, c.release_id DESC
+        ORDER BY ${orderBy}
         LIMIT $1`,
       [Math.max(1, Math.min(200, limit))]
     );
+    return r.rows;
+  } catch { return []; }
+}
+
+// ── Personal suggestions: taste profile + library dedup + persistence ──
+//
+// Taste tuples power the per-user background suggestions job. We
+// expand the user's collection + wantlist by (genre, style, year)
+// and rank by frequency: the top tuples are what the user listens to
+// the most. The job then queries Discogs for masters matching each
+// tuple. Wide net by design — top 9 covers a few different bands
+// of the user's taste rather than just their #1 obsession.
+
+export async function getUserTasteTuples(
+  clerkUserId: string,
+  limit = 9
+): Promise<Array<{ genre: string; style: string; year: number; n: number }>> {
+  try {
+    const r = await getPool().query(
+      `WITH src AS (
+         SELECT data FROM user_collection WHERE clerk_user_id = $1
+         UNION ALL
+         SELECT data FROM user_wantlist  WHERE clerk_user_id = $1
+       ),
+       expanded AS (
+         SELECT
+           g.value AS genre,
+           s.value AS style,
+           NULLIF(src.data->>'year','')::int AS year
+         FROM src,
+              jsonb_array_elements_text(src.data->'genres') AS g(value),
+              jsonb_array_elements_text(src.data->'styles') AS s(value)
+       ),
+       counts AS (
+         SELECT genre, style, year, COUNT(*)::int AS n
+         FROM expanded
+         WHERE year IS NOT NULL AND year > 1900 AND year < 2030
+         GROUP BY genre, style, year
+       )
+       SELECT genre, style, year, n
+         FROM counts
+        ORDER BY n DESC, year DESC
+        LIMIT $2`,
+      [clerkUserId, Math.max(1, Math.min(50, limit))]
+    );
+    return r.rows;
+  } catch { return []; }
+}
+
+// Set of master/release ids the user already has anywhere — used so
+// the suggestions job doesn't surface stuff the user owns/wants. We
+// pull master_ids when present (most releases carry them), plus the
+// release ids themselves so a release-typed suggestion that matches
+// is also dropped.
+export async function getUserLibraryMasterIds(clerkUserId: string): Promise<Set<number>> {
+  const out = new Set<number>();
+  try {
+    const r = await getPool().query(
+      `SELECT DISTINCT (data->>'master_id')::int AS m
+         FROM (
+           SELECT data FROM user_collection WHERE clerk_user_id = $1
+           UNION ALL
+           SELECT data FROM user_wantlist   WHERE clerk_user_id = $1
+           UNION ALL
+           SELECT data FROM user_inventory  WHERE clerk_user_id = $1
+         ) s
+        WHERE NULLIF(s.data->>'master_id','') IS NOT NULL`,
+      [clerkUserId]
+    );
+    for (const row of r.rows) {
+      const m = Number(row.m);
+      if (Number.isFinite(m) && m > 0) out.add(m);
+    }
+  } catch { /* best-effort */ }
+  return out;
+}
+
+// Wipe + insert: the job overwrites the user's previous batch each
+// run so the row count never grows beyond N per user. data is the
+// card snapshot so the UI can render without further Discogs calls.
+export async function replaceUserPersonalSuggestions(
+  clerkUserId: string,
+  items: Array<{ id: number; type: "master" | "release"; score: number; data: any }>
+): Promise<void> {
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    await client.query(
+      `DELETE FROM user_personal_suggestions WHERE clerk_user_id = $1`,
+      [clerkUserId]
+    );
+    for (const it of items) {
+      await client.query(
+        `INSERT INTO user_personal_suggestions
+           (clerk_user_id, discogs_id, entity_type, score, data, generated_at)
+         VALUES ($1, $2, $3, $4, $5::jsonb, NOW())
+         ON CONFLICT (clerk_user_id, discogs_id, entity_type) DO UPDATE
+           SET score = EXCLUDED.score, data = EXCLUDED.data, generated_at = NOW()`,
+        [clerkUserId, it.id, it.type, it.score, JSON.stringify(it.data ?? {})]
+      );
+    }
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+export async function getUserPersonalSuggestions(
+  clerkUserId: string,
+  limit = 48
+): Promise<any[]> {
+  try {
+    const r = await getPool().query(
+      `SELECT discogs_id, entity_type, score, data, generated_at
+         FROM user_personal_suggestions
+        WHERE clerk_user_id = $1
+        ORDER BY score DESC, generated_at DESC
+        LIMIT $2`,
+      [clerkUserId, Math.max(1, Math.min(96, limit))]
+    );
+    return r.rows;
+  } catch { return []; }
+}
+
+// Admin DB tab: per-table summary popup data. Pure introspection
+// against information_schema + pg_indexes + pg_total_relation_size —
+// no application data leaves this function. Caller is responsible for
+// whitelisting the table name (it's interpolated for pg_total_relation_size
+// since that's a function call, not a query target — but is also
+// passed as a parameter to information_schema queries so even an
+// injection slip would only affect the size query).
+export async function getDbAdminTableSummary(tableName: string): Promise<{
+  table: string;
+  rowCount: number;
+  totalSizeBytes: number;
+  columns: Array<{ name: string; type: string; nullable: boolean; default: string | null }>;
+  indexes: Array<{ name: string; definition: string }>;
+}> {
+  // Defensive: refuse any name that's not a-z/0-9/underscore even
+  // though callers should already whitelist via getTableRowCounts.
+  if (!/^[a-z_][a-z0-9_]*$/i.test(tableName)) {
+    throw new Error("Invalid table name");
+  }
+  const [colsR, idxR, cntR, sizeR] = await Promise.all([
+    getPool().query(
+      `SELECT column_name AS name,
+              data_type   AS type,
+              is_nullable = 'YES' AS nullable,
+              column_default AS "default"
+         FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = $1
+        ORDER BY ordinal_position`,
+      [tableName]
+    ),
+    getPool().query(
+      `SELECT indexname AS name, indexdef AS definition
+         FROM pg_indexes
+        WHERE schemaname = 'public' AND tablename = $1
+        ORDER BY indexname`,
+      [tableName]
+    ),
+    getPool().query(`SELECT COUNT(*)::int AS n FROM "${tableName}"`),
+    getPool().query(`SELECT pg_total_relation_size('public."${tableName}"') AS bytes`),
+  ]);
+  return {
+    table: tableName,
+    rowCount: cntR.rows[0]?.n ?? 0,
+    totalSizeBytes: Number(sizeR.rows[0]?.bytes) || 0,
+    columns: colsR.rows,
+    indexes: idxR.rows,
+  };
+}
+
+// Admin Suggestions tab: per-user counts + last-generated timestamp
+// for the background personal-suggestions job. Used to verify the
+// hourly run is healthy without dumping every row.
+export async function getPersonalSuggestionsStats(): Promise<Array<{
+  clerkUserId: string;
+  count: number;
+  lastGeneratedAt: Date | null;
+}>> {
+  try {
+    const r = await getPool().query(`
+      SELECT clerk_user_id AS "clerkUserId",
+             COUNT(*)::int AS count,
+             MAX(generated_at) AS "lastGeneratedAt"
+        FROM user_personal_suggestions
+       GROUP BY clerk_user_id
+       ORDER BY MAX(generated_at) DESC NULLS LAST
+    `);
     return r.rows;
   } catch { return []; }
 }

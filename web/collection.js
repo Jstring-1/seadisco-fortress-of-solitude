@@ -177,6 +177,13 @@ function showRecordSignIn(_rtab) {
 function switchView(view, skipPushState = false) {
   document.getElementById("main-nav-tabs")?.classList.remove("mobile-open");
   saveFilterState();
+  // Picks mode is a search-view sub-mode. Clear the flag on every
+  // navigation; the picks branch below re-arms it. Also trigger the
+  // exit cleanup (hides the picks sort row, drops the title) so
+  // navigating away from Picks doesn't leak its UI into Search.
+  if (view !== "picks" && window._sdPicksMode) {
+    if (typeof _sdExitPicksMode === "function") _sdExitPicksMode();
+  }
 
   // Highlight nav — single row has both data-view and data-rtab tabs
   const isRecords = view === "records";
@@ -210,7 +217,7 @@ function switchView(view, skipPushState = false) {
       const tab = _cwTab || "collection";
       qs.set("v", tab);
       history.pushState({ view, tab }, "", "?" + qs.toString());
-    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive" || view === "youtube") {
+    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive" || view === "youtube" || view === "picks") {
       qs.set("v", view);
       history.pushState({ view }, "", "?" + qs.toString());
     } else {
@@ -357,6 +364,19 @@ function switchView(view, skipPushState = false) {
     if (wantedWrap) wantedWrap.style.display = "";
     document.getElementById("artist-alts").innerHTML = "";
     loadWantedTab();
+  } else if (view === "picks") {
+    // Picks: community-contributed YouTube videos for tracks Discogs
+    // missed. Reuses the search view so the same advanced filters
+    // are available. Pre-enables Hard-to-find + No-CDs and routes
+    // the home strip through the contributed-favorites endpoint
+    // with sortable count ordering.
+    if (searchView) searchView.style.display = "";
+    if (mainForm) mainForm.style.display = "";
+    if (recordsWrap) recordsWrap.style.display = "none";
+    if (wantedWrap) wantedWrap.style.display = "none";
+    bridgeCwToSearch();
+    setCwStatus("");
+    if (typeof _sdEnterPicksMode === "function") _sdEnterPicksMode();
   } else if (view === "records") {
     if (searchView) searchView.style.display = "";
     if (mainForm) mainForm.style.display = "none";

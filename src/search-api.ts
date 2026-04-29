@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserTasteTuples, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 
 
@@ -4028,17 +4028,23 @@ app.get("/api/admin-favorites/sample", async (req, res) => {
 // Weighting: probability ∝ contribution_count^1.5. Each request rolls
 // a fresh sample so revisits feel fresh; the underlying list cache is
 // 5min in-memory so the DB isn't hit per request.
-let _contributedSampleCache: { ts: number; pool: any[] } | null = null;
+// Cache by sort order so swapping in the UI doesn't refetch every time.
+let _contributedSampleCache: Record<string, { ts: number; pool: any[] }> = {};
 const _CONTRIBUTED_TTL_MS = 5 * 60 * 1000;
 app.get("/api/contributed-favorites/sample", async (req, res) => {
   const limit = Math.min(48, Math.max(1, parseInt(String(req.query?.limit ?? "24"), 10) || 24));
+  const orderRaw = String(req.query?.order ?? "most").toLowerCase();
+  const order: "most" | "fewest" | "recent" =
+    orderRaw === "fewest" ? "fewest" :
+    orderRaw === "recent" ? "recent" : "most";
   res.setHeader("Cache-Control", "public, max-age=300");
   let pool: any[] | null = null;
-  if (_contributedSampleCache && Date.now() - _contributedSampleCache.ts < _CONTRIBUTED_TTL_MS) {
-    pool = _contributedSampleCache.pool;
+  const cached = _contributedSampleCache[order];
+  if (cached && Date.now() - cached.ts < _CONTRIBUTED_TTL_MS) {
+    pool = cached.pool;
   } else {
     try {
-      const rows = await getMostContributedAlbums(200);
+      const rows = await getMostContributedAlbums(200, order);
       pool = rows.map(row => {
         const d = row.data ?? {};
         const isMaster = row.type === "master";
@@ -4067,7 +4073,7 @@ app.get("/api/contributed-favorites/sample", async (req, res) => {
           _contributionCount: row.contribution_count,
         };
       });
-      _contributedSampleCache = { ts: Date.now(), pool };
+      _contributedSampleCache[order] = { ts: Date.now(), pool };
     } catch (e: any) {
       console.error("[contributed-favorites/sample]", e?.message ?? e);
       pool = [];
@@ -4093,6 +4099,169 @@ app.get("/api/contributed-favorites/sample", async (req, res) => {
   ranked.sort((a, b) => a.key - b.key);
   const sample = ranked.slice(0, limit).map(x => x.it);
   res.json({ items: sample });
+});
+
+// ── Personal suggestions (background-generated per-user feed) ────────
+// Endpoint: returns the user's most recent saved batch of suggestions.
+// The data column carries the full card snapshot so render is one
+// round-trip — no Discogs lookups needed.
+app.get("/api/user/personal-suggestions", async (req, res) => {
+  const userId = await requireUser(req, res);
+  if (!userId) return;
+  try {
+    const limit = Math.max(1, Math.min(96, parseInt(String(req.query.limit ?? "48"), 10) || 48));
+    const rows = await getUserPersonalSuggestions(userId, limit);
+    const items = rows.map(row => ({
+      id: row.discogs_id,
+      type: row.entity_type,
+      ...(row.data ?? {}),
+      _suggestionScore: row.score,
+      _suggestionGeneratedAt: row.generated_at,
+    }));
+    res.json({ items, generatedAt: rows[0]?.generated_at ?? null });
+  } catch (e: any) {
+    console.error("[personal-suggestions GET]", e?.message ?? e);
+    res.json({ items: [] });
+  }
+});
+
+// Generate one user's batch of suggestions. Requires the user to have
+// Discogs OAuth set up — we use their token so rate-limit pressure is
+// distributed across users rather than concentrated on admin's. Skips
+// users without OAuth (they can connect Discogs to receive
+// suggestions). Each pass overwrites the user's saved batch.
+async function _runPersonalSuggestionsForUser(userId: string): Promise<{ saved: number; reason?: string }> {
+  const dc = await getDiscogsClientForUser(userId);
+  if (!dc) return { saved: 0, reason: "no-oauth" };
+
+  const tuples = await getUserTasteTuples(userId, 9);
+  if (!tuples.length) return { saved: 0, reason: "no-taste" };
+
+  const ownedMasters = await getUserLibraryMasterIds(userId);
+
+  // Map keyed by master:id so the same album appearing for multiple
+  // tuples accumulates score rather than appearing twice.
+  const candidates = new Map<string, { id: number; type: "master"; score: number; data: any }>();
+
+  for (const t of tuples) {
+    try {
+      const r = await dc.search("", {
+        type: "master",
+        genre: t.genre,
+        style: t.style,
+        year: String(t.year),
+        format: "Vinyl",
+        perPage: 12,
+      }) as any;
+      const results = Array.isArray(r?.results) ? r.results : [];
+      for (let i = 0; i < results.length; i++) {
+        const row = results[i];
+        const id = Number(row?.id);
+        if (!Number.isFinite(id) || id <= 0) continue;
+        if (row.type !== "master") continue;
+        if (ownedMasters.has(id)) continue;
+        const key = `master:${id}`;
+        // Score: tuple frequency × inverse rank in this search. Bumps
+        // top-of-results items but doesn't ignore the long tail.
+        const score = (t.n || 1) * (1 / (i + 1));
+        const existing = candidates.get(key);
+        if (existing) {
+          existing.score += score;
+        } else {
+          candidates.set(key, {
+            id,
+            type: "master",
+            score,
+            data: {
+              id,
+              type: "master",
+              title: row.title ?? "",
+              year: row.year ?? "",
+              country: row.country ?? "",
+              cover_image: row.cover_image ?? "",
+              thumb: row.thumb ?? row.cover_image ?? "",
+              format: Array.isArray(row.format) ? row.format : [],
+              label: Array.isArray(row.label) ? row.label : [],
+              genre: Array.isArray(row.genre) ? row.genre : [],
+              style: Array.isArray(row.style) ? row.style : [],
+              uri: row.uri ?? `/master/${id}`,
+              master_id: row.master_id ?? id,
+              // Why we picked this — surfaced in tooltip / dev console.
+              _matchedGenre: t.genre,
+              _matchedStyle: t.style,
+              _matchedYear: t.year,
+            },
+          });
+        }
+      }
+    } catch (e: any) {
+      console.warn(`[suggestions] search failed for ${userId} ${t.genre}/${t.style}/${t.year}:`, e?.message ?? e);
+    }
+    // Pace per-tuple to respect Discogs's ~60/min OAuth limit.
+    await sleep(1100);
+  }
+
+  const items = Array.from(candidates.values())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 48);
+  if (!items.length) return { saved: 0, reason: "no-candidates" };
+  await replaceUserPersonalSuggestions(userId, items);
+  return { saved: items.length };
+}
+
+// Hourly scheduler: walk every signed-up user, run the generator
+// sequentially with a small delay between users so we don't spike
+// Discogs traffic. Users without OAuth or with empty taste profiles
+// are skipped quickly.
+async function _runPersonalSuggestionsForAllUsers() {
+  try {
+    const users = await getAllUsersForSync();
+    if (!users.length) return;
+    console.log(`[suggestions] hourly run starting for ${users.length} users`);
+    let total = 0;
+    let skipped = 0;
+    for (const u of users) {
+      const userId = u.clerkUserId;
+      const result = await _runPersonalSuggestionsForUser(userId).catch(e => {
+        console.warn(`[suggestions] user ${userId} failed:`, e?.message ?? e);
+        return { saved: 0, reason: "error" };
+      });
+      if (result.saved > 0) total += result.saved;
+      else skipped++;
+      await sleep(2000);
+    }
+    console.log(`[suggestions] hourly run complete; saved ${total} items, ${skipped} users skipped`);
+  } catch (e: any) {
+    console.error("[suggestions] scheduler failed:", e?.message ?? e);
+  }
+}
+
+// Boot once 60s after startup so we don't compete with sync, then
+// every hour.
+if (process.env.APP_DB_URL) {
+  setTimeout(() => { _runPersonalSuggestionsForAllUsers(); }, 60_000);
+  setInterval(() => { _runPersonalSuggestionsForAllUsers(); }, 60 * 60 * 1000);
+}
+
+// Admin manual trigger — useful for testing without waiting an hour.
+app.post("/api/admin/run-suggestions", express.json({ limit: "1kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  // Don't block on the run — kick it off and return immediately so
+  // the admin UI doesn't time out on long batches.
+  _runPersonalSuggestionsForAllUsers().catch(() => {});
+  res.json({ ok: true, message: "Suggestions run kicked off in the background." });
+});
+
+// Admin manual trigger for a single user — for fast iteration.
+app.post("/api/admin/run-suggestions-for-self", express.json({ limit: "1kb" }), async (req, res) => {
+  const userId = await requireAdmin(req, res);
+  if (!userId) return;
+  try {
+    const result = await _runPersonalSuggestionsForUser(userId);
+    res.json({ ok: true, ...result });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
 });
 
 // GET /api/site-theme — public read of the current global theme (used
@@ -5788,6 +5957,46 @@ app.get("/api/admin/db-stats", async (req, res) => {
     res.json({ tables, totalRows });
   } catch (err) {
     res.status(500).json({ error: String(err) });
+  }
+});
+
+// GET /api/admin/db-table/:name — per-table summary popup data:
+// schema (columns + types + nullability), index list, row count, and
+// total relation size on disk. Whitelisted to tables we know about so
+// the admin UI can't be coaxed into running arbitrary table names.
+app.get("/api/admin/db-table/:name", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const name = String(req.params?.name || "");
+  let allowed: Set<string>;
+  try {
+    const rows = await getTableRowCounts();
+    allowed = new Set(rows.map(r => r.table));
+  } catch {
+    res.status(500).json({ error: "Could not enumerate tables" });
+    return;
+  }
+  if (!allowed.has(name)) { res.status(400).json({ error: "Unknown table" }); return; }
+  try {
+    const summary = await getDbAdminTableSummary(name);
+    res.json(summary);
+  } catch (e: any) {
+    console.error("[/api/admin/db-table]", e?.message ?? e);
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// GET /api/admin/suggestions-stats — per-user counts + last-generated
+// timestamp for the personal suggestions feed. Powers the admin's
+// "Suggestions" tab so they can verify the hourly job is doing its
+// thing.
+app.get("/api/admin/suggestions-stats", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const stats = await getPersonalSuggestionsStats();
+    res.json({ users: stats });
+  } catch (e: any) {
+    console.error("[/api/admin/suggestions-stats]", e?.message ?? e);
+    res.status(500).json({ error: String(e?.message ?? e) });
   }
 });
 

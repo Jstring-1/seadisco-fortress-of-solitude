@@ -1574,6 +1574,12 @@ footer a.nav-rec-empty { display: none !important; }
 .nav-tab-top[data-rtab="favorites"],
 .nav-tab-top[data-rtab="favorites"].active   { color: #ff7eb6; }
 .nav-tab-top[data-rtab="favorites"]:hover    { color: #888; }
+/* Picks (community YouTube contributions) — purple to match the
+   override-feature affordances scattered across the site (per-track
+   🎵 buttons, override badge, suggest button). */
+.nav-tab-top[data-view="picks"],
+.nav-tab-top[data-view="picks"].active       { color: #c084fc; }
+.nav-tab-top[data-view="picks"]:hover        { color: #888; }
 
 /* ── Icon-nav variant (admin page test bed) ─────────────────────────────
    When renderSharedHeader is called with iconNav:true the tab markup is
