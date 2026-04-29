@@ -94,7 +94,10 @@ async function runYoutubeSearch(query, opts) {
   try {
     const params = [`q=${encodeURIComponent(q)}`];
     if (opts?.pageToken) params.push(`pageToken=${encodeURIComponent(opts.pageToken)}`);
-    const r = await fetch(`/api/youtube/search?${params.join("&")}`, { cache: "no-store" });
+    // apiFetch (not raw fetch) attaches the Clerk Bearer so the server
+    // can identify signed-in users and bypass the anon-IP rate limit.
+    // Without this, every request looks anonymous to the server.
+    const r = await apiFetch(`/api/youtube/search?${params.join("&")}`, { cache: "no-store" });
     if (!r.ok) {
       const errBody = await r.text().catch(() => "");
       console.warn("[youtube] search failed:", r.status, errBody);
@@ -407,7 +410,10 @@ async function openYoutubePopup(query) {
   // Sync ★ state once per session.
   if (_ytSavedIds == null) _youtubeLoadSavedIds();
   try {
-    const r = await fetch(`/api/youtube/search?q=${encodeURIComponent(q)}`, { cache: "no-store" });
+    // apiFetch attaches the Clerk Bearer so signed-in callers bypass
+    // the anon-IP rate limit. Raw fetch would have the server treat
+    // the request as anon and trip the per-IP throttle after 30/hr.
+    const r = await apiFetch(`/api/youtube/search?q=${encodeURIComponent(q)}`, { cache: "no-store" });
     if (!r.ok) {
       const errBody = await r.text().catch(() => "");
       console.warn("[youtube popup] search failed:", r.status, errBody);
