@@ -546,7 +546,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260428.2008";
+  const SITE_VERSION = "build 20260428.2021";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -1060,15 +1060,43 @@ function openLookupPopup(ev, scope, label, ctx) {
           // album / version modal underneath stays open. Standalone
           // searches (footer link or "Full page ↗" inside the popup)
           // still go to /?v=youtube.
-          if (typeof openYoutubePopup === "function") {
-            openYoutubePopup(b._ytQ || label);
+          //
+          // Force-load youtube.js if it hasn't been pulled yet — the
+          // global window.openYoutubePopup might still be the lazy
+          // stub at click time, which would re-dispatch correctly but
+          // adds a roundtrip. Explicit load + check is more robust
+          // and lets us tell the user something useful if the load
+          // genuinely fails.
+          const q = b._ytQ || label;
+          console.debug("[ytapp click]", { q, hasLoader: typeof window._sdLoadModule === "function", isStub: window.openYoutubePopup === window._sdStub_openYoutubePopup });
+          const tryOpen = () => {
+            const fn = window.openYoutubePopup;
+            if (typeof fn === "function" && fn !== window._sdStub_openYoutubePopup) {
+              fn(q);
+              return true;
+            }
+            return false;
+          };
+          if (tryOpen()) return;
+          if (typeof window._sdLoadModule === "function") {
+            window._sdLoadModule("/youtube.js")
+              .then(() => {
+                if (!tryOpen()) {
+                  console.warn("[ytapp] youtube.js loaded but openYoutubePopup still missing");
+                  if (typeof showToast === "function") showToast("Couldn't open YouTube search", "error");
+                }
+              })
+              .catch(err => {
+                console.warn("[ytapp] youtube.js load failed:", err);
+                if (typeof showToast === "function") showToast("Couldn't load YouTube view", "error");
+              });
           } else if (typeof switchView === "function") {
-            // Fallback if youtube.js isn't loaded yet.
+            // Fallback if the lazy loader itself isn't around.
             try { switchView("youtube"); } catch {}
             setTimeout(() => {
               const qInput = document.getElementById("youtube-view-q");
-              if (qInput) qInput.value = b._ytQ || label;
-              if (typeof runYoutubeSearch === "function") runYoutubeSearch(b._ytQ || label);
+              if (qInput) qInput.value = q;
+              if (typeof runYoutubeSearch === "function") runYoutubeSearch(q);
             }, 30);
           }
         }
