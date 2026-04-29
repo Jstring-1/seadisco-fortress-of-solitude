@@ -800,23 +800,77 @@ async function _bindSortable() {
     const Sortable = await _ensureSortable();
     if (!Sortable) return;
     _drawerSortable = Sortable.create(listEl, {
-      handle: ".queue-row-handle",
-      animation: 140,
-      onEnd: async () => {
-        const positions = Array.from(listEl.querySelectorAll(".queue-row"))
+      // Drag from anywhere on the row EXCEPT the buttons (play row,
+      // remove ×). Earlier the only handle was the tiny ⋮⋮ icon,
+      // which made grabbing rows on phones almost impossible.
+      filter: ".queue-row-play, .queue-row-remove",
+      preventOnFilter: false,
+      // Touch fallback. Mobile Safari + some Android browsers don't
+      // honour the native HTML5 drag spec; forceFallback uses
+      // Sortable's polyfill which works everywhere.
+      forceFallback: true,
+      // 200 ms long-press on touch devices before drag activates so
+      // a normal tap on a row's title doesn't accidentally start
+      // a drag. Mouse drags fire instantly.
+      delay: 200,
+      delayOnTouchOnly: true,
+      animation: 160,
+      ghostClass: "queue-row-ghost",
+      chosenClass: "queue-row-chosen",
+      dragClass: "queue-row-dragging",
+      onEnd: (evt) => {
+        // No-op if the drop didn't actually move anything.
+        if (evt.oldIndex === evt.newIndex) return;
+        // Read the new visible order from the DOM. Sortable has
+        // already rearranged the rows; we just snapshot positions.
+        const newPositionsOrder = Array.from(listEl.querySelectorAll(".queue-row"))
           .map(el => parseInt(el.dataset.position, 10))
           .filter(n => Number.isFinite(n));
-        try {
-          await apiFetch("/api/user/play-queue/reorder", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ positions }),
-          });
+        if (!newPositionsOrder.length) return;
+        // Optimistically rebuild _queue to match the new order so
+        // any background _queueLoad / re-render uses the user's
+        // intended order — not the stale server order from a reload
+        // that races the PATCH. Keep the data payloads, just shuffle
+        // the array.
+        if (Array.isArray(_queue)) {
+          const byPos = new Map(_queue.map(it => [it.position, it]));
+          _queue = newPositionsOrder
+            .map(p => byPos.get(p))
+            .filter(Boolean);
+          // Re-stamp positions so the order persists across the
+          // next reload-without-PATCH-having-landed (positions are
+          // 1..N after the server PATCH succeeds).
+          _queue.forEach((it, i) => { it.position = i + 1; });
+          // The currently-playing track's position changed too —
+          // re-bind by externalId so the play marker stays correct.
+          if (_queuePlayingExternalId != null) {
+            const cur = _queue.find(it => String(it.externalId) === String(_queuePlayingExternalId));
+            if (cur) _queueCurrentPosition = cur.position;
+          }
+        }
+        // Fire-and-forget PATCH; if it fails we revert via reload.
+        apiFetch("/api/user/play-queue/reorder", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ positions: newPositionsOrder }),
+        }).then(r => {
+          if (!r.ok) {
+            console.warn("[queue] reorder failed:", r.status);
+            if (typeof showToast === "function") showToast("Reorder failed — restored", "error");
+            // Pull truth from server.
+            _queue = null;
+            _renderQueueDrawer();
+          }
+        }).catch(e => {
+          console.warn("[queue] reorder threw:", e);
+          if (typeof showToast === "function") showToast("Reorder failed — restored", "error");
           _queue = null;
           _renderQueueDrawer();
-        } catch {
-          if (typeof showToast === "function") showToast("Reorder failed", "error");
-        }
+        });
+        // Refresh the rendered drawer so positions in onclick handlers
+        // line up with the new local _queue. Cheap — just a re-paint
+        // off the cached array.
+        _refreshPlayerNavButtons();
       },
     });
   } catch { /* drag is optional — list still works without it */ }
