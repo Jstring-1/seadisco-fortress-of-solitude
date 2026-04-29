@@ -3205,6 +3205,95 @@ button.wiki-link-btn:active {
 }
 .sd-filter-label .sd-filter-select { text-transform: none; letter-spacing: 0; }
 
+/* ── Anonymous-visitor splash (waitlist pitch + OAuth feature list) ─
+   Replaces the home strip for signed-out users. Sits in the same
+   slot but reads as a marketing panel: title, lead, primary CTA,
+   then a feature list explaining what users get post-sign-up. */
+.anon-splash {
+  margin-top: 1rem;
+  padding: 1.4rem 1.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.04) inset;
+}
+.anon-splash-title {
+  font-size: 1.3rem;
+  margin: 0 0 0.4rem;
+  color: var(--text);
+}
+.anon-splash-lead {
+  margin: 0 0 1rem;
+  font-size: 0.92rem;
+  color: var(--muted);
+  line-height: 1.5;
+  max-width: 38rem;
+}
+.anon-splash-cta {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+.anon-splash-btn {
+  background: var(--accent);
+  color: var(--surface);
+  border: none;
+  border-radius: 4px;
+  padding: 0.6rem 1.2rem;
+  font-size: 0.92rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.anon-splash-btn:hover {
+  background: var(--accent-hi, var(--accent));
+  transform: translateY(-1px);
+}
+.anon-splash-cta-note {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.anon-splash-cta-note a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.anon-splash-cta-note a:hover { text-decoration: underline; }
+.anon-splash-section {
+  font-size: 0.78rem;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 0.6rem;
+}
+.anon-splash-features {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 0.5rem 1.2rem;
+}
+.anon-splash-features li {
+  font-size: 0.82rem;
+  color: var(--muted);
+  line-height: 1.5;
+  padding-left: 1rem;
+  position: relative;
+}
+.anon-splash-features li::before {
+  content: "·";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-weight: 700;
+}
+.anon-splash-features li strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
 /* Home strip Recent / Suggestions / Submitted header — title-wrap on the left,
    controls (filter + sort + clear) on the right. Single row whenever
    the viewport allows; on narrow screens controls drop below the

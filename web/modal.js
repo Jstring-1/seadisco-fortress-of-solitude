@@ -1625,6 +1625,22 @@ function _createYTPlayer(id) {
         const code = e?.data;
         if (code === 100 || code === 101 || code === 150) {
           updatePlayerStatus("unavailable");
+          // Report this video to the server's unavailable-tracker so
+          // future popups can pre-filter it out of tracklists. After
+          // a small threshold of distinct reports, the server flips
+          // status to 'unavailable' and broken videos vanish across
+          // the site so users can submit replacements via the
+          // album-suggest popup. Signed-in only — anon reports
+          // would be too easy to spam.
+          if (window._clerk?.user && typeof apiFetch === "function") {
+            try {
+              apiFetch("/api/youtube/report-unavailable", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ videoId: id, errorCode: code }),
+              }).catch(() => {});
+            } catch {}
+          }
           // Removed from queue here so the user doesn't keep hitting
           // the same dead track on every cycle. Advance happens
           // either through queueRemove's wasPlaying auto-advance
@@ -2123,6 +2139,41 @@ function _trackQueueAdd(el) {
   }
 }
 window._trackQueueAdd = _trackQueueAdd;
+
+// ── Unavailable YouTube videos (broken / removed / embed-disabled) ──
+//
+// Set of videoIds the server has flagged as unavailable. Populated
+// once per page session via /api/youtube/unavailable-list and
+// consulted by findVideo so broken videos are treated as missing —
+// album popups then count those tracks toward the "🎵 N missing"
+// heading and the user can submit a replacement via the album-
+// suggest popup. Refreshes after a TTL or on demand.
+window._sdYtUnavailable = window._sdYtUnavailable || new Set();
+let _sdYtUnavailableFetchedAt = 0;
+const _SD_YT_UNAVAILABLE_TTL_MS = 5 * 60 * 1000;
+
+async function _sdEnsureYtUnavailableLoaded() {
+  if (Date.now() - _sdYtUnavailableFetchedAt < _SD_YT_UNAVAILABLE_TTL_MS) return;
+  try {
+    const r = await fetch("/api/youtube/unavailable-list", { cache: "no-store" });
+    if (!r.ok) return;
+    const j = await r.json();
+    const ids = Array.isArray(j?.videoIds) ? j.videoIds : [];
+    window._sdYtUnavailable = new Set(ids);
+    _sdYtUnavailableFetchedAt = Date.now();
+  } catch { /* best-effort */ }
+}
+window._sdEnsureYtUnavailableLoaded = _sdEnsureYtUnavailableLoaded;
+
+// Pull a YouTube videoId out of a watch URL or short URL — same
+// helper as extractYouTubeId, inlined here to avoid an import cycle
+// between modal.js and queue.js. 11 chars, alphanumeric + _ -.
+function _sdYtIdFromUrl(url) {
+  if (!url) return "";
+  // youtu.be/ID or watch?v=ID or embed/ID
+  const m = String(url).match(/(?:v=|youtu\.be\/|embed\/)([A-Za-z0-9_-]{11})/);
+  return m ? m[1] : "";
+}
 
 // ── Crowd-sourced track YouTube overrides ────────────────────────────
 //
@@ -3187,15 +3238,30 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   // injects the affordances once the fetch lands.
   const _overrideMap = _trackYtReadCache(d.master_id, releaseId, searchResult.type === "master") || new Map();
   function findVideo(trackTitle, trackPosition) {
+    const unavailable = window._sdYtUnavailable;
     // 1) Discogs-provided videos win — they're the canonical source.
+    //    Skip any whose videoId is in the global unavailable set so
+    //    the track reads as "missing" and contributes to the album-
+    //    suggest count + popup.
     const tl = trackTitle.toLowerCase();
     for (const [vt, uri] of videoMap) {
-      if (vt.includes(tl) || tl.includes(vt)) return uri;
+      if (vt.includes(tl) || tl.includes(vt)) {
+        if (unavailable && unavailable.size) {
+          const vid = _sdYtIdFromUrl(uri);
+          if (vid && unavailable.has(vid)) continue;
+        }
+        return uri;
+      }
     }
     // 2) Gap-fill via crowd-sourced overrides keyed by track position.
+    //    The server-side query already excludes overrides whose video
+    //    is unavailable, but check defensively in case the cache here
+    //    is stale relative to the unavailable set.
     if (trackPosition) {
       const ov = _overrideMap.get(String(trackPosition));
-      if (ov && ov.video_id) return `https://www.youtube.com/watch?v=${ov.video_id}`;
+      if (ov && ov.video_id && (!unavailable || !unavailable.has(ov.video_id))) {
+        return `https://www.youtube.com/watch?v=${ov.video_id}`;
+      }
     }
     return null;
   }
@@ -3480,8 +3546,19 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   // Anything new lands on the next tick; if there's nothing to apply,
   // this is a no-op. Anonymous viewers still get override-driven play
   // links (the GET endpoint is public).
+  // Refresh the unavailable-list cache too — the override+findVideo
+  // paths consult it. After it lands, re-apply the DOM patch so any
+  // newly-flagged broken videos are filtered out and the missing
+  // count updates.
   if (releaseId && tracks.length) {
-    _trackYtKickFetchAndApply(targetId, d.master_id, releaseId, isMaster).catch(() => {});
+    Promise.all([
+      _sdEnsureYtUnavailableLoaded(),
+      _trackYtKickFetchAndApply(targetId, d.master_id, releaseId, isMaster),
+    ]).then(() => {
+      // Second apply — first run used a possibly-empty unavailable
+      // set; this one runs after both fetches finish. Idempotent.
+      _trackYtApplyToDom(targetId, d.master_id, releaseId, isMaster);
+    }).catch(() => {});
   }
 }
 

@@ -315,6 +315,26 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS track_youtube_overrides_submitted_idx ON track_youtube_overrides (submitted_at DESC)`);
 
+  // ── Unavailable / broken YouTube videos ─────────────────────────────────
+  // When the IFrame Player fires onError 100/101/150 (video removed,
+  // embed disabled, or region-blocked) we record the videoId here.
+  // After report_count crosses a threshold (2) the status flips to
+  // 'unavailable' and the renderer treats every album track that
+  // references that video as "missing" — counted in the heading and
+  // contributable via the album-suggest popup.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS youtube_video_unavailable (
+      video_id          TEXT PRIMARY KEY,
+      status            TEXT NOT NULL DEFAULT 'flagged',
+      report_count      INTEGER NOT NULL DEFAULT 1,
+      first_reported_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_reported_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      sample_user_id    TEXT,
+      sample_error_code INTEGER
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS yt_video_unavailable_status_idx ON youtube_video_unavailable (status)`);
+
   // ── YouTube search cache (DB-backed, survives Railway restarts) ─────────
   // The in-memory _ytSearchCache in search-api.ts gets wiped on every
   // deploy. With YT quota at 100 calls/day project-wide, even a few
@@ -3627,11 +3647,18 @@ export async function getTrackYtOverrides(
   }
   if (ors.length === 0) return [];
   try {
+    // LEFT JOIN against unavailable list so we can exclude rows whose
+    // video has been flagged "unavailable" by enough users — the
+    // override served to clients only contains videos that are likely
+    // playable. Flagged-but-not-yet-unavailable rows still serve.
     const r = await getPool().query(
-      `SELECT release_id, release_type, track_position, track_title,
-              video_id, video_title, submitted_by, submitted_at
-         FROM track_youtube_overrides
-        WHERE ${ors.join(" OR ")}`,
+      `SELECT o.release_id, o.release_type, o.track_position, o.track_title,
+              o.video_id, o.video_title, o.submitted_by, o.submitted_at
+         FROM track_youtube_overrides o
+         LEFT JOIN youtube_video_unavailable u
+           ON u.video_id = o.video_id AND u.status = 'unavailable'
+        WHERE (${ors.join(" OR ")})
+          AND u.video_id IS NULL`,
       params
     );
     return r.rows as TrackYtOverride[];
@@ -4003,6 +4030,91 @@ export async function getUserPersonalSuggestions(
     );
     return r.rows;
   } catch { return []; }
+}
+
+// ── Unavailable YouTube videos ──────────────────────────────────────
+// Threshold above which a flagged videoId graduates to "unavailable"
+// and gets filtered out of every album popup site-wide. 2 reports is
+// enough to suppress one-off network/region anomalies while not
+// requiring a long stream of bad clicks before action.
+const _YT_UNAVAILABLE_THRESHOLD = 2;
+
+// Record a single "video failed to play" report. Increments the
+// counter, refreshes last_reported_at, and flips status to
+// 'unavailable' once the threshold is reached. Returns the post-
+// update row so the caller can decide whether to act on the new
+// status.
+export async function reportYoutubeVideoUnavailable(
+  videoId: string,
+  reporterUserId: string | null,
+  errorCode: number | null
+): Promise<{ status: string; report_count: number }> {
+  if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
+    return { status: "invalid", report_count: 0 };
+  }
+  const r = await getPool().query(
+    `INSERT INTO youtube_video_unavailable
+       (video_id, status, report_count, sample_user_id, sample_error_code)
+     VALUES ($1, 'flagged', 1, $2, $3)
+     ON CONFLICT (video_id) DO UPDATE
+       SET report_count     = youtube_video_unavailable.report_count + 1,
+           last_reported_at = NOW(),
+           status           = CASE
+             WHEN youtube_video_unavailable.report_count + 1 >= $4
+             THEN 'unavailable'
+             ELSE youtube_video_unavailable.status
+           END,
+           -- Keep the first reporter's id + code for diagnostics.
+           sample_user_id    = COALESCE(youtube_video_unavailable.sample_user_id, $2),
+           sample_error_code = COALESCE(youtube_video_unavailable.sample_error_code, $3)
+     RETURNING status, report_count`,
+    [videoId, reporterUserId, errorCode, _YT_UNAVAILABLE_THRESHOLD]
+  );
+  return r.rows[0] ?? { status: "unknown", report_count: 0 };
+}
+
+// Set of videoIds whose status is 'unavailable' (above threshold).
+// Used by the renderer to filter out broken videos from album popups
+// so users see them as "missing" and can submit replacements.
+export async function getUnavailableYoutubeVideoIds(): Promise<Set<string>> {
+  const out = new Set<string>();
+  try {
+    const r = await getPool().query(
+      `SELECT video_id FROM youtube_video_unavailable WHERE status = 'unavailable'`
+    );
+    for (const row of r.rows) out.add(row.video_id);
+  } catch { /* best-effort */ }
+  return out;
+}
+
+// Admin: list every flagged + unavailable entry for the admin tab.
+// Newest reports first so admin sees recent issues at the top.
+export async function listYoutubeVideoUnavailable(limit = 500): Promise<any[]> {
+  try {
+    const r = await getPool().query(
+      `SELECT video_id, status, report_count,
+              first_reported_at, last_reported_at,
+              sample_user_id, sample_error_code
+         FROM youtube_video_unavailable
+        ORDER BY last_reported_at DESC
+        LIMIT $1`,
+      [Math.max(1, Math.min(2000, limit))]
+    );
+    return r.rows;
+  } catch { return []; }
+}
+
+// Admin: clear a single videoId from the unavailable list (e.g. when
+// a video came back online). Removes the row entirely so a future
+// report starts fresh from count 1.
+export async function clearYoutubeVideoUnavailable(videoId: string): Promise<boolean> {
+  try {
+    const r = await getPool().query(
+      `DELETE FROM youtube_video_unavailable WHERE video_id = $1`,
+      [videoId]
+    );
+    return (r.rowCount ?? 0) > 0;
+  } catch { return false; }
 }
 
 // ── YouTube search cache (DB-backed) ────────────────────────────────
