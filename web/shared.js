@@ -474,6 +474,49 @@ async function openSignInModal() {
   }
 }
 
+// Open Clerk's sign-UP modal directly. With Clerk's waitlist mode
+// enabled the sign-up tab is the waitlist join form, so this is what
+// the anon splash's "Join the waitlist" button calls — landing on
+// the sign-IN tab first (the regular openSignInModal) was confusing
+// since the visitor doesn't have an account yet to sign in to.
+async function openSignUpModal() {
+  try {
+    const c = window._clerk || await loadClerkInstance();
+    if (!c) {
+      if (typeof switchView === "function") switchView("account");
+      else location.href = "/?v=account";
+      return;
+    }
+    if (c.user) {
+      if (typeof switchView === "function") switchView("account");
+      else location.href = "/?v=account";
+      return;
+    }
+    if (typeof c.openSignUp === "function") {
+      c.openSignUp({
+        appearance: _seaDiscoBuildClerkAppearance(),
+        afterSignInUrl: location.pathname + location.search,
+        afterSignUpUrl: location.pathname + location.search,
+      });
+    } else if (typeof c.openSignIn === "function") {
+      // Older Clerk builds: fall back to sign-in modal; user can
+      // tap the sign-up tab manually.
+      c.openSignIn({
+        appearance: _seaDiscoBuildClerkAppearance(),
+        afterSignInUrl: location.pathname + location.search,
+        afterSignUpUrl: location.pathname + location.search,
+      });
+    } else {
+      if (typeof switchView === "function") switchView("account");
+      else location.href = "/?v=account";
+    }
+  } catch (e) {
+    console.error("[openSignUpModal] failed:", e);
+    if (typeof switchView === "function") switchView("account");
+    else location.href = "/?v=account";
+  }
+}
+
 // ── Inline nav icons (line-art vinyl set; uses currentColor) ────────────
 // 24×24 viewBox; SVGs have no fixed width/height so the .nav-icon
 // container's CSS sizing wins. fill="none" + stroke="currentColor" so
@@ -556,7 +599,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260429.1151";
+  const SITE_VERSION = "build 20260429.1155";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
