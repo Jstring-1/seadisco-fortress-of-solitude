@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260429.1030" />
+  <link rel="stylesheet" href="/style.css?v=20260429.1135" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260429.1030"></script>
-<script defer src="/shared.js?v=20260429.1030"></script>
+<script defer src="/utils.js?v=20260429.1135"></script>
+<script defer src="/shared.js?v=20260429.1135"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -67,6 +67,7 @@
         <button class="admin-tab" onclick="switchAdminTab('blues-db')">Blues DB</button>
         <button class="admin-tab" onclick="switchAdminTab('submissions')">Submissions</button>
         <button class="admin-tab" onclick="switchAdminTab('suggestions')">Suggestions</button>
+        <button class="admin-tab" onclick="switchAdminTab('unavailable')">Unavailable</button>
         <button class="admin-tab" onclick="switchAdminTab('theme')">View</button>
       </div>
 
@@ -241,6 +242,19 @@
         <div id="suggestions-list" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
       </div>
 
+      <!-- Unavailable YouTube videos (auto-flagged via IFrame Player onError) -->
+      <div class="admin-tab-panel" id="panel-unavailable" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
+          <h2 style="margin:0">Unavailable Videos</h2>
+          <button class="admin-refresh-btn" id="unavailable-refresh-btn" onclick="_adminClickRefresh(this, loadAdminUnavailable)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <span id="unavailable-refresh-status" class="admin-refresh-status"></span>
+          <input type="search" id="unavailable-filter" class="sd-filter-input" placeholder="filter by videoId, code, user…" oninput="_filterAdminUnavailable(this)" style="margin-left:auto;width:14rem">
+          <span id="unavailable-count" style="font-size:0.78rem;color:var(--muted)"></span>
+        </div>
+        <p style="font-size:0.78rem;color:var(--muted);margin:0 0 0.6rem">Videos auto-reported as broken when the YouTube IFrame Player throws error code 100 (not found), 101, or 150 (embed disabled / region-blocked). After 2 distinct reports, the videoId graduates to "unavailable" and is filtered out of every album popup site-wide so the affected tracks register as missing and contributors can submit replacements.</p>
+        <div id="unavailable-list" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
+      </div>
+
       <!-- View-as-user (theme picker removed — site theme is locked to
            Noir White site-wide). The view-as-user toggle remains here so
            the admin can preview the site without admin affordances. -->
@@ -311,7 +325,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260429.1030"></script>
+<script defer src="/modal.js?v=20260429.1135"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -378,6 +392,7 @@ const _adminTabLoaders = {
   'blues-db': () => bluesDbInit(),
   'submissions': () => loadAdminSubmissions(),
   'suggestions': () => loadAdminSuggestions(),
+  'unavailable': () => loadAdminUnavailable(),
   'theme': () => initThemePicker(),
 };
 
@@ -2131,6 +2146,109 @@ function _filterAdminSubmissions(_input) {
   _renderAdminSubmissionsTable();
 }
 window._filterAdminSubmissions = _filterAdminSubmissions;
+
+// ── Admin: Unavailable YouTube videos ─────────────────────────────────
+let _adminUnavailableRows = [];
+
+async function loadAdminUnavailable() {
+  const el = document.getElementById("unavailable-list");
+  if (!el) return;
+  el.textContent = "Loading…";
+  try {
+    const r = await apiFetch("/api/admin/youtube-unavailable");
+    if (!r.ok) { el.textContent = "Could not load."; return; }
+    const j = await r.json();
+    _adminUnavailableRows = Array.isArray(j?.entries) ? j.entries : [];
+    _renderAdminUnavailableTable();
+  } catch (e) {
+    el.textContent = "Could not load: " + (e?.message || e);
+  }
+}
+window.loadAdminUnavailable = loadAdminUnavailable;
+
+function _renderAdminUnavailableTable() {
+  const el = document.getElementById("unavailable-list");
+  const countEl = document.getElementById("unavailable-count");
+  if (!el) return;
+  const filter = (document.getElementById("unavailable-filter")?.value || "").trim().toLowerCase();
+  const rows = _adminUnavailableRows;
+  const filtered = filter
+    ? rows.filter(o => {
+        const hay = [
+          o.video_id, o.status, String(o.report_count),
+          o.sample_user_id, String(o.sample_error_code ?? ""),
+        ].filter(Boolean).join(" ").toLowerCase();
+        return hay.includes(filter);
+      })
+    : rows;
+  if (countEl) {
+    if (filter && filtered.length !== rows.length) {
+      countEl.textContent = `${filtered.length} of ${rows.length} ${rows.length === 1 ? "row" : "rows"}`;
+    } else {
+      countEl.textContent = `${rows.length} ${rows.length === 1 ? "row" : "rows"}`;
+    }
+  }
+  if (!rows.length) {
+    el.innerHTML = `<div style="color:var(--muted);padding:1rem;text-align:center">No unavailable videos reported.</div>`;
+    return;
+  }
+  if (!filtered.length) {
+    el.innerHTML = `<div style="color:var(--muted);padding:1rem;text-align:center">No matches.</div>`;
+    return;
+  }
+  const fmtDate = (d) => d ? new Date(d).toLocaleString() : "—";
+  const trim = (s, n) => { s = String(s || ""); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
+  const head = `<thead style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted);text-align:left">
+    <tr>
+      <th style="padding:0.3rem 0.5rem">Status</th>
+      <th style="padding:0.3rem 0.5rem">Video</th>
+      <th style="padding:0.3rem 0.5rem;text-align:right">Reports</th>
+      <th style="padding:0.3rem 0.5rem">First</th>
+      <th style="padding:0.3rem 0.5rem">Last</th>
+      <th style="padding:0.3rem 0.5rem">Code</th>
+      <th style="padding:0.3rem 0.5rem">Reporter</th>
+      <th></th>
+    </tr></thead>`;
+  const body = filtered.map(o => {
+    const ytLink = `<a href="https://www.youtube.com/watch?v=${encodeURIComponent(o.video_id)}" target="_blank" rel="noopener" style="color:#7eb8da;text-decoration:none;font-family:monospace">${escHtml(o.video_id)}</a>`;
+    const statusColor = o.status === "unavailable" ? "var(--danger)" : "var(--accent)";
+    return `<tr style="border-top:1px solid var(--border);font-size:0.78rem">
+      <td style="padding:0.35rem 0.5rem;font-weight:600;color:${statusColor};text-transform:uppercase;font-size:0.7rem;letter-spacing:0.04em">${escHtml(o.status)}</td>
+      <td style="padding:0.35rem 0.5rem">${ytLink}</td>
+      <td style="padding:0.35rem 0.5rem;text-align:right;font-weight:600">${o.report_count}</td>
+      <td style="padding:0.35rem 0.5rem;color:var(--muted);white-space:nowrap">${escHtml(fmtDate(o.first_reported_at))}</td>
+      <td style="padding:0.35rem 0.5rem;color:var(--muted);white-space:nowrap">${escHtml(fmtDate(o.last_reported_at))}</td>
+      <td style="padding:0.35rem 0.5rem;font-family:monospace">${escHtml(String(o.sample_error_code ?? "—"))}</td>
+      <td style="padding:0.35rem 0.5rem;color:var(--muted);font-family:monospace;font-size:0.72rem">${escHtml(trim(o.sample_user_id || "", 12))}</td>
+      <td style="padding:0.35rem 0.5rem"><button class="admin-btn" onclick="adminClearUnavailable(this,'${escHtml(o.video_id)}')" title="Clear this entry — videoId starts fresh from count 1 next time it's reported">Clear</button></td>
+    </tr>`;
+  }).join("");
+  el.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">${head}<tbody>${body}</tbody></table></div>`;
+}
+
+function _filterAdminUnavailable(_input) {
+  _renderAdminUnavailableTable();
+}
+window._filterAdminUnavailable = _filterAdminUnavailable;
+
+async function adminClearUnavailable(btn, videoId) {
+  if (!confirm(`Clear ${videoId} from the unavailable list? (resets report count to 0)`)) return;
+  btn.disabled = true;
+  try {
+    const r = await apiFetch(`/api/admin/youtube-unavailable/${encodeURIComponent(videoId)}`, {
+      method: "DELETE",
+    });
+    if (!r.ok) throw new Error(`failed (${r.status})`);
+    // Optimistic remove from local cache so the row vanishes without
+    // a full refetch.
+    _adminUnavailableRows = _adminUnavailableRows.filter(o => o.video_id !== videoId);
+    _renderAdminUnavailableTable();
+  } catch (e) {
+    btn.disabled = false;
+    alert("Clear failed: " + (e?.message || e));
+  }
+}
+window.adminClearUnavailable = adminClearUnavailable;
 
 async function adminDeleteSubmission(btn, releaseId, releaseType, trackPosition) {
   if (!confirm(`Delete submission for ${releaseType}/${releaseId} pos ${trackPosition}?`)) return;

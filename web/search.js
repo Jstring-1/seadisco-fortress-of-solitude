@@ -1422,6 +1422,13 @@ async function loadRandomRecords(more) {
   const grid = document.getElementById("random-records-grid");
   const wrap = document.getElementById("random-records");
   if (!grid || !wrap) return;
+  // Anonymous visitors don't see the home strip — they get the
+  // waitlist splash panel (#anon-splash) instead. Hide the strip
+  // defensively in case any path tries to render into it.
+  if (!window._clerk?.user) {
+    wrap.style.display = "none";
+    return;
+  }
 
   // First call (or full reload): rebuild from localStorage history.
   // For logged-out users with no local history (and signed-in users

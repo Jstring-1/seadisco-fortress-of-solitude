@@ -365,15 +365,22 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
 });
 
 // ── Clerk auth init ──────────────────────────────────────────────────────
-// Public mode: site is visible to everyone. Search works without
-// signing in; sync / collection / wantlist / favorites still require
-// auth, gated server-side. The old splash-section is only shown if
-// it's still in the DOM AND nothing else is hiding it.
-function _applySplashVisibility(_clerk) {
-  const splash = document.getElementById("splash-section");
-  const form   = document.getElementById("main-search-form");
-  if (splash) splash.style.display = "none";
+// Search remains publicly accessible (anon visitors can search Discogs
+// and play YouTube previews). The home strip (Recent / Suggestions /
+// Submitted) and the anon splash panel are mutually exclusive: the
+// strip shows for signed-in users who have library data; the splash
+// panel pitches the waitlist + OAuth feature set to everyone else.
+function _applySplashVisibility(clerk) {
+  const splash    = document.getElementById("splash-section");
+  const form      = document.getElementById("main-search-form");
+  const anonSplash = document.getElementById("anon-splash");
+  const stripWrap  = document.getElementById("random-records");
+  const signedIn = !!clerk?.user;
+  if (splash) splash.style.display = "none"; // legacy splash, never used now
   if (form)   form.style.display   = "";
+  // Anon visitors: show the waitlist pitch in place of the home strip.
+  if (anonSplash) anonSplash.style.display = signedIn ? "none" : "";
+  if (stripWrap)  stripWrap.style.display  = signedIn ? ""     : "none";
 }
 
 async function applyAuthState(clerk) {
@@ -482,6 +489,18 @@ if (window._sdOfflineMode) {
     onReady: () => _authReady(),
   });
 }
+
+// Prefetch the unavailable-list cache at boot so the first album
+// popup's tracklist is rendered with the correct play/missing state
+// — without this, the very first popup of a session may briefly
+// show ▶ on a track whose video has been globally flagged broken.
+// Called via a tiny delay so it doesn't compete with the critical-
+// path auth/sync fetches.
+setTimeout(() => {
+  if (typeof window._sdEnsureYtUnavailableLoaded === "function") {
+    window._sdEnsureYtUnavailableLoaded();
+  }
+}, 1500);
 
 // Service worker removed — no sw.js exists
 

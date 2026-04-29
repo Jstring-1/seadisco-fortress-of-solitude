@@ -65,7 +65,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260429.1030" />
+  <link rel="stylesheet" href="/style.css?v=20260429.1135" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -103,7 +103,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260429.1030"></script>
+<script defer src="/shared.js?v=20260429.1135"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -452,6 +452,33 @@
     <button id="search-load-more-btn" class="load-more-btn" onclick="loadMoreResults()">Load more results</button>
   </div>
   <div id="pagination" style="display:none"></div>
+
+  <!-- ── Anonymous-visitor splash ───────────────────────────────────
+       Shown to signed-out users in place of the Recent/Suggestions/
+       Submitted strip. Pitches the waitlist + the OAuth feature set
+       so visitors know what they're signing up for. Hidden for
+       signed-in users via _applySplashVisibility in app.js. -->
+  <div id="anon-splash" class="content-area anon-splash" style="display:none">
+    <h2 class="anon-splash-title">SeaDisco is invite-only</h2>
+    <p class="anon-splash-lead">A music-discovery companion to Discogs for vinyl collectors, DJs, and music historians. Search is public — sign up to get the rest.</p>
+    <div class="anon-splash-cta">
+      <button type="button" class="anon-splash-btn" onclick="openSignInModal()">Join the waitlist</button>
+      <span class="anon-splash-cta-note">Already have an account? <a href="#" onclick="event.preventDefault();openSignInModal();return false">Sign in</a></span>
+    </div>
+    <h3 class="anon-splash-section">Connect your Discogs account and you can:</h3>
+    <ul class="anon-splash-features">
+      <li><strong>Sync your collection, wantlist, inventory, and lists</strong> — any size, syncs nightly.</li>
+      <li><strong>Browse a personalized "Suggestions" feed</strong> generated hourly from the genres, styles, and years you actually own.</li>
+      <li><strong>Play tracks inline</strong> via embedded YouTube + Library of Congress audio with a cross-source play queue, mobile lock-screen controls, and persistent mini-player.</li>
+      <li><strong>Contribute YouTube videos</strong> for tracks Discogs is missing audio for — one search, fill in a whole album at once. Site-wide; future visitors see your match as the canonical preview.</li>
+      <li><strong>Manage your marketplace listings</strong> — list, edit, retire — with Discogs's own price guidance built in.</li>
+      <li><strong>Reply to buyers and advance order status</strong> from a unified Seller Orders panel.</li>
+      <li><strong>Rate releases, favorite albums/artists/labels, and save searches</strong> across devices.</li>
+      <li><strong>Find rare / hard-to-find pressings</strong> with format-biased search modes that surface vinyl-only and pre-streaming-era catalog.</li>
+      <li><strong>Browse adjacent music data</strong> — Library of Congress public-domain audio, Wikipedia, Archive.org live shows, full YouTube search with Saved tab.</li>
+      <li><strong>Use offline</strong> — your library caches to your browser so you can browse without a connection (opt-in).</li>
+    </ul>
+  </div>
 
   <!-- ── Recent history (primary front-page strip) ────────────────── -->
   <div id="random-records" class="content-area" style="margin-top:0.5rem;display:none">
@@ -998,15 +1025,15 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260429.1030"></script>
-<script defer src="/search.js?v=20260429.1030"></script>
-<script defer src="/collection.js?v=20260429.1030"></script>
-<script defer src="/account.js?v=20260429.1030"></script>
-<script defer src="/orders.js?v=20260429.1030"></script>
+<script defer src="/utils.js?v=20260429.1135"></script>
+<script defer src="/search.js?v=20260429.1135"></script>
+<script defer src="/collection.js?v=20260429.1135"></script>
+<script defer src="/account.js?v=20260429.1135"></script>
+<script defer src="/orders.js?v=20260429.1135"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260429.1030"></script>
-<script defer src="/app.js?v=20260429.1030"></script>
+<script defer src="/modal.js?v=20260429.1135"></script>
+<script defer src="/app.js?v=20260429.1135"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1015,13 +1042,13 @@
      (switchView for archive/youtube; openInventoryEditor stub for
      the editor). After window.load they're idle-preloaded so a
      subsequent nav into those views is instant. -->
-<script defer src="/loc.js?v=20260429.1030"></script>
-<script defer src="/queue.js?v=20260429.1030"></script>
+<script defer src="/loc.js?v=20260429.1135"></script>
+<script defer src="/queue.js?v=20260429.1135"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260429.1030";
+  window._SD_LAZY_VERSION = "20260429.1135";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1044,8 +1071,8 @@
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260429.1030"></script>
-<script defer src="/offline.js?v=20260429.1030"></script>
+<script defer src="/idb.js?v=20260429.1135"></script>
+<script defer src="/offline.js?v=20260429.1135"></script>
 
 </body>
 </html>
