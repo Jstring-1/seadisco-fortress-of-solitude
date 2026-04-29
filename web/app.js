@@ -67,10 +67,13 @@ async function _ensureAdminFlag() {
   } else if (rawView === "picks") {
     // Legacy /?v=picks bookmark — Submitted Tracks moved into the
     // home-strip Recent / Suggestions / Submitted toggle. Land on
-    // search and pre-select the Submitted tab so old links still
-    // do something useful.
-    try { localStorage.setItem("sd_home_strip_mode", "submitted"); } catch {}
+    // search and switch to the Submitted tab in-session (no
+    // persistence, since the strip mode resets to Recent on every
+    // page load by design).
     switchView("search", true);
+    if (typeof window._sdSwitchHomeStripTab === "function") {
+      window._sdSwitchHomeStripTab("submitted");
+    }
   } else if (rawView === "records" || rawView === "wanted") {
     await authReadyPromise;
     if (!window._clerk?.user) { showToast("Sign in to view your records", "error"); switchView("account", true); }

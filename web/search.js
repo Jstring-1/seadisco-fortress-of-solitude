@@ -735,25 +735,21 @@ window._sdToggleExcludeCd = _sdToggleExcludeCd;
 
 // ── Home strip Recent / Suggestions / Submitted toggle ────────────────
 //
-// Default is "recent" on first load. Persists per-session in
-// localStorage. The Suggestions side reads from
-// /api/user/personal-suggestions for signed-in users (background-
-// generated hourly). For anon users the Suggestions tab falls back to
-// the contributed-favorites sample so it still has content.
-window._sdHomeStripMode = (() => {
-  try { return localStorage.getItem("sd_home_strip_mode") || "recent"; }
-  catch { return "recent"; }
-})();
+// Defaults to "recent" on every page load — we deliberately do NOT
+// persist the choice across sessions. Cross-session persistence
+// caused the visual / data mismatch where the markup had Recent
+// active (from the static class on the span) while the data feed
+// was Suggestions or Submitted because localStorage said so.
+// Within a session the mode is held in window._sdHomeStripMode and
+// updated by _sdSwitchHomeStripTab when the user clicks a tab.
+window._sdHomeStripMode = "recent";
 window._sdHomeStripFilter = "";
 
-function _sdSwitchHomeStripTab(mode) {
-  const m = mode === "suggestions" ? "suggestions"
-          : mode === "submitted"   ? "submitted"
-          : "recent";
-  if (window._sdHomeStripMode === m) return;
-  window._sdHomeStripMode = m;
-  try { localStorage.setItem("sd_home_strip_mode", m); } catch {}
-  // Visual tab state — exactly one tab carries .rr-tab-active.
+// Force every tab's class + inline color to match the current mode.
+// Called both on click (via _sdSwitchHomeStripTab) and on initial
+// render so the visual state can never drift from the data state.
+function _sdSyncHomeStripTabsVisual() {
+  const m = window._sdHomeStripMode || "recent";
   const tabs = {
     recent:      document.getElementById("rr-tab-recent"),
     suggestions: document.getElementById("rr-tab-suggestions"),
@@ -764,6 +760,22 @@ function _sdSwitchHomeStripTab(mode) {
     el.classList.toggle("rr-tab-active", k === m);
     el.style.color = k === m ? "var(--text)" : "var(--muted)";
   }
+}
+window._sdSyncHomeStripTabsVisual = _sdSyncHomeStripTabsVisual;
+
+function _sdSwitchHomeStripTab(mode) {
+  const m = mode === "suggestions" ? "suggestions"
+          : mode === "submitted"   ? "submitted"
+          : "recent";
+  if (window._sdHomeStripMode === m) {
+    // Idempotent re-click: still re-sync visual state in case
+    // something else (markup edit, race, mid-load DOM update) left
+    // the highlight on the wrong tab.
+    _sdSyncHomeStripTabsVisual();
+    return;
+  }
+  window._sdHomeStripMode = m;
+  _sdSyncHomeStripTabsVisual();
   // Reload strip from the appropriate source.
   loadRandomRecords(false);
 }
