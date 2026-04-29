@@ -2167,7 +2167,14 @@ function _shInit() {
     el.addEventListener("input", () => _shHide());
   });
   document.addEventListener("mousedown", (e) => {
-    if (_shActiveField && !e.target.closest("#sh-dropdown") && !e.target.closest("input")) _shHide();
+    // Dismiss when the click target is outside the dropdown AND
+    // outside the currently-active field. Earlier guard skipped
+    // dismissal whenever the click was on ANY input, which kept the
+    // Artist dropdown lingering on top of Country/Genre/Style when
+    // the user moved to another field.
+    if (_shActiveField && !e.target.closest("#sh-dropdown") && e.target !== _shActiveField) {
+      _shHide();
+    }
   });
 }
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", _shInit);
