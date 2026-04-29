@@ -98,7 +98,14 @@ async function _ensureAdminFlag() {
   //   wk (wiki) > vr (release) > op (master/release) > vd (video bar)
   const wkParam      = p.get("wk");
   const versionParam = p.get("vr");
-  const openParam    = p.get("op") || p.get("vp"); // vp = video parent popup fallback
+  // op = "open popup" — explicit. vp = "video parent" — set
+  // automatically by setVideoUrl as the queue advances so the disc
+  // icon knows the playing track's album. We deliberately do NOT
+  // fall back to vp here: URLs that only carry vp would otherwise
+  // auto-pop the album for the playing track on every reload, even
+  // when the user never asked for that popup. Sharing an album +
+  // track together is done from the popup itself, which sets op=.
+  const openParam    = p.get("op");
   const videoParam   = p.get("vd");
 
   // 1) Pre-warm YouTube API so playback starts the instant we have a URL.

@@ -181,8 +181,14 @@ function switchView(view, skipPushState = false) {
   // navigation; the picks branch below re-arms it. Also trigger the
   // exit cleanup (hides the picks sort row, drops the title) so
   // navigating away from Picks doesn't leak its UI into Search.
-  if (view !== "picks" && window._sdPicksMode) {
-    if (typeof _sdExitPicksMode === "function") _sdExitPicksMode();
+  // Defensive: always remove the body class on non-picks views even
+  // if _sdPicksMode is somehow out of sync — prevents the redundant-
+  // header hide from sticking on other pages.
+  if (view !== "picks") {
+    document.body.classList.remove("picks-mode");
+    if (window._sdPicksMode && typeof _sdExitPicksMode === "function") {
+      _sdExitPicksMode();
+    }
   }
 
   // Highlight nav — single row has both data-view and data-rtab tabs
