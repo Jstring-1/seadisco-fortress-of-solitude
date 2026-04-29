@@ -3160,6 +3160,68 @@ button.wiki-link-btn:active {
 .tracklist-filter:focus { border-color: var(--accent); }
 .tracklist-filter::placeholder { color: #555; }
 
+/* Site-wide filter input + select — used wherever a list/grid has a
+   "filter" affordance (home strip, picks page, etc). Matches the
+   .tracklist-filter footprint so the visual rhythm is consistent.
+   Slightly larger touch target than .tracklist-filter since these
+   live outside dense tracklist rows. */
+.sd-filter-input,
+.sd-filter-select {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: var(--fg);
+  font-size: 0.78rem;
+  padding: 0.3rem 0.5rem;
+  outline: none;
+  font-family: inherit;
+  line-height: 1.2;
+  transition: border-color 0.15s;
+  color-scheme: dark;
+}
+.sd-filter-input { width: 9rem; }
+.sd-filter-input:focus,
+.sd-filter-select:focus { border-color: var(--accent); }
+.sd-filter-input::placeholder { color: #555; }
+
+/* Inline label paired with .sd-filter-input or .sd-filter-select.
+   Keeps the "Sort" / "Filter" word at the right size + color. */
+.sd-filter-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.sd-filter-label .sd-filter-select { text-transform: none; letter-spacing: 0; }
+
+/* Picks (Submitted Tracks) banner — sits above the home strip when
+   Picks mode is active. Houses the page title and the sort dropdown. */
+.picks-banner {
+  margin-top: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+.picks-banner-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.picks-banner-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+.picks-banner-sub {
+  font-size: 0.74rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+
 .credits-header {
   display: flex;
   align-items: center;

@@ -65,7 +65,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260428.2204" />
+  <link rel="stylesheet" href="/style.css?v=20260428.2208" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -103,7 +103,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260428.2204"></script>
+<script defer src="/shared.js?v=20260428.2208"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -465,10 +465,10 @@
         <span id="random-records-title" style="display:none">Recent</span>
       </div>
       <div id="random-records-controls" style="display:flex;align-items:center;gap:0.5rem;flex-shrink:0;flex-wrap:wrap">
-        <input type="search" id="random-records-filter" placeholder="filter…" oninput="_sdHomeStripFilterChanged(this)" style="font-size:0.78rem;padding:0.3rem 0.5rem;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);width:8rem">
-        <label class="sort-label" style="flex-shrink:0">
+        <input type="search" id="random-records-filter" class="sd-filter-input" placeholder="filter…" oninput="_sdHomeStripFilterChanged(this)">
+        <label class="sd-filter-label" style="flex-shrink:0">
           Sort
-          <select id="favorites-sort" onchange="sortFavoritesGrid()" style="font-size:0.78rem;padding:0.3rem 0.4rem;color-scheme:dark">
+          <select id="favorites-sort" class="sd-filter-select" onchange="sortFavoritesGrid()">
             <option value="added:desc">Opened ↓</option>
             <option value="added:asc">Opened ↑</option>
             <option value="year:desc">Year ↓</option>
@@ -961,15 +961,15 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260428.2204"></script>
-<script defer src="/search.js?v=20260428.2204"></script>
-<script defer src="/collection.js?v=20260428.2204"></script>
-<script defer src="/account.js?v=20260428.2204"></script>
-<script defer src="/orders.js?v=20260428.2204"></script>
+<script defer src="/utils.js?v=20260428.2208"></script>
+<script defer src="/search.js?v=20260428.2208"></script>
+<script defer src="/collection.js?v=20260428.2208"></script>
+<script defer src="/account.js?v=20260428.2208"></script>
+<script defer src="/orders.js?v=20260428.2208"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260428.2204"></script>
-<script defer src="/app.js?v=20260428.2204"></script>
+<script defer src="/modal.js?v=20260428.2208"></script>
+<script defer src="/app.js?v=20260428.2208"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -978,13 +978,13 @@
      (switchView for archive/youtube; openInventoryEditor stub for
      the editor). After window.load they're idle-preloaded so a
      subsequent nav into those views is instant. -->
-<script defer src="/loc.js?v=20260428.2204"></script>
-<script defer src="/queue.js?v=20260428.2204"></script>
+<script defer src="/loc.js?v=20260428.2208"></script>
+<script defer src="/queue.js?v=20260428.2208"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260428.2204";
+  window._SD_LAZY_VERSION = "20260428.2208";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1007,8 +1007,8 @@
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260428.2204"></script>
-<script defer src="/offline.js?v=20260428.2204"></script>
+<script defer src="/idb.js?v=20260428.2208"></script>
+<script defer src="/offline.js?v=20260428.2208"></script>
 
 </body>
 </html>

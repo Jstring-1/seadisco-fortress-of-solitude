@@ -807,9 +807,9 @@ function _sdMountPicksHeader() {
       <div class="picks-banner-text">
         <div class="picks-banner-title">🎵 Submitted Tracks</div>
       </div>
-      <label class="picks-sort-label">
+      <label class="sd-filter-label">
         Sort
-        <select id="picks-sort" onchange="_sdPicksSortChanged()">
+        <select id="picks-sort" class="sd-filter-select" onchange="_sdPicksSortChanged()">
           <option value="most" selected>Most contributions</option>
           <option value="fewest">Fewest contributions</option>
           <option value="recent">Most recent</option>
