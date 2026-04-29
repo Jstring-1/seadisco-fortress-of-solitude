@@ -806,7 +806,6 @@ function _sdMountPicksHeader() {
     <div class="picks-banner-inner">
       <div class="picks-banner-text">
         <div class="picks-banner-title">🎵 Submitted Tracks</div>
-        <div class="picks-banner-sub">Albums where users have contributed YouTube videos for tracks Discogs didn't have. Open any album to add your own.</div>
       </div>
       <label class="picks-sort-label">
         Sort
