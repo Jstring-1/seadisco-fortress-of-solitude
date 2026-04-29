@@ -2384,8 +2384,11 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
   right: 0;
   z-index: 300;
   background: #111;
-  border-top: 1px solid #2a2a2a;
-  box-shadow: 0 -4px 20px rgba(0,0,0,0.6);
+  /* Subtle accent on the top edge anchors the bar against the page
+     content so it reads as a docked surface rather than a floating
+     overlay. The shadow puts more depth between bar and content. */
+  border-top: 1px solid rgba(126, 184, 218, 0.12);
+  box-shadow: 0 -8px 28px rgba(0,0,0,0.6), 0 -1px 0 rgba(255,255,255,0.04) inset;
   font-family: inherit;
 }
 .mini-player.open { display: block; }
@@ -2706,6 +2709,10 @@ body.modal-open  { overflow: hidden; }
   max-height: 88vh;
   overflow-y: auto;
   position: relative;
+  /* Soft outer shadow gives the popup a clear "lifted" reading against
+     the dimmed overlay. The inset hairline fakes a top edge highlight
+     so the lift looks intentional rather than a glow. */
+  box-shadow: 0 8px 28px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.04) inset;
 }
 
 /* Empty close zone at top of popup — tap to dismiss (especially on mobile) */
@@ -3839,12 +3846,17 @@ button.wiki-link-btn:active {
   color: inherit;
   display: flex;
   flex-direction: column;
+  /* Subtle resting elevation — barely visible against body bg, but
+     gives the grid a hint of dimension when scanning many cards. */
+  box-shadow: 0 1px 2px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.025) inset;
 }
 
 .card:hover {
   border-color: var(--accent);
   transform: translateY(-2px);
-  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  /* Stronger shadow on hover reinforces clickability — paired with the
+     existing translateY lift it reads as a press-ready affordance. */
+  box-shadow: 0 6px 20px rgba(0,0,0,0.45), 0 1px 0 rgba(255,255,255,0.04) inset;
 }
 
 /* Currently playing LOC card — animated accent border with a small
@@ -6647,6 +6659,151 @@ body.is-offline button.offline-disabled {
   background: rgba(255,255,255,0.04);
 }
 .queue-add-icon.queued { color: var(--success); border-color: var(--success); }
+
+/* ── Track YouTube override affordances ─────────────────────────────
+   .track-yt-suggest  — shown on tracks Discogs missed (signed-in users).
+                         Click opens the YT search popup with track context.
+   .track-yt-override-badge — small 🎵 marker on rows whose play link
+                         came from a crowd-sourced override.
+   .track-yt-admin-delete  — admin-only ✕ on overridden rows; removes
+                         the override after confirm.
+   .archive-btn-suggest — "✓ Suggest" button on each YT search result
+                         when the popup was opened in suggest mode. */
+.track-yt-suggest {
+  display: inline-block;
+  font-size: 0.78em;
+  margin-left: 0.2rem;
+  padding: 0 0.25rem;
+  text-decoration: none;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  line-height: 1.2;
+  opacity: 0.55;
+  transition: color 0.12s, border-color 0.12s, opacity 0.12s, background 0.12s;
+}
+.track-yt-suggest:hover {
+  color: #c084fc;
+  border-color: #c084fc;
+  opacity: 1;
+  background: rgba(192, 132, 252, 0.08);
+}
+.track-yt-override-badge {
+  display: inline-block;
+  font-size: 0.72em;
+  margin-left: 0.25rem;
+  opacity: 0.7;
+  cursor: default;
+}
+.track-yt-admin-delete {
+  display: inline-block;
+  font-size: 0.7em;
+  margin-left: 0.15rem;
+  padding: 0 0.2rem;
+  text-decoration: none;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  cursor: pointer;
+  line-height: 1.2;
+  opacity: 0.6;
+}
+.track-yt-admin-delete:hover {
+  color: #ff7b7b;
+  border-color: #ff7b7b;
+  opacity: 1;
+  background: rgba(255,123,123,0.08);
+}
+.archive-btn-suggest {
+  background: rgba(192, 132, 252, 0.12);
+  border-color: rgba(192, 132, 252, 0.45);
+  color: #c084fc;
+}
+.archive-btn-suggest:hover:not(:disabled) {
+  background: rgba(192, 132, 252, 0.22);
+  border-color: #c084fc;
+}
+.archive-btn-suggest:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* "No CDs" toggle button — a small circular icon button with a CD
+   glyph and a red diagonal strike that brightens when active. Lives
+   on the same row as the "Hard to find" checkbox in the advanced
+   search panel. Filter is applied client-side in renderResults. */
+.f-exclude-cd-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.f-exclude-cd-btn:hover { transform: scale(1.06); }
+.f-exclude-cd-btn .f-exclude-cd-glyph {
+  /* Slight desaturation so the strike reads as the dominant shape. */
+  filter: grayscale(0.4);
+  font-size: 0.95rem;
+  line-height: 1;
+  display: inline-block;
+}
+.f-exclude-cd-btn::after {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 50%;
+  height: 2px;
+  background: #ff5050;
+  border-radius: 1px;
+  transform: rotate(-30deg);
+  transform-origin: center;
+  opacity: 0.45;
+  box-shadow: 0 0 1px rgba(0,0,0,0.7);
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+.f-exclude-cd-btn.active {
+  background: rgba(255, 80, 80, 0.12);
+  border-color: rgba(255, 80, 80, 0.55);
+}
+.f-exclude-cd-btn.active::after { opacity: 1; }
+
+/* "Hard to Find" search-mode badge — decorates result cards whose
+   master/release has no embedded YouTube videos, signaling a place
+   where a user can contribute via the per-track 🎵 affordance. Sits
+   in the lower-left of the card thumbnail, opposite the multi-instance
+   (N) badge so they don't collide. */
+.card-needs-yt-badge {
+  position: absolute;
+  left: 0.35rem;
+  bottom: 0.35rem;
+  z-index: 5;
+  background: rgba(192, 132, 252, 0.18);
+  border: 1px solid rgba(192, 132, 252, 0.55);
+  color: #c084fc;
+  border-radius: 50%;
+  width: 1.5rem;
+  height: 1.5rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.78rem;
+  line-height: 1;
+  pointer-events: none;
+  backdrop-filter: blur(2px);
+}
 
 /* ── LOC info popup overlay ───────────────────────────────────────── */
 .loc-info-overlay {

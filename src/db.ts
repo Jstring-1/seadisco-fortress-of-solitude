@@ -289,6 +289,32 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS user_youtube_saves_user_time_idx ON user_youtube_saves (clerk_user_id, saved_at DESC)`);
 
+  // ── Crowd-sourced YouTube overrides for tracks Discogs missed ─────────────
+  // When a Discogs release/master tracklist has a track with no `videos[]`
+  // entry, signed-in users can suggest a YouTube video for it. The first
+  // submission wins (no approval queue, by design — admin can delete).
+  // Scope is master-level by default so a fix to one pressing surfaces
+  // across every release of the same master; per-release overrides are
+  // also supported by writing release_type='release' rows. The lookup
+  // does master first, falls back to release.
+  //
+  // PK on (release_id, release_type, track_position) gives us "first
+  // submission wins" via INSERT ... ON CONFLICT DO NOTHING.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS track_youtube_overrides (
+      release_id     TEXT        NOT NULL,   -- Discogs master OR release id (string for forward-compat)
+      release_type   TEXT        NOT NULL,   -- "master" | "release"
+      track_position TEXT        NOT NULL,   -- e.g. "A1", "1", "2-4"; whatever Discogs returns
+      track_title    TEXT,                   -- snapshot at submission time (for the admin tab)
+      video_id       TEXT        NOT NULL,   -- 11-char YouTube videoId
+      video_title    TEXT,                   -- snapshot at submission time
+      submitted_by   TEXT        NOT NULL,   -- clerk_user_id of submitter
+      submitted_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (release_id, release_type, track_position)
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS track_youtube_overrides_submitted_idx ON track_youtube_overrides (submitted_at DESC)`);
+
   // ── Site-wide app settings (admin-controlled) ────────────────────────────
   // Simple key/value store for global config (theme, feature flags, etc.).
   // Currently used for the site-wide theme: admin picks a theme on /admin
@@ -3515,4 +3541,209 @@ export async function setUserPrefs(clerkUserId: string, patch: Record<string, an
     [clerkUserId, JSON.stringify(merged)]
   );
   return merged;
+}
+
+// ── Track YouTube overrides (crowd-sourced gap fill) ──────────────────
+// All IDs stored as strings (release/master IDs come in as numbers from
+// Discogs but TEXT keeps the column shape stable if we ever stash a
+// non-numeric source).
+
+export type TrackYtOverride = {
+  release_id: string;
+  release_type: "master" | "release";
+  track_position: string;
+  track_title: string | null;
+  video_id: string;
+  video_title: string | null;
+  submitted_by: string;
+  submitted_at: Date;
+};
+
+// Look up overrides for a given master/release. Returns rows for both
+// the master scope and (if releaseId is provided) the matching release
+// scope; caller picks per-position with release-scope winning.
+export async function getTrackYtOverrides(
+  masterId: string | number | null,
+  releaseId: string | number | null
+): Promise<TrackYtOverride[]> {
+  const params: string[] = [];
+  const ors: string[] = [];
+  if (masterId != null && String(masterId).length) {
+    params.push(String(masterId));
+    ors.push(`(release_type = 'master' AND release_id = $${params.length})`);
+  }
+  if (releaseId != null && String(releaseId).length) {
+    params.push(String(releaseId));
+    ors.push(`(release_type = 'release' AND release_id = $${params.length})`);
+  }
+  if (ors.length === 0) return [];
+  try {
+    const r = await getPool().query(
+      `SELECT release_id, release_type, track_position, track_title,
+              video_id, video_title, submitted_by, submitted_at
+         FROM track_youtube_overrides
+        WHERE ${ors.join(" OR ")}`,
+      params
+    );
+    return r.rows as TrackYtOverride[];
+  } catch { return []; }
+}
+
+// First submission wins. Returns true if inserted, false if a row
+// already existed (ON CONFLICT DO NOTHING).
+export async function suggestTrackYtOverride(args: {
+  releaseId: string | number;
+  releaseType: "master" | "release";
+  trackPosition: string;
+  trackTitle?: string | null;
+  videoId: string;
+  videoTitle?: string | null;
+  submittedBy: string;
+}): Promise<boolean> {
+  const r = await getPool().query(
+    `INSERT INTO track_youtube_overrides
+       (release_id, release_type, track_position, track_title, video_id, video_title, submitted_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (release_id, release_type, track_position) DO NOTHING
+     RETURNING release_id`,
+    [
+      String(args.releaseId),
+      args.releaseType,
+      args.trackPosition,
+      args.trackTitle ?? null,
+      args.videoId,
+      args.videoTitle ?? null,
+      args.submittedBy,
+    ]
+  );
+  return r.rowCount === 1;
+}
+
+// Admin: delete a single override (called from the album popup or the
+// admin tab). Returns true if a row was removed.
+export async function deleteTrackYtOverride(
+  releaseId: string | number,
+  releaseType: "master" | "release",
+  trackPosition: string
+): Promise<boolean> {
+  const r = await getPool().query(
+    `DELETE FROM track_youtube_overrides
+      WHERE release_id = $1 AND release_type = $2 AND track_position = $3`,
+    [String(releaseId), releaseType, trackPosition]
+  );
+  return (r.rowCount ?? 0) > 0;
+}
+
+// Batch lookup: for a list of {id,type} items, return whether each
+// has videos available (either from Discogs's cached videos[] array
+// or from a crowd-sourced track_youtube_overrides row). Returns
+// hasVideos: null when the item isn't in the cache yet — caller treats
+// null as "unknown" and skips badging that card.
+//
+// Used by the "Hard to Find" search mode to mark cards that lack any
+// embedded YT, so users can see at a glance where contributions help.
+export async function getVideoStatusBatch(
+  items: Array<{ id: number; type: "release" | "master" }>
+): Promise<Array<{ id: number; type: "release" | "master"; hasVideos: boolean | null }>> {
+  if (!items.length) return [];
+  const masterIds = items.filter(i => i.type === "master").map(i => i.id);
+  const releaseIds = items.filter(i => i.type === "release").map(i => i.id);
+
+  const cacheRows: Array<{ id: number; type: string; has_videos: boolean }> = [];
+  if (masterIds.length) {
+    const r = await getPool().query(
+      `SELECT discogs_id AS id, 'master'::text AS type,
+              (jsonb_typeof(data->'videos') = 'array' AND jsonb_array_length(data->'videos') > 0) AS has_videos
+         FROM release_cache
+        WHERE type = 'master' AND discogs_id = ANY($1::int[])`,
+      [masterIds]
+    );
+    cacheRows.push(...(r.rows as any));
+  }
+  if (releaseIds.length) {
+    const r = await getPool().query(
+      `SELECT discogs_id AS id, 'release'::text AS type,
+              (jsonb_typeof(data->'videos') = 'array' AND jsonb_array_length(data->'videos') > 0) AS has_videos
+         FROM release_cache
+        WHERE type = 'release' AND discogs_id = ANY($1::int[])`,
+      [releaseIds]
+    );
+    cacheRows.push(...(r.rows as any));
+  }
+
+  // Cross-check crowd-sourced overrides — a master with no Discogs
+  // videos but with user-contributed overrides shouldn't still read as
+  // "needs videos" in search.
+  const allIds = items.map(i => String(i.id));
+  let overrideRows: Array<{ id: string; type: string }> = [];
+  if (allIds.length) {
+    const r = await getPool().query(
+      `SELECT release_id AS id, release_type AS type
+         FROM track_youtube_overrides
+        WHERE release_id = ANY($1::text[])`,
+      [allIds]
+    );
+    overrideRows = r.rows as any;
+  }
+  const overrideSet = new Set(overrideRows.map(r => `${r.type}:${r.id}`));
+
+  const cacheMap = new Map<string, boolean>();
+  for (const r of cacheRows) cacheMap.set(`${r.type}:${r.id}`, r.has_videos);
+
+  return items.map(it => {
+    const key = `${it.type}:${it.id}`;
+    const cacheVal = cacheMap.get(key);
+    const hasOverride = overrideSet.has(key);
+    if (cacheVal == null) {
+      // Not in cache — mark unknown unless an override exists (which
+      // means the master was loaded enough to attract a contribution).
+      return { id: it.id, type: it.type, hasVideos: hasOverride ? true : null };
+    }
+    return { id: it.id, type: it.type, hasVideos: cacheVal || hasOverride };
+  });
+}
+
+// Pull masters/releases that have at least one crowd-sourced YouTube
+// override, ranked by the number of overrides (most-contributed first).
+// Joins release_cache so each row carries the card snapshot needed by
+// the home strip — masters/releases without a cache entry are skipped
+// since there's nothing to render for them. Used to populate the
+// logged-out home page's default cards with contribution-rich albums.
+export async function getMostContributedAlbums(limit = 48): Promise<any[]> {
+  try {
+    const r = await getPool().query(
+      `WITH counts AS (
+         SELECT release_id, release_type, COUNT(*)::int AS n
+           FROM track_youtube_overrides
+          GROUP BY release_id, release_type
+       )
+       SELECT c.release_id   AS id,
+              c.release_type AS type,
+              c.n            AS contribution_count,
+              rc.data        AS data
+         FROM counts c
+         JOIN release_cache rc
+           ON rc.discogs_id = c.release_id::int
+          AND rc.type       = c.release_type
+        ORDER BY c.n DESC, c.release_id DESC
+        LIMIT $1`,
+      [Math.max(1, Math.min(200, limit))]
+    );
+    return r.rows;
+  } catch { return []; }
+}
+
+// Admin: list every override for the audit/admin tab. Newest first.
+export async function listAllTrackYtOverrides(limit = 500): Promise<TrackYtOverride[]> {
+  try {
+    const r = await getPool().query(
+      `SELECT release_id, release_type, track_position, track_title,
+              video_id, video_title, submitted_by, submitted_at
+         FROM track_youtube_overrides
+        ORDER BY submitted_at DESC
+        LIMIT $1`,
+      [limit]
+    );
+    return r.rows as TrackYtOverride[];
+  } catch { return []; }
 }

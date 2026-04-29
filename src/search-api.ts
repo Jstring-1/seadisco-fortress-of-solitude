@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 
 
@@ -636,6 +636,118 @@ app.put("/api/user/preferences", async (req, res) => {
   } catch (e: any) {
     console.error("[/api/user/preferences PUT] error:", e?.message ?? e);
     res.status(500).json({ error: "Could not save preferences" });
+  }
+});
+
+// ── Track YouTube overrides (crowd-sourced gap fill) ────────────────
+//
+// Public read: anyone (including anon) can fetch the override list for
+// a master/release so the album popup can patch in the user-suggested
+// videoId on tracks Discogs didn't supply.
+//
+// Signed-in write: any signed-in user can suggest a video for a track.
+// First submission wins (no approval queue). Admin can delete via the
+// admin endpoint below.
+//
+// Shape: GET /api/track-yt/for-release?master_id=…&release_id=…
+//        → { overrides: [{ track_position, video_id, … }] }
+app.get("/api/track-yt/for-release", async (req, res) => {
+  const masterId = req.query.master_id ? String(req.query.master_id) : null;
+  const releaseId = req.query.release_id ? String(req.query.release_id) : null;
+  if (!masterId && !releaseId) { res.json({ overrides: [] }); return; }
+  try {
+    const rows = await getTrackYtOverrides(masterId, releaseId);
+    res.json({ overrides: rows });
+  } catch (e: any) {
+    console.error("[/api/track-yt/for-release] error:", e?.message ?? e);
+    res.json({ overrides: [] });
+  }
+});
+
+// POST /api/track-yt/suggest — body: { releaseId, releaseType: "master"|"release",
+//                                       trackPosition, trackTitle?, videoId, videoTitle? }
+// Requires Clerk session. Ignores the submission silently if a row
+// already exists at that (releaseId, releaseType, trackPosition) — so
+// the client can treat "already taken" as a successful no-op.
+app.post("/api/track-yt/suggest", express.json({ limit: "8kb" }), async (req, res) => {
+  const userId = await getClerkUserId(req);
+  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const b = req.body ?? {};
+  const releaseId   = b.releaseId != null ? String(b.releaseId) : "";
+  const releaseType = b.releaseType === "release" ? "release" : "master";
+  const trackPosition = typeof b.trackPosition === "string" ? b.trackPosition.slice(0, 16) : "";
+  const trackTitle    = typeof b.trackTitle === "string" ? b.trackTitle.slice(0, 256) : null;
+  const videoId       = typeof b.videoId === "string" ? b.videoId.trim() : "";
+  const videoTitle    = typeof b.videoTitle === "string" ? b.videoTitle.slice(0, 256) : null;
+  // YouTube videoIds are 11 chars of [A-Za-z0-9_-].
+  if (!releaseId || !trackPosition || !/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
+    res.status(400).json({ error: "Bad request" });
+    return;
+  }
+  try {
+    const inserted = await suggestTrackYtOverride({
+      releaseId, releaseType, trackPosition,
+      trackTitle, videoId, videoTitle,
+      submittedBy: userId,
+    });
+    res.json({ ok: true, inserted });
+  } catch (e: any) {
+    console.error("[/api/track-yt/suggest] error:", e?.message ?? e);
+    res.status(500).json({ error: "Could not save suggestion" });
+  }
+});
+
+// DELETE /api/admin/track-yt — body: { releaseId, releaseType, trackPosition }
+// Admin only. Used by both the in-popup delete affordance and the
+// admin tab.
+app.delete("/api/admin/track-yt", express.json({ limit: "4kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const b = req.body ?? {};
+  const releaseId = b.releaseId != null ? String(b.releaseId) : "";
+  const releaseType = b.releaseType === "release" ? "release" : "master";
+  const trackPosition = typeof b.trackPosition === "string" ? b.trackPosition : "";
+  if (!releaseId || !trackPosition) { res.status(400).json({ error: "Bad request" }); return; }
+  try {
+    const deleted = await deleteTrackYtOverride(releaseId, releaseType, trackPosition);
+    res.json({ ok: true, deleted });
+  } catch (e: any) {
+    console.error("[/api/admin/track-yt DELETE] error:", e?.message ?? e);
+    res.status(500).json({ error: "Could not delete override" });
+  }
+});
+
+// POST /api/has-videos — batch lookup used by the "Hard to Find"
+// search mode to badge cards that lack YouTube videos. Reads the
+// release_cache table only — no Discogs API calls — so this is free.
+// Body: { items: [{ id: number, type: "master"|"release" }, …] }.
+// Cap at 100 items to keep the SQL bounded.
+app.post("/api/has-videos", express.json({ limit: "16kb" }), async (req, res) => {
+  const raw = Array.isArray(req.body?.items) ? req.body.items : [];
+  const items: Array<{ id: number; type: "master" | "release" }> = [];
+  for (const it of raw.slice(0, 100)) {
+    const id = Number(it?.id);
+    const t  = it?.type === "master" ? "master" : it?.type === "release" ? "release" : null;
+    if (Number.isFinite(id) && id > 0 && t) items.push({ id, type: t });
+  }
+  if (!items.length) { res.json({ results: [] }); return; }
+  try {
+    const results = await getVideoStatusBatch(items);
+    res.json({ results });
+  } catch (e: any) {
+    console.error("[/api/has-videos] error:", e?.message ?? e);
+    res.json({ results: [] });
+  }
+});
+
+// GET /api/admin/track-yt — admin audit list. Newest first.
+app.get("/api/admin/track-yt", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const rows = await listAllTrackYtOverrides(500);
+    res.json({ overrides: rows });
+  } catch (e: any) {
+    console.error("[/api/admin/track-yt GET] error:", e?.message ?? e);
+    res.json({ overrides: [] });
   }
 });
 
@@ -3904,6 +4016,83 @@ app.get("/api/admin-favorites/sample", async (req, res) => {
     console.error("[admin-favorites/sample]", e?.message ?? e);
     res.status(500).json({ error: String(e?.message ?? e) });
   }
+});
+
+// GET /api/contributed-favorites/sample — public read of masters/releases
+// that have at least one crowd-sourced YouTube override row, weighted
+// random sample biased toward the most-contributed albums. Used as the
+// default content on the logged-out home page so anon visitors see
+// the work the community has done first. Falls back to the admin-
+// favorites sample when no overrides exist yet (early days).
+//
+// Weighting: probability ∝ contribution_count^1.5. Each request rolls
+// a fresh sample so revisits feel fresh; the underlying list cache is
+// 5min in-memory so the DB isn't hit per request.
+let _contributedSampleCache: { ts: number; pool: any[] } | null = null;
+const _CONTRIBUTED_TTL_MS = 5 * 60 * 1000;
+app.get("/api/contributed-favorites/sample", async (req, res) => {
+  const limit = Math.min(48, Math.max(1, parseInt(String(req.query?.limit ?? "24"), 10) || 24));
+  res.setHeader("Cache-Control", "public, max-age=300");
+  let pool: any[] | null = null;
+  if (_contributedSampleCache && Date.now() - _contributedSampleCache.ts < _CONTRIBUTED_TTL_MS) {
+    pool = _contributedSampleCache.pool;
+  } else {
+    try {
+      const rows = await getMostContributedAlbums(200);
+      pool = rows.map(row => {
+        const d = row.data ?? {};
+        const isMaster = row.type === "master";
+        const artistList = Array.isArray(d.artists) ? d.artists.map((a: any) => a.name).filter(Boolean) : [];
+        const cover = (Array.isArray(d.images) && d.images[0]?.uri) ? d.images[0].uri : (d.cover_image ?? "");
+        // Card render expects "Artist - Title" composed in `title` for
+        // release/master types. Mirror the favorites endpoint shape.
+        const composed = artistList.length && d.title
+          ? `${artistList.join(", ")} - ${d.title}`
+          : (d.title ?? "");
+        return {
+          id: row.id,
+          type: row.type,
+          title: composed,
+          year:  d.year ?? "",
+          country: d.country ?? "",
+          cover_image: cover,
+          thumb:       cover,
+          format: (Array.isArray(d.formats) ? d.formats.map((f: any) => f.name).filter(Boolean) : []),
+          label:  (Array.isArray(d.labels)  ? d.labels.map((l: any) => l.name).filter(Boolean)  : []),
+          genre:  Array.isArray(d.genres) ? d.genres : [],
+          style:  Array.isArray(d.styles) ? d.styles : [],
+          master_id: d.master_id ?? null,
+          uri: d.uri ?? `/${row.type}/${row.id}`,
+          // Keep around so future UI can show "5 user contributions" etc.
+          _contributionCount: row.contribution_count,
+        };
+      });
+      _contributedSampleCache = { ts: Date.now(), pool };
+    } catch (e: any) {
+      console.error("[contributed-favorites/sample]", e?.message ?? e);
+      pool = [];
+    }
+  }
+  if (!pool || !pool.length) {
+    // Fallback: empty response so the client falls through to the
+    // admin-favorites sample. Keeping the contract simple — the UI
+    // checks .items.length and chains the second request.
+    res.json({ items: [] });
+    return;
+  }
+  // Weighted shuffle: each item gets a random key biased by count^1.5.
+  // Higher counts are more likely to land at the top — but everything
+  // still has a chance, so a deeply-contributed album doesn't stay
+  // pinned forever and the long tail rotates through.
+  const ranked = pool.map(it => {
+    const w = Math.pow(Math.max(1, Number(it._contributionCount) || 1), 1.5);
+    // The bigger the weight, the smaller (closer to 0) the key tends
+    // to be. Math.random() / w spreads heavy items toward the front.
+    return { it, key: Math.random() / w };
+  });
+  ranked.sort((a, b) => a.key - b.key);
+  const sample = ranked.slice(0, limit).map(x => x.it);
+  res.json({ items: sample });
 });
 
 // GET /api/site-theme — public read of the current global theme (used

@@ -250,6 +250,13 @@ function _youtubeRowHtml(it) {
   const playBtn = `<button type="button" class="archive-btn archive-btn-play" onclick="_youtubePlayRow(this)" title="Play in the bar">▶ Play</button>`;
   const queueBtn = `<button type="button" class="archive-btn archive-btn-queue" onclick="_youtubeQueueRow(this)" title="Add to play queue">＋ Queue</button>`;
   const linkBtn = `<a class="archive-btn archive-btn-link" href="https://www.youtube.com/watch?v=${encodeURIComponent(id)}" target="_blank" rel="noopener">Open on YouTube ↗</a>`;
+  // When the popup was opened from the per-track 🎵 Suggest affordance,
+  // window._sdSuggestForTrack is set with the track context. Render an
+  // extra "✓ Suggest" button so users can pin the picked video to that
+  // track. First-submission-wins on the server.
+  const suggestBtn = window._sdSuggestForTrack
+    ? `<button type="button" class="archive-btn archive-btn-suggest" onclick="_youtubeSuggestForTrack(this)" title="Suggest this video for the track">✓ Suggest</button>`
+    : "";
   return `
     <div class="yt-row archive-row" data-vid="${safeId}" data-title="${safeTitle}" data-channel="${safeChannel}" data-thumb="${escHtml(thumb)}">
       <img class="yt-row-thumb" src="${escHtml(thumb)}" alt="" loading="lazy" width="120" height="68" decoding="async">
@@ -258,7 +265,7 @@ function _youtubeRowHtml(it) {
         ${safeChannel ? `<div class="archive-row-date">${safeChannel}</div>` : ""}
         ${safeDesc ? `<div class="archive-row-desc">${safeDesc}${(it.description || "").length > 200 ? "…" : ""}</div>` : ""}
       </div>
-      <div class="archive-row-actions">${saveBtn}${playBtn}${queueBtn}${linkBtn}</div>
+      <div class="archive-row-actions">${saveBtn}${playBtn}${queueBtn}${suggestBtn}${linkBtn}</div>
     </div>
   `;
 }
@@ -420,6 +427,73 @@ async function openYoutubePopup(query) {
 function closeYoutubePopup() {
   const overlay = document.getElementById("youtube-popup-overlay");
   if (overlay) overlay.classList.remove("open");
+  // Drop any pending track-suggest context so the next popup open
+  // doesn't accidentally show ✓ Suggest buttons.
+  window._sdSuggestForTrack = null;
+}
+
+// Crowd-sourced override submit. Reads window._sdSuggestForTrack
+// (stashed by modal.js when the row's 🎵 affordance was clicked) and
+// the picked video's row data, POSTs the suggestion, then closes the
+// popup and re-applies the album's tracklist DOM patch so the new
+// override surfaces immediately.
+async function _youtubeSuggestForTrack(btn) {
+  const ctx = window._sdSuggestForTrack;
+  if (!ctx) {
+    if (typeof showToast === "function") showToast("Track context lost — re-open from the album", "error");
+    return;
+  }
+  const it = _youtubeRowDataFromBtn(btn);
+  if (!it?.videoId) return;
+  // Optimistic UI: disable the button so a double-click doesn't fire
+  // two POSTs (the second would be a no-op anyway thanks to ON CONFLICT
+  // DO NOTHING, but the user-visible result would be confusing).
+  btn.disabled = true;
+  const oldText = btn.textContent;
+  btn.textContent = "Saving…";
+  try {
+    const r = await apiFetch("/api/track-yt/suggest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        releaseId:     ctx.releaseId,
+        releaseType:   ctx.releaseType,
+        trackPosition: ctx.trackPosition,
+        trackTitle:    ctx.trackTitle,
+        videoId:       it.videoId,
+        videoTitle:    it.title || "",
+      }),
+    });
+    if (!r.ok) throw new Error(`save failed (${r.status})`);
+    const j = await r.json().catch(() => ({}));
+    if (j?.inserted === false) {
+      showToast?.("Already set for this track — nothing changed", "info");
+    } else {
+      showToast?.("Thanks! Suggestion saved.");
+    }
+    // Snapshot before we close — closeYoutubePopup() drops the ctx.
+    const targetId    = ctx.targetId || "album-info";
+    const releaseType = ctx.releaseType;
+    const releaseId   = ctx.releaseId;
+    const masterId    = ctx.masterId || (releaseType === "master" ? releaseId : "");
+    closeYoutubePopup();
+    // Bust the modal-side cache so the re-apply pulls the new row.
+    if (typeof window._trackYtKickFetchAndApply === "function") {
+      const isMaster = releaseType === "master";
+      // Pass both ids when known so the refetch keeps master-scope
+      // rows visible alongside the freshly inserted release-scope one.
+      window._trackYtKickFetchAndApply(
+        targetId,
+        masterId,
+        isMaster ? "" : releaseId,
+        isMaster
+      ).catch(() => {});
+    }
+  } catch (e) {
+    showToast?.(e?.message || "Could not save suggestion", "error");
+    btn.disabled = false;
+    btn.textContent = oldText;
+  }
 }
 
 // "Full page ↗" link click — close the popup, navigate to the
@@ -453,3 +527,4 @@ window._youtubeOnSavedSortChange  = _youtubeOnSavedSortChange;
 window.openYoutubePopup           = openYoutubePopup;
 window.closeYoutubePopup          = closeYoutubePopup;
 window._youtubePopupOpenFullPage  = _youtubePopupOpenFullPage;
+window._youtubeSuggestForTrack    = _youtubeSuggestForTrack;

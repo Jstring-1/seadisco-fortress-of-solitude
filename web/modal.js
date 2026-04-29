@@ -2124,6 +2124,270 @@ function _trackQueueAdd(el) {
 }
 window._trackQueueAdd = _trackQueueAdd;
 
+// ── Crowd-sourced track YouTube overrides ────────────────────────────
+//
+// Cache keyed by "${type}:${id}" of the popup that triggered the
+// fetch. Master popups query master scope only; release popups query
+// both master scope (via d.master_id) and release scope, with release
+// winning at the same position.
+const _trackYtOverridesCache = new Map();
+
+function _trackYtCacheKey(masterId, releaseId, isMaster) {
+  if (isMaster) return `master:${masterId || releaseId || ""}`;
+  return `release:${releaseId || ""}`;
+}
+
+// Synchronous cache read used by renderAlbumInfo's first-pass render.
+// Returns a Map(position -> override) or null if not yet fetched.
+function _trackYtReadCache(masterId, releaseId, isMaster) {
+  const k = _trackYtCacheKey(masterId, releaseId, isMaster);
+  return _trackYtOverridesCache.get(k)?.byPosition || null;
+}
+
+async function _trackYtFetchOverrides(masterId, releaseId, isMaster) {
+  const k = _trackYtCacheKey(masterId, releaseId, isMaster);
+  const params = [];
+  if (masterId) params.push(`master_id=${encodeURIComponent(masterId)}`);
+  // For release popups we still want the master-scope rows — use
+  // d.master_id when available, else fall back to release_id only.
+  if (!isMaster && releaseId) params.push(`release_id=${encodeURIComponent(releaseId)}`);
+  if (!params.length) {
+    const empty = new Map();
+    _trackYtOverridesCache.set(k, { byPosition: empty, fetchedAt: Date.now() });
+    return empty;
+  }
+  try {
+    const r = await fetch(`/api/track-yt/for-release?${params.join("&")}`);
+    if (!r.ok) {
+      const empty = new Map();
+      _trackYtOverridesCache.set(k, { byPosition: empty, fetchedAt: Date.now() });
+      return empty;
+    }
+    const j = await r.json();
+    const byPosition = new Map();
+    // Master rows first, release rows second so release wins on overlap.
+    for (const o of (j.overrides || [])) {
+      if (o.release_type === "master") byPosition.set(String(o.track_position), o);
+    }
+    for (const o of (j.overrides || [])) {
+      if (o.release_type === "release") byPosition.set(String(o.track_position), o);
+    }
+    _trackYtOverridesCache.set(k, { byPosition, fetchedAt: Date.now() });
+    return byPosition;
+  } catch {
+    const empty = new Map();
+    _trackYtOverridesCache.set(k, { byPosition: empty, fetchedAt: Date.now() });
+    return empty;
+  }
+}
+
+// Hook called from renderAlbumInfo after the popup HTML is in the DOM.
+// Fetches overrides and re-renders affected tracklist rows so newly
+// available overrides surface without requiring a popup re-open.
+async function _trackYtKickFetchAndApply(targetId, masterId, releaseId, isMaster) {
+  const k = _trackYtCacheKey(masterId, releaseId, isMaster);
+  const cached = _trackYtOverridesCache.get(k);
+  // Always refetch on popup open — overrides are rare-write, but a
+  // user who just submitted one expects to see it on the next open.
+  // The fetch is cheap (small JSON, server-side).
+  await _trackYtFetchOverrides(masterId, releaseId, isMaster);
+  _trackYtApplyToDom(targetId, masterId, releaseId, isMaster);
+}
+window._trackYtKickFetchAndApply = _trackYtKickFetchAndApply;
+
+// Patch tracklist rows in-place using the latest cached overrides.
+// Idempotent: rebuilds the override-driven affordances each call so a
+// post-suggest re-apply correctly reflects the new state.
+function _trackYtApplyToDom(targetId, masterId, releaseId, isMaster) {
+  const root = document.getElementById(targetId) || document;
+  const rows = root.querySelectorAll(".album-tracklist .track[data-pos]");
+  if (!rows.length) return;
+  const map = _trackYtReadCache(masterId, releaseId, isMaster) || new Map();
+  rows.forEach(row => {
+    const pos = row.dataset.pos || "";
+    const titleCell = row.querySelector(".track-title");
+    if (!titleCell) return;
+    // Strip prior override-driven affordances we own — leaves the
+    // Discogs-supplied play/queue alone.
+    titleCell.querySelectorAll(".track-yt-override-badge, .track-yt-admin-delete, .track-yt-suggest").forEach(el => el.remove());
+    // If row has a Discogs-supplied play link (a .track-link with
+    // data-video set), the playCell is already correct and we don't
+    // need to touch it. We only inject when the row has NO play cell
+    // content at all.
+    const playCell = row.querySelector(".track-play-cell");
+    const hasPlay = !!(playCell && playCell.querySelector(".track-link"));
+    const ov = map.get(String(pos));
+    if (ov && !hasPlay) {
+      // Inject ▶ + ＋ using the override videoId.
+      const url = `https://www.youtube.com/watch?v=${ov.video_id}`;
+      const titleLink = titleCell.querySelector(".track-title-link");
+      const trackTitle = titleLink?.textContent || ov.track_title || "";
+      const trackArtist = row.closest(".album-popup")?.querySelector(".album-artist")?.textContent?.split(",")[0]?.trim() || "";
+      const albumTitle  = row.closest(".album-popup")?.querySelector("h2")?.textContent?.trim() || "";
+      const entityType  = isMaster ? "master" : "release";
+      const playHtml = `<a class="track-play-btn track-link" href="#" data-video="${url}" data-track="${escHtml(trackTitle)}" data-album="${escHtml(albumTitle)}" data-artist="${escHtml(trackArtist)}" data-release-type="${entityType}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="openVideo(event,'${url}')" title="Play this track">▶</a>`;
+      if (playCell) playCell.innerHTML = playHtml;
+      // Append ＋ queue button at the end of the title cell, before
+      // any badges/credits. Just put it at the very end — credits
+      // come later via the credits row layout.
+      const queueAddHtml = ` <a href="#" class="queue-add-icon" data-yt-url="${url}" data-track="${escHtml(trackTitle)}" data-album="${escHtml(albumTitle)}" data-artist="${escHtml(trackArtist)}" data-release-type="${entityType}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackQueueAdd(this);return false" title="Add to play queue">＋</a>`;
+      // Avoid double-inserting: only add if not already there.
+      if (!titleCell.querySelector(`.queue-add-icon[data-yt-url="${url}"]`)) {
+        // Insert before any .track-credits subtree so credits stay last.
+        const credits = titleCell.querySelector(".track-credits");
+        const tmpl = document.createElement("template");
+        tmpl.innerHTML = queueAddHtml.trim();
+        if (credits) credits.before(tmpl.content);
+        else titleCell.appendChild(tmpl.content);
+      }
+      row.dataset.ytOverride = "1";
+    }
+    // Now decorate the row's title with the badge / admin delete /
+    // suggest button based on current state.
+    const stillNoPlay = !(row.querySelector(".track-play-cell .track-link"));
+    const isOverride = !!ov && !!row.querySelector(".track-play-cell .track-link") && row.dataset.ytOverride === "1";
+    const credits = titleCell.querySelector(".track-credits");
+    const decorate = (html) => {
+      if (!html) return;
+      const tmpl = document.createElement("template");
+      tmpl.innerHTML = html.trim();
+      if (credits) credits.before(tmpl.content);
+      else titleCell.appendChild(tmpl.content);
+    };
+    if (isOverride) {
+      decorate(` <span class="track-yt-override-badge" title="User-suggested YouTube video">🎵</span>`);
+      if (window._isAdmin) {
+        decorate(` <a href="#" class="track-yt-admin-delete" data-pos="${escHtml(pos)}" onclick="event.preventDefault();_trackYtAdminDelete(this);return false" title="Admin: remove this user-suggested video">✕</a>`);
+      }
+    }
+    if (stillNoPlay && window._clerk?.user) {
+      const trackTitle = titleCell.querySelector(".track-title-link")?.textContent || "";
+      const trackArtist = row.closest(".album-popup")?.querySelector(".album-artist")?.textContent?.split(",")[0]?.trim() || "";
+      const albumTitle  = row.closest(".album-popup")?.querySelector("h2")?.textContent?.trim() || "";
+      decorate(` <a href="#" class="track-yt-suggest" data-pos="${escHtml(pos)}" data-track="${escHtml(trackTitle)}" data-artist="${escHtml(trackArtist)}" data-album="${escHtml(albumTitle)}" onclick="event.preventDefault();_trackYtOpenSuggest(this);return false" title="Suggest a YouTube video for this track">🎵</a>`);
+    }
+  });
+}
+window._trackYtApplyToDom = _trackYtApplyToDom;
+
+// Click handler for the per-row 🎵 suggest affordance. Stashes the
+// track context on window so youtube.js's popup can pick it up + show
+// "✓ Suggest" buttons on each result, then opens the popup with a
+// pre-filled query.
+function _trackYtOpenSuggest(el) {
+  if (!window._clerk?.user) {
+    if (typeof showToast === "function") showToast("Sign in to suggest videos", "info");
+    return;
+  }
+  // Walk up to the popup root to find the masterId / releaseId.
+  // The album popup body has #album-info or #version-info as the
+  // closest container; the type+id come from the popup share button's
+  // dataset, but easier: re-read from the typeBadge text "Master: 12345"
+  // or "Release: 67890". Falling back to the URL ?op=type:id if absent.
+  const popup = el.closest(".album-popup, .modal-content, #album-info, #version-info") || document;
+  const badge = popup.querySelector(".album-type-badge");
+  let scopeType = "master";
+  let scopeId = "";
+  if (badge) {
+    const m = /^(Master|Release|Version)\s*:\s*(\d+)/.exec(badge.textContent || "");
+    if (m) {
+      scopeType = m[1].toLowerCase() === "master" ? "master" : "release";
+      scopeId = m[2];
+    }
+  }
+  if (!scopeId) {
+    // URL fallback
+    try {
+      const u = new URL(location.href);
+      const op = u.searchParams.get("op");
+      if (op) {
+        const [t, id] = op.split(":");
+        if (t && id) { scopeType = t; scopeId = id; }
+      }
+    } catch {}
+  }
+  const trackTitle  = el.dataset.track  || "";
+  const trackArtist = el.dataset.artist || "";
+  const trackAlbum  = el.dataset.album  || "";
+  const trackPos    = el.dataset.pos    || "";
+  if (!scopeId || !trackPos || !trackTitle) {
+    if (typeof showToast === "function") showToast("Could not identify track context", "error");
+    return;
+  }
+  // Extra context for the post-submit re-fetch: passing masterId
+  // separately so a release-scope override still gets refreshed
+  // alongside the existing master-scope rows (single-key cache).
+  const popupRoot = el.closest("#album-info, #version-info");
+  const masterId  = popupRoot?.dataset?.masterId || "";
+  window._sdSuggestForTrack = {
+    releaseType: scopeType,
+    releaseId:   scopeId,
+    masterId,
+    trackPosition: trackPos,
+    trackTitle,
+    trackArtist,
+    trackAlbum,
+    // Where to re-apply the DOM patch after a successful suggestion —
+    // the popup target id (#album-info or #version-info).
+    targetId: popupRoot?.id || "album-info",
+  };
+  const q = [trackArtist ? `"${trackArtist}"` : "", trackTitle ? `"${trackTitle}"` : "", trackAlbum]
+    .filter(Boolean).join(" ");
+  if (typeof window.openYoutubePopup === "function") {
+    window.openYoutubePopup(q);
+  } else if (typeof window._sdLoadModule === "function") {
+    window._sdLoadModule("/youtube.js").then(() => {
+      window.openYoutubePopup?.(q);
+    });
+  }
+}
+window._trackYtOpenSuggest = _trackYtOpenSuggest;
+
+// Admin: delete a track override. Confirms, hits the admin endpoint,
+// then re-applies the DOM patch so the row reverts to its pre-override
+// state (and shows the 🎵 suggest button if the user is still signed in).
+async function _trackYtAdminDelete(el) {
+  if (!window._isAdmin) return;
+  const pos = el.dataset.pos || "";
+  const row = el.closest(".track");
+  const popup = el.closest(".album-popup, .modal-content, #album-info, #version-info") || document;
+  const badge = popup.querySelector(".album-type-badge");
+  if (!pos || !badge) return;
+  const m = /^(Master|Release|Version)\s*:\s*(\d+)/.exec(badge.textContent || "");
+  if (!m) return;
+  const scopeType = m[1].toLowerCase() === "master" ? "master" : "release";
+  const scopeId   = m[2];
+  if (!confirm(`Remove the user-suggested YouTube video for track "${row?.querySelector('.track-title-link')?.textContent || pos}"?`)) return;
+  try {
+    const r = await apiFetch("/api/admin/track-yt", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ releaseId: scopeId, releaseType: scopeType, trackPosition: pos }),
+    });
+    if (!r.ok) throw new Error(`delete failed (${r.status})`);
+    // Drop this entry from the cache so the re-apply pass reflects it.
+    // We don't know which scope it was at; safer to nuke both possible
+    // cache keys for this popup so the next fetch repopulates clean.
+    _trackYtOverridesCache.clear();
+    const targetId = popup.id || "album-info";
+    // Re-fetch + re-apply against the same popup. masterId arg is
+    // handled by the existing scope: if the popup is a master, scopeId
+    // is the masterId; else it's the releaseId.
+    if (scopeType === "master") {
+      await _trackYtKickFetchAndApply(targetId, scopeId, "", true);
+    } else {
+      // For release popups we don't have d.master_id here, so the
+      // re-fetch will only pick up release-scope rows. Good enough —
+      // master-scope deletes will refresh on the next popup open.
+      await _trackYtKickFetchAndApply(targetId, "", scopeId, false);
+    }
+    if (typeof showToast === "function") showToast("Override removed", "info");
+  } catch (e) {
+    if (typeof showToast === "function") showToast(e?.message || "Could not remove override", "error");
+  }
+}
+window._trackYtAdminDelete = _trackYtAdminDelete;
+
 // ▶ in the tracklist heading: play the first playable track immediately
 // AND queue the rest into the cross-source play queue (in append mode
 // so they play after whatever's already queued). Clears the per-album
@@ -2773,10 +3037,22 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   for (const v of (d.videos ?? [])) {
     if (v.title && v.uri) videoMap.set(v.title.toLowerCase(), v.uri);
   }
-  function findVideo(trackTitle) {
+  // Crowd-sourced overrides — keyed by track position. Read from the
+  // module-level cache (populated by _trackYtFetchOverrides). On the
+  // first popup open for an album the cache is cold so this returns
+  // an empty map; the deferred DOM patch in _trackYtApplyToDom then
+  // injects the affordances once the fetch lands.
+  const _overrideMap = _trackYtReadCache(d.master_id, releaseId, searchResult.type === "master") || new Map();
+  function findVideo(trackTitle, trackPosition) {
+    // 1) Discogs-provided videos win — they're the canonical source.
     const tl = trackTitle.toLowerCase();
     for (const [vt, uri] of videoMap) {
       if (vt.includes(tl) || tl.includes(vt)) return uri;
+    }
+    // 2) Gap-fill via crowd-sourced overrides keyed by track position.
+    if (trackPosition) {
+      const ov = _overrideMap.get(String(trackPosition));
+      if (ov && ov.video_id) return `https://www.youtube.com/watch?v=${ov.video_id}`;
     }
     return null;
   }
@@ -2855,7 +3131,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   // Pre-compute playable count + first-playable URL so we can show
   // them in the Tracklist heading. A track is "playable" when
   // findVideo() returns a YouTube URL for its title.
-  const playableUrls = tracks.map(t => findVideo(t.title || "")).filter(Boolean);
+  const playableUrls = tracks.map(t => findVideo(t.title || "", t.position || "")).filter(Boolean);
   const playableCount = playableUrls.length;
   const firstPlayableUrl = playableUrls[0] || "";
   const playableMeta = playableCount
@@ -2870,7 +3146,16 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
       </div>
       <div class="tracklist-body"${tracklistOpen ? "" : ' style="display:none"'}>
       ${tracks.map(t => {
-        const url = findVideo(t.title || "");
+        const trackPos = t.position || "";
+        const url = findVideo(t.title || "", trackPos);
+        // Was this URL provided by a crowd-sourced override? (vs. Discogs)
+        // Used to mark the row so the badge / admin-delete affordance
+        // renders. Only true when no Discogs video matched.
+        const overrideRow = url && _overrideMap.has(String(trackPos)) && !(() => {
+          const tl = (t.title || "").toLowerCase();
+          for (const [vt] of videoMap) { if (vt.includes(tl) || tl.includes(vt)) return true; }
+          return false;
+        })();
         const trackArtist = artists.length ? artists[0] : "";
         // YouTube search supports double-quoted exact-phrase matching too —
         // quote artist + track so search results match the literal strings
@@ -2910,6 +3195,23 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         const queueAdd = url
           ? ` <a href="#" class="queue-add-icon" data-yt-url="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" data-release-type="${escHtml(entityType || "")}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackQueueAdd(this);return false" title="Add to play queue">＋</a>`
           : "";
+        // Crowd-sourced override badge (shown only when this row's URL
+        // came from track_youtube_overrides, not Discogs's videos[]).
+        // The 🎵 indicates "user-contributed". Admins get a tiny ✕
+        // delete affordance next to it.
+        const overrideBadge = overrideRow
+          ? ` <span class="track-yt-override-badge" title="User-suggested YouTube video">🎵</span>${
+              window._isAdmin
+                ? ` <a href="#" class="track-yt-admin-delete" data-pos="${escHtml(trackPos)}" onclick="event.preventDefault();_trackYtAdminDelete(this);return false" title="Admin: remove this user-suggested video">✕</a>`
+                : ""
+            }`
+          : "";
+        // "Suggest a YouTube video" affordance — only when the row has
+        // no playable URL at all (neither Discogs nor existing override)
+        // AND the user is signed in. Anon users see nothing.
+        const suggestBtn = (!url && t.title && window._clerk?.user)
+          ? ` <a href="#" class="track-yt-suggest" data-pos="${escHtml(trackPos)}" data-track="${escHtml(t.title || "")}" data-artist="${escHtml(trackArtist)}" data-album="${escHtml(title)}" onclick="event.preventDefault();_trackYtOpenSuggest(this);return false" title="Suggest a YouTube video for this track">🎵</a>`
+          : "";
         const trackCredits = (t.extraartists ?? []).length
           ? `<div class="track-credits">${t.extraartists.map(a => {
               const nameEl = entityLookupLinkHtml("artist", a.name, { className: "credit-name", title: `Lookup options for ${a.name}` });
@@ -2921,10 +3223,10 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
               return `${nameEl}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}${credSearchIcon}`;
             }).join('<span class="credit-sep"> · </span>')}</div>`
           : "";
-        return `<div class="track">
+        return `<div class="track" data-pos="${escHtml(trackPos)}"${overrideRow ? ' data-yt-override="1"' : ""}>
           <span class="track-play-cell">${playCell}</span>
           <span class="track-pos">${escHtml(t.position || "")}</span>
-          <span class="track-title">${titleLink}${searchIcon}${wikiW}${locL}${ytSearchEnd}${queueAdd}${trackCredits}</span>
+          <span class="track-title">${titleLink}${searchIcon}${wikiW}${locL}${ytSearchEnd}${queueAdd}${overrideBadge}${suggestBtn}${trackCredits}</span>
           ${t.duration ? `<span class="track-dur">${escHtml(t.duration)}</span>` : ""}
         </div>`;
       }).join("")}
@@ -3016,6 +3318,18 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   if (!isMaster && releaseId && window._collectionIds?.has(Number(releaseId))) loadModalInstanceData(Number(releaseId));
   // Highlight currently playing track if a video is active
   highlightPlayingTrack();
+  // Stash scope on the popup root so post-suggest re-fetch can read
+  // master_id without re-deriving from the rendered HTML.
+  el.dataset.releaseId = String(releaseId || "");
+  el.dataset.masterId  = String(d.master_id || (isMaster ? releaseId : "") || "");
+  el.dataset.entityType = isMaster ? "master" : "release";
+  // Crowd-sourced YouTube overrides — kick the fetch + DOM patch.
+  // Anything new lands on the next tick; if there's nothing to apply,
+  // this is a no-op. Anonymous viewers still get override-driven play
+  // links (the GET endpoint is public).
+  if (releaseId && tracks.length) {
+    _trackYtKickFetchAndApply(targetId, d.master_id, releaseId, isMaster).catch(() => {});
+  }
 }
 
 // ── Modal action buttons (collection/wantlist/rating) ────────────────────
