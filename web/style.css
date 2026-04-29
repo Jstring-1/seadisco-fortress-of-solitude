@@ -4073,15 +4073,16 @@ button.wiki-link-btn:active {
 }
 
 .card img {
+  /* Image is exactly the card's width and renders at its natural
+     aspect ratio — no forced square, no crop, no letterbox. Card
+     heights become variable to match the cover. Discogs's
+     cover_image thumbs ARE actually square most of the time, so
+     in practice cards stay close to uniform-tall in a row; tall or
+     wide artwork (compilation covers, magazine sleeves) shows in
+     full instead of being chopped. */
   width: 100%;
-  aspect-ratio: 1;
-  /* cover fills the square frame — most Discogs cover_image thumbs
-     are roughly square and fill cleanly. Earlier swap to `contain`
-     was meant to fix edge-case cropping but ended up leaving big
-     letterbox bars on non-square thumbs (Discogs serves rectangular
-     images for many 45-rpm + reissue entries) which looked worse
-     than the original crop. */
-  object-fit: cover;
+  height: auto;
+  display: block;
   background: var(--surface);
 }
 
