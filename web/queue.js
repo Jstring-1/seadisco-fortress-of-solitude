@@ -20,6 +20,21 @@ let _queueDrawerEl = null;
 let _sortableLoaded = null; // Promise once we begin lazy-loading Sortable.js
 let _drawerSortable = null; // Sortable instance currently bound
 
+// Pending-delete tracking: set of "position" + "externalId" entries the
+// user removed locally that haven't been confirmed gone server-side
+// yet. Any background reload (e.g. _queueOnExternalPlay's reconcile
+// after a track switch) filters these out so the row doesn't briefly
+// reappear in the drawer between the local mutation and the DELETE
+// landing.
+const _queuePendingDeletePositions = new Set();
+const _queuePendingDeleteExternalIds = new Set();
+function _queueFilterPendingDeletes(items) {
+  if (!_queuePendingDeletePositions.size && !_queuePendingDeleteExternalIds.size) return items;
+  return items.filter(it =>
+    !_queuePendingDeletePositions.has(it.position) &&
+    !_queuePendingDeleteExternalIds.has(String(it.externalId)));
+}
+
 // ── Repeat state ────────────────────────────────────────────────────
 // Three modes:
 //   "off": queue plays through, then stops
@@ -74,7 +89,11 @@ async function _queueLoad(force = false) {
     const r = await apiFetch("/api/user/play-queue");
     if (!r.ok) { _queue = []; return _queue; }
     const j = await r.json();
-    const items = Array.isArray(j?.items) ? j.items : [];
+    let items = Array.isArray(j?.items) ? j.items : [];
+    // Hide any rows the user just removed locally whose DELETEs
+    // haven't landed server-side yet (they'd otherwise reappear
+    // briefly between the click and the DELETE response).
+    items = _queueFilterPendingDeletes(items);
     // Keep ALL server rows here (no dedup). Earlier we deduped at load
     // time to avoid duplicate rows in the drawer, but that hid the
     // dupes from queueRemove — the user would click × and only one
@@ -885,8 +904,14 @@ async function queueRemove(position, externalId) {
       playerClose();
     }
   }
+  // Track these as pending deletes so any background _queueLoad that
+  // races the DELETE responses doesn't briefly resurrect the rows in
+  // the drawer. Cleared per-position when each DELETE comes back ok.
+  for (const p of positionsToDrop) _queuePendingDeletePositions.add(p);
+  if (externalId != null) _queuePendingDeleteExternalIds.add(String(externalId));
   // Fire one DELETE per server-side row in the background. Parallel
   // is fine — the server endpoint is idempotent per (user, position).
+  let pendingResponses = positionsToDrop.length;
   for (const p of positionsToDrop) {
     apiFetch("/api/user/play-queue", {
       method: "DELETE",
@@ -894,7 +919,18 @@ async function queueRemove(position, externalId) {
       body: JSON.stringify({ position: p }),
     }).then(r => {
       if (!r.ok) console.warn("[queue] DELETE failed:", r.status);
-    }).catch(e => console.warn("[queue] DELETE threw:", e));
+      _queuePendingDeletePositions.delete(p);
+    }).catch(e => {
+      console.warn("[queue] DELETE threw:", e);
+      _queuePendingDeletePositions.delete(p);
+    }).finally(() => {
+      // Once every DELETE in this batch has resolved, drop the
+      // externalId-level guard too — server is now consistent with
+      // local state for this externalId.
+      if (--pendingResponses <= 0 && externalId != null) {
+        _queuePendingDeleteExternalIds.delete(String(externalId));
+      }
+    });
   }
 }
 
@@ -907,6 +943,10 @@ async function queueClear() {
   if (count > 0 && !confirm(`Clear all ${count} queued track${count === 1 ? "" : "s"}? This stops playback and can't be undone.`)) {
     return;
   }
+  // Any prior per-row pending-delete bookkeeping is moot — we're
+  // wiping everything regardless.
+  _queuePendingDeletePositions.clear();
+  _queuePendingDeleteExternalIds.clear();
   try {
     await apiFetch("/api/user/play-queue", {
       method: "DELETE",
