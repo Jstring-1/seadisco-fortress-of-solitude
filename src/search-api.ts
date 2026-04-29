@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserTasteTuples, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserTasteTuples, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 
 
@@ -4125,6 +4125,30 @@ app.get("/api/user/personal-suggestions", async (req, res) => {
   }
 });
 
+// POST /api/user/personal-suggestions/dismiss — banish a single
+// suggestion. Body: { id: number, type: "master"|"release" }. Records
+// the dismissal and removes the row from the saved batch so the
+// card disappears immediately. Background job re-checks the
+// dismissal set on every run so the banishment is permanent until
+// manually cleared (no UI for clearing yet).
+app.post("/api/user/personal-suggestions/dismiss", express.json({ limit: "1kb" }), async (req, res) => {
+  const userId = await requireUser(req, res);
+  if (!userId) return;
+  const id = Number(req.body?.id);
+  const t  = req.body?.type === "master" ? "master" : req.body?.type === "release" ? "release" : null;
+  if (!Number.isFinite(id) || id <= 0 || !t) {
+    res.status(400).json({ error: "Bad request" });
+    return;
+  }
+  try {
+    await dismissPersonalSuggestion(userId, id, t);
+    res.json({ ok: true });
+  } catch (e: any) {
+    console.error("[personal-suggestions/dismiss]", e?.message ?? e);
+    res.status(500).json({ error: "Could not dismiss" });
+  }
+});
+
 // Generate one user's batch of suggestions. Requires the user to have
 // Discogs OAuth set up — we use their token so rate-limit pressure is
 // distributed across users rather than concentrated on admin's. Skips
@@ -4138,67 +4162,82 @@ async function _runPersonalSuggestionsForUser(userId: string): Promise<{ saved: 
   if (!tuples.length) return { saved: 0, reason: "no-taste" };
 
   const ownedMasters = await getUserLibraryMasterIds(userId);
+  const dismissed    = await getDismissedSuggestionKeys(userId);
 
-  // Map keyed by master:id so the same album appearing for multiple
-  // tuples accumulates score rather than appearing twice.
-  const candidates = new Map<string, { id: number; type: "master"; score: number; data: any }>();
+  // Map keyed by "type:id" so the same album appearing for multiple
+  // tuples accumulates score rather than appearing twice. Generator is
+  // Masters+ aware: searches type=master AND type=release per tuple,
+  // merging results so standalone releases (no parent master) and
+  // master-grouped pressings both surface. Master rows take precedence
+  // over release rows when both exist.
+  const candidates = new Map<string, { id: number; type: "master" | "release"; score: number; data: any }>();
+
+  const ingest = (row: any, t: { genre: string; style: string; year: number; n: number }, rank: number) => {
+    const id = Number(row?.id);
+    if (!Number.isFinite(id) || id <= 0) return;
+    const type: "master" | "release" = row.type === "master" ? "master" : row.type === "release" ? "release" : "release";
+    if (type !== row.type) return;
+    // Dedup: skip if user owns the underlying master, or if dismissed.
+    const masterIdRaw = Number(row.master_id);
+    if (Number.isFinite(masterIdRaw) && masterIdRaw > 0 && ownedMasters.has(masterIdRaw)) return;
+    if (type === "master" && ownedMasters.has(id)) return;
+    if (dismissed.has(`${type}:${id}`)) return;
+    // For release-type: also skip if its master is already a candidate
+    // — the master version wins and we don't want a duplicate card.
+    if (type === "release" && Number.isFinite(masterIdRaw) && masterIdRaw > 0
+        && candidates.has(`master:${masterIdRaw}`)) return;
+    const key = `${type}:${id}`;
+    const score = (t.n || 1) * (1 / (rank + 1)) * (type === "master" ? 1.0 : 0.85);
+    const existing = candidates.get(key);
+    if (existing) { existing.score += score; return; }
+    candidates.set(key, {
+      id,
+      type,
+      score,
+      data: {
+        id,
+        type,
+        title: row.title ?? "",
+        year: row.year ?? "",
+        country: row.country ?? "",
+        cover_image: row.cover_image ?? "",
+        thumb: row.thumb ?? row.cover_image ?? "",
+        format: Array.isArray(row.format) ? row.format : [],
+        label: Array.isArray(row.label) ? row.label : [],
+        genre: Array.isArray(row.genre) ? row.genre : [],
+        style: Array.isArray(row.style) ? row.style : [],
+        uri: row.uri ?? `/${type}/${id}`,
+        master_id: row.master_id ?? (type === "master" ? id : null),
+        _matchedGenre: t.genre,
+        _matchedStyle: t.style,
+        _matchedYear: t.year,
+      },
+    });
+  };
 
   for (const t of tuples) {
-    try {
-      const r = await dc.search("", {
-        type: "master",
-        genre: t.genre,
-        style: t.style,
-        year: String(t.year),
-        format: "Vinyl",
-        perPage: 12,
-      }) as any;
-      const results = Array.isArray(r?.results) ? r.results : [];
-      for (let i = 0; i < results.length; i++) {
-        const row = results[i];
-        const id = Number(row?.id);
-        if (!Number.isFinite(id) || id <= 0) continue;
-        if (row.type !== "master") continue;
-        if (ownedMasters.has(id)) continue;
-        const key = `master:${id}`;
-        // Score: tuple frequency × inverse rank in this search. Bumps
-        // top-of-results items but doesn't ignore the long tail.
-        const score = (t.n || 1) * (1 / (i + 1));
-        const existing = candidates.get(key);
-        if (existing) {
-          existing.score += score;
-        } else {
-          candidates.set(key, {
-            id,
-            type: "master",
-            score,
-            data: {
-              id,
-              type: "master",
-              title: row.title ?? "",
-              year: row.year ?? "",
-              country: row.country ?? "",
-              cover_image: row.cover_image ?? "",
-              thumb: row.thumb ?? row.cover_image ?? "",
-              format: Array.isArray(row.format) ? row.format : [],
-              label: Array.isArray(row.label) ? row.label : [],
-              genre: Array.isArray(row.genre) ? row.genre : [],
-              style: Array.isArray(row.style) ? row.style : [],
-              uri: row.uri ?? `/master/${id}`,
-              master_id: row.master_id ?? id,
-              // Why we picked this — surfaced in tooltip / dev console.
-              _matchedGenre: t.genre,
-              _matchedStyle: t.style,
-              _matchedYear: t.year,
-            },
-          });
+    // Run master + release searches per tuple. Master scoring is
+    // weighted slightly higher so it floats up when both exist.
+    for (const searchType of ["master", "release"] as const) {
+      try {
+        const r = await dc.search("", {
+          type: searchType,
+          genre: t.genre,
+          style: t.style,
+          year: String(t.year),
+          format: "Vinyl",
+          perPage: searchType === "master" ? 10 : 6,
+        }) as any;
+        const results = Array.isArray(r?.results) ? r.results : [];
+        for (let i = 0; i < results.length; i++) {
+          ingest(results[i], t, i);
         }
+      } catch (e: any) {
+        console.warn(`[suggestions] ${searchType} search failed for ${userId} ${t.genre}/${t.style}/${t.year}:`, e?.message ?? e);
       }
-    } catch (e: any) {
-      console.warn(`[suggestions] search failed for ${userId} ${t.genre}/${t.style}/${t.year}:`, e?.message ?? e);
+      // Pace per request to respect Discogs's ~60/min OAuth limit.
+      await sleep(1100);
     }
-    // Pace per-tuple to respect Discogs's ~60/min OAuth limit.
-    await sleep(1100);
   }
 
   const items = Array.from(candidates.values())
