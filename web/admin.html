@@ -11,14 +11,14 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260429.0819" />
+  <link rel="stylesheet" href="/style.css?v=20260429.1018" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260429.0819"></script>
-<script defer src="/shared.js?v=20260429.0819"></script>
-<script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true, iconNav: true }));</script>
+<script defer src="/utils.js?v=20260429.1018"></script>
+<script defer src="/shared.js?v=20260429.1018"></script>
+<script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
   <div class="account-box">
@@ -217,11 +217,12 @@
 
       <!-- Submitted Tracks (crowd-sourced YT overrides) -->
       <div class="admin-tab-panel" id="panel-submissions" style="display:none">
-        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
           <h2 style="margin:0">Submitted Tracks</h2>
           <button class="admin-refresh-btn" id="submissions-refresh-btn" onclick="_adminClickRefresh(this, loadAdminSubmissions)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
           <span id="submissions-refresh-status" class="admin-refresh-status"></span>
-          <span id="submissions-count" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
+          <input type="search" id="submissions-filter" class="sd-filter-input" placeholder="filter by album, track, video, user…" oninput="_filterAdminSubmissions(this)" style="margin-left:auto;width:14rem">
+          <span id="submissions-count" style="font-size:0.78rem;color:var(--muted)"></span>
         </div>
         <div id="submissions-list" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
       </div>
@@ -310,7 +311,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260429.0819"></script>
+<script defer src="/modal.js?v=20260429.1018"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -2043,54 +2044,93 @@ async function bluesDbDeleteFromEditor() {
 // toggleMobileNav — now in shared.js
 
 // ── Admin: Submitted Tracks (track YT overrides) ──────────────────────
+// Cache the raw submission rows so the filter input can re-render
+// without a server round-trip.
+let _adminSubmissionsRows = [];
+
 async function loadAdminSubmissions() {
   const el = document.getElementById("submissions-list");
-  const countEl = document.getElementById("submissions-count");
   if (!el) return;
   el.textContent = "Loading…";
   try {
     const r = await apiFetch("/api/admin/track-yt");
     if (!r.ok) { el.textContent = "Could not load submissions."; return; }
     const j = await r.json();
-    const rows = Array.isArray(j?.overrides) ? j.overrides : [];
-    if (countEl) countEl.textContent = `${rows.length} ${rows.length === 1 ? "row" : "rows"}`;
-    if (!rows.length) {
-      el.innerHTML = `<div style="color:var(--muted);padding:1rem;text-align:center">No submissions yet.</div>`;
-      return;
-    }
-    const fmtDate = (d) => d ? new Date(d).toLocaleString() : "—";
-    const trim = (s, n) => { s = String(s || ""); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
-    const head = `<thead style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted);text-align:left">
-      <tr>
-        <th style="padding:0.3rem 0.5rem">When</th>
-        <th style="padding:0.3rem 0.5rem">Scope</th>
-        <th style="padding:0.3rem 0.5rem">Album</th>
-        <th style="padding:0.3rem 0.5rem">Pos</th>
-        <th style="padding:0.3rem 0.5rem">Track</th>
-        <th style="padding:0.3rem 0.5rem">Video</th>
-        <th style="padding:0.3rem 0.5rem">By</th>
-        <th></th>
-      </tr></thead>`;
-    const body = rows.map(o => {
-      const albumLink = `<a href="/?op=${encodeURIComponent(o.release_type + ':' + o.release_id)}" target="_blank" rel="noopener" style="color:#7eb8da;text-decoration:none">${o.release_type}/${escHtml(String(o.release_id))}</a>`;
-      const ytLink = `<a href="https://www.youtube.com/watch?v=${encodeURIComponent(o.video_id)}" target="_blank" rel="noopener" style="color:#7eb8da;text-decoration:none">${escHtml(trim(o.video_title || o.video_id, 40))}</a>`;
-      return `<tr style="border-top:1px solid var(--border);font-size:0.78rem">
-        <td style="padding:0.35rem 0.5rem;color:var(--muted);white-space:nowrap">${escHtml(fmtDate(o.submitted_at))}</td>
-        <td style="padding:0.35rem 0.5rem">${escHtml(o.release_type)}</td>
-        <td style="padding:0.35rem 0.5rem">${albumLink}</td>
-        <td style="padding:0.35rem 0.5rem;font-family:monospace">${escHtml(o.track_position)}</td>
-        <td style="padding:0.35rem 0.5rem">${escHtml(trim(o.track_title || "", 32))}</td>
-        <td style="padding:0.35rem 0.5rem">${ytLink}</td>
-        <td style="padding:0.35rem 0.5rem;color:var(--muted);font-family:monospace;font-size:0.72rem">${escHtml(trim(o.submitted_by, 12))}</td>
-        <td style="padding:0.35rem 0.5rem"><button class="admin-btn admin-btn-danger" onclick="adminDeleteSubmission(this,'${escHtml(o.release_id)}','${escHtml(o.release_type)}','${escHtml(o.track_position).replace(/'/g, "\\'")}')">Delete</button></td>
-      </tr>`;
-    }).join("");
-    el.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">${head}<tbody>${body}</tbody></table></div>`;
+    _adminSubmissionsRows = Array.isArray(j?.overrides) ? j.overrides : [];
+    _renderAdminSubmissionsTable();
   } catch (e) {
     el.textContent = "Could not load submissions: " + (e?.message || e);
   }
 }
 window.loadAdminSubmissions = loadAdminSubmissions;
+
+// Render the table from _adminSubmissionsRows, applying the current
+// filter input. Splitting render from fetch lets the filter input
+// re-paint without re-querying the server.
+function _renderAdminSubmissionsTable() {
+  const el = document.getElementById("submissions-list");
+  const countEl = document.getElementById("submissions-count");
+  if (!el) return;
+  const filter = (document.getElementById("submissions-filter")?.value || "").trim().toLowerCase();
+  const rows = _adminSubmissionsRows;
+  const filtered = filter
+    ? rows.filter(o => {
+        const hay = [
+          o.release_id, o.release_type, o.track_position,
+          o.track_title, o.video_id, o.video_title, o.submitted_by,
+        ].filter(Boolean).join(" ").toLowerCase();
+        return hay.includes(filter);
+      })
+    : rows;
+  if (countEl) {
+    if (filter && filtered.length !== rows.length) {
+      countEl.textContent = `${filtered.length} of ${rows.length} ${rows.length === 1 ? "row" : "rows"}`;
+    } else {
+      countEl.textContent = `${rows.length} ${rows.length === 1 ? "row" : "rows"}`;
+    }
+  }
+  if (!rows.length) {
+    el.innerHTML = `<div style="color:var(--muted);padding:1rem;text-align:center">No submissions yet.</div>`;
+    return;
+  }
+  if (!filtered.length) {
+    el.innerHTML = `<div style="color:var(--muted);padding:1rem;text-align:center">No submissions match.</div>`;
+    return;
+  }
+  const fmtDate = (d) => d ? new Date(d).toLocaleString() : "—";
+  const trim = (s, n) => { s = String(s || ""); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
+  const head = `<thead style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted);text-align:left">
+    <tr>
+      <th style="padding:0.3rem 0.5rem">When</th>
+      <th style="padding:0.3rem 0.5rem">Scope</th>
+      <th style="padding:0.3rem 0.5rem">Album</th>
+      <th style="padding:0.3rem 0.5rem">Pos</th>
+      <th style="padding:0.3rem 0.5rem">Track</th>
+      <th style="padding:0.3rem 0.5rem">Video</th>
+      <th style="padding:0.3rem 0.5rem">By</th>
+      <th></th>
+    </tr></thead>`;
+  const body = filtered.map(o => {
+    const albumLink = `<a href="/?op=${encodeURIComponent(o.release_type + ':' + o.release_id)}" target="_blank" rel="noopener" style="color:#7eb8da;text-decoration:none">${o.release_type}/${escHtml(String(o.release_id))}</a>`;
+    const ytLink = `<a href="https://www.youtube.com/watch?v=${encodeURIComponent(o.video_id)}" target="_blank" rel="noopener" style="color:#7eb8da;text-decoration:none">${escHtml(trim(o.video_title || o.video_id, 40))}</a>`;
+    return `<tr style="border-top:1px solid var(--border);font-size:0.78rem">
+      <td style="padding:0.35rem 0.5rem;color:var(--muted);white-space:nowrap">${escHtml(fmtDate(o.submitted_at))}</td>
+      <td style="padding:0.35rem 0.5rem">${escHtml(o.release_type)}</td>
+      <td style="padding:0.35rem 0.5rem">${albumLink}</td>
+      <td style="padding:0.35rem 0.5rem;font-family:monospace">${escHtml(o.track_position)}</td>
+      <td style="padding:0.35rem 0.5rem">${escHtml(trim(o.track_title || "", 32))}</td>
+      <td style="padding:0.35rem 0.5rem">${ytLink}</td>
+      <td style="padding:0.35rem 0.5rem;color:var(--muted);font-family:monospace;font-size:0.72rem">${escHtml(trim(o.submitted_by, 12))}</td>
+      <td style="padding:0.35rem 0.5rem"><button class="admin-btn admin-btn-danger" onclick="adminDeleteSubmission(this,'${escHtml(o.release_id)}','${escHtml(o.release_type)}','${escHtml(o.track_position).replace(/'/g, "\\'")}')">Delete</button></td>
+    </tr>`;
+  }).join("");
+  el.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">${head}<tbody>${body}</tbody></table></div>`;
+}
+
+function _filterAdminSubmissions(_input) {
+  _renderAdminSubmissionsTable();
+}
+window._filterAdminSubmissions = _filterAdminSubmissions;
 
 async function adminDeleteSubmission(btn, releaseId, releaseType, trackPosition) {
   if (!confirm(`Delete submission for ${releaseType}/${releaseId} pos ${trackPosition}?`)) return;

@@ -260,6 +260,32 @@ function _youtubeRowHtml(it) {
   const suggestBtn = window._sdSuggestForTrack
     ? `<button type="button" class="archive-btn archive-btn-suggest" onclick="_youtubeSuggestForTrack(this)" title="Suggest this video for the track">✓ Suggest</button>`
     : "";
+  // Album-mode: when window._sdSuggestAlbumContext is set, render a
+  // dropdown of missing tracks and a "Stage" button. Picking from
+  // the dropdown + clicking Stage queues the assignment locally; the
+  // user submits the whole batch via a footer button.
+  let albumAssignControl = "";
+  if (window._sdSuggestAlbumContext) {
+    const ctx = window._sdSuggestAlbumContext;
+    const auto = _albumAutoMatchTrack(it.title || "", ctx.tracks || []);
+    const opts = (ctx.tracks || []).map(t => {
+      const sel = (auto && auto.position === t.position) ? " selected" : "";
+      const taken = (window._sdSuggestStaged || {})[t.position] && (window._sdSuggestStaged[t.position].videoId !== id);
+      const label = taken ? `${t.position}. ${t.title} (already staged)` : `${t.position}. ${t.title}`;
+      return `<option value="${escHtml(t.position)}"${sel}${taken ? " disabled" : ""}>${escHtml(label)}</option>`;
+    }).join("");
+    const staged = (window._sdSuggestStaged || {});
+    // Find which track (if any) is currently staged with THIS video.
+    const stagedFor = Object.entries(staged).find(([_, v]) => v && v.videoId === id);
+    const isStaged = !!stagedFor;
+    albumAssignControl = `
+      <select class="sd-filter-select album-assign-select" data-vid="${safeId}" data-vtitle="${safeTitle}" onchange="_youtubeAlbumAssignChanged(this)">
+        <option value="">— skip —</option>
+        ${opts}
+      </select>
+      <button type="button" class="archive-btn archive-btn-suggest album-assign-stage${isStaged ? " is-staged" : ""}" onclick="_youtubeAlbumStage(this)" title="${isStaged ? "Already staged — click to update" : "Stage this assignment (submit all at the bottom)"}">${isStaged ? "✓ Staged" : "Stage"}</button>
+    `;
+  }
   return `
     <div class="yt-row archive-row" data-vid="${safeId}" data-title="${safeTitle}" data-channel="${safeChannel}" data-thumb="${escHtml(thumb)}">
       <img class="yt-row-thumb" src="${escHtml(thumb)}" alt="" loading="lazy" width="120" height="68" decoding="async">
@@ -267,10 +293,28 @@ function _youtubeRowHtml(it) {
         <div class="archive-row-title">${safeTitle}</div>
         ${safeChannel ? `<div class="archive-row-date">${safeChannel}</div>` : ""}
         ${safeDesc ? `<div class="archive-row-desc">${safeDesc}${(it.description || "").length > 200 ? "…" : ""}</div>` : ""}
+        ${albumAssignControl ? `<div class="album-assign-row">${albumAssignControl}</div>` : ""}
       </div>
       <div class="archive-row-actions">${saveBtn}${playBtn}${queueBtn}${suggestBtn}${linkBtn}</div>
     </div>
   `;
+}
+
+// Album-mode auto-match: pick the missing track whose title appears as
+// a substring of the YouTube video title. Score by track-title length
+// (longer = more specific). Returns null if no track matches.
+function _albumAutoMatchTrack(videoTitle, tracks) {
+  const v = String(videoTitle || "").toLowerCase().replace(/\s+/g, " ").trim();
+  if (!v || !Array.isArray(tracks) || !tracks.length) return null;
+  let best = null, bestScore = 0;
+  for (const t of tracks) {
+    const tt = String(t.title || "").toLowerCase().replace(/\s+/g, " ").trim();
+    if (!tt || tt.length < 3) continue; // skip generic 1-2 char titles
+    if (v.includes(tt)) {
+      if (tt.length > bestScore) { best = t; bestScore = tt.length; }
+    }
+  }
+  return best;
 }
 
 // ── Actions ───────────────────────────────────────────────────────────
@@ -404,7 +448,16 @@ async function openYoutubePopup(query) {
   const resultsEl = document.getElementById("youtube-popup-results");
   if (!overlay) return;
   overlay.classList.add("open");
-  if (titleEl) titleEl.textContent = `YouTube · "${q}"`;
+  // Album mode: show "Find missing tracks for ALBUM" + clear any
+  // prior staged-assignments map. Per-track mode keeps the original
+  // YouTube · "query" title.
+  const albumCtx = window._sdSuggestAlbumContext;
+  if (albumCtx) {
+    if (titleEl) titleEl.textContent = `Find missing tracks · ${albumCtx.albumTitle || "album"}`;
+    window._sdSuggestStaged = {}; // { trackPosition → { videoId, videoTitle, trackTitle } }
+  } else {
+    if (titleEl) titleEl.textContent = `YouTube · "${q}"`;
+  }
   if (statusEl) statusEl.textContent = "Searching…";
   if (resultsEl) resultsEl.innerHTML = "";
   // Sync ★ state once per session.
@@ -424,6 +477,8 @@ async function openYoutubePopup(query) {
     const items = Array.isArray(j?.items) ? j.items : [];
     if (statusEl) statusEl.textContent = items.length ? `${items.length} result${items.length === 1 ? "" : "s"}` : "No results.";
     if (resultsEl) resultsEl.innerHTML = items.map(it => _youtubeRowHtml(it)).join("");
+    // Album mode: append the sticky status footer + submit button.
+    if (albumCtx) _albumRenderFooter();
   } catch (e) {
     console.warn("[youtube popup] threw:", e);
     if (statusEl) statusEl.textContent = "Search failed.";
@@ -436,7 +491,160 @@ function closeYoutubePopup() {
   // Drop any pending track-suggest context so the next popup open
   // doesn't accidentally show ✓ Suggest buttons.
   window._sdSuggestForTrack = null;
+  window._sdSuggestAlbumContext = null;
+  window._sdSuggestStaged = null;
+  // Remove album footer if present.
+  document.getElementById("album-suggest-footer")?.remove();
 }
+
+// ── Album-mode handlers ──────────────────────────────────────────────
+
+// Re-render the staged-assignments status + submit footer below the
+// results list. Idempotent — safe to call repeatedly.
+function _albumRenderFooter() {
+  const ctx = window._sdSuggestAlbumContext;
+  if (!ctx) return;
+  const overlay = document.getElementById("youtube-popup-overlay");
+  if (!overlay) return;
+  let footer = document.getElementById("album-suggest-footer");
+  if (!footer) {
+    footer = document.createElement("div");
+    footer.id = "album-suggest-footer";
+    footer.className = "album-suggest-footer";
+    overlay.querySelector(".youtube-popup-content")?.appendChild(footer)
+      || overlay.appendChild(footer);
+  }
+  const staged = window._sdSuggestStaged || {};
+  const stagedCount = Object.values(staged).filter(Boolean).length;
+  const rows = (ctx.tracks || []).map(t => {
+    const s = staged[t.position];
+    const mark = s ? "✓" : "✗";
+    const cls = s ? "album-suggest-track is-staged" : "album-suggest-track";
+    const detail = s ? `<span class="album-suggest-staged-vid">${escHtml(s.videoTitle || s.videoId)}</span>` : "";
+    return `<div class="${cls}"><span class="album-suggest-mark">${mark}</span> <span class="album-suggest-tnum">${escHtml(t.position)}.</span> <span class="album-suggest-ttitle">${escHtml(t.title)}</span> ${detail}</div>`;
+  }).join("");
+  footer.innerHTML = `
+    <div class="album-suggest-status-list">${rows}</div>
+    <div class="album-suggest-submit-row">
+      <button type="button" class="archive-btn archive-btn-suggest album-suggest-submit-btn" ${stagedCount ? "" : "disabled"} onclick="_youtubeAlbumSubmit(this)">Submit ${stagedCount} assignment${stagedCount === 1 ? "" : "s"}</button>
+      <button type="button" class="archive-btn" onclick="closeYoutubePopup()">Cancel</button>
+    </div>
+  `;
+}
+
+// Dropdown change handler — does nothing on its own; the user has to
+// press "Stage" to commit. This way they can scan multiple videos
+// and switch their mind without surprise side-effects.
+function _youtubeAlbumAssignChanged(_select) {
+  // No-op — staging happens via _youtubeAlbumStage.
+}
+window._youtubeAlbumAssignChanged = _youtubeAlbumAssignChanged;
+
+// Stage button handler: read the dropdown's selected track + the
+// row's video metadata, save to window._sdSuggestStaged, and re-render
+// the footer + the row to reflect the staged state. Re-staging onto a
+// different track is allowed (overwrites the previous assignment).
+function _youtubeAlbumStage(btn) {
+  const ctx = window._sdSuggestAlbumContext;
+  if (!ctx) return;
+  const row = btn.closest(".yt-row");
+  const select = row?.querySelector(".album-assign-select");
+  if (!row || !select) return;
+  const videoId    = row.dataset.vid || "";
+  const videoTitle = row.dataset.title || "";
+  const pos        = select.value || "";
+  const staged = window._sdSuggestStaged || (window._sdSuggestStaged = {});
+  if (!pos) {
+    // "— skip —" selected — if this video was previously staged for
+    // any track, remove it.
+    for (const k of Object.keys(staged)) {
+      if (staged[k] && staged[k].videoId === videoId) delete staged[k];
+    }
+  } else {
+    // First, drop any existing staging of THIS video for OTHER tracks
+    // (a video can only fill one track at a time). Also drop the
+    // current assignment for THIS track if it was a different video.
+    for (const k of Object.keys(staged)) {
+      if (staged[k] && staged[k].videoId === videoId && k !== pos) delete staged[k];
+    }
+    const trackTitle = (ctx.tracks || []).find(t => t.position === pos)?.title || "";
+    staged[pos] = { videoId, videoTitle, trackTitle };
+  }
+  // Re-render so disabled-options + staged-marks update across rows.
+  const resultsEl = document.getElementById("youtube-popup-results");
+  if (resultsEl) {
+    // We don't have the original items array here; re-render from the
+    // current DOM. Each .yt-row carries enough data attrs to rebuild
+    // a row item shape.
+    const rows = Array.from(resultsEl.querySelectorAll(".yt-row")).map(el => ({
+      videoId: el.dataset.vid,
+      title:   el.dataset.title,
+      channel: el.dataset.channel,
+      thumbnail: el.dataset.thumb,
+      description: el.querySelector(".archive-row-desc")?.textContent || "",
+    }));
+    resultsEl.innerHTML = rows.map(it => _youtubeRowHtml(it)).join("");
+  }
+  _albumRenderFooter();
+}
+window._youtubeAlbumStage = _youtubeAlbumStage;
+
+// Submit all staged assignments as a batch POST. Closes the popup
+// on success and triggers the album popup's override re-fetch so the
+// newly-assigned tracks get their ▶ buttons immediately.
+async function _youtubeAlbumSubmit(btn) {
+  const ctx = window._sdSuggestAlbumContext;
+  if (!ctx) return;
+  const staged = window._sdSuggestStaged || {};
+  const assignments = Object.entries(staged)
+    .filter(([_, v]) => v && v.videoId)
+    .map(([position, v]) => ({
+      releaseId:     ctx.releaseId,
+      releaseType:   ctx.releaseType,
+      trackPosition: position,
+      trackTitle:    v.trackTitle,
+      videoId:       v.videoId,
+      videoTitle:    v.videoTitle,
+    }));
+  if (!assignments.length) return;
+  btn.disabled = true;
+  const oldText = btn.textContent;
+  btn.textContent = "Saving…";
+  try {
+    const r = await apiFetch("/api/track-yt/suggest-batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ assignments }),
+    });
+    if (!r.ok) throw new Error(`save failed (${r.status})`);
+    const j = await r.json().catch(() => ({}));
+    const ins = j?.inserted ?? 0;
+    const skip = j?.skipped ?? 0;
+    if (ins && skip) showToast?.(`Saved ${ins}, ${skip} already taken`);
+    else if (ins)    showToast?.(`Saved ${ins} track${ins === 1 ? "" : "s"}.`);
+    else             showToast?.(`All ${skip} tracks were already taken`, "info");
+    // Snapshot before closing (closeYoutubePopup wipes the ctx).
+    const targetId    = ctx.targetId || "album-info";
+    const releaseType = ctx.releaseType;
+    const releaseId   = ctx.releaseId;
+    const masterId    = ctx.masterId || (releaseType === "master" ? releaseId : "");
+    closeYoutubePopup();
+    if (typeof window._trackYtKickFetchAndApply === "function") {
+      const isMaster = releaseType === "master";
+      window._trackYtKickFetchAndApply(
+        targetId,
+        masterId,
+        isMaster ? "" : releaseId,
+        isMaster
+      ).catch(() => {});
+    }
+  } catch (e) {
+    showToast?.(e?.message || "Could not save", "error");
+    btn.disabled = false;
+    btn.textContent = oldText;
+  }
+}
+window._youtubeAlbumSubmit = _youtubeAlbumSubmit;
 
 // Crowd-sourced override submit. Reads window._sdSuggestForTrack
 // (stashed by modal.js when the row's 🎵 affordance was clicked) and

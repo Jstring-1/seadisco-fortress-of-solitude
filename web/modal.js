@@ -2366,6 +2366,76 @@ function _trackYtOpenSuggest(el) {
 }
 window._trackYtOpenSuggest = _trackYtOpenSuggest;
 
+// Album-level "Find missing tracks" — opens a YouTube popup with one
+// search across the whole album, then lets the user assign returned
+// videos to specific missing tracks via dropdowns. One search.list
+// call instead of N (where N = number of missing tracks).
+//
+// Triggered by the 🎵 N missing affordance in the tracklist heading.
+// Builds the missing-tracks payload from the popup's tracklist DOM
+// (any .track row that has data-pos but no .track-link in its
+// .track-play-cell), stashes it on window for youtube.js to consume,
+// then opens the YT popup with q = "Artist" "Album".
+function _trackYtOpenAlbumSuggest(el) {
+  if (!window._clerk?.user) {
+    if (typeof showToast === "function") showToast("Sign in to suggest videos", "info");
+    return;
+  }
+  const popupRoot = el.closest("#album-info, #version-info");
+  if (!popupRoot) return;
+  const releaseId   = popupRoot.dataset?.releaseId  || "";
+  const masterId    = popupRoot.dataset?.masterId   || "";
+  const isMaster    = popupRoot.dataset?.entityType === "master";
+  const albumTitle  = popupRoot.querySelector("h2")?.textContent?.trim() || "";
+  // First artist from the album-artist line (mirrors per-track flow).
+  const albumArtist = popupRoot.querySelector(".album-artist")?.textContent?.split(",")[0]?.trim() || "";
+  // Walk every tracklist row, collect the ones with no playable URL.
+  const rows = popupRoot.querySelectorAll(".album-tracklist .track[data-pos]");
+  const missing = [];
+  rows.forEach(row => {
+    const pos = row.dataset.pos || "";
+    const hasPlay = !!row.querySelector(".track-play-cell .track-link");
+    if (hasPlay) return;
+    const titleEl = row.querySelector(".track-title-link");
+    const trackTitle = titleEl?.textContent?.trim() || "";
+    if (!pos || !trackTitle) return;
+    missing.push({ position: pos, title: trackTitle });
+  });
+  if (!missing.length) {
+    if (typeof showToast === "function") showToast("No missing tracks on this album", "info");
+    return;
+  }
+  // Default scope: master if known, else release. Same rule as the
+  // per-track flow so a contribution lifts to all pressings.
+  const submitScopeType = (isMaster || masterId) ? "master" : "release";
+  const submitScopeId   = submitScopeType === "master" ? (masterId || releaseId) : releaseId;
+  if (!submitScopeId) {
+    if (typeof showToast === "function") showToast("Could not identify album scope", "error");
+    return;
+  }
+  window._sdSuggestAlbumContext = {
+    releaseType:  submitScopeType,
+    releaseId:    submitScopeId,
+    masterId,
+    albumTitle,
+    albumArtist,
+    tracks:       missing,
+    targetId:     popupRoot.id || "album-info",
+  };
+  // Clear the per-track context so the popup knows it's in album mode.
+  window._sdSuggestForTrack = null;
+  const q = [albumArtist ? `"${albumArtist}"` : "", albumTitle ? `"${albumTitle}"` : ""]
+    .filter(Boolean).join(" ");
+  if (typeof window.openYoutubePopup === "function") {
+    window.openYoutubePopup(q);
+  } else if (typeof window._sdLoadModule === "function") {
+    window._sdLoadModule("/youtube.js").then(() => {
+      window.openYoutubePopup?.(q);
+    });
+  }
+}
+window._trackYtOpenAlbumSuggest = _trackYtOpenAlbumSuggest;
+
 // Admin: delete a track override. Confirms, hits the admin endpoint
 // using the override's ACTUAL scope (master or release) — not the
 // popup's scope. This matters when a master popup is showing a
@@ -3170,9 +3240,16 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const playableUrls = tracks.map(t => findVideo(t.title || "", t.position || "")).filter(Boolean);
   const playableCount = playableUrls.length;
   const firstPlayableUrl = playableUrls[0] || "";
-  const playableMeta = playableCount
-    ? `<span class="tracklist-playable">(${playableCount}${firstPlayableUrl ? ` <a href="#" class="tracklist-play-all" onclick="event.preventDefault();event.stopPropagation();playAlbumAndQueue(this,'${firstPlayableUrl.replace(/'/g, "\\'")}')" title="Play the first track and queue the rest of the album">▶</a>` : ""}${playableCount >= 1 ? ` <a href="#" class="tracklist-queue-album" onclick="event.preventDefault();event.stopPropagation();queueAddAlbum(this)" title="Add all playable tracks to the bottom of your queue">＋</a>` : ""})</span>`
+  // Tracks with a title but no playable URL are candidates for the
+  // album-level "Find missing" affordance. Counted here so the
+  // tracklist heading can show "(N missing)" when ≥2 are missing.
+  const missingCount = tracks.filter(t => t.title && !findVideo(t.title || "", t.position || "")).length;
+  const albumFindMissingLink = (missingCount >= 2 && window._clerk?.user)
+    ? ` <a href="#" class="tracklist-find-missing" onclick="event.preventDefault();event.stopPropagation();_trackYtOpenAlbumSuggest(this);return false" title="Search YouTube once for the whole album and assign videos to all ${missingCount} missing tracks at once">🎵 ${missingCount} missing</a>`
     : "";
+  const playableMeta = playableCount
+    ? `<span class="tracklist-playable">(${playableCount}${firstPlayableUrl ? ` <a href="#" class="tracklist-play-all" onclick="event.preventDefault();event.stopPropagation();playAlbumAndQueue(this,'${firstPlayableUrl.replace(/'/g, "\\'")}')" title="Play the first track and queue the rest of the album">▶</a>` : ""}${playableCount >= 1 ? ` <a href="#" class="tracklist-queue-album" onclick="event.preventDefault();event.stopPropagation();queueAddAlbum(this)" title="Add all playable tracks to the bottom of your queue">＋</a>` : ""}${albumFindMissingLink})</span>`
+    : (albumFindMissingLink ? `<span class="tracklist-playable">(${albumFindMissingLink})</span>` : "");
   const tracklistOpen = localStorage.getItem("tracklist-open") !== "false";
   const trackHTML = tracks.length ? `
     <div class="album-tracklist">

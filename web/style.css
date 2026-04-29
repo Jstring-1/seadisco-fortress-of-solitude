@@ -1574,12 +1574,6 @@ footer a.nav-rec-empty { display: none !important; }
 .nav-tab-top[data-rtab="favorites"],
 .nav-tab-top[data-rtab="favorites"].active   { color: #ff7eb6; }
 .nav-tab-top[data-rtab="favorites"]:hover    { color: #888; }
-/* Picks (community YouTube contributions) — purple to match the
-   override-feature affordances scattered across the site (per-track
-   🎵 buttons, override badge, suggest button). */
-.nav-tab-top[data-view="picks"],
-.nav-tab-top[data-view="picks"].active       { color: #c084fc; }
-.nav-tab-top[data-view="picks"]:hover        { color: #888; }
 
 /* ── Icon-nav variant (admin page test bed) ─────────────────────────────
    When renderSharedHeader is called with iconNav:true the tab markup is
@@ -3211,45 +3205,7 @@ button.wiki-link-btn:active {
 }
 .sd-filter-label .sd-filter-select { text-transform: none; letter-spacing: 0; }
 
-/* Picks (Submitted Tracks) banner — sits above the home strip when
-   Picks mode is active. Houses the page title, filter input, and
-   sort dropdown. Same row layout as the home strip header. */
-.picks-banner {
-  margin-top: 0.5rem;
-  margin-bottom: 0.6rem;
-}
-.picks-banner-inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem 0.75rem;
-  flex-wrap: wrap;
-}
-.picks-banner-text { min-width: 0; flex: 1 1 auto; }
-.picks-banner-title {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--text);
-  letter-spacing: 0.02em;
-}
-.picks-banner-sub {
-  font-size: 0.74rem;
-  color: var(--muted);
-  margin-top: 0.15rem;
-}
-.picks-banner-controls {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  flex-shrink: 0;
-}
-
-/* When Picks mode is active, the random-records-header below the
-   banner is redundant — banner has its own filter+sort. Hide it via
-   a body-level class so we don't duplicate controls. */
-body.picks-mode #random-records-header { display: none; }
-
-/* Home strip Recent / Suggestions header — title-wrap on the left,
+/* Home strip Recent / Suggestions / Submitted header — title-wrap on the left,
    controls (filter + sort + clear) on the right. Single row whenever
    the viewport allows; on narrow screens controls drop below the
    title cleanly instead of breaking individually. */
@@ -6893,6 +6849,105 @@ body.is-offline button.offline-disabled {
 .archive-btn-suggest:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* ── Tracklist heading "🎵 N missing" affordance ────────────────────
+   Lives in the Tracklist header next to the (N) playable count.
+   Only shows when ≥2 tracks are missing AND the user is signed in. */
+.tracklist-find-missing {
+  color: #c084fc;
+  text-decoration: none;
+  font-size: 0.78em;
+  margin-left: 0.35rem;
+  padding: 0.05rem 0.35rem;
+  border: 1px solid rgba(192,132,252,0.45);
+  border-radius: 3px;
+  background: rgba(192,132,252,0.08);
+  transition: background 0.12s, border-color 0.12s;
+}
+.tracklist-find-missing:hover {
+  background: rgba(192,132,252,0.18);
+  border-color: #c084fc;
+}
+
+/* ── Album-mode YT popup: per-result assignment row ──────────────── */
+.album-assign-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+  flex-wrap: wrap;
+}
+.album-assign-select {
+  max-width: 18rem;
+  flex: 1 1 auto;
+}
+.album-assign-stage.is-staged {
+  background: rgba(109, 223, 112, 0.15);
+  border-color: rgba(109, 223, 112, 0.55);
+  color: #6ddf70;
+}
+
+/* ── Album-mode YT popup: sticky footer (status + submit) ────────── */
+.album-suggest-footer {
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--border);
+  position: sticky;
+  bottom: 0;
+  background: var(--surface);
+  z-index: 2;
+}
+.album-suggest-status-list {
+  max-height: 8rem;
+  overflow-y: auto;
+  margin-bottom: 0.5rem;
+  padding: 0.3rem 0.4rem;
+  background: rgba(255,255,255,0.03);
+  border-radius: 4px;
+}
+.album-suggest-track {
+  font-size: 0.78rem;
+  color: var(--muted);
+  padding: 0.1rem 0;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.album-suggest-track.is-staged { color: var(--text); }
+.album-suggest-mark {
+  display: inline-block;
+  width: 1rem;
+  text-align: center;
+  font-weight: 600;
+}
+.album-suggest-track.is-staged .album-suggest-mark { color: #6ddf70; }
+.album-suggest-tnum {
+  font-family: monospace;
+  font-size: 0.72rem;
+  color: var(--muted);
+  min-width: 2rem;
+}
+.album-suggest-staged-vid {
+  margin-left: 0.4rem;
+  font-size: 0.72rem;
+  color: #c084fc;
+  font-style: italic;
+}
+.album-suggest-submit-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.album-suggest-submit-btn:not(:disabled) {
+  background: rgba(192, 132, 252, 0.15);
+  border-color: rgba(192, 132, 252, 0.55);
+  color: #c084fc;
+}
+.album-suggest-submit-btn:not(:disabled):hover {
+  background: rgba(192, 132, 252, 0.25);
+  border-color: #c084fc;
 }
 
 /* "No CDs" toggle button — a small circular icon button with a CD

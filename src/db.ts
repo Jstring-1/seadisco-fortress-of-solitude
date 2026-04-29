@@ -3668,6 +3668,59 @@ export async function suggestTrackYtOverride(args: {
   return r.rowCount === 1;
 }
 
+// Batch insert: all-or-mostly-nothing wrapper around the singleton
+// suggest path. The album-level "Find missing tracks" popup hands us
+// a list of (releaseId, releaseType, trackPosition, videoId, …)
+// tuples and we insert them in one transaction. First-submission-wins
+// semantics still apply per-row via ON CONFLICT DO NOTHING — if some
+// rows are already taken, they're silently skipped while the rest
+// land. Returns counts of inserts vs skips so the UI can report
+// "saved 4, 1 already taken".
+export async function suggestTrackYtOverridesBatch(
+  items: Array<{
+    releaseId: string | number;
+    releaseType: "master" | "release";
+    trackPosition: string;
+    trackTitle?: string | null;
+    videoId: string;
+    videoTitle?: string | null;
+    submittedBy: string;
+  }>
+): Promise<{ inserted: number; skipped: number }> {
+  if (!items.length) return { inserted: 0, skipped: 0 };
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    let inserted = 0;
+    for (const it of items) {
+      const r = await client.query(
+        `INSERT INTO track_youtube_overrides
+           (release_id, release_type, track_position, track_title, video_id, video_title, submitted_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (release_id, release_type, track_position) DO NOTHING
+         RETURNING release_id`,
+        [
+          String(it.releaseId),
+          it.releaseType,
+          it.trackPosition,
+          it.trackTitle ?? null,
+          it.videoId,
+          it.videoTitle ?? null,
+          it.submittedBy,
+        ]
+      );
+      if (r.rowCount === 1) inserted++;
+    }
+    await client.query("COMMIT");
+    return { inserted, skipped: items.length - inserted };
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 // Admin: delete a single override (called from the album popup or the
 // admin tab). Returns true if a row was removed.
 export async function deleteTrackYtOverride(

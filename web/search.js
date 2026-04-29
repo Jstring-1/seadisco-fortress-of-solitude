@@ -733,104 +733,7 @@ function _sdToggleExcludeCd(btn) {
 }
 window._sdToggleExcludeCd = _sdToggleExcludeCd;
 
-// ── Picks mode (community YT contributions) ───────────────────────────
-//
-// switchView('picks') calls _sdEnterPicksMode. This is a sub-mode of
-// the search view: same form/grid, but the home strip is forced to
-// the contributed-favorites endpoint, the Hard-to-find + No-CDs
-// discovery toggles are enabled, and a sort dropdown lets users
-// browse contributions by count (most ↔ fewest ↔ newest).
-//
-// We track which discovery toggles WE flipped on so leaving Picks
-// only undoes our own changes — manual user toggles persist.
-
-function _sdEnterPicksMode() {
-  window._sdPicksMode = true;
-  document.body.classList.add("picks-mode");
-  // Hard-to-find and No-CDs are NOT auto-enabled — leave both at the
-  // user's current state so opening Submitted Tracks doesn't change
-  // their search settings out from under them. Tracked-flipped state
-  // stays empty since we don't flip anything on entry.
-  window._sdPicksFlipped = { h2f: false, cd: false };
-  // Open the advanced panel so users see the filters they're working
-  // with — Picks mode IS about exploring the filter space.
-  if (typeof toggleAdvanced === "function") {
-    try { toggleAdvanced(true); } catch {}
-  }
-  _sdMountPicksHeader();
-  // Force-reload the strip from the contributed endpoint with the
-  // current sort. Hide the favorites Sort/Clear control row since
-  // those are recent-history-only.
-  const wrap = document.getElementById("random-records");
-  if (wrap) wrap.style.display = "";
-  loadRandomRecords(false);
-}
-window._sdEnterPicksMode = _sdEnterPicksMode;
-
-function _sdExitPicksMode() {
-  // Undo only the toggles WE flipped on — manual user choices stay.
-  const flipped = window._sdPicksFlipped || { h2f: false, cd: false };
-  if (flipped.h2f) {
-    const cb = document.getElementById("f-hard2find");
-    if (cb && cb.checked) {
-      cb.checked = false;
-      _sdHard2FindChanged(cb);
-    }
-  }
-  if (flipped.cd) {
-    const btn = document.getElementById("f-exclude-cd");
-    if (btn && btn.classList.contains("active")) {
-      btn.classList.remove("active");
-      btn.setAttribute("aria-pressed", "false");
-    }
-  }
-  window._sdPicksMode = false;
-  window._sdPicksFlipped = null;
-  document.body.classList.remove("picks-mode");
-  const banner = document.getElementById("picks-banner");
-  if (banner) banner.remove();
-}
-window._sdExitPicksMode = _sdExitPicksMode;
-
-// Inject the Picks banner above the home strip if not already
-// present. Holds the explainer + sort dropdown. Idempotent — safe
-// to call on re-entry.
-function _sdMountPicksHeader() {
-  let banner = document.getElementById("picks-banner");
-  if (banner) return; // already mounted
-  const wrap = document.getElementById("random-records");
-  if (!wrap || !wrap.parentNode) return;
-  banner = document.createElement("div");
-  banner.id = "picks-banner";
-  banner.className = "content-area picks-banner";
-  banner.innerHTML = `
-    <div class="picks-banner-inner">
-      <div class="picks-banner-text">
-        <div class="picks-banner-title">🎵 Submitted Tracks</div>
-      </div>
-      <div class="picks-banner-controls">
-        <input type="search" id="picks-filter" class="sd-filter-input" placeholder="filter…" oninput="_sdHomeStripFilterChanged(this)">
-        <label class="sd-filter-label">
-          Sort
-          <select id="picks-sort" class="sd-filter-select" onchange="_sdPicksSortChanged()">
-            <option value="most" selected>Most contributions</option>
-            <option value="fewest">Fewest contributions</option>
-            <option value="recent">Most recent</option>
-          </select>
-        </label>
-      </div>
-    </div>
-  `;
-  wrap.parentNode.insertBefore(banner, wrap);
-}
-
-function _sdPicksSortChanged() {
-  if (!window._sdPicksMode) return;
-  loadRandomRecords(false);
-}
-window._sdPicksSortChanged = _sdPicksSortChanged;
-
-// ── Home strip Recent / Suggestions toggle ────────────────────────────
+// ── Home strip Recent / Suggestions / Submitted toggle ────────────────
 //
 // Default is "recent" on first load. Persists per-session in
 // localStorage. The Suggestions side reads from
@@ -844,18 +747,22 @@ window._sdHomeStripMode = (() => {
 window._sdHomeStripFilter = "";
 
 function _sdSwitchHomeStripTab(mode) {
-  const m = mode === "suggestions" ? "suggestions" : "recent";
+  const m = mode === "suggestions" ? "suggestions"
+          : mode === "submitted"   ? "submitted"
+          : "recent";
   if (window._sdHomeStripMode === m) return;
   window._sdHomeStripMode = m;
   try { localStorage.setItem("sd_home_strip_mode", m); } catch {}
-  // Visual tab state
-  const a = document.getElementById("rr-tab-recent");
-  const b = document.getElementById("rr-tab-suggestions");
-  if (a && b) {
-    a.classList.toggle("rr-tab-active", m === "recent");
-    b.classList.toggle("rr-tab-active", m === "suggestions");
-    a.style.color = m === "recent" ? "var(--text)" : "var(--muted)";
-    b.style.color = m === "suggestions" ? "var(--text)" : "var(--muted)";
+  // Visual tab state — exactly one tab carries .rr-tab-active.
+  const tabs = {
+    recent:      document.getElementById("rr-tab-recent"),
+    suggestions: document.getElementById("rr-tab-suggestions"),
+    submitted:   document.getElementById("rr-tab-submitted"),
+  };
+  for (const [k, el] of Object.entries(tabs)) {
+    if (!el) continue;
+    el.classList.toggle("rr-tab-active", k === m);
+    el.style.color = k === m ? "var(--text)" : "var(--muted)";
   }
   // Reload strip from the appropriate source.
   loadRandomRecords(false);
@@ -1513,20 +1420,19 @@ async function loadRandomRecords(more) {
     _randomShown = 0;
     const titleEl = document.getElementById("random-records-title"); // legacy hidden span
     const tabWrap = document.getElementById("random-records-title-wrap");
-    // Tabs are only shown in normal search mode. Picks mode uses the
-    // picks-banner as its header instead.
-    if (tabWrap) tabWrap.style.display = window._sdPicksMode ? "none" : "";
+    if (tabWrap) tabWrap.style.display = "";
     let isSuggested = false;
     let titleText = "Recent";
 
-    if (window._sdPicksMode) {
-      // ── Picks (Submitted Tracks) page ───────────────────────────
-      // Load contributed-favorites with the page's chosen sort.
+    if (window._sdHomeStripMode === "submitted") {
+      // ── Submitted (community YT contributions, global feed) ─────
+      // Pulls /api/contributed-favorites/sample sorted by Most. The
+      // tab replaces the standalone "Submitted Tracks" page that
+      // used to live at /?v=picks.
       _randomAll = [];
-      const picksOrder = document.getElementById("picks-sort")?.value || "most";
       try {
         const r = await fetch(
-          `/api/contributed-favorites/sample?limit=48&order=${encodeURIComponent(picksOrder)}`,
+          "/api/contributed-favorites/sample?limit=48&order=most",
           { cache: "no-store" }
         );
         if (r.ok) {
@@ -1535,8 +1441,8 @@ async function loadRandomRecords(more) {
             _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
           }
         }
-      } catch { /* leave empty — render placeholder below */ }
-      titleText = "Submitted Tracks";
+      } catch { /* leave empty — placeholder below */ }
+      titleText = "Submitted";
       isSuggested = true;
     } else if (window._sdHomeStripMode === "suggestions") {
       // ── Suggestions tab on main search ──────────────────────────
@@ -1617,9 +1523,9 @@ async function loadRandomRecords(more) {
     if (clearBtn) clearBtn.style.display = isSuggested ? "none" : "";
 
     if (!_randomAll.length) {
-      if (window._sdPicksMode) {
+      if (window._sdHomeStripMode === "submitted") {
         wrap.style.display = "";
-        grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:0.85rem;padding:2rem 1rem">No community picks yet — open any album and use the 🎵 affordance on a track Discogs missed to be the first to contribute.</div>`;
+        grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:0.85rem;padding:2rem 1rem">No community submissions yet — open any album and use the 🎵 affordance on a track Discogs missed to be the first to contribute.</div>`;
         return;
       }
       if (window._sdHomeStripMode === "suggestions") {
@@ -1628,7 +1534,7 @@ async function loadRandomRecords(more) {
         grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:0.85rem;padding:2rem 1rem">${
           isSignedIn
             ? "No suggestions yet — they're generated hourly from your library's taste profile. Check back soon."
-            : "Sign in to see personalized suggestions, or browse Community picks above."
+            : "Sign in to see personalized suggestions, or browse Submitted above."
         }</div>`;
         return;
       }
@@ -1647,18 +1553,19 @@ async function loadRandomRecords(more) {
     }
     return;
   }
-  // Each card gets a small X overlay. In Recent mode, × drops the row
+  // Each card gets a small × overlay. In Recent mode, × drops the row
   // from local history. In Suggestions mode, × banishes that
   // master/release from the user's personal feed forever (server-side
-  // record). On Submitted Tracks (picks mode) we don't show ×.
-  const inSuggestions = !window._sdPicksMode && window._sdHomeStripMode === "suggestions";
+  // record). On Submitted (global community feed) we don't show ×.
+  const inSuggestions = window._sdHomeStripMode === "suggestions";
+  const inSubmitted   = window._sdHomeStripMode === "submitted";
   const html = slice.map((item, i) => {
     const card = renderCard(item, _randomShown + i);
     const safeId = escHtml(String(item.id));
     const safeType = escHtml(String(item.type || "master"));
     let dismiss = "";
-    if (window._sdPicksMode) {
-      // No dismiss on Submitted Tracks page.
+    if (inSubmitted) {
+      // Global feed — no per-user dismiss.
     } else if (inSuggestions && window._clerk?.user) {
       dismiss = `<button class="recent-dismiss" onclick="_sdDismissSuggestion(event,'${safeId}','${safeType}')" title="Hide this suggestion forever">✕</button>`;
     } else if (!item._isSuggested) {

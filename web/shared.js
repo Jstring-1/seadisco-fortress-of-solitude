@@ -506,7 +506,6 @@ window._sdNavIconSvg = function (key) { return _SD_NAV_ICONS[key] || ""; };
 function renderSharedHeader(opts) {
   const isSPA = opts?.spa;
   const active = opts?.active || "";
-  const hideRecords = opts?.hideRecords;
   // Opt-in icon nav: each tab renders as [icon][hover-label] instead of
   // bare text. Used for the admin page first while we evaluate fit.
   const iconNav = !!opts?.iconNav;
@@ -531,12 +530,19 @@ function renderSharedHeader(opts) {
     return `<a class="${navTabClass}${activeCls}" href="${href}" title="${label}">${labelMarkup(label, iconKey)}</a>`;
   };
 
-  // Record tab — starts disabled until signed in
-  const recTab = (label, rtab, iconKey) => {
+  // Record tab — starts disabled until signed in. `startEmpty` adds
+  // the nav-rec-empty class on first paint so tabs that only matter
+  // when the user has data (Inventory, Lists) are HIDDEN until
+  // _updateEmptyRecordTabs flips the class off after sync. Without
+  // this, the navbar pops Inventory/Lists into existence on initial
+  // render then yanks them back when the empty-counts check runs —
+  // the visible "jump" the user sees on load.
+  const recTab = (label, rtab, iconKey, startEmpty) => {
+    const emptyCls = startEmpty ? " nav-rec-empty" : "";
     if (isSPA) {
-      return `<button class="${navTabClass} nav-rec-disabled" data-rtab="${rtab}" onclick="showRecordSignIn('${rtab}')" title="${label}">${labelMarkup(label, iconKey)}</button>`;
+      return `<button class="${navTabClass} nav-rec-disabled${emptyCls}" data-rtab="${rtab}" onclick="showRecordSignIn('${rtab}')" title="${label}">${labelMarkup(label, iconKey)}</button>`;
     }
-    return `<a class="${navTabClass}" href="/?v=${rtab}" data-rtab="${rtab}" title="${label}">${labelMarkup(label, iconKey)}</a>`;
+    return `<a class="${navTabClass}${emptyCls}" href="/?v=${rtab}" data-rtab="${rtab}" title="${label}">${labelMarkup(label, iconKey)}</a>`;
   };
 
   // Auth tab removed from the navbar — the footer "Account" link
@@ -550,7 +556,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260429.0819";
+  const SITE_VERSION = "build 20260429.1018";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -566,11 +572,10 @@ function renderSharedHeader(opts) {
           <div class="nav-row nav-row-top" id="nav-row-records">
             ${tab("Search", "search", "search")}
             ${recTab("Favorites", "favorites", "favorites")}
-            ${tab("Submitted Tracks", "picks", "picks")}
             ${recTab("Collection", "collection", "collection")}
             ${recTab("Wantlist", "wantlist", "wantlist")}
-            ${recTab("Inventory", "inventory", "inventory")}
-            ${recTab("Lists", "lists", "lists")}
+            ${recTab("Inventory", "inventory", "inventory", true)}
+            ${recTab("Lists", "lists", "lists", true)}
           </div>
         </div>
       </div>
@@ -682,13 +687,17 @@ function renderSharedFooter(opts) {
   // matching sub-tab. Outside the SPA, fall back to a query-string deep link.
   // When signed out, mirror the navbar record-tab behavior: pop the in-page
   // sign-in modal instead of trying to load a records view that requires auth.
-  const recLink = (label, tab) => {
+  // `startEmpty` mirrors the navbar's same flag — Inventory and Lists ship
+  // with nav-rec-empty so they're hidden until _updateEmptyRecordTabs flips
+  // them on, avoiding the footer flash for users with no inventory/lists.
+  const recLink = (label, tab, startEmpty) => {
     const href = _seaDiscoBuildViewHref(tab);
     const tip = HINTS[tab] || "";
+    const cls = startEmpty ? ' class="nav-rec-empty"' : "";
     if (isSPA) {
-      return `<a href="${href}" data-sd-view="${tab}" title="${escHtml(tip)}" onclick="event.preventDefault();if(!window._clerk?.user){openSignInModal();return false}_cwTab='${tab}';switchView('records');return false">${label}</a>`;
+      return `<a${cls} href="${href}" data-sd-view="${tab}" title="${escHtml(tip)}" onclick="event.preventDefault();if(!window._clerk?.user){openSignInModal();return false}_cwTab='${tab}';switchView('records');return false">${label}</a>`;
     }
-    return `<a href="${href}" data-sd-view="${tab}" title="${escHtml(tip)}">${label}</a>`;
+    return `<a${cls} href="${href}" data-sd-view="${tab}" title="${escHtml(tip)}">${label}</a>`;
   };
 
   const footer = document.querySelector("footer");
@@ -700,8 +709,8 @@ function renderSharedFooter(opts) {
         ${recLink("Collection", "collection")}
         ${recLink("Wantlist", "wantlist")}
         ${recLink("Favorites", "favorites")}
-        ${recLink("Inventory", "inventory")}
-        ${recLink("Lists", "lists")}
+        ${recLink("Inventory", "inventory", true)}
+        ${recLink("Lists", "lists", true)}
       </div>
       <div class="footer-col">
         ${link("LOC",       "loc")}
