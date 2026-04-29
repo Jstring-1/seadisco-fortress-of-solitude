@@ -733,6 +733,7 @@ window._sdToggleExcludeCd = _sdToggleExcludeCd;
 
 function _sdEnterPicksMode() {
   window._sdPicksMode = true;
+  document.body.classList.add("picks-mode");
   const flippedH2F = (() => {
     const cb = document.getElementById("f-hard2find");
     if (cb && !cb.checked) {
@@ -786,6 +787,7 @@ function _sdExitPicksMode() {
   }
   window._sdPicksMode = false;
   window._sdPicksFlipped = null;
+  document.body.classList.remove("picks-mode");
   const banner = document.getElementById("picks-banner");
   if (banner) banner.remove();
 }
@@ -807,14 +809,17 @@ function _sdMountPicksHeader() {
       <div class="picks-banner-text">
         <div class="picks-banner-title">🎵 Submitted Tracks</div>
       </div>
-      <label class="sd-filter-label">
-        Sort
-        <select id="picks-sort" class="sd-filter-select" onchange="_sdPicksSortChanged()">
-          <option value="most" selected>Most contributions</option>
-          <option value="fewest">Fewest contributions</option>
-          <option value="recent">Most recent</option>
-        </select>
-      </label>
+      <div class="picks-banner-controls">
+        <input type="search" id="picks-filter" class="sd-filter-input" placeholder="filter…" oninput="_sdHomeStripFilterChanged(this)">
+        <label class="sd-filter-label">
+          Sort
+          <select id="picks-sort" class="sd-filter-select" onchange="_sdPicksSortChanged()">
+            <option value="most" selected>Most contributions</option>
+            <option value="fewest">Fewest contributions</option>
+            <option value="recent">Most recent</option>
+          </select>
+        </label>
+      </div>
     </div>
   `;
   wrap.parentNode.insertBefore(banner, wrap);
@@ -1601,10 +1606,12 @@ async function loadRandomRecords(more) {
 
     if (titleEl) titleEl.textContent = titleText;
     // Sort/Clear only make sense in Recent mode with actual local
-    // history. Filter input stays visible across all modes.
-    const sortBtn = document.getElementById("favorites-sort");
+    // history. Filter input stays visible across all modes. Hide the
+    // entire <label> wrapper around the sort select (not just the
+    // select) so the "Sort" word doesn't sit there orphaned.
+    const sortLabel = document.querySelector('#random-records-controls .sd-filter-label');
     const clearBtn = document.getElementById("recent-clear-btn");
-    if (sortBtn) sortBtn.style.display = isSuggested ? "none" : "";
+    if (sortLabel) sortLabel.style.display = isSuggested ? "none" : "";
     if (clearBtn) clearBtn.style.display = isSuggested ? "none" : "";
 
     if (!_randomAll.length) {
