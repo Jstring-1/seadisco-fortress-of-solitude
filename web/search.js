@@ -166,9 +166,20 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
   const label     = advOpen ? document.getElementById("f-label").value.trim() : "";
   const genre     = advOpen ? document.getElementById("f-genre").value.trim() : "";
   const style     = advOpen ? (document.getElementById("f-style")?.value.trim() ?? "") : "";
-  const format    = advOpen ? document.getElementById("f-format").value : "";
+  let format      = advOpen ? document.getElementById("f-format").value : "";
   const country   = advOpen ? (document.getElementById("f-country")?.value.trim() ?? "") : "";
-  const sort      = document.getElementById("f-sort").value;
+  let sort        = document.getElementById("f-sort").value;
+  // "Hard to Find" mode — biases the query toward physical-format,
+  // pre-streaming-era masters that are likely to need YT contributions.
+  // Only fills in defaults the user hasn't explicitly set; an explicit
+  // Format / Year / Sort always wins.
+  const hard2find = !!document.getElementById("f-hard2find")?.checked;
+  let yearForSearch = year;
+  if (hard2find) {
+    if (!format) format = "Vinyl";
+    if (!yearForSearch) yearForSearch = "1900-1985";
+    if (!sort) sort = "have:asc";
+  }
   const resultType = document.querySelector('input[name="result-type"]:checked')?.value ?? "";
 
   if (resultType === "ai") { doAiSearch(q); return; }
@@ -214,12 +225,13 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
     if (q)       parts.push(q);
     if (artist)  parts.push(`Artist: ${artist}`);
     if (release) parts.push(`Release: ${release}`);
-    if (year)    parts.push(`Year: ${year}`);
+    if (yearForSearch) parts.push(`Year: ${yearForSearch}`);
     if (label)   parts.push(`Label: ${label}`);
     if (genre)   parts.push(`Genre: ${genre}`);
     if (style)   parts.push(`Style: ${style}`);
     if (format)  parts.push(`Format: ${format}`);
     if (country) parts.push(`Country: ${country}`);
+    if (hard2find) parts.push(`Hard to Find`);
     const typeLabels = { "master":"Masters", "master+":"Masters+", "release":"Releases", "artist":"Artists", "label":"Labels" };
     const typeLabel = typeLabels[resultType] ?? "";
     const sortLabels = { "year:asc":"Year ↑", "year:desc":"Year ↓", "title:asc":"Title A→Z", "title:desc":"Title Z→A", "label:asc":"Label A→Z" };
@@ -256,7 +268,7 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
     if (resultType && resultType !== "master+") p.set("type", resultType);
     if (useArtist) p.set("artist", useArtist);
     if (release) p.set("release_title", release);
-    if (year)    p.set("year",          year);
+    if (yearForSearch) p.set("year",    yearForSearch);
     if (useLabel) p.set("label",        useLabel);
     if (genre)   p.set("genre",         genre);
     if (style)   p.set("style",         style);
@@ -636,9 +648,14 @@ function renderResults(items, append = false) {
     window._lastResults = (window._lastResults || []).concat(items);
   }
   const hideOwned = document.getElementById("hide-owned")?.checked;
-  const filtered = hideOwned && window._collectionIds?.size
-    ? items.filter(item => !window._collectionIds.has(Number(item.id)))
-    : items;
+  const excludeCd = document.getElementById("f-exclude-cd")?.classList.contains("active");
+  let filtered = items;
+  if (hideOwned && window._collectionIds?.size) {
+    filtered = filtered.filter(item => !window._collectionIds.has(Number(item.id)));
+  }
+  if (excludeCd) {
+    filtered = filtered.filter(_sdItemIsNotCdMain);
+  }
   const grid = document.getElementById("results");
   const startIdx = append ? grid.querySelectorAll(".card, .card-animate").length : 0;
   const html = filtered.map((item, i) => renderCard(item, startIdx + i)).join("");
@@ -650,7 +667,110 @@ function renderResults(items, append = false) {
   // Hide favorites section when showing search results
   const ws = document.getElementById("random-records"); if (ws) ws.style.display = "none";
   if (typeof applyVisitedCards === "function") applyVisitedCards();
+  // "Hard to Find" mode — decorate cards that have no embedded YT
+  // videos with a small purple 🎵 badge so users can spot contribution
+  // opportunities. No-op when the toggle isn't on.
+  if (document.getElementById("f-hard2find")?.checked) {
+    _sdDecorateNoVideoCards(filtered);
+  }
 }
+
+// ── "Hard to Find" toggle UX ─────────────────────────────────────────
+// Show/hide the helper hint text when the toggle flips. Doesn't auto-
+// re-run the search — the user still hits the search button.
+function _sdHard2FindChanged(cb) {
+  const hint = document.getElementById("f-hard2find-hint");
+  if (hint) hint.style.display = cb.checked ? "" : "none";
+}
+window._sdHard2FindChanged = _sdHard2FindChanged;
+
+// ── "No CDs" client-side exclude ─────────────────────────────────────
+// Discogs returns each search result's `format` array reflecting that
+// master's main_release (or the release itself). If any token reads
+// like CD-family (CD, CDr, SACD, HDCD, CD-ROM, Mini-CD, DVD) we treat
+// the item as digitization-likely and exclude it. This is a heuristic
+// — a master whose main_release is CD will be excluded even if vinyl
+// pressings exist, and vinyl-main-release masters with later CD
+// reissues will slip through. Users wanting strict "no CD pressings
+// anywhere" need a per-master versions fetch; that's a future add.
+const _SD_CD_FORMAT_TOKENS = new Set([
+  "cd", "cdr", "sacd", "hdcd", "cd-rom", "mini-cd", "dvd", "dvdr",
+  "blu-ray", "blu-ray-r", "minidisc",
+]);
+function _sdItemIsNotCdMain(item) {
+  // Artist/label cards have no format — keep them.
+  if (item.type !== "release" && item.type !== "master") return true;
+  const fmt = Array.isArray(item.format) ? item.format : [];
+  for (const tok of fmt) {
+    const norm = String(tok || "").trim().toLowerCase();
+    if (_SD_CD_FORMAT_TOKENS.has(norm)) return false;
+  }
+  return true;
+}
+
+function _sdToggleExcludeCd(btn) {
+  const on = btn.classList.toggle("active");
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+  // Re-render from the cached result set so the filter takes effect
+  // without a Discogs re-query. _lastResults holds the full server
+  // response; the renderer applies the filter itself.
+  if (window._lastResults && window._lastResults.length) {
+    renderResults(window._lastResults, false);
+  }
+}
+window._sdToggleExcludeCd = _sdToggleExcludeCd;
+
+// Module-level cache of (type:id) → hasVideos so a second-page load
+// doesn't re-query items already known. null = not yet checked.
+const _sdHasVideosCache = new Map();
+
+async function _sdDecorateNoVideoCards(items) {
+  if (!Array.isArray(items) || !items.length) return;
+  // Only ask about masters/releases — artists/labels don't have videos.
+  // Skip items already in the cache (decorated on a prior page).
+  const todo = items.filter(it => {
+    if (it.type !== "master" && it.type !== "release") return false;
+    return !_sdHasVideosCache.has(`${it.type}:${it.id}`);
+  }).map(it => ({ id: Number(it.id), type: it.type }));
+  if (todo.length) {
+    try {
+      const r = await fetch("/api/has-videos", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: todo }),
+      });
+      if (r.ok) {
+        const j = await r.json();
+        for (const row of (j.results || [])) {
+          _sdHasVideosCache.set(`${row.type}:${row.id}`, row.hasVideos);
+        }
+      }
+    } catch { /* badge stays hidden — no-op */ }
+  }
+  // Apply to DOM. Find each card by data-id / data-type — but the
+  // existing card markup doesn't carry those, so we match via the
+  // onclick attribute that openModal injects (`'12345','master',`).
+  const grid = document.getElementById("results");
+  if (!grid) return;
+  for (const it of items) {
+    if (it.type !== "master" && it.type !== "release") continue;
+    const status = _sdHasVideosCache.get(`${it.type}:${it.id}`);
+    if (status !== false) continue; // null=unknown, true=has videos — skip
+    // Find the card. openModal calls embed the id in onclick — escape
+    // for attribute-selector use.
+    const sel = `a[onclick*="openModal(event,'${String(it.id)}','${it.type}'"]`;
+    const card = grid.querySelector(sel);
+    if (!card || card.querySelector(".card-needs-yt-badge")) continue;
+    const thumbWrap = card.querySelector(".card-thumb-wrap");
+    if (!thumbWrap) continue;
+    const badge = document.createElement("span");
+    badge.className = "card-needs-yt-badge";
+    badge.title = "No YouTube videos yet — open the album to suggest one";
+    badge.textContent = "🎵";
+    thumbWrap.appendChild(badge);
+  }
+}
+window._sdDecorateNoVideoCards = _sdDecorateNoVideoCards;
 
 function renderCard(item, index) {
   const url  = item.uri ? `https://www.discogs.com${item.uri}` : "#";
@@ -1198,20 +1318,41 @@ async function loadRandomRecords(more) {
     const controlsEl = document.getElementById("random-records-controls");
     let isSuggested = false;
     if (!_randomAll.length) {
+      // Anon home: prefer masters/releases that the community has
+      // contributed YT overrides to (weighted by count), so the
+      // default landing experience surfaces albums users have been
+      // actively building. Falls back to admin's favorites when no
+      // contributions exist yet (early days, or first-load before
+      // any submissions).
+      let contribFromYt = false;
       try {
-        const r = await fetch("/api/admin-favorites/sample?limit=24", { cache: "no-store" });
+        const r = await fetch("/api/contributed-favorites/sample?limit=24", { cache: "no-store" });
         if (r.ok) {
           const j = await r.json();
           if (Array.isArray(j?.items) && j.items.length) {
-            // Mark these so the dismiss × is hidden — they aren't in
-            // the user's local history and removing one from there
-            // would be a no-op.
             _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
-            if (titleEl) titleEl.textContent = "Suggested";
+            if (titleEl) titleEl.textContent = "Community picks";
             isSuggested = true;
+            contribFromYt = true;
           }
         }
-      } catch { /* fall through to empty */ }
+      } catch { /* fall through to admin-favorites */ }
+      if (!contribFromYt) {
+        try {
+          const r = await fetch("/api/admin-favorites/sample?limit=24", { cache: "no-store" });
+          if (r.ok) {
+            const j = await r.json();
+            if (Array.isArray(j?.items) && j.items.length) {
+              // Mark these so the dismiss × is hidden — they aren't in
+              // the user's local history and removing one from there
+              // would be a no-op.
+              _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
+              if (titleEl) titleEl.textContent = "Suggested";
+              isSuggested = true;
+            }
+          }
+        } catch { /* fall through to empty */ }
+      }
     } else {
       if (titleEl) titleEl.textContent = "Recent";
     }

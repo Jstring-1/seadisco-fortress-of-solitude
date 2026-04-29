@@ -65,7 +65,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260428.2021" />
+  <link rel="stylesheet" href="/style.css?v=20260428.2345" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -103,7 +103,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260428.2021"></script>
+<script defer src="/shared.js?v=20260428.2345"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -214,6 +214,29 @@
           <option value="">Any</option>
         </select>
       </label>
+    </div>
+    <!-- "Hard to Find" toggle — biases the search toward physical-format
+         pre-streaming-era masters and badges those without any embedded
+         YouTube videos so users can spot contribution opportunities.
+         When enabled, blank Format and Year fields default to Vinyl /
+         1900-1985; explicit user values are respected. -->
+    <div class="filters-hard2find" style="margin-top:0.45rem;display:flex;align-items:center;gap:0.6rem;font-size:0.78rem;color:var(--muted);flex-wrap:wrap">
+      <label style="display:inline-flex;align-items:center;gap:0.35rem;cursor:pointer">
+        <input type="checkbox" id="f-hard2find" onchange="_sdHard2FindChanged(this)" />
+        <span>Hard to find</span>
+      </label>
+      <!-- "No CDs" toggle — pure client-side filter on the format array
+           Discogs returns with each search result. Toggle re-filters the
+           cached result set without re-querying. -->
+      <button type="button" id="f-exclude-cd" class="f-exclude-cd-btn"
+              onclick="_sdToggleExcludeCd(this)"
+              title="Exclude releases whose main format is CD / SACD / CDr / DVD"
+              aria-pressed="false">
+        <span class="f-exclude-cd-glyph">💿</span>
+      </button>
+      <span id="f-hard2find-hint" style="display:none;font-size:0.72rem;color:var(--muted)">
+        Vinyl/Shellac, ≤1985, sorted by least-owned · cards with no YouTube get a 🎵
+      </span>
     </div>
   </div>
   <datalist id="country-list">
@@ -930,15 +953,15 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260428.2021"></script>
-<script defer src="/search.js?v=20260428.2021"></script>
-<script defer src="/collection.js?v=20260428.2021"></script>
-<script defer src="/account.js?v=20260428.2021"></script>
-<script defer src="/orders.js?v=20260428.2021"></script>
+<script defer src="/utils.js?v=20260428.2345"></script>
+<script defer src="/search.js?v=20260428.2345"></script>
+<script defer src="/collection.js?v=20260428.2345"></script>
+<script defer src="/account.js?v=20260428.2345"></script>
+<script defer src="/orders.js?v=20260428.2345"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260428.2021"></script>
-<script defer src="/app.js?v=20260428.2021"></script>
+<script defer src="/modal.js?v=20260428.2345"></script>
+<script defer src="/app.js?v=20260428.2345"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -947,13 +970,13 @@
      (switchView for archive/youtube; openInventoryEditor stub for
      the editor). After window.load they're idle-preloaded so a
      subsequent nav into those views is instant. -->
-<script defer src="/loc.js?v=20260428.2021"></script>
-<script defer src="/queue.js?v=20260428.2021"></script>
+<script defer src="/loc.js?v=20260428.2345"></script>
+<script defer src="/queue.js?v=20260428.2345"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260428.2021";
+  window._SD_LAZY_VERSION = "20260428.2345";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -976,8 +999,8 @@
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260428.2021"></script>
-<script defer src="/offline.js?v=20260428.2021"></script>
+<script defer src="/idb.js?v=20260428.2345"></script>
+<script defer src="/offline.js?v=20260428.2345"></script>
 
 </body>
 </html>
