@@ -684,18 +684,31 @@ function _sdHard2FindChanged(cb) {
 }
 window._sdHard2FindChanged = _sdHard2FindChanged;
 
-// ── "No CDs" client-side exclude ─────────────────────────────────────
+// ── "No CDs" client-side exclude (CD-family + digital formats) ───────
 // Discogs returns each search result's `format` array reflecting that
 // master's main_release (or the release itself). If any token reads
-// like CD-family (CD, CDr, SACD, HDCD, CD-ROM, Mini-CD, DVD) we treat
-// the item as digitization-likely and exclude it. This is a heuristic
-// — a master whose main_release is CD will be excluded even if vinyl
-// pressings exist, and vinyl-main-release masters with later CD
-// reissues will slip through. Users wanting strict "no CD pressings
-// anywhere" need a per-master versions fetch; that's a future add.
+// like CD-family OR digital (the modern equivalent of "obviously
+// digitized") we treat the item as digitization-likely and exclude
+// it. The toggle's icon is a CD with a strikethrough but the intent
+// is broader — "physical, analog-era only".
+//
+// Caveat: this is a heuristic against the search-result format array,
+// not a per-master versions fetch. A master whose main_release is
+// CD/digital will be excluded even if vinyl pressings exist, and
+// vinyl-main-release masters with later CD reissues will slip
+// through. Users wanting strict "no digital pressings anywhere" need
+// the master's full versions list — that's a future add.
 const _SD_CD_FORMAT_TOKENS = new Set([
-  "cd", "cdr", "sacd", "hdcd", "cd-rom", "mini-cd", "dvd", "dvdr",
-  "blu-ray", "blu-ray-r", "minidisc",
+  // CD family
+  "cd", "cdr", "sacd", "hdcd", "cd-rom", "mini-cd",
+  // Optical video / data
+  "dvd", "dvdr", "dvd-rom", "blu-ray", "blu-ray-r", "minidisc",
+  // Pure digital — Discogs uses "File" as the umbrella; codec names
+  // may show up in the descriptions array next to it. Catching the
+  // codec list is paranoid but the toggle's intent is "no digital".
+  "file", "digital", "streaming",
+  "mp3", "flac", "alac", "aac", "wav", "aiff", "ogg", "wma", "ape",
+  "usb", "memory stick",
 ]);
 function _sdItemIsNotCdMain(item) {
   // Artist/label cards have no format — keep them.
@@ -734,25 +747,11 @@ window._sdToggleExcludeCd = _sdToggleExcludeCd;
 function _sdEnterPicksMode() {
   window._sdPicksMode = true;
   document.body.classList.add("picks-mode");
-  const flippedH2F = (() => {
-    const cb = document.getElementById("f-hard2find");
-    if (cb && !cb.checked) {
-      cb.checked = true;
-      _sdHard2FindChanged(cb);
-      return true;
-    }
-    return false;
-  })();
-  const flippedCd = (() => {
-    const btn = document.getElementById("f-exclude-cd");
-    if (btn && !btn.classList.contains("active")) {
-      btn.classList.add("active");
-      btn.setAttribute("aria-pressed", "true");
-      return true;
-    }
-    return false;
-  })();
-  window._sdPicksFlipped = { h2f: flippedH2F, cd: flippedCd };
+  // Hard-to-find and No-CDs are NOT auto-enabled — leave both at the
+  // user's current state so opening Submitted Tracks doesn't change
+  // their search settings out from under them. Tracked-flipped state
+  // stays empty since we don't flip anything on entry.
+  window._sdPicksFlipped = { h2f: false, cd: false };
   // Open the advanced panel so users see the filters they're working
   // with — Picks mode IS about exploring the filter space.
   if (typeof toggleAdvanced === "function") {
