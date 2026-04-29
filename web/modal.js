@@ -2325,9 +2325,22 @@ function _trackYtOpenSuggest(el) {
   // alongside the existing master-scope rows (single-key cache).
   const popupRoot = el.closest("#album-info, #version-info");
   const masterId  = popupRoot?.dataset?.masterId || "";
+  // Default to master scope when a master_id is known, even from a
+  // release popup. The intent is "submissions lift to all pressings"
+  // unless the user explicitly wants this submission to apply only
+  // to a specific pressing. Track-position keys match between master
+  // and release in most simple cases ("1", "2", "3"); for vinyl
+  // ("A1", "B2") the release scope is still appropriate, so we keep
+  // the release-scope path for popups WITHOUT a master_id.
+  let submitScopeType = scopeType;
+  let submitScopeId   = scopeId;
+  if (scopeType === "release" && masterId) {
+    submitScopeType = "master";
+    submitScopeId   = masterId;
+  }
   window._sdSuggestForTrack = {
-    releaseType: scopeType,
-    releaseId:   scopeId,
+    releaseType: submitScopeType,
+    releaseId:   submitScopeId,
     masterId,
     trackPosition: trackPos,
     trackTitle,
