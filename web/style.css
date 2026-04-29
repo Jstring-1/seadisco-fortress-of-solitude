@@ -4075,12 +4075,13 @@ button.wiki-link-btn:active {
 .card img {
   width: 100%;
   aspect-ratio: 1;
-  /* contain (was cover): show the full album cover without zoom-
-     cropping. Square covers fill the box exactly; non-square sleeves
-     (7" angle photos, vintage scans, magazines, etc.) get small
-     letterbox bars that match the card surface so the full artwork
-     is visible at a glance. */
-  object-fit: contain;
+  /* cover fills the square frame — most Discogs cover_image thumbs
+     are roughly square and fill cleanly. Earlier swap to `contain`
+     was meant to fix edge-case cropping but ended up leaving big
+     letterbox bars on non-square thumbs (Discogs serves rectangular
+     images for many 45-rpm + reissue entries) which looked worse
+     than the original crop. */
+  object-fit: cover;
   background: var(--surface);
 }
 
