@@ -1738,8 +1738,8 @@ footer a.nav-rec-empty { display: none !important; }
 #favorites-sort { height: 1.6rem; font-size: 0.7rem; padding: 0 0.3rem; }
 #favorites-sample-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
 }
 .pill-strip-wrap {
   overflow: hidden;
@@ -3981,11 +3981,8 @@ button.wiki-link-btn:active {
 /* ── Unified card grid ── */
 .card-grid {
   display: grid;
-  /* 110px minmax — wide screens fit ~10–12 cards per row at typical
-     viewport widths instead of the chunky 6–7 the old 160px setting
-     produced. Mobile breakpoints below override this anyway. */
-  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
-  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
 }
 
 /* ── Recent history strip (front-page Recent cards) ── */
@@ -4078,7 +4075,12 @@ button.wiki-link-btn:active {
 .card img {
   width: 100%;
   aspect-ratio: 1;
-  object-fit: cover;
+  /* contain (was cover): show the full album cover without zoom-
+     cropping. Square covers fill the box exactly; non-square sleeves
+     (7" angle photos, vintage scans, magazines, etc.) get small
+     letterbox bars that match the card surface so the full artwork
+     is visible at a glance. */
+  object-fit: contain;
   background: var(--surface);
 }
 
