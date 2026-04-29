@@ -298,6 +298,19 @@ function switchView(view, skipPushState = false) {
       window._sdLoadModule("/archive.js").then(() => window.initArchiveView?.()).catch(() => {});
     }
   } else if (view === "youtube") {
+    // Anon users can't reach the YouTube search view — every search
+    // hits our project quota, so we restrict it to signed-in users
+    // who've at least joined the waitlist (signed-in here means a
+    // real Clerk session, not just having visited the site). Anon
+    // visitors get the sign-in modal instead, falling back to the
+    // search view if Clerk isn't available.
+    if (!window._clerk?.user) {
+      if (typeof openSignInModal === "function") openSignInModal();
+      // Land on search so they don't see a blank #youtube-view shell
+      // behind the sign-in modal.
+      switchView("search", true);
+      return;
+    }
     if (youtubeView) youtubeView.style.display = "block";
     if (mainForm) mainForm.style.display = "none";
     if (recordsWrap) recordsWrap.style.display = "none";

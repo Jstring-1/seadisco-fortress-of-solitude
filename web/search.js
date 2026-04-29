@@ -1187,6 +1187,70 @@ function _aiEntityLinks(name, kind) {
     ` <a href="#" class="wiki-icon ai-entity-icon" onclick="event.preventDefault();openWikiPopup('${escHtml(String(wikiQ).replace(/'/g, "\\'"))}')" title="Wikipedia: ${escHtml(name)}">W</a>`;
 }
 
+// Build a Set of "artist|album" normalized keys from items already
+// rendered in the user's session — primarily _lastResults (search
+// results they've seen), recents, and the home strip cards. This is
+// a coarse fingerprint, not a full library scan, but combined with
+// the server-side prompt instruction it dampens the LLM's tendency
+// to recommend things the user clearly already knows about.
+function _sdAiBuildLibraryFingerprintSet() {
+  const set = new Set();
+  const add = (item) => {
+    const key = _sdAiNormalizeItemKey(item);
+    if (key) set.add(key);
+  };
+  // Local recents (history) — already-opened albums.
+  try {
+    const hist = (typeof _readHistory === "function") ? _readHistory() : [];
+    for (const h of hist) add(h);
+  } catch {}
+  // Last search results — passive but useful signal.
+  if (Array.isArray(window._lastResults)) {
+    for (const it of window._lastResults) add(it);
+  }
+  return set;
+}
+
+// Normalize an album card item shape ({ title, ... } where title is
+// either "Artist - Album" or just the album name) to a stable key.
+function _sdAiNormalizeItemKey(item) {
+  if (!item) return "";
+  const raw = String(item.title || "");
+  const idx = raw.indexOf(" - ");
+  let artist = idx > 0 ? raw.slice(0, idx) : "";
+  let album  = idx > 0 ? raw.slice(idx + 3) : raw;
+  // Some shapes carry artist separately.
+  if (Array.isArray(item.artists) && item.artists[0]?.name) artist = item.artists[0].name;
+  return _sdAiNormalize(artist) + "|" + _sdAiNormalize(album);
+}
+
+// Same shape but for an AI recommendation { artist, album, name, type }.
+function _sdAiNormalizeRecKey(rec) {
+  if (!rec) return "";
+  const artist = rec.artist || "";
+  let album = rec.album || "";
+  if (!album && rec.name) {
+    // "Album by Artist" → split
+    const m = /^(.*?)\s+by\s+(.*)$/i.exec(rec.name);
+    if (m) album = m[1];
+    else album = rec.name;
+  }
+  return _sdAiNormalize(artist) + "|" + _sdAiNormalize(album);
+}
+
+// Lowercase, strip parens/brackets, collapse whitespace, drop
+// punctuation that varies (apostrophes, hyphens). Aggressive but
+// good enough for fuzzy fingerprinting.
+function _sdAiNormalize(s) {
+  return String(s || "")
+    .toLowerCase()
+    .replace(/\(.*?\)/g, "")
+    .replace(/\[.*?\]/g, "")
+    .replace(/[''""`.,!?\-_]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 async function doAiSearch(q) {
   if (!q) { setStatus("Enter a question or description to search with AI.", false); return; }
   // Stash the query into #query first so saveSearchHistory("main") below
@@ -1217,8 +1281,30 @@ async function doAiSearch(q) {
     const r = await apiFetch("/api/ai-search", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ q }) });
     if (r.status === 401) { setStatus("Sign in and connect your Discogs account to use AI search.", false); return; }
     if (!r.ok) { setStatus("AI search failed. Try again.", false); return; }
-    const { recommendations, blurb } = await r.json();
+    let { recommendations, blurb } = await r.json();
     if (!recommendations?.length) { setStatus("No recommendations returned.", false); return; }
+    // Belt-and-suspenders post-filter: the server-side prompt asks
+    // Claude to skip the user's library, but the LLM doesn't always
+    // obey perfectly. Drop any recommendation whose normalized
+    // "artist - album" string fuzzy-matches a known collection /
+    // wantlist title. We don't have id-based mapping for AI picks
+    // (Claude returns titles, not Discogs ids) so name match is the
+    // best we can do client-side.
+    try {
+      const seen = _sdAiBuildLibraryFingerprintSet();
+      if (seen.size) {
+        const keep = [];
+        for (const rec of recommendations) {
+          const key = _sdAiNormalizeRecKey(rec);
+          if (key && seen.has(key)) continue;
+          keep.push(rec);
+        }
+        if (keep.length !== recommendations.length) {
+          recommendations = keep;
+        }
+      }
+    } catch { /* filter is best-effort */ }
+    if (!recommendations.length) { setStatus("All recommendations were already in your library — try a different query.", false); return; }
     setStatus("");
 
     // Reflect in URL so AI results are shareable.
