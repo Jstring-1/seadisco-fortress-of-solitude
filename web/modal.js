@@ -2289,7 +2289,37 @@ function openVideo(event, url) {
     _rType = queueMeta.releaseType; _rId = String(queueMeta.releaseId);
   } else if (clickedEl?.dataset?.releaseType && clickedEl?.dataset?.releaseId) {
     _rType = clickedEl.dataset.releaseType; _rId = String(clickedEl.dataset.releaseId);
-  } else if (!window._sdFirstOpenVideoDone) {
+  } else {
+    // Auto-heal for queue rows that were saved before release-context
+    // existed: scan any currently-open album popup for a track-link
+    // whose data-video matches the URL we're loading. If found,
+    // borrow its release attrs and ALSO write them back to the queue
+    // entry's data so subsequent plays carry the info. This means
+    // "open the album modal once and play through the queue" backfills
+    // every old row in that album.
+    try {
+      const matches = document.querySelectorAll(`.track-link[data-video="${url.replace(/"/g, '\\"')}"][data-release-id]`);
+      for (const m of matches) {
+        if (m.dataset.releaseType && m.dataset.releaseId) {
+          _rType = m.dataset.releaseType;
+          _rId   = String(m.dataset.releaseId);
+          // Backfill the queue row server-side so next time we dispatch
+          // this track we don't have to scan the DOM. Fire-and-forget;
+          // failure just leaves the queue row stale (today's behaviour).
+          if (typeof window._queueBackfillReleaseInfo === "function") {
+            try {
+              window._queueBackfillReleaseInfo(id, {
+                releaseType: _rType,
+                releaseId:   _rId,
+              });
+            } catch {}
+          }
+          break;
+        }
+      }
+    } catch {}
+  }
+  if (!_rType && !_rId && !window._sdFirstOpenVideoDone) {
     // URL fallback ONLY on the very first openVideo of the page —
     // the bootstrap path where ?vp= / ?op= were set in the same
     // share-link as ?vd= and genuinely refer to the playing track.

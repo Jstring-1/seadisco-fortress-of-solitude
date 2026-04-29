@@ -1251,6 +1251,73 @@ window._queuePlayPrev = _queuePlayPrev;
 window._queueHasPlayable = _queueHasPlayable;
 window._queueOnExternalPlay = _queueOnExternalPlay;
 window._queueGetCurrentPosition = () => _queueCurrentPosition;
+
+// Backfill release context onto an existing queue row that was saved
+// before the releaseType/releaseId fields were added to the queue
+// data. Called from openVideo when it learns the release ID for an
+// already-queued track via a DOM scrape. Local _queue updates
+// instantly; server-side update is fire-and-forget — if it fails the
+// row is just stale until next time we learn the info.
+window._queueBackfillReleaseInfo = function (externalId, info) {
+  if (!externalId || !info?.releaseType || !info?.releaseId) return;
+  const extKey = String(externalId);
+  let touched = false;
+  if (Array.isArray(_queue)) {
+    for (const it of _queue) {
+      if (String(it.externalId) !== extKey) continue;
+      it.data = it.data || {};
+      // Only backfill — never overwrite richer existing data.
+      if (!it.data.releaseType) it.data.releaseType = info.releaseType;
+      if (!it.data.releaseId)   it.data.releaseId   = String(info.releaseId);
+      touched = true;
+    }
+  }
+  if (!touched) return;
+  // Persist on the server so the heal sticks across reloads. Posts
+  // a fresh "next" insert with merged data, then deletes the old
+  // row(s) — equivalent of re-adding from the popup but invisible.
+  // Caller already awaits playback start, so this background work
+  // doesn't block the user.
+  (async () => {
+    try {
+      // Find every position this externalId occupies (dedup safety).
+      const positions = (Array.isArray(_queue) ? _queue : [])
+        .filter(it => String(it.externalId) === extKey)
+        .map(it => it.position);
+      if (!positions.length) return;
+      // Reuse the row's other fields so the rewrite is faithful.
+      const sample = _queue.find(it => String(it.externalId) === extKey);
+      if (!sample) return;
+      const payload = {
+        items: [{
+          source:     sample.source,
+          externalId: extKey,
+          data:       sample.data,
+        }],
+        mode: "append",
+      };
+      const r = await apiFetch("/api/user/play-queue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      if (!r.ok) return;
+      // Drop the stale row(s); the new append carries the release info.
+      for (const p of positions) {
+        _queuePendingDeletePositions.add(p);
+        apiFetch("/api/user/play-queue", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ position: p }),
+        }).then(rr => {
+          if (rr.ok) _queuePendingDeletePositions.delete(p);
+        }).catch(() => {});
+      }
+    } catch (e) {
+      console.warn("[queue] backfill failed:", e);
+    }
+  })();
+};
 // Stop button on the media bar uses this to "forget" what was playing
 // without clearing the queue itself. Re-renders so the now-playing
 // row indicator clears immediately, and re-runs the idle-bar logic so
