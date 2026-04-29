@@ -1605,13 +1605,13 @@ async function loadRandomRecords(more) {
     }
 
     if (titleEl) titleEl.textContent = titleText;
-    // Sort/Clear only make sense in Recent mode with actual local
-    // history. Filter input stays visible across all modes. Hide the
-    // entire <label> wrapper around the sort select (not just the
-    // select) so the "Sort" word doesn't sit there orphaned.
+    // Filter + Sort are available in both Recent and Suggestions
+    // modes — same control set so the toggle feels symmetric. Clear
+    // is Recent-only (it wipes local history; meaningless against a
+    // server-generated suggestions feed).
     const sortLabel = document.querySelector('#random-records-controls .sd-filter-label');
     const clearBtn = document.getElementById("recent-clear-btn");
-    if (sortLabel) sortLabel.style.display = isSuggested ? "none" : "";
+    if (sortLabel) sortLabel.style.display = "";
     if (clearBtn) clearBtn.style.display = isSuggested ? "none" : "";
 
     if (!_randomAll.length) {
