@@ -61,8 +61,11 @@ async function _ensureAdminFlag() {
   } else if (rawView === "info" || rawView === "privacy" || rawView === "terms") {
     switchView(rawView, true);
   } else if (rawView === "wiki" || rawView === "loc" || rawView === "archive" || rawView === "youtube") {
-    // Wiki / LOC / Archive / YouTube are public to anonymous users
-    // (server endpoints rate-limit per IP). Just enter the view.
+    // Companion views (Wikipedia / LOC / Archive / YouTube) are now
+    // signed-in only. Anon visitors hitting these URLs go through
+    // switchView's _sdGateSignedInView gate, which pops the sign-in
+    // modal and falls back to the search splash.
+    await authReadyPromise;
     switchView(rawView, true);
   } else if (rawView === "picks") {
     // Legacy /?v=picks bookmark — Submitted Tracks moved into the

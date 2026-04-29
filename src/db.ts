@@ -3832,6 +3832,45 @@ export async function getVideoStatusBatch(
   });
 }
 
+// Albums the CURRENT user has personally submitted YouTube overrides
+// for. Distinct by (release_id, release_type), joined with the
+// release_cache snapshot so we can render cards without further
+// Discogs round-trips. Used by the "Submitted" home-strip tab so
+// each signed-in user sees their own contribution history rather
+// than the global community feed.
+export async function getUserSubmittedAlbums(
+  clerkUserId: string,
+  limit = 96
+): Promise<any[]> {
+  try {
+    const r = await getPool().query(
+      `WITH counts AS (
+         SELECT release_id, release_type,
+                COUNT(*)::int     AS n,
+                MIN(submitted_at) AS first_at,
+                MAX(submitted_at) AS last_at
+           FROM track_youtube_overrides
+          WHERE submitted_by = $1
+          GROUP BY release_id, release_type
+       )
+       SELECT c.release_id     AS id,
+              c.release_type   AS type,
+              c.n              AS contribution_count,
+              c.first_at       AS first_contributed_at,
+              c.last_at        AS last_contributed_at,
+              rc.data          AS data
+         FROM counts c
+         LEFT JOIN release_cache rc
+           ON rc.discogs_id = c.release_id::int
+          AND rc.type       = c.release_type
+        ORDER BY c.last_at DESC
+        LIMIT $2`,
+      [clerkUserId, Math.max(1, Math.min(500, limit))]
+    );
+    return r.rows;
+  } catch { return []; }
+}
+
 // Pull masters/releases that have at least one crowd-sourced YouTube
 // override, joined with release_cache so each row carries the card
 // snapshot the home strip needs (orphan rows are skipped). Order is

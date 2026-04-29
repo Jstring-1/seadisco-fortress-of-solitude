@@ -174,6 +174,20 @@ function showRecordSignIn(_rtab) {
 
 // toggleMobileNav — now in shared.js
 
+// Anon visitors hit the sign-in modal + fall through to the search
+// view (which itself shows the waitlist splash) when they try to
+// reach a signed-in-only view. Returns false if the gate caught
+// the caller (the branch should `return`); true if the user is
+// signed in and the view should render normally.
+function _sdGateSignedInView() {
+  if (window._clerk?.user) return true;
+  if (typeof openSignInModal === "function") openSignInModal();
+  // Bail back to /?v=search so the modal sits over the splash, not
+  // a blank shell of the gated view.
+  switchView("search", true);
+  return false;
+}
+
 function switchView(view, skipPushState = false) {
   document.getElementById("main-nav-tabs")?.classList.remove("mobile-open");
   saveFilterState();
@@ -203,7 +217,7 @@ function switchView(view, skipPushState = false) {
     // archive saved-tabs; `li`/`lp` LOC popup ids; `nocache`) so a click
     // from LOC's saved tab over to Wikipedia doesn't carry the stale
     // tab=saved param into the new view.
-    const VIEW_LOCAL_PARAMS = ["tab", "li", "lp", "nocache"];
+    const VIEW_LOCAL_PARAMS = ["tab", "li", "lp", "nocache", "strip"];
     const qs = new URLSearchParams(location.search);
     VIEW_LOCAL_PARAMS.forEach(k => qs.delete(k));
     if (view === "records") {
@@ -280,12 +294,14 @@ function switchView(view, skipPushState = false) {
     if (wantedWrap) wantedWrap.style.display = "none";
     if (typeof initAccountView === "function") initAccountView();
   } else if (view === "loc") {
+    if (!_sdGateSignedInView()) return;
     if (locView) locView.style.display = "block";
     if (mainForm) mainForm.style.display = "none";
     if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
     if (typeof initLocView === "function") initLocView();
   } else if (view === "archive") {
+    if (!_sdGateSignedInView()) return;
     const archView = document.getElementById("archive-view");
     if (archView) archView.style.display = "block";
     if (mainForm) mainForm.style.display = "none";
@@ -298,19 +314,7 @@ function switchView(view, skipPushState = false) {
       window._sdLoadModule("/archive.js").then(() => window.initArchiveView?.()).catch(() => {});
     }
   } else if (view === "youtube") {
-    // Anon users can't reach the YouTube search view — every search
-    // hits our project quota, so we restrict it to signed-in users
-    // who've at least joined the waitlist (signed-in here means a
-    // real Clerk session, not just having visited the site). Anon
-    // visitors get the sign-in modal instead, falling back to the
-    // search view if Clerk isn't available.
-    if (!window._clerk?.user) {
-      if (typeof openSignInModal === "function") openSignInModal();
-      // Land on search so they don't see a blank #youtube-view shell
-      // behind the sign-in modal.
-      switchView("search", true);
-      return;
-    }
+    if (!_sdGateSignedInView()) return;
     if (youtubeView) youtubeView.style.display = "block";
     if (mainForm) mainForm.style.display = "none";
     if (recordsWrap) recordsWrap.style.display = "none";
@@ -320,6 +324,7 @@ function switchView(view, skipPushState = false) {
       window._sdLoadModule("/youtube.js").then(() => window.initYoutubeView?.()).catch(() => {});
     }
   } else if (view === "wiki") {
+    if (!_sdGateSignedInView()) return;
     if (wikiView) wikiView.style.display = "block";
     if (mainForm) mainForm.style.display = "none";
     if (recordsWrap) recordsWrap.style.display = "none";
