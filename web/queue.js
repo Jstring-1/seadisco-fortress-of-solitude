@@ -733,8 +733,14 @@ async function _renderQueueDrawer() {
     // fallback for the brief window between an optimistic insert and
     // the server reconcile (otherwise URL-based playback at boot
     // would leave the indicator off until the POST round-trips).
-    const isPlaying  = (it.position === _queueCurrentPosition)
-      || (_queuePlayingExternalId && String(it.externalId) === _queuePlayingExternalId);
+    // externalId is the single source of truth — _queueCurrentPosition
+    // can drift out of sync during optimistic-insert reconcile or
+    // reorder PATCHes and was lighting up an extra row that didn't
+    // actually correspond to the playing track. Position match is a
+    // fallback ONLY when externalId is unknown (null/empty).
+    const isPlaying = _queuePlayingExternalId
+      ? String(it.externalId) === String(_queuePlayingExternalId)
+      : (it.position === _queueCurrentPosition);
     // Source badge (small colored dot in the thumb corner) tells LOC
     // vs YT apart at a glance; the row's `now playing` mark is a
     // separate visual on top.
