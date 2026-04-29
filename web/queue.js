@@ -873,9 +873,14 @@ async function _bindSortable() {
           _queue = null;
           _renderQueueDrawer();
         });
-        // Refresh the rendered drawer so positions in onclick handlers
-        // line up with the new local _queue. Cheap — just a re-paint
-        // off the cached array.
+        // Re-render the drawer so each row's data-position attribute
+        // matches the freshly re-stamped _queue positions. Without
+        // this, the FIRST drag works (DOM data-positions match the
+        // server), but subsequent drags read stale data-position
+        // values and the byPos lookup above maps them through the new
+        // _queue positions, scrambling the order. Cheap — just a
+        // re-paint off the cached array.
+        _renderQueueDrawer();
         _refreshPlayerNavButtons();
       },
     });
