@@ -375,10 +375,16 @@ function _applySplashVisibility(clerk) {
   const form      = document.getElementById("main-search-form");
   const anonSplash = document.getElementById("anon-splash");
   const stripWrap  = document.getElementById("random-records");
+  const resultsEl  = document.getElementById("results");
   const signedIn = !!clerk?.user;
   if (splash) splash.style.display = "none"; // legacy splash, never used now
-  if (form)   form.style.display   = "";
-  // Anon visitors: show the waitlist pitch in place of the home strip.
+  // Anon visitors: hide the search bar entirely since the server's
+  // /search endpoint requires auth (anon submits would just 401).
+  // The waitlist splash takes their place. Signed-in users get the
+  // search bar back. Results grid hidden for anon too so any stale
+  // restored-state cards don't peek through.
+  if (form)       form.style.display      = signedIn ? ""     : "none";
+  if (resultsEl)  resultsEl.style.display = signedIn ? ""     : "none";
   if (anonSplash) anonSplash.style.display = signedIn ? "none" : "";
   if (stripWrap)  stripWrap.style.display  = signedIn ? ""     : "none";
 }
