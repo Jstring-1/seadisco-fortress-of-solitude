@@ -1545,7 +1545,10 @@ async function loadRandomRecords(more) {
       _randomAll = [];
       if (window._clerk?.user) {
         try {
-          const r = await apiFetch("/api/user/personal-suggestions?limit=48");
+          // Fetch the full saved batch (cap 1000) — the strip pages
+          // through it client-side via Load More so dismissing many
+          // doesn't leave the user empty-handed.
+          const r = await apiFetch("/api/user/personal-suggestions?limit=1000");
           if (r.ok) {
             const j = await r.json();
             if (Array.isArray(j?.items) && j.items.length) {
