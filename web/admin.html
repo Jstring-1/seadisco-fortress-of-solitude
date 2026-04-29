@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260428.2245" />
+  <link rel="stylesheet" href="/style.css?v=20260428.2305" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260428.2245"></script>
-<script defer src="/shared.js?v=20260428.2245"></script>
+<script defer src="/utils.js?v=20260428.2305"></script>
+<script defer src="/shared.js?v=20260428.2305"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ hideRecords: true, iconNav: true }));</script>
 
 <main>
@@ -115,7 +115,8 @@
       <div class="admin-tab-panel" id="panel-db-stats" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
           <h2 style="margin:0">Database</h2>
-          <button class="admin-refresh-btn" onclick="loadDbStats()" title="Refresh">&#8635;</button>
+          <button class="admin-refresh-btn" id="db-stats-refresh-btn" onclick="loadDbStats(this)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <span id="db-stats-refresh-status" class="admin-refresh-status"></span>
         </div>
         <div id="db-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
         <!-- Flat all-tables view (toggle to expand). The grouped view
@@ -302,7 +303,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260428.2245"></script>
+<script defer src="/modal.js?v=20260428.2305"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -629,11 +630,34 @@ async function adminRefreshArchive(btn) {
   }
 }
 
-async function loadDbStats() {
+async function loadDbStats(triggerBtn) {
   const el = document.getElementById("db-stats");
+  // Visual refresh feedback: spin the icon, disable the button, show
+  // a status string. The trigger arg is the clicked button (the panel
+  // auto-load case calls this without an arg, so we fall back to the
+  // known id).
+  const btn = triggerBtn || document.getElementById("db-stats-refresh-btn");
+  const statusEl = document.getElementById("db-stats-refresh-status");
+  if (btn) {
+    btn.classList.add("is-refreshing");
+    btn.classList.remove("just-refreshed");
+    btn.disabled = true;
+  }
+  if (statusEl) {
+    statusEl.textContent = "Refreshing…";
+    statusEl.classList.remove("is-success", "is-error");
+  }
+  const t0 = performance.now();
   try {
     const r = await apiFetch("/api/admin/db-stats");
-    if (!r.ok) { el.textContent = "Could not load DB stats."; return; }
+    if (!r.ok) {
+      el.textContent = "Could not load DB stats.";
+      if (statusEl) {
+        statusEl.textContent = `Failed (${r.status})`;
+        statusEl.classList.add("is-error");
+      }
+      return;
+    }
     const { tables, totalRows } = await r.json();
 
     const groups = [
@@ -693,8 +717,32 @@ async function loadDbStats() {
         }).join("") +
         `</div>`;
     }
-  } catch {
+    // Success indicator: brief green flash + "Refreshed at HH:MM:SS"
+    // status that fades to muted after a few seconds.
+    if (statusEl) {
+      const elapsed = Math.round(performance.now() - t0);
+      const time = new Date().toLocaleTimeString();
+      statusEl.textContent = `Refreshed at ${time} · ${elapsed}ms`;
+      statusEl.classList.add("is-success");
+      setTimeout(() => {
+        statusEl.classList.remove("is-success");
+      }, 2500);
+    }
+    if (btn) {
+      btn.classList.add("just-refreshed");
+      setTimeout(() => btn.classList.remove("just-refreshed"), 1200);
+    }
+  } catch (e) {
     el.textContent = "Could not load DB stats.";
+    if (statusEl) {
+      statusEl.textContent = "Failed: " + (e?.message || e);
+      statusEl.classList.add("is-error");
+    }
+  } finally {
+    if (btn) {
+      btn.classList.remove("is-refreshing");
+      btn.disabled = false;
+    }
   }
 }
 
