@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserTasteTuples, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getUserTasteTuples, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 
 
@@ -3902,7 +3902,15 @@ app.use("/api/admin", (req, res, next) => {
 // so caching is essential for any meaningful traffic.
 const _youtubeApiKey = process.env.YOUTUBE_API_KEY ?? "";
 const _ytSearchCache = new Map<string, { ts: number; body: any }>();
-const _YT_SEARCH_TTL_MS = 24 * 60 * 60 * 1000;
+// 7 days. Bumped from 24h: the per-track / per-album searches we run
+// are deterministic for a given (artist, track, album) tuple — the
+// videos themselves don't change underneath us in less than a week,
+// and a cached miss-then-replay is much cheaper than spending 100
+// units on the same query a day later. Stale results are still
+// invalidated when the user reports a video unavailable (the
+// /api/youtube/report-unavailable path drops broken videos from the
+// global override filter regardless of cache freshness).
+const _YT_SEARCH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const _YT_SEARCH_CACHE_MAX = 500;
 function _ytCacheGet(key: string): any | null {
   const entry = _ytSearchCache.get(key);
@@ -3934,7 +3942,12 @@ app.get("/api/youtube/search", async (req, res) => {
     return;
   }
   const pageToken = String(req.query?.pageToken ?? "").trim().slice(0, 200);
-  const cacheKey = `${q}|${pageToken}`;
+  // Normalize the cache key so trivial differences (case, leading/
+  // trailing whitespace, repeated spaces) hit the same cache row.
+  // The actual call to YouTube uses the original `q` so result quality
+  // isn't affected — only the cache lookup is normalized.
+  const normQ = q.toLowerCase().replace(/\s+/g, " ").trim();
+  const cacheKey = `${normQ}|${pageToken}`;
   // Two-tier cache: in-memory (fast, but wiped on every Railway
   // restart) backed by the DB row (survives deploys). Hot queries
   // stay in RAM; cold queries that are still within 24h hit the DB
@@ -4229,6 +4242,53 @@ app.get("/api/contributed-favorites/sample", async (req, res) => {
   ranked.sort((a, b) => a.key - b.key);
   const sample = ranked.slice(0, limit).map(x => x.it);
   res.json({ items: sample });
+});
+
+// GET /api/user/my-submitted-albums — albums the CURRENT user has
+// personally submitted YouTube overrides for, distinct by master/
+// release. Drives the "Submitted" home-strip tab so each signed-in
+// user sees their own contribution history rather than the global
+// community feed. Card-shaped data is pulled from release_cache —
+// rows where the cache has been pruned still appear with whatever
+// metadata is available so the user can navigate back to them.
+app.get("/api/user/my-submitted-albums", async (req, res) => {
+  const userId = await requireUser(req, res);
+  if (!userId) return;
+  try {
+    const limit = Math.max(1, Math.min(500, parseInt(String(req.query.limit ?? "96"), 10) || 96));
+    const rows = await getUserSubmittedAlbums(userId, limit);
+    const items = rows.map((row: any) => {
+      const d = row.data ?? {};
+      const isMaster = row.type === "master";
+      const artistList = Array.isArray(d.artists) ? d.artists.map((a: any) => a.name).filter(Boolean) : [];
+      const cover = (Array.isArray(d.images) && d.images[0]?.uri) ? d.images[0].uri : (d.cover_image ?? "");
+      const composed = artistList.length && d.title
+        ? `${artistList.join(", ")} - ${d.title}`
+        : (d.title ?? `${row.type} ${row.id}`);
+      return {
+        id: row.id,
+        type: row.type,
+        title: composed,
+        year:  d.year ?? "",
+        country: d.country ?? "",
+        cover_image: cover,
+        thumb:       cover,
+        format: (Array.isArray(d.formats) ? d.formats.map((f: any) => f.name).filter(Boolean) : []),
+        label:  (Array.isArray(d.labels)  ? d.labels.map((l: any) => l.name).filter(Boolean)  : []),
+        genre:  Array.isArray(d.genres) ? d.genres : [],
+        style:  Array.isArray(d.styles) ? d.styles : [],
+        master_id: d.master_id ?? (isMaster ? row.id : null),
+        uri: d.uri ?? `/${row.type}/${row.id}`,
+        _contributionCount: row.contribution_count,
+        _firstContributedAt: row.first_contributed_at,
+        _lastContributedAt:  row.last_contributed_at,
+      };
+    });
+    res.json({ items });
+  } catch (e: any) {
+    console.error("[/api/user/my-submitted-albums]", e?.message ?? e);
+    res.json({ items: [] });
+  }
 });
 
 // ── Personal suggestions (background-generated per-user feed) ────────

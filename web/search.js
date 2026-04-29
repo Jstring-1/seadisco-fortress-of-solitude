@@ -735,14 +735,20 @@ window._sdToggleExcludeCd = _sdToggleExcludeCd;
 
 // ── Home strip Recent / Suggestions / Submitted toggle ────────────────
 //
-// Defaults to "recent" on every page load — we deliberately do NOT
-// persist the choice across sessions. Cross-session persistence
-// caused the visual / data mismatch where the markup had Recent
-// active (from the static class on the span) while the data feed
-// was Suggestions or Submitted because localStorage said so.
-// Within a session the mode is held in window._sdHomeStripMode and
-// updated by _sdSwitchHomeStripTab when the user clicks a tab.
-window._sdHomeStripMode = "recent";
+// Defaults to "recent" on every fresh page load. Optionally honours
+// a ?strip=suggestions or ?strip=submitted URL param so links can
+// deep-link into a specific tab. Click handlers replaceState (no
+// new history entry) the URL so the address bar stays in sync with
+// what the user sees. We deliberately do NOT persist across
+// sessions — only this URL handshake.
+function _sdInitialHomeStripMode() {
+  try {
+    const v = new URLSearchParams(location.search).get("strip");
+    if (v === "suggestions" || v === "submitted") return v;
+  } catch {}
+  return "recent";
+}
+window._sdHomeStripMode = _sdInitialHomeStripMode();
 window._sdHomeStripFilter = "";
 
 // Force every tab's class + inline color to match the current mode.
@@ -763,6 +769,17 @@ function _sdSyncHomeStripTabsVisual() {
 }
 window._sdSyncHomeStripTabsVisual = _sdSyncHomeStripTabsVisual;
 
+// On page boot, sync the visual tab state once the DOM is ready so
+// the static markup (Recent active by default) matches whatever
+// mode was selected via ?strip=. Idempotent.
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => _sdSyncHomeStripTabsVisual());
+  } else {
+    setTimeout(_sdSyncHomeStripTabsVisual, 0);
+  }
+}
+
 function _sdSwitchHomeStripTab(mode) {
   const m = mode === "suggestions" ? "suggestions"
           : mode === "submitted"   ? "submitted"
@@ -776,10 +793,25 @@ function _sdSwitchHomeStripTab(mode) {
   }
   window._sdHomeStripMode = m;
   _sdSyncHomeStripTabsVisual();
+  _sdReflectHomeStripModeInUrl(m);
   // Reload strip from the appropriate source.
   loadRandomRecords(false);
 }
 window._sdSwitchHomeStripTab = _sdSwitchHomeStripTab;
+
+// Mirror the active strip tab in the URL via replaceState so the
+// browser address bar matches what the user sees AND a copied URL
+// re-opens the same tab. replaceState (not pushState) so back-button
+// doesn't walk through tab clicks — only meaningful navigation.
+// Default tab "recent" drops the param entirely to keep URLs clean.
+function _sdReflectHomeStripModeInUrl(mode) {
+  try {
+    const u = new URL(location.href);
+    if (mode === "recent") u.searchParams.delete("strip");
+    else u.searchParams.set("strip", mode);
+    history.replaceState(history.state, "", u.toString());
+  } catch {}
+}
 
 // Filter input on the strip — applies to whatever's currently
 // displayed (recent / suggestions / submitted tracks). Pure
@@ -1530,23 +1562,22 @@ async function loadRandomRecords(more) {
     let titleText = "Recent";
 
     if (window._sdHomeStripMode === "submitted") {
-      // ── Submitted (community YT contributions, global feed) ─────
-      // Pulls /api/contributed-favorites/sample sorted by Most. The
-      // tab replaces the standalone "Submitted Tracks" page that
-      // used to live at /?v=picks.
+      // ── Submitted (the SIGNED-IN user's own contributions) ──────
+      // Distinct list of albums the current user has submitted YT
+      // overrides for. Empty for users who haven't contributed yet —
+      // placeholder text below points them at the contribution path.
       _randomAll = [];
-      try {
-        const r = await fetch(
-          "/api/contributed-favorites/sample?limit=48&order=most",
-          { cache: "no-store" }
-        );
-        if (r.ok) {
-          const j = await r.json();
-          if (Array.isArray(j?.items) && j.items.length) {
-            _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
+      if (window._clerk?.user) {
+        try {
+          const r = await apiFetch("/api/user/my-submitted-albums?limit=200");
+          if (r.ok) {
+            const j = await r.json();
+            if (Array.isArray(j?.items) && j.items.length) {
+              _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
+            }
           }
-        }
-      } catch { /* leave empty — placeholder below */ }
+        } catch { /* leave empty — placeholder below */ }
+      }
       titleText = "Submitted";
       isSuggested = true;
     } else if (window._sdHomeStripMode === "suggestions") {
@@ -1630,7 +1661,7 @@ async function loadRandomRecords(more) {
     if (!_randomAll.length) {
       if (window._sdHomeStripMode === "submitted") {
         wrap.style.display = "";
-        grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:0.85rem;padding:2rem 1rem">No community submissions yet — open any album and use the 🎵 affordance on a track Discogs missed to be the first to contribute.</div>`;
+        grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:0.85rem;padding:2rem 1rem">You haven't submitted any tracks yet. Open any album that has missing YouTube videos and click the <span style="color:#c084fc">🎵 N missing</span> link in the tracklist heading to contribute. Your submissions will appear here.</div>`;
         return;
       }
       if (window._sdHomeStripMode === "suggestions") {
