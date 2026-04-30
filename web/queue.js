@@ -57,6 +57,17 @@ let _queueRepeat = (() => {
 let _repeatHistory = [];
 let _repeatRefillInFlight = false;
 
+// ── Consume-on-play state ───────────────────────────────────────────
+// When ON, every track that finishes playing (or is replaced when the
+// user jumps to another row) is removed from the queue. Equivalent of
+// MPD's "consume" mode — useful for working through a one-shot listen
+// list without having to clear it manually after. Persisted in
+// localStorage so the user's preference survives reloads.
+const _CONSUME_KEY = "sd_queue_consume_on_play";
+let _queueConsumeOnPlay = (() => {
+  try { return localStorage.getItem(_CONSUME_KEY) === "1"; } catch { return false; }
+})();
+
 // Position of the item currently playing FROM THE QUEUE (or null if the
 // active playback didn't start from the queue, e.g. user clicked ▶ on
 // an album track directly). Used to:
@@ -345,6 +356,15 @@ async function _queuePlayItem(entry) {
     releaseType: entry.data?.releaseType || "(missing)",
     releaseId:   entry.data?.releaseId   || "(missing)",
   });
+  // Consume-on-play: capture the prior playing position BEFORE we
+  // overwrite _queueCurrentPosition so we can drop the just-finished
+  // (or just-replaced) row from the server queue. We delete after the
+  // engine dispatch fires so the new track is locked in as playing
+  // before the old row vanishes — keeps the play-marker stable across
+  // the swap and avoids the "playing row removed → auto-advance fired
+  // and restarted from head" race that bit us in queueRemove earlier.
+  const _consumePriorPos = _queueConsumeOnPlay ? _queueCurrentPosition : null;
+  const _consumePriorExt = _queueConsumeOnPlay ? _queuePlayingExternalId : null;
   const playItem = entry.source === "loc"
     ? {
         id:           entry.externalId,
@@ -390,6 +410,38 @@ async function _queuePlayItem(entry) {
   }
   _queueCurrentPosition = entry.position;
   _queuePlayingExternalId = entry.externalId ?? null;
+  // Consume-on-play: drop the row we just left behind. Skip when:
+  //  - prior position is null/undefined (nothing to consume),
+  //  - prior position equals the new entry (same track — replay),
+  //  - prior is a synthetic fractional optimistic-insert position
+  //    (server has no row at that index; the eventual reconcile
+  //    will resolve it once the POST lands).
+  if (
+    _consumePriorPos != null &&
+    _consumePriorPos !== entry.position &&
+    Number.isInteger(_consumePriorPos) &&
+    String(_consumePriorExt || "") !== String(entry.externalId || "")
+  ) {
+    // Drop from the local cache + server. Don't go through queueRemove
+    // because that has its own auto-advance logic for "you removed the
+    // playing row" — but we've ALREADY advanced (the new track is the
+    // playing row now). Direct path:
+    if (Array.isArray(_queue)) {
+      _queue = _queue.filter(it => it.position !== _consumePriorPos);
+    }
+    _queuePendingDeletePositions.add(_consumePriorPos);
+    apiFetch("/api/user/play-queue", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ position: _consumePriorPos }),
+    }).then(r => {
+      if (!r.ok) console.warn("[queue] consume DELETE failed:", r.status);
+      _queuePendingDeletePositions.delete(_consumePriorPos);
+    }).catch(e => {
+      console.warn("[queue] consume DELETE threw:", e);
+      _queuePendingDeletePositions.delete(_consumePriorPos);
+    });
+  }
   if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
   _refreshPlayerNavButtons();
   return true;
@@ -627,6 +679,25 @@ function _queueCycleRepeat() {
 
 function _queueGetRepeat() { return _queueRepeat; }
 
+// ── Consume-on-play toggle ──────────────────────────────────────────
+function _queueToggleConsume() {
+  _queueConsumeOnPlay = !_queueConsumeOnPlay;
+  try { localStorage.setItem(_CONSUME_KEY, _queueConsumeOnPlay ? "1" : "0"); } catch {}
+  _renderConsumeBtn();
+  if (typeof showToast === "function") {
+    showToast(_queueConsumeOnPlay ? "Consume on play: on" : "Consume on play: off");
+  }
+}
+function _queueGetConsume() { return _queueConsumeOnPlay; }
+function _renderConsumeBtn() {
+  const btn = _queueDrawerEl?.querySelector(".queue-drawer-consume");
+  if (!btn) return;
+  btn.classList.toggle("is-on", _queueConsumeOnPlay);
+  btn.title = _queueConsumeOnPlay
+    ? "Consume on play: ON — each played track is removed from the queue (click to disable)"
+    : "Consume on play: OFF — played tracks stay in the queue (click to enable)";
+}
+
 // Update the drawer's repeat button — distinct icon AND distinct color
 // per state. Uses monochrome glyphs (NOT emoji like 🔁/🔂) because CSS
 // `color` doesn't affect emoji rendering on most platforms — that's why
@@ -660,6 +731,7 @@ function _ensureQueueDrawer() {
       <span class="queue-drawer-title">Up Next</span>
       <span class="queue-drawer-count" id="queue-drawer-count"></span>
       <button type="button" class="queue-drawer-repeat repeat-off" onclick="_queueCycleRepeat()" title="Repeat: off (click to cycle)">→</button>
+      <button type="button" class="queue-drawer-consume" onclick="_queueToggleConsume()" title="Consume on play: OFF (click to enable)">✂</button>
       <button type="button" class="queue-drawer-clear" onclick="queueClear()" title="Clear queue">Clear</button>
       <button type="button" class="queue-drawer-close" onclick="queueToggleDrawer()" title="Close">&#9660;</button>
     </div>
@@ -668,6 +740,7 @@ function _ensureQueueDrawer() {
   document.body.appendChild(wrap);
   _queueDrawerEl = wrap;
   _renderRepeatBtn();
+  _renderConsumeBtn();
   return wrap;
 }
 
@@ -1364,6 +1437,8 @@ window._queueClearPlayingMark = () => {
 };
 window._queueGetRepeat = _queueGetRepeat;
 window._queueCycleRepeat = _queueCycleRepeat;
+window._queueGetConsume = _queueGetConsume;
+window._queueToggleConsume = _queueToggleConsume;
 window.queuePlayHead = queuePlayHead;
 window.queueAddAlbumOrPlay = queueAddAlbumOrPlay;
 window._queueRefreshIdleBar = _queueRefreshIdleBar;

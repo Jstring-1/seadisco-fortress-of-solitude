@@ -2345,7 +2345,9 @@ function _trackYtRefreshHeadingMissingCount(root) {
   });
   const link = root.querySelector(".tracklist-find-missing");
   if (!link) return;
-  if (missing < 1 || !window._clerk?.user) {
+  // Admin-only while quota is constrained — keep the link hidden for
+  // non-admins regardless of missing count.
+  if (missing < 1 || !window._clerk?.user || !window._isAdmin) {
     link.style.display = "none";
     return;
   }
@@ -2361,6 +2363,11 @@ window._trackYtRefreshHeadingMissingCount = _trackYtRefreshHeadingMissingCount;
 function _trackYtOpenSuggest(el) {
   if (!window._clerk?.user) {
     if (typeof showToast === "function") showToast("Sign in to suggest videos", "info");
+    return;
+  }
+  // Admin-only while YouTube quota is constrained.
+  if (!window._isAdmin) {
+    if (typeof showToast === "function") showToast("YouTube submissions are admin-only right now (quota request pending).", "info");
     return;
   }
   // Walk up to the popup root to find the masterId / releaseId.
@@ -2453,6 +2460,11 @@ window._trackYtOpenSuggest = _trackYtOpenSuggest;
 async function _trackYtOpenAlbumSuggest(el) {
   if (!window._clerk?.user) {
     if (typeof showToast === "function") showToast("Sign in to suggest videos", "info");
+    return;
+  }
+  // Admin-only while YouTube quota is constrained.
+  if (!window._isAdmin) {
+    if (typeof showToast === "function") showToast("YouTube submissions are admin-only right now (quota request pending).", "info");
     return;
   }
   const popupRoot = el.closest("#album-info, #version-info");
@@ -3351,7 +3363,11 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   // recounts after the override patch lands so the heading reflects
   // the true post-patch state.
   const missingCount = tracks.filter(t => t.title && !findVideo(t.title || "", t.position || "")).length;
-  const albumFindMissingLink = (missingCount >= 1 && window._clerk?.user)
+  // Admin-only while we're throttling YouTube quota — every album-mode
+  // search.list call costs 100 units and runs against the constrained
+  // 10k/day project quota. Reconsider when Google approves the
+  // increased-quota request.
+  const albumFindMissingLink = (missingCount >= 1 && window._clerk?.user && window._isAdmin)
     ? ` <a href="#" class="tracklist-find-missing" onclick="event.preventDefault();event.stopPropagation();_trackYtOpenAlbumSuggest(this);return false" title="Search YouTube once for the whole album and assign videos to all missing tracks at once">🎵 ${missingCount} missing</a>`
     : "";
   const playableMeta = playableCount

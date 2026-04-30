@@ -674,8 +674,11 @@ app.get("/api/track-yt/for-release", async (req, res) => {
 // already exists at that (releaseId, releaseType, trackPosition) — so
 // the client can treat "already taken" as a successful no-op.
 app.post("/api/track-yt/suggest", express.json({ limit: "8kb" }), async (req, res) => {
-  const userId = await getClerkUserId(req);
-  if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
+  // Admin-only while the YouTube submission flow is gated to admins
+  // (matches the client-side restriction). Reconsider when the
+  // upstream API quota request is approved.
+  const userId = await requireAdmin(req, res);
+  if (!userId) return;
   const b = req.body ?? {};
   const releaseId   = b.releaseId != null ? String(b.releaseId) : "";
   const releaseType = b.releaseType === "release" ? "release" : "master";
@@ -710,7 +713,8 @@ app.post("/api/track-yt/suggest", express.json({ limit: "8kb" }), async (req, re
 // are silently skipped. Caps batch size at 64 so a hand-edited POST
 // can't try to write a thousand rows in one go.
 app.post("/api/track-yt/suggest-batch", express.json({ limit: "64kb" }), async (req, res) => {
-  const userId = await requireUser(req, res);
+  // Admin-only — see /api/track-yt/suggest comment for context.
+  const userId = await requireAdmin(req, res);
   if (!userId) return;
   const raw = Array.isArray(req.body?.assignments) ? req.body.assignments : [];
   const items: Parameters<typeof suggestTrackYtOverridesBatch>[0] = [];
@@ -810,6 +814,38 @@ app.get("/api/admin/youtube-unavailable", async (req, res) => {
     console.error("[/api/admin/youtube-unavailable GET]", e?.message ?? e);
     res.json({ entries: [] });
   }
+});
+
+// GET /api/admin/youtube-quota — what we've spent today (best-effort,
+// in-process counter), per-user breakdown, in-flight count, and the
+// soft caps. Lets the admin see at a glance whether we're about to
+// trip the daily limit and which users (if any) are dominating.
+app.get("/api/admin/youtube-quota", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  _ytQuotaMaybeReset();
+  // Reset stale per-user entries so the breakdown reflects today only.
+  const now = Date.now();
+  const users: Array<{ userId: string; used: number; limit: number }> = [];
+  for (const [uid, entry] of _ytPerUserCounts.entries()) {
+    if (now >= entry.resetAt) { _ytPerUserCounts.delete(uid); continue; }
+    users.push({ userId: uid, used: entry.count, limit: _YT_PER_USER_DAILY_LIMIT });
+  }
+  users.sort((a, b) => b.used - a.used);
+  res.json({
+    project: {
+      usedToday: _ytQuotaUnitsToday,
+      cap: _YT_DAILY_SOFT_CAP_UNITS,
+      perCallUnits: 100,
+      resetAtIso: new Date(_ytQuotaResetAt).toISOString(),
+    },
+    cache: {
+      memEntries: _ytSearchCache.size,
+      memMax: _YT_SEARCH_CACHE_MAX,
+      inflight: _ytInflight.size,
+      ttlDays: _YT_SEARCH_TTL_MS / (24 * 60 * 60 * 1000),
+    },
+    users,
+  });
 });
 
 // DELETE /api/admin/youtube-unavailable/:videoId — admin clears a
@@ -3902,6 +3938,65 @@ app.use("/api/admin", (req, res, next) => {
 // so caching is essential for any meaningful traffic.
 const _youtubeApiKey = process.env.YOUTUBE_API_KEY ?? "";
 const _ytSearchCache = new Map<string, { ts: number; body: any }>();
+
+// In-flight coalescing: when two callers fire the SAME cache key while
+// the first request is still in flight (cache miss → upstream Google
+// call), the second call should wait for the first and reuse its body
+// instead of paying another 100 units for a duplicate query. Common
+// triggers: a user mashes the 🎵 button, two tabs open the same album
+// popup, or the album- and per-track suggest popups happen to compose
+// the exact same q.
+const _ytInflight = new Map<string, Promise<any>>();
+
+// Approximate per-day quota tracker. We don't have read access to
+// Google's actual counter, so this is a best-effort local count of
+// the search.list calls WE made since UTC midnight. When it crosses
+// the soft cap, new (non-cached) requests get rejected before they
+// hit Google so the last few hundred units of headroom aren't burned
+// on whatever happens to land first. Reset at UTC midnight.
+let _ytQuotaUnitsToday = 0;
+let _ytQuotaResetAt = (() => {
+  const d = new Date();
+  d.setUTCHours(24, 0, 0, 0);
+  return d.getTime();
+})();
+function _ytQuotaMaybeReset() {
+  const now = Date.now();
+  if (now >= _ytQuotaResetAt) {
+    _ytQuotaUnitsToday = 0;
+    const d = new Date();
+    d.setUTCHours(24, 0, 0, 0);
+    _ytQuotaResetAt = d.getTime();
+  }
+}
+// Soft cap: refuse new search.list calls once we've spent this many
+// units in the current UTC day. Leaves a safety margin under the 10k
+// project quota for whatever else might be going on (account creation
+// quota usage, etc.).
+const _YT_DAILY_SOFT_CAP_UNITS = 9000;
+
+// Per-user daily quota: signed-in users bypass the per-IP throttle,
+// which is correct (the IP belongs to many users behind NAT). But
+// without ANY upper bound, one user opening dozens of album popups
+// can chew through the whole day's budget. Cap each signed-in user
+// to a generous-but-finite number of search.list calls per UTC day.
+const _ytPerUserCounts = new Map<string, { count: number; resetAt: number }>();
+const _YT_PER_USER_DAILY_LIMIT = 200; // 200 × 100 units = 20k units of headroom per user (effectively the project cap is the harder limit)
+function _ytUserCheckAndBump(userId: string): { ok: boolean; used: number; limit: number } {
+  const now = Date.now();
+  let entry = _ytPerUserCounts.get(userId);
+  if (!entry || now >= entry.resetAt) {
+    const d = new Date();
+    d.setUTCHours(24, 0, 0, 0);
+    entry = { count: 0, resetAt: d.getTime() };
+    _ytPerUserCounts.set(userId, entry);
+  }
+  if (entry.count >= _YT_PER_USER_DAILY_LIMIT) {
+    return { ok: false, used: entry.count, limit: _YT_PER_USER_DAILY_LIMIT };
+  }
+  entry.count += 1;
+  return { ok: true, used: entry.count, limit: _YT_PER_USER_DAILY_LIMIT };
+}
 // 7 days. Bumped from 24h: the per-track / per-album searches we run
 // are deterministic for a given (artist, track, album) tuple — the
 // videos themselves don't change underneath us in less than a week,
@@ -3934,7 +4029,12 @@ function _ytCacheSet(key: string, body: any) {
 // Returns { items: [{videoId, title, channel, channelId, publishedAt,
 // description, thumbnail}], nextPageToken }
 app.get("/api/youtube/search", async (req, res) => {
-  if (!await allowAnonRateLimited(req, res, anonYoutubeLimiter)) return;
+  // Admin-only while we're cap-constrained on the YouTube Data API.
+  // Cache hits still come from the same handler — non-admin Bearer
+  // requests are bounced before any quota-spending path runs. Any
+  // anon caller falls through to the same admin block.
+  // Reconsider when Google approves the quota-increase request.
+  if (!await requireAdmin(req, res)) return;
   const q = String(req.query?.q ?? "").trim().slice(0, 200);
   if (!q) { res.status(400).json({ error: "q required" }); return; }
   if (!_youtubeApiKey) {
@@ -3961,7 +4061,57 @@ app.get("/api/youtube/search", async (req, res) => {
     res.json(dbCached);
     return;
   }
-  try {
+  // Cache miss → about to spend 100 quota units. Apply guards.
+  // 1) Project-wide soft cap. _ytQuotaUnitsToday is best-effort but
+  //    catches the common burn pattern (lots of misses in the same
+  //    UTC day) before we get to Google's hard 403 / 429.
+  _ytQuotaMaybeReset();
+  if (_ytQuotaUnitsToday + 100 > _YT_DAILY_SOFT_CAP_UNITS) {
+    res.setHeader("X-SeaDisco-Cache", "soft-cap");
+    res.status(429).json({
+      error: "youtube_daily_soft_cap",
+      message: "YouTube search has reached its daily quota for this project. Try again after midnight UTC.",
+      usedToday: _ytQuotaUnitsToday,
+      cap: _YT_DAILY_SOFT_CAP_UNITS,
+    });
+    return;
+  }
+  // 2) Per-user daily cap (signed-in users only — anon is already
+  //    capped by the per-IP limiter at the top of this handler). Keeps
+  //    one user from chewing through everyone's headroom.
+  const userId = await getClerkUserId(req).catch(() => null);
+  if (userId) {
+    const u = _ytUserCheckAndBump(userId);
+    if (!u.ok) {
+      res.setHeader("X-SeaDisco-Cache", "user-cap");
+      res.status(429).json({
+        error: "youtube_user_daily_cap",
+        message: `Daily YouTube search limit reached (${u.used}/${u.limit}). Resets at UTC midnight.`,
+      });
+      return;
+    }
+  }
+  // 3) In-flight coalescing — if another request for THIS cache key
+  //    is already running, await its body instead of paying quota
+  //    twice. The first caller's response gets cached and the second
+  //    just reads it.
+  const inflight = _ytInflight.get(cacheKey);
+  if (inflight) {
+    try {
+      const body = await inflight;
+      res.setHeader("X-SeaDisco-Cache", "hit-inflight");
+      res.json(body);
+      return;
+    } catch (e: any) {
+      // Fall through to a fresh attempt — we don't want a single
+      // upstream failure to fail every coalesced caller.
+      console.warn("[youtube/search] coalesced upstream failed:", e?.message ?? e);
+    }
+  }
+  // Real upstream call. Track this body in _ytInflight so any
+  // duplicate request that comes in WHILE we're awaiting Google
+  // shares the result.
+  const work = (async () => {
     const params = [
       "part=snippet",
       "type=video",
@@ -3972,11 +4122,21 @@ app.get("/api/youtube/search", async (req, res) => {
     if (pageToken) params.push(`pageToken=${encodeURIComponent(pageToken)}`);
     const url = `https://www.googleapis.com/youtube/v3/search?${params.join("&")}`;
     const r = await loggedFetch("youtube", url, { context: "youtube-search" });
+    // Count units regardless of status — the failed call still spends
+    // quota unless it's a 4xx pre-check rejection by Google's gateway.
+    if (r.status !== 400 && r.status !== 401 && r.status !== 403) {
+      _ytQuotaUnitsToday += 100;
+    } else if (r.status === 403) {
+      // 403 from Google is most often quotaExceeded — count it so we
+      // proactively soft-cap until UTC midnight rather than retrying.
+      _ytQuotaUnitsToday += 100;
+    }
     if (!r.ok) {
       const errText = await r.text().catch(() => "");
-      console.warn("[youtube/search] HTTP", r.status, errText.slice(0, 200));
-      res.status(r.status >= 500 ? 502 : r.status).json({ error: `YouTube API HTTP ${r.status}` });
-      return;
+      const err: any = new Error(`youtube_http_${r.status}`);
+      err.status = r.status;
+      err.body = errText.slice(0, 200);
+      throw err;
     }
     const j: any = await r.json();
     const items = (Array.isArray(j?.items) ? j.items : [])
@@ -4004,11 +4164,25 @@ app.get("/api/youtube/search", async (req, res) => {
     // Persist to DB so the next deploy doesn't force this query to
     // pay quota again. Fire-and-forget — caller already has the body.
     setYoutubeSearchCache(cacheKey, body).catch(() => {});
+    return body;
+  })();
+  _ytInflight.set(cacheKey, work);
+  try {
+    const body = await work;
     res.setHeader("X-SeaDisco-Cache", "miss");
     res.json(body);
   } catch (e: any) {
-    console.error("[youtube/search]", e?.message ?? e);
-    res.status(500).json({ error: String(e?.message ?? e) });
+    if (e?.status) {
+      console.warn("[youtube/search] HTTP", e.status, e.body ?? "");
+      res.status(e.status >= 500 ? 502 : e.status).json({ error: `YouTube API HTTP ${e.status}` });
+    } else {
+      console.error("[youtube/search]", e?.message ?? e);
+      res.status(500).json({ error: String(e?.message ?? e) });
+    }
+  } finally {
+    // Drop the in-flight slot so future cache misses fire fresh upstream
+    // calls (the body is cached by _ytCacheSet above on success).
+    _ytInflight.delete(cacheKey);
   }
 });
 
