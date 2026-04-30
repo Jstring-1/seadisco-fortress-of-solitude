@@ -4151,14 +4151,27 @@ button.wiki-link-btn:active {
 .card-visited { opacity: 0.5; }
 .link-visited { opacity: 0.45; }
 
-/* Version-list interactive dots */
+/* Version-list interactive dots — colors match the navbar tabs:
+   collection (green), wantlist (yellow), favorites (pink), lists
+   (light blue), inventory (purple). Each dot now renders the same
+   line-art SVG the nav uses; inactive dots are dimmed but still
+   show the icon so users can see what each slot represents. */
 .mv-dots { display: inline-flex; gap: 3px; align-items: center; vertical-align: middle; }
 .mv-dot {
-  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-  background: #2a2a2a; cursor: pointer; opacity: 0.35; transition: opacity 0.15s, background 0.15s;
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 3px;
+  cursor: pointer; opacity: 0.32;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  color: #888;
 }
+.mv-dot svg { width: 14px; height: 14px; display: block; }
+.mv-dot svg path,
+.mv-dot svg circle { vector-effect: non-scaling-stroke; }
 .mv-dot.active { opacity: 1; }
-.mv-dot:hover { opacity: 0.85; }
+.mv-dot:hover  { opacity: 0.85; }
+.mv-dot.active:hover { opacity: 1; }
+/* Active colors come from inline style in JS so each dot tints to its
+   corresponding navbar color via currentColor. */
 
 /* Search history dropdown — compact so it doesn't visually swallow
    the next row of advanced-search fields. Aimed at ~4 visible rows
