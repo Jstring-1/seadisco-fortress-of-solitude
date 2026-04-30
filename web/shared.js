@@ -97,6 +97,35 @@ function setStorageJSON(key, value) {
   catch { return false; }
 }
 
+// ── Body scroll lock for popups ─────────────────────────────────────────
+// When any major popup (album modal, version overlay, lightbox, YouTube
+// popup, inventory editor, …) is open, the page underneath must NOT
+// scroll — only the popup's own content. body.modal-open already wires
+// `overflow: hidden`; the trick is to add/remove that class correctly
+// across nested popups (e.g. open YT popup ON TOP of an album popup
+// then close just the YT popup — the album popup is still open and
+// must keep the lock).
+//
+// Counter-based: every popup calls _sdLockBodyScroll(uniqueId) on open
+// and _sdUnlockBodyScroll(uniqueId) on close. The class only comes off
+// when every owner has released. Idempotent — repeat lock-by-same-id
+// is a no-op (Set semantics).
+window._sdScrollLockOwners = window._sdScrollLockOwners || new Set();
+function _sdLockBodyScroll(id) {
+  if (!id) return;
+  window._sdScrollLockOwners.add(String(id));
+  document.body.classList.add("modal-open");
+}
+function _sdUnlockBodyScroll(id) {
+  if (!id) return;
+  window._sdScrollLockOwners.delete(String(id));
+  if (window._sdScrollLockOwners.size === 0) {
+    document.body.classList.remove("modal-open");
+  }
+}
+window._sdLockBodyScroll = _sdLockBodyScroll;
+window._sdUnlockBodyScroll = _sdUnlockBodyScroll;
+
 // ── Mobile nav toggle ────────────────────────────────────────────────────
 function toggleMobileNav() {
   document.getElementById("main-nav-tabs")?.classList.toggle("mobile-open");
@@ -599,7 +628,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260430.0859";
+  const SITE_VERSION = "build 20260430.0943";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>

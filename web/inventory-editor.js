@@ -32,6 +32,7 @@ function closeInventoryEditor() {
   if (overlay) overlay.remove();
   document.removeEventListener("keydown", _invEscHandler);
   _invEditorState = null;
+  if (typeof _sdUnlockBodyScroll === "function") _sdUnlockBodyScroll("inv-editor");
 }
 
 // Snapshot the current form state. Used for dirty-state tracking so we can
@@ -163,6 +164,7 @@ async function openInventoryEditor(opts = {}) {
     </div>
   `;
   document.body.appendChild(overlay);
+  if (typeof _sdLockBodyScroll === "function") _sdLockBodyScroll("inv-editor");
 
   // Click outside to dismiss (prompts if there are unsaved changes)
   overlay.addEventListener("click", (ev) => {

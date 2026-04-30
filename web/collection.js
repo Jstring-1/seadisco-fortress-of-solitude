@@ -555,7 +555,7 @@ async function openFolderManager() {
     </div>
   `;
   document.body.appendChild(overlay);
-  document.body.classList.add("modal-open");
+  _sdLockBodyScroll("folder-manager");
   // Enter-to-create
   const nameInput = document.getElementById("fm-new-name");
   nameInput?.addEventListener("keydown", (e) => { if (e.key === "Enter") fmCreateFolder(); });
@@ -569,10 +569,7 @@ function closeFolderManager() {
   const ov = document.getElementById("folder-manager-overlay");
   if (ov) ov.remove();
   document.removeEventListener("keydown", _fmEscHandler);
-  // Only drop modal-open if the main modal isn't also open
-  if (!document.getElementById("modal-overlay")?.classList.contains("open")) {
-    document.body.classList.remove("modal-open");
-  }
+  _sdUnlockBodyScroll("folder-manager");
 }
 
 function fmStartRename(folderId) {

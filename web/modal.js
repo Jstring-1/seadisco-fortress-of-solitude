@@ -198,7 +198,7 @@ function openModal(event, id, type, discogsUrl) {
   document.getElementById("album-info").innerHTML = "";
   document.getElementById("modal-loading").style.display = "block";
   overlay.classList.add("open");
-  document.body.classList.add("modal-open");
+  _sdLockBodyScroll("modal");
 
   const cachedItem = (typeof itemCache !== 'undefined' ? itemCache.get(String(id)) : null) ?? { type, id };
   const endpoint = type === "master" ? "master" : "release";
@@ -229,10 +229,10 @@ function openModal(event, id, type, discogsUrl) {
 
 function closeModal() {
   document.getElementById("modal-overlay").classList.remove("open");
-  if (!document.getElementById("version-overlay")?.classList.contains("open") &&
-      !document.getElementById("series-overlay")?.classList.contains("open")) {
-    document.body.classList.remove("modal-open");
-  }
+  // Counter-based scroll lock — version/series/youtube/etc. popups
+  // each hold their own lock and only the last release drops the
+  // body.modal-open class. No more conditional checks needed here.
+  _sdUnlockBodyScroll("modal");
   const u = new URL(window.location.href);
   u.searchParams.delete("op");
   history.replaceState({}, "", u.toString());
@@ -299,11 +299,13 @@ function openLightbox(images, startIdx) {
   _lbIdx = startIdx ?? 0;
   _renderLightbox();
   document.getElementById("lightbox-overlay").classList.add("open");
+  _sdLockBodyScroll("lightbox");
   document.addEventListener("keydown", _lbKey);
 }
 
 function closeLightbox() {
   document.getElementById("lightbox-overlay").classList.remove("open");
+  _sdUnlockBodyScroll("lightbox");
   document.removeEventListener("keydown", _lbKey);
 }
 
@@ -371,7 +373,7 @@ async function openVersionPopup(event, releaseId) {
   info.innerHTML = "";
   loading.style.display = "block";
   overlay.classList.add("open");
-  document.body.classList.add("modal-open");
+  _sdLockBodyScroll("version");
   const u = new URL(window.location.href);
   u.searchParams.set("vr", releaseId);
   history.replaceState({}, "", u.toString());
@@ -392,10 +394,7 @@ async function openVersionPopup(event, releaseId) {
 
 function closeVersionPopup() {
   document.getElementById("version-overlay").classList.remove("open");
-  if (!document.getElementById("modal-overlay")?.classList.contains("open") &&
-      !document.getElementById("series-overlay")?.classList.contains("open")) {
-    document.body.classList.remove("modal-open");
-  }
+  _sdUnlockBodyScroll("version");
   const u = new URL(window.location.href);
   u.searchParams.delete("vr");
   history.replaceState({}, "", u.toString());
@@ -4706,7 +4705,7 @@ async function openSeriesBrowser(seriesId, seriesName) {
   info.innerHTML = "";
   loading.style.display = "block";
   overlay.classList.add("open");
-  document.body.classList.add("modal-open");
+  _sdLockBodyScroll("series");
 
   try {
     const resp = await apiFetch(`${API}/series-releases/${seriesId}`);
@@ -4751,10 +4750,7 @@ async function openSeriesBrowser(seriesId, seriesName) {
 
 function closeSeriesBrowser() {
   document.getElementById("series-overlay").classList.remove("open");
-  if (!document.getElementById("modal-overlay")?.classList.contains("open") &&
-      !document.getElementById("version-overlay")?.classList.contains("open")) {
-    document.body.classList.remove("modal-open");
-  }
+  _sdUnlockBodyScroll("series");
 }
 
 document.getElementById("series-overlay")?.addEventListener("click", e => {
