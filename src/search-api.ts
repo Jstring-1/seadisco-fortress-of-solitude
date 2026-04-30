@@ -4062,9 +4062,13 @@ async function _ytBackfillDurationsIfNeeded(cacheKey: string, body: any): Promis
   const missing = body.items.filter((it: any) => !it?.durationFormatted && it?.videoId);
   if (!missing.length) return body;
   if (!_youtubeApiKey) return body;
-  // Soft-cap respect — don't burn the last unit on a backfill.
+  // No soft-cap gate here on purpose — videos.list is 1 unit per call
+  // (regardless of how many IDs are batched), and once a body is
+  // enriched it's cached for 7 days. Skipping enrichment when the cap
+  // is high defeats the whole point: the user is left without
+  // durations for the rest of the day. The 100-unit search.list path
+  // is what the soft cap protects, not this 1-unit enrichment.
   _ytQuotaMaybeReset();
-  if (_ytQuotaUnitsToday + 1 > _YT_DAILY_SOFT_CAP_UNITS) return body;
   try {
     const ids = missing.map((it: any) => String(it.videoId)).slice(0, 50);
     if (!ids.length) return body;
