@@ -599,7 +599,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260430.0814";
+  const SITE_VERSION = "build 20260430.0830";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -719,11 +719,15 @@ function renderSharedFooter(opts) {
     terms:      "Terms of service",
   };
   // data-sd-view marks the link for the live href-sync system below.
-  const link = (label, view) => {
+  // `idAttr` is used for admin-only gated links so the post-/api/me
+  // visibility flip can find them (see the wiki/loc/archive/youtube
+  // reveal block further down).
+  const link = (label, view, idAttr) => {
     const href = _seaDiscoBuildViewHref(view);
     const tip = HINTS[view] || "";
-    if (isSPA) return `<a href="${href}" data-sd-view="${view}" title="${escHtml(tip)}" onclick="event.preventDefault();switchView('${view}');return false">${label}</a>`;
-    return `<a href="${href}" data-sd-view="${view}" title="${escHtml(tip)}">${label}</a>`;
+    const id = idAttr ? ` id="${idAttr}"` : "";
+    if (isSPA) return `<a${id} href="${href}" data-sd-view="${view}" title="${escHtml(tip)}" onclick="event.preventDefault();switchView('${view}');return false">${label}</a>`;
+    return `<a${id} href="${href}" data-sd-view="${view}" title="${escHtml(tip)}">${label}</a>`;
   };
 
   // Records-tab links: in SPA mode, route through switchView('records') with the
@@ -759,7 +763,7 @@ function renderSharedFooter(opts) {
         ${link("LOC",       "loc")}
         ${link("Wikipedia", "wiki")}
         ${link("Archive",   "archive")}
-        ${link("YouTube",   "youtube")}
+        <a id="footer-youtube-link" href="${_seaDiscoBuildViewHref("youtube")}" data-sd-view="youtube" title="${escHtml(HINTS.youtube)}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('youtube');return false"` : ""}>YouTube</a>
       </div>
       <div class="footer-col">
         ${isSPA
@@ -866,6 +870,11 @@ function renderSharedFooter(opts) {
         if (locA) locA.style.display = "";
         const archA = document.getElementById("footer-archive-link");
         if (archA) archA.style.display = "";
+        // YouTube footer link is admin-only too — temporarily, while the
+        // YouTube Data API quota is constrained. Reconsider when Google
+        // approves our increased-quota request.
+        const ytA = document.getElementById("footer-youtube-link");
+        if (ytA) ytA.style.display = "";
         // Pre-load the discogs_ids AND names already in the
         // blues_artists table so the admin "+ add to Blues DB" icon
         // (popup AND card) can hide itself for artists already in.

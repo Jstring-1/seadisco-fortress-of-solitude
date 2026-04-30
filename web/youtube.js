@@ -330,16 +330,25 @@ function _youtubeRowHtml(it) {
   if (window._sdSuggestAlbumContext) {
     const ctx = window._sdSuggestAlbumContext;
     const auto = _albumAutoMatchTrack(it.title || "", ctx.tracks || []);
-    const opts = (ctx.tracks || []).map(t => {
-      const sel = (auto && auto.position === t.position) ? " selected" : "";
-      const taken = (window._sdSuggestStaged || {})[t.position] && (window._sdSuggestStaged[t.position].videoId !== id);
-      const label = taken ? `${t.position}. ${t.title} (already staged)` : `${t.position}. ${t.title}`;
-      return `<option value="${escHtml(t.position)}"${sel}${taken ? " disabled" : ""}>${escHtml(label)}</option>`;
-    }).join("");
     const staged = (window._sdSuggestStaged || {});
     // Find which track (if any) is currently staged with THIS video.
     const stagedFor = Object.entries(staged).find(([_, v]) => v && v.videoId === id);
     const isStaged = !!stagedFor;
+    // Selection priority: (1) the staged track for this video, so the
+    // dropdown shows what was actually committed (not auto-match); (2)
+    // any pending pre-render pick the user already made on this row
+    // (preserved by _youtubeAlbumStage via window._sdSuggestSelectSnapshot
+    // before the re-render); (3) auto-match fallback.
+    const stagedPos  = stagedFor ? stagedFor[0] : "";
+    const pendingMap = window._sdSuggestSelectSnapshot || {};
+    const pendingPos = pendingMap[id] != null ? pendingMap[id] : "";
+    const wantPos = stagedPos || pendingPos || (auto ? auto.position : "");
+    const opts = (ctx.tracks || []).map(t => {
+      const sel = (wantPos && t.position === wantPos) ? " selected" : "";
+      const taken = staged[t.position] && (staged[t.position].videoId !== id);
+      const label = taken ? `${t.position}. ${t.title} (already staged)` : `${t.position}. ${t.title}`;
+      return `<option value="${escHtml(t.position)}"${sel}${taken ? " disabled" : ""}>${escHtml(label)}</option>`;
+    }).join("");
     albumAssignControl = `
       <select class="sd-filter-select album-assign-select" data-vid="${safeId}" data-vtitle="${safeTitle}" onchange="_youtubeAlbumAssignChanged(this)">
         <option value="">— skip —</option>
@@ -555,6 +564,7 @@ function closeYoutubePopup() {
   window._sdSuggestForTrack = null;
   window._sdSuggestAlbumContext = null;
   window._sdSuggestStaged = null;
+  window._sdSuggestSelectSnapshot = null;
   // Remove album footer if present.
   document.getElementById("album-suggest-footer")?.remove();
 }
@@ -633,8 +643,19 @@ function _youtubeAlbumStage(btn) {
     staged[pos] = { videoId, videoTitle, trackTitle };
   }
   // Re-render so disabled-options + staged-marks update across rows.
+  // Before we blow away the DOM, snapshot every row's current dropdown
+  // value keyed by videoId so any pending (un-staged) pick the user
+  // already made on another row survives the re-render. _youtubeRowHtml
+  // reads this snapshot and prefers it over the auto-match default.
   const resultsEl = document.getElementById("youtube-popup-results");
   if (resultsEl) {
+    const snap = {};
+    resultsEl.querySelectorAll(".yt-row").forEach(el => {
+      const vid = el.dataset.vid;
+      const sel = el.querySelector(".album-assign-select");
+      if (vid && sel) snap[vid] = sel.value || "";
+    });
+    window._sdSuggestSelectSnapshot = snap;
     // We don't have the original items array here; re-render from the
     // current DOM. Each .yt-row carries enough data attrs to rebuild
     // a row item shape.
@@ -646,6 +667,9 @@ function _youtubeAlbumStage(btn) {
       description: el.querySelector(".archive-row-desc")?.textContent || "",
     }));
     resultsEl.innerHTML = rows.map(it => _youtubeRowHtml(it)).join("");
+    // Snapshot was a one-shot bridge across this re-render — clear it
+    // so the next fresh popup open / search doesn't pick up stale picks.
+    window._sdSuggestSelectSnapshot = null;
   }
   _albumRenderFooter();
 }

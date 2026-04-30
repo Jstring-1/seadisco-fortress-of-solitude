@@ -66,6 +66,11 @@ async function _ensureAdminFlag() {
     // switchView's _sdGateSignedInView gate, which pops the sign-in
     // modal and falls back to the search splash.
     await authReadyPromise;
+    // YouTube is additionally admin-only right now (quota constraint).
+    // Wait for the admin flag before routing — without this an admin
+    // hitting /?v=youtube directly would race the /api/me probe and
+    // get bounced back to /?v=search by the gate.
+    if (rawView === "youtube") await _ensureAdminFlag();
     switchView(rawView, true);
   } else if (rawView === "picks") {
     // Legacy /?v=picks bookmark — Submitted Tracks moved into the

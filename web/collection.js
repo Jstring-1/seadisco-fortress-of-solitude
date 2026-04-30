@@ -188,6 +188,21 @@ function _sdGateSignedInView() {
   return false;
 }
 
+// Admin-only gate. Used while we're capping YouTube traffic — the
+// in-app YouTube search page (and the per-track / per-album suggest
+// flows) burn the most quota, so we restrict initiation to admin
+// until the API quota request is approved. Non-admins get bounced
+// to /?v=search with a toast. Returns true to continue, false to
+// abort the caller.
+function _sdGateAdminView() {
+  if (window._isAdmin) return true;
+  if (typeof showToast === "function") {
+    showToast("YouTube search is admin-only right now (quota request pending).", "info");
+  }
+  switchView("search", true);
+  return false;
+}
+
 function switchView(view, skipPushState = false) {
   document.getElementById("main-nav-tabs")?.classList.remove("mobile-open");
   saveFilterState();
@@ -315,6 +330,7 @@ function switchView(view, skipPushState = false) {
     }
   } else if (view === "youtube") {
     if (!_sdGateSignedInView()) return;
+    if (!_sdGateAdminView()) return;
     if (youtubeView) youtubeView.style.display = "block";
     if (mainForm) mainForm.style.display = "none";
     if (recordsWrap) recordsWrap.style.display = "none";

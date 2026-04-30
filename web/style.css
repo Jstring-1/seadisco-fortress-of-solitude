@@ -6468,7 +6468,8 @@ body.player-open .queue-drawer.open { bottom: 102px; }
 }
 .queue-drawer-clear,
 .queue-drawer-close,
-.queue-drawer-repeat {
+.queue-drawer-repeat,
+.queue-drawer-consume {
   background: none;
   border: none;
   color: #888;
@@ -6477,11 +6478,15 @@ body.player-open .queue-drawer.open { bottom: 102px; }
   border-radius: 4px;
   font-size: 0.72rem;
 }
-.queue-drawer-close  { font-size: 1.1rem; }
-.queue-drawer-repeat { font-size: 1.05rem; line-height: 1; position: relative; }
+.queue-drawer-close   { font-size: 1.1rem; }
+.queue-drawer-repeat  { font-size: 1.05rem; line-height: 1; position: relative; }
+.queue-drawer-consume { font-size: 1rem; line-height: 1; opacity: 0.7; }
+.queue-drawer-consume.is-on { color: var(--accent); opacity: 1; }
 .queue-drawer-clear:hover,
 .queue-drawer-close:hover,
-.queue-drawer-repeat:hover  { color: #fff; background: rgba(255,255,255,0.08); }
+.queue-drawer-repeat:hover,
+.queue-drawer-consume:hover { color: #fff; background: rgba(255,255,255,0.08); }
+.queue-drawer-consume.is-on:hover { color: var(--accent); }
 /* Repeat button: three distinct visuals so each state reads at a
    glance. Off uses a muted gray + linear arrow; all uses the accent
    color (blue in the default theme); one uses a warm yellow + a tiny
