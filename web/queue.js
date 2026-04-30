@@ -773,7 +773,7 @@ async function _renderQueueDrawer() {
              make room). Position captured here at render time would
              then point at a different row by the time the click fires.
              externalId is stable across position shifts. -->
-        <button class="queue-row-remove" onclick="queueRemove(null,'${escHtml(String(it.externalId)).replace(/'/g, "\\'")}')" title="Remove from queue">×</button>
+        <button class="queue-row-remove" data-ext="${escHtml(String(it.externalId))}" title="Remove from queue">×</button>
       </div>
     `;
   }).join("");
@@ -781,6 +781,34 @@ async function _renderQueueDrawer() {
   // back to the top of a long queue.
   if (prevScroll > 0) listEl.scrollTop = prevScroll;
   _bindSortable();
+  // Wire delete via event delegation on the list container instead
+  // of inline onclick on each button. The inline handler approach
+  // sometimes lost clicks when Sortable.js (with forceFallback) was
+  // capturing mousedown on the row, especially during the brief
+  // window between a re-render replacing the buttons and the user's
+  // next click landing. The container is a stable element, so a
+  // single delegated listener handles every X click reliably.
+  if (!listEl.dataset.removeBound) {
+    listEl.addEventListener("click", (ev) => {
+      const btn = ev.target.closest(".queue-row-remove");
+      if (!btn || !listEl.contains(btn)) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const ext = btn.dataset.ext;
+      if (!ext) return;
+      // Dedup: if this externalId is already pending delete, ignore
+      // the click so an accidental double-tap doesn't queue two
+      // sweeps.
+      if (_queuePendingDeleteExternalIds.has(String(ext))) return;
+      // Visually mark as deleting so a fast follow-up click on the
+      // same row gets no feedback (the row will vanish on the
+      // upcoming re-render anyway).
+      btn.disabled = true;
+      btn.style.opacity = "0.4";
+      queueRemove(null, ext);
+    });
+    listEl.dataset.removeBound = "1";
+  }
 }
 
 // Lazy-load Sortable.js from CDN the first time the drawer opens.
