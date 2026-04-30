@@ -2277,6 +2277,12 @@ function _trackYtApplyToDom(targetId, masterId, releaseId, isMaster) {
     if (ov && !hasPlay) {
       // Inject ▶ + ＋ using the override videoId.
       const url = `https://www.youtube.com/watch?v=${ov.video_id}`;
+      // The Full Album pseudo-row is rendered hidden for non-admins
+      // when no override exists at boot. If an override has now landed,
+      // reveal the row.
+      if (row.classList.contains("track-fullalbum") && row.style.display === "none") {
+        row.style.display = "";
+      }
       const titleLink = titleCell.querySelector(".track-title-link");
       const trackTitle = titleLink?.textContent || ov.track_title || "";
       // The popup root is #album-info / #version-info — there's no
@@ -3362,7 +3368,26 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   // value (cache may not be populated yet); _trackYtApplyToDom
   // recounts after the override patch lands so the heading reflects
   // the true post-patch state.
-  const missingCount = tracks.filter(t => t.title && !findVideo(t.title || "", t.position || "")).length;
+  // Full-album pseudo-track: a single video that contains the entire
+  // album. Stored as an override at position "ALBUM" via the existing
+  // track_youtube_overrides table — same flow, sentinel position.
+  // When an override exists, the row appears for everyone; when there's
+  // no override, the row appears for admins (so they can suggest one).
+  const fullAlbumOverride = _overrideMap.get("ALBUM");
+  const fullAlbumUrl = (fullAlbumOverride && fullAlbumOverride.video_id)
+    ? `https://www.youtube.com/watch?v=${fullAlbumOverride.video_id}`
+    : "";
+  // Show the full-album row whenever we have an override OR the user is
+  // admin (and signed-in non-admin gates are already in place for the
+  // album-suggest entry points). _renderFullAlbumRow is generated
+  // alongside the normal track rows below.
+  const fullAlbumRowVisible = !!fullAlbumUrl || !!window._isAdmin;
+  // Count Full Album as "missing" only when admin (so the heading
+  // "🎵 N missing" link naturally rolls in the option) AND no override
+  // exists. Non-admins don't see the album-suggest entry point at all.
+  const fullAlbumIsMissing = window._isAdmin && !fullAlbumUrl;
+  const missingCount = tracks.filter(t => t.title && !findVideo(t.title || "", t.position || "")).length
+    + (fullAlbumIsMissing ? 1 : 0);
   // Admin-only while we're throttling YouTube quota — every album-mode
   // search.list call costs 100 units and runs against the constrained
   // 10k/day project quota. Reconsider when Google approves the
@@ -3381,6 +3406,44 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         <input type="text" class="tracklist-filter" placeholder="filter tracks…" oninput="filterTracks(this)" />
       </div>
       <div class="tracklist-body"${tracklistOpen ? "" : ' style="display:none"'}>
+      ${(() => {
+        // Full Album pseudo-row. Mirrors the regular track row layout so
+        // _trackYtApplyToDom (which walks .track[data-pos] generically)
+        // patches in ▶ ＋ when an override lands. Always rendered so the
+        // override-fetch reconcile can reveal it on cold-cache boots —
+        // the row is visually hidden for non-admins without an override
+        // and unhidden by _trackYtApplyToDom once the override lands.
+        const trackArtistFA = artists.length ? artists[0] : "";
+        const entityType = isMaster ? "master" : "release";
+        const playCellFA = fullAlbumUrl
+          ? `<a class="track-play-btn track-link" href="#" data-video="${escHtml(fullAlbumUrl)}" data-track="Full album" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtistFA)}" data-release-type="${escHtml(entityType)}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="openVideo(event,'${fullAlbumUrl.replace(/'/g, "\\'")}')" title="Play the full album">▶</a>`
+          : "";
+        // data-fullalbum="1" marks this queue-add icon so queueAddAlbum
+        // (the bulk-queue scan over .queue-add-icon[data-yt-url]) skips
+        // it — the full-album video shouldn't be queued alongside per-
+        // track ones via "Play album" / "Queue album". The single ＋
+        // button on this row still works for an individual queue add.
+        const queueAddFA = fullAlbumUrl
+          ? ` <a href="#" class="queue-add-icon" data-fullalbum="1" data-yt-url="${escHtml(fullAlbumUrl)}" data-track="Full album" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtistFA)}" data-release-type="${escHtml(entityType)}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackQueueAdd(this);return false" title="Add full album to play queue">＋</a>`
+          : "";
+        const overrideBadgeFA = fullAlbumUrl
+          ? ` <span class="track-yt-override-badge" title="User-suggested full-album video">🎵</span>${
+              window._isAdmin
+                ? ` <a href="#" class="track-yt-admin-delete" data-pos="ALBUM" onclick="event.preventDefault();_trackYtAdminDelete(this);return false" title="Admin: remove this user-suggested video">✕</a>`
+                : ""
+            }`
+          : "";
+        // Hide the row by default when no override AND not admin —
+        // _trackYtApplyToDom flips this off when an override lands so
+        // non-admins on cold-cache boots still get the row revealed
+        // once the override fetch reconciles.
+        const hideStyle = (!fullAlbumUrl && !window._isAdmin) ? ' style="display:none"' : "";
+        return `<div class="track track-fullalbum" data-pos="ALBUM"${fullAlbumUrl ? ' data-yt-override="1"' : ""}${hideStyle}>
+          <span class="track-play-cell">${playCellFA}</span>
+          <span class="track-pos">Full</span>
+          <span class="track-title"><span class="track-title-link">Full album</span>${queueAddFA}${overrideBadgeFA}</span>
+        </div>`;
+      })()}
       ${tracks.map(t => {
         const trackPos = t.position || "";
         const url = findVideo(t.title || "", trackPos);

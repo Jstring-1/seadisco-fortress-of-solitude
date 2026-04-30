@@ -8651,6 +8651,12 @@ a:focus-visible {
   align-items: flex-start;
   padding: 0.55rem 0.7rem;
 }
+.yt-row-thumb-wrap {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-block;
+  line-height: 0;
+}
 .yt-row-thumb {
   width: 160px;
   height: 90px;
@@ -8659,6 +8665,20 @@ a:focus-visible {
   flex-shrink: 0;
   background: rgba(255,255,255,0.05);
 }
+.yt-row-duration {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  line-height: 1.2;
+  pointer-events: none;
+  letter-spacing: 0.02em;
+}
 .yt-row .archive-row-actions { flex-direction: column; align-items: flex-end; gap: 0.35rem; }
 .yt-save-btn { font-size: 1rem; line-height: 1; padding: 0.3rem 0.55rem; }
 .yt-save-btn.is-saved { color: var(--accent); }
@@ -8666,6 +8686,7 @@ a:focus-visible {
 .yt-save-btn:hover { color: var(--accent-hi, var(--accent)); }
 @media (max-width: 600px) {
   .yt-row { flex-direction: column; }
+  .yt-row-thumb-wrap { width: 100%; }
   .yt-row-thumb { width: 100%; height: auto; aspect-ratio: 16 / 9; }
   .yt-row .archive-row-actions { flex-direction: row; align-items: center; justify-content: flex-start; flex-wrap: wrap; }
 }

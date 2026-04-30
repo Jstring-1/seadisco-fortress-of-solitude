@@ -228,7 +228,11 @@ function queueAddYt(videoId, meta, opts) {
 // otherwise append all tracks to the tail.
 async function queueAddAlbum(btn) {
   const scope = btn?.closest("#album-info, #version-info, .tracklist") || document;
-  const rows  = scope.querySelectorAll(".queue-add-icon[data-yt-url]");
+  // Exclude the Full Album pseudo-row's queue-add icon — it represents
+  // "the entire album as one video" and shouldn't get bulk-queued
+  // alongside per-track videos via Play Album / Queue Album. The user
+  // can still click ＋ on that specific row to queue it individually.
+  const rows  = scope.querySelectorAll(".queue-add-icon[data-yt-url]:not([data-fullalbum])");
   if (!rows.length) {
     if (typeof showToast === "function") showToast("No playable tracks on this album", "error");
     return false;
