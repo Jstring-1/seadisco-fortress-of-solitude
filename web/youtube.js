@@ -239,14 +239,76 @@ function _youtubeOnSavedSortChange(select) {
   _renderYoutubeSavedRows();
 }
 
+// YouTube's Data API sometimes returns title / description fields
+// already HTML-encoded ("Sweet William&#39;s Ghost" instead of
+// "Sweet William's Ghost"). Running our usual escHtml on top of that
+// double-escapes ("&" → "&amp;"), so the entity ends up rendered as
+// literal text in the browser. Decode any pre-existing entities back
+// to their plain-text form before our own escHtml so the final string
+// is escaped exactly once. Uses a textarea to leverage the browser's
+// native entity decoder — safe because we re-escape via escHtml.
+function _decodeHtmlEntities(str) {
+  if (!str) return "";
+  const ta = document.createElement("textarea");
+  ta.innerHTML = String(str);
+  return ta.value;
+}
+
+// Wrap occurrences of any missing-track title inside `text` with
+// <mark class="album-track-match"> tags so the user can scan the
+// result list and immediately spot which row goes with which track.
+// `text` should be ALREADY HTML-escaped (the caller passes safeTitle
+// / safeDesc); we escape each track title the same way before doing
+// a case-insensitive global replace, so the marker injection stays
+// safe to render. Skips track titles shorter than 3 chars to avoid
+// false positives ("01", "Untitled", etc.).
+function _albumHighlightMatches(escapedText, tracks) {
+  if (!escapedText || !Array.isArray(tracks) || !tracks.length) return escapedText;
+  // Sort by length desc so longer titles win when one is a prefix
+  // of another (e.g. "Love" vs "Love Is Strange").
+  const candidates = tracks
+    .map(t => String(t.title || "").trim())
+    .filter(t => t.length >= 3)
+    .sort((a, b) => b.length - a.length);
+  let out = escapedText;
+  for (const title of candidates) {
+    const escaped = escHtml(title);
+    // Escape regex special chars in the escaped title.
+    const pattern = escaped.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const rx = new RegExp(`(${pattern})`, "gi");
+    out = out.replace(rx, '<mark class="album-track-match">$1</mark>');
+  }
+  return out;
+}
+
 // ── Row HTML ──────────────────────────────────────────────────────────
 function _youtubeRowHtml(it) {
   const id = String(it.videoId || it.id || "");
   if (!id) return "";
   const safeId = escHtml(id);
-  const safeTitle = escHtml(it.title || "Untitled");
-  const safeChannel = escHtml(it.channel || "");
-  const safeDesc = escHtml(String(it.description || "").slice(0, 200));
+  // Decode any pre-existing HTML entities from the YT API response
+  // before we escape — otherwise titles like "Sweet William's Ghost"
+  // (returned as "Sweet William&#39;s Ghost") get double-escaped and
+  // render as literal "&#39;".
+  const safeTitle = escHtml(_decodeHtmlEntities(it.title || "Untitled"));
+  const safeChannel = escHtml(_decodeHtmlEntities(it.channel || ""));
+  const safeDesc = escHtml(_decodeHtmlEntities(String(it.description || "")).slice(0, 200));
+  // Album mode: highlight any portion of the title / description that
+  // matches a still-missing track name. Done AFTER escHtml so the
+  // marker insertion is safe. Only the still-missing tracks (those
+  // not yet staged) are candidates — once a track is staged we don't
+  // need to keep highlighting it across other results. Keep the raw
+  // safeTitle/safeDesc for data attributes; the highlighted version
+  // is only used for the visible elements.
+  let displayTitle = safeTitle;
+  let displayDesc  = safeDesc;
+  if (window._sdSuggestAlbumContext) {
+    const ctx = window._sdSuggestAlbumContext;
+    const staged = window._sdSuggestStaged || {};
+    const remaining = (ctx.tracks || []).filter(t => !staged[t.position]);
+    displayTitle = _albumHighlightMatches(safeTitle, remaining);
+    displayDesc  = _albumHighlightMatches(safeDesc,  remaining);
+  }
   const thumb = it.thumbnail || `https://i.ytimg.com/vi/${encodeURIComponent(id)}/mqdefault.jpg`;
   const isSaved = !!_ytSavedIds?.has(id);
   const saveBtn = `<button type="button" class="archive-btn yt-save-btn${isSaved ? " is-saved" : ""}" onclick="_youtubeToggleSave(this)" title="${isSaved ? "Remove from Saved" : "Save"}">${isSaved ? "★" : "☆"}</button>`;
@@ -290,9 +352,9 @@ function _youtubeRowHtml(it) {
     <div class="yt-row archive-row" data-vid="${safeId}" data-title="${safeTitle}" data-channel="${safeChannel}" data-thumb="${escHtml(thumb)}">
       <img class="yt-row-thumb" src="${escHtml(thumb)}" alt="" loading="lazy" width="120" height="68" decoding="async">
       <div class="archive-row-main">
-        <div class="archive-row-title">${safeTitle}</div>
+        <div class="archive-row-title">${displayTitle}</div>
         ${safeChannel ? `<div class="archive-row-date">${safeChannel}</div>` : ""}
-        ${safeDesc ? `<div class="archive-row-desc">${safeDesc}${(it.description || "").length > 200 ? "…" : ""}</div>` : ""}
+        ${displayDesc ? `<div class="archive-row-desc">${displayDesc}${(it.description || "").length > 200 ? "…" : ""}</div>` : ""}
         ${albumAssignControl ? `<div class="album-assign-row">${albumAssignControl}</div>` : ""}
       </div>
       <div class="archive-row-actions">${saveBtn}${playBtn}${queueBtn}${suggestBtn}${linkBtn}</div>
