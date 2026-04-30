@@ -2397,7 +2397,11 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
    behind it. The expanded YouTube mini-player needs more headroom. */
 body.player-open { padding-bottom: 96px; }
 body.player-open.expanded-mini { padding-bottom: 168px; }
-body.modal-open  { overflow: hidden; }
+/* When any popup is open, the page underneath must NOT scroll —
+   only the popup's own content. overscroll-behavior:none blocks the
+   rubber-band that lets a wheel/touch over the dark overlay edges
+   propagate to the body in some browsers. */
+body.modal-open  { overflow: hidden; overscroll-behavior: none; }
 
 .mini-player-bar {
   display: flex;
@@ -8639,6 +8643,48 @@ a:focus-visible {
 }
 #youtube-popup-overlay .loc-info-close:hover { color: var(--text); }
 #youtube-popup-fullpage:hover { color: var(--accent) !important; }
+
+/* Album-mode admin "Add by URL" form. Lets admin paste a known YT URL
+   instead of paying the 100-unit search.list cost — useful any time
+   they already know the video, and essential when daily quota's gone. */
+.youtube-popup-paste {
+  margin: 0.4rem 0 0.55rem;
+  padding: 0.5rem 0.65rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+}
+.youtube-popup-paste-head {
+  font-size: 0.74rem;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+  letter-spacing: 0.02em;
+}
+.youtube-popup-paste-head .muted { color: #666; font-size: 0.68rem; }
+.youtube-popup-paste-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+#youtube-popup-paste-url {
+  flex: 1 1 240px;
+  min-width: 200px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 4px;
+  padding: 0.32rem 0.45rem;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-family: inherit;
+}
+#youtube-popup-paste-track { font-size: 0.78rem; }
+.youtube-popup-paste-status {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin-top: 0.3rem;
+  min-height: 1em;
+}
 
 /* ── YouTube view list ────────────────────────────────────────────────
    Each result is a flex row: thumbnail · title/channel/desc · actions.

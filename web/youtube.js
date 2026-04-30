@@ -531,6 +531,7 @@ async function openYoutubePopup(query) {
   const resultsEl = document.getElementById("youtube-popup-results");
   if (!overlay) return;
   overlay.classList.add("open");
+  if (typeof _sdLockBodyScroll === "function") _sdLockBodyScroll("yt-popup");
   // Album mode: show "Find missing tracks for ALBUM" + clear any
   // prior staged-assignments map. Per-track mode keeps the original
   // YouTube · "query" title.
@@ -543,6 +544,11 @@ async function openYoutubePopup(query) {
   }
   if (statusEl) statusEl.textContent = "Searching…";
   if (resultsEl) resultsEl.innerHTML = "";
+  // Album-mode admin paste-URL form: rebuild the track dropdown and
+  // reveal the form so admin can stage videos by URL without firing
+  // a 100-unit search. Hidden in per-track / non-admin / non-album
+  // mode so it doesn't clutter regular YT searches.
+  _youtubeRenderPasteForm();
   // Sync ★ state once per session.
   if (_ytSavedIds == null) _youtubeLoadSavedIds();
   try {
@@ -552,8 +558,25 @@ async function openYoutubePopup(query) {
     const r = await apiFetch(`/api/youtube/search?q=${encodeURIComponent(q)}`, { cache: "no-store" });
     if (!r.ok) {
       const errBody = await r.text().catch(() => "");
+      let errJson = null;
+      try { errJson = JSON.parse(errBody); } catch {}
       console.warn("[youtube popup] search failed:", r.status, errBody);
-      if (statusEl) statusEl.textContent = `Search failed (${r.status}).`;
+      // Quota-exhausted (429 + soft cap or user cap) — emit a friendly
+      // error with an external-search link so the admin can keep
+      // working. The paste-URL form above stays visible so they can
+      // round-trip URLs straight into the album.
+      if (r.status === 429) {
+        const ytExtUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+        const msg = errJson?.message || "YouTube quota reached.";
+        if (statusEl) {
+          statusEl.innerHTML = `<span style="color:#f0c95c">${escHtml(msg)}</span> <a href="${escHtml(ytExtUrl)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline">Search YouTube ↗</a>${albumCtx ? ' — copy any URL into the form above to stage it.' : ''}`;
+        }
+      } else if (statusEl) {
+        statusEl.textContent = `Search failed (${r.status}).`;
+      }
+      // In album mode, render the staging footer so the admin can still
+      // submit paste-URL stages even though search returned nothing.
+      if (albumCtx) _albumRenderFooter();
       return;
     }
     const j = await r.json();
@@ -568,9 +591,147 @@ async function openYoutubePopup(query) {
   }
 }
 
+// ── Paste-URL form (album-mode admin only) ───────────────────────────
+// Lets admin register a known YouTube URL as a track override without
+// firing a search.list (100 units). The per-paste video-info fetch is
+// 1 unit and gets cached server-side. Used both as a quota-conserving
+// alternative to search and as a fallback when the daily cap is hit.
+
+// Parse a YouTube URL/ID into an 11-char video ID. Accepts:
+//   https://www.youtube.com/watch?v=ABCDEFGHIJK
+//   https://youtu.be/ABCDEFGHIJK
+//   https://www.youtube.com/embed/ABCDEFGHIJK
+//   https://www.youtube.com/shorts/ABCDEFGHIJK
+//   ABCDEFGHIJK (raw 11-char ID)
+function _ytExtractVideoId(input) {
+  const s = String(input || "").trim();
+  if (!s) return "";
+  // Raw 11-char ID
+  if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s;
+  // Try URL parsing for the various YouTube hostpaths
+  try {
+    const u = new URL(s);
+    const host = u.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") {
+      const id = u.pathname.replace(/^\//, "").split("/")[0];
+      return /^[A-Za-z0-9_-]{11}$/.test(id) ? id : "";
+    }
+    if (host === "youtube.com" || host === "m.youtube.com" || host === "music.youtube.com") {
+      // /watch?v=ID
+      const v = u.searchParams.get("v") || "";
+      if (/^[A-Za-z0-9_-]{11}$/.test(v)) return v;
+      // /embed/ID  /shorts/ID  /live/ID
+      const m = u.pathname.match(/^\/(?:embed|shorts|live|v)\/([A-Za-z0-9_-]{11})/);
+      if (m) return m[1];
+    }
+  } catch { /* not a URL — fall through */ }
+  // Loose extract: any 11-char run that looks like an ID
+  const m2 = s.match(/[A-Za-z0-9_-]{11}/);
+  return m2 ? m2[0] : "";
+}
+
+// Build/refresh the album-mode paste-URL form. Called on every popup
+// open (so the dropdown reflects the current ctx.tracks). Shows the
+// form only in album mode AND only for admin — non-admins can't
+// reach the album-suggest popup anyway in current builds, but the
+// guard keeps the UI from surfacing if that gate ever loosens.
+function _youtubeRenderPasteForm() {
+  const wrap = document.getElementById("youtube-popup-paste");
+  if (!wrap) return;
+  const ctx = window._sdSuggestAlbumContext;
+  if (!ctx || !window._isAdmin) {
+    wrap.style.display = "none";
+    return;
+  }
+  wrap.style.display = "";
+  const sel = document.getElementById("youtube-popup-paste-track");
+  const urlInput = document.getElementById("youtube-popup-paste-url");
+  const status = document.getElementById("youtube-popup-paste-status");
+  if (urlInput) urlInput.value = "";
+  if (status) status.textContent = "";
+  if (sel) {
+    const opts = (ctx.tracks || []).map(t =>
+      `<option value="${escHtml(t.position)}">${escHtml(t.position)}. ${escHtml(t.title)}</option>`
+    ).join("");
+    sel.innerHTML = opts || `<option value="">— no missing tracks —</option>`;
+  }
+}
+window._youtubeRenderPasteForm = _youtubeRenderPasteForm;
+
+// Paste-URL "Stage" button click. Resolves the video info via the
+// admin-only /api/youtube/video-info endpoint (1 quota unit, cached),
+// then routes through the same staged-assignments map the result-row
+// Stage button uses. Falls back to a manual entry (videoId as title)
+// when the info fetch fails (e.g. quota exhausted).
+async function _youtubePastePresubmit(btn) {
+  const ctx = window._sdSuggestAlbumContext;
+  if (!ctx) return;
+  const urlInput = document.getElementById("youtube-popup-paste-url");
+  const sel = document.getElementById("youtube-popup-paste-track");
+  const status = document.getElementById("youtube-popup-paste-status");
+  if (!urlInput || !sel) return;
+  const videoId = _ytExtractVideoId(urlInput.value);
+  if (!videoId) {
+    if (status) status.textContent = "Couldn't parse a YouTube video ID from that URL.";
+    return;
+  }
+  const pos = String(sel.value || "");
+  if (!pos) {
+    if (status) status.textContent = "Pick a track to assign this video to.";
+    return;
+  }
+  if (status) status.textContent = "Fetching video info…";
+  btn.disabled = true;
+  let videoTitle = videoId;
+  try {
+    const r = await apiFetch(`/api/youtube/video-info?videoId=${encodeURIComponent(videoId)}`, { cache: "no-store" });
+    if (r.ok) {
+      const j = await r.json();
+      videoTitle = j?.title || videoId;
+    } else if (r.status === 429) {
+      // Quota's gone — store with the videoId as the title so the
+      // submission still goes through. Admin can fix the title later.
+      if (status) status.textContent = "Quota reached for video lookup — staging with ID as title.";
+    } else {
+      console.warn("[youtube paste] video-info failed:", r.status);
+    }
+  } catch (e) {
+    console.warn("[youtube paste] video-info threw:", e);
+  }
+  // Stage: same shape the result-row Stage button writes.
+  const staged = window._sdSuggestStaged || (window._sdSuggestStaged = {});
+  const trackTitle = (ctx.tracks || []).find(t => t.position === pos)?.title || "";
+  // Drop any prior staging of THIS video against another track (a
+  // single video can fill one position at a time).
+  for (const k of Object.keys(staged)) {
+    if (staged[k] && staged[k].videoId === videoId && k !== pos) delete staged[k];
+  }
+  staged[pos] = { videoId, videoTitle, trackTitle };
+  if (status) status.innerHTML = `<span style="color:#7eb8da">Staged "${escHtml(videoTitle)}" → ${escHtml(pos)}. ${escHtml(trackTitle)}</span>`;
+  if (urlInput) urlInput.value = "";
+  btn.disabled = false;
+  // Re-render footer + result rows so the staged mark + disabled-options
+  // states match.
+  _albumRenderFooter();
+  const resultsEl = document.getElementById("youtube-popup-results");
+  if (resultsEl) {
+    const rows = Array.from(resultsEl.querySelectorAll(".yt-row")).map(el => ({
+      videoId: el.dataset.vid,
+      title:   el.dataset.title,
+      channel: el.dataset.channel,
+      thumbnail: el.dataset.thumb,
+    }));
+    if (rows.length) {
+      resultsEl.innerHTML = rows.map(it => _youtubeRowHtml(it)).join("");
+    }
+  }
+}
+window._youtubePastePresubmit = _youtubePastePresubmit;
+
 function closeYoutubePopup() {
   const overlay = document.getElementById("youtube-popup-overlay");
   if (overlay) overlay.classList.remove("open");
+  if (typeof _sdUnlockBodyScroll === "function") _sdUnlockBodyScroll("yt-popup");
   // Drop any pending track-suggest context so the next popup open
   // doesn't accidentally show ✓ Suggest buttons.
   window._sdSuggestForTrack = null;

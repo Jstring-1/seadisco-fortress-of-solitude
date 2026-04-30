@@ -2014,11 +2014,13 @@ function openAltsPopup(event) {
   event.stopPropagation();
   document.getElementById("alts-popup").classList.add("open");
   document.getElementById("alts-popup-backdrop").classList.add("open");
+  if (typeof _sdLockBodyScroll === "function") _sdLockBodyScroll("alts-popup");
 }
 
 function closeAltsPopup() {
   document.getElementById("alts-popup").classList.remove("open");
   document.getElementById("alts-popup-backdrop").classList.remove("open");
+  if (typeof _sdUnlockBodyScroll === "function") _sdUnlockBodyScroll("alts-popup");
 }
 
 function searchByEntity(event, el) {

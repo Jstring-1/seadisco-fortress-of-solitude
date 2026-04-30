@@ -4050,6 +4050,56 @@ function _formatDurationSec(totalSec: number): string {
   return `${m}:${ss}`;
 }
 
+// Backfill durations on a cached search body whose items predate the
+// duration enrichment (added 4/30). Returns the body unchanged if every
+// item already has a durationFormatted, or after a single batched
+// videos.list call (1 quota unit) when at least one is missing. Updates
+// the in-memory + DB cache in place so subsequent reads serve the
+// enriched body. Failures fall through silently — the body still
+// renders, just without duration overlays.
+async function _ytBackfillDurationsIfNeeded(cacheKey: string, body: any): Promise<any> {
+  if (!body || !Array.isArray(body.items) || !body.items.length) return body;
+  const missing = body.items.filter((it: any) => !it?.durationFormatted && it?.videoId);
+  if (!missing.length) return body;
+  if (!_youtubeApiKey) return body;
+  // Soft-cap respect — don't burn the last unit on a backfill.
+  _ytQuotaMaybeReset();
+  if (_ytQuotaUnitsToday + 1 > _YT_DAILY_SOFT_CAP_UNITS) return body;
+  try {
+    const ids = missing.map((it: any) => String(it.videoId)).slice(0, 50);
+    if (!ids.length) return body;
+    const dUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${encodeURIComponent(ids.join(","))}&key=${encodeURIComponent(_youtubeApiKey)}`;
+    const dr = await loggedFetch("youtube", dUrl, { context: "youtube-videos-duration-backfill" });
+    if (!dr.ok) {
+      console.warn("[youtube/search] backfill HTTP", dr.status);
+      return body;
+    }
+    _ytQuotaUnitsToday += 1;
+    const dj: any = await dr.json();
+    const byId = new Map<string, string>();
+    for (const it of (dj?.items ?? [])) {
+      if (it?.id && it?.contentDetails?.duration) {
+        byId.set(String(it.id), String(it.contentDetails.duration));
+      }
+    }
+    for (const it of body.items) {
+      if (it.durationFormatted) continue;
+      const iso = byId.get(String(it.videoId));
+      if (!iso) continue;
+      const sec = _parseIsoDurationToSec(iso);
+      it.durationSec = sec;
+      it.durationFormatted = sec != null ? _formatDurationSec(sec) : "";
+    }
+    // Persist the enriched body so subsequent reads (mem + DB) skip
+    // backfill entirely.
+    _ytCacheSet(cacheKey, body);
+    setYoutubeSearchCache(cacheKey, body).catch(() => {});
+  } catch (e: any) {
+    console.warn("[youtube/search] backfill threw:", e?.message ?? e);
+  }
+  return body;
+}
+
 // GET /api/youtube/search?q=…&pageToken=…
 //   q          — search query (required)
 //   pageToken  — YouTube pagination cursor (optional)
@@ -4080,12 +4130,21 @@ app.get("/api/youtube/search", async (req, res) => {
   // stay in RAM; cold queries that are still within 24h hit the DB
   // and avoid burning quota every deploy.
   const memCached = _ytCacheGet(cacheKey);
-  if (memCached) { res.setHeader("X-SeaDisco-Cache", "hit-mem"); res.json(memCached); return; }
+  if (memCached) {
+    // Backfill durations on cached bodies that predate the duration
+    // enrichment (added 4/30). One-time cost per stale cache row;
+    // subsequent reads return the enriched body straight from cache.
+    const enriched = await _ytBackfillDurationsIfNeeded(cacheKey, memCached);
+    res.setHeader("X-SeaDisco-Cache", "hit-mem");
+    res.json(enriched);
+    return;
+  }
   const dbCached = await getYoutubeSearchCache(cacheKey, _YT_SEARCH_TTL_MS / 1000).catch(() => null);
   if (dbCached) {
     _ytCacheSet(cacheKey, dbCached);
+    const enriched = await _ytBackfillDurationsIfNeeded(cacheKey, dbCached);
     res.setHeader("X-SeaDisco-Cache", "hit-db");
-    res.json(dbCached);
+    res.json(enriched);
     return;
   }
   // Cache miss → about to spend 100 quota units. Apply guards.
@@ -4252,6 +4311,84 @@ app.get("/api/youtube/search", async (req, res) => {
     // Drop the in-flight slot so future cache misses fire fresh upstream
     // calls (the body is cached by _ytCacheSet above on success).
     _ytInflight.delete(cacheKey);
+  }
+});
+
+// GET /api/youtube/video-info?videoId=xxx — admin-only paste-URL helper.
+// videos.list costs 1 quota unit per call (regardless of parts), so this
+// gives admin a quota-cheap path to register a known YouTube video as
+// an override without firing a 100-unit search.list. Used by the
+// album-mode "Add by URL" form in the YT popup so the admin can keep
+// working when the daily search.list cap is hit.
+const _ytVideoInfoCache = new Map<string, { ts: number; body: any }>();
+const _YT_VIDEO_INFO_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+app.get("/api/youtube/video-info", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const videoId = String(req.query?.videoId ?? "").trim();
+  if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
+    res.status(400).json({ error: "Bad videoId" });
+    return;
+  }
+  if (!_youtubeApiKey) {
+    res.status(503).json({ error: "youtube_unconfigured" });
+    return;
+  }
+  const cached = _ytVideoInfoCache.get(videoId);
+  if (cached && Date.now() - cached.ts < _YT_VIDEO_INFO_TTL_MS) {
+    res.setHeader("X-SeaDisco-Cache", "hit-mem");
+    res.json(cached.body);
+    return;
+  }
+  // Soft-cap respect — if we're already past the daily cap, refuse so
+  // we don't spend the last few units on a paste-info that the admin
+  // could enter manually instead. Returns the same 429 shape so the
+  // client can fall back to manual entry.
+  _ytQuotaMaybeReset();
+  if (_ytQuotaUnitsToday + 1 > _YT_DAILY_SOFT_CAP_UNITS) {
+    res.status(429).json({
+      error: "youtube_daily_soft_cap",
+      message: "YouTube quota exhausted — enter title/duration manually.",
+    });
+    return;
+  }
+  try {
+    const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${encodeURIComponent(videoId)}&key=${encodeURIComponent(_youtubeApiKey)}`;
+    const r = await loggedFetch("youtube", url, { context: "youtube-video-info" });
+    if (r.status !== 400 && r.status !== 401) _ytQuotaUnitsToday += 1;
+    if (!r.ok) {
+      const errText = await r.text().catch(() => "");
+      console.warn("[youtube/video-info] HTTP", r.status, errText.slice(0, 200));
+      res.status(r.status >= 500 ? 502 : r.status).json({ error: `YouTube API HTTP ${r.status}` });
+      return;
+    }
+    const j: any = await r.json();
+    const it = (Array.isArray(j?.items) ? j.items : [])[0];
+    if (!it) {
+      res.status(404).json({ error: "Video not found" });
+      return;
+    }
+    const sn = it.snippet ?? {};
+    const thumbs = sn.thumbnails ?? {};
+    const thumb = thumbs.medium?.url ?? thumbs.default?.url ?? thumbs.high?.url ?? "";
+    const iso = it.contentDetails?.duration ?? "";
+    const sec = _parseIsoDurationToSec(iso);
+    const body = {
+      videoId,
+      title:       String(sn.title ?? ""),
+      channel:     String(sn.channelTitle ?? ""),
+      channelId:   String(sn.channelId ?? ""),
+      publishedAt: String(sn.publishedAt ?? ""),
+      description: String(sn.description ?? ""),
+      thumbnail:   thumb,
+      durationSec:       sec,
+      durationFormatted: sec != null ? _formatDurationSec(sec) : "",
+    };
+    _ytVideoInfoCache.set(videoId, { ts: Date.now(), body });
+    res.setHeader("X-SeaDisco-Cache", "miss");
+    res.json(body);
+  } catch (e: any) {
+    console.error("[youtube/video-info]", e?.message ?? e);
+    res.status(500).json({ error: String(e?.message ?? e) });
   }
 });
 
