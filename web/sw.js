@@ -25,7 +25,7 @@
 //   Everything else → passthrough. We don't cache search results,
 //     marketplace, AI calls, queue endpoints, etc.
 
-const SW_VERSION = "v1-20260430.1004";
+const SW_VERSION = "v1-20260430.1013";
 const SHELL_CACHE = `sd-shell-${SW_VERSION}`;
 const API_CACHE   = `sd-api-${SW_VERSION}`;
 const IMG_CACHE   = `sd-img-${SW_VERSION}`;
