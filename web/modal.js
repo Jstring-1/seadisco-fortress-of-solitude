@@ -2296,7 +2296,13 @@ function _trackYtApplyToDom(targetId, masterId, releaseId, isMaster) {
       // Append ＋ queue button at the end of the title cell, before
       // any badges/credits. Just put it at the very end — credits
       // come later via the credits row layout.
-      const queueAddHtml = ` <a href="#" class="queue-add-icon" data-yt-url="${url}" data-track="${escHtml(trackTitle)}" data-album="${escHtml(albumTitle)}" data-artist="${escHtml(trackArtist)}" data-release-type="${entityType}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackQueueAdd(this);return false" title="Add to play queue">＋</a>`;
+      // Mark the Full Album row's queue-add icon so the album-level
+      // bulk-queue (queueAddAlbum) skips it — without this attr, post-
+      // render override injection would let "Queue album" pick up the
+      // full-album video alongside per-track ones.
+      const isFullAlbumRow = String(pos) === "ALBUM";
+      const fullAlbumAttr = isFullAlbumRow ? ' data-fullalbum="1"' : "";
+      const queueAddHtml = ` <a href="#" class="queue-add-icon"${fullAlbumAttr} data-yt-url="${url}" data-track="${escHtml(trackTitle)}" data-album="${escHtml(albumTitle)}" data-artist="${escHtml(trackArtist)}" data-release-type="${entityType}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackQueueAdd(this);return false" title="${isFullAlbumRow ? "Add full album to play queue" : "Add to play queue"}">＋</a>`;
       // Avoid double-inserting: only add if not already there.
       if (!titleCell.querySelector(`.queue-add-icon[data-yt-url="${url}"]`)) {
         // Insert before any .track-credits subtree so credits stay last.
@@ -3068,9 +3074,28 @@ function openPlayerRelease() {
     }
     return;
   }
-  const rType = window._playerReleaseType;
-  const rId   = window._playerReleaseId;
-  const rUrl  = window._playerReleaseUrl;
+  let rType = window._playerReleaseType;
+  let rId   = window._playerReleaseId;
+  let rUrl  = window._playerReleaseUrl;
+  // Fallback: if the player-release globals got dropped (e.g. mid-
+  // queue race or a stale optimistic insert), try the currently-
+  // playing queue entry's data — every queue row carries the
+  // releaseType/releaseId from when it was added. This keeps the disc
+  // icon working for full-album / queue-managed tracks even when the
+  // direct openVideo path's setters were stomped or never ran.
+  if ((!rType || !rId) && typeof window._queueGetCurrentEntry === "function") {
+    const cur = window._queueGetCurrentEntry();
+    if (cur?.data?.releaseType && cur?.data?.releaseId) {
+      rType = cur.data.releaseType;
+      rId   = String(cur.data.releaseId);
+      rUrl  = `https://www.discogs.com/${rType}/${rId}`;
+      // Heal the player-release globals so subsequent disc-icon
+      // clicks don't re-do the lookup.
+      window._playerReleaseType = rType;
+      window._playerReleaseId   = rId;
+      window._playerReleaseUrl  = rUrl;
+    }
+  }
   if (rType && rId) {
     openModal(null, rId, rType, rUrl);
     return;
@@ -4556,22 +4581,53 @@ function refreshCardBadges(releaseId) {
       id = releaseId; type = entityType || "artist";
     } else return;
 
+    // Use the SAME nav-icon SVG markup the initial card render (search.js)
+    // uses — without this, toggling a badge replaced the icons with the
+    // legacy single-letter glyphs ("C", "W", "F" etc.). The pink "F"
+    // bug after clicking the favorite badge was the most visible
+    // symptom; collection/wantlist icons reverted to letters too.
+    const navIcon = (typeof window._sdNavIconSvg === "function") ? window._sdNavIconSvg : (() => "");
     let badges = "";
-    const inCol = type === "release" && window._collectionIds?.has(id);
-    const inWant = type === "release" && window._wantlistIds?.has(id);
+    const userHasLists = window._listMembership && Object.keys(window._listMembership).length > 0;
+    const userHasInventory = (window._inventoryIds?.size ?? 0) > 0;
     if (type === "release") {
-      badges += `<span class="card-badge badge-collection${inCol ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleCollectionFromCard(this,${id})" title="${inCol ? "Remove from collection" : "Add to collection"}">C</span>`;
-      badges += `<span class="card-badge badge-wantlist${inWant ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleWantlistFromCard(this,${id})" title="${inWant ? "Remove from wantlist" : "Add to wantlist"}">W</span>`;
-      const lists = window._listMembership?.[id];
-      if (lists?.length) {
-        const names = lists.map(l => l.listName).join(", ");
-        badges += `<span class="card-badge badge-list" title="In list: ${escHtml(names)}">L</span>`;
-      }
-      if (window._inventoryIds?.has(id)) badges += `<span class="card-badge badge-inventory" title="In your inventory">I</span>`;
+      const inCol = window._collectionIds?.has(id);
+      const inWant = window._wantlistIds?.has(id);
+      badges += `<span class="card-badge badge-collection${inCol ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleCollectionFromCard(this,${id})" title="${inCol ? "Remove from collection" : "Add to collection"}">${navIcon("collection")}</span>`;
+      badges += `<span class="card-badge badge-wantlist${inWant ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleWantlistFromCard(this,${id})" title="${inWant ? "Remove from wantlist" : "Add to wantlist"}">${navIcon("wantlist")}</span>`;
+    } else if (type === "master") {
+      const colCount = Number(window._collectionMasterCounts?.[id]) || 0;
+      const wantCount = Number(window._wantlistMasterCounts?.[id]) || 0;
+      const colActive = colCount > 0;
+      const wantActive = wantCount > 0;
+      const colTitle = colActive
+        ? `${colCount} ${colCount === 1 ? "version" : "versions"} of this master in your collection — click to view pressings`
+        : "Open to add a version to collection";
+      const wantTitle = wantActive
+        ? `${wantCount} ${wantCount === 1 ? "version" : "versions"} of this master in your wantlist — click to view pressings`
+        : "Open to add a version to wantlist";
+      const colSup  = colCount  >= 2 ? `<sup class="card-badge-count">${colCount}</sup>`  : "";
+      const wantSup = wantCount >= 2 ? `<sup class="card-badge-count">${wantCount}</sup>` : "";
+      badges += `<span class="card-badge badge-collection${colActive ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();openModal(event,'${id}','master','')" title="${colTitle}">${navIcon("collection")}${colSup}</span>`;
+      badges += `<span class="card-badge badge-wantlist${wantActive ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();openModal(event,'${id}','master','')" title="${wantTitle}">${navIcon("wantlist")}${wantSup}</span>`;
     }
     const favKey = `${type}:${id}`;
     const isFav = window._favoriteKeys?.has(favKey);
-    badges += `<span class="card-badge badge-favorite${isFav ? " is-favorite" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,${id},'${type}')" title="${isFav ? "Remove from favorites" : "Add to favorites"}">F</span>`;
+    badges += `<span class="card-badge badge-favorite${isFav ? " is-favorite" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,${id},'${type}')" title="${isFav ? "Remove from favorites" : "Add to favorites"}">${navIcon("favorites")}</span>`;
+    if (type === "release") {
+      if (userHasInventory) {
+        const inInv = window._inventoryIds?.has(id);
+        const iTitle = inInv ? "In your inventory" : "Not in your inventory";
+        badges += `<span class="card-badge badge-inventory${inInv ? " is-active" : ""}" title="${iTitle}">${navIcon("inventory")}</span>`;
+      }
+      if (userHasLists) {
+        const lists = window._listMembership?.[id];
+        const inList = !!(lists && lists.length);
+        const names = inList ? lists.map(l => l.listName).join(", ") : "";
+        const lTitle = inList ? `In list: ${escHtml(names)}` : "Not in any of your lists";
+        badges += `<span class="card-badge badge-list${inList ? " is-active" : ""}" title="${lTitle}">${navIcon("lists")}</span>`;
+      }
+    }
     el.innerHTML = badges;
   });
 }
@@ -4667,12 +4723,19 @@ function renderMasterVersions() {
     const inInv  = window._inventoryIds?.has(v.id);
     const isFav  = window._favoriteKeys?.has(`release:${v.id}`);
     const listNames = inList ? (window._listMembership[v.id].map(l => l.name || l.title).filter(Boolean).join(", ")) : "";
+    // Dots use the same SVG nav-icons as the navbar tabs and tint to
+    // the matching tab colors (collection green, wantlist yellow,
+    // favorites pink, lists light blue, inventory purple). Inactive
+    // dots stay dimmed but still show the icon for clarity. Lists +
+    // inventory dots are always present (no longer conditional) so
+    // the row layout stays stable across versions.
+    const navIcon = (typeof window._sdNavIconSvg === "function") ? window._sdNavIconSvg : (() => "");
     const badge = `<span class="mv-dots">` +
-      `<span class="mv-dot${inCol ? ' active' : ''}" style="background:${inCol ? '#6ddf70' : ''}" onclick="event.preventDefault();event.stopPropagation();mvToggleCol(this,${v.id})" title="${inCol ? 'In collection — click to remove' : 'Add to collection'}"></span>` +
-      `<span class="mv-dot${inWant ? ' active' : ''}" style="background:${inWant ? '#f0c95c' : ''}" onclick="event.preventDefault();event.stopPropagation();mvToggleWant(this,${v.id})" title="${inWant ? 'In wantlist — click to remove' : 'Add to wantlist'}"></span>` +
-      `<span class="mv-dot${isFav ? ' active' : ''}" style="background:${isFav ? '#ff6b35' : ''}" onclick="event.preventDefault();event.stopPropagation();mvToggleFav(this,${v.id})" title="${isFav ? 'Favorited — click to remove' : 'Add to favorites'}"></span>` +
-      (inList ? `<span class="mv-dot active" style="background:#a0ccf0" title="${escHtml(listNames ? `In your list${window._listMembership[v.id].length > 1 ? "s" : ""}: ${listNames}` : "In one of your lists")}"></span>` : '') +
-      (inInv ? `<span class="mv-dot active" style="background:#cda0f5" title="In your inventory"></span>` : '') +
+      `<span class="mv-dot${inCol ? ' active' : ''}" style="${inCol ? 'color:#6ddf70' : ''}" onclick="event.preventDefault();event.stopPropagation();mvToggleCol(this,${v.id})" title="${inCol ? 'In collection — click to remove' : 'Add to collection'}">${navIcon("collection")}</span>` +
+      `<span class="mv-dot${inWant ? ' active' : ''}" style="${inWant ? 'color:#f0c95c' : ''}" onclick="event.preventDefault();event.stopPropagation();mvToggleWant(this,${v.id})" title="${inWant ? 'In wantlist — click to remove' : 'Add to wantlist'}">${navIcon("wantlist")}</span>` +
+      `<span class="mv-dot${isFav ? ' active' : ''}" style="${isFav ? 'color:#ff7eb6' : ''}" onclick="event.preventDefault();event.stopPropagation();mvToggleFav(this,${v.id})" title="${isFav ? 'Favorited — click to remove' : 'Add to favorites'}">${navIcon("favorites")}</span>` +
+      `<span class="mv-dot${inList ? ' active' : ''}" style="${inList ? 'color:#a0ccf0' : ''}" title="${escHtml(inList ? (listNames ? `In your list${window._listMembership[v.id].length > 1 ? "s" : ""}: ${listNames}` : "In one of your lists") : "Not in any of your lists")}">${navIcon("lists")}</span>` +
+      `<span class="mv-dot${inInv ? ' active' : ''}" style="${inInv ? 'color:#cda0f5' : ''}" title="${inInv ? 'In your inventory' : 'Not in your inventory'}">${navIcon("inventory")}</span>` +
       `</span>`;
     const fmtText = _mvGetDisplayFormat(v);
     const fmtCell = inCol

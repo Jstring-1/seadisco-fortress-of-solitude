@@ -1362,6 +1362,25 @@ window._queueHasPlayable = _queueHasPlayable;
 window._queueOnExternalPlay = _queueOnExternalPlay;
 window._queueGetCurrentPosition = () => _queueCurrentPosition;
 
+// Resolve the queue entry that's currently playing — used by the
+// disc-icon ("Open this album") fallback in modal.js when the
+// _playerRelease* globals are missing (cross-source races, full-album
+// tracks added via the YT submission popup, optimistic-insert
+// reconcile gaps). Looks up by externalId first (stable across
+// position renumbering), then position.
+window._queueGetCurrentEntry = () => {
+  if (!Array.isArray(_queue) || !_queue.length) return null;
+  if (_queuePlayingExternalId != null) {
+    const byExt = _queue.find(it => String(it.externalId) === String(_queuePlayingExternalId));
+    if (byExt) return byExt;
+  }
+  if (_queueCurrentPosition != null) {
+    const byPos = _queue.find(it => it.position === _queueCurrentPosition);
+    if (byPos) return byPos;
+  }
+  return null;
+};
+
 // Backfill release context onto an existing queue row that was saved
 // before the releaseType/releaseId fields were added to the queue
 // data. Called from openVideo when it learns the release ID for an
