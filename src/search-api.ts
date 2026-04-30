@@ -4023,6 +4023,33 @@ function _ytCacheSet(key: string, body: any) {
   _ytSearchCache.set(key, { ts: Date.now(), body });
 }
 
+// Parse YouTube's ISO 8601 duration ("PT4M13S", "PT1H2M", "PT45S", etc.)
+// into total seconds. Returns null on garbage input. videos.list returns
+// content durations in this format on the contentDetails part.
+function _parseIsoDurationToSec(iso: string): number | null {
+  if (!iso) return null;
+  const m = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(iso);
+  if (!m) return null;
+  const days  = parseInt(m[1] ?? "0", 10) || 0;
+  const hours = parseInt(m[2] ?? "0", 10) || 0;
+  const mins  = parseInt(m[3] ?? "0", 10) || 0;
+  const secs  = parseInt(m[4] ?? "0", 10) || 0;
+  return days * 86400 + hours * 3600 + mins * 60 + secs;
+}
+
+// Format a duration in seconds as "M:SS" (under an hour) or "H:MM:SS"
+// (an hour or longer). Pads minutes to two digits only when there's
+// an hour component, mirroring how YouTube renders durations.
+function _formatDurationSec(totalSec: number): string {
+  if (!Number.isFinite(totalSec) || totalSec < 0) return "";
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = Math.floor(totalSec % 60);
+  const ss = String(s).padStart(2, "0");
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${ss}`;
+  return `${m}:${ss}`;
+}
+
 // GET /api/youtube/search?q=…&pageToken=…
 //   q          — search query (required)
 //   pageToken  — YouTube pagination cursor (optional)
@@ -4153,8 +4180,50 @@ app.get("/api/youtube/search", async (req, res) => {
           publishedAt: String(sn.publishedAt ?? ""),
           description: String(sn.description ?? ""),
           thumbnail:   thumb,
+          // durationSec / durationFormatted populated below via
+          // a single videos.list call (1 unit, batched up to 50 IDs).
+          durationSec:       null as number | null,
+          durationFormatted: "",
         };
       });
+    // Durations: a single videos.list?part=contentDetails call costs
+    // 1 quota unit and returns the contentDetails for up to 50 IDs at
+    // once. Cheap relative to search.list (100 units) so worth doing
+    // on every cache miss for the album-suggest UX (lets users spot
+    // "real album track" 3-minute uploads vs 60-minute "full album"
+    // mixes vs 5-second junk videos at a glance).
+    if (items.length) {
+      try {
+        const ids = items.map((it: any) => it.videoId).filter(Boolean).slice(0, 50);
+        if (ids.length) {
+          const dUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${encodeURIComponent(ids.join(","))}&key=${encodeURIComponent(_youtubeApiKey)}`;
+          const dr = await loggedFetch("youtube", dUrl, { context: "youtube-videos-duration" });
+          if (dr.ok) {
+            _ytQuotaUnitsToday += 1;
+            const dj: any = await dr.json();
+            const byId = new Map<string, string>();
+            for (const it of (dj?.items ?? [])) {
+              if (it?.id && it?.contentDetails?.duration) {
+                byId.set(String(it.id), String(it.contentDetails.duration));
+              }
+            }
+            for (const it of items) {
+              const iso = byId.get(it.videoId);
+              if (!iso) continue;
+              const sec = _parseIsoDurationToSec(iso);
+              it.durationSec = sec;
+              it.durationFormatted = sec != null ? _formatDurationSec(sec) : "";
+            }
+          } else {
+            // Don't fail the whole search if duration enrichment errors.
+            // Items just go out without duration fields populated.
+            console.warn("[youtube/search] duration fetch HTTP", dr.status);
+          }
+        }
+      } catch (e: any) {
+        console.warn("[youtube/search] duration fetch threw:", e?.message ?? e);
+      }
+    }
     const body = {
       items,
       nextPageToken: j?.nextPageToken ?? null,

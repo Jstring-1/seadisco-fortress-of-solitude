@@ -265,10 +265,13 @@ function _decodeHtmlEntities(str) {
 function _albumHighlightMatches(escapedText, tracks) {
   if (!escapedText || !Array.isArray(tracks) || !tracks.length) return escapedText;
   // Sort by length desc so longer titles win when one is a prefix
-  // of another (e.g. "Love" vs "Love Is Strange").
+  // of another (e.g. "Love" vs "Love Is Strange"). Skip "Full album"
+  // — that's the sentinel pseudo-track for whole-album uploads, and
+  // the literal phrase appears in unrelated descriptions ("from the
+  // full album X") often enough that highlighting it is just noise.
   const candidates = tracks
     .map(t => String(t.title || "").trim())
-    .filter(t => t.length >= 3)
+    .filter(t => t.length >= 3 && t.toLowerCase() !== "full album")
     .sort((a, b) => b.length - a.length);
   let out = escapedText;
   for (const title of candidates) {
@@ -357,9 +360,18 @@ function _youtubeRowHtml(it) {
       <button type="button" class="archive-btn archive-btn-suggest album-assign-stage${isStaged ? " is-staged" : ""}" onclick="_youtubeAlbumStage(this)" title="${isStaged ? "Already staged — click to update" : "Stage this assignment (submit all at the bottom)"}">${isStaged ? "✓ Staged" : "Stage"}</button>
     `;
   }
+  // Duration is populated server-side from a videos.list contentDetails
+  // call (1 quota unit, batched across all results). Renders as a small
+  // overlay on the thumbnail, like YouTube's own UI. Falls back gracefully
+  // when missing (older cached responses won't have it).
+  const durStr = String(it.durationFormatted || "").trim();
+  const durOverlay = durStr ? `<span class="yt-row-duration">${escHtml(durStr)}</span>` : "";
   return `
     <div class="yt-row archive-row" data-vid="${safeId}" data-title="${safeTitle}" data-channel="${safeChannel}" data-thumb="${escHtml(thumb)}">
-      <img class="yt-row-thumb" src="${escHtml(thumb)}" alt="" loading="lazy" width="120" height="68" decoding="async">
+      <span class="yt-row-thumb-wrap">
+        <img class="yt-row-thumb" src="${escHtml(thumb)}" alt="" loading="lazy" width="120" height="68" decoding="async">
+        ${durOverlay}
+      </span>
       <div class="archive-row-main">
         <div class="archive-row-title">${displayTitle}</div>
         ${safeChannel ? `<div class="archive-row-date">${safeChannel}</div>` : ""}
