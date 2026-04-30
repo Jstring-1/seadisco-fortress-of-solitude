@@ -295,7 +295,32 @@ function _youtubeRowHtml(it) {
   // render as literal "&#39;".
   const safeTitle = escHtml(_decodeHtmlEntities(it.title || "Untitled"));
   const safeChannel = escHtml(_decodeHtmlEntities(it.channel || ""));
-  const safeDesc = escHtml(_decodeHtmlEntities(String(it.description || "")).slice(0, 200));
+  // Keep the FULL decoded description around for the row's hover
+  // tooltip — the visible body still gets sliced to 200 chars so the
+  // result list doesn't blow up vertically. The tooltip uses the
+  // browser's built-in `title` attribute which preserves newlines on
+  // most platforms, so we can stack title + channel + date + duration
+  // + full description into one block.
+  const fullDescDecoded = _decodeHtmlEntities(String(it.description || ""));
+  const safeDesc = escHtml(fullDescDecoded.slice(0, 200));
+  // Compose the hover tooltip text. attrEsc escapes for an HTML
+  // attribute (replaces newlines too — but we keep them as &#10; so
+  // most browsers render multi-line tooltips). escHtml here would
+  // double-escape ampersands inside the attribute, so the lighter
+  // attrEsc is correct.
+  const attrEsc = (s) => String(s ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  const tooltipParts = [
+    _decodeHtmlEntities(it.title || ""),
+    it.channel ? `Channel: ${_decodeHtmlEntities(it.channel)}` : "",
+    it.publishedAt ? `Published: ${String(it.publishedAt).slice(0, 10)}` : "",
+    it.durationFormatted ? `Duration: ${it.durationFormatted}` : "",
+    fullDescDecoded ? `\n${fullDescDecoded}` : "",
+  ].filter(Boolean).join("\n");
+  const fullInfoTitle = attrEsc(tooltipParts);
   // Album mode: highlight any portion of the title / description that
   // matches a still-missing track name. Done AFTER escHtml so the
   // marker insertion is safe. Only the still-missing tracks (those
@@ -372,7 +397,7 @@ function _youtubeRowHtml(it) {
         <img class="yt-row-thumb" src="${escHtml(thumb)}" alt="" loading="lazy" width="120" height="68" decoding="async">
         ${durOverlay}
       </span>
-      <div class="archive-row-main">
+      <div class="archive-row-main" title="${fullInfoTitle}">
         <div class="archive-row-title">${displayTitle}</div>
         ${safeChannel ? `<div class="archive-row-date">${safeChannel}</div>` : ""}
         ${displayDesc ? `<div class="archive-row-desc">${displayDesc}${(it.description || "").length > 200 ? "…" : ""}</div>` : ""}
@@ -520,6 +545,12 @@ async function _youtubeToggleSave(btn) {
 // the "Full page ↗" link in the popup header.
 
 let _ytPopupQuery = "";
+// Snapshot of the items rendered into the popup. Used by the album-
+// mode Stage re-render so we can rebuild rows from the original item
+// payloads (preserving duration, publishedAt, full description, etc.)
+// instead of round-tripping through DOM dataset attrs which only
+// carry a subset.
+let _ytPopupItems = [];
 
 async function openYoutubePopup(query) {
   const q = String(query ?? "").trim();
@@ -581,6 +612,7 @@ async function openYoutubePopup(query) {
     }
     const j = await r.json();
     const items = Array.isArray(j?.items) ? j.items : [];
+    _ytPopupItems = items;
     if (statusEl) statusEl.textContent = items.length ? `${items.length} result${items.length === 1 ? "" : "s"}` : "No results.";
     if (resultsEl) resultsEl.innerHTML = items.map(it => _youtubeRowHtml(it)).join("");
     // Album mode: append the sticky status footer + submit button.
@@ -715,12 +747,19 @@ async function _youtubePastePresubmit(btn) {
   _albumRenderFooter();
   const resultsEl = document.getElementById("youtube-popup-results");
   if (resultsEl) {
-    const rows = Array.from(resultsEl.querySelectorAll(".yt-row")).map(el => ({
-      videoId: el.dataset.vid,
-      title:   el.dataset.title,
-      channel: el.dataset.channel,
-      thumbnail: el.dataset.thumb,
-    }));
+    // Prefer cached popup items so duration / publishedAt / full
+    // description survive the re-render. Fall back to DOM scrape.
+    let rows = [];
+    if (Array.isArray(_ytPopupItems) && _ytPopupItems.length) {
+      rows = _ytPopupItems;
+    } else {
+      rows = Array.from(resultsEl.querySelectorAll(".yt-row")).map(el => ({
+        videoId: el.dataset.vid,
+        title:   el.dataset.title,
+        channel: el.dataset.channel,
+        thumbnail: el.dataset.thumb,
+      }));
+    }
     if (rows.length) {
       resultsEl.innerHTML = rows.map(it => _youtubeRowHtml(it)).join("");
     }
@@ -738,6 +777,7 @@ function closeYoutubePopup() {
   window._sdSuggestAlbumContext = null;
   window._sdSuggestStaged = null;
   window._sdSuggestSelectSnapshot = null;
+  _ytPopupItems = [];
   // Remove album footer if present.
   document.getElementById("album-suggest-footer")?.remove();
 }
@@ -829,16 +869,23 @@ function _youtubeAlbumStage(btn) {
       if (vid && sel) snap[vid] = sel.value || "";
     });
     window._sdSuggestSelectSnapshot = snap;
-    // We don't have the original items array here; re-render from the
-    // current DOM. Each .yt-row carries enough data attrs to rebuild
-    // a row item shape.
-    const rows = Array.from(resultsEl.querySelectorAll(".yt-row")).map(el => ({
-      videoId: el.dataset.vid,
-      title:   el.dataset.title,
-      channel: el.dataset.channel,
-      thumbnail: el.dataset.thumb,
-      description: el.querySelector(".archive-row-desc")?.textContent || "",
-    }));
+    // Prefer the cached popup items (preserves duration, publishedAt,
+    // full description) over the lossy DOM-attr round-trip. Fall back
+    // to scraping the DOM only if the cache is somehow empty (legacy
+    // path; happens when popup was rendered before this snapshot was
+    // wired up).
+    let rows = [];
+    if (Array.isArray(_ytPopupItems) && _ytPopupItems.length) {
+      rows = _ytPopupItems;
+    } else {
+      rows = Array.from(resultsEl.querySelectorAll(".yt-row")).map(el => ({
+        videoId: el.dataset.vid,
+        title:   el.dataset.title,
+        channel: el.dataset.channel,
+        thumbnail: el.dataset.thumb,
+        description: el.querySelector(".archive-row-desc")?.textContent || "",
+      }));
+    }
     resultsEl.innerHTML = rows.map(it => _youtubeRowHtml(it)).join("");
     // Snapshot was a one-shot bridge across this re-render — clear it
     // so the next fresh popup open / search doesn't pick up stale picks.
