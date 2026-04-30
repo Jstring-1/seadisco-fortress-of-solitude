@@ -6950,6 +6950,19 @@ body.is-offline button.offline-disabled {
   cursor: not-allowed;
 }
 
+/* Album-mode YT popup: highlight portions of result titles +
+   descriptions that match the names of still-missing tracks, so
+   the user can scan a long result list and immediately spot which
+   row maps to which track. Same purple as the contribution
+   affordances elsewhere on the site. */
+.album-track-match {
+  background: rgba(192, 132, 252, 0.25);
+  color: #f5e6ff;
+  padding: 0 0.15em;
+  border-radius: 2px;
+  font-weight: 600;
+}
+
 /* ── Tracklist heading "🎵 N missing" affordance ────────────────────
    Lives in the Tracklist header next to the (N) playable count.
    Only shows when ≥2 tracks are missing AND the user is signed in. */
