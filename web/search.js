@@ -1590,8 +1590,13 @@ async function loadRandomRecords(more) {
       isSuggested = true;
     } else if (window._sdHomeStripMode === "suggestions") {
       // ── Suggestions tab on main search ──────────────────────────
-      // Signed-in: per-user background-generated feed. Anon: fall
-      // back to community-picks so the tab still has content.
+      // Signed-in: per-user background-generated feed. If the user
+      // has none yet (new account, sync hasn't run), show the empty
+      // state — DON'T fall back to the global community-picks sample,
+      // which would surface admin/heavy-contributor submissions as
+      // if they were personalized recommendations.
+      // Anon: fall back to community-picks so the tab still has
+      // content (no per-user feed to fetch in the first place).
       _randomAll = [];
       if (window._clerk?.user) {
         try {
@@ -1605,9 +1610,8 @@ async function loadRandomRecords(more) {
               _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
             }
           }
-        } catch { /* fall through */ }
-      }
-      if (!_randomAll.length) {
+        } catch { /* leave empty — user sees the no-suggestions message */ }
+      } else {
         try {
           const r = await fetch("/api/contributed-favorites/sample?limit=24&order=most", { cache: "no-store" });
           if (r.ok) {
