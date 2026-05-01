@@ -126,6 +126,16 @@ function _sdUnlockBodyScroll(id) {
 window._sdLockBodyScroll = _sdLockBodyScroll;
 window._sdUnlockBodyScroll = _sdUnlockBodyScroll;
 
+// True when the current user is allowed into the YouTube submission
+// flow + standalone /?v=youtube view. Admin always passes; signed-in
+// non-admins pass only when the server's YT_OPEN_TO_USERS env-var is
+// on (Google API quota demo). Consumed by every YT-feature gate so a
+// single env-var flip on Railway changes behaviour everywhere.
+window._sdHasYtAccess = function () {
+  if (window._isAdmin) return true;
+  return !!(window._clerk?.user) && !!window._sdYtOpen;
+};
+
 // ── Mobile nav toggle ────────────────────────────────────────────────────
 function toggleMobileNav() {
   document.getElementById("main-nav-tabs")?.classList.toggle("mobile-open");
@@ -628,7 +638,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260430.1229";
+  const SITE_VERSION = "build 20260501.0812";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -873,6 +883,11 @@ function renderSharedFooter(opts) {
       try { viewAsUser = localStorage.getItem("sd-admin-as-user") === "1"; } catch {}
       window._adminViewAsUser = viewAsUser && window._serverIsAdmin;
       window._isAdmin = window._serverIsAdmin && !viewAsUser;
+      // YT_OPEN_TO_USERS env-var on the server: when on, the YouTube
+      // submission flow + standalone /?v=youtube view are temporarily
+      // accessible to all signed-in users (Google API quota demo).
+      // Consumed by _sdHasYtAccess() below.
+      window._sdYtOpen = !!data?.ytOpen;
       if (window._serverIsAdmin) {
         const adminA = document.getElementById("footer-admin-link");
         if (adminA) adminA.style.display = "";
@@ -899,11 +914,16 @@ function renderSharedFooter(opts) {
         if (locA) locA.style.display = "";
         const archA = document.getElementById("footer-archive-link");
         if (archA) archA.style.display = "";
-        // YouTube footer link is admin-only too — temporarily, while the
-        // YouTube Data API quota is constrained. Reconsider when Google
-        // approves our increased-quota request.
+      }
+      // YouTube footer link reveals for admin OR when YT_OPEN_TO_USERS
+      // is set on the server (signed-in non-admins get access during
+      // the demo). Once Google approves the quota request, flip the
+      // env var off and this drops back to admin-only.
+      if (window._isAdmin || window._sdYtOpen) {
         const ytA = document.getElementById("footer-youtube-link");
         if (ytA) ytA.style.display = "";
+      }
+      if (window._isAdmin) {
         // Pre-load the discogs_ids AND names already in the
         // blues_artists table so the admin "+ add to Blues DB" icon
         // (popup AND card) can hide itself for artists already in.

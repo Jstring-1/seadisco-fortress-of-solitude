@@ -385,6 +385,24 @@ async function requireAdmin(req: express.Request, res: express.Response): Promis
   return userId;
 }
 
+// Temporary toggle: open the YouTube submission flow + standalone
+// /?v=youtube view to ALL signed-in users (instead of admin-only) for
+// the Google API quota review demo. Set YT_OPEN_TO_USERS=1 on Railway
+// to enable; unset/0 for normal admin-only behaviour. Toggling does
+// NOT require a redeploy — env-var only.
+const _ytOpenToUsers = (process.env.YT_OPEN_TO_USERS === "1" || process.env.YT_OPEN_TO_USERS === "true");
+async function requireYtAccess(req: express.Request, res: express.Response): Promise<string | null> {
+  if (_ytOpenToUsers) {
+    const userId = await getClerkUserId(req);
+    if (!userId) {
+      res.status(401).json({ error: "auth_required" });
+      return null;
+    }
+    return userId;
+  }
+  return requireAdmin(req, res);
+}
+
 /** Build a DiscogsClient for a userId (outside of an HTTP request context).
  *  OAuth-only — Personal Access Token support has been removed. Returns
  *  null if the user has no OAuth credentials on file. */
@@ -562,9 +580,16 @@ app.get("/api/config", (_req, res) => {
 app.get("/api/me", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const userId = await getClerkUserId(req);
-  if (!userId) { res.json({ signedIn: false, isAdmin: false }); return; }
+  if (!userId) { res.json({ signedIn: false, isAdmin: false, ytOpen: _ytOpenToUsers }); return; }
   const adminId = ADMIN_CLERK_ID;
-  res.json({ signedIn: true, isAdmin: !!adminId && userId === adminId });
+  res.json({
+    signedIn: true,
+    isAdmin: !!adminId && userId === adminId,
+    // Temporary flag mirroring the YT_OPEN_TO_USERS env var so the
+    // client can relax YouTube-feature gates for non-admin signed-in
+    // users during the Google API quota demo.
+    ytOpen: _ytOpenToUsers,
+  });
 });
 
 // GET /api/user-count — admin-only (cap is internal, never advertised)
@@ -674,10 +699,10 @@ app.get("/api/track-yt/for-release", async (req, res) => {
 // already exists at that (releaseId, releaseType, trackPosition) — so
 // the client can treat "already taken" as a successful no-op.
 app.post("/api/track-yt/suggest", express.json({ limit: "8kb" }), async (req, res) => {
-  // Admin-only while the YouTube submission flow is gated to admins
-  // (matches the client-side restriction). Reconsider when the
-  // upstream API quota request is approved.
-  const userId = await requireAdmin(req, res);
+  // YT submission flow normally admin-only; relaxed to all signed-in
+  // users when YT_OPEN_TO_USERS=1 (Google API quota demo). Toggle
+  // back via Railway env-var, no redeploy needed.
+  const userId = await requireYtAccess(req, res);
   if (!userId) return;
   const b = req.body ?? {};
   const releaseId   = b.releaseId != null ? String(b.releaseId) : "";
@@ -713,8 +738,8 @@ app.post("/api/track-yt/suggest", express.json({ limit: "8kb" }), async (req, re
 // are silently skipped. Caps batch size at 64 so a hand-edited POST
 // can't try to write a thousand rows in one go.
 app.post("/api/track-yt/suggest-batch", express.json({ limit: "64kb" }), async (req, res) => {
-  // Admin-only — see /api/track-yt/suggest comment for context.
-  const userId = await requireAdmin(req, res);
+  // See /api/track-yt/suggest comment for the YT_OPEN_TO_USERS toggle.
+  const userId = await requireYtAccess(req, res);
   if (!userId) return;
   const raw = Array.isArray(req.body?.assignments) ? req.body.assignments : [];
   const items: Parameters<typeof suggestTrackYtOverridesBatch>[0] = [];
@@ -4110,12 +4135,10 @@ async function _ytBackfillDurationsIfNeeded(cacheKey: string, body: any): Promis
 // Returns { items: [{videoId, title, channel, channelId, publishedAt,
 // description, thumbnail}], nextPageToken }
 app.get("/api/youtube/search", async (req, res) => {
-  // Admin-only while we're cap-constrained on the YouTube Data API.
-  // Cache hits still come from the same handler — non-admin Bearer
-  // requests are bounced before any quota-spending path runs. Any
-  // anon caller falls through to the same admin block.
-  // Reconsider when Google approves the quota-increase request.
-  if (!await requireAdmin(req, res)) return;
+  // Normally admin-only while we're cap-constrained on the YouTube
+  // Data API. Relaxed to all signed-in users when YT_OPEN_TO_USERS=1
+  // (Google API quota demo). Toggle back via Railway env-var.
+  if (!await requireYtAccess(req, res)) return;
   const q = String(req.query?.q ?? "").trim().slice(0, 200);
   if (!q) { res.status(400).json({ error: "q required" }); return; }
   if (!_youtubeApiKey) {
@@ -4327,7 +4350,7 @@ app.get("/api/youtube/search", async (req, res) => {
 const _ytVideoInfoCache = new Map<string, { ts: number; body: any }>();
 const _YT_VIDEO_INFO_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 app.get("/api/youtube/video-info", async (req, res) => {
-  if (!await requireAdmin(req, res)) return;
+  if (!await requireYtAccess(req, res)) return;
   const videoId = String(req.query?.videoId ?? "").trim();
   if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
     res.status(400).json({ error: "Bad videoId" });

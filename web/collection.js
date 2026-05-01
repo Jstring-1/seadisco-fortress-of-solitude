@@ -193,9 +193,10 @@ function _sdGateSignedInView() {
 // flows) burn the most quota, so we restrict initiation to admin
 // until the API quota request is approved. Non-admins get bounced
 // to /?v=search with a toast. Returns true to continue, false to
-// abort the caller.
+// abort the caller. The YT_OPEN_TO_USERS env-var temporarily relaxes
+// this to all signed-in users (Google API quota demo).
 function _sdGateAdminView() {
-  if (window._isAdmin) return true;
+  if (typeof window._sdHasYtAccess === "function" ? window._sdHasYtAccess() : window._isAdmin) return true;
   if (typeof showToast === "function") {
     showToast("YouTube search is admin-only right now (quota request pending).", "info");
   }
