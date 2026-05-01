@@ -127,12 +127,17 @@ window._sdLockBodyScroll = _sdLockBodyScroll;
 window._sdUnlockBodyScroll = _sdUnlockBodyScroll;
 
 // True when the current user is allowed into the YouTube submission
-// flow + standalone /?v=youtube view. Admin always passes; signed-in
-// non-admins pass only when the server's YT_OPEN_TO_USERS env-var is
-// on (Google API quota demo). Consumed by every YT-feature gate so a
-// single env-var flip on Railway changes behaviour everywhere.
+// flow + standalone /?v=youtube view. Three paths:
+//   - admin (ADMIN_CLERK_ID match): always passes.
+//   - demo (DEMO_CLERK_IDS allowlist): per-account access for the
+//     Google API quota reviewer. Same UX as admin minus admin-only
+//     mutations (✕ delete buttons stay gated on _isAdmin).
+//   - YT_OPEN_TO_USERS env-var: broad signed-in access. Off by default.
+// Consumed by every YT-feature gate so a single env-var flip changes
+// behaviour everywhere.
 window._sdHasYtAccess = function () {
   if (window._isAdmin) return true;
+  if (window._sdIsDemo) return true;
   return !!(window._clerk?.user) && !!window._sdYtOpen;
 };
 
@@ -638,7 +643,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260501.0815";
+  const SITE_VERSION = "build 20260501.0827";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -883,10 +888,12 @@ function renderSharedFooter(opts) {
       try { viewAsUser = localStorage.getItem("sd-admin-as-user") === "1"; } catch {}
       window._adminViewAsUser = viewAsUser && window._serverIsAdmin;
       window._isAdmin = window._serverIsAdmin && !viewAsUser;
-      // YT_OPEN_TO_USERS env-var on the server: when on, the YouTube
-      // submission flow + standalone /?v=youtube view are temporarily
-      // accessible to all signed-in users (Google API quota demo).
-      // Consumed by _sdHasYtAccess() below.
+      // Per-account demo allowlist (DEMO_CLERK_IDS env-var) — the
+      // Google API quota reviewer's account gets YT-feature access
+      // without being admin. Mutations stay gated on _isAdmin.
+      window._sdIsDemo = !!data?.isDemo;
+      // Broad YT_OPEN_TO_USERS toggle — off by default. Off means
+      // signed-in non-admin/demo users see the standard splash.
       window._sdYtOpen = !!data?.ytOpen;
       if (window._serverIsAdmin) {
         const adminA = document.getElementById("footer-admin-link");
@@ -915,11 +922,10 @@ function renderSharedFooter(opts) {
         const archA = document.getElementById("footer-archive-link");
         if (archA) archA.style.display = "";
       }
-      // YouTube footer link reveals for admin OR when YT_OPEN_TO_USERS
-      // is set on the server (signed-in non-admins get access during
-      // the demo). Once Google approves the quota request, flip the
-      // env var off and this drops back to admin-only.
-      if (window._isAdmin || window._sdYtOpen) {
+      // YouTube footer link reveals for admin, demo accounts (per-
+      // user DEMO_CLERK_IDS allowlist), or when the broad
+      // YT_OPEN_TO_USERS env-var is set. Default: admin-only.
+      if (typeof window._sdHasYtAccess === "function" ? window._sdHasYtAccess() : window._isAdmin) {
         const ytA = document.getElementById("footer-youtube-link");
         if (ytA) ytA.style.display = "";
       }

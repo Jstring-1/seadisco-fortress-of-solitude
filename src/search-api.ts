@@ -386,21 +386,45 @@ async function requireAdmin(req: express.Request, res: express.Response): Promis
 }
 
 // Temporary toggle: open the YouTube submission flow + standalone
-// /?v=youtube view to ALL signed-in users (instead of admin-only) for
-// the Google API quota review demo. Set YT_OPEN_TO_USERS=1 on Railway
-// to enable; unset/0 for normal admin-only behaviour. Toggling does
-// NOT require a redeploy — env-var only.
+// /?v=youtube view to ALL signed-in users (instead of admin-only).
+// Off by default; flip on with YT_OPEN_TO_USERS=1 on Railway when
+// you want broad signed-in access (e.g. open beta).
 const _ytOpenToUsers = (process.env.YT_OPEN_TO_USERS === "1" || process.env.YT_OPEN_TO_USERS === "true");
+
+// Per-account allowlist for demo / reviewer access. Comma-separated
+// Clerk user IDs that get the same privileges as admin without being
+// admin: bypass the MAX_USERS cap, see the YouTube view + submission
+// flow, hit YT routes server-side. Used for the Google API quota
+// reviewer's `kylejester+ytdemo@gmail.com` account so the reviewer
+// can demo without admin credentials AND without opening the doors
+// to every signed-in user.
+//
+// Find the Clerk user ID in Clerk dashboard → Users → click the user
+// → "user_xxxxxxxx" copyable string. Set DEMO_CLERK_IDS=user_abc,user_def
+// on Railway. Empty / unset = no demo accounts.
+const _demoClerkIds = new Set(
+  (process.env.DEMO_CLERK_IDS ?? "")
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean)
+);
+function isDemoUser(userId: string | null | undefined): boolean {
+  return !!userId && _demoClerkIds.has(userId);
+}
+
 async function requireYtAccess(req: express.Request, res: express.Response): Promise<string | null> {
-  if (_ytOpenToUsers) {
-    const userId = await getClerkUserId(req);
-    if (!userId) {
-      res.status(401).json({ error: "auth_required" });
-      return null;
-    }
-    return userId;
+  // Allowlist path: admin always passes; demo users always pass; the
+  // YT_OPEN_TO_USERS broad-toggle (if on) lets every signed-in user in.
+  const userId = await getClerkUserId(req);
+  if (!userId) {
+    res.status(401).json({ error: "auth_required" });
+    return null;
   }
-  return requireAdmin(req, res);
+  if (ADMIN_CLERK_ID && userId === ADMIN_CLERK_ID) return userId;
+  if (isDemoUser(userId)) return userId;
+  if (_ytOpenToUsers) return userId;
+  res.status(403).json({ error: "forbidden" });
+  return null;
 }
 
 /** Build a DiscogsClient for a userId (outside of an HTTP request context).
@@ -580,14 +604,21 @@ app.get("/api/config", (_req, res) => {
 app.get("/api/me", async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   const userId = await getClerkUserId(req);
-  if (!userId) { res.json({ signedIn: false, isAdmin: false, ytOpen: _ytOpenToUsers }); return; }
+  if (!userId) {
+    res.json({ signedIn: false, isAdmin: false, isDemo: false, ytOpen: _ytOpenToUsers });
+    return;
+  }
   const adminId = ADMIN_CLERK_ID;
   res.json({
     signedIn: true,
     isAdmin: !!adminId && userId === adminId,
-    // Temporary flag mirroring the YT_OPEN_TO_USERS env var so the
-    // client can relax YouTube-feature gates for non-admin signed-in
-    // users during the Google API quota demo.
+    // Per-account demo flag — Clerk user IDs in DEMO_CLERK_IDS get
+    // admin-equivalent UX (YT view, submission popup, paste-URL form)
+    // without the actual admin-only mutations (✕ delete buttons, etc.).
+    isDemo: isDemoUser(userId),
+    // Broad YT_OPEN_TO_USERS toggle — when set, every signed-in user
+    // sees YT features. Off by default; demo accounts above are the
+    // narrower per-account allowlist.
     ytOpen: _ytOpenToUsers,
   });
 });
@@ -608,15 +639,20 @@ app.get("/api/user/token", async (req, res) => {
   const userId = await getClerkUserId(req);
   if (!userId) { res.status(401).json({ error: "Unauthorized" }); return; }
 
-  // Check if this user is hibernated
+  // Check if this user is hibernated. Admin + demo users always
+  // reactivate immediately, bypassing the cap check — they should
+  // never be locked out by an unrelated user-count threshold.
   const hibernated = await isUserHibernated(userId);
   if (hibernated) {
-    const activeCount = await getActiveUserCount();
-    if (activeCount >= MAX_USERS) {
-      res.status(403).json({ error: "hibernated", message: `Your account is hibernated due to inactivity. All ${MAX_USERS} spots are currently full. Please try again later.` });
-      return;
+    const isPrivileged = (ADMIN_CLERK_ID && userId === ADMIN_CLERK_ID) || isDemoUser(userId);
+    if (!isPrivileged) {
+      const activeCount = await getActiveUserCount();
+      if (activeCount >= MAX_USERS) {
+        res.status(403).json({ error: "hibernated", message: `Your account is hibernated due to inactivity. All ${MAX_USERS} spots are currently full. Please try again later.` });
+        return;
+      }
     }
-    // There's room — reactivate automatically
+    // There's room (or user is privileged) — reactivate automatically
     await reactivateUser(userId);
   }
 
@@ -1032,11 +1068,15 @@ app.get("/api/auth/discogs/callback", async (req, res) => {
     // Access Token UI exists anymore.
     const existingToken = await getUserToken(stored.clerkUserId);
     if (!existingToken) {
-      // Check user cap for new users
-      const userCount = await getActiveUserCount();
-      if (userCount >= MAX_USERS) {
-        res.status(403).send(`User limit reached (${MAX_USERS}). New registrations are currently closed. <a href="/">Home</a>`);
-        return;
+      // Check user cap for new users — admin + demo users bypass so a
+      // late-stage demo signup doesn't get bounced when the cap's full.
+      const isPrivileged = (ADMIN_CLERK_ID && stored.clerkUserId === ADMIN_CLERK_ID) || isDemoUser(stored.clerkUserId);
+      if (!isPrivileged) {
+        const userCount = await getActiveUserCount();
+        if (userCount >= MAX_USERS) {
+          res.status(403).send(`User limit reached (${MAX_USERS}). New registrations are currently closed. <a href="/">Home</a>`);
+          return;
+        }
       }
       // Create a placeholder row so OAuth columns have somewhere to live
       await setUserToken(stored.clerkUserId, "__oauth__");
