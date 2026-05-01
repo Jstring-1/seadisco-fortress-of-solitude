@@ -856,8 +856,11 @@ function _sdRenderRandomSlice() {
     }
     return;
   }
+  // Submitted-tab cards opt into the contribution-count badge; other
+  // strip modes render plain cards.
+  const inSubmitted = window._sdHomeStripMode === "submitted";
   for (let i = 0; i < slice.length; i++) {
-    const card = renderCard(slice[i], _randomShown + i);
+    const card = renderCard(slice[i], _randomShown + i, { showContributionBadge: inSubmitted });
     grid.insertAdjacentHTML("beforeend", card);
   }
   _randomShown += slice.length;
@@ -916,7 +919,12 @@ async function _sdDecorateNoVideoCards(items) {
 }
 window._sdDecorateNoVideoCards = _sdDecorateNoVideoCards;
 
-function renderCard(item, index) {
+function renderCard(item, index, opts) {
+  // opts.showContributionBadge — only the home-strip Submitted feed
+  // (and any future "most-contributed" surface) opts in. Default off
+  // so favorites / search / collection don't surface a stale snapshot
+  // count from when an item was originally added via Submitted.
+  const showContributionBadge = !!(opts && opts.showContributionBadge);
   const url  = item.uri ? `https://www.discogs.com${item.uri}` : "#";
   const type = item.type ?? "";
 
@@ -1038,12 +1046,12 @@ function renderCard(item, index) {
   const instanceBadge = (instanceCount > 1 && isRelease)
     ? `<span class="card-instance-badge" onclick="event.preventDefault();event.stopPropagation();openInstancesPopover(event,${item.id})" title="${instanceCount} copies in your collection — click to view">(${instanceCount})</span>`
     : "";
-  // Contribution-count badge — only on cards from the Picks page (or
-  // anywhere _contributionCount is populated by the server). Shows the
-  // total number of crowd-sourced YT overrides for this album so users
-  // can compare at a glance.
+  // Contribution-count badge — opt-in only via opts.showContributionBadge.
+  // _contributionCount gets snapshotted into user_favorites when an item
+  // is favorited from the Submitted feed, so without this opt-in gate
+  // the badge would also surface on Favorites, search, collection, etc.
   const contributionCount = Number(item._contributionCount) || 0;
-  const contributionBadge = contributionCount > 0
+  const contributionBadge = (contributionCount > 0 && showContributionBadge)
     ? `<span class="card-contribution-badge" title="${contributionCount} user-contributed YouTube ${contributionCount === 1 ? "video" : "videos"} for this album">🎵 ${contributionCount}</span>`
     : "";
   const thumbWrap = `<div class="card-thumb-wrap">${thumb}<div class="card-thumb-badges">${badges}</div>${instanceBadge}${contributionBadge}</div>`;
@@ -1696,7 +1704,10 @@ async function loadRandomRecords(more) {
   const inSuggestions = window._sdHomeStripMode === "suggestions";
   const inSubmitted   = window._sdHomeStripMode === "submitted";
   const html = slice.map((item, i) => {
-    const card = renderCard(item, _randomShown + i);
+    // The contribution-count badge is meaningful only on the Submitted
+    // feed — opt in here. Other surfaces (favorites etc.) would inherit
+    // _contributionCount from the snapshot otherwise.
+    const card = renderCard(item, _randomShown + i, { showContributionBadge: inSubmitted });
     const safeId = escHtml(String(item.id));
     const safeType = escHtml(String(item.type || "master"));
     let dismiss = "";
