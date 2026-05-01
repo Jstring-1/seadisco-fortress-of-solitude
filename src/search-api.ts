@@ -341,13 +341,33 @@ async function getDiscogsForRequest(req: express.Request): Promise<DiscogsClient
   if (!userId) return null;
   if (!discogsConsumerKey) return null;
   const oauth = await getOAuthCredentials(userId);
-  if (!oauth) return null;
-  return new DiscogsClient({
-    consumerKey: discogsConsumerKey,
-    consumerSecret: discogsConsumerSecret,
-    accessToken: oauth.accessToken,
-    accessSecret: oauth.accessSecret,
-  });
+  if (oauth) {
+    return new DiscogsClient({
+      consumerKey: discogsConsumerKey,
+      consumerSecret: discogsConsumerSecret,
+      accessToken: oauth.accessToken,
+      accessSecret: oauth.accessSecret,
+    });
+  }
+  // Demo allowlist fallback: a user in DEMO_CLERK_IDS who hasn't
+  // connected their own Discogs OAuth borrows admin's credentials so
+  // they can browse the catalog. Read-only flows (search, release/
+  // master fetches) are the realistic targets here; mutations like
+  // collection edits should still 401 because they hit different
+  // endpoints that look up THIS user's collection. No-op when admin
+  // hasn't connected OAuth either.
+  if (isDemoUser(userId) && ADMIN_CLERK_ID) {
+    const adminOauth = await getOAuthCredentials(ADMIN_CLERK_ID);
+    if (adminOauth) {
+      return new DiscogsClient({
+        consumerKey: discogsConsumerKey,
+        consumerSecret: discogsConsumerSecret,
+        accessToken: adminOauth.accessToken,
+        accessSecret: adminOauth.accessSecret,
+      });
+    }
+  }
+  return null;
 }
 
 /** Gate helper: returns the Clerk userId for a signed-in caller, or null
