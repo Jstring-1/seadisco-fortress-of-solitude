@@ -33,6 +33,10 @@ async function _ensureAdminFlag() {
     if (!r.ok) { window._isAdmin = false; return false; }
     const j = await r.json();
     window._isAdmin = !!j?.isAdmin;
+    // Also populate the YT-open flag so URL-direct nav to /?v=youtube
+    // sees the env-var toggle without waiting for shared.js's separate
+    // /api/me probe (race-free).
+    window._sdYtOpen = !!j?.ytOpen;
     return window._isAdmin;
   } catch {
     window._isAdmin = false;

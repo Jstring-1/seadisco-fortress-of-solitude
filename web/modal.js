@@ -2356,9 +2356,11 @@ function _trackYtRefreshHeadingMissingCount(root) {
   });
   const link = root.querySelector(".tracklist-find-missing");
   if (!link) return;
-  // Admin-only while quota is constrained — keep the link hidden for
-  // non-admins regardless of missing count.
-  if (missing < 1 || !window._clerk?.user || !window._isAdmin) {
+  // YT submission is normally admin-only (quota-constrained). The
+  // YT_OPEN_TO_USERS env-var relaxes this to all signed-in users for
+  // the Google API quota demo — _sdHasYtAccess() encapsulates the rule.
+  const hasYt = typeof window._sdHasYtAccess === "function" ? window._sdHasYtAccess() : !!window._isAdmin;
+  if (missing < 1 || !window._clerk?.user || !hasYt) {
     link.style.display = "none";
     return;
   }
@@ -2376,8 +2378,9 @@ function _trackYtOpenSuggest(el) {
     if (typeof showToast === "function") showToast("Sign in to suggest videos", "info");
     return;
   }
-  // Admin-only while YouTube quota is constrained.
-  if (!window._isAdmin) {
+  // Normally admin-only; relaxed via YT_OPEN_TO_USERS env-var.
+  const hasYt = typeof window._sdHasYtAccess === "function" ? window._sdHasYtAccess() : !!window._isAdmin;
+  if (!hasYt) {
     if (typeof showToast === "function") showToast("YouTube submissions are admin-only right now (quota request pending).", "info");
     return;
   }
@@ -2473,8 +2476,9 @@ async function _trackYtOpenAlbumSuggest(el) {
     if (typeof showToast === "function") showToast("Sign in to suggest videos", "info");
     return;
   }
-  // Admin-only while YouTube quota is constrained.
-  if (!window._isAdmin) {
+  // Normally admin-only; relaxed via YT_OPEN_TO_USERS env-var.
+  const hasYt = typeof window._sdHasYtAccess === "function" ? window._sdHasYtAccess() : !!window._isAdmin;
+  if (!hasYt) {
     if (typeof showToast === "function") showToast("YouTube submissions are admin-only right now (quota request pending).", "info");
     return;
   }
@@ -3405,18 +3409,18 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   // admin (and signed-in non-admin gates are already in place for the
   // album-suggest entry points). _renderFullAlbumRow is generated
   // alongside the normal track rows below.
-  const fullAlbumRowVisible = !!fullAlbumUrl || !!window._isAdmin;
-  // Count Full Album as "missing" only when admin (so the heading
-  // "🎵 N missing" link naturally rolls in the option) AND no override
-  // exists. Non-admins don't see the album-suggest entry point at all.
-  const fullAlbumIsMissing = window._isAdmin && !fullAlbumUrl;
+  // _sdHasYtAccess() is admin OR (signed-in && YT_OPEN_TO_USERS env on).
+  // Used everywhere a "user can submit YT overrides" gate fires.
+  const hasYtAccess = typeof window._sdHasYtAccess === "function" ? window._sdHasYtAccess() : !!window._isAdmin;
+  const fullAlbumRowVisible = !!fullAlbumUrl || hasYtAccess;
+  // Count Full Album as "missing" only when the user can act on it
+  // (admin or YT_OPEN_TO_USERS) AND no override exists. Visitors who
+  // can't submit don't see the album-suggest entry point at all.
+  const fullAlbumIsMissing = hasYtAccess && !fullAlbumUrl;
   const missingCount = tracks.filter(t => t.title && !findVideo(t.title || "", t.position || "")).length
     + (fullAlbumIsMissing ? 1 : 0);
-  // Admin-only while we're throttling YouTube quota — every album-mode
-  // search.list call costs 100 units and runs against the constrained
-  // 10k/day project quota. Reconsider when Google approves the
-  // increased-quota request.
-  const albumFindMissingLink = (missingCount >= 1 && window._clerk?.user && window._isAdmin)
+  // Normally admin-only; relaxed by YT_OPEN_TO_USERS env-var.
+  const albumFindMissingLink = (missingCount >= 1 && window._clerk?.user && hasYtAccess)
     ? ` <a href="#" class="tracklist-find-missing" onclick="event.preventDefault();event.stopPropagation();_trackYtOpenAlbumSuggest(this);return false" title="Search YouTube once for the whole album and assign videos to all missing tracks at once">🎵 ${missingCount} missing</a>`
     : "";
   const playableMeta = playableCount
@@ -3457,11 +3461,11 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
                 : ""
             }`
           : "";
-        // Hide the row by default when no override AND not admin —
+        // Hide the row by default when no override AND no YT-access —
         // _trackYtApplyToDom flips this off when an override lands so
-        // non-admins on cold-cache boots still get the row revealed
-        // once the override fetch reconciles.
-        const hideStyle = (!fullAlbumUrl && !window._isAdmin) ? ' style="display:none"' : "";
+        // signed-in users on cold-cache boots still get the row
+        // revealed once the override fetch reconciles.
+        const hideStyle = (!fullAlbumUrl && !hasYtAccess) ? ' style="display:none"' : "";
         return `<div class="track track-fullalbum" data-pos="ALBUM"${fullAlbumUrl ? ' data-yt-override="1"' : ""}${hideStyle}>
           <span class="track-play-cell">${playCellFA}</span>
           <span class="track-pos">Full</span>

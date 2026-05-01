@@ -671,7 +671,10 @@ function _youtubeRenderPasteForm() {
   const wrap = document.getElementById("youtube-popup-paste");
   if (!wrap) return;
   const ctx = window._sdSuggestAlbumContext;
-  if (!ctx || !window._isAdmin) {
+  // Show paste form to anyone who can submit YT overrides — admin
+  // always, plus all signed-in users when YT_OPEN_TO_USERS is on.
+  const hasYt = typeof window._sdHasYtAccess === "function" ? window._sdHasYtAccess() : !!window._isAdmin;
+  if (!ctx || !hasYt) {
     wrap.style.display = "none";
     return;
   }
