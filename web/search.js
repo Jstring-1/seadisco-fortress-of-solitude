@@ -1161,6 +1161,18 @@ function renderCard(item, index, opts) {
   // manually. The detection logic and _bluesAddArtistByName helper
   // remain so flipping this back on later is one line.
   let bluesAddBtn = "";
+  // Wide-card tracklist: cached releases / masters from Feed /
+  // Submitted / Contributed-favorites endpoints carry a slim
+  // tracklist (position + title + duration). Render it as a tiny
+  // inline list at the bottom of the card body. Hidden in compact
+  // mode via CSS so the HTML doesn't bloat compact-mode layout.
+  const cardTracks = (Array.isArray(item.tracklist) ? item.tracklist : []);
+  const tracklistHtml = cardTracks.length
+    ? `<div class="card-tracklist">
+        <div class="card-tracklist-head">${cardTracks.length} track${cardTracks.length === 1 ? "" : "s"}</div>
+        <ol class="card-tracklist-rows">${cardTracks.map(t => `<li><span class="card-track-pos">${escHtml(t.position || "")}</span><span class="card-track-title">${escHtml(t.title || "")}</span>${t.duration ? `<span class="card-track-dur">${escHtml(t.duration)}</span>` : ""}</li>`).join("")}</ol>
+      </div>`
+    : "";
   return `
     <a ${cardAttrs}${animStyle}>
       ${thumbWrap}
@@ -1177,6 +1189,7 @@ function renderCard(item, index, opts) {
           <div class="card-meta">${metaParts.map(escHtml).join(" · ")}</div>
           ${notesHtml}
         </div>
+        ${tracklistHtml}
       </div>
     </a>`;
 }

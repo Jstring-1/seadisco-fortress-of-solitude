@@ -4144,6 +4144,50 @@ body.card-mode-wide .card-images-strip {
   display: flex;
   flex: 0 0 auto;
 }
+/* Inline tracklist on wide cards. Hidden in compact mode. Caps at
+   ~6 rows visible with scroll for longer ones, so a 4-LP box set
+   doesn't stretch the card to the moon. */
+.card-tracklist {
+  display: none;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+  font-size: 0.72rem;
+}
+.card-tracklist-head {
+  font-size: 0.65rem;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  margin-bottom: 0.25rem;
+}
+.card-tracklist-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 12rem;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+.card-tracklist-rows li {
+  display: grid;
+  grid-template-columns: 2rem 1fr auto;
+  gap: 0.4rem;
+  padding: 0.12rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.card-tracklist-rows li:last-child { border-bottom: none; }
+.card-track-pos { color: var(--muted); font-variant-numeric: tabular-nums; }
+.card-track-title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card-track-dur { color: #777; font-variant-numeric: tabular-nums; }
+body.card-mode-wide .card-tracklist {
+  display: block;
+}
 /* On narrow screens, wide cards drop to single column instead of
    trying to squeeze the cover + metadata into ~150px each. */
 @media (max-width: 640px) {

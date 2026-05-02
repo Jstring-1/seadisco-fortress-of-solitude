@@ -4660,6 +4660,17 @@ app.get("/api/contributed-favorites/sample", async (req, res) => {
         const isMaster = row.type === "master";
         const artistList = Array.isArray(d.artists) ? d.artists.map((a: any) => a.name).filter(Boolean) : [];
         const imageUris = (Array.isArray(d.images) ? d.images.map((im: any) => im?.uri).filter(Boolean) : []);
+      // Slim tracklist for the wide-card inline view — position +
+      // title + duration is all the card needs. Capped at 30 so a
+      // 4-LP box set doesn't blow up the payload.
+      const trackList = (Array.isArray(d.tracklist) ? d.tracklist : [])
+        .map((t: any) => ({
+          position: String(t?.position ?? ""),
+          title:    String(t?.title    ?? ""),
+          duration: String(t?.duration ?? ""),
+        }))
+        .filter((t: { title: string }) => t.title)
+        .slice(0, 30);
         const cover = imageUris[0] ?? (d.cover_image ?? "");
         // Card render expects "Artist - Title" composed in `title` for
         // release/master types. Mirror the favorites endpoint shape.
@@ -4675,6 +4686,7 @@ app.get("/api/contributed-favorites/sample", async (req, res) => {
           cover_image: cover,
           thumb:       cover,
           images: imageUris.slice(0, 12),
+        tracklist: trackList,
           format: (Array.isArray(d.formats) ? d.formats.map((f: any) => f.name).filter(Boolean) : []),
           label:  (Array.isArray(d.labels)  ? d.labels.map((l: any) => l.name).filter(Boolean)  : []),
           genre:  Array.isArray(d.genres) ? d.genres : [],
@@ -4745,6 +4757,17 @@ app.get("/api/feed/random", async (req, res) => {
       const d = row.data ?? {};
       const artistList = Array.isArray(d.artists) ? d.artists.map((a: any) => a.name).filter(Boolean) : [];
       const imageUris = (Array.isArray(d.images) ? d.images.map((im: any) => im?.uri).filter(Boolean) : []);
+      // Slim tracklist for the wide-card inline view — position +
+      // title + duration is all the card needs. Capped at 30 so a
+      // 4-LP box set doesn't blow up the payload.
+      const trackList = (Array.isArray(d.tracklist) ? d.tracklist : [])
+        .map((t: any) => ({
+          position: String(t?.position ?? ""),
+          title:    String(t?.title    ?? ""),
+          duration: String(t?.duration ?? ""),
+        }))
+        .filter((t: { title: string }) => t.title)
+        .slice(0, 30);
       const cover = imageUris[0] ?? (d.cover_image ?? "");
       const composed = artistList.length && d.title
         ? `${artistList.join(", ")} - ${d.title}`
@@ -4761,6 +4784,7 @@ app.get("/api/feed/random", async (req, res) => {
         // scroller beneath/beside the main cover. Capped at 12 to
         // keep card payloads modest.
         images: imageUris.slice(0, 12),
+        tracklist: trackList,
         format: (Array.isArray(d.formats) ? d.formats.map((f: any) => f.name).filter(Boolean) : []),
         label:  (Array.isArray(d.labels)  ? d.labels.map((l: any) => l.name).filter(Boolean)  : []),
         genre:  Array.isArray(d.genres) ? d.genres : [],
@@ -4794,6 +4818,17 @@ app.get("/api/user/my-submitted-albums", async (req, res) => {
       const isMaster = row.type === "master";
       const artistList = Array.isArray(d.artists) ? d.artists.map((a: any) => a.name).filter(Boolean) : [];
       const imageUris = (Array.isArray(d.images) ? d.images.map((im: any) => im?.uri).filter(Boolean) : []);
+      // Slim tracklist for the wide-card inline view — position +
+      // title + duration is all the card needs. Capped at 30 so a
+      // 4-LP box set doesn't blow up the payload.
+      const trackList = (Array.isArray(d.tracklist) ? d.tracklist : [])
+        .map((t: any) => ({
+          position: String(t?.position ?? ""),
+          title:    String(t?.title    ?? ""),
+          duration: String(t?.duration ?? ""),
+        }))
+        .filter((t: { title: string }) => t.title)
+        .slice(0, 30);
       const cover = imageUris[0] ?? (d.cover_image ?? "");
       const composed = artistList.length && d.title
         ? `${artistList.join(", ")} - ${d.title}`
@@ -4807,6 +4842,7 @@ app.get("/api/user/my-submitted-albums", async (req, res) => {
         cover_image: cover,
         thumb:       cover,
         images: imageUris.slice(0, 12),
+        tracklist: trackList,
         format: (Array.isArray(d.formats) ? d.formats.map((f: any) => f.name).filter(Boolean) : []),
         label:  (Array.isArray(d.labels)  ? d.labels.map((l: any) => l.name).filter(Boolean)  : []),
         genre:  Array.isArray(d.genres) ? d.genres : [],
