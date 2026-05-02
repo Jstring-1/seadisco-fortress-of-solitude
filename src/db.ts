@@ -3955,6 +3955,36 @@ export async function getFeedRandomAlbums(
   } catch { return []; }
 }
 
+// Batched lookup of release_cache rows for a list of (id, type)
+// pairs. Used by /api/cards/enrich to backfill the wide-card image
+// strip + inline tracklist on any card surface (favorites, search
+// results, collection, etc.) without requiring each endpoint to
+// JOIN with release_cache itself. Returns only rows that exist —
+// cache misses are silently dropped.
+export async function getCacheEnrichmentBatch(
+  pairs: Array<{ id: number; type: string }>
+): Promise<Array<{ id: number; type: string; data: any }>> {
+  if (!Array.isArray(pairs) || !pairs.length) return [];
+  // Cap input size to keep the query bounded; at 200 pairs the
+  // query fingerprint is still small (~3KB JSON) and the unnest
+  // cost is negligible.
+  const capped = pairs.slice(0, 200).filter(p => Number.isFinite(Number(p.id)) && (p.type === "master" || p.type === "release"));
+  if (!capped.length) return [];
+  try {
+    const ids = capped.map(p => Number(p.id));
+    const types = capped.map(p => String(p.type));
+    const r = await getPool().query(
+      `SELECT discogs_id AS id, type, data
+         FROM release_cache
+        WHERE (discogs_id, type) IN (
+          SELECT * FROM unnest($1::int[], $2::text[])
+        )`,
+      [ids, types]
+    );
+    return r.rows;
+  } catch { return []; }
+}
+
 // AI-search exclusion list: a compact set of "Artist - Title" lines
 // pulled from the user's collection + wantlist so the recommendation
 // prompt can tell Claude what to avoid. Capped so the prompt stays

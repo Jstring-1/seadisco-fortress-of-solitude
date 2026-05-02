@@ -1029,8 +1029,14 @@ function renderCard(item, index, opts) {
   const animStyle = index != null ? ` style="--i:${Math.min(index, 20)}"` : "";
   const typeClass = `card card-type-${type}${animClass}`;
   const fullTitle = artist ? `${artist} - ${title}` : title;
+  // data-card-id / data-card-type let the wide-card enrichment
+  // helper (_sdEnrichWideCards) batch-look-up cached release data
+  // for cards from any surface — favorites, collection, etc. Only
+  // release/master cards get them; artist/label cards have no
+  // tracks/images to enrich.
+  const enrichAttrs = isRelease ? ` data-card-id="${escHtml(String(item.id))}" data-card-type="${escHtml(type)}"` : "";
   const cardAttrs = isRelease
-    ? `class="${typeClass}" href="#" title="${escHtml(fullTitle)}" onclick="openModal(event,'${item.id}','${type}','${url.replace(/'/g, "\\'")}')" `
+    ? `class="${typeClass}"${enrichAttrs} href="#" title="${escHtml(fullTitle)}" onclick="openModal(event,'${item.id}','${type}','${url.replace(/'/g, "\\'")}')" `
     : (isArtist || isLabel)
       ? `class="${typeClass}" href="#" title="${escHtml(fullTitle)}" data-entity-type="${escHtml(type)}" data-entity-name="${escHtml(title)}" data-entity-id="${item.id}" onclick="searchByEntity(event,this)"`
       : `class="${typeClass}" href="${url}" title="${escHtml(fullTitle)}" target="_blank" rel="noopener"`;
