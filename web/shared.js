@@ -154,14 +154,143 @@ function _sdToggleCardMode() {
   const next = _sdGetCardMode() === "wide" ? "compact" : "wide";
   try { localStorage.setItem(_SD_CARD_MODE_KEY, next); } catch {}
   _sdApplyCardMode();
+  // Toggling on enriches every visible release/master card with
+  // cached image-strip + tracklist data so favorites, collection,
+  // search results etc. all get the wide-card extras.
+  _sdScheduleCardEnrich();
 }
 window._sdToggleCardMode = _sdToggleCardMode;
 window._sdApplyCardMode = _sdApplyCardMode;
 if (typeof document !== "undefined") {
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", _sdApplyCardMode);
+    document.addEventListener("DOMContentLoaded", () => { _sdApplyCardMode(); _sdScheduleCardEnrich(); });
   } else {
     _sdApplyCardMode();
+    _sdScheduleCardEnrich();
+  }
+}
+
+// ── Wide-card enrichment ────────────────────────────────────────
+// Cards on most surfaces (favorites, collection, search results,
+// recent strip, etc.) ship with just thumbnail + summary fields. In
+// wide mode we want each card to also show a tiny image strip + an
+// inline tracklist, both pulled from the per-album cache the user
+// has already populated by clicking around. _sdEnrichWideCards
+// scans the visible DOM, batches { id, type } pairs the server
+// hasn't yet enriched, fires /api/cards/enrich, and patches the
+// matching cards in place. Idempotent — already-enriched cards are
+// skipped via a data-card-enriched attribute.
+const _sdEnrichInflight = new Map();
+let _sdEnrichDebounce = null;
+function _sdScheduleCardEnrich() {
+  if (_sdEnrichDebounce) clearTimeout(_sdEnrichDebounce);
+  _sdEnrichDebounce = setTimeout(() => {
+    _sdEnrichDebounce = null;
+    _sdEnrichWideCards().catch(() => {});
+  }, 250);
+}
+window._sdScheduleCardEnrich = _sdScheduleCardEnrich;
+
+async function _sdEnrichWideCards() {
+  if (!document.body.classList.contains("card-mode-wide")) return;
+  const candidates = document.querySelectorAll(
+    ".card[data-card-id][data-card-type]:not([data-card-enriched])"
+  );
+  if (!candidates.length) return;
+  const uniq = new Map();
+  candidates.forEach(el => {
+    const id = el.dataset.cardId;
+    const type = el.dataset.cardType;
+    if (!id || !type) return;
+    const key = `${type}:${id}`;
+    if (!uniq.has(key)) uniq.set(key, { id: Number(id), type });
+  });
+  if (!uniq.size) return;
+  const items = [];
+  for (const [key, val] of uniq.entries()) {
+    if (_sdEnrichInflight.has(key)) continue;
+    items.push(val);
+  }
+  if (!items.length) return;
+  for (const it of items) _sdEnrichInflight.set(`${it.type}:${it.id}`, true);
+  const batches = [];
+  for (let i = 0; i < items.length; i += 200) batches.push(items.slice(i, i + 200));
+  for (const batch of batches) {
+    try {
+      const r = await fetch("/api/cards/enrich", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items: batch }),
+        cache: "no-store",
+      });
+      if (!r.ok) continue;
+      const j = await r.json();
+      const rows = Array.isArray(j?.items) ? j.items : [];
+      for (const row of rows) _sdInjectEnrichmentIntoCards(row);
+    } catch { /* leave un-enriched — cards still render fine */ }
+    finally {
+      for (const it of batch) _sdEnrichInflight.delete(`${it.type}:${it.id}`);
+    }
+  }
+}
+window._sdEnrichWideCards = _sdEnrichWideCards;
+
+function _sdInjectEnrichmentIntoCards(row) {
+  if (!row || row.id == null || !row.type) return;
+  const sel = `.card[data-card-id="${CSS.escape(String(row.id))}"][data-card-type="${CSS.escape(String(row.type))}"]`;
+  const cards = document.querySelectorAll(sel);
+  if (!cards.length) return;
+  const escAttr = (s) => String(s ?? "")
+    .replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+  const escText = (s) => String(s ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  const images = Array.isArray(row.images) ? row.images.filter(Boolean).slice(0, 12) : [];
+  const tracks = Array.isArray(row.tracklist) ? row.tracklist.filter(t => t?.title).slice(0, 30) : [];
+  cards.forEach(card => {
+    if (card.dataset.cardEnriched === "1") return;
+    card.dataset.cardEnriched = "1";
+    if (images.length > 1) {
+      const wrap = card.querySelector(".card-thumb-wrap");
+      if (wrap && !wrap.querySelector(".card-images-strip")) {
+        const stripHtml = `<div class="card-images-strip">${images.map((u, i) =>
+          `<img class="card-images-thumb${i === 0 ? " is-active" : ""}" src="${escAttr(u)}" alt="thumb ${i + 1}" loading="lazy" decoding="async" onclick="event.preventDefault();event.stopPropagation();_sdSwapCardCover(this,'${escAttr(u)}')" />`
+        ).join("")}</div>`;
+        wrap.insertAdjacentHTML("beforeend", stripHtml);
+      }
+    }
+    if (tracks.length) {
+      const body = card.querySelector(".card-body");
+      if (body && !body.querySelector(".card-tracklist")) {
+        const tlHtml = `<div class="card-tracklist">
+          <div class="card-tracklist-head">${tracks.length} track${tracks.length === 1 ? "" : "s"}</div>
+          <ol class="card-tracklist-rows">${tracks.map(t =>
+            `<li><span class="card-track-pos">${escText(t.position || "")}</span><span class="card-track-title">${escText(t.title || "")}</span>${t.duration ? `<span class="card-track-dur">${escText(t.duration)}</span>` : ""}</li>`
+          ).join("")}</ol>
+        </div>`;
+        body.insertAdjacentHTML("beforeend", tlHtml);
+      }
+    }
+  });
+}
+
+// MutationObserver — any new card rendered into a .card-grid (search
+// Load More, page change, view switch) triggers a debounced enrichment
+// pass. Skip outright in compact mode (the helper itself early-exits
+// too, but skipping the timer churn keeps the page snappier).
+if (typeof MutationObserver !== "undefined" && typeof document !== "undefined") {
+  const startObserver = () => {
+    if (document.body.__sdEnrichBodyObs) return;
+    const obs = new MutationObserver(() => {
+      if (!document.body.classList.contains("card-mode-wide")) return;
+      _sdScheduleCardEnrich();
+    });
+    obs.observe(document.body, { childList: true, subtree: true });
+    document.body.__sdEnrichBodyObs = obs;
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", startObserver);
+  } else {
+    startObserver();
   }
 }
 
@@ -682,7 +811,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260501.2151";
+  const SITE_VERSION = "build 20260501.2156";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
