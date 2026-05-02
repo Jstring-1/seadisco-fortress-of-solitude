@@ -4114,18 +4114,24 @@ body.card-mode-wide .card-artist {
   scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
 .card-images-thumb {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   object-fit: cover;
   border-radius: 3px;
   flex-shrink: 0;
   cursor: pointer;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  transition: border-color 0.12s, transform 0.12s;
+  opacity: 0.7;
+  transition: border-color 0.12s, transform 0.12s, opacity 0.12s;
 }
 .card-images-thumb:hover {
   border-color: var(--accent);
-  transform: scale(1.04);
+  opacity: 1;
+}
+.card-images-thumb.is-active {
+  border-color: var(--accent);
+  opacity: 1;
+  transform: scale(1.05);
 }
 body.card-mode-wide .card-thumb-wrap {
   display: flex;
