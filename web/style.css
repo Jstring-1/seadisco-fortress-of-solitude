@@ -4106,6 +4106,36 @@ body.card-mode-wide .card-artist {
 }
 /* Toggle button "on" state. */
 #card-mode-toggle.is-on { color: var(--accent); border-color: var(--accent); }
+/* Sparse cards — the underlying release_cache row was missing or
+   pruned, so the feed endpoint returned a fallback record with just
+   id+type. Visual: dimmed border + a ↻ Re-fetch button so the user
+   can force a fresh Discogs pull (which repopulates the cache). */
+.card.card-sparse {
+  opacity: 0.85;
+  border-style: dashed;
+}
+.card-refresh-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--muted);
+  font-size: 0.7rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  margin-top: 0.6rem;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition: color 0.12s, border-color 0.12s, background 0.12s;
+  align-self: flex-start;
+}
+.card-refresh-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.1);
+}
+.card-refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: progress;
+}
 /* Wide-mode image strip — sits at the bottom of the cover panel. The
    wrap becomes flex-column in wide mode so the cover takes the upper
    chunk and the strip is a fixed-height row underneath. Hidden in

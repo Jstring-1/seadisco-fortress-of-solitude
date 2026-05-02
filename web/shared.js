@@ -178,13 +178,21 @@ function _sdScheduleCardEnrich() {
   if (_sdEnrichDebounce) clearTimeout(_sdEnrichDebounce);
   _sdEnrichDebounce = setTimeout(() => {
     _sdEnrichDebounce = null;
-    _sdEnrichWideCards().catch(() => {});
+    _sdEnrichWideCards().catch(() => {}).finally(() => {
+      // After each enrichment pass, mark whichever cards are still
+      // sparse (cache-missed) so the user sees a ↻ refresh button.
+      try { _sdMarkSparseCards(); } catch {}
+    });
   }, 250);
 }
 window._sdScheduleCardEnrich = _sdScheduleCardEnrich;
 
 async function _sdEnrichWideCards() {
-  if (!document.body.classList.contains("card-mode-wide")) return;
+  // Runs in BOTH compact and wide mode now — search results, recent,
+  // suggestions, every surface — so we have tracks + images cached
+  // and ready when the user toggles to wide. Compact CSS hides the
+  // injected strip + tracklist (display:none) so layout there is
+  // unchanged; the data just rides along.
   const candidates = document.querySelectorAll(
     ".card[data-card-id][data-card-type]:not([data-card-enriched])"
   );
@@ -282,6 +290,129 @@ function _sdMatchTrackVideo(trackTitle, videos) {
   return "";
 }
 
+// Sparse-card detection + ↻ refresh button. A card is "sparse" when
+// the underlying release_cache row is missing — the Submitted /
+// Favorites / Collection feed returned a fallback record with just
+// the discogs id and type. Visual symptoms: title shows as
+// "master 187632", no artist, no cover. We surface a small ↻ button
+// so the user can force a fresh fetch (which populates release_cache)
+// and the next render comes back full. Library-wide.
+function _sdIsSparseCard(card) {
+  if (!card) return false;
+  const id = card.dataset.cardId;
+  const type = card.dataset.cardType;
+  if (!id || !type) return false;
+  const titleEl = card.querySelector(".card-title");
+  const titleText = (titleEl?.textContent || "").trim();
+  const sparseTitle = !titleText || titleText === `${type} ${id}` || titleText === id;
+  const hasImg = !!card.querySelector(".card-thumb-wrap > img:first-of-type");
+  const hasArtist = !!card.querySelector(".card-artist");
+  return sparseTitle && !hasImg && !hasArtist;
+}
+
+async function _sdRefreshSparseCard(btn) {
+  const card = btn?.closest(".card");
+  if (!card) return;
+  const id = card.dataset.cardId;
+  const type = card.dataset.cardType;
+  if (!id || !type) return;
+  const oldText = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "…";
+  try {
+    // Hit the existing /release/:id or /master/:id endpoint with
+    // nocache=1 so the upstream Discogs fetch runs and the result
+    // gets persisted to release_cache. Server-side already requires
+    // a Discogs OAuth client (own creds for signed-in users, admin
+    // fallback for demo/anon).
+    const r = await apiFetch(`/${type}/${id}?nocache=1`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    // The response is a full Discogs record. Patch the visible
+    // card with whatever fields we can scrape. Easiest: re-fire
+    // enrichment which now finds the freshly-cached row.
+    card.removeAttribute("data-card-enriched");
+    if (typeof _sdScheduleCardEnrich === "function") _sdScheduleCardEnrich();
+    // Update the visible title + artist immediately from the
+    // response so the card stops looking sparse before enrichment
+    // lands (~250ms later).
+    const j = await r.json();
+    const titleEl = card.querySelector(".card-title");
+    const bodyEl  = card.querySelector(".card-body");
+    if (j?.title && titleEl) titleEl.textContent = j.title;
+    if (j?.artists && Array.isArray(j.artists) && j.artists.length && bodyEl) {
+      const artistName = j.artists.map(a => a?.name).filter(Boolean).join(", ");
+      // Insert/replace .card-artist if it didn't exist before.
+      let artEl = card.querySelector(".card-artist");
+      if (!artEl) {
+        artEl = document.createElement("div");
+        artEl.className = "card-artist";
+        bodyEl.insertBefore(artEl, bodyEl.firstChild);
+      }
+      artEl.textContent = artistName;
+    }
+    // Replace the placeholder thumb with the cover, if any.
+    const cover = (Array.isArray(j?.images) && j.images[0]?.uri) ? j.images[0].uri : "";
+    if (cover) {
+      const wrap = card.querySelector(".card-thumb-wrap");
+      const placeholder = wrap?.querySelector(".thumb-placeholder");
+      if (placeholder) {
+        const img = document.createElement("img");
+        img.src = cover;
+        img.loading = "lazy";
+        img.decoding = "async";
+        img.width = 300;
+        img.height = 300;
+        placeholder.replaceWith(img);
+      } else {
+        const existingImg = wrap?.querySelector("img:first-of-type:not(.card-images-thumb)");
+        if (existingImg) existingImg.src = cover;
+      }
+    }
+    // Drop the sparse marker + the button itself; the card is now full.
+    card.classList.remove("card-sparse");
+    btn.remove();
+  } catch (e) {
+    console.warn("[card refresh] failed:", e);
+    btn.disabled = false;
+    btn.textContent = oldText;
+    if (typeof showToast === "function") showToast("Couldn't refresh from Discogs", "error");
+  }
+}
+window._sdRefreshSparseCard = _sdRefreshSparseCard;
+
+// Scan visible cards, mark sparse ones, inject the ↻ button. Runs
+// after every render and after each enrichment pass (since enrichment
+// may have populated some cards, leaving only the truly cache-missed
+// ones still sparse). Idempotent — uses card-sparse class as marker.
+function _sdMarkSparseCards() {
+  const cards = document.querySelectorAll(".card[data-card-id][data-card-type]");
+  cards.forEach(card => {
+    const sparse = _sdIsSparseCard(card);
+    if (sparse && !card.classList.contains("card-sparse")) {
+      card.classList.add("card-sparse");
+      // Inject ↻ button into the body if missing.
+      const body = card.querySelector(".card-body");
+      if (body && !body.querySelector(".card-refresh-btn")) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "card-refresh-btn";
+        btn.textContent = "↻ Re-fetch from Discogs";
+        btn.title = "This album's metadata is stale or missing — click to fetch fresh data";
+        btn.onclick = (ev) => {
+          ev.preventDefault();
+          ev.stopPropagation();
+          _sdRefreshSparseCard(btn);
+        };
+        body.appendChild(btn);
+      }
+    } else if (!sparse && card.classList.contains("card-sparse")) {
+      card.classList.remove("card-sparse");
+      card.querySelector(".card-refresh-btn")?.remove();
+    }
+  });
+}
+window._sdMarkSparseCards = _sdMarkSparseCards;
+
 function _sdInjectEnrichmentIntoCards(row) {
   if (!row || row.id == null || !row.type) return;
   const sel = `.card[data-card-id="${CSS.escape(String(row.id))}"][data-card-type="${CSS.escape(String(row.type))}"]`;
@@ -371,8 +502,21 @@ function _sdInjectEnrichmentIntoCards(row) {
 if (typeof MutationObserver !== "undefined" && typeof document !== "undefined") {
   const startObserver = () => {
     if (document.body.__sdEnrichBodyObs) return;
+    let _sparseDebounce = null;
     const obs = new MutationObserver(() => {
-      if (!document.body.classList.contains("card-mode-wide")) return;
+      // Sparse-card marking runs in BOTH compact and wide modes —
+      // the ↻ button isn't a wide-only affordance, it's a "stale
+      // cache" rescue.
+      if (_sparseDebounce) clearTimeout(_sparseDebounce);
+      _sparseDebounce = setTimeout(() => {
+        _sparseDebounce = null;
+        try { _sdMarkSparseCards(); } catch {}
+      }, 200);
+      // Enrichment runs site-wide regardless of card mode now. In
+      // compact mode the cached track + image data is fetched and
+      // injected, but CSS keeps it hidden (display:none) so the
+      // visible compact card looks unchanged. Toggling to wide
+      // immediately reveals the already-cached data with no fetch.
       _sdScheduleCardEnrich();
     });
     obs.observe(document.body, { childList: true, subtree: true });
@@ -918,7 +1062,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260501.2233";
+  const SITE_VERSION = "build 20260501.2248";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
