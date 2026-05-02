@@ -1182,8 +1182,10 @@ function renderCard(item, index, opts) {
     <a ${cardAttrs}${animStyle}>
       ${thumbWrap}
       <div class="card-body">
-        ${artist ? `<div class="card-artist">${bluesAddBtn}<span class="card-artist-link" onclick="event.preventDefault();event.stopPropagation();_sdSearchEntityFromCard('artist','${escHtml(artist).replace(/'/g, "\\'")}')" title="Search for ${escHtml(artist)}">${escHtml(artist)}</span></div>` : ""}
-        <div class="card-title">${escHtml(title)}</div>
+        ${artist ? `<div class="card-artist">${bluesAddBtn}${entityLookupLinkHtml("artist", artist, { className: "card-artist-link", title: `Lookup options for ${artist}` })}</div>` : ""}
+        ${(type === "release" || type === "master")
+          ? `<div class="card-title">${entityLookupLinkHtml("track", title, { className: "card-title-link", title: `Lookup options for ${title}` })}</div>`
+          : `<div class="card-title">${escHtml(title)}</div>`}
         <div class="card-bottom">
           ${label   ? `<div class="card-sub">${escHtml(label)}</div>` : ""}
           ${formats ? `<div class="card-format">${escHtml(formats)}</div>` : ""}

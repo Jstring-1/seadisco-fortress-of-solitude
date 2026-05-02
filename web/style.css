@@ -4249,13 +4249,31 @@ body.card-mode-wide .card-images-strip {
 }
 .card-track-fullalbum .card-track-title { color: #c084fc; font-weight: 600; }
 .card-track-fullalbum .card-track-pos    { color: #c084fc; }
-/* Artist text on cards is now an interactive link to a fresh search.
-   Keep underline-on-hover only so the default card-artist look (accent
-   color) stays the same as before. */
-.card-artist-link {
-  cursor: pointer;
+/* Artist + title on cards use entityLookupLinkHtml (same popup the
+   modal uses — SeaDisco / Wiki / LOC / YouTube / Copy). In compact
+   mode the popup links are inert: pointer-events:none so the outer
+   card click reaches the card and opens the album modal as before.
+   In wide mode (where the outer click is restricted to the cover
+   image) the links become active so the user can choose where to
+   search. Selectors here intentionally beat the generic
+   .entity-lookup-link rule (which adds a dotted underline) — the
+   parent .card-artist / .card-title styling already conveys the
+   color/weight, so we only want the underline on hover in wide mode. */
+.card .card-artist-link,
+.card .card-title-link {
+  color: inherit;
+  text-decoration: none;
 }
-.card-artist-link:hover { text-decoration: underline; }
+body:not(.card-mode-wide) .card .card-artist-link,
+body:not(.card-mode-wide) .card .card-title-link {
+  pointer-events: none;
+}
+body.card-mode-wide .card .card-artist-link:hover,
+body.card-mode-wide .card .card-title-link:hover {
+  text-decoration: underline;
+  cursor: pointer;
+  color: var(--accent-hi, var(--accent));
+}
 /* In wide mode, hovering over the body shouldn't suggest "click to
    open modal" — only the main cover should. Switch the cursor on
    the body areas that aren't clickable to default. */
