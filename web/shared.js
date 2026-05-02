@@ -255,6 +255,68 @@ function _sdCardOuterClick(event, id, type, url) {
 }
 window._sdCardOuterClick = _sdCardOuterClick;
 
+// "Play all" / "Queue all" — walks the tracklist DOM of the card the
+// button lives in, collects every resolved per-track YT URL (skipping
+// disabled rows and the Full Album sentinel), and routes through the
+// queue. mode="play" does next-insert + playHead so playback starts on
+// the first track immediately; mode="append" tacks them onto the tail.
+// Anon users hit queueAdd's localStorage path, so this works without
+// sign-in. Distinct from the Full Album row above which plays a single
+// concatenated video — this one stitches the individual track videos.
+async function _sdQueueAlbumTracks(btn, mode) {
+  const card = btn?.closest(".card");
+  if (!card) return;
+  const rows = card.querySelectorAll(".card-tracklist-rows > li:not(.card-track-fullalbum)");
+  if (!rows.length) return;
+  const items = [];
+  rows.forEach(li => {
+    const playEl = li.querySelector(".card-track-play.track-link");
+    if (!playEl) return; // disabled row — no YT URL
+    const url = playEl.dataset.video || "";
+    const videoId = (typeof extractYouTubeId === "function") ? extractYouTubeId(url) : "";
+    if (!videoId) return;
+    items.push({
+      source: "yt",
+      externalId: String(videoId),
+      data: {
+        title:       playEl.dataset.track   || "",
+        artist:      playEl.dataset.artist  || "",
+        albumTitle:  playEl.dataset.album   || "",
+        ytUrl:       url,
+        releaseType: playEl.dataset.releaseType || "",
+        releaseId:   playEl.dataset.releaseId   || "",
+      },
+    });
+  });
+  if (!items.length) {
+    if (typeof showToast === "function") showToast("No playable tracks on this card", "error");
+    return;
+  }
+  // Signed-in path can use queueAddAlbumOrPlay (handles the "already
+  // queued → jump in place" case). Anons fall through to plain
+  // queueAdd which writes to localStorage.
+  try {
+    if (window._clerk?.user && typeof queueAddAlbumOrPlay === "function") {
+      await queueAddAlbumOrPlay(items, { mode: mode === "play" ? "play" : "append" });
+      return;
+    }
+    if (typeof queueAdd === "function") {
+      if (mode === "play") {
+        await queueAdd(items, { mode: "next" });
+        if (typeof queuePlayHead === "function") {
+          try { await queuePlayHead(); } catch {}
+        }
+      } else {
+        await queueAdd(items, { mode: "append" });
+      }
+    }
+  } catch (e) {
+    console.warn("[_sdQueueAlbumTracks] failed", e);
+    if (typeof showToast === "function") showToast("Could not queue album tracks", "error");
+  }
+}
+window._sdQueueAlbumTracks = _sdQueueAlbumTracks;
+
 // Entity click on a card — pop a fresh search keyed off the artist /
 // label name. event.stopPropagation keeps the outer card's modal-open
 // click from also firing. Routes through the existing search form so
@@ -457,20 +519,25 @@ function _sdInjectEnrichmentIntoCards(row) {
       if (body && !body.querySelector(".card-tracklist")) {
         // data-* attrs match the modal's track-link / queue-add-icon
         // contract so openVideo and _trackQueueAdd consume them as-is.
+        // Title is wrapped in entityLookupLinkHtml so clicking it opens
+        // the same SeaDisco / Wikipedia / Copy popup the modal uses.
         const trackRow = (t, idx) => {
           const url = trackUrls[idx];
+          const titleHtml = (typeof entityLookupLinkHtml === "function" && t.title)
+            ? entityLookupLinkHtml("track", t.title, { className: "card-track-title-link", trackArtist: cardArtist, title: `Lookup options for "${t.title}"` })
+            : escText(t.title || "");
           // <span> not <a> for the same nested-anchor reason —
           // openVideo / _trackQueueAdd read by class + dataset, no
           // anchor semantics needed.
           const playBtn = url
-            ? `<span role="button" tabindex="0" class="card-track-play track-link" data-video="${escAttr(url)}" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();openVideo(event,'${escAttr(url).replace(/'/g, "\\'")}')" title="Play this track">▶</span>`
+            ? `<span role="button" tabindex="0" class="card-track-play card-track-play-active track-link" data-video="${escAttr(url)}" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();openVideo(event,'${escAttr(url).replace(/'/g, "\\'")}')" title="Play this track">▶</span>`
             : `<span class="card-track-play card-track-disabled" aria-hidden="true">▶</span>`;
           const queueBtn = url
             ? `<span role="button" tabindex="0" class="card-track-queue queue-add-icon" data-yt-url="${escAttr(url)}" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackQueueAdd(this);return false" title="Add to queue">＋</span>`
             : `<span class="card-track-queue card-track-disabled" aria-hidden="true">＋</span>`;
           return `<li>
             <span class="card-track-pos">${escText(t.position || "")}</span>
-            <span class="card-track-title">${escText(t.title || "")}</span>
+            <span class="card-track-title">${titleHtml}</span>
             <span class="card-track-actions">${playBtn}${queueBtn}</span>
             ${t.duration ? `<span class="card-track-dur">${escText(t.duration)}</span>` : ""}
           </li>`;
@@ -480,13 +547,28 @@ function _sdInjectEnrichmentIntoCards(row) {
               <span class="card-track-pos">★</span>
               <span class="card-track-title">Full album</span>
               <span class="card-track-actions">
-                <span role="button" tabindex="0" class="card-track-play track-link" data-video="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();openVideo(event,'${escAttr(fullAlbumUrl).replace(/'/g, "\\'")}')" title="Play full album">▶</span>
+                <span role="button" tabindex="0" class="card-track-play card-track-play-active track-link" data-video="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();openVideo(event,'${escAttr(fullAlbumUrl).replace(/'/g, "\\'")}')" title="Play full album">▶</span>
                 <span role="button" tabindex="0" class="card-track-queue queue-add-icon" data-fullalbum="1" data-yt-url="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackQueueAdd(this);return false" title="Queue full album">＋</span>
               </span>
             </li>`
           : "";
+        // "Play all tracks" / "Queue all tracks" — only meaningful if
+        // at least one track has a resolved YT URL. They build a batch
+        // of queueAddYt-shaped items from the resolved trackUrls and
+        // call _sdQueueAlbumTracks (declared below). Distinct from the
+        // Full album single-video row above: this stitches the
+        // individual per-track videos together, which is the closer
+        // analogue of "play the album" when no full-album upload
+        // exists. A tiny visual divider separates these two affordances.
+        const playableCount = trackUrls.filter(Boolean).length;
+        const headActions = playableCount > 0
+          ? `<span class="card-tracklist-head-actions">
+              <span role="button" tabindex="0" class="card-tracklist-playall card-track-play-active" data-card-id="${escAttr(releaseId)}" data-card-type="${escAttr(releaseType)}" onclick="event.preventDefault();event.stopPropagation();_sdQueueAlbumTracks(this,'play');return false" title="Play all tracks (queues every available track)">▶ All</span>
+              <span role="button" tabindex="0" class="card-tracklist-queueall" data-card-id="${escAttr(releaseId)}" data-card-type="${escAttr(releaseType)}" onclick="event.preventDefault();event.stopPropagation();_sdQueueAlbumTracks(this,'append');return false" title="Queue all tracks (append every available track)">＋ All</span>
+            </span>`
+          : "";
         const tlHtml = `<div class="card-tracklist">
-          <div class="card-tracklist-head">${tracks.length} track${tracks.length === 1 ? "" : "s"}${fullAlbumUrl ? " · full album" : ""}</div>
+          <div class="card-tracklist-head"><span class="card-tracklist-head-label">${tracks.length} track${tracks.length === 1 ? "" : "s"}${fullAlbumUrl ? " · full album" : ""}</span>${headActions}</div>
           <ol class="card-tracklist-rows">${fullAlbumRow}${tracks.map((t, i) => trackRow(t, i)).join("")}</ol>
         </div>`;
         body.insertAdjacentHTML("beforeend", tlHtml);

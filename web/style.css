@@ -4265,11 +4265,73 @@ body.card-mode-wide .card-images-strip {
   color: var(--accent);
   background: rgba(255, 255, 255, 0.05);
 }
+/* Play buttons that resolved to a real YT URL render in bright white
+   so the user can see at-a-glance which rows are actually playable.
+   Disabled / no-match rows stay dim (.card-track-disabled rule below). */
+.card-track-play-active {
+  color: #ffffff !important;
+  font-weight: 600;
+}
+.card-track-play-active:hover {
+  color: var(--accent) !important;
+  background: rgba(255, 255, 255, 0.08);
+}
 .card-track-disabled {
   color: #444 !important;
   cursor: default !important;
 }
 .card-track-disabled:hover { background: none !important; color: #444 !important; }
+/* Tracklist head row: label on the left, "Play all / Queue all"
+   buttons on the right. Visible only when there's at least one
+   playable track on the card (helper handles that). */
+.card-tracklist-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+.card-tracklist-head-label { flex: 0 1 auto; }
+.card-tracklist-head-actions {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+}
+.card-tracklist-playall,
+.card-tracklist-queueall {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  padding: 0.05rem 0.35rem;
+  border-radius: 3px;
+  font-size: 0.65rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--muted);
+  transition: color 0.12s, background 0.12s;
+}
+.card-tracklist-playall { color: #ffffff; }
+.card-tracklist-playall:hover,
+.card-tracklist-queueall:hover {
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.12);
+}
+/* Track-title click target — same dotted underline / hover treatment
+   as the entity-lookup popup uses elsewhere. We override the generic
+   .entity-lookup-link rule for ergonomics inside the tight tracklist
+   row: tighter underline offset + inherited color so the row stays
+   readable. The popup itself is unchanged. */
+.card-track-title-link {
+  color: inherit !important;
+  text-decoration: none !important;
+  cursor: pointer;
+}
+.card-track-title-link:hover {
+  color: var(--accent) !important;
+  text-decoration: underline dotted !important;
+  text-underline-offset: 2px;
+}
 /* Full-album row stands out a bit so the user sees it as the special
    "play the whole thing" affordance, not just another track. */
 .card-track-fullalbum {
