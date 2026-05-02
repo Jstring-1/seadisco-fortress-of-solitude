@@ -947,21 +947,24 @@ async function _sdDecorateNoVideoCards(items) {
 }
 window._sdDecorateNoVideoCards = _sdDecorateNoVideoCards;
 
-// Click handler for the wide-card image strip — swap the main thumb
-// to the clicked image. Doesn't touch any other state; the click
-// stops propagation so it doesn't open the modal.
+// Click handler for the wide-card image strip — set the main image
+// to the clicked thumb's source. Thumbs themselves stay in their
+// original order so the user can click back and forth without losing
+// position. The active thumb gets an .is-active class so the user
+// sees which one is currently shown.
 function _sdSwapCardCover(thumbEl, src) {
   if (!thumbEl || !src) return;
   const wrap = thumbEl.closest(".card-thumb-wrap");
   if (!wrap) return;
   const main = wrap.querySelector("img:not(.card-images-thumb)");
-  if (!main) return;
-  // Move the prior main image into the strip slot the user just
-  // clicked, so a back-and-forth swap pattern works without losing
-  // any image.
-  const prior = main.src;
-  main.src = src;
-  thumbEl.src = prior;
+  if (main) main.src = src;
+  // Highlight the active thumb. Other thumbs in the same strip drop
+  // the marker.
+  const strip = thumbEl.closest(".card-images-strip");
+  if (strip) {
+    strip.querySelectorAll(".card-images-thumb.is-active").forEach(el => el.classList.remove("is-active"));
+    thumbEl.classList.add("is-active");
+  }
 }
 window._sdSwapCardCover = _sdSwapCardCover;
 
@@ -1101,19 +1104,19 @@ function renderCard(item, index, opts) {
     ? `<span class="card-contribution-badge" title="${contributionCount} user-contributed YouTube ${contributionCount === 1 ? "video" : "videos"} for this album">🎵 ${contributionCount}</span>`
     : "";
   // Wide-card image scroller: when the item carries a full images
-  // array (cached releases / masters from the Feed / Submitted /
-  // Contributed-favorites endpoints), render the first as the main
-  // cover and the rest as a horizontal thumbnail strip below. Strip
-  // is only visible in wide-card mode (CSS hides it otherwise) so
-  // compact cards don't change. Limited to 12 images server-side.
-  const extraImages = (Array.isArray(item.images) ? item.images : [])
-    .filter(u => u && u !== item.cover_image)
-    .slice(0, 11);
-  const imageStrip = extraImages.length
-    ? `<div class="card-images-strip">${extraImages.map((u, i) => {
+  // array, render every image (including the cover) as a small thumb
+  // in a horizontal scroll strip beneath the main cover. Click any
+  // thumb to make it the main image — thumbs themselves stay put so
+  // the user can browse back and forth without losing position. Strip
+  // is hidden in compact mode (CSS keyed on body.card-mode-wide).
+  const allImages = (Array.isArray(item.images) ? item.images : [])
+    .filter(Boolean)
+    .slice(0, 12);
+  const imageStrip = allImages.length > 1
+    ? `<div class="card-images-strip">${allImages.map((u, i) => {
         const safeU = escHtml(u);
-        // Click swaps the main image; visited classes stay untouched.
-        return `<img class="card-images-thumb" src="${safeU}" alt="${escHtml(title)} #${i + 2}" loading="lazy" decoding="async" onclick="event.preventDefault();event.stopPropagation();_sdSwapCardCover(this,'${safeU}')" />`;
+        const activeCls = i === 0 ? " is-active" : "";
+        return `<img class="card-images-thumb${activeCls}" src="${safeU}" alt="${escHtml(title)} #${i + 1}" loading="lazy" decoding="async" onclick="event.preventDefault();event.stopPropagation();_sdSwapCardCover(this,'${safeU}')" />`;
       }).join("")}</div>`
     : "";
   const thumbWrap = `<div class="card-thumb-wrap">${thumb}<div class="card-thumb-badges">${badges}</div>${instanceBadge}${contributionBadge}${imageStrip}</div>`;
