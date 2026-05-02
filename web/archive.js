@@ -55,6 +55,11 @@ async function initArchiveView(forceRefresh = false) {
   try {
     const url = forceRefresh ? "/api/archive/aadamjacobs?nocache=1" : "/api/archive/aadamjacobs";
     const r = await apiFetch(url);
+    if (r.status === 429) {
+      const body = await r.json().catch(() => ({}));
+      if (listEl) listEl.innerHTML = `<div class="loc-empty">${escHtml(body?.message || "Too many Archive requests from your network — wait a minute and try again.")}</div>`;
+      return;
+    }
     if (!r.ok) {
       if (listEl) listEl.innerHTML = `<div class="loc-empty">Could not load archive collection (HTTP ${r.status}).</div>`;
       return;
@@ -601,6 +606,11 @@ async function _archiveOpenInfoPopup(identifier) {
   if (!data) {
     try {
       const r = await apiFetch(`/api/archive/item/${encodeURIComponent(identifier)}`);
+      if (r.status === 429) {
+        const errBody = await r.json().catch(() => ({}));
+        body.innerHTML = `<div class="loc-empty">${escHtml(errBody?.message || "Too many Archive requests from your network — try again in a minute.")}</div>`;
+        return;
+      }
       if (!r.ok) {
         body.innerHTML = `<div class="loc-empty">Could not load item details (HTTP ${r.status}).</div>`;
         return;

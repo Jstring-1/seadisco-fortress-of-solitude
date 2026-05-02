@@ -516,6 +516,11 @@ async function _renderWikiPopupSearch(q, contentEl) {
   const listEl = contentEl.querySelector(".wiki-popup-results");
   try {
     const r = await apiFetch(`/api/wikipedia/search?q=${encodeURIComponent(q)}&limit=15&offset=0`);
+    if (r.status === 429) {
+      const body = await r.json().catch(() => ({}));
+      listEl.innerHTML = `<div class="wiki-results-error">${escHtml(body?.message || "Too many Wikipedia searches from your network — try again in a few minutes.")}</div>`;
+      return;
+    }
     if (!r.ok) {
       listEl.innerHTML = `<div class="wiki-results-error">Wikipedia search failed.</div>`;
       return;
@@ -978,6 +983,11 @@ async function runWikiPageSearch(query) {
   } catch {}
   try {
     const r = await apiFetch(`/api/wikipedia/search?q=${encodeURIComponent(q)}&limit=${_WIKI_PAGE_SIZE}&offset=0`);
+    if (r.status === 429) {
+      const body = await r.json().catch(() => ({}));
+      resultsEl.innerHTML = `<div class="wiki-results-error">${escHtml(body?.message || "Too many Wikipedia searches from your network — try again in a few minutes.")}</div>`;
+      return;
+    }
     if (!r.ok) {
       resultsEl.innerHTML = `<div class="wiki-results-error">Wikipedia search failed.</div>`;
       return;
@@ -1026,6 +1036,11 @@ async function loadMoreWikiResults() {
   if (btn) { btn.disabled = true; btn.textContent = "Loading…"; }
   try {
     const r = await apiFetch(`/api/wikipedia/search?q=${encodeURIComponent(q)}&limit=${_WIKI_PAGE_SIZE}&offset=${offset}`);
+    if (r.status === 429) {
+      const body = await r.json().catch(() => ({}));
+      if (btn) { btn.disabled = true; btn.textContent = body?.message || "Wikipedia rate limit — try later"; }
+      return;
+    }
     if (!r.ok) {
       if (btn) { btn.disabled = false; btn.textContent = "Load more"; }
       return;

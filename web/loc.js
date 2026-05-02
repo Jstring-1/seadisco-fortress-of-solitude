@@ -127,6 +127,14 @@ async function _locFetchSearch(params) {
   const promise = (async () => {
     try {
       const r = await apiFetch(`/api/loc/search?${qs.toString()}`);
+      if (r.status === 429) {
+        // Per-IP rate limit hit (anon visitors, 5/min). Friendlier
+        // than the generic "Search failed" — tell them to wait, not
+        // sign in (signing in would actually move them to the global
+        // pool but most anons won't think to).
+        const body = await r.json().catch(() => ({}));
+        throw new Error(body?.message || "Too many LOC searches from your network — wait a minute and try again.");
+      }
       if (r.status === 503) {
         const body = await r.json().catch(() => ({}));
         throw new Error(body?.message || "LOC is busy — try again in a moment.");
