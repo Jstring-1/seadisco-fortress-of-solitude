@@ -4196,7 +4196,10 @@ button.wiki-link-btn:active {
   color: var(--accent);
   font-weight: 500;
   display: -webkit-box;
-  -webkit-line-clamp: 1;
+  /* A bit less than double the title clamp (which is now 2 lines) so
+     long artists like "Niney The Observer Aka Winston Holness" still
+     show in full while shorter ones don't claim extra height. */
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -4207,7 +4210,9 @@ button.wiki-link-btn:active {
   line-height: 1.35;
   color: var(--fg);
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  /* 2 lines (was 3) — drops ~one line worth of overflow on the long-
+     suffix titles like "… (Aladdin & Peacock Sides)". */
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
