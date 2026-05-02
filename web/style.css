@@ -8675,6 +8675,23 @@ a:focus-visible {
   gap: 1rem;
   margin-right: 2rem; /* leave room for the × close button */
 }
+.youtube-popup-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+#youtube-popup-loosen {
+  font-size: 0.72rem;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+}
+#youtube-popup-loosen:hover { color: var(--text); background: rgba(255, 255, 255, 0.1); }
 #youtube-popup-overlay .loc-info-close {
   position: absolute;
   top: 0.4rem;
