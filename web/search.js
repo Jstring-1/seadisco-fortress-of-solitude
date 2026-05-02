@@ -1035,8 +1035,11 @@ function renderCard(item, index, opts) {
   // release/master cards get them; artist/label cards have no
   // tracks/images to enrich.
   const enrichAttrs = isRelease ? ` data-card-id="${escHtml(String(item.id))}" data-card-type="${escHtml(type)}"` : "";
+  // _sdCardOuterClick filters by event.target — in wide mode only
+  // clicks on the main cover image open the modal, so internal
+  // entity links, play/queue buttons etc. don't trigger it.
   const cardAttrs = isRelease
-    ? `class="${typeClass}"${enrichAttrs} href="#" title="${escHtml(fullTitle)}" onclick="openModal(event,'${item.id}','${type}','${url.replace(/'/g, "\\'")}')" `
+    ? `class="${typeClass}"${enrichAttrs} href="#" title="${escHtml(fullTitle)}" onclick="_sdCardOuterClick(event,'${item.id}','${type}','${url.replace(/'/g, "\\'")}')" `
     : (isArtist || isLabel)
       ? `class="${typeClass}" href="#" title="${escHtml(fullTitle)}" data-entity-type="${escHtml(type)}" data-entity-name="${escHtml(title)}" data-entity-id="${item.id}" onclick="searchByEntity(event,this)"`
       : `class="${typeClass}" href="${url}" title="${escHtml(fullTitle)}" target="_blank" rel="noopener"`;
@@ -1119,22 +1122,14 @@ function renderCard(item, index, opts) {
   const contributionBadge = (contributionCount > 0 && showContributionBadge)
     ? `<span class="card-contribution-badge" title="${contributionCount} user-contributed YouTube ${contributionCount === 1 ? "video" : "videos"} for this album">🎵 ${contributionCount}</span>`
     : "";
-  // Wide-card image scroller: when the item carries a full images
-  // array, render every image (including the cover) as a small thumb
-  // in a horizontal scroll strip beneath the main cover. Click any
-  // thumb to make it the main image — thumbs themselves stay put so
-  // the user can browse back and forth without losing position. Strip
-  // is hidden in compact mode (CSS keyed on body.card-mode-wide).
-  const allImages = (Array.isArray(item.images) ? item.images : [])
-    .filter(Boolean)
-    .slice(0, 12);
-  const imageStrip = allImages.length > 1
-    ? `<div class="card-images-strip">${allImages.map((u, i) => {
-        const safeU = escHtml(u);
-        const activeCls = i === 0 ? " is-active" : "";
-        return `<img class="card-images-thumb${activeCls}" src="${safeU}" alt="${escHtml(title)} #${i + 1}" loading="lazy" decoding="async" onclick="event.preventDefault();event.stopPropagation();_sdSwapCardCover(this,'${safeU}')" />`;
-      }).join("")}</div>`
-    : "";
+  // Image strip + inline tracklist used to be rendered here for
+  // Feed/Submitted/Contributed cards that ship images/tracklist on
+  // the response. It's now handled exclusively by the wide-card
+  // enrichment path (_sdInjectEnrichmentIntoCards in shared.js) so
+  // every surface — favorites, collection, search results — gets
+  // the same play/queue affordances. Cards without item.images are
+  // unchanged.
+  const imageStrip = "";
   const thumbWrap = `<div class="card-thumb-wrap">${thumb}<div class="card-thumb-badges">${badges}</div>${instanceBadge}${contributionBadge}${imageStrip}</div>`;
 
   // Rating stars (only for collection/wantlist cards)
@@ -1180,23 +1175,14 @@ function renderCard(item, index, opts) {
   // manually. The detection logic and _bluesAddArtistByName helper
   // remain so flipping this back on later is one line.
   let bluesAddBtn = "";
-  // Wide-card tracklist: cached releases / masters from Feed /
-  // Submitted / Contributed-favorites endpoints carry a slim
-  // tracklist (position + title + duration). Render it as a tiny
-  // inline list at the bottom of the card body. Hidden in compact
-  // mode via CSS so the HTML doesn't bloat compact-mode layout.
-  const cardTracks = (Array.isArray(item.tracklist) ? item.tracklist : []);
-  const tracklistHtml = cardTracks.length
-    ? `<div class="card-tracklist">
-        <div class="card-tracklist-head">${cardTracks.length} track${cardTracks.length === 1 ? "" : "s"}</div>
-        <ol class="card-tracklist-rows">${cardTracks.map(t => `<li><span class="card-track-pos">${escHtml(t.position || "")}</span><span class="card-track-title">${escHtml(t.title || "")}</span>${t.duration ? `<span class="card-track-dur">${escHtml(t.duration)}</span>` : ""}</li>`).join("")}</ol>
-      </div>`
-    : "";
+  // Inline tracklist also moved to the wide-card enrichment path —
+  // the renderCard output stays compact and unified across surfaces.
+  const tracklistHtml = "";
   return `
     <a ${cardAttrs}${animStyle}>
       ${thumbWrap}
       <div class="card-body">
-        ${artist ? `<div class="card-artist">${bluesAddBtn}${escHtml(artist)}</div>` : ""}
+        ${artist ? `<div class="card-artist">${bluesAddBtn}<span class="card-artist-link" onclick="event.preventDefault();event.stopPropagation();_sdSearchEntityFromCard('artist','${escHtml(artist).replace(/'/g, "\\'")}')" title="Search for ${escHtml(artist)}">${escHtml(artist)}</span></div>` : ""}
         <div class="card-title">${escHtml(title)}</div>
         <div class="card-bottom">
           ${label   ? `<div class="card-sub">${escHtml(label)}</div>` : ""}

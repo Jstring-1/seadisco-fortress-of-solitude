@@ -4187,8 +4187,9 @@ body.card-mode-wide .card-images-strip {
 }
 .card-tracklist-rows li {
   display: grid;
-  grid-template-columns: 2rem 1fr auto;
+  grid-template-columns: 2rem 1fr auto auto;
   gap: 0.4rem;
+  align-items: center;
   padding: 0.12rem 0;
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
@@ -4200,6 +4201,58 @@ body.card-mode-wide .card-images-strip {
   text-overflow: ellipsis;
 }
 .card-track-dur { color: #777; font-variant-numeric: tabular-nums; }
+/* Per-track ▶ / ＋ buttons. Tiny so the row stays compact. Disabled
+   variant (no YT match) is dimmed and non-clickable. */
+.card-track-actions {
+  display: inline-flex;
+  gap: 0.25rem;
+  align-items: center;
+  font-size: 0.78rem;
+}
+.card-track-play,
+.card-track-queue {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 3px;
+  color: var(--muted);
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.12s, background 0.12s;
+}
+.card-track-play:hover,
+.card-track-queue:hover {
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.05);
+}
+.card-track-disabled {
+  color: #444 !important;
+  cursor: default !important;
+}
+.card-track-disabled:hover { background: none !important; color: #444 !important; }
+/* Full-album row stands out a bit so the user sees it as the special
+   "play the whole thing" affordance, not just another track. */
+.card-track-fullalbum {
+  background: rgba(192, 132, 252, 0.06);
+  border-radius: 3px;
+  padding: 0.18rem 0.3rem !important;
+}
+.card-track-fullalbum .card-track-title { color: #c084fc; font-weight: 600; }
+.card-track-fullalbum .card-track-pos    { color: #c084fc; }
+/* Artist text on cards is now an interactive link to a fresh search.
+   Keep underline-on-hover only so the default card-artist look (accent
+   color) stays the same as before. */
+.card-artist-link {
+  cursor: pointer;
+}
+.card-artist-link:hover { text-decoration: underline; }
+/* In wide mode, hovering over the body shouldn't suggest "click to
+   open modal" — only the main cover should. Switch the cursor on
+   the body areas that aren't clickable to default. */
+body.card-mode-wide .card .card-body { cursor: default; }
+body.card-mode-wide .card .card-thumb-wrap > img:first-of-type { cursor: pointer; }
 body.card-mode-wide .card-tracklist {
   display: block;
 }
