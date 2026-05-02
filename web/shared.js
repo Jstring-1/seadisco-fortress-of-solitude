@@ -126,6 +126,45 @@ function _sdUnlockBodyScroll(id) {
 window._sdLockBodyScroll = _sdLockBodyScroll;
 window._sdUnlockBodyScroll = _sdUnlockBodyScroll;
 
+// ── Card display mode (compact / wide) ────────────────────────────
+// User-toggleable via the ▦ Wide button on the search bar. Persisted
+// in localStorage so the choice sticks across reloads and tabs. Wide
+// mode roughly doubles per-card width so all artist + title text
+// shows in full without clamping. Compact mode is the default.
+const _SD_CARD_MODE_KEY = "sd_card_mode";
+function _sdGetCardMode() {
+  try { return localStorage.getItem(_SD_CARD_MODE_KEY) === "wide" ? "wide" : "compact"; }
+  catch { return "compact"; }
+}
+function _sdApplyCardMode() {
+  const mode = _sdGetCardMode();
+  document.body.classList.toggle("card-mode-wide", mode === "wide");
+  // Reflect button state if it exists on this page.
+  const btn = document.getElementById("card-mode-toggle");
+  if (btn) {
+    btn.classList.toggle("is-on", mode === "wide");
+    btn.style.color = mode === "wide" ? "var(--accent)" : "var(--muted)";
+    btn.style.borderColor = mode === "wide" ? "var(--accent)" : "var(--border)";
+    btn.title = mode === "wide"
+      ? "Wide card mode is ON — click for compact"
+      : "Wide card mode (shows full title + artist) — click to enable";
+  }
+}
+function _sdToggleCardMode() {
+  const next = _sdGetCardMode() === "wide" ? "compact" : "wide";
+  try { localStorage.setItem(_SD_CARD_MODE_KEY, next); } catch {}
+  _sdApplyCardMode();
+}
+window._sdToggleCardMode = _sdToggleCardMode;
+window._sdApplyCardMode = _sdApplyCardMode;
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", _sdApplyCardMode);
+  } else {
+    _sdApplyCardMode();
+  }
+}
+
 // True when the current user is allowed into the YouTube submission
 // flow + standalone /?v=youtube view. Three paths:
 //   - admin (ADMIN_CLERK_ID match): always passes.
@@ -643,7 +682,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260501.2114";
+  const SITE_VERSION = "build 20260501.2118";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>

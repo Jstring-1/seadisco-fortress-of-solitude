@@ -4053,6 +4053,61 @@ button.wiki-link-btn:active {
   gap: 1rem;
 }
 
+/* Wide card mode (toggled via the ▦ Wide button — body.card-mode-wide).
+   Roughly doubles each card's min-width so two compact-mode cards
+   become one wide one. Title + artist clamps drop so all text shows.
+   Layout becomes a horizontal flex row inside each card so the cover
+   sits next to the metadata instead of above it. */
+body.card-mode-wide .card-grid {
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+}
+body.card-mode-wide .card {
+  /* Override the aspect-ratio from the compact card style — wide cards
+     should size to their content, not stay square. */
+  aspect-ratio: auto;
+  height: auto;
+  display: flex;
+  flex-direction: row;
+  align-items: stretch;
+}
+body.card-mode-wide .card-thumb-wrap {
+  width: 50%;
+  flex-shrink: 0;
+  aspect-ratio: 1 / 1;
+}
+body.card-mode-wide .card-body {
+  flex: 1 1 auto;
+  padding: 0.6rem 0.7rem;
+  min-width: 0;
+}
+body.card-mode-wide .card-artist,
+body.card-mode-wide .card-title {
+  /* Drop the line clamps so the full text shows. */
+  -webkit-line-clamp: unset;
+  display: block;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+body.card-mode-wide .card-title {
+  font-size: 0.85rem;
+  margin-bottom: 0.3rem;
+}
+body.card-mode-wide .card-artist {
+  font-size: 0.8rem;
+  margin-bottom: 0.2rem;
+}
+/* Toggle button "on" state. */
+#card-mode-toggle.is-on { color: var(--accent); border-color: var(--accent); }
+/* On narrow screens, wide cards drop to single column instead of
+   trying to squeeze the cover + metadata into ~150px each. */
+@media (max-width: 640px) {
+  body.card-mode-wide .card-grid {
+    grid-template-columns: 1fr;
+    gap: 0.7rem;
+  }
+}
+
 /* ── Recent history strip (front-page Recent cards) ── */
 /* Uses the standard .card-grid layout and the full card body, so cards
    look identical to search results. Each card is wrapped in .recent-wrap
