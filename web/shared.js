@@ -161,14 +161,6 @@ function _sdToggleCardMode() {
 }
 window._sdToggleCardMode = _sdToggleCardMode;
 window._sdApplyCardMode = _sdApplyCardMode;
-if (typeof document !== "undefined") {
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => { _sdApplyCardMode(); _sdScheduleCardEnrich(); });
-  } else {
-    _sdApplyCardMode();
-    _sdScheduleCardEnrich();
-  }
-}
 
 // ── Wide-card enrichment ────────────────────────────────────────
 // Cards on most surfaces (favorites, collection, search results,
@@ -387,6 +379,22 @@ if (typeof MutationObserver !== "undefined" && typeof document !== "undefined") 
     document.addEventListener("DOMContentLoaded", startObserver);
   } else {
     startObserver();
+  }
+}
+
+// Card-mode boot — moved here AFTER the wide-card enrichment helpers
+// are declared so the synchronous _sdScheduleCardEnrich() call below
+// can resolve _sdEnrichDebounce / _sdEnrichInflight (declared just
+// above). When this lived BEFORE those declarations, the function
+// body hit the TDZ on every fresh load and the script aborted —
+// which left renderSharedHeader's _SD_NAV_ICONS uninitialized too,
+// blanking the navbar.
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => { _sdApplyCardMode(); _sdScheduleCardEnrich(); });
+  } else {
+    _sdApplyCardMode();
+    _sdScheduleCardEnrich();
   }
 }
 
@@ -907,7 +915,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260501.2204";
+  const SITE_VERSION = "build 20260501.2215";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
