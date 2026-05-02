@@ -771,24 +771,19 @@ function _sdSyncHomeStripTabsVisual() {
     el.classList.toggle("rr-tab-active", k === m);
     el.style.color = k === m ? "var(--text)" : "var(--muted)";
   }
-  // Anon users only see Feed — hide the other three tabs (and the
-  // separators between them) so the strip doesn't suggest features
-  // that immediately bounce them to a sign-in modal.
+  // Anon users see all four tabs but Recent / Suggestions / Submitted
+  // are visually disabled (greyed out) — clicking them is a no-op
+  // (handled in _sdSwitchHomeStripTab) so anons can only land on Feed.
+  // Sign-in unlocks the rest.
   const isAnon = !window._clerk?.user;
-  const stripHeader = document.querySelector("#random-records-title-wrap");
-  if (stripHeader) {
-    const recentTab = tabs.recent;
-    const suggestTab = tabs.suggestions;
-    const submittedTab = tabs.submitted;
-    [recentTab, suggestTab, submittedTab].forEach(el => {
-      if (el) el.style.display = isAnon ? "none" : "";
-    });
-    // The separators are <span class="rr-tab-sep">. Hide all but the
-    // last one for anons (we only want the strip to show "Feed" cleanly).
-    stripHeader.querySelectorAll(".rr-tab-sep").forEach(el => {
-      el.style.display = isAnon ? "none" : "";
-    });
-  }
+  ["recent", "suggestions", "submitted"].forEach(k => {
+    const el = tabs[k];
+    if (!el) return;
+    el.classList.toggle("rr-tab-disabled", isAnon);
+    if (isAnon) {
+      el.title = (el.title ? el.title + " · " : "") + "Sign in to use";
+    }
+  });
 }
 window._sdSyncHomeStripTabsVisual = _sdSyncHomeStripTabsVisual;
 
@@ -808,6 +803,15 @@ function _sdSwitchHomeStripTab(mode) {
           : mode === "submitted"   ? "submitted"
           : mode === "feed"        ? "feed"
           : "recent";
+  // Anon-mode lockdown: signed-out users can only land on Feed. Other
+  // tabs are visible-but-disabled — nudge them to sign in and bail.
+  if (!window._clerk?.user && m !== "feed") {
+    if (typeof showToast === "function") showToast("Sign in to use the rest of the strip.", "info");
+    if (typeof openSignInModal === "function") {
+      try { openSignInModal(); } catch {}
+    }
+    return;
+  }
   if (window._sdHomeStripMode === m) {
     // Idempotent re-click: still re-sync visual state in case
     // something else (markup edit, race, mid-load DOM update) left
@@ -1736,6 +1740,31 @@ async function loadRandomRecords(more) {
     }
   }
 
+  // Feed-mode Load More: when we've exhausted the locally-loaded
+  // page AND the user is asking for more, fetch a fresh server page
+  // with already-shown ids excluded so we don't repeat. Append to
+  // _randomAll then fall through to the normal render-slice path.
+  if (more && window._sdHomeStripMode === "feed") {
+    const filteredSoFar = _sdFilterRandom(_randomAll);
+    if (_randomShown >= filteredSoFar.length) {
+      try {
+        const seen = (Array.isArray(_randomAll) ? _randomAll : [])
+          .map(it => `${it.type}:${it.id}`)
+          .filter(s => /^(master|release):\d+/.test(s))
+          .slice(0, 500)
+          .join(",");
+        const url = `/api/feed/random?limit=48${seen ? "&exclude=" + encodeURIComponent(seen) : ""}`;
+        const r = await fetch(url, { cache: "no-store" });
+        if (r.ok) {
+          const j = await r.json();
+          if (Array.isArray(j?.items) && j.items.length) {
+            const fresh = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
+            _randomAll = (_randomAll || []).concat(fresh);
+          }
+        }
+      } catch { /* leave _randomAll as-is; the slice below will be empty and we'll bail */ }
+    }
+  }
   // Filter is client-side and re-runs on every render so the visible
   // grid always matches the current search input.
   const filteredAll = _sdFilterRandom(_randomAll);
@@ -1777,8 +1806,12 @@ async function loadRandomRecords(more) {
   }
   _randomShown += slice.length;
 
-  // Add load-more if there are more to show
-  if (_randomShown < filteredAll.length) {
+  // Add load-more if there are more to show. In Feed mode we always
+  // show Load More — clicking fetches the next server page from the
+  // RANDOM-ordered cache, with already-seen ids excluded.
+  const hasMoreLocal = _randomShown < filteredAll.length;
+  const isFeedMode  = window._sdHomeStripMode === "feed";
+  if (hasMoreLocal || isFeedMode) {
     grid.insertAdjacentHTML("beforeend",
       `<div class="random-load-more" style="grid-column:1/-1;text-align:center;padding:0.75rem 0">` +
       `<button onclick="loadRandomRecords(true)" style="background:none;border:1px solid var(--border);color:var(--muted);padding:0.4rem 1.2rem;border-radius:var(--radius);cursor:pointer;font-size:0.8rem" ` +

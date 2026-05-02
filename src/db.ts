@@ -3921,19 +3921,35 @@ export async function getMostContributedAlbums(
 // callers can opt for either via `type`.
 export async function getFeedRandomAlbums(
   limit = 48,
-  type: "master" | "release" | "any" = "any"
+  type: "master" | "release" | "any" = "any",
+  excludeIds?: Array<{ id: number; type: string }>
 ): Promise<any[]> {
   try {
     const cap = Math.max(1, Math.min(200, limit));
-    const sql = type === "any"
-      ? `SELECT discogs_id AS id, type, data, cached_at
-           FROM release_cache
-          ORDER BY RANDOM() LIMIT $1`
-      : `SELECT discogs_id AS id, type, data, cached_at
-           FROM release_cache
-          WHERE type = $2
-          ORDER BY RANDOM() LIMIT $1`;
-    const params: any[] = type === "any" ? [cap] : [cap, type];
+    // Exclusion filter — used by Load More so already-shown rows
+    // don't repeat in the next page. Encoded as parallel arrays of
+    // (discogs_id, type) so we can NOT (id, type) IN (...) match.
+    const exclude = Array.isArray(excludeIds) ? excludeIds.slice(0, 500) : [];
+    const excludeIdsArr  = exclude.map(e => Number(e.id));
+    const excludeTypeArr = exclude.map(e => String(e.type));
+    const params: any[] = [cap];
+    let where = "";
+    if (type !== "any") {
+      params.push(type);
+      where += `WHERE type = $${params.length} `;
+    }
+    if (exclude.length) {
+      params.push(excludeIdsArr);
+      const idIdx = params.length;
+      params.push(excludeTypeArr);
+      const tyIdx = params.length;
+      where += where ? "AND " : "WHERE ";
+      where += `NOT (discogs_id = ANY($${idIdx}::int[]) AND type = ANY($${tyIdx}::text[])) `;
+    }
+    const sql = `SELECT discogs_id AS id, type, data, cached_at
+                   FROM release_cache
+                   ${where}
+                  ORDER BY RANDOM() LIMIT $1`;
     const r = await getPool().query(sql, params);
     return r.rows;
   } catch { return []; }

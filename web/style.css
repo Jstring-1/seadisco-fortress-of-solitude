@@ -2435,6 +2435,27 @@ body.mini-player-bar-hidden #mini-player-show-tab { display: flex; align-items: 
    propagate to the body in some browsers. */
 body.modal-open  { overflow: hidden; overscroll-behavior: none; }
 
+/* Anon mode: hide save / favorite affordances across LOC, Wiki,
+   Archive, and YouTube companion views — anons can search & view
+   but can't save (server-side requireUser on the save endpoints
+   would 401 anyway; this just keeps the UI honest). The Saved sub-
+   tabs in those views are also hidden. */
+body.sd-anon .loc-save-badge,
+body.sd-anon .archive-save-btn,
+body.sd-anon .wiki-save-btn,
+body.sd-anon .yt-save-btn,
+body.sd-anon .loc-tab-saved,
+body.sd-anon .archive-tab-saved,
+body.sd-anon .wiki-tab-saved,
+body.sd-anon .youtube-saved-tab,
+body.sd-anon .card-badge.badge-favorite,
+body.sd-anon .card-badge.badge-collection,
+body.sd-anon .card-badge.badge-wantlist,
+body.sd-anon .card-badge.badge-list,
+body.sd-anon .card-badge.badge-inventory {
+  display: none !important;
+}
+
 .mini-player-bar {
   display: flex;
   align-items: center;
@@ -3360,6 +3381,12 @@ button.wiki-link-btn:active {
 .rr-tab { cursor: pointer; color: var(--muted); transition: color 0.15s; }
 .rr-tab:hover { color: var(--text); }
 .rr-tab.rr-tab-active { color: var(--text); }
+.rr-tab.rr-tab-disabled {
+  color: #444 !important;
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.rr-tab.rr-tab-disabled:hover { color: #444 !important; }
 .rr-tab-sep { color: #444; }
 .rr-controls {
   display: flex;
