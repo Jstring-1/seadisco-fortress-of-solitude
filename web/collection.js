@@ -310,14 +310,16 @@ function switchView(view, skipPushState = false) {
     if (wantedWrap) wantedWrap.style.display = "none";
     if (typeof initAccountView === "function") initAccountView();
   } else if (view === "loc") {
-    if (!_sdGateSignedInView()) return;
+    // LOC / Wiki / Archive are open to anons too — public APIs with
+    // generous rate limits and per-IP caps. Anons can search & view
+    // but can't save (server-side requireUser on the save endpoints
+    // + client-side hideSaveButtons toggle in each view's init).
     if (locView) locView.style.display = "block";
     if (mainForm) mainForm.style.display = "none";
     if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
     if (typeof initLocView === "function") initLocView();
   } else if (view === "archive") {
-    if (!_sdGateSignedInView()) return;
     const archView = document.getElementById("archive-view");
     if (archView) archView.style.display = "block";
     if (mainForm) mainForm.style.display = "none";
@@ -341,7 +343,6 @@ function switchView(view, skipPushState = false) {
       window._sdLoadModule("/youtube.js").then(() => window.initYoutubeView?.()).catch(() => {});
     }
   } else if (view === "wiki") {
-    if (!_sdGateSignedInView()) return;
     if (wikiView) wikiView.style.display = "block";
     if (mainForm) mainForm.style.display = "none";
     if (recordsWrap) recordsWrap.style.display = "none";

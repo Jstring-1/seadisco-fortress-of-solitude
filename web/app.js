@@ -66,15 +66,11 @@ async function _ensureAdminFlag() {
   } else if (rawView === "info" || rawView === "privacy" || rawView === "terms") {
     switchView(rawView, true);
   } else if (rawView === "wiki" || rawView === "loc" || rawView === "archive" || rawView === "youtube") {
-    // Companion views (Wikipedia / LOC / Archive / YouTube) are now
-    // signed-in only. Anon visitors hitting these URLs go through
-    // switchView's _sdGateSignedInView gate, which pops the sign-in
-    // modal and falls back to the search splash.
+    // LOC / Wikipedia / Archive: anon-accessible (read + search,
+    // no save). YouTube: still admin/demo gated via the access
+    // helper. Wait for auth so any save-button visibility decisions
+    // happen post-Clerk-resolve.
     await authReadyPromise;
-    // YouTube is additionally admin-only right now (quota constraint).
-    // Wait for the admin flag before routing — without this an admin
-    // hitting /?v=youtube directly would race the /api/me probe and
-    // get bounced back to /?v=search by the gate.
     if (rawView === "youtube") await _ensureAdminFlag();
     switchView(rawView, true);
   } else if (rawView === "picks") {

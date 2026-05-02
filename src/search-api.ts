@@ -192,12 +192,6 @@ const anonWikiLimiter = new PerIpRateLimiter(50, 60 * 60_000,   "wiki-anon");
 // without the Clerk Bearer attached). The DB-backed search cache
 // makes repeated queries free regardless.
 const anonYoutubeLimiter = new PerIpRateLimiter(120, 60 * 60_000, "youtube-anon");
-// Discogs search for anon visitors. We borrow admin's OAuth credentials
-// to actually hit the Discogs API on their behalf, so we throttle hard
-// per IP to keep one curious visitor from chewing through admin's
-// 60/min OAuth budget. 30/hr per IP is generous for normal browsing
-// (covers a typical 10-15 min explore session) and abuse-resistant.
-const anonDiscogsLimiter = new PerIpRateLimiter(30, 60 * 60_000, "discogs-anon");
 
 /** Open gate: allows any caller (anon or authenticated). Anonymous
  *  callers are rate-limited per IP via the supplied limiter; signed-in
@@ -4732,7 +4726,19 @@ app.get("/api/feed/random", async (req, res) => {
     const type: "master" | "release" | "any" =
       typeParam === "master" ? "master" :
       typeParam === "release" ? "release" : "any";
-    const rows = await getFeedRandomAlbums(limit, type);
+    // Optional exclude list: comma-separated "type:id" pairs the
+    // client has already shown (Load More uses this to avoid repeats
+    // across pages). Capped server-side at 500 entries.
+    const excludeStr = String(req.query.exclude ?? "").trim();
+    const excludeIds = excludeStr
+      ? excludeStr.split(",").map(s => {
+          const [t, idRaw] = s.split(":");
+          const id = Number(idRaw);
+          if (!Number.isFinite(id) || (t !== "master" && t !== "release")) return null;
+          return { id, type: t };
+        }).filter((x): x is { id: number; type: string } => !!x).slice(0, 500)
+      : [];
+    const rows = await getFeedRandomAlbums(limit, type, excludeIds);
     const items = rows.map((row: any) => {
       const d = row.data ?? {};
       const artistList = Array.isArray(d.artists) ? d.artists.map((a: any) => a.name).filter(Boolean) : [];
@@ -6147,14 +6153,11 @@ In 4–7 words, give a single honest phrase describing how well these results ma
 
 // GET /search?q=pink+floyd&type=master&year=1973&page=1&per_page=10
 app.get("/search", async (req, res) => {
-  // Anon visitors can search via admin's OAuth as a fallback (read-only
-  // catalog browse) — gated by a per-IP rate limit to keep abuse off
-  // admin's 60/min OAuth budget. Signed-in users go through the
-  // standard requireUser path with their own creds.
-  const callerId = await getClerkUserId(req).catch(() => null);
-  if (!callerId) {
-    if (!await allowAnonRateLimited(req, res, anonDiscogsLimiter)) return;
-  }
+  // Discogs search is signed-in only. Anon visitors get the cached
+  // Feed instead (see /api/feed/random) — we never burn upstream
+  // Discogs requests on anon traffic.
+  const userId = await requireUser(req, res);
+  if (!userId) return;
 
   const rawQ   = (req.query.q as string) ?? "";
   const artist = stripArtistSuffix(req.query.artist as string | undefined);
@@ -6167,24 +6170,9 @@ app.get("/search", async (req, res) => {
   const searchLabel: string | undefined = rawLabel || undefined;
   const searchRelease: string | undefined = rawRelease || undefined;
 
-  // Touch activity for the signed-in user
-  if (callerId) touchUserActivity(callerId).catch(() => {});
+  touchUserActivity(userId).catch(() => {});
 
-  // Resolve a Discogs client. Signed-in users use their own creds;
-  // anon users borrow admin's. Either way, getDiscogsForRequest's
-  // demo fallback already handles signed-in users without OAuth.
-  let dc = await getDiscogsForRequest(req);
-  if (!dc && !callerId && ADMIN_CLERK_ID) {
-    const adminOauth = await getOAuthCredentials(ADMIN_CLERK_ID);
-    if (adminOauth && discogsConsumerKey) {
-      dc = new DiscogsClient({
-        consumerKey: discogsConsumerKey,
-        consumerSecret: discogsConsumerSecret,
-        accessToken: adminOauth.accessToken,
-        accessSecret: adminOauth.accessSecret,
-      });
-    }
-  }
+  const dc = await getDiscogsForRequest(req);
   if (!dc) {
     res.status(401).json({ error: "no_token", message: "Connect your Discogs account in Account settings to search." });
     return;
