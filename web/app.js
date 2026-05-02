@@ -391,15 +391,17 @@ function _applySplashVisibility(clerk) {
   const resultsEl  = document.getElementById("results");
   const signedIn = !!clerk?.user;
   if (splash) splash.style.display = "none"; // legacy splash, never used now
-  // Anon visitors: hide the search bar entirely since the server's
-  // /search endpoint requires auth (anon submits would just 401).
-  // The waitlist splash takes their place. Signed-in users get the
-  // search bar back. Results grid hidden for anon too so any stale
-  // restored-state cards don't peek through.
-  if (form)       form.style.display      = signedIn ? ""     : "none";
-  if (resultsEl)  resultsEl.style.display = signedIn ? ""     : "none";
+  // Anon visitors get the same surfaces signed-in users do — search
+  // bar, results grid, home strip — so they can preview the catalog
+  // (the Feed tab in the home strip is anon-accessible). The
+  // anon-splash node is now a thin signup banner above everything
+  // rather than a full takeover. The body class lets CSS shrink the
+  // splash node (and any other anon-only nudges) to a slim banner.
+  document.body.classList.toggle("sd-anon", !signedIn);
+  if (form)       form.style.display      = "";
+  if (resultsEl)  resultsEl.style.display = "";
   if (anonSplash) anonSplash.style.display = signedIn ? "none" : "";
-  if (stripWrap)  stripWrap.style.display  = signedIn ? ""     : "none";
+  if (stripWrap)  stripWrap.style.display  = "";
 }
 
 async function applyAuthState(clerk) {

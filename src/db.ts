@@ -3913,6 +3913,32 @@ export async function getMostContributedAlbums(
   } catch { return []; }
 }
 
+// Random sample of cached albums for the public Feed strip — anon
+// visitors see this as their home view (signed-in users get it as the
+// "Feed" tab in the Recent/Suggestions/Submitted/Feed strip). All
+// rows already paid for via the release_cache; no upstream Discogs
+// hit. Defaults to masters (richer card data, broader scope) but
+// callers can opt for either via `type`.
+export async function getFeedRandomAlbums(
+  limit = 48,
+  type: "master" | "release" | "any" = "any"
+): Promise<any[]> {
+  try {
+    const cap = Math.max(1, Math.min(200, limit));
+    const sql = type === "any"
+      ? `SELECT discogs_id AS id, type, data, cached_at
+           FROM release_cache
+          ORDER BY RANDOM() LIMIT $1`
+      : `SELECT discogs_id AS id, type, data, cached_at
+           FROM release_cache
+          WHERE type = $2
+          ORDER BY RANDOM() LIMIT $1`;
+    const params: any[] = type === "any" ? [cap] : [cap, type];
+    const r = await getPool().query(sql, params);
+    return r.rows;
+  } catch { return []; }
+}
+
 // AI-search exclusion list: a compact set of "Artist - Title" lines
 // pulled from the user's collection + wantlist so the recommendation
 // prompt can tell Claude what to avoid. Capped so the prompt stays

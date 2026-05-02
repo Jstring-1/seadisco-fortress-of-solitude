@@ -65,7 +65,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260501.2026" />
+  <link rel="stylesheet" href="/style.css?v=20260501.2043" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -103,7 +103,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260501.2026"></script>
+<script defer src="/shared.js?v=20260501.2043"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -460,36 +460,22 @@
        so visitors know what they're signing up for. Hidden for
        signed-in users via _applySplashVisibility in app.js. -->
   <div id="anon-splash" class="content-area anon-splash" style="display:none">
-    <h2 class="anon-splash-title">SeaDisco is invite-only</h2>
-    <p class="anon-splash-lead">A music-discovery companion to Discogs for vinyl collectors, DJs, and music historians. Join the waitlist for an invite — connect your Discogs account and unlock everything below.</p>
-    <div class="anon-splash-cta">
-      <button type="button" class="anon-splash-btn" onclick="openSignUpModal()">Join the waitlist</button>
-      <span class="anon-splash-cta-note">Already have an account? <a href="#" onclick="event.preventDefault();openSignInModal();return false">Sign in</a></span>
-    </div>
-    <h3 class="anon-splash-section">Connect your Discogs account and you can:</h3>
-    <ul class="anon-splash-features">
-      <li><strong>Sync your collection, wantlist, inventory, and lists</strong> — any size, syncs nightly.</li>
-      <li><strong>Browse a personalized "Suggestions" feed</strong> generated hourly from the genres, styles, and years you actually own.</li>
-      <li><strong>Play tracks inline</strong> via embedded YouTube + Library of Congress audio with a cross-source play queue, mobile lock-screen controls, and persistent mini-player.</li>
-      <li><strong>Contribute YouTube videos</strong> for tracks Discogs is missing audio for — one search, fill in a whole album at once. Site-wide; future visitors see your match as the canonical preview.</li>
-      <li><strong>Manage your marketplace listings</strong> — list, edit, retire — with Discogs's own price guidance built in.</li>
-      <li><strong>Reply to buyers and advance order status</strong> from a unified Seller Orders panel.</li>
-      <li><strong>Rate releases, favorite albums/artists/labels, and save searches</strong> across devices.</li>
-      <li><strong>Find rare / hard-to-find pressings</strong> with format-biased search modes that surface vinyl-only and pre-streaming-era catalog.</li>
-      <li><strong>Browse adjacent music data</strong> — Library of Congress public-domain audio, Wikipedia, Archive.org live shows, full YouTube search with Saved tab.</li>
-      <li><strong>Use offline</strong> — your library caches to your browser so you can browse without a connection (opt-in).</li>
-    </ul>
+    <p class="anon-splash-lead">
+      <strong>SeaDisco</strong> — music discovery for vinyl collectors. Browse the Feed below, search the catalog, play tracks. <a href="#" onclick="event.preventDefault();openSignUpModal();return false">Join the waitlist</a> to sync your collection, build a personalized feed, contribute YouTube videos, and more. <a href="#" onclick="event.preventDefault();openSignInModal();return false">Sign in</a>.
+    </p>
   </div>
 
   <!-- ── Recent history (primary front-page strip) ────────────────── -->
   <div id="random-records" class="content-area" style="margin-top:0.5rem;display:none">
     <div id="random-records-header" class="rr-header">
       <div id="random-records-title-wrap" class="rr-title-wrap">
-        <span id="rr-tab-recent" class="rr-tab rr-tab-active" onclick="_sdSwitchHomeStripTab('recent')">Recent</span>
+        <span id="rr-tab-recent" class="rr-tab rr-tab-active" onclick="_sdSwitchHomeStripTab('recent')" title="Albums you've recently viewed (kept locally in this browser)">Recent</span>
         <span class="rr-tab-sep">/</span>
-        <span id="rr-tab-suggestions" class="rr-tab" onclick="_sdSwitchHomeStripTab('suggestions')">Suggestions</span>
+        <span id="rr-tab-suggestions" class="rr-tab" onclick="_sdSwitchHomeStripTab('suggestions')" title="Personalized suggestions generated hourly from your library's taste profile">Suggestions</span>
         <span class="rr-tab-sep">/</span>
-        <span id="rr-tab-submitted" class="rr-tab" onclick="_sdSwitchHomeStripTab('submitted')" title="Albums with crowd-sourced YouTube contributions">Submitted</span>
+        <span id="rr-tab-submitted" class="rr-tab" onclick="_sdSwitchHomeStripTab('submitted')" title="Albums you've contributed YouTube videos for">Submitted</span>
+        <span class="rr-tab-sep">/</span>
+        <span id="rr-tab-feed" class="rr-tab" onclick="_sdSwitchHomeStripTab('feed')" title="A random sample from every album in our catalog cache — explore freely">Feed</span>
         <!-- Legacy id kept as a hidden node so older code paths that
              write to it don't blow up; visible state is on the tabs above. -->
         <span id="random-records-title" style="display:none">Recent</span>
@@ -1066,15 +1052,15 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260501.2026"></script>
-<script defer src="/search.js?v=20260501.2026"></script>
-<script defer src="/collection.js?v=20260501.2026"></script>
-<script defer src="/account.js?v=20260501.2026"></script>
-<script defer src="/orders.js?v=20260501.2026"></script>
+<script defer src="/utils.js?v=20260501.2043"></script>
+<script defer src="/search.js?v=20260501.2043"></script>
+<script defer src="/collection.js?v=20260501.2043"></script>
+<script defer src="/account.js?v=20260501.2043"></script>
+<script defer src="/orders.js?v=20260501.2043"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260501.2026"></script>
-<script defer src="/app.js?v=20260501.2026"></script>
+<script defer src="/modal.js?v=20260501.2043"></script>
+<script defer src="/app.js?v=20260501.2043"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1083,13 +1069,13 @@
      (switchView for archive/youtube; openInventoryEditor stub for
      the editor). After window.load they're idle-preloaded so a
      subsequent nav into those views is instant. -->
-<script defer src="/loc.js?v=20260501.2026"></script>
-<script defer src="/queue.js?v=20260501.2026"></script>
+<script defer src="/loc.js?v=20260501.2043"></script>
+<script defer src="/queue.js?v=20260501.2043"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260501.2026";
+  window._SD_LAZY_VERSION = "20260501.2043";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1112,8 +1098,8 @@
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260501.2026"></script>
-<script defer src="/offline.js?v=20260501.2026"></script>
+<script defer src="/idb.js?v=20260501.2043"></script>
+<script defer src="/offline.js?v=20260501.2043"></script>
 
 </body>
 </html>
