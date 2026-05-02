@@ -2074,6 +2074,20 @@ function playerClose() {
   if (typeof closeVideo === "function") closeVideo();
 }
 
+// Hide / show the mini-player BAR without touching playback. Useful on
+// mobile when an open popup's bottom rows are hidden behind the bar —
+// user can hide the chrome to reach those rows, then restore via the
+// floating tab. Distinct from playerClose / playerStop which actually
+// stop the audio.
+function hideMiniPlayerBar() {
+  document.body.classList.add("mini-player-bar-hidden");
+}
+function showMiniPlayerBar() {
+  document.body.classList.remove("mini-player-bar-hidden");
+}
+window.hideMiniPlayerBar = hideMiniPlayerBar;
+window.showMiniPlayerBar = showMiniPlayerBar;
+
 // ⏹ button on the media bar — stop whatever's playing and forget the
 // current track + progress. The queue itself is preserved (use Clear
 // in the drawer to wipe the queue). After this, the bar returns to
@@ -2490,6 +2504,38 @@ async function _trackYtOpenAlbumSuggest(el) {
   const albumTitle  = popupRoot.querySelector("h2")?.textContent?.trim() || "";
   // First artist from the album-artist line (mirrors per-track flow).
   const albumArtist = popupRoot.querySelector(".album-artist")?.textContent?.split(",")[0]?.trim() || "";
+  // Extra album context for the YT popup header — the popup obscures
+  // the underlying album modal, so we surface artist / year / label /
+  // cover up top so the user knows which album they're submitting for
+  // without closing the popup.
+  const albumCover = popupRoot.querySelector(".album-cover")?.getAttribute("src") || "";
+  const albumYear  = (() => {
+    const grid = popupRoot.querySelector(".album-detail-grid");
+    if (!grid) return "";
+    // Walk label/value pairs; "Released" row holds the year-ish value.
+    const labels = grid.querySelectorAll(".detail-label");
+    for (const lbl of labels) {
+      const k = (lbl.textContent || "").trim().toLowerCase();
+      if (k === "released" || k === "year") {
+        const v = lbl.nextElementSibling?.textContent?.trim();
+        if (v) return v;
+      }
+    }
+    return "";
+  })();
+  const albumLabel = (() => {
+    const grid = popupRoot.querySelector(".album-detail-grid");
+    if (!grid) return "";
+    const labels = grid.querySelectorAll(".detail-label");
+    for (const lbl of labels) {
+      const k = (lbl.textContent || "").trim().toLowerCase();
+      if (k === "label") {
+        const v = lbl.nextElementSibling?.textContent?.trim();
+        if (v) return v;
+      }
+    }
+    return "";
+  })();
   // Ensure the override DOM patch has run before we walk the rows —
   // otherwise tracks with already-saved overrides would still show
   // as "missing" if the user clicked the heading link before the
@@ -2534,6 +2580,9 @@ async function _trackYtOpenAlbumSuggest(el) {
     masterId,
     albumTitle,
     albumArtist,
+    albumYear,
+    albumLabel,
+    albumCover,
     tracks:       missing,
     targetId:     popupRoot.id || "album-info",
   };

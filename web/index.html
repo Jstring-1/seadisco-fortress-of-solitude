@@ -65,7 +65,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260501.0845" />
+  <link rel="stylesheet" href="/style.css?v=20260501.1959" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -103,7 +103,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260501.0845"></script>
+<script defer src="/shared.js?v=20260501.1959"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -931,6 +931,18 @@
       <h3 id="youtube-popup-title" style="margin:0;font-size:1rem">YouTube</h3>
       <a id="youtube-popup-fullpage" href="/?v=youtube" onclick="event.preventDefault();_youtubePopupOpenFullPage();return false" style="font-size:0.78rem;color:var(--muted);text-decoration:none">Full page ↗</a>
     </div>
+    <!-- Album-mode context strip: cover thumb + artist + year + label
+         so the user knows which album they're submitting for without
+         having to close the popup to peek at the album modal beneath.
+         Hidden in non-album mode. -->
+    <div id="youtube-popup-album-ctx" class="youtube-popup-album-ctx" style="display:none">
+      <img id="youtube-popup-album-cover" alt="" />
+      <div class="youtube-popup-album-meta">
+        <div id="youtube-popup-album-artist" class="youtube-popup-album-artist"></div>
+        <div id="youtube-popup-album-title" class="youtube-popup-album-title"></div>
+        <div id="youtube-popup-album-sub" class="youtube-popup-album-sub"></div>
+      </div>
+    </div>
     <div id="youtube-popup-status" class="loc-status" style="margin:0.4rem 0"></div>
     <!-- Album-mode admin "Add by URL" form. Lets admin register a known
          YouTube URL as a track override without firing a 100-unit
@@ -998,6 +1010,11 @@
            single source of truth. -->
       <button id="mini-queue" onclick="queueToggleDrawer()" title="Up next (queue)">☰</button>
       <button id="mini-expand" onclick="toggleMiniPlayer()" title="Expand player">&#9650;</button>
+      <!-- Hide-bar: collapses the player out of view so the bottom of
+           open popups (especially master/version lists on mobile) is
+           reachable. Playback continues; a small "show player" tab
+           floats in the corner to restore. -->
+      <button id="mini-hide" onclick="hideMiniPlayerBar()" title="Hide bar (keep playing)">&#10006;</button>
     </div>
   </div>
   <!-- Click-to-seek progress strip. Spans the full width below the bar.
@@ -1029,6 +1046,10 @@
     </div>
   </div>
 </div>
+<!-- Floating "show player" tab — visible only when body.mini-player-bar-hidden
+     is set (i.e. user clicked × on the bar). Click to restore the bar.
+     Keeps playback running while hidden — only the chrome moves. -->
+<button id="mini-player-show-tab" onclick="showMiniPlayerBar()" title="Show player bar" aria-label="Show player bar">&#9835;</button>
 
 <div id="lightbox-overlay" onclick="closeLightbox()">
   <button id="lightbox-close" onclick="closeLightbox()">×</button>
@@ -1039,15 +1060,15 @@
 </div>
 
 <!-- Core scripts — needed for search page interactivity -->
-<script defer src="/utils.js?v=20260501.0845"></script>
-<script defer src="/search.js?v=20260501.0845"></script>
-<script defer src="/collection.js?v=20260501.0845"></script>
-<script defer src="/account.js?v=20260501.0845"></script>
-<script defer src="/orders.js?v=20260501.0845"></script>
+<script defer src="/utils.js?v=20260501.1959"></script>
+<script defer src="/search.js?v=20260501.1959"></script>
+<script defer src="/collection.js?v=20260501.1959"></script>
+<script defer src="/account.js?v=20260501.1959"></script>
+<script defer src="/orders.js?v=20260501.1959"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260501.0845"></script>
-<script defer src="/app.js?v=20260501.0845"></script>
+<script defer src="/modal.js?v=20260501.1959"></script>
+<script defer src="/app.js?v=20260501.1959"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1056,13 +1077,13 @@
      (switchView for archive/youtube; openInventoryEditor stub for
      the editor). After window.load they're idle-preloaded so a
      subsequent nav into those views is instant. -->
-<script defer src="/loc.js?v=20260501.0845"></script>
-<script defer src="/queue.js?v=20260501.0845"></script>
+<script defer src="/loc.js?v=20260501.1959"></script>
+<script defer src="/queue.js?v=20260501.1959"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260501.0845";
+  window._SD_LAZY_VERSION = "20260501.1959";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1085,8 +1106,8 @@
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260501.0845"></script>
-<script defer src="/offline.js?v=20260501.0845"></script>
+<script defer src="/idb.js?v=20260501.1959"></script>
+<script defer src="/offline.js?v=20260501.1959"></script>
 
 </body>
 </html>
