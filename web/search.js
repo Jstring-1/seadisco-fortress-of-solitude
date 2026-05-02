@@ -775,14 +775,24 @@ function _sdSyncHomeStripTabsVisual() {
   // are visually disabled (greyed out) — clicking them is a no-op
   // (handled in _sdSwitchHomeStripTab) so anons can only land on Feed.
   // Sign-in unlocks the rest.
-  const isAnon = !window._clerk?.user;
+  //
+  // IMPORTANT: only treat as anon when Clerk has actually resolved.
+  // Before auth resolves, window._clerk is undefined and we'd
+  // incorrectly disable the tabs for signed-in users on first paint
+  // until applyAuthState (in app.js) re-runs this. _sdAuthResolved
+  // is set true by applyAuthState after Clerk hydrates.
+  const authResolved = !!window._sdAuthResolved;
+  const isAnon = authResolved && !window._clerk?.user;
   ["recent", "suggestions", "submitted"].forEach(k => {
     const el = tabs[k];
     if (!el) return;
     el.classList.toggle("rr-tab-disabled", isAnon);
-    if (isAnon) {
-      el.title = (el.title ? el.title + " · " : "") + "Sign in to use";
-    }
+    // Stash the original title once + reset on every sync so the
+    // " · Sign in to use" suffix doesn't accrete on repeat calls.
+    if (el.dataset.baseTitle == null) el.dataset.baseTitle = el.title || "";
+    el.title = isAnon
+      ? (el.dataset.baseTitle ? el.dataset.baseTitle + " · " : "") + "Sign in to use"
+      : el.dataset.baseTitle;
   });
 }
 window._sdSyncHomeStripTabsVisual = _sdSyncHomeStripTabsVisual;

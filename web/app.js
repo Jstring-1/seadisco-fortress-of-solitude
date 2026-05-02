@@ -419,6 +419,16 @@ async function applyAuthState(clerk) {
   }
 
   _applySplashVisibility(clerk);
+  // Flag that Clerk has resolved auth at least once, so consumers
+  // (e.g. _sdSyncHomeStripTabsVisual) can distinguish "not yet
+  // resolved → don't disable anything" from "resolved as anon →
+  // grey out signed-in features". Without this, the home-strip
+  // tabs show as disabled for signed-in users on first paint
+  // because Clerk hadn't hydrated yet when the strip first rendered.
+  window._sdAuthResolved = true;
+  if (typeof window._sdSyncHomeStripTabsVisual === "function") {
+    try { window._sdSyncHomeStripTabsVisual(); } catch {}
+  }
 
   if (clerk.user) {
     // Notify account.js so the account view can update if it's active
