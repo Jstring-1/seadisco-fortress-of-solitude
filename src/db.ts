@@ -3955,6 +3955,37 @@ export async function getFeedRandomAlbums(
   } catch { return []; }
 }
 
+// Batched lookup of track_youtube_overrides for a list of
+// (release_id, release_type) pairs. Used by the wide-card enrichment
+// path so each card's tracks (and the special ALBUM full-album slot)
+// can render play / queue buttons keyed off user-contributed overrides
+// in addition to Discogs's own videos[]. Excludes rows whose video
+// has been flagged "unavailable" via the LEFT JOIN against
+// youtube_video_unavailable, mirroring getTrackYtOverrides.
+export async function getTrackYtOverridesBatch(
+  pairs: Array<{ id: number; type: string }>
+): Promise<Array<{ release_id: string; release_type: string; track_position: string; video_id: string; video_title: string | null }>> {
+  if (!Array.isArray(pairs) || !pairs.length) return [];
+  const capped = pairs.slice(0, 200).filter(p => Number.isFinite(Number(p.id)) && (p.type === "master" || p.type === "release"));
+  if (!capped.length) return [];
+  try {
+    const ids = capped.map(p => String(p.id));
+    const types = capped.map(p => String(p.type));
+    const r = await getPool().query(
+      `SELECT o.release_id, o.release_type, o.track_position, o.video_id, o.video_title
+         FROM track_youtube_overrides o
+         LEFT JOIN youtube_video_unavailable u
+           ON u.video_id = o.video_id AND u.status = 'unavailable'
+        WHERE (o.release_id, o.release_type) IN (
+          SELECT * FROM unnest($1::text[], $2::text[])
+        )
+          AND u.video_id IS NULL`,
+      [ids, types]
+    );
+    return r.rows;
+  } catch { return []; }
+}
+
 // Batched lookup of release_cache rows for a list of (id, type)
 // pairs. Used by /api/cards/enrich to backfill the wide-card image
 // strip + inline tracklist on any card surface (favorites, search

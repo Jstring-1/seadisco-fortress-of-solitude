@@ -235,6 +235,61 @@ async function _sdEnrichWideCards() {
 }
 window._sdEnrichWideCards = _sdEnrichWideCards;
 
+// Outer-card click handler. In compact mode the whole card opens the
+// album modal (existing behaviour). In wide mode only clicks ON the
+// main cover image trigger the modal — clicks on the body, tracklist,
+// thumb strip, entity links, etc. are no-ops at this level so their
+// own handlers (play, queue, search-by-entity) can run without the
+// modal stealing focus.
+function _sdCardOuterClick(event, id, type, url) {
+  // Always cancel the href="#" navigation regardless of wide/compact —
+  // the card link uses # as an anchor sentinel.
+  if (event && event.preventDefault) event.preventDefault();
+  if (document.body.classList.contains("card-mode-wide")) {
+    const card = event.currentTarget;
+    const main = card?.querySelector(".card-thumb-wrap > img:first-of-type");
+    const onMain = main && (event.target === main || main.contains(event.target));
+    if (!onMain) return;
+  }
+  if (typeof openModal === "function") openModal(event, id, type, url);
+}
+window._sdCardOuterClick = _sdCardOuterClick;
+
+// Entity click on a card — pop a fresh search keyed off the artist /
+// label name. event.stopPropagation keeps the outer card's modal-open
+// click from also firing. Routes through the existing search form so
+// the user lands on a normal results grid.
+function _sdSearchEntityFromCard(scope, name) {
+  const v = String(name || "").trim();
+  if (!v) return;
+  // Switch to the search view + populate the field + run.
+  if (typeof switchView === "function") {
+    try { switchView("search", true); } catch {}
+  }
+  try {
+    const fld = document.getElementById(scope === "label" ? "f-label" : "f-artist");
+    if (fld) fld.value = v;
+    if (typeof toggleAdvanced === "function") toggleAdvanced(true);
+  } catch {}
+  if (typeof doSearch === "function") {
+    try { doSearch(1); } catch {}
+  }
+}
+window._sdSearchEntityFromCard = _sdSearchEntityFromCard;
+
+// Match a track title against Discogs's videos array — same loose
+// substring rule the modal's findVideo uses. Returns the YT URL on
+// hit, "" on miss.
+function _sdMatchTrackVideo(trackTitle, videos) {
+  if (!trackTitle || !Array.isArray(videos) || !videos.length) return "";
+  const tl = String(trackTitle).toLowerCase();
+  for (const v of videos) {
+    const vt = String(v?.title ?? "").toLowerCase();
+    if (vt && (vt.includes(tl) || tl.includes(vt))) return v.uri || "";
+  }
+  return "";
+}
+
 function _sdInjectEnrichmentIntoCards(row) {
   if (!row || row.id == null || !row.type) return;
   const sel = `.card[data-card-id="${CSS.escape(String(row.id))}"][data-card-type="${CSS.escape(String(row.type))}"]`;
@@ -246,9 +301,25 @@ function _sdInjectEnrichmentIntoCards(row) {
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   const images = Array.isArray(row.images) ? row.images.filter(Boolean).slice(0, 12) : [];
   const tracks = Array.isArray(row.tracklist) ? row.tracklist.filter(t => t?.title).slice(0, 30) : [];
+  const videos = Array.isArray(row.videos) ? row.videos : [];
+  const overrides = (row.overrides && typeof row.overrides === "object") ? row.overrides : {};
+  // Resolve a YT URL per track: override (by position) wins, else
+  // Discogs videos by fuzzy title match.
+  const trackUrls = tracks.map(t => {
+    const ovId = overrides[String(t.position)];
+    if (ovId) return `https://www.youtube.com/watch?v=${ovId}`;
+    return _sdMatchTrackVideo(t.title, videos);
+  });
+  // Full-album special slot — backed by an override at position "ALBUM".
+  const fullAlbumId  = overrides["ALBUM"] || "";
+  const fullAlbumUrl = fullAlbumId ? `https://www.youtube.com/watch?v=${fullAlbumId}` : "";
   cards.forEach(card => {
     if (card.dataset.cardEnriched === "1") return;
     card.dataset.cardEnriched = "1";
+    const cardArtist  = card.querySelector(".card-artist")?.textContent?.trim() || "";
+    const cardTitle   = card.querySelector(".card-title")?.textContent?.trim()  || "";
+    const releaseType = card.dataset.cardType || "";
+    const releaseId   = card.dataset.cardId   || "";
     if (images.length > 1) {
       const wrap = card.querySelector(".card-thumb-wrap");
       if (wrap && !wrap.querySelector(".card-images-strip")) {
@@ -258,14 +329,39 @@ function _sdInjectEnrichmentIntoCards(row) {
         wrap.insertAdjacentHTML("beforeend", stripHtml);
       }
     }
-    if (tracks.length) {
+    if (tracks.length || fullAlbumUrl) {
       const body = card.querySelector(".card-body");
       if (body && !body.querySelector(".card-tracklist")) {
+        // data-* attrs match the modal's track-link / queue-add-icon
+        // contract so openVideo and _trackQueueAdd consume them as-is.
+        const trackRow = (t, idx) => {
+          const url = trackUrls[idx];
+          const playBtn = url
+            ? `<a class="card-track-play track-link" href="#" data-video="${escAttr(url)}" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();openVideo(event,'${escAttr(url).replace(/'/g, "\\'")}')" title="Play this track">▶</a>`
+            : `<span class="card-track-play card-track-disabled" aria-hidden="true">▶</span>`;
+          const queueBtn = url
+            ? `<a class="card-track-queue queue-add-icon" href="#" data-yt-url="${escAttr(url)}" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackQueueAdd(this);return false" title="Add to queue">＋</a>`
+            : `<span class="card-track-queue card-track-disabled" aria-hidden="true">＋</span>`;
+          return `<li>
+            <span class="card-track-pos">${escText(t.position || "")}</span>
+            <span class="card-track-title">${escText(t.title || "")}</span>
+            <span class="card-track-actions">${playBtn}${queueBtn}</span>
+            ${t.duration ? `<span class="card-track-dur">${escText(t.duration)}</span>` : ""}
+          </li>`;
+        };
+        const fullAlbumRow = fullAlbumUrl
+          ? `<li class="card-track-fullalbum">
+              <span class="card-track-pos">★</span>
+              <span class="card-track-title">Full album</span>
+              <span class="card-track-actions">
+                <a class="card-track-play track-link" href="#" data-video="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();openVideo(event,'${escAttr(fullAlbumUrl).replace(/'/g, "\\'")}')" title="Play full album">▶</a>
+                <a class="card-track-queue queue-add-icon" href="#" data-fullalbum="1" data-yt-url="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackQueueAdd(this);return false" title="Queue full album">＋</a>
+              </span>
+            </li>`
+          : "";
         const tlHtml = `<div class="card-tracklist">
-          <div class="card-tracklist-head">${tracks.length} track${tracks.length === 1 ? "" : "s"}</div>
-          <ol class="card-tracklist-rows">${tracks.map(t =>
-            `<li><span class="card-track-pos">${escText(t.position || "")}</span><span class="card-track-title">${escText(t.title || "")}</span>${t.duration ? `<span class="card-track-dur">${escText(t.duration)}</span>` : ""}</li>`
-          ).join("")}</ol>
+          <div class="card-tracklist-head">${tracks.length} track${tracks.length === 1 ? "" : "s"}${fullAlbumUrl ? " · full album" : ""}</div>
+          <ol class="card-tracklist-rows">${fullAlbumRow}${tracks.map((t, i) => trackRow(t, i)).join("")}</ol>
         </div>`;
         body.insertAdjacentHTML("beforeend", tlHtml);
       }
@@ -811,7 +907,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260501.2156";
+  const SITE_VERSION = "build 20260501.2204";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
