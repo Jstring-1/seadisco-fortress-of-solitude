@@ -4063,17 +4063,19 @@ body.card-mode-wide .card-grid {
 }
 body.card-mode-wide .card {
   /* Override the aspect-ratio from the compact card style — wide cards
-     should size to their content, not stay square. */
+     should size to their content, not stay square. align-items:
+     flex-start so the thumb side stays at its intrinsic size when
+     the body side has lots of content (long tracklists). Otherwise
+     align-stretch made the cover image grow + crop. */
   aspect-ratio: auto;
   height: auto;
   display: flex;
   flex-direction: row;
-  align-items: stretch;
+  align-items: flex-start;
 }
 body.card-mode-wide .card-thumb-wrap {
   width: 50%;
   flex-shrink: 0;
-  aspect-ratio: 1 / 1;
 }
 body.card-mode-wide .card-body {
   flex: 1 1 auto;
@@ -4147,13 +4149,19 @@ body.card-mode-wide .card-thumb-wrap {
   flex-direction: column;
   aspect-ratio: auto;
 }
+/* Main image stays at its intrinsic computed size — square based on
+   the wrap's 50% width — and explicitly does NOT flex-grow when the
+   card gets taller. Without this, a long tracklist on the right side
+   stretched the wrap, pulled the image up to fill, and object-fit
+   cropped the cover into a center-zoomed thumbnail. */
 body.card-mode-wide .card-thumb-wrap > img:first-of-type,
 body.card-mode-wide .card-thumb-wrap > .thumb-placeholder {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   width: 100%;
   height: auto;
   aspect-ratio: 1 / 1;
   object-fit: cover;
+  display: block;
 }
 body.card-mode-wide .card-images-strip {
   display: flex;
