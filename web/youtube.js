@@ -567,11 +567,38 @@ async function openYoutubePopup(query) {
   // prior staged-assignments map. Per-track mode keeps the original
   // YouTube · "query" title.
   const albumCtx = window._sdSuggestAlbumContext;
+  // Album context strip — cover + artist + title + year/label. Helps
+  // the user keep their bearings while the popup is over the album
+  // modal (especially on mobile where the modal is fully obscured).
+  const ctxStrip   = document.getElementById("youtube-popup-album-ctx");
+  const ctxCover   = document.getElementById("youtube-popup-album-cover");
+  const ctxArtist  = document.getElementById("youtube-popup-album-artist");
+  const ctxTitle   = document.getElementById("youtube-popup-album-title");
+  const ctxSub     = document.getElementById("youtube-popup-album-sub");
   if (albumCtx) {
-    if (titleEl) titleEl.textContent = `Find missing tracks · ${albumCtx.albumTitle || "album"}`;
+    if (titleEl) titleEl.textContent = `Find missing tracks`;
+    if (ctxStrip) {
+      ctxStrip.style.display = albumCtx.albumCover || albumCtx.albumTitle ? "" : "none";
+      if (ctxCover) {
+        if (albumCtx.albumCover) {
+          ctxCover.src = albumCtx.albumCover;
+          ctxCover.style.display = "";
+        } else {
+          ctxCover.removeAttribute("src");
+          ctxCover.style.display = "none";
+        }
+      }
+      if (ctxArtist) ctxArtist.textContent = albumCtx.albumArtist || "";
+      if (ctxTitle)  ctxTitle.textContent  = albumCtx.albumTitle  || "";
+      if (ctxSub) {
+        const subParts = [albumCtx.albumYear, albumCtx.albumLabel].filter(Boolean);
+        ctxSub.textContent = subParts.join(" · ");
+      }
+    }
     window._sdSuggestStaged = {}; // { trackPosition → { videoId, videoTitle, trackTitle } }
   } else {
     if (titleEl) titleEl.textContent = `YouTube · "${q}"`;
+    if (ctxStrip) ctxStrip.style.display = "none";
   }
   if (statusEl) statusEl.textContent = "Searching…";
   if (resultsEl) resultsEl.innerHTML = "";

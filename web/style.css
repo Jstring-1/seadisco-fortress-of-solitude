@@ -2397,6 +2397,38 @@ button:disabled { background: var(--accent-dim); cursor: not-allowed; }
    behind it. The expanded YouTube mini-player needs more headroom. */
 body.player-open { padding-bottom: 96px; }
 body.player-open.expanded-mini { padding-bottom: 168px; }
+/* Hide-bar mode: user clicked × to push the player out of view so the
+   bottom of open popups (master/version lists on mobile especially)
+   becomes reachable. Playback continues — only the chrome moves.
+   Drop the player-open padding too so the body can scroll all the
+   way down. */
+body.mini-player-bar-hidden #mini-player {
+  transform: translateY(110%);
+  pointer-events: none;
+}
+body.mini-player-bar-hidden.player-open { padding-bottom: 0; }
+body.mini-player-bar-hidden.player-open.expanded-mini { padding-bottom: 0; }
+/* Floating restore tab. Hidden by default; revealed when the bar is
+   hidden. Sits above any other footer / drawer chrome. */
+#mini-player-show-tab {
+  display: none;
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  width: 44px;
+  height: 44px;
+  border-radius: 22px;
+  background: var(--accent);
+  color: #000;
+  border: none;
+  font-size: 1.2rem;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+  z-index: 1500;
+  line-height: 1;
+}
+#mini-player-show-tab:hover { filter: brightness(1.1); }
+body.mini-player-bar-hidden #mini-player-show-tab { display: flex; align-items: center; justify-content: center; }
 /* When any popup is open, the page underneath must NOT scroll —
    only the popup's own content. overscroll-behavior:none blocks the
    rubber-band that lets a wheel/touch over the dark overlay edges
@@ -8656,6 +8688,58 @@ a:focus-visible {
 }
 #youtube-popup-overlay .loc-info-close:hover { color: var(--text); }
 #youtube-popup-fullpage:hover { color: var(--accent) !important; }
+
+/* Album-mode context strip — cover thumb + artist / title / year /
+   label. Sits between the popup header and the search status so the
+   user always sees which album they're submitting for, even on mobile
+   where the underlying album modal is fully obscured. */
+.youtube-popup-album-ctx {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0.65rem;
+  margin: 0.35rem 0 0.4rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+}
+.youtube-popup-album-ctx img {
+  width: 56px;
+  height: 56px;
+  object-fit: cover;
+  border-radius: 4px;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.05);
+}
+.youtube-popup-album-meta {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+.youtube-popup-album-artist {
+  font-size: 0.78rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.youtube-popup-album-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.youtube-popup-album-sub {
+  font-size: 0.72rem;
+  color: #888;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* Album-mode admin "Add by URL" form. Lets admin paste a known YT URL
    instead of paying the 100-unit search.list cost — useful any time
