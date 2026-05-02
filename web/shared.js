@@ -328,11 +328,14 @@ function _sdInjectEnrichmentIntoCards(row) {
         // contract so openVideo and _trackQueueAdd consume them as-is.
         const trackRow = (t, idx) => {
           const url = trackUrls[idx];
+          // <span> not <a> for the same nested-anchor reason —
+          // openVideo / _trackQueueAdd read by class + dataset, no
+          // anchor semantics needed.
           const playBtn = url
-            ? `<a class="card-track-play track-link" href="#" data-video="${escAttr(url)}" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();openVideo(event,'${escAttr(url).replace(/'/g, "\\'")}')" title="Play this track">▶</a>`
+            ? `<span role="button" tabindex="0" class="card-track-play track-link" data-video="${escAttr(url)}" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();openVideo(event,'${escAttr(url).replace(/'/g, "\\'")}')" title="Play this track">▶</span>`
             : `<span class="card-track-play card-track-disabled" aria-hidden="true">▶</span>`;
           const queueBtn = url
-            ? `<a class="card-track-queue queue-add-icon" href="#" data-yt-url="${escAttr(url)}" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackQueueAdd(this);return false" title="Add to queue">＋</a>`
+            ? `<span role="button" tabindex="0" class="card-track-queue queue-add-icon" data-yt-url="${escAttr(url)}" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackQueueAdd(this);return false" title="Add to queue">＋</span>`
             : `<span class="card-track-queue card-track-disabled" aria-hidden="true">＋</span>`;
           return `<li>
             <span class="card-track-pos">${escText(t.position || "")}</span>
@@ -346,8 +349,8 @@ function _sdInjectEnrichmentIntoCards(row) {
               <span class="card-track-pos">★</span>
               <span class="card-track-title">Full album</span>
               <span class="card-track-actions">
-                <a class="card-track-play track-link" href="#" data-video="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();openVideo(event,'${escAttr(fullAlbumUrl).replace(/'/g, "\\'")}')" title="Play full album">▶</a>
-                <a class="card-track-queue queue-add-icon" href="#" data-fullalbum="1" data-yt-url="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackQueueAdd(this);return false" title="Queue full album">＋</a>
+                <span role="button" tabindex="0" class="card-track-play track-link" data-video="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();openVideo(event,'${escAttr(fullAlbumUrl).replace(/'/g, "\\'")}')" title="Play full album">▶</span>
+                <span role="button" tabindex="0" class="card-track-queue queue-add-icon" data-fullalbum="1" data-yt-url="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackQueueAdd(this);return false" title="Queue full album">＋</span>
               </span>
             </li>`
           : "";
@@ -915,7 +918,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260501.2227";
+  const SITE_VERSION = "build 20260501.2233";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -1256,7 +1259,12 @@ function entityLookupLinkHtml(scope, label, opts = {}) {
   const artistAttr = opts.trackArtist ? ` data-lk-artist="${escHtml(opts.trackArtist)}"` : "";
   const titleAttr  = opts.title       ? ` title="${escHtml(opts.title)}"`              : "";
   const cls = ["entity-lookup-link", opts.className || ""].filter(Boolean).join(" ");
-  return `<a href="#" class="${cls}" data-lk-scope="${escHtml(scope)}" data-lk-label="${safeLabel}"${artistAttr} onclick="event.preventDefault();event.stopPropagation();_handleLookupClick(this,event);return false"${titleAttr}>${safeLabel}</a>`;
+  // <span> not <a> — these markups can be embedded inside card <a>
+  // wrappers, and HTML5 auto-closes the outer anchor when a nested
+  // anchor is encountered, which broke wide-card layout (each card
+  // split across multiple grid cells). Click semantics are unchanged
+  // because the onclick handler does the work.
+  return `<span class="${cls}" data-lk-scope="${escHtml(scope)}" data-lk-label="${safeLabel}"${artistAttr} role="button" tabindex="0" onclick="event.preventDefault();event.stopPropagation();_handleLookupClick(this,event);return false"${titleAttr}>${safeLabel}</span>`;
 }
 
 function _handleLookupClick(el, ev) {
