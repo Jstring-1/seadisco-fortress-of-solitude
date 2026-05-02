@@ -4099,6 +4099,51 @@ body.card-mode-wide .card-artist {
 }
 /* Toggle button "on" state. */
 #card-mode-toggle.is-on { color: var(--accent); border-color: var(--accent); }
+/* Wide-mode image strip — sits at the bottom of the cover panel. The
+   wrap becomes flex-column in wide mode so the cover takes the upper
+   chunk and the strip is a fixed-height row underneath. Hidden in
+   compact mode. */
+.card-images-strip {
+  display: none;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(0, 0, 0, 0.5);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+.card-images-thumb {
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: 3px;
+  flex-shrink: 0;
+  cursor: pointer;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: border-color 0.12s, transform 0.12s;
+}
+.card-images-thumb:hover {
+  border-color: var(--accent);
+  transform: scale(1.04);
+}
+body.card-mode-wide .card-thumb-wrap {
+  display: flex;
+  flex-direction: column;
+  aspect-ratio: auto;
+}
+body.card-mode-wide .card-thumb-wrap > img:first-of-type,
+body.card-mode-wide .card-thumb-wrap > .thumb-placeholder {
+  flex: 1 1 auto;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+}
+body.card-mode-wide .card-images-strip {
+  display: flex;
+  flex: 0 0 auto;
+}
 /* On narrow screens, wide cards drop to single column instead of
    trying to squeeze the cover + metadata into ~150px each. */
 @media (max-width: 640px) {

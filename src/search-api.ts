@@ -4659,7 +4659,8 @@ app.get("/api/contributed-favorites/sample", async (req, res) => {
         const d = row.data ?? {};
         const isMaster = row.type === "master";
         const artistList = Array.isArray(d.artists) ? d.artists.map((a: any) => a.name).filter(Boolean) : [];
-        const cover = (Array.isArray(d.images) && d.images[0]?.uri) ? d.images[0].uri : (d.cover_image ?? "");
+        const imageUris = (Array.isArray(d.images) ? d.images.map((im: any) => im?.uri).filter(Boolean) : []);
+        const cover = imageUris[0] ?? (d.cover_image ?? "");
         // Card render expects "Artist - Title" composed in `title` for
         // release/master types. Mirror the favorites endpoint shape.
         const composed = artistList.length && d.title
@@ -4673,6 +4674,7 @@ app.get("/api/contributed-favorites/sample", async (req, res) => {
           country: d.country ?? "",
           cover_image: cover,
           thumb:       cover,
+          images: imageUris.slice(0, 12),
           format: (Array.isArray(d.formats) ? d.formats.map((f: any) => f.name).filter(Boolean) : []),
           label:  (Array.isArray(d.labels)  ? d.labels.map((l: any) => l.name).filter(Boolean)  : []),
           genre:  Array.isArray(d.genres) ? d.genres : [],
@@ -4742,7 +4744,8 @@ app.get("/api/feed/random", async (req, res) => {
     const items = rows.map((row: any) => {
       const d = row.data ?? {};
       const artistList = Array.isArray(d.artists) ? d.artists.map((a: any) => a.name).filter(Boolean) : [];
-      const cover = (Array.isArray(d.images) && d.images[0]?.uri) ? d.images[0].uri : (d.cover_image ?? "");
+      const imageUris = (Array.isArray(d.images) ? d.images.map((im: any) => im?.uri).filter(Boolean) : []);
+      const cover = imageUris[0] ?? (d.cover_image ?? "");
       const composed = artistList.length && d.title
         ? `${artistList.join(", ")} - ${d.title}`
         : (d.title ?? `${row.type} ${row.id}`);
@@ -4754,6 +4757,10 @@ app.get("/api/feed/random", async (req, res) => {
         country: d.country ?? "",
         cover_image: cover,
         thumb:       cover,
+        // Full image list — used by wide-card mode to render a thumb
+        // scroller beneath/beside the main cover. Capped at 12 to
+        // keep card payloads modest.
+        images: imageUris.slice(0, 12),
         format: (Array.isArray(d.formats) ? d.formats.map((f: any) => f.name).filter(Boolean) : []),
         label:  (Array.isArray(d.labels)  ? d.labels.map((l: any) => l.name).filter(Boolean)  : []),
         genre:  Array.isArray(d.genres) ? d.genres : [],
@@ -4786,7 +4793,8 @@ app.get("/api/user/my-submitted-albums", async (req, res) => {
       const d = row.data ?? {};
       const isMaster = row.type === "master";
       const artistList = Array.isArray(d.artists) ? d.artists.map((a: any) => a.name).filter(Boolean) : [];
-      const cover = (Array.isArray(d.images) && d.images[0]?.uri) ? d.images[0].uri : (d.cover_image ?? "");
+      const imageUris = (Array.isArray(d.images) ? d.images.map((im: any) => im?.uri).filter(Boolean) : []);
+      const cover = imageUris[0] ?? (d.cover_image ?? "");
       const composed = artistList.length && d.title
         ? `${artistList.join(", ")} - ${d.title}`
         : (d.title ?? `${row.type} ${row.id}`);
@@ -4798,6 +4806,7 @@ app.get("/api/user/my-submitted-albums", async (req, res) => {
         country: d.country ?? "",
         cover_image: cover,
         thumb:       cover,
+        images: imageUris.slice(0, 12),
         format: (Array.isArray(d.formats) ? d.formats.map((f: any) => f.name).filter(Boolean) : []),
         label:  (Array.isArray(d.labels)  ? d.labels.map((l: any) => l.name).filter(Boolean)  : []),
         genre:  Array.isArray(d.genres) ? d.genres : [],

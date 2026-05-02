@@ -947,6 +947,24 @@ async function _sdDecorateNoVideoCards(items) {
 }
 window._sdDecorateNoVideoCards = _sdDecorateNoVideoCards;
 
+// Click handler for the wide-card image strip — swap the main thumb
+// to the clicked image. Doesn't touch any other state; the click
+// stops propagation so it doesn't open the modal.
+function _sdSwapCardCover(thumbEl, src) {
+  if (!thumbEl || !src) return;
+  const wrap = thumbEl.closest(".card-thumb-wrap");
+  if (!wrap) return;
+  const main = wrap.querySelector("img:not(.card-images-thumb)");
+  if (!main) return;
+  // Move the prior main image into the strip slot the user just
+  // clicked, so a back-and-forth swap pattern works without losing
+  // any image.
+  const prior = main.src;
+  main.src = src;
+  thumbEl.src = prior;
+}
+window._sdSwapCardCover = _sdSwapCardCover;
+
 function renderCard(item, index, opts) {
   // opts.showContributionBadge — only the home-strip Submitted feed
   // (and any future "most-contributed" surface) opts in. Default off
@@ -1082,7 +1100,23 @@ function renderCard(item, index, opts) {
   const contributionBadge = (contributionCount > 0 && showContributionBadge)
     ? `<span class="card-contribution-badge" title="${contributionCount} user-contributed YouTube ${contributionCount === 1 ? "video" : "videos"} for this album">🎵 ${contributionCount}</span>`
     : "";
-  const thumbWrap = `<div class="card-thumb-wrap">${thumb}<div class="card-thumb-badges">${badges}</div>${instanceBadge}${contributionBadge}</div>`;
+  // Wide-card image scroller: when the item carries a full images
+  // array (cached releases / masters from the Feed / Submitted /
+  // Contributed-favorites endpoints), render the first as the main
+  // cover and the rest as a horizontal thumbnail strip below. Strip
+  // is only visible in wide-card mode (CSS hides it otherwise) so
+  // compact cards don't change. Limited to 12 images server-side.
+  const extraImages = (Array.isArray(item.images) ? item.images : [])
+    .filter(u => u && u !== item.cover_image)
+    .slice(0, 11);
+  const imageStrip = extraImages.length
+    ? `<div class="card-images-strip">${extraImages.map((u, i) => {
+        const safeU = escHtml(u);
+        // Click swaps the main image; visited classes stay untouched.
+        return `<img class="card-images-thumb" src="${safeU}" alt="${escHtml(title)} #${i + 2}" loading="lazy" decoding="async" onclick="event.preventDefault();event.stopPropagation();_sdSwapCardCover(this,'${safeU}')" />`;
+      }).join("")}</div>`
+    : "";
+  const thumbWrap = `<div class="card-thumb-wrap">${thumb}<div class="card-thumb-badges">${badges}</div>${instanceBadge}${contributionBadge}${imageStrip}</div>`;
 
   // Rating stars (only for collection/wantlist cards)
   const rating = item._rating ?? 0;
