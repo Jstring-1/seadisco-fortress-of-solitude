@@ -742,10 +742,14 @@ window._sdToggleExcludeCd = _sdToggleExcludeCd;
 // what the user sees. We deliberately do NOT persist across
 // sessions — only this URL handshake.
 function _sdInitialHomeStripMode() {
+  // Anon users default to "feed" since Recent / Suggestions / Submitted
+  // all require a signed-in account. ?strip= URL param wins for both
+  // anon and signed-in so deep links keep working.
   try {
     const v = new URLSearchParams(location.search).get("strip");
-    if (v === "suggestions" || v === "submitted") return v;
+    if (v === "suggestions" || v === "submitted" || v === "feed") return v;
   } catch {}
+  if (!window._clerk?.user) return "feed";
   return "recent";
 }
 window._sdHomeStripMode = _sdInitialHomeStripMode();
@@ -760,11 +764,30 @@ function _sdSyncHomeStripTabsVisual() {
     recent:      document.getElementById("rr-tab-recent"),
     suggestions: document.getElementById("rr-tab-suggestions"),
     submitted:   document.getElementById("rr-tab-submitted"),
+    feed:        document.getElementById("rr-tab-feed"),
   };
   for (const [k, el] of Object.entries(tabs)) {
     if (!el) continue;
     el.classList.toggle("rr-tab-active", k === m);
     el.style.color = k === m ? "var(--text)" : "var(--muted)";
+  }
+  // Anon users only see Feed — hide the other three tabs (and the
+  // separators between them) so the strip doesn't suggest features
+  // that immediately bounce them to a sign-in modal.
+  const isAnon = !window._clerk?.user;
+  const stripHeader = document.querySelector("#random-records-title-wrap");
+  if (stripHeader) {
+    const recentTab = tabs.recent;
+    const suggestTab = tabs.suggestions;
+    const submittedTab = tabs.submitted;
+    [recentTab, suggestTab, submittedTab].forEach(el => {
+      if (el) el.style.display = isAnon ? "none" : "";
+    });
+    // The separators are <span class="rr-tab-sep">. Hide all but the
+    // last one for anons (we only want the strip to show "Feed" cleanly).
+    stripHeader.querySelectorAll(".rr-tab-sep").forEach(el => {
+      el.style.display = isAnon ? "none" : "";
+    });
   }
 }
 window._sdSyncHomeStripTabsVisual = _sdSyncHomeStripTabsVisual;
@@ -783,6 +806,7 @@ if (typeof document !== "undefined") {
 function _sdSwitchHomeStripTab(mode) {
   const m = mode === "suggestions" ? "suggestions"
           : mode === "submitted"   ? "submitted"
+          : mode === "feed"        ? "feed"
           : "recent";
   if (window._sdHomeStripMode === m) {
     // Idempotent re-click: still re-sync visual state in case
@@ -1548,12 +1572,16 @@ async function loadRandomRecords(more) {
   const grid = document.getElementById("random-records-grid");
   const wrap = document.getElementById("random-records");
   if (!grid || !wrap) return;
-  // Anonymous visitors don't see the home strip — they get the
-  // waitlist splash panel (#anon-splash) instead. Hide the strip
-  // defensively in case any path tries to render into it.
+  // Anon-mode default: load the public Feed (random cached albums).
+  // Force the strip mode to "feed" since Recent / Suggestions /
+  // Submitted all require signin — keeps the rendering path clean
+  // for anon visitors.
   if (!window._clerk?.user) {
-    wrap.style.display = "none";
-    return;
+    if (window._sdHomeStripMode !== "feed") window._sdHomeStripMode = "feed";
+    if (typeof _sdSyncHomeStripTabsVisual === "function") _sdSyncHomeStripTabsVisual();
+    wrap.style.display = "";
+    // Falls through into the main render path below; the "feed"
+    // branch handles fetching and rendering for both anon + signed-in.
   }
 
   // First call (or full reload): rebuild from localStorage history.
@@ -1623,6 +1651,23 @@ async function loadRandomRecords(more) {
         } catch { /* leave empty */ }
       }
       titleText = "Suggestions";
+      isSuggested = true;
+    } else if (window._sdHomeStripMode === "feed") {
+      // ── Feed: random sample from every cached album ─────────────
+      // Public, no auth required. Rows already paid for via the
+      // release_cache so this is free server-side. Anon visitors
+      // see this as their primary home view.
+      _randomAll = [];
+      try {
+        const r = await fetch("/api/feed/random?limit=96", { cache: "no-store" });
+        if (r.ok) {
+          const j = await r.json();
+          if (Array.isArray(j?.items) && j.items.length) {
+            _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
+          }
+        }
+      } catch { /* leave empty */ }
+      titleText = "Feed";
       isSuggested = true;
     } else {
       // ── Recent (default) ────────────────────────────────────────

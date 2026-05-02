@@ -84,15 +84,39 @@ let _queueCurrentPosition = null;
 // externalId match keeps the indicator stable across that window.
 let _queuePlayingExternalId = null;
 
+// ── Anon queue persistence (localStorage) ───────────────────────────
+// Anon visitors don't have a server-backed queue, but we want them to
+// be able to build a queue, listen, and have it survive page reloads.
+// Persist to localStorage in the same shape the server returns. Keys
+// are stamped with a stable client-id (random uuid in localStorage)
+// so multiple anon tabs share state. Cap at 200 items so a runaway
+// "queue all" doesn't bloat localStorage.
+const _ANON_QUEUE_KEY = "sd_anon_queue_v1";
+const _ANON_QUEUE_MAX = 200;
+function _loadAnonQueue() {
+  try {
+    const raw = localStorage.getItem(_ANON_QUEUE_KEY);
+    if (!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+}
+function _saveAnonQueue(items) {
+  try {
+    const cap = Array.isArray(items) ? items.slice(0, _ANON_QUEUE_MAX) : [];
+    localStorage.setItem(_ANON_QUEUE_KEY, JSON.stringify(cap));
+  } catch { /* quota / disabled — queue is session-only */ }
+}
+
 // ── Fetch / cache ───────────────────────────────────────────────────
 async function _queueLoad(force = false) {
   if (_queue && !force) return _queue;
   if (_queueLoading) return _queue ?? [];
-  // Signed-out users have no server queue. Don't fire a request that
-  // would 401, and don't clobber a local-only "queue of one" that
-  // _queueOnExternalPlay may have populated for the playing track.
+  // Anon visitors: hydrate from localStorage instead of the server.
+  // Same shape the server endpoint returns so the rest of queue.js
+  // doesn't have to branch on auth state. Persistence is per-browser.
   if (!window._clerk?.user) {
-    _queue = Array.isArray(_queue) ? _queue : [];
+    if (!Array.isArray(_queue)) _queue = _loadAnonQueue();
     return _queue;
   }
   _queueLoading = true;
@@ -130,11 +154,41 @@ async function _queueLoad(force = false) {
 async function queueAdd(items, opts) {
   const arr = Array.isArray(items) ? items : [items];
   if (!arr.length) return false;
-  if (!window._clerk?.user) {
-    if (typeof showToast === "function") showToast("Sign in to use the queue", "error");
-    return false;
-  }
   const mode = opts?.mode === "append" ? "append" : "next";
+  // Anon path: persist to localStorage. Same shape the server returns
+  // so the rest of the queue UI consumes either equally. Position is
+  // assigned monotonically; dedup-by-externalId keeps a single row
+  // per track. 200-item cap (the same MAX the server enforces) gets
+  // applied via _saveAnonQueue.
+  if (!window._clerk?.user) {
+    const existing = Array.isArray(_queue) ? _queue.slice() : _loadAnonQueue();
+    // Build new entries — strip dupes by externalId so re-adding the
+    // same track shifts it rather than stacking.
+    const incomingExt = new Set(arr.map(it => String(it.externalId)));
+    let kept = existing.filter(it => !incomingExt.has(String(it.externalId)));
+    // Position numbering: head insert (mode=next) prepends; append goes
+    // to the tail. We re-stamp positions 1..N at the end.
+    const incoming = arr.map(it => ({
+      source:     it.source,
+      externalId: it.externalId,
+      data:       it.data || {},
+    }));
+    let combined = mode === "append" ? kept.concat(incoming) : incoming.concat(kept);
+    combined = combined.slice(0, _ANON_QUEUE_MAX);
+    combined.forEach((it, i) => { it.position = i + 1; });
+    _queue = combined;
+    _saveAnonQueue(combined);
+    if (typeof showToast === "function") {
+      const verb = mode === "next" ? "Playing next" : "Queued";
+      const count = arr.length === 1 ? "" : ` (${arr.length})`;
+      showToast(`${verb}${count}`);
+    }
+    if (_queueDrawerEl?.classList.contains("open")) {
+      try { await _renderQueueDrawer(); } catch {}
+    }
+    _refreshPlayerNavButtons();
+    return true;
+  }
   try {
     const r = await apiFetch("/api/user/play-queue", {
       method: "POST",
@@ -494,21 +548,32 @@ function _queueOnExternalPlay(itemPayload) {
   // "Sign in" toast as before.
   const isAnon = !window._clerk?.user;
   if (isAnon) {
+    // Anon queue is now a real localStorage-backed queue (not just a
+    // queue-of-one). Move the played track to head, dedup, persist.
+    // Mirrors the signed-in optimistic-insert path below but writes
+    // to localStorage instead of POSTing to the server.
+    if (!Array.isArray(_queue)) _queue = _loadAnonQueue();
     const data = itemPayload.data || {};
-    const optimistic = {
-      position: 1,
+    const ext = String(itemPayload.externalId);
+    const filtered = _queue.filter(it => String(it.externalId) !== ext);
+    const fresh = {
       source: itemPayload.source,
       externalId: itemPayload.externalId,
       data: {
-        title: data.title || `Track ${itemPayload.externalId}`,
-        artist: data.artist || "",
-        albumTitle: data.albumTitle || "",
-        image: data.image || "",
+        title:       data.title       || `Track ${itemPayload.externalId}`,
+        artist:      data.artist      || "",
+        albumTitle:  data.albumTitle  || "",
+        image:       data.image       || "",
+        releaseType: data.releaseType || "",
+        releaseId:   data.releaseId   || "",
       },
     };
-    _queue = [optimistic];
+    const combined = [fresh, ...filtered].slice(0, _ANON_QUEUE_MAX);
+    combined.forEach((it, i) => { it.position = i + 1; });
+    _queue = combined;
     _queueCurrentPosition = 1;
-    _queuePlayingExternalId = String(itemPayload.externalId);
+    _queuePlayingExternalId = ext;
+    _saveAnonQueue(combined);
     if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
     _refreshPlayerNavButtons();
     return false;
@@ -1017,6 +1082,24 @@ async function queueRemove(position, externalId) {
     positionsToDrop = [position];
   }
   if (!positionsToDrop.length) return;
+  // Anon path: drop locally, no server DELETE. Re-stamp positions so
+  // subsequent operations stay consistent.
+  if (!window._clerk?.user) {
+    const wasPlaying = positionsToDrop.includes(_queueCurrentPosition)
+      || (externalId != null && _queuePlayingExternalId && String(externalId) === String(_queuePlayingExternalId));
+    if (Array.isArray(_queue)) {
+      _queue = _queue.filter(it => !positionsToDrop.includes(it.position));
+      _queue.forEach((it, i) => { it.position = i + 1; });
+      _saveAnonQueue(_queue);
+    }
+    if (wasPlaying) { _queueCurrentPosition = null; _queuePlayingExternalId = null; }
+    _refreshPlayerNavButtons();
+    _renderQueueDrawer();
+    if (wasPlaying && typeof playerClose === "function") {
+      try { playerClose(); } catch {}
+    }
+    return;
+  }
 
   // Was any of the swept rows the currently-playing one?
   const wasPlaying = positionsToDrop.includes(_queueCurrentPosition)
@@ -1111,6 +1194,19 @@ async function queueClear() {
   // click. Add a guard so a stray tap doesn't dump a 30-track queue.
   const count = Array.isArray(_queue) ? _queue.length : 0;
   if (count > 0 && !confirm(`Clear all ${count} queued track${count === 1 ? "" : "s"}? This stops playback and can't be undone.`)) {
+    return;
+  }
+  // Anon path: clear localStorage, stop playback, drop the drawer.
+  if (!window._clerk?.user) {
+    _queue = [];
+    _queueCurrentPosition = null;
+    _queuePlayingExternalId = null;
+    _saveAnonQueue([]);
+    if (typeof playerClose === "function") {
+      try { playerClose(); } catch {}
+    }
+    if (_queueDrawerEl) _queueDrawerEl.classList.remove("open");
+    _renderQueueDrawer();
     return;
   }
   // Any prior per-row pending-delete bookkeeping is moot — we're

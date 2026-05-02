@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getUserTasteTuples, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getUserTasteTuples, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 
 
@@ -192,6 +192,12 @@ const anonWikiLimiter = new PerIpRateLimiter(50, 60 * 60_000,   "wiki-anon");
 // without the Clerk Bearer attached). The DB-backed search cache
 // makes repeated queries free regardless.
 const anonYoutubeLimiter = new PerIpRateLimiter(120, 60 * 60_000, "youtube-anon");
+// Discogs search for anon visitors. We borrow admin's OAuth credentials
+// to actually hit the Discogs API on their behalf, so we throttle hard
+// per IP to keep one curious visitor from chewing through admin's
+// 60/min OAuth budget. 30/hr per IP is generous for normal browsing
+// (covers a typical 10-15 min explore session) and abuse-resistant.
+const anonDiscogsLimiter = new PerIpRateLimiter(30, 60 * 60_000, "discogs-anon");
 
 /** Open gate: allows any caller (anon or authenticated). Anonymous
  *  callers are rate-limited per IP via the supplied limiter; signed-in
@@ -4711,6 +4717,52 @@ app.get("/api/contributed-favorites/sample", async (req, res) => {
   res.json({ items: sample });
 });
 
+// GET /api/feed/random — public "Feed" endpoint, no auth required.
+// Returns a random sample of cached albums for the home-strip Feed
+// tab (and the anon home page). All rows already paid for via the
+// release_cache, so this never hits Discogs upstream. Each item is
+// shaped like a search-result card so the existing renderCard path
+// can consume it without conversion. Anons see this as their primary
+// home view; signed-in users see it as the 4th strip tab.
+app.get("/api/feed/random", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  try {
+    const limit = Math.max(1, Math.min(200, parseInt(String(req.query.limit ?? "48"), 10) || 48));
+    const typeParam = String(req.query.type ?? "any");
+    const type: "master" | "release" | "any" =
+      typeParam === "master" ? "master" :
+      typeParam === "release" ? "release" : "any";
+    const rows = await getFeedRandomAlbums(limit, type);
+    const items = rows.map((row: any) => {
+      const d = row.data ?? {};
+      const artistList = Array.isArray(d.artists) ? d.artists.map((a: any) => a.name).filter(Boolean) : [];
+      const cover = (Array.isArray(d.images) && d.images[0]?.uri) ? d.images[0].uri : (d.cover_image ?? "");
+      const composed = artistList.length && d.title
+        ? `${artistList.join(", ")} - ${d.title}`
+        : (d.title ?? `${row.type} ${row.id}`);
+      return {
+        id: row.id,
+        type: row.type,
+        title: composed,
+        year:  d.year ?? "",
+        country: d.country ?? "",
+        cover_image: cover,
+        thumb:       cover,
+        format: (Array.isArray(d.formats) ? d.formats.map((f: any) => f.name).filter(Boolean) : []),
+        label:  (Array.isArray(d.labels)  ? d.labels.map((l: any) => l.name).filter(Boolean)  : []),
+        genre:  Array.isArray(d.genres) ? d.genres : [],
+        style:  Array.isArray(d.styles) ? d.styles : [],
+        master_id: d.master_id ?? (row.type === "master" ? row.id : null),
+        uri: d.uri ?? `/${row.type}/${row.id}`,
+      };
+    });
+    res.json({ items });
+  } catch (e: any) {
+    console.error("[/api/feed/random]", e?.message ?? e);
+    res.json({ items: [] });
+  }
+});
+
 // GET /api/user/my-submitted-albums — albums the CURRENT user has
 // personally submitted YouTube overrides for, distinct by master/
 // release. Drives the "Submitted" home-strip tab so each signed-in
@@ -6095,8 +6147,14 @@ In 4–7 words, give a single honest phrase describing how well these results ma
 
 // GET /search?q=pink+floyd&type=master&year=1973&page=1&per_page=10
 app.get("/search", async (req, res) => {
-  const userId = await requireUser(req, res);
-  if (!userId) return;
+  // Anon visitors can search via admin's OAuth as a fallback (read-only
+  // catalog browse) — gated by a per-IP rate limit to keep abuse off
+  // admin's 60/min OAuth budget. Signed-in users go through the
+  // standard requireUser path with their own creds.
+  const callerId = await getClerkUserId(req).catch(() => null);
+  if (!callerId) {
+    if (!await allowAnonRateLimited(req, res, anonDiscogsLimiter)) return;
+  }
 
   const rawQ   = (req.query.q as string) ?? "";
   const artist = stripArtistSuffix(req.query.artist as string | undefined);
@@ -6110,9 +6168,23 @@ app.get("/search", async (req, res) => {
   const searchRelease: string | undefined = rawRelease || undefined;
 
   // Touch activity for the signed-in user
-  touchUserActivity(userId).catch(() => {});
+  if (callerId) touchUserActivity(callerId).catch(() => {});
 
-  const dc = await getDiscogsForRequest(req);
+  // Resolve a Discogs client. Signed-in users use their own creds;
+  // anon users borrow admin's. Either way, getDiscogsForRequest's
+  // demo fallback already handles signed-in users without OAuth.
+  let dc = await getDiscogsForRequest(req);
+  if (!dc && !callerId && ADMIN_CLERK_ID) {
+    const adminOauth = await getOAuthCredentials(ADMIN_CLERK_ID);
+    if (adminOauth && discogsConsumerKey) {
+      dc = new DiscogsClient({
+        consumerKey: discogsConsumerKey,
+        consumerSecret: discogsConsumerSecret,
+        accessToken: adminOauth.accessToken,
+        accessSecret: adminOauth.accessSecret,
+      });
+    }
+  }
   if (!dc) {
     res.status(401).json({ error: "no_token", message: "Connect your Discogs account in Account settings to search." });
     return;
