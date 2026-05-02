@@ -6307,9 +6307,16 @@ app.get("/search", async (req, res) => {
 // Cache TTLs by resource type. Masters and artists are stable; releases
 // can be edited so they get a shorter TTL. Override per-request with
 // ?nocache=1 (admin-only) to force a fresh fetch.
-const _RELEASE_CACHE_TTL_S = 60 * 60 * 24 * 1;     // 1 day
-const _MASTER_CACHE_TTL_S  = 60 * 60 * 24 * 7;     // 7 days
-const _ARTIST_CACHE_TTL_S  = 60 * 60 * 24 * 7;     // 7 days
+// Far long-lived cache. Release / master / artist metadata is
+// effectively static on Discogs's end — release edits are rare,
+// master/artist updates rarer. Year-long TTL means almost every
+// repeat view is served from cache, anon visitors get full data
+// without burning admin's OAuth, and the user's library stays
+// usable across deploys / outages. Per-card ↻ Re-fetch button lets
+// users force a refresh when they suspect stale data.
+const _RELEASE_CACHE_TTL_S = 60 * 60 * 24 * 365;   // 1 year
+const _MASTER_CACHE_TTL_S  = 60 * 60 * 24 * 365;   // 1 year
+const _ARTIST_CACHE_TTL_S  = 60 * 60 * 24 * 365;   // 1 year
 
 app.get("/release/:id", async (req, res) => {
   const id = parseInt(req.params.id, 10);
