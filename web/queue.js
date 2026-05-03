@@ -801,6 +801,8 @@ function _ensureQueueDrawer() {
       <span class="queue-drawer-count" id="queue-drawer-count"></span>
       <button type="button" class="queue-drawer-repeat repeat-off" onclick="_queueCycleRepeat()" title="Repeat: off (click to cycle)">→</button>
       <button type="button" class="queue-drawer-consume" onclick="_queueToggleConsume()" title="Consume on play: OFF (click to enable)">✂</button>
+      <button type="button" class="queue-drawer-save" onclick="_playlistSavePrompt()" title="Save current queue as a playlist">💾</button>
+      <button type="button" class="queue-drawer-load" onclick="_playlistOpenPicker()" title="Load one of your saved playlists">📂</button>
       <button type="button" class="queue-drawer-clear" onclick="queueClear()" title="Clear queue">Clear</button>
       <button type="button" class="queue-drawer-close" onclick="queueToggleDrawer()" title="Close">&#9660;</button>
     </div>
@@ -1599,3 +1601,260 @@ window.queueClear          = queueClear;
 window.queueJumpTo         = queueJumpTo;
 window.queueToggleDrawer   = queueToggleDrawer;
 window._queuePlayNext      = _queuePlayNext;
+
+// ── Playlists (save / load / share) ────────────────────────────────────
+// Sign-in only. Anons hit a toast prompting them to sign in. The save
+// flow snapshots whatever's currently in _queue under a user-chosen
+// name; load replaces the queue with the playlist's items; share
+// generates a /?pl=<id> link the user can paste anywhere.
+
+function _playlistRequireAuth() {
+  if (window._clerk?.user) return true;
+  if (typeof showToast === "function") showToast("Sign in to save playlists", "error");
+  return false;
+}
+
+async function _playlistSavePrompt() {
+  if (!_playlistRequireAuth()) return;
+  await _queueLoad(false);
+  if (!_queue?.length) {
+    if (typeof showToast === "function") showToast("Queue is empty — nothing to save", "error");
+    return;
+  }
+  // Default name: "<first track title> + N more" — gives the user a
+  // meaningful preview to either accept or replace.
+  const head = _queue[0]?.data?.title || "Playlist";
+  const more = _queue.length > 1 ? ` +${_queue.length - 1} more` : "";
+  const def = `${head}${more}`.slice(0, 80);
+  const name = window.prompt("Name this playlist:", def);
+  if (name == null) return;                     // cancelled
+  const trimmed = name.trim();
+  if (!trimmed) return;
+  try {
+    const items = _queue.map(it => ({
+      source: it.source, externalId: it.externalId, data: it.data || {},
+    }));
+    const r = await apiFetch("/api/user/playlists", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: trimmed, items }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      if (typeof showToast === "function") {
+        showToast(err.error || `Save failed (HTTP ${r.status})`, "error");
+      }
+      return;
+    }
+    const { id } = await r.json();
+    if (typeof showToast === "function") {
+      showToast(`Saved as "${trimmed}" — click 📂 to load it later`);
+    }
+    // Drop the share URL onto the clipboard so the user has it ready
+    // without an extra step. Best-effort; clipboard API may be blocked.
+    const url = `${location.origin}/?pl=${id}`;
+    try { await navigator.clipboard?.writeText(url); } catch {}
+  } catch (e) {
+    console.warn("[_playlistSavePrompt] failed", e);
+    if (typeof showToast === "function") showToast("Save failed", "error");
+  }
+}
+window._playlistSavePrompt = _playlistSavePrompt;
+
+let _playlistPickerEl = null;
+
+async function _playlistOpenPicker() {
+  if (!_playlistRequireAuth()) return;
+  // Lazy-build the modal on first open so the queue drawer doesn't
+  // pay the DOM cost up front.
+  if (!_playlistPickerEl) {
+    _playlistPickerEl = document.createElement("div");
+    _playlistPickerEl.className = "playlist-picker";
+    _playlistPickerEl.innerHTML = `
+      <div class="playlist-picker-card">
+        <div class="playlist-picker-head">
+          <span class="playlist-picker-title">Your playlists</span>
+          <button type="button" class="playlist-picker-close" onclick="_playlistClosePicker()">×</button>
+        </div>
+        <div class="playlist-picker-body" id="playlist-picker-body">Loading…</div>
+      </div>`;
+    _playlistPickerEl.addEventListener("click", e => {
+      if (e.target === _playlistPickerEl) _playlistClosePicker();
+    });
+    document.body.appendChild(_playlistPickerEl);
+  }
+  _playlistPickerEl.classList.add("open");
+  if (typeof _sdLockBodyScroll === "function") _sdLockBodyScroll("playlist-picker");
+  await _playlistRefreshPicker();
+}
+window._playlistOpenPicker = _playlistOpenPicker;
+
+function _playlistClosePicker() {
+  if (!_playlistPickerEl) return;
+  _playlistPickerEl.classList.remove("open");
+  if (typeof _sdUnlockBodyScroll === "function") _sdUnlockBodyScroll("playlist-picker");
+}
+window._playlistClosePicker = _playlistClosePicker;
+
+async function _playlistRefreshPicker() {
+  if (!_playlistPickerEl) return;
+  const body = _playlistPickerEl.querySelector("#playlist-picker-body");
+  if (!body) return;
+  body.innerHTML = "Loading…";
+  try {
+    const r = await apiFetch("/api/user/playlists");
+    if (!r.ok) { body.textContent = "Could not load playlists."; return; }
+    const { items } = await r.json();
+    if (!Array.isArray(items) || !items.length) {
+      body.innerHTML = `<div class="playlist-picker-empty">No saved playlists yet. Click 💾 in the queue drawer to save the current queue.</div>`;
+      return;
+    }
+    const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+    body.innerHTML = `<ul class="playlist-picker-list">${items.map(p => `
+      <li class="playlist-picker-row" data-id="${p.id}">
+        <span class="playlist-picker-name" title="${esc(p.name)}">${esc(p.name)}</span>
+        <span class="playlist-picker-count">${p.item_count} item${p.item_count === 1 ? "" : "s"}</span>
+        <span class="playlist-picker-actions">
+          <button type="button" class="playlist-picker-load"   onclick="_playlistLoad(${p.id})"  title="Load into queue">▶ Load</button>
+          <button type="button" class="playlist-picker-share"  onclick="_playlistShare(${p.id})" title="Copy share link">🔗</button>
+          <button type="button" class="playlist-picker-rename" onclick="_playlistRename(${p.id}, '${esc(p.name).replace(/'/g, "\\'")}')" title="Rename">✏</button>
+          <button type="button" class="playlist-picker-delete" onclick="_playlistDelete(${p.id}, '${esc(p.name).replace(/'/g, "\\'")}')" title="Delete">🗑</button>
+        </span>
+      </li>`).join("")}</ul>`;
+  } catch (e) {
+    console.warn("[_playlistRefreshPicker]", e);
+    body.textContent = "Could not load playlists.";
+  }
+}
+
+async function _playlistLoad(id) {
+  // "Load" replaces the queue. Confirm before nuking what's there
+  // unless the queue is already empty.
+  await _queueLoad(false);
+  if (_queue?.length) {
+    const ok = window.confirm(`Replace the current queue (${_queue.length} item${_queue.length === 1 ? "" : "s"}) with this playlist?`);
+    if (!ok) return;
+  }
+  try {
+    const r = await apiFetch(`/api/playlists/${id}`);
+    if (!r.ok) { if (typeof showToast === "function") showToast("Playlist not found", "error"); return; }
+    const { playlist } = await r.json();
+    if (!playlist?.items?.length) {
+      if (typeof showToast === "function") showToast("Playlist is empty", "error");
+      return;
+    }
+    await queueClear();
+    await queueAdd(playlist.items.map(it => ({
+      source: it.source, externalId: it.externalId, data: it.data || {},
+    })), { mode: "append" });
+    _playlistClosePicker();
+    if (typeof showToast === "function") showToast(`Loaded "${playlist.name}"`);
+  } catch (e) {
+    console.warn("[_playlistLoad]", e);
+    if (typeof showToast === "function") showToast("Load failed", "error");
+  }
+}
+window._playlistLoad = _playlistLoad;
+
+async function _playlistShare(id) {
+  const url = `${location.origin}/?pl=${id}`;
+  try {
+    await navigator.clipboard.writeText(url);
+    if (typeof showToast === "function") showToast("Share link copied to clipboard");
+  } catch {
+    // Clipboard blocked — fall back to a visible prompt the user can
+    // copy from manually.
+    window.prompt("Copy this share link:", url);
+  }
+}
+window._playlistShare = _playlistShare;
+
+async function _playlistRename(id, currentName) {
+  const next = window.prompt("Rename playlist:", currentName);
+  if (next == null) return;
+  const trimmed = next.trim();
+  if (!trimmed || trimmed === currentName) return;
+  try {
+    const r = await apiFetch(`/api/user/playlists/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: trimmed }),
+    });
+    if (!r.ok) {
+      if (typeof showToast === "function") showToast("Rename failed", "error");
+      return;
+    }
+    await _playlistRefreshPicker();
+  } catch {
+    if (typeof showToast === "function") showToast("Rename failed", "error");
+  }
+}
+window._playlistRename = _playlistRename;
+
+async function _playlistDelete(id, currentName) {
+  if (!window.confirm(`Delete playlist "${currentName}"? This can't be undone.`)) return;
+  try {
+    const r = await apiFetch(`/api/user/playlists/${id}`, { method: "DELETE" });
+    if (!r.ok) {
+      if (typeof showToast === "function") showToast("Delete failed", "error");
+      return;
+    }
+    await _playlistRefreshPicker();
+    if (typeof showToast === "function") showToast("Playlist deleted");
+  } catch {
+    if (typeof showToast === "function") showToast("Delete failed", "error");
+  }
+}
+window._playlistDelete = _playlistDelete;
+
+// Deep-link: /?pl=<id> on landing → fetch playlist, prompt user to load
+// into their queue. Public read (works even when signed-out) but the
+// load action requires auth, so anons get a sign-in nudge.
+async function _playlistHandleDeepLink() {
+  let id;
+  try {
+    id = parseInt(new URLSearchParams(location.search).get("pl") || "", 10);
+  } catch { return; }
+  if (!Number.isFinite(id) || id <= 0) return;
+  // Strip the param immediately so a refresh doesn't re-prompt and the
+  // share link doesn't pollute future copies.
+  try {
+    const u = new URL(location.href);
+    u.searchParams.delete("pl");
+    history.replaceState({}, "", u.toString());
+  } catch {}
+  try {
+    const r = await apiFetch(`/api/playlists/${id}`);
+    if (!r.ok) return;
+    const { playlist } = await r.json();
+    if (!playlist?.items?.length) return;
+    if (!window._clerk?.user) {
+      if (typeof showToast === "function") {
+        showToast(`Sign in to load shared playlist "${playlist.name}"`, "error");
+      }
+      return;
+    }
+    const ok = window.confirm(`Load shared playlist "${playlist.name}" (${playlist.items.length} items) into your queue? This replaces the current queue.`);
+    if (!ok) return;
+    await queueClear();
+    await queueAdd(playlist.items.map(it => ({
+      source: it.source, externalId: it.externalId, data: it.data || {},
+    })), { mode: "append" });
+    if (typeof showToast === "function") showToast(`Loaded "${playlist.name}"`);
+  } catch (e) {
+    console.warn("[_playlistHandleDeepLink]", e);
+  }
+}
+// Run after auth resolves so the sign-in check is accurate. Falls back
+// to "after DOMContentLoaded" if there's no authReadyPromise (offline
+// boot path stubs Clerk synchronously).
+if (typeof window !== "undefined") {
+  const fire = () => { _playlistHandleDeepLink().catch(() => {}); };
+  if (window.authReadyPromise?.then) {
+    window.authReadyPromise.then(fire).catch(fire);
+  } else if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", fire);
+  } else {
+    fire();
+  }
+}

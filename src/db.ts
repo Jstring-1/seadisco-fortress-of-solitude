@@ -447,6 +447,32 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS user_play_queue_user_idx ON user_play_queue (clerk_user_id, position)`);
 
+  // ── User playlists ──────────────────────────────────────────────────────
+  // Saved snapshots of a user's queue. Public-readable by id (so
+  // playlists are shareable via /?pl=<id> URLs) but only the owner
+  // can rename/delete. Items mirror the user_play_queue shape so
+  // loading a playlist into the queue is a copy-paste job.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_playlists (
+      id            SERIAL PRIMARY KEY,
+      clerk_user_id TEXT        NOT NULL,
+      name          TEXT        NOT NULL,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS user_playlists_user_idx ON user_playlists (clerk_user_id, updated_at DESC)`);
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_playlist_items (
+      playlist_id   INTEGER     NOT NULL REFERENCES user_playlists(id) ON DELETE CASCADE,
+      position      INTEGER     NOT NULL,
+      source        TEXT        NOT NULL,
+      external_id   TEXT        NOT NULL,
+      data          JSONB       NOT NULL,
+      PRIMARY KEY (playlist_id, position)
+    )
+  `);
+
   // ── User orders (marketplace buy/sell history) ──────────────────────────
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS user_orders (
@@ -2319,6 +2345,144 @@ export async function reorderPlayQueue(clerkUserId: string, orderedPositions: nu
   } finally {
     client.release();
   }
+}
+
+// ── User playlists ─────────────────────────────────────────────────────
+
+const PLAYLIST_NAME_MAX  = 80;
+const PLAYLIST_ITEMS_MAX = 500;       // same cap as the live queue
+const PLAYLISTS_PER_USER = 100;       // soft cap per user
+
+// Create a playlist owned by clerkUserId from a snapshot of items.
+// Caller passes the items in display order. Returns the new id.
+export async function createPlaylist(
+  clerkUserId: string,
+  name: string,
+  items: QueueItem[],
+): Promise<number> {
+  const trimmedName = (name || "").trim().slice(0, PLAYLIST_NAME_MAX) || "Untitled playlist";
+  const capped = items.slice(0, PLAYLIST_ITEMS_MAX);
+  const pool = getPool();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // Soft cap: refuse new playlists past PLAYLISTS_PER_USER. The
+    // CHECK is a count, not a delete-the-oldest sweep — we'd rather
+    // tell the user "too many playlists, delete some" than silently
+    // garbage-collect things they made.
+    const countRow = await client.query(
+      `SELECT COUNT(*)::int AS n FROM user_playlists WHERE clerk_user_id = $1`,
+      [clerkUserId],
+    );
+    if ((countRow.rows[0]?.n ?? 0) >= PLAYLISTS_PER_USER) {
+      throw new Error(`Playlist limit reached (${PLAYLISTS_PER_USER}). Delete one before saving another.`);
+    }
+    const r = await client.query(
+      `INSERT INTO user_playlists (clerk_user_id, name) VALUES ($1, $2) RETURNING id`,
+      [clerkUserId, trimmedName],
+    );
+    const id = r.rows[0].id as number;
+    if (capped.length) {
+      const values: any[] = [];
+      const placeholders: string[] = [];
+      capped.forEach((it, i) => {
+        const base = values.length;
+        placeholders.push(`($1, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5})`);
+        values.push(i + 1, it.source, it.externalId, JSON.stringify(it.data ?? {}));
+      });
+      await client.query(
+        `INSERT INTO user_playlist_items (playlist_id, position, source, external_id, data) VALUES ${placeholders.join(", ")}`,
+        [id, ...values],
+      );
+    }
+    await client.query("COMMIT");
+    return id;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// List one user's playlists — name + counts, no item bodies (the
+// drawer picker just needs labels).
+export async function listPlaylists(clerkUserId: string): Promise<Array<{
+  id: number; name: string; created_at: string; updated_at: string; item_count: number;
+}>> {
+  const r = await getPool().query(
+    `SELECT p.id, p.name, p.created_at, p.updated_at,
+            COALESCE(c.n, 0) AS item_count
+       FROM user_playlists p
+       LEFT JOIN (
+         SELECT playlist_id, COUNT(*)::int AS n
+           FROM user_playlist_items
+          GROUP BY playlist_id
+       ) c ON c.playlist_id = p.id
+      WHERE p.clerk_user_id = $1
+      ORDER BY p.updated_at DESC`,
+    [clerkUserId],
+  );
+  return r.rows;
+}
+
+// Public: fetch a playlist by id including all items in order. Returns
+// null if not found. Owner clerk_user_id is included so the caller can
+// gate edits — read-side gating is owner-agnostic by design (shareable).
+export async function getPlaylist(id: number): Promise<{
+  id: number; name: string; clerk_user_id: string; created_at: string; updated_at: string;
+  items: Array<QueueItem & { position: number }>;
+} | null> {
+  const head = await getPool().query(
+    `SELECT id, name, clerk_user_id, created_at, updated_at
+       FROM user_playlists WHERE id = $1`,
+    [id],
+  );
+  if (!head.rows.length) return null;
+  const itemsRows = await getPool().query(
+    `SELECT position, source, external_id, data
+       FROM user_playlist_items
+      WHERE playlist_id = $1
+      ORDER BY position ASC`,
+    [id],
+  );
+  return {
+    id: head.rows[0].id,
+    name: head.rows[0].name,
+    clerk_user_id: head.rows[0].clerk_user_id,
+    created_at: head.rows[0].created_at,
+    updated_at: head.rows[0].updated_at,
+    items: itemsRows.rows.map(r => ({
+      position: r.position,
+      source: r.source,
+      externalId: r.external_id,
+      data: r.data ?? {},
+    })),
+  };
+}
+
+// Owner-only rename. Returns true if a row was updated.
+export async function renamePlaylist(
+  id: number, clerkUserId: string, name: string,
+): Promise<boolean> {
+  const trimmed = (name || "").trim().slice(0, PLAYLIST_NAME_MAX);
+  if (!trimmed) return false;
+  const r = await getPool().query(
+    `UPDATE user_playlists SET name = $3, updated_at = NOW()
+      WHERE id = $1 AND clerk_user_id = $2`,
+    [id, clerkUserId, trimmed],
+  );
+  return (r.rowCount ?? 0) > 0;
+}
+
+// Owner-only delete. ON DELETE CASCADE on the items table sweeps
+// the children automatically.
+export async function deletePlaylist(id: number, clerkUserId: string): Promise<boolean> {
+  const r = await getPool().query(
+    `DELETE FROM user_playlists WHERE id = $1 AND clerk_user_id = $2`,
+    [id, clerkUserId],
+  );
+  return (r.rowCount ?? 0) > 0;
 }
 
 // ── Phase 4: Price intelligence DB functions ─────────────────────────────

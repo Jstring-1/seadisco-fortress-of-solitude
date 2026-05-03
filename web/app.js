@@ -7,9 +7,12 @@
 //   5. drops.js    — fresh releases, tag cloud, genre filter, drop card popup
 //   6. app.js      — auth, URL restore, event wiring (this file)
 
-// Auth-ready promise
+// Auth-ready promise. Also exposed on window so other modules
+// (queue.js's playlist deep-link handler etc.) can wait for Clerk
+// to resolve before checking window._clerk.user.
 let _authReady;
 const authReadyPromise = new Promise(res => { _authReady = res; });
+window.authReadyPromise = authReadyPromise;
 
 // ── URL param helpers — read "v" with fallback to old "view" ─────────────
 function _getView(p) {
