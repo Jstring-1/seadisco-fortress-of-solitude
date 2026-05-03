@@ -139,16 +139,22 @@ function _sdGetCardMode() {
 function _sdApplyCardMode() {
   const mode = _sdGetCardMode();
   document.body.classList.toggle("card-mode-wide", mode === "wide");
-  // Reflect button state if it exists on this page.
-  const btn = document.getElementById("card-mode-toggle");
-  if (btn) {
+  // Reflect state across EVERY toggle button on the page — the search
+  // controls bar has one (#card-mode-toggle) and the shared navbar has
+  // another (#nav-card-mode-toggle), and additional surfaces can opt
+  // in just by adding the .card-mode-toggle-btn class.
+  document.querySelectorAll(".card-mode-toggle-btn").forEach(btn => {
     btn.classList.toggle("is-on", mode === "wide");
-    btn.style.color = mode === "wide" ? "var(--accent)" : "var(--muted)";
-    btn.style.borderColor = mode === "wide" ? "var(--accent)" : "var(--border)";
+    // Inline color overrides only apply to the search-bar button which
+    // ships with inline style. The navbar variant relies on CSS rules.
+    if (btn.id === "card-mode-toggle") {
+      btn.style.color = mode === "wide" ? "var(--accent)" : "var(--muted)";
+      btn.style.borderColor = mode === "wide" ? "var(--accent)" : "var(--border)";
+    }
     btn.title = mode === "wide"
       ? "Wide card mode is ON — click for compact"
       : "Wide card mode (shows full title + artist) — click to enable";
-  }
+  });
 }
 function _sdToggleCardMode() {
   const next = _sdGetCardMode() === "wide" ? "compact" : "wide";
@@ -1167,6 +1173,12 @@ function renderSharedHeader(opts) {
           </div>
         </div>
       </div>
+      <!-- Wide-cards toggle lives in the navbar so it's reachable from
+           every view (search, favorites, collection, account, admin,
+           etc.), not just the search controls bar. _sdApplyCardMode
+           keeps every .card-mode-toggle-btn in sync, so this button
+           and the search-bar button reflect the same state. -->
+      <button type="button" id="nav-card-mode-toggle" class="card-mode-toggle-btn nav-card-mode-toggle" onclick="_sdToggleCardMode()" aria-label="Toggle wide card mode" title="Toggle wide card mode">▦</button>
     </nav>`;
 
   // On non-SPA pages (account, admin), update auth tab once Clerk resolves
@@ -1184,6 +1196,14 @@ function renderSharedHeader(opts) {
         }
       }
     }).catch(() => {});
+  }
+  // Re-apply the card-mode state now that the navbar (and its
+  // #nav-card-mode-toggle button) is in the DOM. The boot block above
+  // ran at DOMContentLoaded too, but renderSharedHeader's handler may
+  // have run after it, leaving the freshly-painted button without its
+  // is-on class. Idempotent — only re-toggles classes/styles.
+  if (typeof _sdApplyCardMode === "function") {
+    try { _sdApplyCardMode(); } catch {}
   }
 }
 

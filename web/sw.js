@@ -8,8 +8,13 @@
 // Strategy by request kind:
 //
 //   App shell (/, /*.js, /*.css, /*.svg, /icon-512.svg, manifest)
-//     → cache-first, fall back to network. After install we have a
-//       full snapshot; offline reload boots straight from cache.
+//     → network-first, fall back to cache. Online: always fresh, so
+//       a refresh after a deploy shows the new build with no
+//       hard-reload required. Offline: last-seen copy from cache.
+//       (We used to be cache-first with ignoreSearch + background
+//       revalidate — that surfaced the *previous* build on refresh
+//       because the cached entry returned synchronously while the
+//       fresh fetch only landed in cache for the NEXT refresh.)
 //
 //   User library (/api/collection, /api/wantlist, /api/inventory,
 //                 /api/lists, /api/user/profile)
@@ -25,7 +30,11 @@
 //   Everything else → passthrough. We don't cache search results,
 //     marketplace, AI calls, queue endpoints, etc.
 
-const SW_VERSION = "v1-20260501.2248";
+// Bumped whenever the SW's caching behavior changes — the activate
+// handler nukes any cache that doesn't match these names, so an
+// updated SW can shed all stale entries from the old strategy in one
+// shot. v2 = network-first shell.
+const SW_VERSION = "v2-20260502.1410";
 const SHELL_CACHE = `sd-shell-${SW_VERSION}`;
 const API_CACHE   = `sd-api-${SW_VERSION}`;
 const IMG_CACHE   = `sd-img-${SW_VERSION}`;
@@ -126,9 +135,13 @@ self.addEventListener("fetch", (event) => {
   // Don't touch range requests, cross-origin auth flows, etc.
   if (req.headers.has("range")) return;
 
-  // App shell — cache-first, network-revalidate behind.
+  // App shell — network-first, cache fallback. _shellNetworkFirst
+  // (defined below) does cache.put on success so we always have a
+  // fresh offline snapshot, and on network failure falls back to a
+  // cached copy (matching with ignoreSearch so the precached
+  // non-versioned shell URLs match the page's ?v=… requests).
   if (_isShellRequest(url)) {
-    event.respondWith(_cacheFirst(req, SHELL_CACHE));
+    event.respondWith(_shellNetworkFirst(req, SHELL_CACHE));
     return;
   }
 
@@ -147,27 +160,24 @@ self.addEventListener("fetch", (event) => {
   // Everything else — passthrough. SW out of the way.
 });
 
-async function _cacheFirst(req, cacheName) {
+async function _shellNetworkFirst(req, cacheName) {
   const cache = await caches.open(cacheName);
-  // ignoreSearch: the page requests JS/CSS with a `?v=…` cache-bust
-  // query that the pre-cached entries don't have. Without this, every
-  // shell file would miss the cache and re-fetch on every load.
-  const cached = await cache.match(req, { ignoreSearch: true });
-  if (cached) {
-    // Refresh in background so the next load gets newer code.
-    fetch(req).then((res) => {
-      if (res && res.ok) cache.put(req, res.clone());
-    }).catch(() => {});
-    return cached;
-  }
   try {
+    // Always race the network first when online so refresh = fresh.
+    // The page's ?v=… cache-bust string is preserved on the way out;
+    // on the way back in we cache the response so an offline refresh
+    // still has something to show.
     const res = await fetch(req);
-    if (res && res.ok) cache.put(req, res.clone());
+    if (res && res.ok) cache.put(req, res.clone()).catch(() => {});
     return res;
   } catch (e) {
-    // Last resort: try to return the index for SPA navigation when
-    // offline and the requested file isn't cached. Avoids the
-    // browser's "no internet" page on a deep-link offline.
+    // Network failed — fall back to cache. ignoreSearch so a request
+    // for "/shared.js?v=20260502.1410" matches the precached
+    // "/shared.js" entry. The cached copy may be older than what the
+    // page would prefer, but a stale-but-functional offline reload
+    // beats a hard browser error.
+    const cached = await cache.match(req, { ignoreSearch: true });
+    if (cached) return cached;
     if (req.mode === "navigate") {
       const root = await cache.match("/", { ignoreSearch: true });
       if (root) return root;
