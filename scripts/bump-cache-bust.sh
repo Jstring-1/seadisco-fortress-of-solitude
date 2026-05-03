@@ -8,15 +8,21 @@
 #
 # Bails silently for anything that isn't a `git push` against this
 # repo — every Bash tool call goes through the hook, so the fast path
-# is critical.
+# is critical AND the gate has to be tight. v1 substring-matched
+# "git push" anywhere in the JSON payload, which fired on commit
+# messages whose HEREDOC bodies happened to mention "git push" — the
+# hook then ran the bump pre-commit and stole every staged change
+# into a commit titled "chore: bump cache-bust". v2 (this file)
+# extracts the literal tool_input.command field from the JSON, strips
+# any leading `cd … &&` prefixes, and only fires when the LEFTOVER
+# command is `git push`.
 #
 # Can also be run manually: `scripts/bump-cache-bust.sh` from anywhere
 # inside the repo will bump + commit the cache-bust string.
 #
 # Why no jq: this runs in Git Bash on Windows where jq isn't always
-# installed. We just substring-match the raw JSON payload — that's
-# sufficient because we're only checking for the literal "git push"
-# command and the repo path, both of which appear verbatim.
+# installed. Bash's built-in regex (`=~`) is enough to pull the
+# command field out of the JSON payload.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
@@ -30,17 +36,46 @@ if [ ! -t 0 ]; then
   INPUT="$(cat || true)"
 fi
 
-# Hook path: gate on the literal "git push" substring AND a reference
-# to this repo. Both must be present in the JSON command field.
-# Manual path: INPUT is empty, so we rely on PWD being inside the repo.
+# Extract the literal command field from the hook JSON. The regex
+# follows JSON's quoted-string grammar: a `"command":"..."` pair where
+# the inner string is a sequence of escape-sequences (\\.) or any
+# non-quote/non-backslash chars. BASH_REMATCH[1] captures the body.
+# Manual invocations don't have INPUT, so CMD stays empty.
+CMD=""
 if [ -n "$INPUT" ]; then
-  case "$INPUT" in
-    *"git push"*) ;;
-    *) exit 0 ;;
+  re='"command"[[:space:]]*:[[:space:]]*"((\\.|[^"\\])*)"'
+  if [[ "$INPUT" =~ $re ]]; then
+    CMD="${BASH_REMATCH[1]}"
+  fi
+fi
+
+# Hook path: only fire when the actual command (after stripping any
+# `cd … && ` prefixes) starts with `git push`. This deliberately
+# misses chains like `git pull && git push` — those are rare enough
+# that the user can rerun, and the strict gate is worth the tradeoff
+# (the v1 loose match committed every push-mentioning command).
+if [ -n "$CMD" ]; then
+  STRIPPED="$CMD"
+  # Strip leading `cd <path> && ` (or `cd <path>;`) — possibly
+  # multiple times. Stops once the next token isn't `cd`.
+  while [[ "$STRIPPED" =~ ^[[:space:]]*cd[[:space:]]+[^[:space:]]+[[:space:]]*(\&\&|\;)[[:space:]]*(.*)$ ]]; do
+    STRIPPED="${BASH_REMATCH[2]}"
+  done
+  # Also strip a leading env-var assignment block (e.g. `FOO=bar git push`).
+  while [[ "$STRIPPED" =~ ^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]+[[:space:]]+(.*)$ ]]; do
+    STRIPPED="${BASH_REMATCH[1]}"
+  done
+  case "$STRIPPED" in
+    "git push"|"git push "*|"git push;"*|"git push&"*)
+      ;;
+    *)
+      exit 0
+      ;;
   esac
-  # Confirm the push targets THIS repo (path mentioned in command, or
-  # cwd inside it). Otherwise some other repo's push would trigger us.
-  if [[ "$INPUT" != *"$REPO_NAME"* ]]; then
+  # Confirm the push targets THIS repo: command mentions repo path,
+  # OR the cwd is inside the repo. Otherwise some other clone's push
+  # could trigger a bump in this repo.
+  if [[ "$CMD" != *"$REPO_NAME"* ]]; then
     case "$PWD" in
       "$REPO_DIR"|"$REPO_DIR"/*) ;;
       *) exit 0 ;;
