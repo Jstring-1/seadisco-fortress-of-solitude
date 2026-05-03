@@ -140,17 +140,15 @@ function _sdApplyCardMode() {
   const mode = _sdGetCardMode();
   document.body.classList.toggle("card-mode-wide", mode === "wide");
   // Reflect state across EVERY toggle button on the page — the search
-  // controls bar has one (#card-mode-toggle) and the shared navbar has
-  // another (#nav-card-mode-toggle), and additional surfaces can opt
-  // in just by adding the .card-mode-toggle-btn class.
+  // controls bar has one (#card-mode-toggle) and each records-view
+  // controls row has its own (#cw-card-mode-toggle). Additional
+  // surfaces can opt in just by adding the .card-mode-toggle-btn
+  // class. Inline styles override the buttons' own inline `style=`
+  // attributes (which set the bordered-pill base look).
   document.querySelectorAll(".card-mode-toggle-btn").forEach(btn => {
     btn.classList.toggle("is-on", mode === "wide");
-    // Inline color overrides only apply to the search-bar button which
-    // ships with inline style. The navbar variant relies on CSS rules.
-    if (btn.id === "card-mode-toggle") {
-      btn.style.color = mode === "wide" ? "var(--accent)" : "var(--muted)";
-      btn.style.borderColor = mode === "wide" ? "var(--accent)" : "var(--border)";
-    }
+    btn.style.color       = mode === "wide" ? "var(--accent)" : "var(--muted)";
+    btn.style.borderColor = mode === "wide" ? "var(--accent)" : "var(--border)";
     btn.title = mode === "wide"
       ? "Wide card mode is ON — click for compact"
       : "Wide card mode (shows full title + artist) — click to enable";
@@ -518,6 +516,16 @@ function _sdInjectEnrichmentIntoCards(row) {
           `<img class="card-images-thumb${i === 0 ? " is-active" : ""}" src="${escAttr(u)}" alt="thumb ${i + 1}" loading="lazy" decoding="async" onclick="event.preventDefault();event.stopPropagation();_sdSwapCardCover(this,'${escAttr(u)}')" />`
         ).join("")}</div>`;
         wrap.insertAdjacentHTML("beforeend", stripHtml);
+        // Full-size stack of additional images, rendered below the
+        // thumb-picker. Skips the first image (already shown as the
+        // main cover) and lets the card's overflow:hidden + fixed
+        // height clip the bottom — naturally cuts off when the body
+        // (tracklist) sets the card's height. Hidden in compact mode
+        // by CSS (only `.card-mode-wide .card-images-stack` is shown).
+        const stackHtml = `<div class="card-images-stack">${images.slice(1).map((u, i) =>
+          `<img class="card-images-stack-img" src="${escAttr(u)}" alt="image ${i + 2}" loading="lazy" decoding="async" onclick="event.preventDefault();event.stopPropagation();_sdSwapCardCover(this,'${escAttr(u)}')" />`
+        ).join("")}</div>`;
+        wrap.insertAdjacentHTML("beforeend", stackHtml);
       }
     }
     if (tracks.length || fullAlbumUrl) {
@@ -572,8 +580,8 @@ function _sdInjectEnrichmentIntoCards(row) {
         const playableCount = trackUrls.filter(Boolean).length;
         const headActions = playableCount > 0
           ? `<span class="card-tracklist-head-actions">
-              <span role="button" tabindex="0" class="card-tracklist-playall card-track-play-active" data-card-id="${escAttr(releaseId)}" data-card-type="${escAttr(releaseType)}" onclick="event.preventDefault();event.stopPropagation();_sdQueueAlbumTracks(this,'play');return false" title="Play all tracks (queues every available track)">▶ All</span>
-              <span role="button" tabindex="0" class="card-tracklist-queueall" data-card-id="${escAttr(releaseId)}" data-card-type="${escAttr(releaseType)}" onclick="event.preventDefault();event.stopPropagation();_sdQueueAlbumTracks(this,'append');return false" title="Queue all tracks (append every available track)">＋ All</span>
+              <span role="button" tabindex="0" class="card-tracklist-playall card-track-play-active" data-card-id="${escAttr(releaseId)}" data-card-type="${escAttr(releaseType)}" onclick="event.preventDefault();event.stopPropagation();_sdQueueAlbumTracks(this,'play');return false" title="Play all tracks (queues every available track)">▶</span>
+              <span role="button" tabindex="0" class="card-tracklist-queueall" data-card-id="${escAttr(releaseId)}" data-card-type="${escAttr(releaseType)}" onclick="event.preventDefault();event.stopPropagation();_sdQueueAlbumTracks(this,'append');return false" title="Queue all tracks (append every available track)">＋</span>
             </span>`
           : "";
         // Head row: ALL buttons on the left, count label on the right
@@ -1181,12 +1189,6 @@ function renderSharedHeader(opts) {
           </div>
         </div>
       </div>
-      <!-- Wide-cards toggle lives in the navbar so it's reachable from
-           every view (search, favorites, collection, account, admin,
-           etc.), not just the search controls bar. _sdApplyCardMode
-           keeps every .card-mode-toggle-btn in sync, so this button
-           and the search-bar button reflect the same state. -->
-      <button type="button" id="nav-card-mode-toggle" class="card-mode-toggle-btn nav-card-mode-toggle" onclick="_sdToggleCardMode()" aria-label="Toggle wide card mode" title="Toggle wide card mode">▦</button>
     </nav>`;
 
   // On non-SPA pages (account, admin), update auth tab once Clerk resolves
