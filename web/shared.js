@@ -541,21 +541,24 @@ function _sdInjectEnrichmentIntoCards(row) {
           const queueBtn = url
             ? `<span role="button" tabindex="0" class="card-track-queue queue-add-icon" data-yt-url="${escAttr(url)}" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackQueueAdd(this);return false" title="Add to queue">＋</span>`
             : `<span class="card-track-queue card-track-disabled" aria-hidden="true">＋</span>`;
+          // Actions column moved to the LEFT of pos so the play/queue
+          // affordances are the first thing the eye lands on. Grid
+          // template in style.css matches: actions | pos | title | dur.
           return `<li>
+            <span class="card-track-actions">${playBtn}${queueBtn}</span>
             <span class="card-track-pos">${escText(t.position || "")}</span>
             <span class="card-track-title">${titleHtml}</span>
-            <span class="card-track-actions">${playBtn}${queueBtn}</span>
             ${t.duration ? `<span class="card-track-dur">${escText(t.duration)}</span>` : ""}
           </li>`;
         };
         const fullAlbumRow = fullAlbumUrl
           ? `<li class="card-track-fullalbum">
-              <span class="card-track-pos">★</span>
-              <span class="card-track-title">Full album</span>
               <span class="card-track-actions">
                 <span role="button" tabindex="0" class="card-track-play card-track-play-active track-link" data-video="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();openVideo(event,'${escAttr(fullAlbumUrl).replace(/'/g, "\\'")}')" title="Play full album">▶</span>
                 <span role="button" tabindex="0" class="card-track-queue queue-add-icon" data-fullalbum="1" data-yt-url="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackQueueAdd(this);return false" title="Queue full album">＋</span>
               </span>
+              <span class="card-track-pos">★</span>
+              <span class="card-track-title">Full album</span>
             </li>`
           : "";
         // "Play all tracks" / "Queue all tracks" — only meaningful if
@@ -573,8 +576,13 @@ function _sdInjectEnrichmentIntoCards(row) {
               <span role="button" tabindex="0" class="card-tracklist-queueall" data-card-id="${escAttr(releaseId)}" data-card-type="${escAttr(releaseType)}" onclick="event.preventDefault();event.stopPropagation();_sdQueueAlbumTracks(this,'append');return false" title="Queue all tracks (append every available track)">＋ All</span>
             </span>`
           : "";
+        // Head row: ALL buttons on the left, count label on the right
+        // showing "(playable / total) tracks". When no tracks have
+        // resolved YT URLs the buttons are hidden but the count still
+        // renders so the user knows how many tracks the album has.
+        const headLabel = `<span class="card-tracklist-head-label" title="${playableCount} of ${tracks.length} tracks have a YouTube match">(${playableCount}/${tracks.length}) track${tracks.length === 1 ? "" : "s"}${fullAlbumUrl ? " · full album" : ""}</span>`;
         const tlHtml = `<div class="card-tracklist">
-          <div class="card-tracklist-head"><span class="card-tracklist-head-label">${tracks.length} track${tracks.length === 1 ? "" : "s"}${fullAlbumUrl ? " · full album" : ""}</span>${headActions}</div>
+          <div class="card-tracklist-head">${headActions}${headLabel}</div>
           <ol class="card-tracklist-rows">${fullAlbumRow}${tracks.map((t, i) => trackRow(t, i)).join("")}</ol>
         </div>`;
         body.insertAdjacentHTML("beforeend", tlHtml);
