@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const anthropicKey = process.env.ANTHROPIC_API_KEY ?? "";
@@ -140,6 +140,84 @@ class RateLimiter {
 // searches are free. Queue caps at 30 pending so worst-case tail latency
 // is bounded (queue full → fast 503 → client governor backs off).
 const locLimiter = new RateLimiter(20, 60_000, 30, "loc");
+// ── Per-IP rate limiting (for anonymous callers) ──────────────────────────
+// Used on endpoints we want open to non-logged-in users. Signed-in users
+// bypass this — they hit the global RateLimiter instead. Keeps a simple
+// fixed-window count of timestamps per IP; lazily prunes the entire map
+// once it grows past a threshold so memory stays bounded.
+class PerIpRateLimiter {
+    max;
+    windowMs;
+    label;
+    buckets = new Map();
+    constructor(max, windowMs, label) {
+        this.max = max;
+        this.windowMs = windowMs;
+        this.label = label;
+    }
+    /** Returns true if allowed and records the timestamp; false if over the limit. */
+    check(ip) {
+        const now = Date.now();
+        const cutoff = now - this.windowMs;
+        let arr = this.buckets.get(ip);
+        if (!arr) {
+            arr = [];
+            this.buckets.set(ip, arr);
+        }
+        while (arr.length && arr[0] < cutoff)
+            arr.shift();
+        if (arr.length >= this.max)
+            return false;
+        arr.push(now);
+        if (this.buckets.size > 5000)
+            this._gc();
+        return true;
+    }
+    _gc() {
+        const cutoff = Date.now() - this.windowMs;
+        for (const [ip, arr] of this.buckets) {
+            while (arr.length && arr[0] < cutoff)
+                arr.shift();
+            if (!arr.length)
+                this.buckets.delete(ip);
+        }
+    }
+}
+// LOC: 5/min per anonymous IP (signed-in users still share the 20/min
+// global pool, so a few anons can't starve them).
+const anonLocLimiter = new PerIpRateLimiter(5, 60_000, "loc-anon");
+// Wikipedia: 50/hour per IP. Wikimedia's public API is generous to
+// well-behaved User-Agents; this caps abuse without being noticeable
+// during normal browsing.
+const anonWikiLimiter = new PerIpRateLimiter(50, 60 * 60_000, "wiki-anon");
+// YouTube Data API: per-IP throttle for anonymous callers only.
+// Signed-in users bypass this entirely (the global YouTube Data API
+// quota — 10k units/day, 100 units per search.list — is the only
+// limit they hit). Bumped from 30/hr to 120/hr after the prior
+// ceiling proved too low even for normal track-suggest browsing
+// sessions when the request was incorrectly anonymous (raw fetch
+// without the Clerk Bearer attached). The DB-backed search cache
+// makes repeated queries free regardless.
+const anonYoutubeLimiter = new PerIpRateLimiter(120, 60 * 60_000, "youtube-anon");
+/** Open gate: allows any caller (anon or authenticated). Anonymous
+ *  callers are rate-limited per IP via the supplied limiter; signed-in
+ *  users pass through unchecked (they pay the global limiter / cache).
+ *  Returns the userId for signed-in callers, "anon" for allowed anons,
+ *  or null when the response has already been sent (rate-limited 429). */
+async function allowAnonRateLimited(req, res, anonLimiter) {
+    const userId = await getClerkUserId(req).catch(() => null);
+    if (userId)
+        return userId;
+    const ip = String(req.ip || req.socket.remoteAddress || "unknown").slice(0, 64);
+    if (!anonLimiter.check(ip)) {
+        res.status(429).json({
+            error: "rate_limit",
+            message: "Too many requests from this IP — try again in a minute.",
+        });
+        return null;
+    }
+    return "anon";
+}
 // Simple in-memory LRU-ish cache for LOC search responses. Key is the
 // canonicalized query string; value is the raw body + timestamp.
 const _locCache = new Map();
@@ -273,39 +351,43 @@ async function getClerkUserId(req) {
         return null;
     }
 }
-/** Resolve a Discogs token for an authenticated request. OAuth → PAT → null.
- *  No shared-token fallback — invite-only sites require every caller to have
- *  brought their own auth. */
-async function getTokenForRequest(req) {
-    const userId = await getClerkUserId(req);
-    if (!userId)
-        return null;
-    const userToken = await getUserToken(userId);
-    if (userToken && userToken !== "__oauth__")
-        return userToken;
-    return null;
-}
+/** Build a DiscogsClient from a request's authenticated user. OAuth-only —
+ *  Personal Access Token support has been removed. Returns null if the user
+ *  is unauthenticated or has not connected via OAuth. */
 async function getDiscogsForRequest(req) {
     const userId = await getClerkUserId(req);
     if (!userId)
         return null;
-    // Check if user has OAuth credentials first
-    if (discogsConsumerKey) {
-        const oauth = await getOAuthCredentials(userId);
-        if (oauth) {
+    if (!discogsConsumerKey)
+        return null;
+    const oauth = await getOAuthCredentials(userId);
+    if (oauth) {
+        return new DiscogsClient({
+            consumerKey: discogsConsumerKey,
+            consumerSecret: discogsConsumerSecret,
+            accessToken: oauth.accessToken,
+            accessSecret: oauth.accessSecret,
+        });
+    }
+    // Demo allowlist fallback: a user in DEMO_CLERK_IDS who hasn't
+    // connected their own Discogs OAuth borrows admin's credentials so
+    // they can browse the catalog. Read-only flows (search, release/
+    // master fetches) are the realistic targets here; mutations like
+    // collection edits should still 401 because they hit different
+    // endpoints that look up THIS user's collection. No-op when admin
+    // hasn't connected OAuth either.
+    if (isDemoUser(userId) && ADMIN_CLERK_ID) {
+        const adminOauth = await getOAuthCredentials(ADMIN_CLERK_ID);
+        if (adminOauth) {
             return new DiscogsClient({
                 consumerKey: discogsConsumerKey,
                 consumerSecret: discogsConsumerSecret,
-                accessToken: oauth.accessToken,
-                accessSecret: oauth.accessSecret,
+                accessToken: adminOauth.accessToken,
+                accessSecret: adminOauth.accessSecret,
             });
         }
     }
-    // Fall back to PAT flow
-    const t = await getTokenForRequest(req);
-    if (!t)
-        return null;
-    return new DiscogsClient(t);
+    return null;
 }
 /** Gate helper: returns the Clerk userId for a signed-in caller, or null
  *  after sending a 401 response. Use at the top of every endpoint that
@@ -340,29 +422,69 @@ async function requireAdmin(req, res) {
     }
     return userId;
 }
-/** Build a DiscogsClient for a userId (outside of an HTTP request context).
- *  Checks OAuth first, then PAT. Returns null if user has no valid auth. */
-async function getDiscogsClientForUser(userId) {
-    if (discogsConsumerKey) {
-        const oauth = await getOAuthCredentials(userId);
-        if (oauth) {
-            return new DiscogsClient({
-                consumerKey: discogsConsumerKey,
-                consumerSecret: discogsConsumerSecret,
-                accessToken: oauth.accessToken,
-                accessSecret: oauth.accessSecret,
-            });
-        }
+// Temporary toggle: open the YouTube submission flow + standalone
+// /?v=youtube view to ALL signed-in users (instead of admin-only).
+// Off by default; flip on with YT_OPEN_TO_USERS=1 on Railway when
+// you want broad signed-in access (e.g. open beta).
+const _ytOpenToUsers = (process.env.YT_OPEN_TO_USERS === "1" || process.env.YT_OPEN_TO_USERS === "true");
+// Per-account allowlist for demo / reviewer access. Comma-separated
+// Clerk user IDs that get the same privileges as admin without being
+// admin: bypass the MAX_USERS cap, see the YouTube view + submission
+// flow, hit YT routes server-side. Used for the Google API quota
+// reviewer's `kylejester+ytdemo@gmail.com` account so the reviewer
+// can demo without admin credentials AND without opening the doors
+// to every signed-in user.
+//
+// Find the Clerk user ID in Clerk dashboard → Users → click the user
+// → "user_xxxxxxxx" copyable string. Set DEMO_CLERK_IDS=user_abc,user_def
+// on Railway. Empty / unset = no demo accounts.
+const _demoClerkIds = new Set((process.env.DEMO_CLERK_IDS ?? "")
+    .split(",")
+    .map(s => s.trim())
+    .filter(Boolean));
+function isDemoUser(userId) {
+    return !!userId && _demoClerkIds.has(userId);
+}
+async function requireYtAccess(req, res) {
+    // Allowlist path: admin always passes; demo users always pass; the
+    // YT_OPEN_TO_USERS broad-toggle (if on) lets every signed-in user in.
+    const userId = await getClerkUserId(req);
+    if (!userId) {
+        res.status(401).json({ error: "auth_required" });
+        return null;
     }
-    const token = await getUserToken(userId);
-    if (token && token !== "__oauth__")
-        return new DiscogsClient(token);
+    if (ADMIN_CLERK_ID && userId === ADMIN_CLERK_ID)
+        return userId;
+    if (isDemoUser(userId))
+        return userId;
+    if (_ytOpenToUsers)
+        return userId;
+    res.status(403).json({ error: "forbidden" });
     return null;
 }
-// Boot DB if a connection string is configured
-if (process.env.APP_DB_URL) {
-    initDb().catch(err => console.error("DB init failed:", err));
+/** Build a DiscogsClient for a userId (outside of an HTTP request context).
+ *  OAuth-only — Personal Access Token support has been removed. Returns
+ *  null if the user has no OAuth credentials on file. */
+async function getDiscogsClientForUser(userId) {
+    if (!discogsConsumerKey)
+        return null;
+    const oauth = await getOAuthCredentials(userId);
+    if (!oauth)
+        return null;
+    return new DiscogsClient({
+        consumerKey: discogsConsumerKey,
+        consumerSecret: discogsConsumerSecret,
+        accessToken: oauth.accessToken,
+        accessSecret: oauth.accessSecret,
+    });
 }
+// Boot DB if a connection string is configured. _dbReady resolves
+// once the schema migrations have run so other startup tasks
+// (site-theme load, etc.) can wait for tables to exist before
+// querying them.
+const _dbReady = process.env.APP_DB_URL
+    ? initDb().then(() => { console.log("[startup] DB schema ready"); }).catch(err => { console.error("DB init failed:", err); })
+    : Promise.resolve();
 const app = express();
 app.set("trust proxy", 1); // trust exactly 1 hop (Railway's reverse proxy)
 // Gzip/brotli compression for all responses
@@ -378,6 +500,11 @@ app.get("/account", (req, res) => {
 // clerk-js. This lets the Clerk bundle start downloading before shared.js
 // even parses, saving ~300–500ms on cold page loads.
 const _htmlCache = new Map();
+// Site-wide theme is locked to noir-white. The admin theme picker
+// was removed; we no longer query app_settings for "site_theme"
+// or accept POST /api/admin/site-theme writes. The constant is
+// injected into every page's HTML at the SD_THEME_INJECT placeholder.
+const _siteTheme = "noir-white";
 function _buildClerkInject() {
     if (!authPk)
         return "";
@@ -395,14 +522,27 @@ function _buildClerkInject() {
 }
 const _clerkInject = _buildClerkInject();
 function _loadHtmlTemplated(relPath) {
-    const cached = _htmlCache.get(relPath);
-    if (cached)
-        return cached;
+    // Don't cache an empty-themed HTML — if _siteTheme hasn't loaded
+    // yet (DB still warming up, brand-new deploy, etc.) we'd lock in
+    // the no-theme HTML and need a manual save to clear it. Re-template
+    // on every request until _siteTheme is populated; once it's set,
+    // cache normally.
+    const useCache = !!_siteTheme;
+    if (useCache) {
+        const cached = _htmlCache.get(relPath);
+        if (cached)
+            return cached;
+    }
     try {
         const full = path.join(__dirname, "../web", relPath);
         let html = fs.readFileSync(full, "utf8");
         html = html.replace(/<!--CLERK_SCRIPT_INJECT-->/g, _clerkInject);
-        _htmlCache.set(relPath, html);
+        // Inject the site-wide theme into every page so the bootstrap
+        // script in <head> can apply it before the stylesheet parses.
+        // The placeholder is read by the inline IIFE that sets data-theme.
+        html = html.replace(/<!--SD_THEME_INJECT-->/g, _siteTheme);
+        if (useCache)
+            _htmlCache.set(relPath, html);
         return html;
     }
     catch {
@@ -413,8 +553,16 @@ function _sendHtml(res, relPath) {
     const html = _loadHtmlTemplated(relPath);
     if (!html)
         return false;
-    res.setHeader("Cache-Control", "no-cache, must-revalidate");
+    // Stronger cache directive — `no-cache` is browser-honored but some
+    // edge caches (Railway proxies, Cloudflare, etc.) still hold pages.
+    // `no-store` is unambiguous: don't cache anywhere. The HTML is
+    // small and re-fetching is cheap.
+    res.setHeader("Cache-Control", "private, no-store, max-age=0, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
     res.setHeader("Content-Type", "text/html; charset=utf-8");
+    // Diagnostic header — `curl -I https://seadisco.com` will show
+    // exactly which theme the server thinks it's injecting.
+    res.setHeader("X-SeaDisco-Theme", _siteTheme || "(unset)");
     res.send(html);
     return true;
 }
@@ -433,7 +581,19 @@ app.get("/admin.html", (_req, res, next) => { if (!_sendHtml(res, "admin.html"))
 app.use(express.static(path.join(__dirname, "../web"), {
     extensions: ["html"],
     setHeaders(res, filePath) {
-        if (/\.(js|css|webp|png|ico|woff2?)$/i.test(filePath)) {
+        // Service worker MUST revalidate on every navigation — otherwise
+        // a stale SW would never pick up new code. Special-case before
+        // the generic JS rule below.
+        if (/[\\/]sw\.js$/i.test(filePath)) {
+            res.setHeader("Cache-Control", "no-cache, must-revalidate");
+            res.setHeader("Service-Worker-Allowed", "/");
+        }
+        else if (/\.webmanifest$/i.test(filePath)) {
+            // Manifest changes infrequently but should still revalidate so
+            // PWA install metadata stays current.
+            res.setHeader("Cache-Control", "public, max-age=3600");
+        }
+        else if (/\.(js|css|webp|png|ico|woff2?)$/i.test(filePath)) {
             res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
         }
         else if (/\.html$/i.test(filePath)) {
@@ -487,11 +647,22 @@ app.get("/api/me", async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     const userId = await getClerkUserId(req);
     if (!userId) {
-        res.json({ signedIn: false, isAdmin: false });
+        res.json({ signedIn: false, isAdmin: false, isDemo: false, ytOpen: _ytOpenToUsers });
         return;
     }
     const adminId = ADMIN_CLERK_ID;
-    res.json({ signedIn: true, isAdmin: !!adminId && userId === adminId });
+    res.json({
+        signedIn: true,
+        isAdmin: !!adminId && userId === adminId,
+        // Per-account demo flag — Clerk user IDs in DEMO_CLERK_IDS get
+        // admin-equivalent UX (YT view, submission popup, paste-URL form)
+        // without the actual admin-only mutations (✕ delete buttons, etc.).
+        isDemo: isDemoUser(userId),
+        // Broad YT_OPEN_TO_USERS toggle — when set, every signed-in user
+        // sees YT features. Off by default; demo accounts above are the
+        // narrower per-account allowlist.
+        ytOpen: _ytOpenToUsers,
+    });
 });
 // GET /api/user-count — admin-only (cap is internal, never advertised)
 app.get("/api/user-count", async (req, res) => {
@@ -505,100 +676,367 @@ app.get("/api/user-count", async (req, res) => {
         res.json({ count: 0, limit: MAX_USERS });
     }
 });
-// GET /api/user/token — returns whether the user has a token saved + auth method
+// GET /api/user/token — reports whether the user has connected via Discogs
+// OAuth. Personal Access Tokens are no longer supported; the endpoint name
+// is kept for client compatibility but `authMethod` is always "oauth" or null.
 app.get("/api/user/token", async (req, res) => {
     const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    // Check if this user is hibernated
+    // Check if this user is hibernated. Admin + demo users always
+    // reactivate immediately, bypassing the cap check — they should
+    // never be locked out by an unrelated user-count threshold.
     const hibernated = await isUserHibernated(userId);
     if (hibernated) {
-        const activeCount = await getActiveUserCount();
-        if (activeCount >= MAX_USERS) {
-            res.status(403).json({ error: "hibernated", message: `Your account is hibernated due to inactivity. All ${MAX_USERS} spots are currently full. Please try again later.` });
-            return;
+        const isPrivileged = (ADMIN_CLERK_ID && userId === ADMIN_CLERK_ID) || isDemoUser(userId);
+        if (!isPrivileged) {
+            const activeCount = await getActiveUserCount();
+            if (activeCount >= MAX_USERS) {
+                res.status(403).json({ error: "hibernated", message: `Your account is hibernated due to inactivity. All ${MAX_USERS} spots are currently full. Please try again later.` });
+                return;
+            }
         }
-        // There's room — reactivate automatically
+        // There's room (or user is privileged) — reactivate automatically
         await reactivateUser(userId);
     }
-    // Touch activity
-    const existingToken = await getUserToken(userId);
-    if (existingToken)
-        touchUserActivity(userId).catch(() => { });
-    const [t, oauthCreds] = await Promise.all([
-        getUserToken(userId),
-        getOAuthCredentials(userId),
-    ]);
-    const hasPat = !!t && t !== "__oauth__";
+    const oauthCreds = await getOAuthCredentials(userId);
     const hasOAuth = !!oauthCreds;
+    if (hasOAuth)
+        touchUserActivity(userId).catch(() => { });
     res.json({
-        hasToken: hasPat || hasOAuth,
-        masked: hasPat ? `****${t.slice(-4)}` : null,
-        authMethod: hasOAuth ? "oauth" : (hasPat ? "pat" : null),
+        hasToken: hasOAuth,
+        authMethod: hasOAuth ? "oauth" : null,
         oauthEnabled: !!discogsConsumerKey,
     });
 });
-// POST /api/user/token — save user's Discogs personal access token
-app.post("/api/user/token", express.json(), async (req, res) => {
+// GET /api/user/preferences — cross-device prefs blob.
+// Currently surfaces { offlineEnabled }; extend with new keys without
+// schema migrations (the underlying column is JSONB).
+app.get("/api/user/preferences", async (req, res) => {
     const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    const { token } = req.body ?? {};
-    if (!token || typeof token !== "string" || token.trim().length < 8) {
-        res.status(400).json({ error: "Invalid token" });
-        return;
-    }
-    // Check user cap for new users
-    const existingToken = await getUserToken(userId);
-    if (!existingToken) {
-        const count = await getActiveUserCount();
-        if (count >= MAX_USERS) {
-            res.status(403).json({ error: `User limit reached (${MAX_USERS}). New registrations are currently closed.` });
-            return;
-        }
-    }
-    await setUserToken(userId, token.trim());
-    // Fetch Discogs username and profile using the user's token
     try {
-        const identRes = await loggedFetch("discogs", "https://api.discogs.com/oauth/identity", {
-            headers: { "Authorization": `Discogs token=${token.trim()}`, "User-Agent": "SeaDisco/1.0" },
-            context: "save-token identity check",
-        });
-        if (identRes.ok) {
-            const ident = await identRes.json();
-            if (ident.username) {
-                await setDiscogsUsername(userId, ident.username);
-                // Also fetch and cache the full profile
-                try {
-                    const profileRes = await loggedFetch("discogs", `https://api.discogs.com/users/${encodeURIComponent(ident.username)}`, {
-                        headers: { "Authorization": `Discogs token=${token.trim()}`, "User-Agent": "SeaDisco/1.0" },
-                        context: "save-token profile fetch",
-                    });
-                    if (profileRes.ok) {
-                        const profile = await profileRes.json();
-                        await setDiscogsProfile(userId, profile.id ?? ident.id ?? 0, profile.avatar_url ?? "", _extractDiscogsProfile(profile));
-                    }
-                }
-                catch { }
-            }
-        }
+        const prefs = await getUserPrefs(userId);
+        res.json({ prefs });
     }
-    catch { }
-    res.json({ ok: true });
+    catch (e) {
+        console.error("[/api/user/preferences GET] error:", e?.message ?? e);
+        res.json({ prefs: {} }); // never fail — prefs are best-effort
+    }
 });
-// DELETE /api/user/token — remove user's saved token
-app.delete("/api/user/token", async (req, res) => {
+// PUT /api/user/preferences — merge-update. Body: { patch: { … } }.
+// Only known keys are persisted (allowlist) so a malicious or stale
+// client can't fill the blob with junk.
+const ALLOWED_PREF_KEYS = new Set(["offlineEnabled"]);
+app.put("/api/user/preferences", async (req, res) => {
     const userId = await getClerkUserId(req);
     if (!userId) {
         res.status(401).json({ error: "Unauthorized" });
         return;
     }
-    await deleteUserToken(userId);
-    res.json({ ok: true });
+    const body = req.body ?? {};
+    const patch = {};
+    const incoming = body.patch && typeof body.patch === "object" ? body.patch : body;
+    for (const k of Object.keys(incoming)) {
+        if (ALLOWED_PREF_KEYS.has(k))
+            patch[k] = incoming[k];
+    }
+    try {
+        const merged = await setUserPrefs(userId, patch);
+        res.json({ prefs: merged });
+    }
+    catch (e) {
+        console.error("[/api/user/preferences PUT] error:", e?.message ?? e);
+        res.status(500).json({ error: "Could not save preferences" });
+    }
+});
+// ── Track YouTube overrides (crowd-sourced gap fill) ────────────────
+//
+// Public read: anyone (including anon) can fetch the override list for
+// a master/release so the album popup can patch in the user-suggested
+// videoId on tracks Discogs didn't supply.
+//
+// Signed-in write: any signed-in user can suggest a video for a track.
+// First submission wins (no approval queue). Admin can delete via the
+// admin endpoint below.
+//
+// Shape: GET /api/track-yt/for-release?master_id=…&release_id=…
+//        → { overrides: [{ track_position, video_id, … }] }
+app.get("/api/track-yt/for-release", async (req, res) => {
+    const masterId = req.query.master_id ? String(req.query.master_id) : null;
+    const releaseId = req.query.release_id ? String(req.query.release_id) : null;
+    if (!masterId && !releaseId) {
+        res.json({ overrides: [] });
+        return;
+    }
+    try {
+        const rows = await getTrackYtOverrides(masterId, releaseId);
+        res.json({ overrides: rows });
+    }
+    catch (e) {
+        console.error("[/api/track-yt/for-release] error:", e?.message ?? e);
+        res.json({ overrides: [] });
+    }
+});
+// POST /api/track-yt/suggest — body: { releaseId, releaseType: "master"|"release",
+//                                       trackPosition, trackTitle?, videoId, videoTitle? }
+// Requires Clerk session. Ignores the submission silently if a row
+// already exists at that (releaseId, releaseType, trackPosition) — so
+// the client can treat "already taken" as a successful no-op.
+app.post("/api/track-yt/suggest", express.json({ limit: "8kb" }), async (req, res) => {
+    // YT submission flow normally admin-only; relaxed to all signed-in
+    // users when YT_OPEN_TO_USERS=1 (Google API quota demo). Toggle
+    // back via Railway env-var, no redeploy needed.
+    const userId = await requireYtAccess(req, res);
+    if (!userId)
+        return;
+    const b = req.body ?? {};
+    const releaseId = b.releaseId != null ? String(b.releaseId) : "";
+    const releaseType = b.releaseType === "release" ? "release" : "master";
+    const trackPosition = typeof b.trackPosition === "string" ? b.trackPosition.slice(0, 16) : "";
+    const trackTitle = typeof b.trackTitle === "string" ? b.trackTitle.slice(0, 256) : null;
+    const videoId = typeof b.videoId === "string" ? b.videoId.trim() : "";
+    const videoTitle = typeof b.videoTitle === "string" ? b.videoTitle.slice(0, 256) : null;
+    // YouTube videoIds are 11 chars of [A-Za-z0-9_-].
+    if (!releaseId || !trackPosition || !/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
+        res.status(400).json({ error: "Bad request" });
+        return;
+    }
+    try {
+        const inserted = await suggestTrackYtOverride({
+            releaseId, releaseType, trackPosition,
+            trackTitle, videoId, videoTitle,
+            submittedBy: userId,
+        });
+        res.json({ ok: true, inserted });
+    }
+    catch (e) {
+        console.error("[/api/track-yt/suggest] error:", e?.message ?? e);
+        res.status(500).json({ error: "Could not save suggestion" });
+    }
+});
+// POST /api/track-yt/suggest-batch — body: { assignments: [...] }
+// Used by the album-level "Find missing tracks" popup so a single YT
+// search can fill in multiple tracks at once. Each assignment is
+// { releaseId, releaseType, trackPosition, trackTitle?, videoId, videoTitle? }
+// — same shape as the singleton endpoint, just batched. Inserted in
+// one DB transaction; rows that already exist (first-submission-wins)
+// are silently skipped. Caps batch size at 64 so a hand-edited POST
+// can't try to write a thousand rows in one go.
+app.post("/api/track-yt/suggest-batch", express.json({ limit: "64kb" }), async (req, res) => {
+    // See /api/track-yt/suggest comment for the YT_OPEN_TO_USERS toggle.
+    const userId = await requireYtAccess(req, res);
+    if (!userId)
+        return;
+    const raw = Array.isArray(req.body?.assignments) ? req.body.assignments : [];
+    const items = [];
+    for (const a of raw.slice(0, 64)) {
+        const releaseId = a?.releaseId != null ? String(a.releaseId) : "";
+        const releaseType = a?.releaseType === "release" ? "release" : "master";
+        const trackPosition = typeof a?.trackPosition === "string" ? a.trackPosition.slice(0, 16) : "";
+        const trackTitle = typeof a?.trackTitle === "string" ? a.trackTitle.slice(0, 256) : null;
+        const videoId = typeof a?.videoId === "string" ? a.videoId.trim() : "";
+        const videoTitle = typeof a?.videoTitle === "string" ? a.videoTitle.slice(0, 256) : null;
+        if (!releaseId || !trackPosition || !/^[A-Za-z0-9_-]{11}$/.test(videoId))
+            continue;
+        items.push({
+            releaseId, releaseType, trackPosition, trackTitle,
+            videoId, videoTitle, submittedBy: userId,
+        });
+    }
+    if (!items.length) {
+        res.status(400).json({ error: "No valid assignments" });
+        return;
+    }
+    try {
+        const result = await suggestTrackYtOverridesBatch(items);
+        res.json({ ok: true, ...result });
+    }
+    catch (e) {
+        console.error("[/api/track-yt/suggest-batch] error:", e?.message ?? e);
+        res.status(500).json({ error: "Could not save suggestions" });
+    }
+});
+// DELETE /api/admin/track-yt — body: { releaseId, releaseType, trackPosition }
+// Admin only. Used by both the in-popup delete affordance and the
+// admin tab.
+app.delete("/api/admin/track-yt", express.json({ limit: "4kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const b = req.body ?? {};
+    const releaseId = b.releaseId != null ? String(b.releaseId) : "";
+    const releaseType = b.releaseType === "release" ? "release" : "master";
+    const trackPosition = typeof b.trackPosition === "string" ? b.trackPosition : "";
+    if (!releaseId || !trackPosition) {
+        res.status(400).json({ error: "Bad request" });
+        return;
+    }
+    try {
+        const deleted = await deleteTrackYtOverride(releaseId, releaseType, trackPosition);
+        res.json({ ok: true, deleted });
+    }
+    catch (e) {
+        console.error("[/api/admin/track-yt DELETE] error:", e?.message ?? e);
+        res.status(500).json({ error: "Could not delete override" });
+    }
+});
+// ── Unavailable YouTube videos ───────────────────────────────────────
+//
+// Client reports broken videos via POST. After a threshold of distinct
+// reports, the videoId is treated as globally unavailable and filtered
+// out of every album popup. Admin manages via the GET / DELETE pair.
+// POST /api/youtube/report-unavailable — body: { videoId, errorCode? }
+// Signed-in users only (anonymous reports would be too easy to spam).
+// Cap report bodies to a tiny size — shouldn't be more than 64 bytes.
+app.post("/api/youtube/report-unavailable", express.json({ limit: "1kb" }), async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    const videoId = typeof req.body?.videoId === "string" ? req.body.videoId.trim() : "";
+    const errorCode = Number.isFinite(Number(req.body?.errorCode)) ? Number(req.body.errorCode) : null;
+    if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
+        res.status(400).json({ error: "Bad videoId" });
+        return;
+    }
+    try {
+        const result = await reportYoutubeVideoUnavailable(videoId, userId, errorCode);
+        res.json({ ok: true, ...result });
+    }
+    catch (e) {
+        console.error("[/api/youtube/report-unavailable]", e?.message ?? e);
+        res.status(500).json({ error: "Could not record" });
+    }
+});
+// GET /api/youtube/unavailable-list — public read of every videoId
+// that's been flagged 'unavailable'. Used client-side to filter
+// out broken videos from album popups so they read as "missing"
+// and contributable. Cached on the response so we don't hammer the
+// DB if a popup-heavy session opens many albums.
+app.get("/api/youtube/unavailable-list", async (_req, res) => {
+    res.setHeader("Cache-Control", "public, max-age=300");
+    try {
+        const set = await getUnavailableYoutubeVideoIds();
+        res.json({ videoIds: Array.from(set) });
+    }
+    catch (e) {
+        console.error("[/api/youtube/unavailable-list]", e?.message ?? e);
+        res.json({ videoIds: [] });
+    }
+});
+// GET /api/admin/youtube-unavailable — admin tab data. Lists every
+// flagged + unavailable entry with report counts and timestamps.
+app.get("/api/admin/youtube-unavailable", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const rows = await listYoutubeVideoUnavailable(500);
+        res.json({ entries: rows });
+    }
+    catch (e) {
+        console.error("[/api/admin/youtube-unavailable GET]", e?.message ?? e);
+        res.json({ entries: [] });
+    }
+});
+// GET /api/admin/youtube-quota — what we've spent today (best-effort,
+// in-process counter), per-user breakdown, in-flight count, and the
+// soft caps. Lets the admin see at a glance whether we're about to
+// trip the daily limit and which users (if any) are dominating.
+app.get("/api/admin/youtube-quota", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    _ytQuotaMaybeReset();
+    // Reset stale per-user entries so the breakdown reflects today only.
+    const now = Date.now();
+    const users = [];
+    for (const [uid, entry] of _ytPerUserCounts.entries()) {
+        if (now >= entry.resetAt) {
+            _ytPerUserCounts.delete(uid);
+            continue;
+        }
+        users.push({ userId: uid, used: entry.count, limit: _YT_PER_USER_DAILY_LIMIT });
+    }
+    users.sort((a, b) => b.used - a.used);
+    res.json({
+        project: {
+            usedToday: _ytQuotaUnitsToday,
+            cap: _YT_DAILY_SOFT_CAP_UNITS,
+            perCallUnits: 100,
+            resetAtIso: new Date(_ytQuotaResetAt).toISOString(),
+        },
+        cache: {
+            memEntries: _ytSearchCache.size,
+            memMax: _YT_SEARCH_CACHE_MAX,
+            inflight: _ytInflight.size,
+            ttlDays: _YT_SEARCH_TTL_MS / (24 * 60 * 60 * 1000),
+        },
+        users,
+    });
+});
+// DELETE /api/admin/youtube-unavailable/:videoId — admin clears a
+// single entry (e.g. when a video came back online or was a false
+// positive). Removes the row entirely so a fresh report starts from
+// count 1.
+app.delete("/api/admin/youtube-unavailable/:videoId", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const videoId = String(req.params?.videoId || "");
+    if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
+        res.status(400).json({ error: "Bad videoId" });
+        return;
+    }
+    try {
+        const cleared = await clearYoutubeVideoUnavailable(videoId);
+        res.json({ ok: true, cleared });
+    }
+    catch (e) {
+        console.error("[/api/admin/youtube-unavailable DELETE]", e?.message ?? e);
+        res.status(500).json({ error: "Could not clear" });
+    }
+});
+// POST /api/has-videos — batch lookup used by the "Hard to Find"
+// search mode to badge cards that lack YouTube videos. Reads the
+// release_cache table only — no Discogs API calls — so this is free.
+// Body: { items: [{ id: number, type: "master"|"release" }, …] }.
+// Cap at 100 items to keep the SQL bounded.
+app.post("/api/has-videos", express.json({ limit: "16kb" }), async (req, res) => {
+    const raw = Array.isArray(req.body?.items) ? req.body.items : [];
+    const items = [];
+    for (const it of raw.slice(0, 100)) {
+        const id = Number(it?.id);
+        const t = it?.type === "master" ? "master" : it?.type === "release" ? "release" : null;
+        if (Number.isFinite(id) && id > 0 && t)
+            items.push({ id, type: t });
+    }
+    if (!items.length) {
+        res.json({ results: [] });
+        return;
+    }
+    try {
+        const results = await getVideoStatusBatch(items);
+        res.json({ results });
+    }
+    catch (e) {
+        console.error("[/api/has-videos] error:", e?.message ?? e);
+        res.json({ results: [] });
+    }
+});
+// GET /api/admin/track-yt — admin audit list. Newest first.
+app.get("/api/admin/track-yt", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const rows = await listAllTrackYtOverrides(500);
+        res.json({ overrides: rows });
+    }
+    catch (e) {
+        console.error("[/api/admin/track-yt GET] error:", e?.message ?? e);
+        res.json({ overrides: [] });
+    }
 });
 // DELETE /api/user/account — wipe all user data from our DB (Clerk deletion handled client-side)
 app.delete("/api/user/account", async (req, res) => {
@@ -710,14 +1148,20 @@ app.get("/api/auth/discogs/callback", async (req, res) => {
         }
         // Clean up request token
         await deleteOAuthRequestToken(oauthToken);
-        // Ensure the user has a row in user_tokens (they might not have saved a PAT yet)
+        // Ensure the user has a row in user_tokens. The schema requires a
+        // non-null discogs_token, so we write a sentinel value — no Personal
+        // Access Token UI exists anymore.
         const existingToken = await getUserToken(stored.clerkUserId);
         if (!existingToken) {
-            // Check user cap for new users
-            const userCount = await getActiveUserCount();
-            if (userCount >= MAX_USERS) {
-                res.status(403).send(`User limit reached (${MAX_USERS}). New registrations are currently closed. <a href="/">Home</a>`);
-                return;
+            // Check user cap for new users — admin + demo users bypass so a
+            // late-stage demo signup doesn't get bounced when the cap's full.
+            const isPrivileged = (ADMIN_CLERK_ID && stored.clerkUserId === ADMIN_CLERK_ID) || isDemoUser(stored.clerkUserId);
+            if (!isPrivileged) {
+                const userCount = await getActiveUserCount();
+                if (userCount >= MAX_USERS) {
+                    res.status(403).send(`User limit reached (${MAX_USERS}). New registrations are currently closed. <a href="/">Home</a>`);
+                    return;
+                }
             }
             // Create a placeholder row so OAuth columns have somewhere to live
             await setUserToken(stored.clerkUserId, "__oauth__");
@@ -851,6 +1295,22 @@ async function runBackgroundSync(userId, client, username, syncCollection, syncW
     // Build headers per-request via the client (handles both PAT and OAuth signing)
     const getHeaders = (url) => client.buildHeaders("GET", url);
     const delay = (ms) => new Promise(r => setTimeout(r, ms));
+    // Adaptive pacer (audit #3) — fixed-1.2s waits added ~12s of dead
+    // time on a 10-page collection sync even when responses came back
+    // in 800ms. This pacer measures inter-request gap and only sleeps
+    // long enough to maintain the minimum spacing. 1.1s gap stays just
+    // under Discogs' 60/min limit. Per-collection-loop instances so
+    // collection and wantlist pacing are independent.
+    const makePacer = (minGapMs) => {
+        let last = 0;
+        return async () => {
+            const now = Date.now();
+            const wait = minGapMs - (now - last);
+            if (wait > 0)
+                await delay(wait);
+            last = Date.now();
+        };
+    };
     let totalSynced = 0;
     let lastProgressAt = Date.now(); // tracks last time progress was made
     // Timeout guard — checks every 60s if sync has stalled
@@ -939,6 +1399,7 @@ async function runBackgroundSync(userId, client, username, syncCollection, syncW
         await updateSyncProgress(userId, "syncing", 0, estimatedTotal);
         if (syncCollection) {
             const allInstanceIds = [];
+            const pace = makePacer(1100);
             for (let page = 1;; page++) {
                 if (_syncAbort || _thisSyncAbort) {
                     console.log(`Sync ${username}: aborted`);
@@ -946,8 +1407,7 @@ async function runBackgroundSync(userId, client, username, syncCollection, syncW
                     _syncDone = true;
                     return;
                 }
-                if (page > 1)
-                    await delay(1200); // 1.2s pacing — Discogs allows 60/min
+                await pace(); // adaptive — only sleeps if last request started <1.1s ago
                 const r = await fetchWithRetry(`https://api.discogs.com/users/${encodeURIComponent(username)}/collection/folders/0/releases?per_page=500&page=${page}&sort=added&sort_order=desc`);
                 const data = await r.json();
                 const releases = data.releases ?? [];
@@ -995,6 +1455,7 @@ async function runBackgroundSync(userId, client, username, syncCollection, syncW
         }
         if (syncWantlist) {
             const allWantlistIds = [];
+            const pace = makePacer(1100);
             for (let page = 1;; page++) {
                 if (_syncAbort || _thisSyncAbort) {
                     console.log(`Sync ${username}: aborted`);
@@ -1002,8 +1463,7 @@ async function runBackgroundSync(userId, client, username, syncCollection, syncW
                     _syncDone = true;
                     return;
                 }
-                if (page > 1)
-                    await delay(1200);
+                await pace();
                 const r = await fetchWithRetry(`https://api.discogs.com/users/${encodeURIComponent(username)}/wants?per_page=500&page=${page}&sort=added&sort_order=desc`);
                 const data = await r.json();
                 const wants = data.wants ?? [];
@@ -1991,14 +2451,42 @@ app.put("/api/user/settings/default-folder", express.json(), async (req, res) =>
         res.status(500).json({ error: String(e) });
     }
 });
-// POST /api/user/collection/remove — remove release from collection
+// POST /api/user/collection/remove — remove release from collection.
+// instanceId is required by Discogs (a user can have multiple copies),
+// but the client doesn't always know it — e.g. the green-circle dot in
+// the master-release version list only has the releaseId in scope. When
+// instanceId is missing OR null we look up the user's first instance
+// from local state and use that. Multi-instance users with the
+// dedicated modal button still pass an explicit instanceId.
 app.post("/api/user/collection/remove", express.json(), async (req, res) => {
     const ctx = await requireUsernameAndToken(req, res);
     if (!ctx)
         return;
-    const { releaseId, instanceId, folderId = 1 } = req.body ?? {};
-    if (!releaseId || !instanceId) {
-        res.status(400).json({ error: "releaseId and instanceId required" });
+    const body = req.body ?? {};
+    const releaseId = body.releaseId;
+    let instanceId = body.instanceId;
+    let folderId = body.folderId ?? 1;
+    if (!releaseId) {
+        res.status(400).json({ error: "releaseId required" });
+        return;
+    }
+    // Fallback lookup when the caller didn't supply an instanceId.
+    if (!instanceId) {
+        try {
+            const inst = await getCollectionInstance(ctx.userId, Number(releaseId));
+            if (inst?.instanceId) {
+                instanceId = inst.instanceId;
+                // Also use the actual stored folderId — most callers default
+                // to 1 ("Uncategorized") but Discogs returns 404 if the
+                // release isn't in folder 1 specifically.
+                if (inst.folderId)
+                    folderId = inst.folderId;
+            }
+        }
+        catch { /* fall through to error below */ }
+    }
+    if (!instanceId) {
+        res.status(400).json({ error: "release not in collection (no instance found)" });
         return;
     }
     try {
@@ -2711,8 +3199,10 @@ function _normalizeLocResult(r) {
 }
 // GET /api/loc/search — proxy with rate limiting and response caching
 app.get("/api/loc/search", async (req, res) => {
-    // Admin-only: the LOC view is a personal workspace for the site owner.
-    const userId = await requireAdmin(req, res);
+    // Open to all callers. Anonymous IPs are throttled at 5/min (per IP);
+    // signed-in users pass through and share the 20/min global pool.
+    // Saves endpoints (POST/DELETE /api/user/loc-saves) remain admin-only.
+    const userId = await allowAnonRateLimited(req, res, anonLocLimiter);
     if (!userId)
         return;
     const { url, cacheKey } = _buildLocSearchUrl(req);
@@ -2794,9 +3284,80 @@ app.get("/api/loc/search", async (req, res) => {
         res.status(500).json({ error: String(e?.message ?? e) });
     }
 });
+// GET /api/loc/lookup — resolve a single LOC item by its full URL/id.
+// Used so a shared URL like /?v=loc&li=<urlencoded-loc-id> can open the
+// info popup (and a /?v=loc&lp=<id> URL can resume playback) without
+// the recipient having to re-run the search that originally surfaced
+// the item. Same rate limiter as /api/loc/search.
+app.get("/api/loc/lookup", async (req, res) => {
+    // Open with same anon throttle as /api/loc/search.
+    const userId = await allowAnonRateLimited(req, res, anonLocLimiter);
+    if (!userId)
+        return;
+    const id = typeof req.query.id === "string" ? req.query.id : "";
+    // Validate: must be a loc.gov item URL. Anything else gets a 400 so
+    // we don't proxy arbitrary URLs through this endpoint.
+    if (!/^https?:\/\/(www\.)?loc\.gov\//i.test(id)) {
+        res.status(400).json({ error: "id must be a loc.gov URL" });
+        return;
+    }
+    try {
+        await locLimiter.acquire();
+    }
+    catch (e) {
+        if (e?.code === "rate_limit_queue_full") {
+            res.status(503).json({ error: "rate_limited", message: "LOC API is busy, try again in a moment." });
+            return;
+        }
+        res.status(500).json({ error: String(e?.message ?? e) });
+        return;
+    }
+    try {
+        const url = id + (id.includes("?") ? "&" : "?") + "fo=json";
+        const r = await loggedFetch("loc", url, {
+            headers: { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "application/json" },
+            context: "loc-lookup",
+        });
+        if (r.status === 429) {
+            res.status(503).json({ error: "rate_limited", message: "LOC is currently rate-limiting — try again shortly." });
+            return;
+        }
+        if (!r.ok) {
+            res.status(502).json({ error: `LOC HTTP ${r.status}` });
+            return;
+        }
+        const ct = r.headers.get("content-type") ?? "";
+        if (!ct.includes("json")) {
+            res.status(502).json({ error: "LOC returned non-JSON (possible CAPTCHA). Try again later." });
+            return;
+        }
+        const body = await r.json();
+        // The single-item response wraps the actual record under `item` (and
+        // `resources`/`recording` siblings carry the audio info). Build a
+        // flat object that matches the search-result shape so _normalizeLocResult
+        // can produce the same normalized card.
+        const merged = {
+            ...(body?.item ?? {}),
+            // search results carry these at the top level — preserve resources
+            // so audio URLs survive normalization
+            resources: body?.resources ?? body?.item?.resources ?? [],
+            id,
+            url: id,
+        };
+        const normalized = _normalizeLocResult(merged);
+        if (!normalized) {
+            res.status(404).json({ error: "Item not found" });
+            return;
+        }
+        res.json({ item: normalized });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
 // GET /api/user/loc-saves — list the current user's saved LOC items
 app.get("/api/user/loc-saves", async (req, res) => {
-    const userId = await requireAdmin(req, res);
+    const userId = await requireUser(req, res);
     if (!userId)
         return;
     try {
@@ -2809,7 +3370,7 @@ app.get("/api/user/loc-saves", async (req, res) => {
 });
 // GET /api/user/loc-saves/ids — lightweight list of saved IDs (for toggling star state)
 app.get("/api/user/loc-saves/ids", async (req, res) => {
-    const userId = await requireAdmin(req, res);
+    const userId = await requireUser(req, res);
     if (!userId)
         return;
     try {
@@ -2823,7 +3384,7 @@ app.get("/api/user/loc-saves/ids", async (req, res) => {
 // POST /api/user/loc-saves — save an item
 // Body: { locId, title, streamUrl, data }
 app.post("/api/user/loc-saves", express.json({ limit: "64kb" }), async (req, res) => {
-    const userId = await requireAdmin(req, res);
+    const userId = await requireUser(req, res);
     if (!userId)
         return;
     const { locId, title = null, streamUrl = null, data = {} } = req.body ?? {};
@@ -2844,7 +3405,7 @@ app.post("/api/user/loc-saves", express.json({ limit: "64kb" }), async (req, res
 // Body: { locId }
 // (DELETE with a URL param was avoided because LOC IDs are full URLs with slashes)
 app.delete("/api/user/loc-saves", express.json(), async (req, res) => {
-    const userId = await requireAdmin(req, res);
+    const userId = await requireUser(req, res);
     if (!userId)
         return;
     const locId = typeof req.body?.locId === "string"
@@ -2856,6 +3417,661 @@ app.delete("/api/user/loc-saves", express.json(), async (req, res) => {
     }
     try {
         await deleteLocSave(userId, locId);
+        res.json({ ok: true });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// ── Archive.org item saves (Archive view "Saved" tab) ─────────────────
+// Same shape as the LOC saves API; archive identifiers are slug-safe
+// (no slashes) but we mirror the body-as-payload pattern anyway for
+// consistency with the LOC endpoints. Admin-only — the archive view
+// itself is gated by requireAdmin so non-admins won't see save buttons.
+// GET /api/user/archive-saves — list the current user's saved archive items
+app.get("/api/user/archive-saves", async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    try {
+        const items = await getArchiveSaves(userId);
+        res.json({ items });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// GET /api/user/archive-saves/ids — lightweight list of saved IDs
+app.get("/api/user/archive-saves/ids", async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    try {
+        const ids = await getArchiveSaveIds(userId);
+        res.json({ ids });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// POST /api/user/archive-saves — save an archive item
+// Body: { archiveId, title, streamUrl, data }
+app.post("/api/user/archive-saves", express.json({ limit: "64kb" }), async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    const { archiveId, title = null, streamUrl = null, data = {} } = req.body ?? {};
+    if (typeof archiveId !== "string" || !archiveId) {
+        res.status(400).json({ error: "archiveId required" });
+        return;
+    }
+    try {
+        await saveArchiveItem(userId, archiveId, title ? String(title).slice(0, 500) : null, streamUrl ? String(streamUrl).slice(0, 2000) : null, data && typeof data === "object" ? data : {});
+        res.json({ ok: true });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// DELETE /api/user/archive-saves — remove a single save
+// Body: { archiveId }
+app.delete("/api/user/archive-saves", express.json(), async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    const archiveId = typeof req.body?.archiveId === "string"
+        ? req.body.archiveId
+        : (typeof req.query?.archiveId === "string" ? req.query.archiveId : "");
+    if (!archiveId) {
+        res.status(400).json({ error: "archiveId required" });
+        return;
+    }
+    try {
+        await deleteArchiveSave(userId, archiveId);
+        res.json({ ok: true });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// ── Wikipedia article saves (Wikipedia SPA "Saved" tab) ────────────────
+// Same shape as the LOC saves API. Wikipedia titles can contain spaces,
+// slashes, and other URL-unfriendly characters — title is sent in the
+// request body for POST/DELETE, never in the URL path.
+// GET /api/user/wiki-saves — list the current user's saved Wikipedia articles
+app.get("/api/user/wiki-saves", async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    try {
+        const items = await getWikiSaves(userId);
+        res.json({ items });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// GET /api/user/wiki-saves/ids — lightweight list of saved titles for ★ state
+app.get("/api/user/wiki-saves/ids", async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    try {
+        const ids = await getWikiSaveIds(userId);
+        res.json({ ids });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// POST /api/user/wiki-saves — save an article
+// Body: { title, url?, snippet?, thumbnail?, data? }
+app.post("/api/user/wiki-saves", express.json({ limit: "64kb" }), async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    const { title, url = null, snippet = null, thumbnail = null, data = {} } = req.body ?? {};
+    if (typeof title !== "string" || !title.trim()) {
+        res.status(400).json({ error: "title required" });
+        return;
+    }
+    try {
+        await saveWikiArticle(userId, title.trim().slice(0, 500), url ? String(url).slice(0, 2000) : null, snippet ? String(snippet).slice(0, 2000) : null, thumbnail ? String(thumbnail).slice(0, 2000) : null, data && typeof data === "object" ? data : {});
+        res.json({ ok: true });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// DELETE /api/user/wiki-saves — remove a single save
+// Body: { title }
+app.delete("/api/user/wiki-saves", express.json(), async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    const title = typeof req.body?.title === "string"
+        ? req.body.title.trim()
+        : (typeof req.query?.title === "string" ? req.query.title.trim() : "");
+    if (!title) {
+        res.status(400).json({ error: "title required" });
+        return;
+    }
+    try {
+        await deleteWikiSave(userId, title);
+        res.json({ ok: true });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// ── Archive.org collection proxy (admin-only) ───────────────────────────
+//
+// Lightweight proxy for a curated archive.org collection. Lists every
+// item in the collection with metadata + the primary playable audio
+// URL. Cached in release_cache via a fixed sentinel key so the browser
+// hits archive.org at most once a day even with many admin visits.
+// Items play through the existing LOC <audio> engine since
+// archive.org serves direct mp3 URLs the same way LOC does.
+const _ARCHIVE_AADAM_COLLECTION = "aadamjacobs";
+// Curated archive.org collections rarely change, so the cache is
+// effectively permanent. Admin can force a refresh from the page or
+// hit ?nocache=1 directly.
+const _ARCHIVE_CACHE_TTL_S = 60 * 60 * 24 * 365 * 5; // ~5 years
+// Synthetic discogs_id used as the cache key for this collection's
+// listing. Any positive int that won't collide with a real master.
+const _ARCHIVE_AADAM_CACHE_KEY = 999_900_001;
+async function _fetchArchiveMeta(identifier) {
+    const metaUrl = `https://archive.org/metadata/${encodeURIComponent(identifier)}`;
+    try {
+        const mr = await loggedFetch("archive", metaUrl, {
+            headers: { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "application/json" },
+            context: "archive-meta",
+        });
+        if (!mr.ok)
+            return { streamUrl: "", duration: "" };
+        const meta = await mr.json();
+        const files = Array.isArray(meta?.files) ? meta.files : [];
+        const mp3 = files.find(f => typeof f?.name === "string" &&
+            /\.mp3$/i.test(f.name) &&
+            (f.format === "VBR MP3" || f.format === "128Kbps MP3" || f.format === "MP3")) || files.find(f => typeof f?.name === "string" && /\.mp3$/i.test(f.name));
+        if (!mp3)
+            return { streamUrl: "", duration: "" };
+        return {
+            streamUrl: `https://archive.org/download/${encodeURIComponent(identifier)}/${encodeURIComponent(mp3.name)}`,
+            duration: typeof mp3.length === "string" ? mp3.length : "",
+        };
+    }
+    catch {
+        return { streamUrl: "", duration: "" };
+    }
+}
+async function _fetchArchiveCollection(collectionId) {
+    // Step 1: page through every item belonging to this archive.org user.
+    // archive.org's search API caps each page at 1000; we walk page-by-
+    // page until we've collected `numFound` records.
+    //
+    // We try four fields independently and union the results, because
+    // different items use different fields depending on how they were
+    // catalogued:
+    //   collection:NAME — items explicitly tagged with this collection
+    //   uploader:NAME*  — `uploader` stores an email (aadamjacobs@…)
+    //                     so we need a wildcard for the username prefix
+    //   addedby:NAME*   — same email-form as uploader
+    //   creator:NAME    — creator field on items by this artist
+    //
+    // Querying separately (rather than one big OR expression) is more
+    // robust: a single OR query was returning 0 items in production —
+    // probably because of how archive.org parses the URL-encoded
+    // parens / wildcards. Per-field queries each parse cleanly, and
+    // we dedupe by identifier client-side.
+    const PAGE_ROWS = 1000;
+    const seen = new Map();
+    // Run one paged search for a single q= expression and merge unique
+    // docs into `seen`. Logs numFound per query so railway logs show
+    // exactly what each field contributed.
+    const runQuery = async (q, label) => {
+        let page = 1;
+        let numFound = 0;
+        let pageCount = 0;
+        while (true) {
+            const url = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(q)}&fl[]=identifier,title,date,description&rows=${PAGE_ROWS}&page=${page}&output=json&sort[]=identifier+asc`;
+            const r = await loggedFetch("archive", url, {
+                headers: { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "application/json" },
+                context: `archive-search-${label}`,
+            });
+            if (!r.ok) {
+                console.warn(`[archive] ${label} HTTP ${r.status} — skipping this field`);
+                return 0;
+            }
+            const body = await r.json();
+            const docs = (body?.response?.docs ?? []).filter((d) => d?.identifier);
+            if (page === 1)
+                numFound = body?.response?.numFound ?? docs.length;
+            let added = 0;
+            for (const d of docs) {
+                if (!seen.has(d.identifier)) {
+                    seen.set(d.identifier, d);
+                    added++;
+                }
+            }
+            pageCount += docs.length;
+            if (pageCount >= numFound || !docs.length)
+                break;
+            page++;
+            if (page > 20)
+                break;
+        }
+        console.log(`[archive] ${label} numFound=${numFound} returned=${pageCount}`);
+        return numFound;
+    };
+    // Wrap each query in try/catch so a transient network/parse failure
+    // on one field doesn't kill the whole refresh — we want partial
+    // results over none.
+    const safeQuery = async (q, label) => {
+        try {
+            await runQuery(q, label);
+        }
+        catch (e) {
+            console.warn(`[archive] ${label} threw — skipping (${e?.message ?? e})`);
+        }
+    };
+    await safeQuery(`collection:${collectionId}`, "collection");
+    await safeQuery(`uploader:${collectionId}*`, "uploader");
+    await safeQuery(`addedby:${collectionId}*`, "addedby");
+    await safeQuery(`creator:${collectionId}`, "creator");
+    console.log(`[archive] union total unique=${seen.size}`);
+    const allDocs = Array.from(seen.values());
+    // Build basic item records WITHOUT per-item streamUrl. The previous
+    // version walked archive.org's /metadata/{id} for every doc to
+    // pre-resolve stream URLs — that took 5+ minutes for 2,541 items
+    // and meant the cache wasn't written until everything completed,
+    // so users saw the old cache (often empty) the whole time.
+    //
+    // Stream URLs are now resolved on demand by the existing
+    // GET /api/archive/item/:id endpoint (24h memory cache) when a
+    // user clicks ▶ or ＋ on a row. Trades one extra round trip per
+    // play for a refresh that completes in seconds instead of minutes.
+    const items = allDocs.map((d) => ({
+        identifier: d.identifier,
+        title: String(d.title ?? d.identifier),
+        date: Array.isArray(d.date) ? d.date[0] : (d.date ?? ""),
+        description: Array.isArray(d.description) ? d.description.join(" ") : (d.description ?? ""),
+        itemUrl: `https://archive.org/details/${encodeURIComponent(d.identifier)}`,
+        streamUrl: "", // resolved lazily by /api/archive/item/:id
+        duration: "",
+    }));
+    return items;
+}
+// Refetch the collection and write to cache. Used by both the weekly
+// scheduled refresh and the admin manual trigger. Logs how many items
+// were stored so admin can sanity-check.
+// Bump this whenever the cached payload shape or fetch strategy
+// changes; _maybeRefreshArchive will discard older-schema caches and
+// rebuild on next boot. Avoids stuck-stale-cache after deploys.
+//   v2: added rows=1000 paging (was rows=300 hardcoded)
+//   v3: tried (collection:X OR uploader:X) — works but unnecessarily
+//       wide; v5 below uses uploader: alone
+//   v4: reverted to collection:X — confirmed too narrow (300 vs 2541)
+//   v5: tried uploader:X — returned 0 because uploader stores email
+//       (aadamjacobs@archive.org), bare username doesn't match
+//   v6: tried single-OR query — got mangled by URL encoding, returned 0
+//   v7: split into per-field queries with client-side dedupe; logs
+//       numFound per field
+//   v8: dropped per-item metadata fetch from refresh (was making the
+//       whole refresh take 5+ minutes); streams are now lazy-resolved
+//       client-side via /api/archive/item/:id when user clicks ▶
+const _ARCHIVE_CACHE_SCHEMA = 8;
+async function _refreshArchiveCache(collectionId, cacheKey) {
+    console.log(`[archive] refreshing collection "${collectionId}" cache…`);
+    const t0 = Date.now();
+    const items = await _fetchArchiveCollection(collectionId);
+    const payload = { items, fetchedAt: new Date().toISOString(), schemaV: _ARCHIVE_CACHE_SCHEMA };
+    await cacheRelease(cacheKey, "master-versions", payload);
+    const ms = Date.now() - t0;
+    console.log(`[archive] refresh complete: ${items.length} items in ${ms}ms`);
+    return { count: items.length };
+}
+// Boot the weekly refresh schedule. Runs once at startup if the cache
+// is empty or stale, then every 24h checks and refetches if older than
+// 7 days. setInterval is fine for this — Node.js keeps the process
+// alive past the interval; if Railway restarts the container we just
+// pick up where the cron schedule left off (cache_at carries the truth).
+const _ARCHIVE_REFRESH_INTERVAL_MS = 24 * 60 * 60 * 1000; // every 24h check
+const _ARCHIVE_STALE_AFTER_MS = 7 * 24 * 60 * 60 * 1000; // refresh if >7d old
+async function _maybeRefreshArchive() {
+    try {
+        // Inspect the cached payload. Refresh triggers when:
+        //   1. row doesn't exist yet
+        //   2. payload schema is older than current (deploy invalidates)
+        //   3. fetchedAt is older than 7 days
+        const cached = await getCachedRelease(_ARCHIVE_AADAM_CACHE_KEY, "master-versions");
+        const fetchedAt = cached?.fetchedAt ? Date.parse(cached.fetchedAt) : 0;
+        const ageMs = Date.now() - fetchedAt;
+        const schemaStale = (cached?.schemaV ?? 0) < _ARCHIVE_CACHE_SCHEMA;
+        if (!fetchedAt || schemaStale || ageMs > _ARCHIVE_STALE_AFTER_MS) {
+            console.log(`[archive] refresh trigger:`, !fetchedAt ? "no cache" : schemaStale ? `schema ${cached?.schemaV ?? 0} → ${_ARCHIVE_CACHE_SCHEMA}` : `age ${Math.round(ageMs / 86400000)}d`);
+            await _refreshArchiveCache(_ARCHIVE_AADAM_COLLECTION, _ARCHIVE_AADAM_CACHE_KEY);
+        }
+    }
+    catch (err) {
+        console.error("[archive] scheduled refresh failed:", err?.message ?? err);
+    }
+}
+// Fire once at startup (in background — don't block boot) + every 24h.
+if (process.env.APP_DB_URL) {
+    setTimeout(() => { _maybeRefreshArchive(); }, 5000);
+    setInterval(() => { _maybeRefreshArchive(); }, _ARCHIVE_REFRESH_INTERVAL_MS);
+}
+// GET /api/archive/aadamjacobs — public listing of the curated
+// Aadam Jacobs live shows collection on archive.org. Reads from the
+// DB cache only — never fetches from archive.org on a user request.
+// The cache is populated by the weekly scheduled refresh (above) or
+// by an admin manual trigger via POST /api/admin/archive/refresh.
+// Open to all callers: there's no upstream call to abuse, and the
+// nocache=1 path is also harmless (just re-reads our DB row).
+app.get("/api/archive/aadamjacobs", async (_req, res) => {
+    const cached = await getCachedRelease(_ARCHIVE_AADAM_CACHE_KEY, "master-versions", _ARCHIVE_CACHE_TTL_S);
+    if (cached?.items) {
+        res.setHeader("X-SeaDisco-Cache", "hit");
+        res.json(cached);
+        return;
+    }
+    // Cache miss (e.g. very first hit before scheduled refresh has run).
+    // Trigger an on-demand refresh so the user gets data; subsequent
+    // requests serve from cache.
+    try {
+        const { count } = await _refreshArchiveCache(_ARCHIVE_AADAM_COLLECTION, _ARCHIVE_AADAM_CACHE_KEY);
+        const fresh = await getCachedRelease(_ARCHIVE_AADAM_CACHE_KEY, "master-versions");
+        res.setHeader("X-SeaDisco-Cache", "miss");
+        res.json(fresh ?? { items: [], fetchedAt: new Date().toISOString(), count });
+    }
+    catch (e) {
+        console.error("[archive/aadamjacobs]", e?.message ?? e);
+        res.status(502).json({ error: String(e?.message ?? e) });
+    }
+});
+// GET /api/archive/item/:identifier — rich metadata for a single
+// archive.org item (powers the in-app info popup). Open to all
+// callers; we cache responses 1 day in-memory to avoid hammering
+// archive.org during browsing. Anonymous IPs share the LOC anon
+// limiter so anons can't burn through the whole metadata API.
+const _archiveItemCache = new Map();
+const _ARCHIVE_ITEM_TTL_MS = 24 * 60 * 60 * 1000;
+const _ARCHIVE_ITEM_CACHE_MAX = 500;
+function _archiveItemCacheGet(id) {
+    const entry = _archiveItemCache.get(id);
+    if (!entry)
+        return null;
+    if (Date.now() - entry.ts > _ARCHIVE_ITEM_TTL_MS) {
+        _archiveItemCache.delete(id);
+        return null;
+    }
+    _archiveItemCache.delete(id);
+    _archiveItemCache.set(id, entry);
+    return entry.body;
+}
+function _archiveItemCacheSet(id, body) {
+    if (_archiveItemCache.size >= _ARCHIVE_ITEM_CACHE_MAX) {
+        const firstKey = _archiveItemCache.keys().next().value;
+        if (firstKey !== undefined)
+            _archiveItemCache.delete(firstKey);
+    }
+    _archiveItemCache.set(id, { ts: Date.now(), body });
+}
+app.get("/api/archive/item/:identifier", async (req, res) => {
+    if (!await allowAnonRateLimited(req, res, anonLocLimiter))
+        return;
+    const id = String(req.params.identifier ?? "").trim();
+    // Validate: archive.org identifiers are slug-safe ([A-Za-z0-9._-]+).
+    // Reject anything else so we don't proxy arbitrary URLs through here.
+    if (!id || !/^[A-Za-z0-9._-]+$/.test(id) || id.length > 200) {
+        res.status(400).json({ error: "invalid identifier" });
+        return;
+    }
+    const cached = _archiveItemCacheGet(id);
+    if (cached) {
+        res.setHeader("X-SeaDisco-Cache", "hit");
+        res.json(cached);
+        return;
+    }
+    try {
+        const r = await loggedFetch("archive", `https://archive.org/metadata/${encodeURIComponent(id)}`, {
+            headers: { "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)", "Accept": "application/json" },
+            context: "archive-item",
+        });
+        if (!r.ok) {
+            res.status(r.status >= 500 ? 502 : r.status).json({ error: `archive.org HTTP ${r.status}` });
+            return;
+        }
+        const meta = await r.json();
+        // Curate the response: archive.org's raw metadata is huge (full
+        // file manifest, derivatives, download counts per format, etc.).
+        // We trim to what the popup actually renders, which keeps payloads
+        // small AND insulates the client from upstream shape changes.
+        const m = meta?.metadata ?? {};
+        const filesArr = Array.isArray(meta?.files) ? meta.files : [];
+        // Audio tracks only — and dedupe per-track to one row per logical
+        // recording. archive.org typically stores each track in 3+
+        // formats (FLAC original + MP3/OGG derivatives); the previous
+        // filter kept the original AND the MP3 derivative, which meant
+        // "Queue all tracks" added every track twice. Group files by
+        // their `original` field (derivatives point at the source name;
+        // originals are their own group), then pick the most browser-
+        // friendly format from each group — prefer MP3 since it has
+        // universal <audio> support, fall back to OGG/M4A/etc.
+        const audioCandidates = filesArr.filter(f => typeof f?.name === "string" && /\.(mp3|m4a|flac|ogg|wav|opus|aac)$/i.test(f.name));
+        const groups = new Map();
+        for (const f of audioCandidates) {
+            // Group by both `original` (when present) AND basename-without-
+            // extension so we catch the dedup whether or not archive.org
+            // surfaces the derivative-of relationship in this item's
+            // metadata. track01.flac and track01.mp3 share basename
+            // "track01" → same logical recording.
+            let key;
+            if (typeof f.original === "string" && f.original) {
+                key = f.original.replace(/\.[^.]+$/, "").toLowerCase();
+            }
+            else {
+                key = String(f.name).replace(/\.[^.]+$/, "").toLowerCase();
+            }
+            if (!groups.has(key))
+                groups.set(key, []);
+            groups.get(key).push(f);
+        }
+        const formatPriority = (f) => {
+            const name = String(f.name || "").toLowerCase();
+            if (/\.mp3$/.test(name))
+                return 1; // best HTML5 <audio> support
+            if (/\.m4a$/.test(name))
+                return 2;
+            if (/\.ogg$/.test(name))
+                return 3;
+            if (/\.opus$/.test(name))
+                return 4;
+            if (/\.aac$/.test(name))
+                return 5;
+            if (/\.flac$/.test(name))
+                return 6;
+            if (/\.wav$/.test(name))
+                return 7;
+            return 99;
+        };
+        const deduped = [];
+        for (const group of groups.values()) {
+            group.sort((a, b) => formatPriority(a) - formatPriority(b));
+            deduped.push(group[0]);
+        }
+        // Sort by track number then filename so the popup lists in album
+        // order. Track numbers may be "1" or "1/12" — parseInt handles both.
+        deduped.sort((a, b) => {
+            const ta = parseInt(String(a.track || "0"), 10) || 0;
+            const tb = parseInt(String(b.track || "0"), 10) || 0;
+            if (ta !== tb)
+                return ta - tb;
+            return String(a.name).localeCompare(String(b.name));
+        });
+        const audioFiles = deduped.slice(0, 100).map(f => ({
+            name: String(f.name),
+            title: typeof f.title === "string" ? f.title : "",
+            track: typeof f.track === "string" ? f.track : "",
+            format: typeof f.format === "string" ? f.format : "",
+            length: typeof f.length === "string" ? f.length : "",
+            size: typeof f.size === "string" ? f.size : "",
+            streamUrl: `https://archive.org/download/${encodeURIComponent(id)}/${encodeURIComponent(String(f.name))}`,
+        }));
+        // Pick a primary stream — first track in the deduped list (which
+        // is already MP3-preferred and track-ordered).
+        const primaryStream = audioFiles[0] ?? null;
+        const arr = (v) => Array.isArray(v) ? v.filter((x) => typeof x === "string") : (typeof v === "string" ? [v] : []);
+        const body = {
+            identifier: id,
+            title: String(m.title ?? id),
+            creator: arr(m.creator),
+            date: typeof m.date === "string" ? m.date : (Array.isArray(m.date) ? m.date[0] : ""),
+            year: typeof m.year === "string" ? m.year : (Array.isArray(m.year) ? m.year[0] : ""),
+            description: typeof m.description === "string" ? m.description : (Array.isArray(m.description) ? m.description.join("\n\n") : ""),
+            subject: arr(m.subject),
+            uploader: typeof m.uploader === "string" ? m.uploader : "",
+            runtime: typeof m.runtime === "string" ? m.runtime : "",
+            language: arr(m.language),
+            licenseurl: typeof m.licenseurl === "string" ? m.licenseurl : "",
+            mediatype: typeof m.mediatype === "string" ? m.mediatype : "",
+            collection: arr(m.collection),
+            venue: typeof m.venue === "string" ? m.venue : "",
+            coverage: typeof m.coverage === "string" ? m.coverage : "",
+            source: typeof m.source === "string" ? m.source : "",
+            taper: typeof m.taper === "string" ? m.taper : "",
+            notes: typeof m.notes === "string" ? m.notes : "",
+            addeddate: typeof m.addeddate === "string" ? m.addeddate : "",
+            // Stats — these live at the top level, not under metadata.
+            downloads: typeof meta?.item_size === "number" ? meta.item_size : null,
+            itemSizeBytes: typeof meta?.item_size === "number" ? meta.item_size : null,
+            reviews: meta?.reviews?.info?.num_reviews ?? null,
+            avgRating: meta?.reviews?.info?.avg_rating ?? null,
+            itemUrl: `https://archive.org/details/${encodeURIComponent(id)}`,
+            coverUrl: `https://archive.org/services/img/${encodeURIComponent(id)}`,
+            audioFiles,
+            primaryStreamUrl: primaryStream?.streamUrl ?? "",
+        };
+        _archiveItemCacheSet(id, body);
+        res.setHeader("X-SeaDisco-Cache", "miss");
+        res.json(body);
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// POST /api/admin/archive/refresh — admin manual trigger to re-fetch
+// the archive.org collection and overwrite the DB cache. Returns
+// 202 Accepted immediately; refresh runs in the background.
+app.post("/api/admin/archive/refresh", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    res.status(202).json({ ok: true, message: "Refresh started; check /api/archive/aadamjacobs in a few seconds for the updated cache." });
+    _refreshArchiveCache(_ARCHIVE_AADAM_COLLECTION, _ARCHIVE_AADAM_CACHE_KEY).catch((err) => {
+        console.error("[archive/refresh]", err?.message ?? err);
+    });
+});
+// ── Play queue (cross-source: LOC + YouTube) ────────────────────────────
+//
+// The queue lives server-side so it persists across devices/logins. Items
+// carry everything needed to play without a Discogs round-trip — title,
+// artist, image, plus engine-specific fields (streamUrl/streamType for
+// LOC, videoId/durationSec for YT). Cap at 500 per user.
+app.get("/api/user/play-queue", async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    try {
+        const items = await getPlayQueue(userId);
+        res.json({ items });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// POST /api/user/play-queue — add items to the queue.
+// Body: { items: [...], mode?: "next" | "append" }
+//   mode "next" (default) — insert at head; existing items shift down
+//   mode "append"          — add to tail
+app.post("/api/user/play-queue", express.json({ limit: "256kb" }), async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    const raw = Array.isArray(req.body?.items) ? req.body.items : [];
+    // Normalize + validate each item. Reject anything missing source / id.
+    const items = raw
+        .map((it) => {
+        const src = String(it?.source ?? "").trim().toLowerCase();
+        if (src !== "loc" && src !== "yt")
+            return null;
+        const externalId = String(it?.externalId ?? "").trim().slice(0, 2000);
+        if (!externalId)
+            return null;
+        const data = (it?.data && typeof it.data === "object") ? it.data : {};
+        return { source: src, externalId, data };
+    })
+        .filter((x) => !!x)
+        .slice(0, 100); // cap one POST at 100 items
+    if (!items.length) {
+        res.status(400).json({ error: "items required" });
+        return;
+    }
+    const mode = req.body?.mode === "append" ? "append" : "next";
+    try {
+        const result = await appendPlayQueue(userId, items, { mode });
+        res.json({ ok: true, mode, ...result });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// DELETE /api/user/play-queue?position=N or body { position: N } — remove
+// a single item. POST body { clear: true } clears the whole queue.
+app.delete("/api/user/play-queue", express.json(), async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    if (req.body?.clear === true) {
+        try {
+            const removed = await clearPlayQueue(userId);
+            res.json({ ok: true, removed });
+        }
+        catch (e) {
+            res.status(500).json({ error: String(e?.message ?? e) });
+        }
+        return;
+    }
+    const positionRaw = req.body?.position ?? req.query?.position;
+    const position = parseInt(String(positionRaw), 10);
+    if (!Number.isFinite(position)) {
+        res.status(400).json({ error: "position required" });
+        return;
+    }
+    try {
+        await removeFromPlayQueue(userId, position);
+        res.json({ ok: true });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// PATCH /api/user/play-queue/reorder — body: { positions: [oldPos1, oldPos2, ...] }
+// Server rewrites positions to match the order given; transactional so
+// concurrent reorders stay consistent.
+app.patch("/api/user/play-queue/reorder", express.json({ limit: "16kb" }), async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    const positions = Array.isArray(req.body?.positions)
+        ? req.body.positions.map((n) => parseInt(String(n), 10)).filter((n) => Number.isFinite(n))
+        : [];
+    if (!positions.length) {
+        res.status(400).json({ error: "positions required" });
+        return;
+    }
+    try {
+        await reorderPlayQueue(userId, positions);
         res.json({ ok: true });
     }
     catch (e) {
@@ -3249,36 +4465,1218 @@ app.use("/api/admin", (req, res, next) => {
     entry.count++;
     next();
 });
-// GET /api/admin/feedback — inbox, only for admin user
-app.get("/api/admin/feedback", async (req, res) => {
-    const userId = await getClerkUserId(req);
-    const adminId = ADMIN_CLERK_ID;
-    if (!userId || !adminId || userId !== adminId) {
-        res.status(403).json({ error: "Forbidden" });
+// ── YouTube search proxy + saves ─────────────────────────────────────
+// Server-side proxy for the YouTube Data API v3. We never expose the
+// API key to the browser. Results are cached 24h per query so repeat
+// searches don't burn quota. Each search.list call costs 100 quota
+// units; the default project quota is 10,000/day = 100 searches/day,
+// so caching is essential for any meaningful traffic.
+const _youtubeApiKey = process.env.YOUTUBE_API_KEY ?? "";
+const _ytSearchCache = new Map();
+// In-flight coalescing: when two callers fire the SAME cache key while
+// the first request is still in flight (cache miss → upstream Google
+// call), the second call should wait for the first and reuse its body
+// instead of paying another 100 units for a duplicate query. Common
+// triggers: a user mashes the 🎵 button, two tabs open the same album
+// popup, or the album- and per-track suggest popups happen to compose
+// the exact same q.
+const _ytInflight = new Map();
+// Approximate per-day quota tracker. We don't have read access to
+// Google's actual counter, so this is a best-effort local count of
+// the search.list calls WE made since UTC midnight. When it crosses
+// the soft cap, new (non-cached) requests get rejected before they
+// hit Google so the last few hundred units of headroom aren't burned
+// on whatever happens to land first. Reset at UTC midnight.
+let _ytQuotaUnitsToday = 0;
+let _ytQuotaResetAt = (() => {
+    const d = new Date();
+    d.setUTCHours(24, 0, 0, 0);
+    return d.getTime();
+})();
+function _ytQuotaMaybeReset() {
+    const now = Date.now();
+    if (now >= _ytQuotaResetAt) {
+        _ytQuotaUnitsToday = 0;
+        const d = new Date();
+        d.setUTCHours(24, 0, 0, 0);
+        _ytQuotaResetAt = d.getTime();
+    }
+}
+// Soft cap: refuse new search.list calls once we've spent this many
+// units in the current UTC day. Leaves a safety margin under the 10k
+// project quota for whatever else might be going on (account creation
+// quota usage, etc.).
+const _YT_DAILY_SOFT_CAP_UNITS = 9000;
+// Per-user daily quota: signed-in users bypass the per-IP throttle,
+// which is correct (the IP belongs to many users behind NAT). But
+// without ANY upper bound, one user opening dozens of album popups
+// can chew through the whole day's budget. Cap each signed-in user
+// to a generous-but-finite number of search.list calls per UTC day.
+const _ytPerUserCounts = new Map();
+const _YT_PER_USER_DAILY_LIMIT = 200; // 200 × 100 units = 20k units of headroom per user (effectively the project cap is the harder limit)
+function _ytUserCheckAndBump(userId) {
+    const now = Date.now();
+    let entry = _ytPerUserCounts.get(userId);
+    if (!entry || now >= entry.resetAt) {
+        const d = new Date();
+        d.setUTCHours(24, 0, 0, 0);
+        entry = { count: 0, resetAt: d.getTime() };
+        _ytPerUserCounts.set(userId, entry);
+    }
+    if (entry.count >= _YT_PER_USER_DAILY_LIMIT) {
+        return { ok: false, used: entry.count, limit: _YT_PER_USER_DAILY_LIMIT };
+    }
+    entry.count += 1;
+    return { ok: true, used: entry.count, limit: _YT_PER_USER_DAILY_LIMIT };
+}
+// 7 days. Bumped from 24h: the per-track / per-album searches we run
+// are deterministic for a given (artist, track, album) tuple — the
+// videos themselves don't change underneath us in less than a week,
+// and a cached miss-then-replay is much cheaper than spending 100
+// units on the same query a day later. Stale results are still
+// invalidated when the user reports a video unavailable (the
+// /api/youtube/report-unavailable path drops broken videos from the
+// global override filter regardless of cache freshness).
+const _YT_SEARCH_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const _YT_SEARCH_CACHE_MAX = 500;
+function _ytCacheGet(key) {
+    const entry = _ytSearchCache.get(key);
+    if (!entry)
+        return null;
+    if (Date.now() - entry.ts > _YT_SEARCH_TTL_MS) {
+        _ytSearchCache.delete(key);
+        return null;
+    }
+    _ytSearchCache.delete(key);
+    _ytSearchCache.set(key, entry);
+    return entry.body;
+}
+function _ytCacheSet(key, body) {
+    if (_ytSearchCache.size >= _YT_SEARCH_CACHE_MAX) {
+        const firstKey = _ytSearchCache.keys().next().value;
+        if (firstKey !== undefined)
+            _ytSearchCache.delete(firstKey);
+    }
+    _ytSearchCache.set(key, { ts: Date.now(), body });
+}
+// Parse YouTube's ISO 8601 duration ("PT4M13S", "PT1H2M", "PT45S", etc.)
+// into total seconds. Returns null on garbage input. videos.list returns
+// content durations in this format on the contentDetails part.
+function _parseIsoDurationToSec(iso) {
+    if (!iso)
+        return null;
+    const m = /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/.exec(iso);
+    if (!m)
+        return null;
+    const days = parseInt(m[1] ?? "0", 10) || 0;
+    const hours = parseInt(m[2] ?? "0", 10) || 0;
+    const mins = parseInt(m[3] ?? "0", 10) || 0;
+    const secs = parseInt(m[4] ?? "0", 10) || 0;
+    return days * 86400 + hours * 3600 + mins * 60 + secs;
+}
+// Format a duration in seconds as "M:SS" (under an hour) or "H:MM:SS"
+// (an hour or longer). Pads minutes to two digits only when there's
+// an hour component, mirroring how YouTube renders durations.
+function _formatDurationSec(totalSec) {
+    if (!Number.isFinite(totalSec) || totalSec < 0)
+        return "";
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = Math.floor(totalSec % 60);
+    const ss = String(s).padStart(2, "0");
+    if (h > 0)
+        return `${h}:${String(m).padStart(2, "0")}:${ss}`;
+    return `${m}:${ss}`;
+}
+// Backfill durations on a cached search body whose items predate the
+// duration enrichment (added 4/30). Returns the body unchanged if every
+// item already has a durationFormatted, or after a single batched
+// videos.list call (1 quota unit) when at least one is missing. Updates
+// the in-memory + DB cache in place so subsequent reads serve the
+// enriched body. Failures fall through silently — the body still
+// renders, just without duration overlays.
+async function _ytBackfillDurationsIfNeeded(cacheKey, body) {
+    if (!body || !Array.isArray(body.items) || !body.items.length)
+        return body;
+    const missing = body.items.filter((it) => !it?.durationFormatted && it?.videoId);
+    if (!missing.length)
+        return body;
+    if (!_youtubeApiKey)
+        return body;
+    // No soft-cap gate here on purpose — videos.list is 1 unit per call
+    // (regardless of how many IDs are batched), and once a body is
+    // enriched it's cached for 7 days. Skipping enrichment when the cap
+    // is high defeats the whole point: the user is left without
+    // durations for the rest of the day. The 100-unit search.list path
+    // is what the soft cap protects, not this 1-unit enrichment.
+    _ytQuotaMaybeReset();
+    try {
+        const ids = missing.map((it) => String(it.videoId)).slice(0, 50);
+        if (!ids.length)
+            return body;
+        const dUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${encodeURIComponent(ids.join(","))}&key=${encodeURIComponent(_youtubeApiKey)}`;
+        const dr = await loggedFetch("youtube", dUrl, { context: "youtube-videos-duration-backfill" });
+        if (!dr.ok) {
+            console.warn("[youtube/search] backfill HTTP", dr.status);
+            return body;
+        }
+        _ytQuotaUnitsToday += 1;
+        const dj = await dr.json();
+        const byId = new Map();
+        for (const it of (dj?.items ?? [])) {
+            if (it?.id && it?.contentDetails?.duration) {
+                byId.set(String(it.id), String(it.contentDetails.duration));
+            }
+        }
+        for (const it of body.items) {
+            if (it.durationFormatted)
+                continue;
+            const iso = byId.get(String(it.videoId));
+            if (!iso)
+                continue;
+            const sec = _parseIsoDurationToSec(iso);
+            it.durationSec = sec;
+            it.durationFormatted = sec != null ? _formatDurationSec(sec) : "";
+        }
+        // Persist the enriched body so subsequent reads (mem + DB) skip
+        // backfill entirely.
+        _ytCacheSet(cacheKey, body);
+        setYoutubeSearchCache(cacheKey, body).catch(() => { });
+    }
+    catch (e) {
+        console.warn("[youtube/search] backfill threw:", e?.message ?? e);
+    }
+    return body;
+}
+// GET /api/youtube/search?q=…&pageToken=…
+//   q          — search query (required)
+//   pageToken  — YouTube pagination cursor (optional)
+// Returns { items: [{videoId, title, channel, channelId, publishedAt,
+// description, thumbnail}], nextPageToken }
+app.get("/api/youtube/search", async (req, res) => {
+    // Normally admin-only while we're cap-constrained on the YouTube
+    // Data API. Relaxed to all signed-in users when YT_OPEN_TO_USERS=1
+    // (Google API quota demo). Toggle back via Railway env-var.
+    if (!await requireYtAccess(req, res))
+        return;
+    const q = String(req.query?.q ?? "").trim().slice(0, 200);
+    if (!q) {
+        res.status(400).json({ error: "q required" });
         return;
     }
+    if (!_youtubeApiKey) {
+        res.status(503).json({ error: "youtube_unconfigured", message: "YouTube search isn't configured on this server." });
+        return;
+    }
+    const pageToken = String(req.query?.pageToken ?? "").trim().slice(0, 200);
+    // Normalize the cache key so trivial differences (case, leading/
+    // trailing whitespace, repeated spaces) hit the same cache row.
+    // The actual call to YouTube uses the original `q` so result quality
+    // isn't affected — only the cache lookup is normalized.
+    const normQ = q.toLowerCase().replace(/\s+/g, " ").trim();
+    const cacheKey = `${normQ}|${pageToken}`;
+    // Two-tier cache: in-memory (fast, but wiped on every Railway
+    // restart) backed by the DB row (survives deploys). Hot queries
+    // stay in RAM; cold queries that are still within 24h hit the DB
+    // and avoid burning quota every deploy.
+    const memCached = _ytCacheGet(cacheKey);
+    if (memCached) {
+        // Backfill durations on cached bodies that predate the duration
+        // enrichment (added 4/30). One-time cost per stale cache row;
+        // subsequent reads return the enriched body straight from cache.
+        const enriched = await _ytBackfillDurationsIfNeeded(cacheKey, memCached);
+        res.setHeader("X-SeaDisco-Cache", "hit-mem");
+        res.json(enriched);
+        return;
+    }
+    const dbCached = await getYoutubeSearchCache(cacheKey, _YT_SEARCH_TTL_MS / 1000).catch(() => null);
+    if (dbCached) {
+        _ytCacheSet(cacheKey, dbCached);
+        const enriched = await _ytBackfillDurationsIfNeeded(cacheKey, dbCached);
+        res.setHeader("X-SeaDisco-Cache", "hit-db");
+        res.json(enriched);
+        return;
+    }
+    // Cache miss → about to spend 100 quota units. Apply guards.
+    // 1) Project-wide soft cap. _ytQuotaUnitsToday is best-effort but
+    //    catches the common burn pattern (lots of misses in the same
+    //    UTC day) before we get to Google's hard 403 / 429.
+    _ytQuotaMaybeReset();
+    if (_ytQuotaUnitsToday + 100 > _YT_DAILY_SOFT_CAP_UNITS) {
+        res.setHeader("X-SeaDisco-Cache", "soft-cap");
+        res.status(429).json({
+            error: "youtube_daily_soft_cap",
+            message: "YouTube search has reached its daily quota for this project. Try again after midnight UTC.",
+            usedToday: _ytQuotaUnitsToday,
+            cap: _YT_DAILY_SOFT_CAP_UNITS,
+        });
+        return;
+    }
+    // 2) Per-user daily cap (signed-in users only — anon is already
+    //    capped by the per-IP limiter at the top of this handler). Keeps
+    //    one user from chewing through everyone's headroom.
+    const userId = await getClerkUserId(req).catch(() => null);
+    if (userId) {
+        const u = _ytUserCheckAndBump(userId);
+        if (!u.ok) {
+            res.setHeader("X-SeaDisco-Cache", "user-cap");
+            res.status(429).json({
+                error: "youtube_user_daily_cap",
+                message: `Daily YouTube search limit reached (${u.used}/${u.limit}). Resets at UTC midnight.`,
+            });
+            return;
+        }
+    }
+    // 3) In-flight coalescing — if another request for THIS cache key
+    //    is already running, await its body instead of paying quota
+    //    twice. The first caller's response gets cached and the second
+    //    just reads it.
+    const inflight = _ytInflight.get(cacheKey);
+    if (inflight) {
+        try {
+            const body = await inflight;
+            res.setHeader("X-SeaDisco-Cache", "hit-inflight");
+            res.json(body);
+            return;
+        }
+        catch (e) {
+            // Fall through to a fresh attempt — we don't want a single
+            // upstream failure to fail every coalesced caller.
+            console.warn("[youtube/search] coalesced upstream failed:", e?.message ?? e);
+        }
+    }
+    // Real upstream call. Track this body in _ytInflight so any
+    // duplicate request that comes in WHILE we're awaiting Google
+    // shares the result.
+    const work = (async () => {
+        const params = [
+            "part=snippet",
+            "type=video",
+            "maxResults=24",
+            `q=${encodeURIComponent(q)}`,
+            `key=${encodeURIComponent(_youtubeApiKey)}`,
+        ];
+        if (pageToken)
+            params.push(`pageToken=${encodeURIComponent(pageToken)}`);
+        const url = `https://www.googleapis.com/youtube/v3/search?${params.join("&")}`;
+        const r = await loggedFetch("youtube", url, { context: "youtube-search" });
+        // Count units regardless of status — the failed call still spends
+        // quota unless it's a 4xx pre-check rejection by Google's gateway.
+        if (r.status !== 400 && r.status !== 401 && r.status !== 403) {
+            _ytQuotaUnitsToday += 100;
+        }
+        else if (r.status === 403) {
+            // 403 from Google is most often quotaExceeded — count it so we
+            // proactively soft-cap until UTC midnight rather than retrying.
+            _ytQuotaUnitsToday += 100;
+        }
+        if (!r.ok) {
+            const errText = await r.text().catch(() => "");
+            const err = new Error(`youtube_http_${r.status}`);
+            err.status = r.status;
+            err.body = errText.slice(0, 200);
+            throw err;
+        }
+        const j = await r.json();
+        const items = (Array.isArray(j?.items) ? j.items : [])
+            .filter((it) => it?.id?.videoId)
+            .map((it) => {
+            const sn = it.snippet ?? {};
+            const thumbs = sn.thumbnails ?? {};
+            const thumb = thumbs.medium?.url ?? thumbs.default?.url ?? thumbs.high?.url ?? "";
+            return {
+                videoId: String(it.id.videoId),
+                title: String(sn.title ?? ""),
+                channel: String(sn.channelTitle ?? ""),
+                channelId: String(sn.channelId ?? ""),
+                publishedAt: String(sn.publishedAt ?? ""),
+                description: String(sn.description ?? ""),
+                thumbnail: thumb,
+                // durationSec / durationFormatted populated below via
+                // a single videos.list call (1 unit, batched up to 50 IDs).
+                durationSec: null,
+                durationFormatted: "",
+            };
+        });
+        // Durations: a single videos.list?part=contentDetails call costs
+        // 1 quota unit and returns the contentDetails for up to 50 IDs at
+        // once. Cheap relative to search.list (100 units) so worth doing
+        // on every cache miss for the album-suggest UX (lets users spot
+        // "real album track" 3-minute uploads vs 60-minute "full album"
+        // mixes vs 5-second junk videos at a glance).
+        if (items.length) {
+            try {
+                const ids = items.map((it) => it.videoId).filter(Boolean).slice(0, 50);
+                if (ids.length) {
+                    const dUrl = `https://www.googleapis.com/youtube/v3/videos?part=contentDetails&id=${encodeURIComponent(ids.join(","))}&key=${encodeURIComponent(_youtubeApiKey)}`;
+                    const dr = await loggedFetch("youtube", dUrl, { context: "youtube-videos-duration" });
+                    if (dr.ok) {
+                        _ytQuotaUnitsToday += 1;
+                        const dj = await dr.json();
+                        const byId = new Map();
+                        for (const it of (dj?.items ?? [])) {
+                            if (it?.id && it?.contentDetails?.duration) {
+                                byId.set(String(it.id), String(it.contentDetails.duration));
+                            }
+                        }
+                        for (const it of items) {
+                            const iso = byId.get(it.videoId);
+                            if (!iso)
+                                continue;
+                            const sec = _parseIsoDurationToSec(iso);
+                            it.durationSec = sec;
+                            it.durationFormatted = sec != null ? _formatDurationSec(sec) : "";
+                        }
+                    }
+                    else {
+                        // Don't fail the whole search if duration enrichment errors.
+                        // Items just go out without duration fields populated.
+                        console.warn("[youtube/search] duration fetch HTTP", dr.status);
+                    }
+                }
+            }
+            catch (e) {
+                console.warn("[youtube/search] duration fetch threw:", e?.message ?? e);
+            }
+        }
+        const body = {
+            items,
+            nextPageToken: j?.nextPageToken ?? null,
+            totalResults: j?.pageInfo?.totalResults ?? null,
+        };
+        _ytCacheSet(cacheKey, body);
+        // Persist to DB so the next deploy doesn't force this query to
+        // pay quota again. Fire-and-forget — caller already has the body.
+        setYoutubeSearchCache(cacheKey, body).catch(() => { });
+        return body;
+    })();
+    _ytInflight.set(cacheKey, work);
+    try {
+        const body = await work;
+        res.setHeader("X-SeaDisco-Cache", "miss");
+        res.json(body);
+    }
+    catch (e) {
+        if (e?.status) {
+            console.warn("[youtube/search] HTTP", e.status, e.body ?? "");
+            res.status(e.status >= 500 ? 502 : e.status).json({ error: `YouTube API HTTP ${e.status}` });
+        }
+        else {
+            console.error("[youtube/search]", e?.message ?? e);
+            res.status(500).json({ error: String(e?.message ?? e) });
+        }
+    }
+    finally {
+        // Drop the in-flight slot so future cache misses fire fresh upstream
+        // calls (the body is cached by _ytCacheSet above on success).
+        _ytInflight.delete(cacheKey);
+    }
+});
+// GET /api/youtube/video-info?videoId=xxx — admin-only paste-URL helper.
+// videos.list costs 1 quota unit per call (regardless of parts), so this
+// gives admin a quota-cheap path to register a known YouTube video as
+// an override without firing a 100-unit search.list. Used by the
+// album-mode "Add by URL" form in the YT popup so the admin can keep
+// working when the daily search.list cap is hit.
+const _ytVideoInfoCache = new Map();
+const _YT_VIDEO_INFO_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+app.get("/api/youtube/video-info", async (req, res) => {
+    if (!await requireYtAccess(req, res))
+        return;
+    const videoId = String(req.query?.videoId ?? "").trim();
+    if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
+        res.status(400).json({ error: "Bad videoId" });
+        return;
+    }
+    if (!_youtubeApiKey) {
+        res.status(503).json({ error: "youtube_unconfigured" });
+        return;
+    }
+    const cached = _ytVideoInfoCache.get(videoId);
+    if (cached && Date.now() - cached.ts < _YT_VIDEO_INFO_TTL_MS) {
+        res.setHeader("X-SeaDisco-Cache", "hit-mem");
+        res.json(cached.body);
+        return;
+    }
+    // Soft-cap respect — if we're already past the daily cap, refuse so
+    // we don't spend the last few units on a paste-info that the admin
+    // could enter manually instead. Returns the same 429 shape so the
+    // client can fall back to manual entry.
+    _ytQuotaMaybeReset();
+    if (_ytQuotaUnitsToday + 1 > _YT_DAILY_SOFT_CAP_UNITS) {
+        res.status(429).json({
+            error: "youtube_daily_soft_cap",
+            message: "YouTube quota exhausted — enter title/duration manually.",
+        });
+        return;
+    }
+    try {
+        const url = `https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${encodeURIComponent(videoId)}&key=${encodeURIComponent(_youtubeApiKey)}`;
+        const r = await loggedFetch("youtube", url, { context: "youtube-video-info" });
+        if (r.status !== 400 && r.status !== 401)
+            _ytQuotaUnitsToday += 1;
+        if (!r.ok) {
+            const errText = await r.text().catch(() => "");
+            console.warn("[youtube/video-info] HTTP", r.status, errText.slice(0, 200));
+            res.status(r.status >= 500 ? 502 : r.status).json({ error: `YouTube API HTTP ${r.status}` });
+            return;
+        }
+        const j = await r.json();
+        const it = (Array.isArray(j?.items) ? j.items : [])[0];
+        if (!it) {
+            res.status(404).json({ error: "Video not found" });
+            return;
+        }
+        const sn = it.snippet ?? {};
+        const thumbs = sn.thumbnails ?? {};
+        const thumb = thumbs.medium?.url ?? thumbs.default?.url ?? thumbs.high?.url ?? "";
+        const iso = it.contentDetails?.duration ?? "";
+        const sec = _parseIsoDurationToSec(iso);
+        const body = {
+            videoId,
+            title: String(sn.title ?? ""),
+            channel: String(sn.channelTitle ?? ""),
+            channelId: String(sn.channelId ?? ""),
+            publishedAt: String(sn.publishedAt ?? ""),
+            description: String(sn.description ?? ""),
+            thumbnail: thumb,
+            durationSec: sec,
+            durationFormatted: sec != null ? _formatDurationSec(sec) : "",
+        };
+        _ytVideoInfoCache.set(videoId, { ts: Date.now(), body });
+        res.setHeader("X-SeaDisco-Cache", "miss");
+        res.json(body);
+    }
+    catch (e) {
+        console.error("[youtube/video-info]", e?.message ?? e);
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// ── YouTube saves (Saved tab on /?v=youtube) ─────────────────────────
+app.get("/api/user/youtube-saves", async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    try {
+        const items = await getYoutubeSaves(userId);
+        res.json({ items });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+app.get("/api/user/youtube-saves/ids", async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    try {
+        const ids = await getYoutubeSaveIds(userId);
+        res.json({ ids });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+app.post("/api/user/youtube-saves", express.json({ limit: "32kb" }), async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    const { videoId, title = null, channel = null, thumbnail = null, data = {} } = req.body ?? {};
+    if (typeof videoId !== "string" || !videoId) {
+        res.status(400).json({ error: "videoId required" });
+        return;
+    }
+    try {
+        await saveYoutubeVideo(userId, videoId, title ? String(title).slice(0, 500) : null, channel ? String(channel).slice(0, 200) : null, thumbnail ? String(thumbnail).slice(0, 2000) : null, data && typeof data === "object" ? data : {});
+        res.json({ ok: true });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+app.delete("/api/user/youtube-saves", express.json(), async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    const videoId = typeof req.body?.videoId === "string"
+        ? req.body.videoId
+        : (typeof req.query?.videoId === "string" ? req.query.videoId : "");
+    if (!videoId) {
+        res.status(400).json({ error: "videoId required" });
+        return;
+    }
+    try {
+        await deleteYoutubeSave(userId, videoId);
+        res.json({ ok: true });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// POST /api/admin/warm-favorites-cache — admin-only. Walks every
+// release / master in the admin's favorites and fetches its full
+// detail page via admin's Discogs OAuth, caching server-side. Anon
+// users on the home page who click a Suggested card then get the
+// full tracklist + credits from the cache instead of a stripped
+// "sign in for more" stub. Throttled to ~1 req/sec to spread out
+// the API quota; returns as soon as the warm job kicks off (status
+// is logged to railway).
+app.post("/api/admin/warm-favorites-cache", async (req, res) => {
+    const userId = await requireAdmin(req, res);
+    if (!userId)
+        return;
+    const dc = await getDiscogsClientForUser(userId);
+    if (!dc) {
+        res.status(503).json({ error: "Admin has no Discogs OAuth connection" });
+        return;
+    }
+    res.status(202).json({ ok: true, message: "Warm cache started; check railway logs." });
+    // Background job — no `await` on the response side.
+    (async () => {
+        try {
+            const favs = await getFavorites(userId, 1000, 0);
+            let warmed = 0;
+            let skipped = 0;
+            let failed = 0;
+            const targets = favs.filter((row) => row.entity_type === "release" || row.entity_type === "master");
+            console.log(`[warm-favorites] starting for ${targets.length} items`);
+            for (const row of targets) {
+                const id = Number(row.discogs_id);
+                const type = row.entity_type;
+                if (!Number.isFinite(id) || id <= 0) {
+                    skipped++;
+                    continue;
+                }
+                try {
+                    const cached = await getCachedRelease(id, type, _RELEASE_CACHE_TTL_S);
+                    if (cached) {
+                        skipped++;
+                        continue;
+                    }
+                    const result = type === "release"
+                        ? await dc.getRelease(String(id))
+                        : await dc.getMasterRelease(String(id));
+                    await cacheRelease(id, type, result);
+                    warmed++;
+                    // Throttle ~1 req/sec to avoid burning the rate-limit pool.
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+                catch (e) {
+                    failed++;
+                    console.warn(`[warm-favorites] ${type}/${id} failed:`, e?.message ?? e);
+                }
+            }
+            console.log(`[warm-favorites] done: warmed=${warmed} cached=${skipped} failed=${failed}`);
+        }
+        catch (e) {
+            console.error(`[warm-favorites] crashed:`, e?.message ?? e);
+        }
+    })();
+});
+// GET /api/admin-favorites/sample — public read of a random sample of
+// admin's favorites. Used as default content on the logged-out home
+// page so anonymous visitors land on a curated set of records to
+// browse instead of an empty "Recent" strip. Cached 5 minutes
+// in-memory (admin's library doesn't change minute-to-minute).
+let _adminFavSampleCache = null;
+const _ADMIN_FAV_TTL_MS = 5 * 60 * 1000;
+app.get("/api/admin-favorites/sample", async (req, res) => {
+    const limit = Math.min(48, Math.max(1, parseInt(String(req.query?.limit ?? "24"), 10) || 24));
+    res.setHeader("Cache-Control", "public, max-age=300");
+    // Serve from cache when fresh.
+    if (_adminFavSampleCache && Date.now() - _adminFavSampleCache.ts < _ADMIN_FAV_TTL_MS) {
+        const cached = _adminFavSampleCache.items;
+        const sample = cached.slice().sort(() => Math.random() - 0.5).slice(0, limit);
+        res.json({ items: sample });
+        return;
+    }
+    if (!ADMIN_CLERK_ID) {
+        res.json({ items: [] });
+        return;
+    }
+    try {
+        // Pull all admin favorites once (capped at 500 — typical admin
+        // libraries are well below). Random shuffle + slice gives the
+        // sample. The data column has the card snapshot we need
+        // (title/artist/year/image) so no Discogs round-trips are
+        // required to render.
+        const rows = await getFavorites(ADMIN_CLERK_ID, 500, 0);
+        const items = rows.map((row) => {
+            const d = row.data ?? {};
+            return {
+                id: row.discogs_id,
+                type: row.entity_type,
+                title: d.title ?? "",
+                year: d.year ?? "",
+                country: d.country ?? "",
+                cover_image: d.cover_image ?? d.thumb ?? "",
+                thumb: d.thumb ?? d.cover_image ?? "",
+                format: d.format ?? [],
+                label: d.label ?? [],
+                genre: d.genre ?? [],
+                style: d.style ?? [],
+                master_id: d.master_id ?? null,
+                ...d,
+            };
+        });
+        _adminFavSampleCache = { ts: Date.now(), items };
+        const sample = items.slice().sort(() => Math.random() - 0.5).slice(0, limit);
+        res.json({ items: sample });
+    }
+    catch (e) {
+        console.error("[admin-favorites/sample]", e?.message ?? e);
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// GET /api/contributed-favorites/sample — public read of masters/releases
+// that have at least one crowd-sourced YouTube override row, weighted
+// random sample biased toward the most-contributed albums. Used as the
+// default content on the logged-out home page so anon visitors see
+// the work the community has done first. Falls back to the admin-
+// favorites sample when no overrides exist yet (early days).
+//
+// Weighting: probability ∝ contribution_count^1.5. Each request rolls
+// a fresh sample so revisits feel fresh; the underlying list cache is
+// 5min in-memory so the DB isn't hit per request.
+// Cache by sort order so swapping in the UI doesn't refetch every time.
+let _contributedSampleCache = {};
+const _CONTRIBUTED_TTL_MS = 5 * 60 * 1000;
+app.get("/api/contributed-favorites/sample", async (req, res) => {
+    const limit = Math.min(48, Math.max(1, parseInt(String(req.query?.limit ?? "24"), 10) || 24));
+    const orderRaw = String(req.query?.order ?? "most").toLowerCase();
+    const order = orderRaw === "fewest" ? "fewest" :
+        orderRaw === "recent" ? "recent" : "most";
+    res.setHeader("Cache-Control", "public, max-age=300");
+    let pool = null;
+    const cached = _contributedSampleCache[order];
+    if (cached && Date.now() - cached.ts < _CONTRIBUTED_TTL_MS) {
+        pool = cached.pool;
+    }
+    else {
+        try {
+            const rows = await getMostContributedAlbums(200, order);
+            pool = rows.map(row => {
+                const d = row.data ?? {};
+                const isMaster = row.type === "master";
+                const artistList = Array.isArray(d.artists) ? d.artists.map((a) => a.name).filter(Boolean) : [];
+                const imageUris = (Array.isArray(d.images) ? d.images.map((im) => im?.uri).filter(Boolean) : []);
+                // Slim tracklist for the wide-card inline view — position +
+                // title + duration is all the card needs. Capped at 30 so a
+                // 4-LP box set doesn't blow up the payload.
+                const trackList = (Array.isArray(d.tracklist) ? d.tracklist : [])
+                    .map((t) => ({
+                    position: String(t?.position ?? ""),
+                    title: String(t?.title ?? ""),
+                    duration: String(t?.duration ?? ""),
+                }))
+                    .filter((t) => t.title)
+                    .slice(0, 30);
+                const cover = imageUris[0] ?? (d.cover_image ?? "");
+                // Card render expects "Artist - Title" composed in `title` for
+                // release/master types. Mirror the favorites endpoint shape.
+                const composed = artistList.length && d.title
+                    ? `${artistList.join(", ")} - ${d.title}`
+                    : (d.title ?? "");
+                return {
+                    id: row.id,
+                    type: row.type,
+                    title: composed,
+                    year: d.year ?? "",
+                    country: d.country ?? "",
+                    cover_image: cover,
+                    thumb: cover,
+                    images: imageUris.slice(0, 12),
+                    tracklist: trackList,
+                    format: (Array.isArray(d.formats) ? d.formats.map((f) => f.name).filter(Boolean) : []),
+                    label: (Array.isArray(d.labels) ? d.labels.map((l) => l.name).filter(Boolean) : []),
+                    genre: Array.isArray(d.genres) ? d.genres : [],
+                    style: Array.isArray(d.styles) ? d.styles : [],
+                    master_id: d.master_id ?? null,
+                    uri: d.uri ?? `/${row.type}/${row.id}`,
+                    // Keep around so future UI can show "5 user contributions" etc.
+                    _contributionCount: row.contribution_count,
+                };
+            });
+            _contributedSampleCache[order] = { ts: Date.now(), pool };
+        }
+        catch (e) {
+            console.error("[contributed-favorites/sample]", e?.message ?? e);
+            pool = [];
+        }
+    }
+    if (!pool || !pool.length) {
+        // Fallback: empty response so the client falls through to the
+        // admin-favorites sample. Keeping the contract simple — the UI
+        // checks .items.length and chains the second request.
+        res.json({ items: [] });
+        return;
+    }
+    // Weighted shuffle: each item gets a random key biased by count^1.5.
+    // Higher counts are more likely to land at the top — but everything
+    // still has a chance, so a deeply-contributed album doesn't stay
+    // pinned forever and the long tail rotates through.
+    const ranked = pool.map(it => {
+        const w = Math.pow(Math.max(1, Number(it._contributionCount) || 1), 1.5);
+        // The bigger the weight, the smaller (closer to 0) the key tends
+        // to be. Math.random() / w spreads heavy items toward the front.
+        return { it, key: Math.random() / w };
+    });
+    ranked.sort((a, b) => a.key - b.key);
+    const sample = ranked.slice(0, limit).map(x => x.it);
+    res.json({ items: sample });
+});
+// POST /api/cards/enrich — public batch lookup. Body: { items: [{id, type}] }
+// Returns: { items: [{id, type, images, tracklist}] } pulled from
+// release_cache. Used by wide-card mode to backfill the image strip
+// + inline tracklist on every card surface (favorites, collection,
+// search results, etc.) without requiring each card-rendering
+// endpoint to JOIN release_cache. Cache misses are silently dropped.
+app.post("/api/cards/enrich", express.json({ limit: "32kb" }), async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    try {
+        const raw = Array.isArray(req.body?.items) ? req.body.items : [];
+        const pairs = raw
+            .map((it) => ({ id: Number(it?.id), type: String(it?.type ?? "") }))
+            .filter((p) => Number.isFinite(p.id) && (p.type === "master" || p.type === "release"))
+            .slice(0, 200);
+        if (!pairs.length) {
+            res.json({ items: [] });
+            return;
+        }
+        const [rows, overrideRows] = await Promise.all([
+            getCacheEnrichmentBatch(pairs),
+            getTrackYtOverridesBatch(pairs),
+        ]);
+        // Index overrides by "type:id" → Map<position, videoId>
+        const overrideIdx = new Map();
+        for (const o of overrideRows) {
+            const k = `${o.release_type}:${o.release_id}`;
+            if (!overrideIdx.has(k))
+                overrideIdx.set(k, new Map());
+            overrideIdx.get(k).set(String(o.track_position), String(o.video_id));
+        }
+        const items = rows.map((row) => {
+            const d = row.data ?? {};
+            const images = (Array.isArray(d.images) ? d.images.map((im) => im?.uri).filter(Boolean) : []).slice(0, 12);
+            const tracklist = (Array.isArray(d.tracklist) ? d.tracklist : [])
+                .map((t) => ({
+                position: String(t?.position ?? ""),
+                title: String(t?.title ?? ""),
+                duration: String(t?.duration ?? ""),
+            }))
+                .filter((t) => t.title)
+                .slice(0, 30);
+            // Discogs-supplied videos array, slimmed to the fields the
+            // client matcher needs.
+            const videos = (Array.isArray(d.videos) ? d.videos : [])
+                .map((v) => ({ uri: String(v?.uri ?? ""), title: String(v?.title ?? "") }))
+                .filter((v) => v.uri);
+            // Crowd-sourced overrides for this album. Position → video ID
+            // (turned into a full URL on the client). Special "ALBUM"
+            // position is the full-album slot.
+            const overrides = {};
+            const ov = overrideIdx.get(`${row.type}:${row.id}`);
+            if (ov)
+                for (const [pos, vid] of ov.entries())
+                    overrides[pos] = vid;
+            return { id: row.id, type: row.type, images, tracklist, videos, overrides };
+        });
+        res.json({ items });
+    }
+    catch (e) {
+        console.error("[/api/cards/enrich]", e?.message ?? e);
+        res.json({ items: [] });
+    }
+});
+// GET /api/feed/random — public "Feed" endpoint, no auth required.
+// Returns a random sample of cached albums for the home-strip Feed
+// tab (and the anon home page). All rows already paid for via the
+// release_cache, so this never hits Discogs upstream. Each item is
+// shaped like a search-result card so the existing renderCard path
+// can consume it without conversion. Anons see this as their primary
+// home view; signed-in users see it as the 4th strip tab.
+app.get("/api/feed/random", async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    try {
+        const limit = Math.max(1, Math.min(200, parseInt(String(req.query.limit ?? "48"), 10) || 48));
+        const typeParam = String(req.query.type ?? "any");
+        const type = typeParam === "master" ? "master" :
+            typeParam === "release" ? "release" : "any";
+        // Optional exclude list: comma-separated "type:id" pairs the
+        // client has already shown (Load More uses this to avoid repeats
+        // across pages). Capped server-side at 500 entries.
+        const excludeStr = String(req.query.exclude ?? "").trim();
+        const excludeIds = excludeStr
+            ? excludeStr.split(",").map(s => {
+                const [t, idRaw] = s.split(":");
+                const id = Number(idRaw);
+                if (!Number.isFinite(id) || (t !== "master" && t !== "release"))
+                    return null;
+                return { id, type: t };
+            }).filter((x) => !!x).slice(0, 500)
+            : [];
+        const rows = await getFeedRandomAlbums(limit, type, excludeIds);
+        const items = rows.map((row) => {
+            const d = row.data ?? {};
+            const artistList = Array.isArray(d.artists) ? d.artists.map((a) => a.name).filter(Boolean) : [];
+            const imageUris = (Array.isArray(d.images) ? d.images.map((im) => im?.uri).filter(Boolean) : []);
+            // Slim tracklist for the wide-card inline view — position +
+            // title + duration is all the card needs. Capped at 30 so a
+            // 4-LP box set doesn't blow up the payload.
+            const trackList = (Array.isArray(d.tracklist) ? d.tracklist : [])
+                .map((t) => ({
+                position: String(t?.position ?? ""),
+                title: String(t?.title ?? ""),
+                duration: String(t?.duration ?? ""),
+            }))
+                .filter((t) => t.title)
+                .slice(0, 30);
+            const cover = imageUris[0] ?? (d.cover_image ?? "");
+            const composed = artistList.length && d.title
+                ? `${artistList.join(", ")} - ${d.title}`
+                : (d.title ?? `${row.type} ${row.id}`);
+            return {
+                id: row.id,
+                type: row.type,
+                title: composed,
+                year: d.year ?? "",
+                country: d.country ?? "",
+                cover_image: cover,
+                thumb: cover,
+                // Full image list — used by wide-card mode to render a thumb
+                // scroller beneath/beside the main cover. Capped at 12 to
+                // keep card payloads modest.
+                images: imageUris.slice(0, 12),
+                tracklist: trackList,
+                format: (Array.isArray(d.formats) ? d.formats.map((f) => f.name).filter(Boolean) : []),
+                label: (Array.isArray(d.labels) ? d.labels.map((l) => l.name).filter(Boolean) : []),
+                genre: Array.isArray(d.genres) ? d.genres : [],
+                style: Array.isArray(d.styles) ? d.styles : [],
+                master_id: d.master_id ?? (row.type === "master" ? row.id : null),
+                uri: d.uri ?? `/${row.type}/${row.id}`,
+            };
+        });
+        res.json({ items });
+    }
+    catch (e) {
+        console.error("[/api/feed/random]", e?.message ?? e);
+        res.json({ items: [] });
+    }
+});
+// GET /api/user/my-submitted-albums — albums the CURRENT user has
+// personally submitted YouTube overrides for, distinct by master/
+// release. Drives the "Submitted" home-strip tab so each signed-in
+// user sees their own contribution history rather than the global
+// community feed. Card-shaped data is pulled from release_cache —
+// rows where the cache has been pruned still appear with whatever
+// metadata is available so the user can navigate back to them.
+app.get("/api/user/my-submitted-albums", async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    try {
+        const limit = Math.max(1, Math.min(500, parseInt(String(req.query.limit ?? "96"), 10) || 96));
+        const rows = await getUserSubmittedAlbums(userId, limit);
+        const items = rows.map((row) => {
+            const d = row.data ?? {};
+            const isMaster = row.type === "master";
+            const artistList = Array.isArray(d.artists) ? d.artists.map((a) => a.name).filter(Boolean) : [];
+            const imageUris = (Array.isArray(d.images) ? d.images.map((im) => im?.uri).filter(Boolean) : []);
+            // Slim tracklist for the wide-card inline view — position +
+            // title + duration is all the card needs. Capped at 30 so a
+            // 4-LP box set doesn't blow up the payload.
+            const trackList = (Array.isArray(d.tracklist) ? d.tracklist : [])
+                .map((t) => ({
+                position: String(t?.position ?? ""),
+                title: String(t?.title ?? ""),
+                duration: String(t?.duration ?? ""),
+            }))
+                .filter((t) => t.title)
+                .slice(0, 30);
+            const cover = imageUris[0] ?? (d.cover_image ?? "");
+            const composed = artistList.length && d.title
+                ? `${artistList.join(", ")} - ${d.title}`
+                : (d.title ?? `${row.type} ${row.id}`);
+            return {
+                id: row.id,
+                type: row.type,
+                title: composed,
+                year: d.year ?? "",
+                country: d.country ?? "",
+                cover_image: cover,
+                thumb: cover,
+                images: imageUris.slice(0, 12),
+                tracklist: trackList,
+                format: (Array.isArray(d.formats) ? d.formats.map((f) => f.name).filter(Boolean) : []),
+                label: (Array.isArray(d.labels) ? d.labels.map((l) => l.name).filter(Boolean) : []),
+                genre: Array.isArray(d.genres) ? d.genres : [],
+                style: Array.isArray(d.styles) ? d.styles : [],
+                master_id: d.master_id ?? (isMaster ? row.id : null),
+                uri: d.uri ?? `/${row.type}/${row.id}`,
+                _contributionCount: row.contribution_count,
+                _firstContributedAt: row.first_contributed_at,
+                _lastContributedAt: row.last_contributed_at,
+            };
+        });
+        res.json({ items });
+    }
+    catch (e) {
+        console.error("[/api/user/my-submitted-albums]", e?.message ?? e);
+        res.json({ items: [] });
+    }
+});
+// ── Personal suggestions (background-generated per-user feed) ────────
+// Endpoint: returns the user's most recent saved batch of suggestions.
+// The data column carries the full card snapshot so render is one
+// round-trip — no Discogs lookups needed.
+app.get("/api/user/personal-suggestions", async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    try {
+        // Default returns the full saved batch (cap 1000) since the home
+        // strip pages through it client-side via Load More.
+        const limit = Math.max(1, Math.min(1000, parseInt(String(req.query.limit ?? "1000"), 10) || 1000));
+        const rows = await getUserPersonalSuggestions(userId, limit);
+        const items = rows.map(row => ({
+            id: row.discogs_id,
+            type: row.entity_type,
+            ...(row.data ?? {}),
+            _suggestionScore: row.score,
+            _suggestionGeneratedAt: row.generated_at,
+        }));
+        res.json({ items, generatedAt: rows[0]?.generated_at ?? null });
+    }
+    catch (e) {
+        console.error("[personal-suggestions GET]", e?.message ?? e);
+        res.json({ items: [] });
+    }
+});
+// POST /api/user/personal-suggestions/dismiss — banish a single
+// suggestion. Body: { id: number, type: "master"|"release" }. Records
+// the dismissal and removes the row from the saved batch so the
+// card disappears immediately. Background job re-checks the
+// dismissal set on every run so the banishment is permanent until
+// manually cleared (no UI for clearing yet).
+app.post("/api/user/personal-suggestions/dismiss", express.json({ limit: "1kb" }), async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    const id = Number(req.body?.id);
+    const t = req.body?.type === "master" ? "master" : req.body?.type === "release" ? "release" : null;
+    if (!Number.isFinite(id) || id <= 0 || !t) {
+        res.status(400).json({ error: "Bad request" });
+        return;
+    }
+    try {
+        await dismissPersonalSuggestion(userId, id, t);
+        res.json({ ok: true });
+    }
+    catch (e) {
+        console.error("[personal-suggestions/dismiss]", e?.message ?? e);
+        res.status(500).json({ error: "Could not dismiss" });
+    }
+});
+// Generate one user's batch of suggestions. Requires the user to have
+// Discogs OAuth set up — we use their token so rate-limit pressure is
+// distributed across users rather than concentrated on admin's. Skips
+// users without OAuth (they can connect Discogs to receive
+// suggestions). Each pass overwrites the user's saved batch.
+async function _runPersonalSuggestionsForUser(userId) {
+    const dc = await getDiscogsClientForUser(userId);
+    if (!dc)
+        return { saved: 0, reason: "no-oauth" };
+    // Wider taste sampling so a user dismissing aggressively doesn't run
+    // out of fresh suggestions. 30 tuples × master+release search × per-
+    // page 25/15 yields ~1200 raw rows pre-dedupe; cap saved at 1000
+    // after sorting.
+    const tuples = await getUserTasteTuples(userId, 30);
+    if (!tuples.length)
+        return { saved: 0, reason: "no-taste" };
+    const ownedMasters = await getUserLibraryMasterIds(userId);
+    const dismissed = await getDismissedSuggestionKeys(userId);
+    // Map keyed by "type:id" so the same album appearing for multiple
+    // tuples accumulates score rather than appearing twice. Generator is
+    // Masters+ aware: searches type=master AND type=release per tuple,
+    // merging results so standalone releases (no parent master) and
+    // master-grouped pressings both surface. Master rows take precedence
+    // over release rows when both exist.
+    const candidates = new Map();
+    const ingest = (row, t, rank) => {
+        const id = Number(row?.id);
+        if (!Number.isFinite(id) || id <= 0)
+            return;
+        const type = row.type === "master" ? "master" : row.type === "release" ? "release" : "release";
+        if (type !== row.type)
+            return;
+        // Dedup: skip if user owns the underlying master, or if dismissed.
+        const masterIdRaw = Number(row.master_id);
+        if (Number.isFinite(masterIdRaw) && masterIdRaw > 0 && ownedMasters.has(masterIdRaw))
+            return;
+        if (type === "master" && ownedMasters.has(id))
+            return;
+        if (dismissed.has(`${type}:${id}`))
+            return;
+        // For release-type: also skip if its master is already a candidate
+        // — the master version wins and we don't want a duplicate card.
+        if (type === "release" && Number.isFinite(masterIdRaw) && masterIdRaw > 0
+            && candidates.has(`master:${masterIdRaw}`))
+            return;
+        const key = `${type}:${id}`;
+        const score = (t.n || 1) * (1 / (rank + 1)) * (type === "master" ? 1.0 : 0.85);
+        const existing = candidates.get(key);
+        if (existing) {
+            existing.score += score;
+            return;
+        }
+        candidates.set(key, {
+            id,
+            type,
+            score,
+            data: {
+                id,
+                type,
+                title: row.title ?? "",
+                year: row.year ?? "",
+                country: row.country ?? "",
+                cover_image: row.cover_image ?? "",
+                thumb: row.thumb ?? row.cover_image ?? "",
+                format: Array.isArray(row.format) ? row.format : [],
+                label: Array.isArray(row.label) ? row.label : [],
+                genre: Array.isArray(row.genre) ? row.genre : [],
+                style: Array.isArray(row.style) ? row.style : [],
+                uri: row.uri ?? `/${type}/${id}`,
+                master_id: row.master_id ?? (type === "master" ? id : null),
+                _matchedGenre: t.genre,
+                _matchedStyle: t.style,
+                _matchedYear: t.year,
+            },
+        });
+    };
+    for (const t of tuples) {
+        // Run master + release searches per tuple. Master scoring is
+        // weighted slightly higher so it floats up when both exist.
+        for (const searchType of ["master", "release"]) {
+            try {
+                const r = await dc.search("", {
+                    type: searchType,
+                    genre: t.genre,
+                    style: t.style,
+                    year: String(t.year),
+                    format: "Vinyl",
+                    perPage: searchType === "master" ? 25 : 15,
+                });
+                const results = Array.isArray(r?.results) ? r.results : [];
+                for (let i = 0; i < results.length; i++) {
+                    ingest(results[i], t, i);
+                }
+            }
+            catch (e) {
+                console.warn(`[suggestions] ${searchType} search failed for ${userId} ${t.genre}/${t.style}/${t.year}:`, e?.message ?? e);
+            }
+            // Pace per request to respect Discogs's ~60/min OAuth limit.
+            await sleep(1100);
+        }
+    }
+    const items = Array.from(candidates.values())
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 1000);
+    if (!items.length)
+        return { saved: 0, reason: "no-candidates" };
+    await replaceUserPersonalSuggestions(userId, items);
+    return { saved: items.length };
+}
+// Hourly scheduler: walk every signed-up user, run the generator
+// sequentially with a small delay between users so we don't spike
+// Discogs traffic. Users without OAuth or with empty taste profiles
+// are skipped quickly.
+async function _runPersonalSuggestionsForAllUsers() {
+    try {
+        const users = await getAllUsersForSync();
+        if (!users.length)
+            return;
+        console.log(`[suggestions] hourly run starting for ${users.length} users`);
+        let total = 0;
+        let skipped = 0;
+        for (const u of users) {
+            const userId = u.clerkUserId;
+            const result = await _runPersonalSuggestionsForUser(userId).catch(e => {
+                console.warn(`[suggestions] user ${userId} failed:`, e?.message ?? e);
+                return { saved: 0, reason: "error" };
+            });
+            if (result.saved > 0)
+                total += result.saved;
+            else
+                skipped++;
+            await sleep(2000);
+        }
+        console.log(`[suggestions] hourly run complete; saved ${total} items, ${skipped} users skipped`);
+    }
+    catch (e) {
+        console.error("[suggestions] scheduler failed:", e?.message ?? e);
+    }
+}
+// Boot once 60s after startup so we don't compete with sync, then
+// every hour.
+if (process.env.APP_DB_URL) {
+    setTimeout(() => { _runPersonalSuggestionsForAllUsers(); }, 60_000);
+    setInterval(() => { _runPersonalSuggestionsForAllUsers(); }, 60 * 60 * 1000);
+}
+// Admin manual trigger — useful for testing without waiting an hour.
+app.post("/api/admin/run-suggestions", express.json({ limit: "1kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    // Don't block on the run — kick it off and return immediately so
+    // the admin UI doesn't time out on long batches.
+    _runPersonalSuggestionsForAllUsers().catch(() => { });
+    res.json({ ok: true, message: "Suggestions run kicked off in the background." });
+});
+// Admin manual trigger for a single user — for fast iteration.
+app.post("/api/admin/run-suggestions-for-self", express.json({ limit: "1kb" }), async (req, res) => {
+    const userId = await requireAdmin(req, res);
+    if (!userId)
+        return;
+    try {
+        const result = await _runPersonalSuggestionsForUser(userId);
+        res.json({ ok: true, ...result });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// GET /api/site-theme — public read of the current global theme (used
+// by clients to verify their cached HTML matches the live setting).
+// Admin's setting controls every visitor's theme.
+app.get("/api/site-theme", async (_req, res) => {
+    res.setHeader("Cache-Control", "no-cache");
+    res.json({ theme: _siteTheme });
+});
+// POST /api/admin/site-theme — kept as a stub returning the locked
+// theme so any leftover client code (cached admin.html, scripts) gets
+// a non-error response. The site theme is now fixed to "noir-white".
+app.post("/api/admin/site-theme", express.json({ limit: "1kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    res.json({ ok: true, theme: _siteTheme, locked: true });
+});
+// GET /api/admin/feedback — inbox, only for admin user
+app.get("/api/admin/feedback", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
     const items = await getFeedback();
     res.json({ items });
 });
 // DELETE /api/admin/feedback/:id — delete a feedback item, admin only
 app.delete("/api/admin/feedback/:id", async (req, res) => {
-    const userId = await getClerkUserId(req);
-    const adminId = ADMIN_CLERK_ID;
-    if (!userId || !adminId || userId !== adminId) {
-        res.status(403).json({ error: "Forbidden" });
+    if (!await requireAdmin(req, res))
         return;
-    }
     await deleteFeedback(parseInt(req.params.id));
     res.json({ ok: true });
 });
 // GET /api/admin/sync-status — per-user sync status, admin only
 app.get("/api/admin/sync-status", async (req, res) => {
-    const userId = await getClerkUserId(req);
-    const adminId = ADMIN_CLERK_ID;
-    if (!userId || !adminId || userId !== adminId) {
-        res.status(403).json({ error: "Forbidden" });
+    if (!await requireAdmin(req, res))
         return;
-    }
     const [users, favCounts] = await Promise.all([getAllUsersSyncStatus(), getAllFavoriteCounts()]);
     // Check Clerk sessions for accurate last-activity timestamps
     const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
@@ -3323,12 +5721,8 @@ app.get("/api/admin/sync-status", async (req, res) => {
 });
 // POST /api/admin/sync-all — trigger FULL background sync for all users, admin only
 app.post("/api/admin/sync-all", express.json(), async (req, res) => {
-    const userId = await getClerkUserId(req);
-    const adminId = ADMIN_CLERK_ID;
-    if (!userId || !adminId || userId !== adminId) {
-        res.status(403).json({ error: "Forbidden" });
+    if (!await requireAdmin(req, res))
         return;
-    }
     _syncAbort = false; // clear any previous abort
     const users = await getAllUsersForSync();
     res.json({ ok: true, queued: users.length, mode: "full" });
@@ -3354,14 +5748,11 @@ app.post("/api/admin/sync-all", express.json(), async (req, res) => {
     })();
 });
 // POST /api/admin/sync-user — trigger background sync for a single user, admin only
-app.post("/api/admin/sync-user", express.json(), async (req, res) => {
-    const userId = await getClerkUserId(req);
-    const adminId = ADMIN_CLERK_ID;
-    if (!userId || !adminId || userId !== adminId) {
-        res.status(403).json({ error: "Forbidden" });
+app.post("/api/admin/sync-user", express.json({ limit: "4kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
         return;
-    }
-    const { username } = req.body;
+    const usernameRaw = (req.body?.username ?? "").trim();
+    const username = usernameRaw.slice(0, 200);
     if (!username) {
         res.status(400).json({ error: "username required" });
         return;
@@ -3390,12 +5781,8 @@ app.post("/api/admin/sync-user", express.json(), async (req, res) => {
 });
 // POST /api/admin/sync-stop — abort all running syncs and reset statuses
 app.post("/api/admin/sync-stop", async (req, res) => {
-    const userId = await getClerkUserId(req);
-    const adminId = ADMIN_CLERK_ID;
-    if (!userId || !adminId || userId !== adminId) {
-        res.status(403).json({ error: "Forbidden" });
+    if (!await requireAdmin(req, res))
         return;
-    }
     _syncAbort = true;
     const count = await resetAllSyncingStatuses();
     console.log(`Admin: sync abort requested, ${count} syncing statuses reset`);
@@ -3403,12 +5790,8 @@ app.post("/api/admin/sync-stop", async (req, res) => {
 });
 // POST /api/admin/api-kill — toggle global API kill switch
 app.post("/api/admin/api-kill", async (req, res) => {
-    const userId = await getClerkUserId(req);
-    const adminId = ADMIN_CLERK_ID;
-    if (!userId || !adminId || userId !== adminId) {
-        res.status(403).json({ error: "Forbidden" });
+    if (!await requireAdmin(req, res))
         return;
-    }
     const { enabled } = req.body ?? {};
     _apiKillSwitch = enabled !== undefined ? !!enabled : !_apiKillSwitch;
     console.log(`Admin: API kill switch ${_apiKillSwitch ? "ENABLED — all outgoing requests blocked" : "DISABLED — requests flowing"}`);
@@ -3416,22 +5799,15 @@ app.post("/api/admin/api-kill", async (req, res) => {
 });
 // GET /api/admin/api-kill — check kill switch status
 app.get("/api/admin/api-kill", async (req, res) => {
-    const userId = await getClerkUserId(req);
-    const adminId = ADMIN_CLERK_ID;
-    if (!userId || !adminId || userId !== adminId) {
-        res.status(403).json({ error: "Forbidden" });
+    if (!await requireAdmin(req, res))
         return;
-    }
     res.json({ killSwitch: _apiKillSwitch });
 });
 // POST /api/admin/revoke-sessions — log out all Clerk users except admin
 app.post("/api/admin/revoke-sessions", async (req, res) => {
-    const userId = await getClerkUserId(req);
-    const adminId = ADMIN_CLERK_ID;
-    if (!userId || !adminId || userId !== adminId) {
-        res.status(403).json({ error: "Forbidden" });
+    if (!await requireAdmin(req, res))
         return;
-    }
+    const adminId = ADMIN_CLERK_ID; // skip the admin's own session below
     const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
     if (!clerkSecret) {
         res.status(500).json({ error: "CLERK_SECRET_KEY not configured" });
@@ -3536,12 +5912,8 @@ app.post("/api/admin/purge-non-admin-users", express.json(), async (req, res) =>
 });
 // GET /api/admin/collection-stats — per-user and global collection/wantlist stats
 app.get("/api/admin/collection-stats", async (req, res) => {
-    const userId = await getClerkUserId(req);
-    const adminId = ADMIN_CLERK_ID;
-    if (!userId || !adminId || userId !== adminId) {
-        res.status(403).json({ error: "Forbidden" });
+    if (!await requireAdmin(req, res))
         return;
-    }
     try {
         const stats = await getUserCollectionStats();
         res.json(stats);
@@ -3552,12 +5924,8 @@ app.get("/api/admin/collection-stats", async (req, res) => {
 });
 // GET /api/admin/user-items — view any user's collection or wantlist, admin only
 app.get("/api/admin/user-items", async (req, res) => {
-    const userId = await getClerkUserId(req);
-    const adminId = ADMIN_CLERK_ID;
-    if (!userId || !adminId || userId !== adminId) {
-        res.status(403).json({ error: "Forbidden" });
+    if (!await requireAdmin(req, res))
         return;
-    }
     const username = (req.query.username ?? "").trim();
     const tab = (req.query.tab ?? "collection");
     const page = Math.max(1, parseInt(req.query.page) || 1);
@@ -3583,12 +5951,8 @@ app.get("/api/admin/user-items", async (req, res) => {
 });
 // GET /api/admin/user-favorites — view any user's favorites, admin only
 app.get("/api/admin/user-favorites", async (req, res) => {
-    const userId = await getClerkUserId(req);
-    const adminId = ADMIN_CLERK_ID;
-    if (!userId || !adminId || userId !== adminId) {
-        res.status(403).json({ error: "Forbidden" });
+    if (!await requireAdmin(req, res))
         return;
-    }
     const username = (req.query.username ?? "").trim();
     if (!username) {
         res.status(400).json({ error: "username required" });
@@ -3644,7 +6008,9 @@ app.post("/api/admin/blues/add-by-discogs-id", express.json({ limit: "8kb" }), a
     if (!await requireAdmin(req, res))
         return;
     const discogsIdRaw = req.body?.discogs_id;
-    const name = (req.body?.name ?? "").trim();
+    // Length cap (audit #11) — express.json's 8kb limit is the outer
+    // line of defense; this caps the actual stored field at 500 chars.
+    const name = (req.body?.name ?? "").trim().slice(0, 500);
     const discogsId = parseInt(String(discogsIdRaw), 10);
     if (!Number.isFinite(discogsId) || discogsId <= 0 || !name) {
         res.status(400).json({ error: "discogs_id (positive int) and name required" });
@@ -3674,10 +6040,10 @@ app.post("/api/admin/blues/add-by-name", express.json({ limit: "8kb" }), async (
         return;
     const client = await getDiscogsClientForUser(adminId);
     if (!client) {
-        res.status(400).json({ error: "Admin has no Discogs token configured." });
+        res.status(400).json({ error: "Admin has not connected Discogs via OAuth." });
         return;
     }
-    const name = (req.body?.name ?? "").trim();
+    const name = (req.body?.name ?? "").trim().slice(0, 500);
     if (!name) {
         res.status(400).json({ error: "name required" });
         return;
@@ -3975,7 +6341,7 @@ app.post("/api/admin/blues/seed-discogs", async (req, res) => {
     }
     const client = await getDiscogsClientForUser(adminId);
     if (!client) {
-        res.status(400).json({ error: "Admin has no Discogs token configured. Connect Discogs on the Account page first." });
+        res.status(400).json({ error: "Admin has not connected Discogs via OAuth. Connect Discogs on the Account page first." });
         return;
     }
     const startYear = parseInt(String(req.query.startYear ?? "1900"), 10);
@@ -4073,7 +6439,7 @@ app.post("/api/admin/blues/enrich-discogs", async (req, res) => {
         return;
     const client = await getDiscogsClientForUser(adminId);
     if (!client) {
-        res.status(400).json({ error: "Admin has no Discogs token configured. Connect Discogs on the Account page first." });
+        res.status(400).json({ error: "Admin has not connected Discogs via OAuth. Connect Discogs on the Account page first." });
         return;
     }
     const idRaw = req.query.id;
@@ -4129,7 +6495,7 @@ app.post("/api/admin/blues/enrich-discogs-full", async (req, res) => {
         return;
     const client = await getDiscogsClientForUser(adminId);
     if (!client) {
-        res.status(400).json({ error: "Admin has no Discogs token configured. Connect Discogs on the Account page first." });
+        res.status(400).json({ error: "Admin has not connected Discogs via OAuth. Connect Discogs on the Account page first." });
         return;
     }
     const idRaw = req.query.id;
@@ -4219,6 +6585,19 @@ app.post("/api/ai-search", express.json(), async (req, res) => {
         res.status(400).json({ error: "Query required" });
         return;
     }
+    // Pull a compact list of titles the user already owns (collection)
+    // or wants (wantlist) so we can tell Claude to avoid those — and
+    // ideally avoid recommending other albums by artists already deeply
+    // represented in the user's library. Capped at 200 lines so the
+    // prompt stays within token budget. Best-effort: empty array if
+    // the lookup fails or the user has no synced library.
+    const exclusionTitles = await getAiExclusionTitles(userId, 200).catch(() => []);
+    const exclusionBlock = exclusionTitles.length
+        ? `\n\nUSER LIBRARY (DO NOT RECOMMEND THESE):
+The user already owns or has on their wantlist the following ${exclusionTitles.length} releases${exclusionTitles.length >= 200 ? " (sample of a larger library)" : ""}. Skip every one of them, AND avoid the most obvious other releases by artists who appear here multiple times — they're already familiar.
+
+${exclusionTitles.map(t => `- ${t}`).join("\n")}\n`
+        : "";
     const prompt = `You are a deep-catalog music expert — a record-shop digger, not a radio programmer.
 The user is searching for: "${q}"
 
@@ -4230,6 +6609,7 @@ Anchoring rules:
 3. Prefer regional contemporaries, B-sides, single-album acts, label-mates, session players who cut their own records, and obscure scene peers.
 4. If the query is a specific song/release, lean into other artists who recorded that exact style/era — not generic "similar artists".
 5. Mix artist and release types. Releases should be specific records, not greatest-hits comps.
+6. Hard exclusion: never recommend anything from the USER LIBRARY block below.${exclusionBlock}
 
 Return a JSON object with two fields:
 - blurb: one sentence (max 30 words) naming the scene/era/sound these picks share — concrete, no filler.
@@ -4309,7 +6689,10 @@ Return ONLY a valid JSON object, no markdown, no explanation.`;
 // (Wikipedia's <span class="searchmatch"> highlight markup preserved).
 // Supports paging via offset so the frontend can implement "Load more".
 app.get("/api/wikipedia/search", async (req, res) => {
-    if (!await requireUser(req, res))
+    // Open to all. Anons throttled at 50/hr per IP; signed-in users pass
+    // through. Wikipedia's public API is generous to well-behaved
+    // User-Agents (we set one — see wikiHeaders below).
+    if (!await allowAnonRateLimited(req, res, anonWikiLimiter))
         return;
     const q = (req.query.q ?? "").trim();
     if (!q) {
@@ -4357,7 +6740,8 @@ app.get("/api/wikipedia/search", async (req, res) => {
 // in-app popup. Default returns only the lead section (fast); pass full=1 to
 // load the entire article body so users can read it without leaving SeaDisco.
 app.get("/api/wikipedia/lookup", async (req, res) => {
-    if (!await requireUser(req, res))
+    // Open with same anon throttle as /api/wikipedia/search.
+    if (!await allowAnonRateLimited(req, res, anonWikiLimiter))
         return;
     const q = (req.query.q ?? "").trim();
     if (!q) {
@@ -4474,6 +6858,9 @@ In 4–7 words, give a single honest phrase describing how well these results ma
 });
 // GET /search?q=pink+floyd&type=master&year=1973&page=1&per_page=10
 app.get("/search", async (req, res) => {
+    // Discogs search is signed-in only. Anon visitors get the cached
+    // Feed instead (see /api/feed/random) — we never burn upstream
+    // Discogs requests on anon traffic.
     const userId = await requireUser(req, res);
     if (!userId)
         return;
@@ -4486,7 +6873,6 @@ app.get("/search", async (req, res) => {
     const searchArtist = artist || undefined;
     const searchLabel = rawLabel || undefined;
     const searchRelease = rawRelease || undefined;
-    // Touch activity for the signed-in user
     touchUserActivity(userId).catch(() => { });
     const dc = await getDiscogsForRequest(req);
     if (!dc) {
@@ -4517,19 +6903,47 @@ app.get("/search", async (req, res) => {
     }
 });
 // GET /release/:id
+// Cache TTLs by resource type. Masters and artists are stable; releases
+// can be edited so they get a shorter TTL. Override per-request with
+// ?nocache=1 (admin-only) to force a fresh fetch.
+// Far long-lived cache. Release / master / artist metadata is
+// effectively static on Discogs's end — release edits are rare,
+// master/artist updates rarer. Year-long TTL means almost every
+// repeat view is served from cache, anon visitors get full data
+// without burning admin's OAuth, and the user's library stays
+// usable across deploys / outages. Per-card ↻ Re-fetch button lets
+// users force a refresh when they suspect stale data.
+const _RELEASE_CACHE_TTL_S = 60 * 60 * 24 * 365; // 1 year
+const _MASTER_CACHE_TTL_S = 60 * 60 * 24 * 365; // 1 year
+const _ARTIST_CACHE_TTL_S = 60 * 60 * 24 * 365; // 1 year
 app.get("/release/:id", async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    // Cache hit serves to ANYONE (signed-in or anon) — cached release
+    // data is already public via shared URLs, and serving the cache to
+    // logged-out visitors lets shared/popup-restore links render
+    // correctly without requiring sign-in. Cache miss still requires
+    // a signed-in user with an OAuth connection (Discogs upstream
+    // can't be hit without a token).
+    const noCache = req.query.nocache === "1";
+    if (!noCache) {
+        const cached = await getCachedRelease(id, "release", _RELEASE_CACHE_TTL_S);
+        if (cached) {
+            res.setHeader("X-SeaDisco-Cache", "hit");
+            res.json(cached);
+            return;
+        }
+    }
     if (!await requireUser(req, res))
         return;
-    const id = parseInt(req.params.id, 10);
     const dc = await getDiscogsForRequest(req);
     if (!dc) {
-        res.status(503).json({ error: "No Discogs token configured" });
+        res.status(503).json({ error: "No Discogs OAuth connection" });
         return;
     }
     try {
         const result = await dc.getRelease(req.params.id);
-        // Always save fresh data to cache
         cacheRelease(id, "release", result).catch(() => { });
+        res.setHeader("X-SeaDisco-Cache", "miss");
         res.json(result);
     }
     catch (err) {
@@ -4537,20 +6951,29 @@ app.get("/release/:id", async (req, res) => {
         res.status(500).json({ error: "Discogs API error" });
     }
 });
-// GET /master/:id
+// GET /master/:id — cache hit serves to anon, miss requires sign-in.
 app.get("/master/:id", async (req, res) => {
+    const id = parseInt(req.params.id, 10);
+    const noCache = req.query.nocache === "1";
+    if (!noCache) {
+        const cached = await getCachedRelease(id, "master", _MASTER_CACHE_TTL_S);
+        if (cached) {
+            res.setHeader("X-SeaDisco-Cache", "hit");
+            res.json(cached);
+            return;
+        }
+    }
     if (!await requireUser(req, res))
         return;
-    const id = parseInt(req.params.id, 10);
     const dc = await getDiscogsForRequest(req);
     if (!dc) {
-        res.status(503).json({ error: "No Discogs token configured" });
+        res.status(503).json({ error: "No Discogs OAuth connection" });
         return;
     }
     try {
         const result = await dc.getMasterRelease(req.params.id);
-        // Always save fresh data to cache
         cacheRelease(id, "master", result).catch(() => { });
+        res.setHeader("X-SeaDisco-Cache", "miss");
         res.json(result);
     }
     catch (err) {
@@ -4562,13 +6985,27 @@ app.get("/master/:id", async (req, res) => {
 app.get("/artist/:id", async (req, res) => {
     if (!await requireUser(req, res))
         return;
+    const id = parseInt(req.params.id, 10);
+    const noCache = req.query.nocache === "1";
+    if (!noCache && Number.isFinite(id) && id > 0) {
+        const cached = await getCachedRelease(id, "artist", _ARTIST_CACHE_TTL_S);
+        if (cached) {
+            res.setHeader("X-SeaDisco-Cache", "hit");
+            res.json(cached);
+            return;
+        }
+    }
     const dc = await getDiscogsForRequest(req);
     if (!dc) {
-        res.status(503).json({ error: "No Discogs token configured" });
+        res.status(503).json({ error: "No Discogs OAuth connection" });
         return;
     }
     try {
         const result = await dc.getArtist(req.params.id);
+        if (Number.isFinite(id) && id > 0) {
+            cacheRelease(id, "artist", result).catch(() => { });
+        }
+        res.setHeader("X-SeaDisco-Cache", "miss");
         res.json(result);
     }
     catch (err) {
@@ -4876,10 +7313,25 @@ app.get("/api/price-suggestions/:id", async (req, res) => {
 // Discogs paginates at 100 per page; popular masters can have several
 // hundred pressings, so walk pages until the response runs out (with a
 // safety cap to avoid runaway loops).
+// Master version-lists rarely change (new pressings of a master do, but
+// rarely on the timescale of a typical user session). Cache 1 day so
+// repeat opens of the same master skip the per-page Discogs walk.
+const _MASTER_VERSIONS_CACHE_TTL_S = 60 * 60 * 24;
 app.get("/master-versions/:id", async (req, res) => {
     if (!await requireUser(req, res))
         return;
     const { id } = req.params;
+    const idNum = parseInt(id, 10);
+    const noCache = req.query.nocache === "1";
+    // Cache HIT: skip the entire Discogs walk
+    if (!noCache && Number.isFinite(idNum) && idNum > 0) {
+        const cached = await getCachedRelease(idNum, "master-versions", _MASTER_VERSIONS_CACHE_TTL_S);
+        if (cached?.versions) {
+            res.setHeader("X-SeaDisco-Cache", "hit");
+            res.json(cached);
+            return;
+        }
+    }
     const dc = await getDiscogsForRequest(req);
     if (!dc) {
         res.json({ versions: [] });
@@ -4888,16 +7340,26 @@ app.get("/master-versions/:id", async (req, res) => {
     try {
         const PER_PAGE = 100;
         const MAX_PAGES = 10; // 1,000 versions ceiling — well above any real master
-        const collected = [];
-        let page = 1;
-        while (page <= MAX_PAGES) {
-            const data = await dc.getMasterVersions(id, { page, perPage: PER_PAGE, sort: "released", sortOrder: "asc" });
-            const chunk = data?.versions ?? [];
-            collected.push(...chunk);
-            const totalPages = data?.pagination?.pages ?? 1;
-            if (page >= totalPages || chunk.length < PER_PAGE)
-                break;
-            page++;
+        const PARALLEL_BATCH = 4; // tail pages fired in chunks to balance speed vs Discogs rate-limit pressure
+        // Fetch page 1 first to learn total page count.
+        const firstPage = await dc.getMasterVersions(id, { page: 1, perPage: PER_PAGE, sort: "released", sortOrder: "asc" });
+        const collected = firstPage?.versions ?? [];
+        const totalPages = Math.min(firstPage?.pagination?.pages ?? 1, MAX_PAGES);
+        // Pages 2..N fetched in parallel batches. Was sequential — for masters
+        // with 5+ pages this collapsed 1.5-2.5s of waterfall into one batch
+        // round-trip. (Audit #1.)
+        if (totalPages > 1) {
+            const remaining = [];
+            for (let p = 2; p <= totalPages; p++)
+                remaining.push(p);
+            for (let i = 0; i < remaining.length; i += PARALLEL_BATCH) {
+                const batch = remaining.slice(i, i + PARALLEL_BATCH);
+                const results = await Promise.all(batch.map(p => dc.getMasterVersions(id, { page: p, perPage: PER_PAGE, sort: "released", sortOrder: "asc" })));
+                for (const r of results) {
+                    const chunk = r?.versions ?? [];
+                    collected.push(...chunk);
+                }
+            }
         }
         const versions = collected.map((v) => ({
             id: v.id,
@@ -4910,7 +7372,12 @@ app.get("/master-versions/:id", async (req, res) => {
             majorFormats: v.major_formats ?? [],
             url: v.resource_url ? `https://www.discogs.com/release/${v.id}` : null,
         }));
-        res.json({ versions });
+        const payload = { versions };
+        if (Number.isFinite(idNum) && idNum > 0) {
+            cacheRelease(idNum, "master-versions", payload).catch(() => { });
+        }
+        res.setHeader("X-SeaDisco-Cache", "miss");
+        res.json(payload);
     }
     catch (err) {
         console.error(`[master-versions/${id}] Error:`, err?.message ?? err);
@@ -4954,12 +7421,8 @@ app.get("/series-releases/:id", async (req, res) => {
 });
 // POST /api/admin/extras/fetch — manual trigger for inventory/lists sync
 app.post("/api/admin/extras/fetch", express.json(), async (req, res) => {
-    const userId = await getClerkUserId(req);
-    const adminId = ADMIN_CLERK_ID;
-    if (!userId || !adminId || userId !== adminId) {
-        res.status(403).json({ error: "Forbidden" });
+    if (!await requireAdmin(req, res))
         return;
-    }
     res.json({ ok: true, message: "Extras sync started" });
     (async () => {
         const users = await getAllUsersForSync();
@@ -4983,12 +7446,8 @@ app.post("/api/admin/extras/fetch", express.json(), async (req, res) => {
 });
 // GET /api/admin/api-log — view API request log (last 24h by default)
 app.get("/api/admin/api-log", async (req, res) => {
-    const userId = await getClerkUserId(req);
-    const adminId = ADMIN_CLERK_ID;
-    if (!userId || !adminId || userId !== adminId) {
-        res.status(403).json({ error: "Forbidden" });
+    if (!await requireAdmin(req, res))
         return;
-    }
     const service = req.query.service;
     const errorsOnly = req.query.errors === "true";
     const scheduledOnly = req.query.scheduled === "true";
@@ -4998,24 +7457,16 @@ app.get("/api/admin/api-log", async (req, res) => {
 });
 // GET /api/admin/api-stats — 24h summary by service
 app.get("/api/admin/api-stats", async (req, res) => {
-    const userId = await getClerkUserId(req);
-    const adminId = ADMIN_CLERK_ID;
-    if (!userId || !adminId || userId !== adminId) {
-        res.status(403).json({ error: "Forbidden" });
+    if (!await requireAdmin(req, res))
         return;
-    }
     const hours = Math.min(parseInt(req.query.hours) || 24, 168);
     const stats = await getApiRequestStats(hours);
     res.json({ stats });
 });
 // GET /api/admin/db-stats — row counts for all tables
 app.get("/api/admin/db-stats", async (req, res) => {
-    const userId = await getClerkUserId(req);
-    const adminId = ADMIN_CLERK_ID;
-    if (!userId || !adminId || userId !== adminId) {
-        res.status(403).json({ error: "Forbidden" });
+    if (!await requireAdmin(req, res))
         return;
-    }
     try {
         const tables = await getTableRowCounts();
         const totalRows = tables.reduce((sum, t) => sum + (t.rows > 0 ? t.rows : 0), 0);
@@ -5023,6 +7474,52 @@ app.get("/api/admin/db-stats", async (req, res) => {
     }
     catch (err) {
         res.status(500).json({ error: String(err) });
+    }
+});
+// GET /api/admin/db-table/:name — per-table summary popup data:
+// schema (columns + types + nullability), index list, row count, and
+// total relation size on disk. Whitelisted to tables we know about so
+// the admin UI can't be coaxed into running arbitrary table names.
+app.get("/api/admin/db-table/:name", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const name = String(req.params?.name || "");
+    let allowed;
+    try {
+        const rows = await getTableRowCounts();
+        allowed = new Set(rows.map(r => r.table));
+    }
+    catch {
+        res.status(500).json({ error: "Could not enumerate tables" });
+        return;
+    }
+    if (!allowed.has(name)) {
+        res.status(400).json({ error: "Unknown table" });
+        return;
+    }
+    try {
+        const summary = await getDbAdminTableSummary(name);
+        res.json(summary);
+    }
+    catch (e) {
+        console.error("[/api/admin/db-table]", e?.message ?? e);
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// GET /api/admin/suggestions-stats — per-user counts + last-generated
+// timestamp for the personal suggestions feed. Powers the admin's
+// "Suggestions" tab so they can verify the hourly job is doing its
+// thing.
+app.get("/api/admin/suggestions-stats", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const stats = await getPersonalSuggestionsStats();
+        res.json({ users: stats });
+    }
+    catch (e) {
+        console.error("[/api/admin/suggestions-stats]", e?.message ?? e);
+        res.status(500).json({ error: String(e?.message ?? e) });
     }
 });
 // Helper: ms until the next occurrence of HH:MM Pacific, repeating every intervalH hours

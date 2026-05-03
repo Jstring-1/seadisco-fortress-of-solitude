@@ -3937,6 +3937,14 @@ export async function getFeedRandomAlbums(
     if (type !== "any") {
       params.push(type);
       where += `WHERE type = $${params.length} `;
+    } else {
+      // "any" means "any album", NOT every row in release_cache. The
+      // table also stores master-versions (pressing-list payloads) and
+      // artist (artist profile cache) which are infrastructure caches,
+      // not displayable albums — surfacing them as feed cards produces
+      // empty placeholders like "master-versions 645422 / NO IMAGE".
+      // Restrict to the two real album types.
+      where += `WHERE type IN ('master','release') `;
     }
     if (exclude.length) {
       params.push(excludeIdsArr);

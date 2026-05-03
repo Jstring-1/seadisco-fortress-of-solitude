@@ -7,11 +7,29 @@ function getPool() {
         const connStr = process.env.APP_DB_URL;
         if (!connStr)
             throw new Error("APP_DB_URL not set");
+        // Explicit pool sizing. Defaults (max:10, no idleTimeoutMillis)
+        // were fine at small scale but caused queue buildup during
+        // sync bursts (every signed-in user can hit /api/user/* in
+        // parallel for collection / wantlist / inventory / lists).
+        // Overridable via env so we can tune without a redeploy.
+        const max = Number(process.env.APP_DB_POOL_MAX ?? 20);
+        const min = Number(process.env.APP_DB_POOL_MIN ?? 2);
+        const idle = Number(process.env.APP_DB_POOL_IDLE_MS ?? 30000);
+        const connTimeout = Number(process.env.APP_DB_POOL_CONN_MS ?? 5000);
         pool = new Pool({
             connectionString: connStr,
             ssl: process.env.DB_CA_CERT
                 ? { rejectUnauthorized: true, ca: process.env.DB_CA_CERT }
                 : { rejectUnauthorized: false },
+            max,
+            min,
+            idleTimeoutMillis: idle,
+            connectionTimeoutMillis: connTimeout,
+        });
+        pool.on("error", (err) => {
+            // Idle-client errors aren't fatal — log so we notice if Railway
+            // is killing connections in the background.
+            console.warn("[db pool] idle client error:", err?.message ?? err);
         });
     }
     return pool;
@@ -221,6 +239,189 @@ export async function initDb() {
     )
   `);
     await getPool().query(`CREATE INDEX IF NOT EXISTS user_loc_saves_user_time_idx ON user_loc_saves (clerk_user_id, saved_at DESC)`);
+    // ── Archive.org item saves (Archive view) ────────────────────────────────
+    // Mirrors user_loc_saves — admins can bookmark items from the archive.org
+    // collection (Aadam Jacobs live-show recordings) and revisit them in a
+    // dedicated "Saved" tab on the archive page.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_archive_saves (
+      clerk_user_id TEXT        NOT NULL,
+      archive_id    TEXT        NOT NULL,   -- archive.org item identifier (slug)
+      title         TEXT,
+      stream_url    TEXT,                   -- primary playable audio URL (mp3 or hls)
+      data          JSONB       NOT NULL,   -- full card snapshot (date/desc/itemUrl)
+      saved_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (clerk_user_id, archive_id)
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS user_archive_saves_user_time_idx ON user_archive_saves (clerk_user_id, saved_at DESC)`);
+    // ── YouTube video saves (YouTube SPA "Saved" tab) ────────────────────────
+    // Mirrors the LOC / Archive saves shape. Video ID is the canonical
+    // Discogs-independent identifier; title / channel / thumbnail / data
+    // are a snapshot for the Saved tab card render so re-running the
+    // YouTube search isn't required to display the user's library.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_youtube_saves (
+      clerk_user_id TEXT        NOT NULL,
+      video_id      TEXT        NOT NULL,   -- YouTube videoId (11 chars)
+      title         TEXT,
+      channel       TEXT,
+      thumbnail     TEXT,
+      data          JSONB       NOT NULL,
+      saved_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (clerk_user_id, video_id)
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS user_youtube_saves_user_time_idx ON user_youtube_saves (clerk_user_id, saved_at DESC)`);
+    // ── Crowd-sourced YouTube overrides for tracks Discogs missed ─────────────
+    // When a Discogs release/master tracklist has a track with no `videos[]`
+    // entry, signed-in users can suggest a YouTube video for it. The first
+    // submission wins (no approval queue, by design — admin can delete).
+    // Scope is master-level by default so a fix to one pressing surfaces
+    // across every release of the same master; per-release overrides are
+    // also supported by writing release_type='release' rows. The lookup
+    // does master first, falls back to release.
+    //
+    // PK on (release_id, release_type, track_position) gives us "first
+    // submission wins" via INSERT ... ON CONFLICT DO NOTHING.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS track_youtube_overrides (
+      release_id     TEXT        NOT NULL,   -- Discogs master OR release id (string for forward-compat)
+      release_type   TEXT        NOT NULL,   -- "master" | "release"
+      track_position TEXT        NOT NULL,   -- e.g. "A1", "1", "2-4"; whatever Discogs returns
+      track_title    TEXT,                   -- snapshot at submission time (for the admin tab)
+      video_id       TEXT        NOT NULL,   -- 11-char YouTube videoId
+      video_title    TEXT,                   -- snapshot at submission time
+      submitted_by   TEXT        NOT NULL,   -- clerk_user_id of submitter
+      submitted_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (release_id, release_type, track_position)
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS track_youtube_overrides_submitted_idx ON track_youtube_overrides (submitted_at DESC)`);
+    // ── Unavailable / broken YouTube videos ─────────────────────────────────
+    // When the IFrame Player fires onError 100/101/150 (video removed,
+    // embed disabled, or region-blocked) we record the videoId here.
+    // After report_count crosses a threshold (2) the status flips to
+    // 'unavailable' and the renderer treats every album track that
+    // references that video as "missing" — counted in the heading and
+    // contributable via the album-suggest popup.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS youtube_video_unavailable (
+      video_id          TEXT PRIMARY KEY,
+      status            TEXT NOT NULL DEFAULT 'flagged',
+      report_count      INTEGER NOT NULL DEFAULT 1,
+      first_reported_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_reported_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      sample_user_id    TEXT,
+      sample_error_code INTEGER
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS yt_video_unavailable_status_idx ON youtube_video_unavailable (status)`);
+    // ── YouTube search cache (DB-backed, survives Railway restarts) ─────────
+    // The in-memory _ytSearchCache in search-api.ts gets wiped on every
+    // deploy. With YT quota at 100 calls/day project-wide, even a few
+    // deploys can burn the whole day's budget on otherwise-cached queries.
+    // Mirror the same cache to a row here so a query that landed yesterday
+    // is still free today.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS youtube_search_cache (
+      cache_key  TEXT PRIMARY KEY,
+      body       JSONB NOT NULL,
+      cached_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS youtube_search_cache_age_idx ON youtube_search_cache (cached_at)`);
+    // ── Per-user "banished" suggestions ──────────────────────────────────────
+    // When a user dismisses a personal-suggestion card with the × button,
+    // the (id,type) is recorded here and the background generator skips it
+    // on every subsequent run. Banishments are permanent unless the user
+    // clears them (no UI for that yet — manual DB op).
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_suggestion_dismissals (
+      clerk_user_id TEXT        NOT NULL,
+      discogs_id    INTEGER     NOT NULL,
+      entity_type   TEXT        NOT NULL,    -- 'master' | 'release'
+      dismissed_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (clerk_user_id, discogs_id, entity_type)
+    )
+  `);
+    // ── Per-user personal suggestions (background-generated) ─────────────────
+    // A scheduled task computes a fresh batch of master/release suggestions
+    // for each user once an hour: albums in the user's favorite genre/style
+    // bands, recorded around the user's most-represented years, that the
+    // user doesn't already own and that lack embedded YouTube videos. The
+    // job overwrites the user's row each pass (no append history).
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_personal_suggestions (
+      clerk_user_id TEXT        NOT NULL,
+      discogs_id    INTEGER     NOT NULL,
+      entity_type   TEXT        NOT NULL,    -- 'master' | 'release'
+      score         REAL        NOT NULL DEFAULT 0,  -- ranking heuristic
+      data          JSONB       NOT NULL,    -- card snapshot for render
+      generated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (clerk_user_id, discogs_id, entity_type)
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS user_personal_suggestions_user_idx ON user_personal_suggestions (clerk_user_id, generated_at DESC)`);
+    // ── Site-wide app settings (admin-controlled) ────────────────────────────
+    // Simple key/value store for global config (theme, feature flags, etc.).
+    // Currently used for the site-wide theme: admin picks a theme on /admin
+    // and it applies to every visitor.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key        TEXT PRIMARY KEY,
+      value      TEXT,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+    // ── Per-user preferences ──────────────────────────────────────────────
+    // Cross-device user prefs (currently: { offlineEnabled }). Stored as a
+    // JSONB blob per user so we can extend with new keys without schema
+    // migrations. Read on every page load to surface a one-time "cache on
+    // this device too?" prompt when offlineEnabled is true server-side
+    // but the device hasn't been opted in locally.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_preferences (
+      clerk_user_id TEXT PRIMARY KEY,
+      prefs         JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+    // ── Wikipedia article saves (Wikipedia SPA "Saved" tab) ──────────────────
+    // Mirrors user_loc_saves so users can bookmark articles without bouncing
+    // through search again. Title is the canonical Wikipedia title (used to
+    // re-fetch the article on click); the snippet/thumbnail/url fields are
+    // a snapshot for the saved-tab card render.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_wiki_saves (
+      clerk_user_id TEXT        NOT NULL,
+      wiki_title    TEXT        NOT NULL,   -- canonical Wikipedia title
+      wiki_url      TEXT,                   -- en.wikipedia.org/wiki/<Title>
+      snippet       TEXT,                   -- HTML-stripped first paragraph
+      thumbnail     TEXT,                   -- thumbnail image URL if any
+      data          JSONB       NOT NULL,   -- additional snapshot fields
+      saved_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (clerk_user_id, wiki_title)
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS user_wiki_saves_user_time_idx ON user_wiki_saves (clerk_user_id, saved_at DESC)`);
+    // ── User play queue (cross-source: LOC + YouTube) ───────────────────────
+    // Items are ordered by `position` (1-indexed). Source is "loc" or "yt"
+    // and `data` JSONB carries everything needed to play without a Discogs
+    // round-trip: title, artist, image, plus engine-specific fields
+    // (streamUrl/streamType for LOC; videoId/durationSec for YT).
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_play_queue (
+      clerk_user_id TEXT        NOT NULL,
+      position      INTEGER     NOT NULL,
+      source        TEXT        NOT NULL,
+      external_id   TEXT        NOT NULL,
+      data          JSONB       NOT NULL,
+      added_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (clerk_user_id, position)
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS user_play_queue_user_idx ON user_play_queue (clerk_user_id, position)`);
     // ── User orders (marketplace buy/sell history) ──────────────────────────
     await getPool().query(`
     CREATE TABLE IF NOT EXISTS user_orders (
@@ -315,34 +516,11 @@ export async function initDb() {
     )
   `);
     await getPool().query(`CREATE INDEX IF NOT EXISTS price_history_release_date_idx ON price_history (discogs_release_id, recorded_at DESC)`);
-    await getPool().query(`
-    CREATE TABLE IF NOT EXISTS price_alerts (
-      id                  SERIAL PRIMARY KEY,
-      clerk_user_id       TEXT NOT NULL,
-      discogs_release_id  INTEGER NOT NULL,
-      alert_type          TEXT NOT NULL DEFAULT 'below',
-      threshold_price     NUMERIC(10,2) NOT NULL,
-      currency            TEXT DEFAULT 'USD',
-      triggered           BOOLEAN DEFAULT false,
-      triggered_at        TIMESTAMPTZ,
-      created_at          TIMESTAMPTZ DEFAULT NOW(),
-      UNIQUE(clerk_user_id, discogs_release_id, alert_type)
-    )
-  `);
-    await getPool().query(`
-    CREATE TABLE IF NOT EXISTS triggered_alerts (
-      id                  SERIAL PRIMARY KEY,
-      clerk_user_id       TEXT NOT NULL,
-      alert_id            INTEGER REFERENCES price_alerts(id) ON DELETE CASCADE,
-      discogs_release_id  INTEGER NOT NULL,
-      alert_type          TEXT DEFAULT 'below',
-      message             TEXT NOT NULL,
-      current_price       NUMERIC(10,2),
-      dismissed           BOOLEAN DEFAULT false,
-      triggered_at        TIMESTAMPTZ DEFAULT NOW(),
-      created_at          TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
+    // Drop legacy alert tables that were planned but never wired up.
+    // No reads, no writes anywhere in the code; safe to remove. FK
+    // dependency: triggered_alerts → price_alerts, so child first.
+    await getPool().query(`DROP TABLE IF EXISTS triggered_alerts`);
+    await getPool().query(`DROP TABLE IF EXISTS price_alerts`);
     await getPool().query(`
     CREATE TABLE IF NOT EXISTS saved_searches (
       id                  SERIAL PRIMARY KEY,
@@ -740,10 +918,8 @@ export async function getBluesStats() {
 export async function purgeNonAdminUserData(adminClerkId) {
     if (!adminClerkId)
         throw new Error("adminClerkId required");
-    // Per-user tables, ordered with FK-children first (triggered_alerts → price_alerts).
+    // Per-user tables, ordered with FK-children first.
     const tables = [
-        "triggered_alerts",
-        "price_alerts",
         "user_order_messages",
         "user_orders",
         "user_list_items",
@@ -755,6 +931,11 @@ export async function purgeNonAdminUserData(adminClerkId) {
         "user_favorites",
         "user_recent_views",
         "user_loc_saves",
+        "user_archive_saves",
+        "user_youtube_saves",
+        "user_wiki_saves",
+        "user_play_queue",
+        "user_preferences",
         "saved_searches",
         "feedback",
         "oauth_request_tokens",
@@ -935,9 +1116,12 @@ export async function deleteUserData(clerkUserId) {
         "user_favorites",
         "user_recent_views",
         "user_loc_saves",
+        "user_archive_saves",
+        "user_youtube_saves",
+        "user_wiki_saves",
+        "user_play_queue",
+        "user_preferences",
         "saved_searches",
-        "price_alerts",
-        "triggered_alerts",
         "feedback",
         "user_order_messages",
         "user_orders",
@@ -1343,6 +1527,251 @@ export async function deleteLocSave(clerkUserId, locId) {
 export async function getLocSaveIds(clerkUserId) {
     const r = await getPool().query(`SELECT loc_id FROM user_loc_saves WHERE clerk_user_id = $1`, [clerkUserId]);
     return r.rows.map(row => row.loc_id);
+}
+// ── Archive.org item saves ────────────────────────────────────────────
+// Same shape and cap as LOC saves; just a different table. Archive is
+// admin-only on the wire — only admin users can hit the saves
+// endpoints — but the DB layer doesn't enforce that (the API does).
+const ARCHIVE_SAVES_MAX_PER_USER = 1000;
+export async function saveArchiveItem(clerkUserId, archiveId, title, streamUrl, data) {
+    const pool = getPool();
+    await pool.query(`INSERT INTO user_archive_saves (clerk_user_id, archive_id, title, stream_url, data, saved_at)
+     VALUES ($1, $2, $3, $4, $5, NOW())
+     ON CONFLICT (clerk_user_id, archive_id)
+     DO UPDATE SET title = EXCLUDED.title, stream_url = EXCLUDED.stream_url,
+                   data = EXCLUDED.data, saved_at = NOW()`, [clerkUserId, archiveId, title, streamUrl, JSON.stringify(data)]);
+    await pool.query(`DELETE FROM user_archive_saves
+     WHERE clerk_user_id = $1
+       AND archive_id NOT IN (
+         SELECT archive_id FROM user_archive_saves
+         WHERE clerk_user_id = $1
+         ORDER BY saved_at DESC
+         LIMIT ${ARCHIVE_SAVES_MAX_PER_USER}
+       )`, [clerkUserId]);
+}
+export async function getArchiveSaves(clerkUserId, limit = 500) {
+    const capped = Math.min(Math.max(1, limit), 1000);
+    const r = await getPool().query(`SELECT archive_id, title, stream_url, data, saved_at
+     FROM user_archive_saves
+     WHERE clerk_user_id = $1
+     ORDER BY saved_at DESC
+     LIMIT $2`, [clerkUserId, capped]);
+    return r.rows.map(row => ({
+        archiveId: row.archive_id,
+        title: row.title,
+        streamUrl: row.stream_url,
+        data: row.data ?? {},
+        savedAt: row.saved_at,
+    }));
+}
+export async function deleteArchiveSave(clerkUserId, archiveId) {
+    await getPool().query(`DELETE FROM user_archive_saves WHERE clerk_user_id = $1 AND archive_id = $2`, [clerkUserId, archiveId]);
+}
+export async function getArchiveSaveIds(clerkUserId) {
+    const r = await getPool().query(`SELECT archive_id FROM user_archive_saves WHERE clerk_user_id = $1`, [clerkUserId]);
+    return r.rows.map(row => row.archive_id);
+}
+// ── YouTube video saves ───────────────────────────────────────────────
+const YOUTUBE_SAVES_MAX_PER_USER = 1000;
+export async function saveYoutubeVideo(clerkUserId, videoId, title, channel, thumbnail, data) {
+    const pool = getPool();
+    await pool.query(`INSERT INTO user_youtube_saves (clerk_user_id, video_id, title, channel, thumbnail, data, saved_at)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW())
+     ON CONFLICT (clerk_user_id, video_id)
+     DO UPDATE SET title = EXCLUDED.title, channel = EXCLUDED.channel,
+                   thumbnail = EXCLUDED.thumbnail, data = EXCLUDED.data, saved_at = NOW()`, [clerkUserId, videoId, title, channel, thumbnail, JSON.stringify(data)]);
+    await pool.query(`DELETE FROM user_youtube_saves
+     WHERE clerk_user_id = $1
+       AND video_id NOT IN (
+         SELECT video_id FROM user_youtube_saves
+         WHERE clerk_user_id = $1
+         ORDER BY saved_at DESC
+         LIMIT ${YOUTUBE_SAVES_MAX_PER_USER}
+       )`, [clerkUserId]);
+}
+export async function getYoutubeSaves(clerkUserId, limit = 500) {
+    const capped = Math.min(Math.max(1, limit), 1000);
+    const r = await getPool().query(`SELECT video_id, title, channel, thumbnail, data, saved_at
+     FROM user_youtube_saves
+     WHERE clerk_user_id = $1
+     ORDER BY saved_at DESC
+     LIMIT $2`, [clerkUserId, capped]);
+    return r.rows.map(row => ({
+        videoId: row.video_id,
+        title: row.title,
+        channel: row.channel,
+        thumbnail: row.thumbnail,
+        data: row.data ?? {},
+        savedAt: row.saved_at,
+    }));
+}
+export async function deleteYoutubeSave(clerkUserId, videoId) {
+    await getPool().query(`DELETE FROM user_youtube_saves WHERE clerk_user_id = $1 AND video_id = $2`, [clerkUserId, videoId]);
+}
+export async function getYoutubeSaveIds(clerkUserId) {
+    const r = await getPool().query(`SELECT video_id FROM user_youtube_saves WHERE clerk_user_id = $1`, [clerkUserId]);
+    return r.rows.map(row => row.video_id);
+}
+// ── Wikipedia article saves ───────────────────────────────────────────
+// Mirrors the LOC saves API. The Wikipedia title is the natural primary
+// key (canonical, stable). Cap matches LOC's so a user can't accumulate
+// more than 1000 saved articles.
+const WIKI_SAVES_MAX_PER_USER = 1000;
+export async function saveWikiArticle(clerkUserId, title, url, snippet, thumbnail, data) {
+    const pool = getPool();
+    await pool.query(`INSERT INTO user_wiki_saves (clerk_user_id, wiki_title, wiki_url, snippet, thumbnail, data, saved_at)
+     VALUES ($1, $2, $3, $4, $5, $6, NOW())
+     ON CONFLICT (clerk_user_id, wiki_title)
+     DO UPDATE SET wiki_url = EXCLUDED.wiki_url, snippet = EXCLUDED.snippet,
+                   thumbnail = EXCLUDED.thumbnail, data = EXCLUDED.data, saved_at = NOW()`, [clerkUserId, title, url, snippet, thumbnail, JSON.stringify(data)]);
+    await pool.query(`DELETE FROM user_wiki_saves
+     WHERE clerk_user_id = $1
+       AND wiki_title NOT IN (
+         SELECT wiki_title FROM user_wiki_saves
+         WHERE clerk_user_id = $1
+         ORDER BY saved_at DESC
+         LIMIT ${WIKI_SAVES_MAX_PER_USER}
+       )`, [clerkUserId]);
+}
+export async function getWikiSaves(clerkUserId, limit = 500) {
+    const capped = Math.min(Math.max(1, limit), 1000);
+    const r = await getPool().query(`SELECT wiki_title, wiki_url, snippet, thumbnail, data, saved_at
+     FROM user_wiki_saves
+     WHERE clerk_user_id = $1
+     ORDER BY saved_at DESC
+     LIMIT $2`, [clerkUserId, capped]);
+    return r.rows.map(row => ({
+        title: row.wiki_title,
+        url: row.wiki_url,
+        snippet: row.snippet,
+        thumbnail: row.thumbnail,
+        data: row.data ?? {},
+        savedAt: row.saved_at,
+    }));
+}
+export async function deleteWikiSave(clerkUserId, title) {
+    await getPool().query(`DELETE FROM user_wiki_saves WHERE clerk_user_id = $1 AND wiki_title = $2`, [clerkUserId, title]);
+}
+export async function getWikiSaveIds(clerkUserId) {
+    const r = await getPool().query(`SELECT wiki_title FROM user_wiki_saves WHERE clerk_user_id = $1`, [clerkUserId]);
+    return r.rows.map(row => row.wiki_title);
+}
+// ── Play queue (cross-source: LOC + YouTube) ─────────────────────────
+const PLAY_QUEUE_MAX = 500;
+export async function getPlayQueue(clerkUserId) {
+    const r = await getPool().query(`SELECT position, source, external_id, data
+     FROM user_play_queue
+     WHERE clerk_user_id = $1
+     ORDER BY position ASC`, [clerkUserId]);
+    return r.rows.map(row => ({
+        position: row.position,
+        source: row.source,
+        externalId: row.external_id,
+        data: row.data ?? {},
+    }));
+}
+// Add items to the queue. mode "next" inserts at the head (positions
+// 1..N) and shifts existing items down by N. mode "append" puts them
+// at the tail (MAX(position)+1..). Caps total at 500; head trims when
+// exceeded. Both modes are transactional so concurrent adds stay
+// monotonic. Default mode is "next" — single-track ➕ buttons want
+// "I want this NOW" semantics; album bulk-adds pass mode "append".
+export async function appendPlayQueue(clerkUserId, items, opts) {
+    if (!items.length)
+        return { added: 0, firstPosition: 0 };
+    const mode = opts?.mode === "append" ? "append" : "next";
+    const pool = getPool();
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+        let startPos;
+        if (mode === "append") {
+            const r = await client.query(`SELECT COALESCE(MAX(position), 0) AS maxp FROM user_play_queue WHERE clerk_user_id = $1`, [clerkUserId]);
+            startPos = (r.rows[0]?.maxp ?? 0) + 1;
+        }
+        else {
+            // "next": shift all existing positions down by items.length so
+            // the new items can occupy 1..N. The naive
+            //   UPDATE ... SET position = position + $2
+            // hits a unique-constraint violation in PostgreSQL because the
+            // PK (clerk_user_id, position) is checked per-row mid-statement
+            // — going from [1, 2, 3] → [3, 4, 5] tries to write 3 while 3
+            // still exists. Workaround: two passes through a negative
+            // intermediate range that can't collide with valid positive
+            // positions:
+            //   pass 1: position → -position - 1   ([1,2,3] → [-2,-3,-4])
+            //   pass 2: position → -position - 1 + N ([-2,-3,-4] → [N+1,…])
+            // Final: existing rows shifted down by N, slots 1..N free.
+            await client.query(`UPDATE user_play_queue SET position = -position - 1 WHERE clerk_user_id = $1`, [clerkUserId]);
+            await client.query(`UPDATE user_play_queue SET position = -position - 1 + $2 WHERE clerk_user_id = $1`, [clerkUserId, items.length]);
+            startPos = 1;
+        }
+        const values = [];
+        const placeholders = [];
+        items.forEach((it, i) => {
+            const p = startPos + i;
+            placeholders.push(`($1, $${values.length + 2}, $${values.length + 3}, $${values.length + 4}, $${values.length + 5})`);
+            values.push(p, it.source, it.externalId, JSON.stringify(it.data ?? {}));
+        });
+        await client.query(`INSERT INTO user_play_queue (clerk_user_id, position, source, external_id, data) VALUES ${placeholders.join(", ")}
+       ON CONFLICT (clerk_user_id, position) DO UPDATE SET source = EXCLUDED.source, external_id = EXCLUDED.external_id, data = EXCLUDED.data, added_at = NOW()`, [clerkUserId, ...values]);
+        // Trim the cap (drops oldest tail entries beyond PLAY_QUEUE_MAX).
+        await client.query(`DELETE FROM user_play_queue
+       WHERE clerk_user_id = $1
+         AND position NOT IN (
+           SELECT position FROM user_play_queue
+           WHERE clerk_user_id = $1
+           ORDER BY position ASC
+           LIMIT ${PLAY_QUEUE_MAX}
+         )`, [clerkUserId]);
+        await client.query("COMMIT");
+        return { added: items.length, firstPosition: startPos };
+    }
+    catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+    }
+    finally {
+        client.release();
+    }
+}
+export async function removeFromPlayQueue(clerkUserId, position) {
+    await getPool().query(`DELETE FROM user_play_queue WHERE clerk_user_id = $1 AND position = $2`, [clerkUserId, position]);
+}
+export async function clearPlayQueue(clerkUserId) {
+    const r = await getPool().query(`DELETE FROM user_play_queue WHERE clerk_user_id = $1`, [clerkUserId]);
+    return r.rowCount ?? 0;
+}
+// Reorder by sending the full ordered list of positions. Server rewrites
+// positions in a transaction so concurrent updates stay consistent.
+export async function reorderPlayQueue(clerkUserId, orderedPositions) {
+    if (!orderedPositions.length)
+        return;
+    const pool = getPool();
+    const client = await pool.connect();
+    try {
+        await client.query("BEGIN");
+        const r = await client.query(`SELECT position, source, external_id, data FROM user_play_queue WHERE clerk_user_id = $1`, [clerkUserId]);
+        const byPos = new Map();
+        r.rows.forEach(row => byPos.set(row.position, row));
+        await client.query(`DELETE FROM user_play_queue WHERE clerk_user_id = $1`, [clerkUserId]);
+        let newPos = 1;
+        for (const oldPos of orderedPositions) {
+            const row = byPos.get(oldPos);
+            if (!row)
+                continue;
+            await client.query(`INSERT INTO user_play_queue (clerk_user_id, position, source, external_id, data) VALUES ($1, $2, $3, $4, $5)`, [clerkUserId, newPos, row.source, row.external_id, JSON.stringify(row.data ?? {})]);
+            newPos++;
+        }
+        await client.query("COMMIT");
+    }
+    catch (err) {
+        await client.query("ROLLBACK");
+        throw err;
+    }
+    finally {
+        client.release();
+    }
 }
 // ── Phase 4: Price intelligence DB functions ─────────────────────────────
 export async function upsertPriceCache(releaseId, lowest, median, highest, numForSale, currency = "USD") {
@@ -2192,18 +2621,38 @@ export async function getUserCollectionStats() {
   `);
     return { users: perUser.rows, global: globalQ.rows[0] };
 }
-// ── Release cache ─────────────────────────────────────────────────────────
-/** Get a cached release/master from DB. Returns null if not cached. */
-export async function getCachedRelease(discogsId, type) {
-    const r = await getPool().query(`SELECT data FROM release_cache WHERE discogs_id = $1 AND type = $2`, [discogsId, type]);
-    return r.rows[0]?.data ?? null;
+/** Get a cached entry from DB. Returns null if not cached or if the
+ *  entry is older than `maxAgeSeconds` (cache miss vs stale-eviction
+ *  collapsed to a single null return — caller decides whether to
+ *  refetch). When `maxAgeSeconds` is undefined the entry is returned
+ *  regardless of age (caller can then decide based on cached_at). */
+export async function getCachedRelease(discogsId, type, maxAgeSeconds) {
+    const r = await getPool().query(`SELECT data, cached_at FROM release_cache WHERE discogs_id = $1 AND type = $2`, [discogsId, type]);
+    const row = r.rows[0];
+    if (!row)
+        return null;
+    if (typeof maxAgeSeconds === "number" && row.cached_at) {
+        const ageMs = Date.now() - new Date(row.cached_at).getTime();
+        if (ageMs > maxAgeSeconds * 1000)
+            return null;
+    }
+    return row.data ?? null;
 }
-/** Save a release/master response to cache. Overwrites if already present. */
+/** Save a metadata response to cache. Overwrites if already present. */
 export async function cacheRelease(discogsId, type, data) {
     await getPool().query(`INSERT INTO release_cache (discogs_id, type, data, cached_at)
      VALUES ($1, $2, $3, NOW())
      ON CONFLICT (discogs_id, type)
      DO UPDATE SET data = EXCLUDED.data, cached_at = NOW()`, [discogsId, type, JSON.stringify(data)]);
+}
+/** Prune stale cache entries — masters/artists older than 30 days,
+ *  releases older than 7 days. Run nightly via a scheduled task or
+ *  on-demand from the admin DB Stats panel. Returns rows deleted. */
+export async function pruneStaleReleaseCache() {
+    const r = await getPool().query(`DELETE FROM release_cache
+       WHERE (type IN ('master','artist') AND cached_at < NOW() - INTERVAL '30 days')
+          OR (type = 'release' AND cached_at < NOW() - INTERVAL '7 days')`);
+    return r.rowCount ?? 0;
 }
 export async function getApiRequestStats(hours = 24) {
     const r = await getPool().query(`
@@ -2225,9 +2674,11 @@ export async function getTableRowCounts() {
     const tables = [
         'user_tokens', 'user_collection', 'user_collection_folders', 'user_wantlist',
         'user_inventory', 'user_lists', 'user_list_items', 'user_orders', 'user_order_messages',
-        'user_favorites', 'saved_searches', 'feedback',
-        'release_cache', 'price_cache', 'price_history', 'price_alerts', 'triggered_alerts',
-        'api_request_log', 'oauth_request_tokens',
+        'user_favorites', 'user_recent_views', 'user_loc_saves', 'user_archive_saves',
+        'user_youtube_saves', 'user_wiki_saves', 'user_play_queue', 'saved_searches', 'feedback',
+        'release_cache', 'price_cache', 'price_history',
+        'blues_artists', 'api_request_log', 'oauth_request_tokens',
+        'app_settings',
     ];
     const counts = await Promise.all(tables.map(async (t) => {
         try {
@@ -2239,4 +2690,716 @@ export async function getTableRowCounts() {
         }
     }));
     return counts;
+}
+// ── App settings (key/value) ─────────────────────────────────────────────
+export async function getAppSetting(key) {
+    try {
+        const r = await getPool().query(`SELECT value FROM app_settings WHERE key = $1 LIMIT 1`, [key]);
+        return r.rows[0]?.value ?? null;
+    }
+    catch {
+        return null;
+    }
+}
+export async function setAppSetting(key, value) {
+    await getPool().query(`INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, NOW())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`, [key, value]);
+}
+// ── User preferences (cross-device) ───────────────────────────────────
+// Returns the prefs JSON for a user, or {} if no row. Never throws —
+// missing rows or DB hiccups are treated as "no prefs set."
+export async function getUserPrefs(clerkUserId) {
+    try {
+        const r = await getPool().query(`SELECT prefs FROM user_preferences WHERE clerk_user_id = $1 LIMIT 1`, [clerkUserId]);
+        const row = r.rows[0]?.prefs;
+        return row && typeof row === "object" ? row : {};
+    }
+    catch {
+        return {};
+    }
+}
+// Merge-update a user's prefs. Pass partial keys; existing keys not in
+// the patch are preserved. Returns the post-merge prefs.
+export async function setUserPrefs(clerkUserId, patch) {
+    const current = await getUserPrefs(clerkUserId);
+    const merged = { ...current, ...patch };
+    await getPool().query(`INSERT INTO user_preferences (clerk_user_id, prefs, updated_at)
+     VALUES ($1, $2::jsonb, NOW())
+     ON CONFLICT (clerk_user_id) DO UPDATE SET prefs = EXCLUDED.prefs, updated_at = NOW()`, [clerkUserId, JSON.stringify(merged)]);
+    return merged;
+}
+// Look up overrides for a given master/release. Returns rows for both
+// the master scope and (if releaseId is provided) the matching release
+// scope; caller picks per-position with release-scope winning.
+export async function getTrackYtOverrides(masterId, releaseId) {
+    const params = [];
+    const ors = [];
+    if (masterId != null && String(masterId).length) {
+        params.push(String(masterId));
+        ors.push(`(release_type = 'master' AND release_id = $${params.length})`);
+    }
+    if (releaseId != null && String(releaseId).length) {
+        params.push(String(releaseId));
+        ors.push(`(release_type = 'release' AND release_id = $${params.length})`);
+    }
+    if (ors.length === 0)
+        return [];
+    try {
+        // LEFT JOIN against unavailable list so we can exclude rows whose
+        // video has been flagged "unavailable" by enough users — the
+        // override served to clients only contains videos that are likely
+        // playable. Flagged-but-not-yet-unavailable rows still serve.
+        const r = await getPool().query(`SELECT o.release_id, o.release_type, o.track_position, o.track_title,
+              o.video_id, o.video_title, o.submitted_by, o.submitted_at
+         FROM track_youtube_overrides o
+         LEFT JOIN youtube_video_unavailable u
+           ON u.video_id = o.video_id AND u.status = 'unavailable'
+        WHERE (${ors.join(" OR ")})
+          AND u.video_id IS NULL`, params);
+        return r.rows;
+    }
+    catch {
+        return [];
+    }
+}
+// First submission wins. Returns true if inserted, false if a row
+// already existed (ON CONFLICT DO NOTHING).
+export async function suggestTrackYtOverride(args) {
+    const r = await getPool().query(`INSERT INTO track_youtube_overrides
+       (release_id, release_type, track_position, track_title, video_id, video_title, submitted_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     ON CONFLICT (release_id, release_type, track_position) DO NOTHING
+     RETURNING release_id`, [
+        String(args.releaseId),
+        args.releaseType,
+        args.trackPosition,
+        args.trackTitle ?? null,
+        args.videoId,
+        args.videoTitle ?? null,
+        args.submittedBy,
+    ]);
+    return r.rowCount === 1;
+}
+// Batch insert: all-or-mostly-nothing wrapper around the singleton
+// suggest path. The album-level "Find missing tracks" popup hands us
+// a list of (releaseId, releaseType, trackPosition, videoId, …)
+// tuples and we insert them in one transaction. First-submission-wins
+// semantics still apply per-row via ON CONFLICT DO NOTHING — if some
+// rows are already taken, they're silently skipped while the rest
+// land. Returns counts of inserts vs skips so the UI can report
+// "saved 4, 1 already taken".
+export async function suggestTrackYtOverridesBatch(items) {
+    if (!items.length)
+        return { inserted: 0, skipped: 0 };
+    const client = await getPool().connect();
+    try {
+        await client.query("BEGIN");
+        let inserted = 0;
+        for (const it of items) {
+            const r = await client.query(`INSERT INTO track_youtube_overrides
+           (release_id, release_type, track_position, track_title, video_id, video_title, submitted_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (release_id, release_type, track_position) DO NOTHING
+         RETURNING release_id`, [
+                String(it.releaseId),
+                it.releaseType,
+                it.trackPosition,
+                it.trackTitle ?? null,
+                it.videoId,
+                it.videoTitle ?? null,
+                it.submittedBy,
+            ]);
+            if (r.rowCount === 1)
+                inserted++;
+        }
+        await client.query("COMMIT");
+        return { inserted, skipped: items.length - inserted };
+    }
+    catch (e) {
+        await client.query("ROLLBACK").catch(() => { });
+        throw e;
+    }
+    finally {
+        client.release();
+    }
+}
+// Admin: delete a single override (called from the album popup or the
+// admin tab). Returns true if a row was removed.
+export async function deleteTrackYtOverride(releaseId, releaseType, trackPosition) {
+    const r = await getPool().query(`DELETE FROM track_youtube_overrides
+      WHERE release_id = $1 AND release_type = $2 AND track_position = $3`, [String(releaseId), releaseType, trackPosition]);
+    return (r.rowCount ?? 0) > 0;
+}
+// Batch lookup: for a list of {id,type} items, return whether each
+// has videos available (either from Discogs's cached videos[] array
+// or from a crowd-sourced track_youtube_overrides row). Returns
+// hasVideos: null when the item isn't in the cache yet — caller treats
+// null as "unknown" and skips badging that card.
+//
+// Used by the "Hard to Find" search mode to mark cards that lack any
+// embedded YT, so users can see at a glance where contributions help.
+export async function getVideoStatusBatch(items) {
+    if (!items.length)
+        return [];
+    const masterIds = items.filter(i => i.type === "master").map(i => i.id);
+    const releaseIds = items.filter(i => i.type === "release").map(i => i.id);
+    const cacheRows = [];
+    if (masterIds.length) {
+        const r = await getPool().query(`SELECT discogs_id AS id, 'master'::text AS type,
+              (jsonb_typeof(data->'videos') = 'array' AND jsonb_array_length(data->'videos') > 0) AS has_videos
+         FROM release_cache
+        WHERE type = 'master' AND discogs_id = ANY($1::int[])`, [masterIds]);
+        cacheRows.push(...r.rows);
+    }
+    if (releaseIds.length) {
+        const r = await getPool().query(`SELECT discogs_id AS id, 'release'::text AS type,
+              (jsonb_typeof(data->'videos') = 'array' AND jsonb_array_length(data->'videos') > 0) AS has_videos
+         FROM release_cache
+        WHERE type = 'release' AND discogs_id = ANY($1::int[])`, [releaseIds]);
+        cacheRows.push(...r.rows);
+    }
+    // Cross-check crowd-sourced overrides — a master with no Discogs
+    // videos but with user-contributed overrides shouldn't still read as
+    // "needs videos" in search.
+    const allIds = items.map(i => String(i.id));
+    let overrideRows = [];
+    if (allIds.length) {
+        const r = await getPool().query(`SELECT release_id AS id, release_type AS type
+         FROM track_youtube_overrides
+        WHERE release_id = ANY($1::text[])`, [allIds]);
+        overrideRows = r.rows;
+    }
+    const overrideSet = new Set(overrideRows.map(r => `${r.type}:${r.id}`));
+    const cacheMap = new Map();
+    for (const r of cacheRows)
+        cacheMap.set(`${r.type}:${r.id}`, r.has_videos);
+    return items.map(it => {
+        const key = `${it.type}:${it.id}`;
+        const cacheVal = cacheMap.get(key);
+        const hasOverride = overrideSet.has(key);
+        if (cacheVal == null) {
+            // Not in cache — mark unknown unless an override exists (which
+            // means the master was loaded enough to attract a contribution).
+            return { id: it.id, type: it.type, hasVideos: hasOverride ? true : null };
+        }
+        return { id: it.id, type: it.type, hasVideos: cacheVal || hasOverride };
+    });
+}
+// Albums the CURRENT user has personally submitted YouTube overrides
+// for. Distinct by (release_id, release_type), joined with the
+// release_cache snapshot so we can render cards without further
+// Discogs round-trips. Used by the "Submitted" home-strip tab so
+// each signed-in user sees their own contribution history rather
+// than the global community feed.
+export async function getUserSubmittedAlbums(clerkUserId, limit = 96) {
+    try {
+        const r = await getPool().query(`WITH counts AS (
+         SELECT release_id, release_type,
+                COUNT(*)::int     AS n,
+                MIN(submitted_at) AS first_at,
+                MAX(submitted_at) AS last_at
+           FROM track_youtube_overrides
+          WHERE submitted_by = $1
+          GROUP BY release_id, release_type
+       )
+       SELECT c.release_id     AS id,
+              c.release_type   AS type,
+              c.n              AS contribution_count,
+              c.first_at       AS first_contributed_at,
+              c.last_at        AS last_contributed_at,
+              rc.data          AS data
+         FROM counts c
+         LEFT JOIN release_cache rc
+           ON rc.discogs_id = c.release_id::int
+          AND rc.type       = c.release_type
+        ORDER BY c.last_at DESC
+        LIMIT $2`, [clerkUserId, Math.max(1, Math.min(500, limit))]);
+        return r.rows;
+    }
+    catch {
+        return [];
+    }
+}
+// Pull masters/releases that have at least one crowd-sourced YouTube
+// override, joined with release_cache so each row carries the card
+// snapshot the home strip needs (orphan rows are skipped). Order is
+// caller-selectable: "most" (default), "fewest", or "recent" — the
+// last sorts by the most recently submitted override timestamp.
+export async function getMostContributedAlbums(limit = 48, order = "most") {
+    let orderBy;
+    switch (order) {
+        case "fewest":
+            orderBy = "c.n ASC, c.release_id ASC";
+            break;
+        case "recent":
+            orderBy = "c.last_at DESC, c.release_id DESC";
+            break;
+        case "most":
+        default:
+            orderBy = "c.n DESC, c.release_id DESC";
+            break;
+    }
+    try {
+        const r = await getPool().query(`WITH counts AS (
+         SELECT release_id, release_type,
+                COUNT(*)::int   AS n,
+                MAX(submitted_at) AS last_at
+           FROM track_youtube_overrides
+          GROUP BY release_id, release_type
+       )
+       SELECT c.release_id   AS id,
+              c.release_type AS type,
+              c.n            AS contribution_count,
+              c.last_at      AS last_contributed_at,
+              rc.data        AS data
+         FROM counts c
+         JOIN release_cache rc
+           ON rc.discogs_id = c.release_id::int
+          AND rc.type       = c.release_type
+        ORDER BY ${orderBy}
+        LIMIT $1`, [Math.max(1, Math.min(200, limit))]);
+        return r.rows;
+    }
+    catch {
+        return [];
+    }
+}
+// Random sample of cached albums for the public Feed strip — anon
+// visitors see this as their home view (signed-in users get it as the
+// "Feed" tab in the Recent/Suggestions/Submitted/Feed strip). All
+// rows already paid for via the release_cache; no upstream Discogs
+// hit. Defaults to masters (richer card data, broader scope) but
+// callers can opt for either via `type`.
+export async function getFeedRandomAlbums(limit = 48, type = "any", excludeIds) {
+    try {
+        const cap = Math.max(1, Math.min(200, limit));
+        // Exclusion filter — used by Load More so already-shown rows
+        // don't repeat in the next page. Encoded as parallel arrays of
+        // (discogs_id, type) so we can NOT (id, type) IN (...) match.
+        const exclude = Array.isArray(excludeIds) ? excludeIds.slice(0, 500) : [];
+        const excludeIdsArr = exclude.map(e => Number(e.id));
+        const excludeTypeArr = exclude.map(e => String(e.type));
+        const params = [cap];
+        let where = "";
+        if (type !== "any") {
+            params.push(type);
+            where += `WHERE type = $${params.length} `;
+        }
+        else {
+            // "any" means "any album", NOT every row in release_cache. The
+            // table also stores master-versions (pressing-list payloads) and
+            // artist (artist profile cache) which are infrastructure caches,
+            // not displayable albums — surfacing them as feed cards produces
+            // empty placeholders like "master-versions 645422 / NO IMAGE".
+            // Restrict to the two real album types.
+            where += `WHERE type IN ('master','release') `;
+        }
+        if (exclude.length) {
+            params.push(excludeIdsArr);
+            const idIdx = params.length;
+            params.push(excludeTypeArr);
+            const tyIdx = params.length;
+            where += where ? "AND " : "WHERE ";
+            where += `NOT (discogs_id = ANY($${idIdx}::int[]) AND type = ANY($${tyIdx}::text[])) `;
+        }
+        const sql = `SELECT discogs_id AS id, type, data, cached_at
+                   FROM release_cache
+                   ${where}
+                  ORDER BY RANDOM() LIMIT $1`;
+        const r = await getPool().query(sql, params);
+        return r.rows;
+    }
+    catch {
+        return [];
+    }
+}
+// Batched lookup of track_youtube_overrides for a list of
+// (release_id, release_type) pairs. Used by the wide-card enrichment
+// path so each card's tracks (and the special ALBUM full-album slot)
+// can render play / queue buttons keyed off user-contributed overrides
+// in addition to Discogs's own videos[]. Excludes rows whose video
+// has been flagged "unavailable" via the LEFT JOIN against
+// youtube_video_unavailable, mirroring getTrackYtOverrides.
+export async function getTrackYtOverridesBatch(pairs) {
+    if (!Array.isArray(pairs) || !pairs.length)
+        return [];
+    const capped = pairs.slice(0, 200).filter(p => Number.isFinite(Number(p.id)) && (p.type === "master" || p.type === "release"));
+    if (!capped.length)
+        return [];
+    try {
+        const ids = capped.map(p => String(p.id));
+        const types = capped.map(p => String(p.type));
+        const r = await getPool().query(`SELECT o.release_id, o.release_type, o.track_position, o.video_id, o.video_title
+         FROM track_youtube_overrides o
+         LEFT JOIN youtube_video_unavailable u
+           ON u.video_id = o.video_id AND u.status = 'unavailable'
+        WHERE (o.release_id, o.release_type) IN (
+          SELECT * FROM unnest($1::text[], $2::text[])
+        )
+          AND u.video_id IS NULL`, [ids, types]);
+        return r.rows;
+    }
+    catch {
+        return [];
+    }
+}
+// Batched lookup of release_cache rows for a list of (id, type)
+// pairs. Used by /api/cards/enrich to backfill the wide-card image
+// strip + inline tracklist on any card surface (favorites, search
+// results, collection, etc.) without requiring each endpoint to
+// JOIN with release_cache itself. Returns only rows that exist —
+// cache misses are silently dropped.
+export async function getCacheEnrichmentBatch(pairs) {
+    if (!Array.isArray(pairs) || !pairs.length)
+        return [];
+    // Cap input size to keep the query bounded; at 200 pairs the
+    // query fingerprint is still small (~3KB JSON) and the unnest
+    // cost is negligible.
+    const capped = pairs.slice(0, 200).filter(p => Number.isFinite(Number(p.id)) && (p.type === "master" || p.type === "release"));
+    if (!capped.length)
+        return [];
+    try {
+        const ids = capped.map(p => Number(p.id));
+        const types = capped.map(p => String(p.type));
+        const r = await getPool().query(`SELECT discogs_id AS id, type, data
+         FROM release_cache
+        WHERE (discogs_id, type) IN (
+          SELECT * FROM unnest($1::int[], $2::text[])
+        )`, [ids, types]);
+        return r.rows;
+    }
+    catch {
+        return [];
+    }
+}
+// AI-search exclusion list: a compact set of "Artist - Title" lines
+// pulled from the user's collection + wantlist so the recommendation
+// prompt can tell Claude what to avoid. Capped so the prompt stays
+// within token budget — at 200 lines × ~50 chars = ~10KB which is
+// fine. UNION-distinct keeps a single-line entry per album the user
+// has in either list.
+export async function getAiExclusionTitles(clerkUserId, limit = 200) {
+    try {
+        const r = await getPool().query(`SELECT title FROM (
+         SELECT DISTINCT NULLIF(data->>'title', '') AS title
+           FROM user_collection
+          WHERE clerk_user_id = $1
+         UNION
+         SELECT DISTINCT NULLIF(data->>'title', '') AS title
+           FROM user_wantlist
+          WHERE clerk_user_id = $1
+       ) sub
+       WHERE title IS NOT NULL
+       LIMIT $2`, [clerkUserId, Math.max(1, Math.min(500, limit))]);
+        return r.rows.map(row => String(row.title || "")).filter(Boolean);
+    }
+    catch {
+        return [];
+    }
+}
+// ── Personal suggestions: taste profile + library dedup + persistence ──
+//
+// Taste tuples power the per-user background suggestions job. We
+// expand the user's collection + wantlist by (genre, style, year)
+// and rank by frequency: the top tuples are what the user listens to
+// the most. The job then queries Discogs for masters matching each
+// tuple. Wide net by design — top 9 covers a few different bands
+// of the user's taste rather than just their #1 obsession.
+export async function getUserTasteTuples(clerkUserId, limit = 9) {
+    try {
+        const r = await getPool().query(`WITH src AS (
+         SELECT data FROM user_collection WHERE clerk_user_id = $1
+         UNION ALL
+         SELECT data FROM user_wantlist  WHERE clerk_user_id = $1
+       ),
+       expanded AS (
+         SELECT
+           g.value AS genre,
+           s.value AS style,
+           NULLIF(src.data->>'year','')::int AS year
+         FROM src,
+              jsonb_array_elements_text(src.data->'genres') AS g(value),
+              jsonb_array_elements_text(src.data->'styles') AS s(value)
+       ),
+       counts AS (
+         SELECT genre, style, year, COUNT(*)::int AS n
+         FROM expanded
+         WHERE year IS NOT NULL AND year > 1900 AND year < 2030
+         GROUP BY genre, style, year
+       )
+       SELECT genre, style, year, n
+         FROM counts
+        ORDER BY n DESC, year DESC
+        LIMIT $2`, [clerkUserId, Math.max(1, Math.min(50, limit))]);
+        return r.rows;
+    }
+    catch {
+        return [];
+    }
+}
+// Set of master/release ids the user already has anywhere — used so
+// the suggestions job doesn't surface stuff the user owns/wants. We
+// pull master_ids when present (most releases carry them), plus the
+// release ids themselves so a release-typed suggestion that matches
+// is also dropped.
+export async function getUserLibraryMasterIds(clerkUserId) {
+    const out = new Set();
+    try {
+        const r = await getPool().query(`SELECT DISTINCT (data->>'master_id')::int AS m
+         FROM (
+           SELECT data FROM user_collection WHERE clerk_user_id = $1
+           UNION ALL
+           SELECT data FROM user_wantlist   WHERE clerk_user_id = $1
+           UNION ALL
+           SELECT data FROM user_inventory  WHERE clerk_user_id = $1
+         ) s
+        WHERE NULLIF(s.data->>'master_id','') IS NOT NULL`, [clerkUserId]);
+        for (const row of r.rows) {
+            const m = Number(row.m);
+            if (Number.isFinite(m) && m > 0)
+                out.add(m);
+        }
+    }
+    catch { /* best-effort */ }
+    return out;
+}
+// Wipe + insert: the job overwrites the user's previous batch each
+// run so the row count never grows beyond N per user. data is the
+// card snapshot so the UI can render without further Discogs calls.
+export async function replaceUserPersonalSuggestions(clerkUserId, items) {
+    const client = await getPool().connect();
+    try {
+        await client.query("BEGIN");
+        await client.query(`DELETE FROM user_personal_suggestions WHERE clerk_user_id = $1`, [clerkUserId]);
+        for (const it of items) {
+            await client.query(`INSERT INTO user_personal_suggestions
+           (clerk_user_id, discogs_id, entity_type, score, data, generated_at)
+         VALUES ($1, $2, $3, $4, $5::jsonb, NOW())
+         ON CONFLICT (clerk_user_id, discogs_id, entity_type) DO UPDATE
+           SET score = EXCLUDED.score, data = EXCLUDED.data, generated_at = NOW()`, [clerkUserId, it.id, it.type, it.score, JSON.stringify(it.data ?? {})]);
+        }
+        await client.query("COMMIT");
+    }
+    catch (e) {
+        await client.query("ROLLBACK").catch(() => { });
+        throw e;
+    }
+    finally {
+        client.release();
+    }
+}
+// Dismissals ("banish this suggestion forever") — record per-user so
+// the generator skips them and any saved row is wiped immediately.
+export async function dismissPersonalSuggestion(clerkUserId, discogsId, entityType) {
+    await getPool().query(`INSERT INTO user_suggestion_dismissals (clerk_user_id, discogs_id, entity_type)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (clerk_user_id, discogs_id, entity_type) DO NOTHING`, [clerkUserId, discogsId, entityType]);
+    // Also remove from the saved batch so the card disappears on next render.
+    await getPool().query(`DELETE FROM user_personal_suggestions
+       WHERE clerk_user_id = $1 AND discogs_id = $2 AND entity_type = $3`, [clerkUserId, discogsId, entityType]);
+}
+// Returns set of "type:id" strings the user has banished so the
+// generator can skip them in O(1).
+export async function getDismissedSuggestionKeys(clerkUserId) {
+    const out = new Set();
+    try {
+        const r = await getPool().query(`SELECT discogs_id, entity_type FROM user_suggestion_dismissals WHERE clerk_user_id = $1`, [clerkUserId]);
+        for (const row of r.rows)
+            out.add(`${row.entity_type}:${row.discogs_id}`);
+    }
+    catch { /* best effort */ }
+    return out;
+}
+export async function getUserPersonalSuggestions(clerkUserId, limit = 1000) {
+    try {
+        const r = await getPool().query(`SELECT discogs_id, entity_type, score, data, generated_at
+         FROM user_personal_suggestions
+        WHERE clerk_user_id = $1
+        ORDER BY score DESC, generated_at DESC
+        LIMIT $2`, [clerkUserId, Math.max(1, Math.min(1000, limit))]);
+        return r.rows;
+    }
+    catch {
+        return [];
+    }
+}
+// ── Unavailable YouTube videos ──────────────────────────────────────
+// Threshold above which a flagged videoId graduates to "unavailable"
+// and gets filtered out of every album popup site-wide. 2 reports is
+// enough to suppress one-off network/region anomalies while not
+// requiring a long stream of bad clicks before action.
+const _YT_UNAVAILABLE_THRESHOLD = 2;
+// Record a single "video failed to play" report. Increments the
+// counter, refreshes last_reported_at, and flips status to
+// 'unavailable' once the threshold is reached. Returns the post-
+// update row so the caller can decide whether to act on the new
+// status.
+export async function reportYoutubeVideoUnavailable(videoId, reporterUserId, errorCode) {
+    if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
+        return { status: "invalid", report_count: 0 };
+    }
+    const r = await getPool().query(`INSERT INTO youtube_video_unavailable
+       (video_id, status, report_count, sample_user_id, sample_error_code)
+     VALUES ($1, 'flagged', 1, $2, $3)
+     ON CONFLICT (video_id) DO UPDATE
+       SET report_count     = youtube_video_unavailable.report_count + 1,
+           last_reported_at = NOW(),
+           status           = CASE
+             WHEN youtube_video_unavailable.report_count + 1 >= $4
+             THEN 'unavailable'
+             ELSE youtube_video_unavailable.status
+           END,
+           -- Keep the first reporter's id + code for diagnostics.
+           sample_user_id    = COALESCE(youtube_video_unavailable.sample_user_id, $2),
+           sample_error_code = COALESCE(youtube_video_unavailable.sample_error_code, $3)
+     RETURNING status, report_count`, [videoId, reporterUserId, errorCode, _YT_UNAVAILABLE_THRESHOLD]);
+    return r.rows[0] ?? { status: "unknown", report_count: 0 };
+}
+// Set of videoIds whose status is 'unavailable' (above threshold).
+// Used by the renderer to filter out broken videos from album popups
+// so users see them as "missing" and can submit replacements.
+export async function getUnavailableYoutubeVideoIds() {
+    const out = new Set();
+    try {
+        const r = await getPool().query(`SELECT video_id FROM youtube_video_unavailable WHERE status = 'unavailable'`);
+        for (const row of r.rows)
+            out.add(row.video_id);
+    }
+    catch { /* best-effort */ }
+    return out;
+}
+// Admin: list every flagged + unavailable entry for the admin tab.
+// Newest reports first so admin sees recent issues at the top.
+export async function listYoutubeVideoUnavailable(limit = 500) {
+    try {
+        const r = await getPool().query(`SELECT video_id, status, report_count,
+              first_reported_at, last_reported_at,
+              sample_user_id, sample_error_code
+         FROM youtube_video_unavailable
+        ORDER BY last_reported_at DESC
+        LIMIT $1`, [Math.max(1, Math.min(2000, limit))]);
+        return r.rows;
+    }
+    catch {
+        return [];
+    }
+}
+// Admin: clear a single videoId from the unavailable list (e.g. when
+// a video came back online). Removes the row entirely so a future
+// report starts fresh from count 1.
+export async function clearYoutubeVideoUnavailable(videoId) {
+    try {
+        const r = await getPool().query(`DELETE FROM youtube_video_unavailable WHERE video_id = $1`, [videoId]);
+        return (r.rowCount ?? 0) > 0;
+    }
+    catch {
+        return false;
+    }
+}
+// ── YouTube search cache (DB-backed) ────────────────────────────────
+// In-memory cache in search-api.ts evaporates on every Railway
+// restart. Mirror the same query results to a durable row so we
+// don't rebuild the cache from quota-paid hits each deploy.
+export async function getYoutubeSearchCache(cacheKey, maxAgeSeconds) {
+    try {
+        const r = await getPool().query(`SELECT body, cached_at FROM youtube_search_cache WHERE cache_key = $1 LIMIT 1`, [cacheKey]);
+        const row = r.rows[0];
+        if (!row)
+            return null;
+        const ageMs = Date.now() - new Date(row.cached_at).getTime();
+        if (ageMs > maxAgeSeconds * 1000)
+            return null;
+        return row.body ?? null;
+    }
+    catch {
+        return null;
+    }
+}
+export async function setYoutubeSearchCache(cacheKey, body) {
+    try {
+        await getPool().query(`INSERT INTO youtube_search_cache (cache_key, body, cached_at)
+       VALUES ($1, $2::jsonb, NOW())
+       ON CONFLICT (cache_key) DO UPDATE SET body = EXCLUDED.body, cached_at = NOW()`, [cacheKey, JSON.stringify(body)]);
+    }
+    catch { /* cache is best-effort */ }
+}
+// Periodic prune of stale rows so the table stays bounded. Anything
+// older than 7 days is dropped — well past the 24h read TTL.
+export async function pruneYoutubeSearchCache() {
+    try {
+        const r = await getPool().query(`DELETE FROM youtube_search_cache WHERE cached_at < NOW() - INTERVAL '7 days'`);
+        return r.rowCount ?? 0;
+    }
+    catch {
+        return 0;
+    }
+}
+// Admin DB tab: per-table summary popup data. Pure introspection
+// against information_schema + pg_indexes + pg_total_relation_size —
+// no application data leaves this function. Caller is responsible for
+// whitelisting the table name (it's interpolated for pg_total_relation_size
+// since that's a function call, not a query target — but is also
+// passed as a parameter to information_schema queries so even an
+// injection slip would only affect the size query).
+export async function getDbAdminTableSummary(tableName) {
+    // Defensive: refuse any name that's not a-z/0-9/underscore even
+    // though callers should already whitelist via getTableRowCounts.
+    if (!/^[a-z_][a-z0-9_]*$/i.test(tableName)) {
+        throw new Error("Invalid table name");
+    }
+    const [colsR, idxR, cntR, sizeR] = await Promise.all([
+        getPool().query(`SELECT column_name AS name,
+              data_type   AS type,
+              is_nullable = 'YES' AS nullable,
+              column_default AS "default"
+         FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = $1
+        ORDER BY ordinal_position`, [tableName]),
+        getPool().query(`SELECT indexname AS name, indexdef AS definition
+         FROM pg_indexes
+        WHERE schemaname = 'public' AND tablename = $1
+        ORDER BY indexname`, [tableName]),
+        getPool().query(`SELECT COUNT(*)::int AS n FROM "${tableName}"`),
+        getPool().query(`SELECT pg_total_relation_size('public."${tableName}"') AS bytes`),
+    ]);
+    return {
+        table: tableName,
+        rowCount: cntR.rows[0]?.n ?? 0,
+        totalSizeBytes: Number(sizeR.rows[0]?.bytes) || 0,
+        columns: colsR.rows,
+        indexes: idxR.rows,
+    };
+}
+// Admin Suggestions tab: per-user counts + last-generated timestamp
+// for the background personal-suggestions job. Used to verify the
+// hourly run is healthy without dumping every row.
+export async function getPersonalSuggestionsStats() {
+    try {
+        const r = await getPool().query(`
+      SELECT clerk_user_id AS "clerkUserId",
+             COUNT(*)::int AS count,
+             MAX(generated_at) AS "lastGeneratedAt"
+        FROM user_personal_suggestions
+       GROUP BY clerk_user_id
+       ORDER BY MAX(generated_at) DESC NULLS LAST
+    `);
+        return r.rows;
+    }
+    catch {
+        return [];
+    }
+}
+// Admin: list every override for the audit/admin tab. Newest first.
+export async function listAllTrackYtOverrides(limit = 500) {
+    try {
+        const r = await getPool().query(`SELECT release_id, release_type, track_position, track_title,
+              video_id, video_title, submitted_by, submitted_at
+         FROM track_youtube_overrides
+        ORDER BY submitted_at DESC
+        LIMIT $1`, [limit]);
+        return r.rows;
+    }
+    catch {
+        return [];
+    }
 }
