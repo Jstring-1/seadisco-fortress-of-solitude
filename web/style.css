@@ -4062,22 +4062,27 @@ body.card-mode-wide .card-grid {
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
 }
 body.card-mode-wide .card {
-  /* Override the aspect-ratio from the compact card style — wide cards
-     should size to their content, not stay square. align-items:
-     flex-start so the thumb side stays at its intrinsic size when
-     the body side has lots of content (long tracklists). Otherwise
-     align-stretch made the cover image grow + crop.
+  /* Override the aspect-ratio from the compact card style — wide
+     cards should size to their content (the body / tracklist), not
+     stay square.
 
-     height: 100% + align-self: stretch makes every card in a grid
-     row fill the row's height (= height of the tallest card's
-     content), so cards line up cleanly with no empty background
-     showing between rows of unequal-content cards. */
+     display: block + position: relative is the key change here. We
+     used to be flex-row, which meant the card's height = max of
+     children, so a tall image-stack inside the cover panel pushed
+     the card taller than the tracklist. By taking the cover panel
+     OUT of normal flow (position: absolute below) the body alone
+     drives the card height — the cover panel and image stack just
+     fill whatever vertical space the body claims, and the card's
+     overflow:hidden clips anything past the body bottom.
+
+     height: 100% + align-self: stretch keeps every card in a grid
+     row at the tallest body's height (no background showing
+     between unequal-content cards). */
   aspect-ratio: auto;
   height: 100%;
   align-self: stretch;
-  display: flex;
-  flex-direction: row;
-  align-items: flex-start;
+  display: block;
+  position: relative;
 }
 /* Same row-equalization at the grid level — explicit so it doesn't
    rely on the grid's default stretch behaviour being inherited. */
@@ -4085,14 +4090,26 @@ body.card-mode-wide .card-grid {
   align-items: stretch;
 }
 body.card-mode-wide .card-thumb-wrap {
-  /* 40% (was 50%) — the cover panel claims a smaller share of the
-     card width so the metadata + tracklist column gets more room.
-     Per-user request: shrink the cover by ~20%. */
+  /* Pinned to the card's left edge and stretched top→bottom. With
+     absolute positioning the wrap doesn't contribute to the card's
+     intrinsic height — its height matches whatever the body claims.
+     overflow:hidden then clips the image stack at the bottom of the
+     body, exactly what the user wants ("cut the extra photos
+     wherever that line might be"). */
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
   width: 40%;
-  flex-shrink: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 body.card-mode-wide .card-body {
-  flex: 1 1 auto;
+  /* Leave room for the absolutely-positioned cover panel on the
+     left. margin-left (vs padding-left) so the body's own padding
+     stays as authored. */
+  margin-left: 40%;
   padding: 0.6rem 0.7rem;
   min-width: 0;
 }
