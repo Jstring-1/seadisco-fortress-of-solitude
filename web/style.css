@@ -4118,45 +4118,11 @@ body.card-mode-wide .card-artist {
   font-size: 0.8rem;
   margin-bottom: 0.2rem;
 }
-/* Toggle button "on" state. */
-#card-mode-toggle.is-on { color: var(--accent); border-color: var(--accent); }
-/* Navbar variant of the wide-cards toggle. Lives inside #main-nav so
-   it's reachable from every page. Visually unobtrusive (no border by
-   default) — picks up the accent color when active to mirror the
-   search-bar button's "on" state. */
-#nav-card-mode-toggle.nav-card-mode-toggle {
-  margin-left: auto;
-  margin-right: 0.6rem;
-  align-self: center;
-  background: none;
-  border: 1px solid transparent;
-  color: var(--muted);
-  width: 1.9rem;
-  height: 1.9rem;
-  border-radius: 4px;
-  font-size: 0.95rem;
-  line-height: 1;
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  transition: color 0.12s, border-color 0.12s, background 0.12s;
-}
-#nav-card-mode-toggle.nav-card-mode-toggle:hover {
-  color: #ddd;
-  background: rgba(255, 255, 255, 0.05);
-  border-color: var(--border);
-}
-#nav-card-mode-toggle.nav-card-mode-toggle.is-on {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-@media (max-width: 640px) {
-  /* On narrow viewports the navbar wraps and the toggle would push to
-     the right of nothing — pull the auto-margin so it nests neatly. */
-  #nav-card-mode-toggle.nav-card-mode-toggle { margin-left: 0.4rem; }
-}
+/* Toggle button "on" state — applies to every .card-mode-toggle-btn
+   instance (search-page button, records-page button, etc.). All share
+   the same shape language: bordered pill that lights up in the accent
+   color when wide mode is active. */
+.card-mode-toggle-btn.is-on { color: var(--accent); border-color: var(--accent); }
 /* Sparse cards — the underlying release_cache row was missing or
    pruned, so the feed endpoint returned a fallback record with just
    id+type. Visual: dimmed border + a ↻ Re-fetch button so the user
@@ -4225,10 +4191,42 @@ body.card-mode-wide .card-artist {
   opacity: 1;
   transform: scale(1.05);
 }
+/* Full-size image stack rendered below the thumb-picker in wide
+   mode. Each image matches the main cover's width (100% of the
+   thumb-wrap) and stays in 1:1 aspect. The card's overflow:hidden
+   clips the bottom when the body (tracklist) sets the card height,
+   so users see as many full images as the row allows without the
+   thumb-wrap pushing the card taller. Hidden in compact mode. */
+.card-images-stack {
+  display: none;
+  flex-direction: column;
+  gap: 0;
+}
+body.card-mode-wide .card-images-stack {
+  display: flex;
+}
+.card-images-stack-img {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  cursor: pointer;
+  display: block;
+}
+.card-images-stack-img:hover {
+  opacity: 0.92;
+}
 body.card-mode-wide .card-thumb-wrap {
   display: flex;
   flex-direction: column;
   aspect-ratio: auto;
+  /* Stretch the cover panel to fill the full card height even though
+     the card uses align-items:flex-start (which keeps the main image
+     from growing and cropping). overflow:hidden then clips the
+     full-size image stack at the card bottom — the user sees as many
+     extra images as the body's height allows, no more. */
+  align-self: stretch;
+  overflow: hidden;
 }
 /* Main image stays at its intrinsic computed size — square based on
    the wrap's 50% width — and explicitly does NOT flex-grow when the
@@ -4367,37 +4365,43 @@ body.card-mode-wide .card-images-strip {
   gap: 0.3rem;
   align-items: center;
 }
-.card-tracklist-playall,
+/* "▶ All" head button — same shape as the per-track .card-track-play
+   buttons (square, subtle background hover) but slightly larger so
+   the album-wide control reads as the dominant affordance. Glyph
+   only, no "All" label. */
+.card-tracklist-playall {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.7rem;
+  height: 1.7rem;
+  border-radius: 3px;
+  cursor: pointer;
+  color: #ffffff;
+  font-weight: 600;
+  font-size: 0.95rem;
+  line-height: 1;
+  background: none;
+  transition: color 0.12s, background 0.12s;
+}
+.card-tracklist-playall:hover {
+  color: var(--accent);
+  background: rgba(255, 255, 255, 0.08);
+}
+/* "＋" head button: plain text, no box. Sized to align next to the
+   ▶ head button without dominating it. */
 .card-tracklist-queueall {
   display: inline-flex;
   align-items: center;
-  gap: 0.15rem;
-  padding: 0.05rem 0.35rem;
-  border-radius: 3px;
-  font-size: 0.65rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  justify-content: center;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.06);
   color: var(--muted);
-  transition: color 0.12s, background 0.12s;
-}
-.card-tracklist-playall { color: #ffffff; }
-.card-tracklist-playall:hover {
-  color: var(--accent);
-  background: rgba(255, 255, 255, 0.12);
-}
-/* "＋ All" head button: plain text, no box, a bit bigger so it reads
-   as a tap target without button chrome. Mirrors the per-track ＋
-   styling so the two ＋ affordances feel like the same control. */
-.card-tracklist-queueall {
   background: none !important;
   border-radius: 0;
-  padding: 0 0.2rem;
-  font-size: 0.95rem;
-  text-transform: none;
-  letter-spacing: 0;
+  padding: 0 0.25rem;
+  font-size: 1.25rem;
   line-height: 1;
+  transition: color 0.12s, background 0.12s;
 }
 .card-tracklist-queueall:hover {
   color: var(--accent);
