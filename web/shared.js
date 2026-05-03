@@ -1041,11 +1041,10 @@ async function openSignInModal() {
   }
 }
 
-// Open Clerk's sign-UP modal directly. With Clerk's waitlist mode
-// enabled the sign-up tab is the waitlist join form, so this is what
-// the anon splash's "Join the waitlist" button calls — landing on
-// the sign-IN tab first (the regular openSignInModal) was confusing
-// since the visitor doesn't have an account yet to sign in to.
+// Open Clerk's sign-UP modal directly — what the anon splash's
+// "Sign up" button calls. Landing on the sign-IN tab first (the
+// regular openSignInModal) was confusing since the visitor doesn't
+// have an account yet to sign in to.
 async function openSignUpModal() {
   try {
     const c = window._clerk || await loadClerkInstance();
