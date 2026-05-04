@@ -898,6 +898,32 @@ function _sdFilterRandom(items) {
   });
 }
 
+// Build a single home-strip card with the .recent-wrap + ✕ overlay
+// appropriate for the active mode. Used by both the initial render
+// path in loadRandomRecords AND the filter/genre/load-more re-render
+// in _sdRenderRandomSlice so the × button stays available regardless
+// of which path drew the card. Modes:
+//   - submitted: no ×  (global community feed)
+//   - suggestions: × banishes the suggestion forever (server-side)
+//   - recent / feed (etc.): × removes from local history if not _isSuggested
+function _sdBuildStripCardHtml(item, absIndex, mode) {
+  const inSuggestions = mode === "suggestions";
+  const inSubmitted   = mode === "submitted";
+  const card = renderCard(item, absIndex, { showContributionBadge: inSubmitted });
+  const safeId = escHtml(String(item.id));
+  const safeType = escHtml(String(item.type || "master"));
+  let dismiss = "";
+  if (inSubmitted) {
+    // Global feed — no per-user dismiss.
+  } else if (inSuggestions && window._clerk?.user) {
+    dismiss = `<button class="recent-dismiss" onclick="_sdDismissSuggestion(event,'${safeId}','${safeType}')" title="Hide this suggestion forever">✕</button>`;
+  } else if (!item._isSuggested) {
+    dismiss = `<button class="recent-dismiss" onclick="removeFromHistory(event,'${safeId}')" title="Remove from history">✕</button>`;
+  }
+  return `<div class="recent-wrap" data-hist-id="${safeId}">${card}${dismiss}</div>`;
+}
+window._sdBuildStripCardHtml = _sdBuildStripCardHtml;
+
 // Render the next slice of _randomAll into the grid, honoring filter
 // + paging. Extracted from loadRandomRecords so the filter input can
 // re-run rendering without a refetch.
@@ -913,12 +939,9 @@ function _sdRenderRandomSlice() {
     }
     return;
   }
-  // Submitted-tab cards opt into the contribution-count badge; other
-  // strip modes render plain cards.
-  const inSubmitted = window._sdHomeStripMode === "submitted";
+  const mode = window._sdHomeStripMode || "recent";
   for (let i = 0; i < slice.length; i++) {
-    const card = renderCard(slice[i], _randomShown + i, { showContributionBadge: inSubmitted });
-    grid.insertAdjacentHTML("beforeend", card);
+    grid.insertAdjacentHTML("beforeend", _sdBuildStripCardHtml(slice[i], _randomShown + i, mode));
   }
   _randomShown += slice.length;
 }
@@ -1999,29 +2022,12 @@ async function loadRandomRecords(more) {
     }
     return;
   }
-  // Each card gets a small × overlay. In Recent mode, × drops the row
-  // from local history. In Suggestions mode, × banishes that
-  // master/release from the user's personal feed forever (server-side
-  // record). On Submitted (global community feed) we don't show ×.
-  const inSuggestions = window._sdHomeStripMode === "suggestions";
-  const inSubmitted   = window._sdHomeStripMode === "submitted";
-  const html = slice.map((item, i) => {
-    // The contribution-count badge is meaningful only on the Submitted
-    // feed — opt in here. Other surfaces (favorites etc.) would inherit
-    // _contributionCount from the snapshot otherwise.
-    const card = renderCard(item, _randomShown + i, { showContributionBadge: inSubmitted });
-    const safeId = escHtml(String(item.id));
-    const safeType = escHtml(String(item.type || "master"));
-    let dismiss = "";
-    if (inSubmitted) {
-      // Global feed — no per-user dismiss.
-    } else if (inSuggestions && window._clerk?.user) {
-      dismiss = `<button class="recent-dismiss" onclick="_sdDismissSuggestion(event,'${safeId}','${safeType}')" title="Hide this suggestion forever">✕</button>`;
-    } else if (!item._isSuggested) {
-      dismiss = `<button class="recent-dismiss" onclick="removeFromHistory(event,'${safeId}')" title="Remove from history">✕</button>`;
-    }
-    return `<div class="recent-wrap" data-hist-id="${safeId}">${card}${dismiss}</div>`;
-  }).join("");
+  // Each card gets a small × overlay. Card-building (mode-aware
+  // dismiss button + .recent-wrap) is delegated to _sdBuildStripCardHtml
+  // so the filter / genre / load-more re-render path produces the same
+  // markup — otherwise filtered cards would lose their × handler.
+  const mode = window._sdHomeStripMode || "recent";
+  const html = slice.map((item, i) => _sdBuildStripCardHtml(item, _randomShown + i, mode)).join("");
   grid.querySelector(".random-load-more")?.remove();
   if (more) {
     grid.insertAdjacentHTML("beforeend", html);
