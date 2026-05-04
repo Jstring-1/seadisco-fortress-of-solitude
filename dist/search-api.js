@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const anthropicKey = process.env.ANTHROPIC_API_KEY ?? "";
@@ -5631,6 +5631,12 @@ async function _runPersonalSuggestionsForUser(userId) {
         return { saved: 0, reason: "no-taste" };
     const ownedMasters = await getUserLibraryMasterIds(userId);
     const dismissed = await getDismissedSuggestionKeys(userId);
+    // Recently-clicked suggestions act as a soft-suppress: the user
+    // already looked at these, so don't re-surface them for a while.
+    // 30-day window — long enough to keep the feed feeling fresh, short
+    // enough that strong-interest items eventually come back if not
+    // explicitly dismissed.
+    const recentlyClicked = await getRecentlyClickedSuggestionKeys(userId, 30);
     // Map keyed by "type:id" so the same album appearing for multiple
     // tuples accumulates score rather than appearing twice. Generator is
     // Masters+ aware: searches type=master AND type=release per tuple,
@@ -5652,6 +5658,8 @@ async function _runPersonalSuggestionsForUser(userId) {
         if (type === "master" && ownedMasters.has(id))
             return;
         if (dismissed.has(`${type}:${id}`))
+            return;
+        if (recentlyClicked.has(`${type}:${id}`))
             return;
         // For release-type: also skip if its master is already a candidate
         // — the master version wins and we don't want a duplicate card.
@@ -5719,8 +5727,39 @@ async function _runPersonalSuggestionsForUser(userId) {
         .slice(0, 1000);
     if (!items.length)
         return { saved: 0, reason: "no-candidates" };
-    await replaceUserPersonalSuggestions(userId, items);
-    return { saved: items.length };
+    // Merge instead of replace — keep stable rows, only add genuinely
+    // new finds. excludeKeys folds dismissals + recent clicks together
+    // so existing rows for those keys also get suppressed.
+    const excludeKeys = new Set();
+    for (const k of dismissed)
+        excludeKeys.add(k);
+    for (const k of recentlyClicked)
+        excludeKeys.add(k);
+    const { added } = await mergeUserPersonalSuggestions(userId, items, { excludeKeys });
+    // Enqueue ONLY the genuinely new IDs into the cache-fetch queue —
+    // existing suggestions either got cached on a previous pass or
+    // were already enqueued. enqueueCacheFetches itself drops anything
+    // already in release_cache, so this is safe even if some recent
+    // adds were warmed mid-pass.
+    if (added.length) {
+        try {
+            // Cap each user's contribution to top-50 by score so the queue
+            // doesn't get dominated by one heavy user — fairness across
+            // the user pool. The full set still goes into the suggestions
+            // table; only the warm queue is rate-limited.
+            const topAdded = items
+                .slice(0, 50)
+                .filter(it => added.some(a => a.discogs_id === it.id && a.entity_type === it.type))
+                .map(it => ({ entity_type: it.type, discogs_id: it.id }));
+            if (topAdded.length) {
+                await enqueueCacheFetches(topAdded, "suggestions", 0);
+            }
+        }
+        catch (e) {
+            console.warn(`[suggestions] enqueue cache-warm failed for ${userId}:`, e?.message ?? e);
+        }
+    }
+    return { saved: added.length };
 }
 // Hourly scheduler: walk every signed-up user, run the generator
 // sequentially with a small delay between users so we don't spike
@@ -5752,12 +5791,238 @@ async function _runPersonalSuggestionsForAllUsers() {
         console.error("[suggestions] scheduler failed:", e?.message ?? e);
     }
 }
-// Boot once 60s after startup so we don't compete with sync, then
-// every hour.
-if (process.env.APP_DB_URL) {
-    setTimeout(() => { _runPersonalSuggestionsForAllUsers(); }, 60_000);
-    setInterval(() => { _runPersonalSuggestionsForAllUsers(); }, 60 * 60 * 1000);
+// Daily scheduler — fires once per day at 02:xx Pacific (just before
+// the cache-warm window opens at 03:00 PT, so the warm worker has
+// fresh suggestion deltas to drain). Was hourly, which burned ~2 min
+// of Discogs API budget per user every hour even though taste
+// tuples barely change. Daily is plenty for personal suggestions
+// since the user's library doesn't shift much in 24 hours.
+//
+// Implemented as a 15-min tick that asks "is it 02:xx PT AND have
+// we run today already?" — same pattern as the cache-warm window
+// check, just narrower (one hour instead of four).
+const _SUGG_GEN_TZ = "America/Los_Angeles";
+const _SUGG_GEN_HOUR = 2;
+let _suggGenLastRunDate = null; // YYYY-MM-DD in PT
+function _ptDateStr() {
+    return new Date().toLocaleDateString("en-CA", { timeZone: _SUGG_GEN_TZ });
 }
+function _ptHour() {
+    try {
+        const h = parseInt(new Date().toLocaleString("en-US", {
+            timeZone: _SUGG_GEN_TZ, hour: "2-digit", hour12: false,
+        }), 10);
+        return Number.isFinite(h) ? h : -1;
+    }
+    catch {
+        return -1;
+    }
+}
+function _maybeStartDailySuggestionsRun() {
+    const today = _ptDateStr();
+    if (_suggGenLastRunDate === today)
+        return; // already ran today
+    if (_ptHour() !== _SUGG_GEN_HOUR)
+        return; // not the firing hour
+    _suggGenLastRunDate = today;
+    _runPersonalSuggestionsForAllUsers().catch(() => { });
+}
+if (process.env.APP_DB_URL) {
+    // First check 60s after startup (handles boot during the firing hour).
+    setTimeout(() => { _maybeStartDailySuggestionsRun(); }, 60_000);
+    // Subsequent checks every 15 min — narrow enough that we never
+    // miss the firing hour, broad enough to cost nothing.
+    setInterval(() => { _maybeStartDailySuggestionsRun(); }, 15 * 60 * 1000);
+}
+// ── Cache-warm worker (overnight job) ──────────────────────────────────
+// Drains cache_fetch_queue, fetching each requested album's
+// /releases/:id or /masters/:id from Discogs (using admin's OAuth)
+// and writing it into release_cache with seen_at NULL so it stays
+// out of the public feed until a real user opens it.
+//
+// Window: 03:00–07:00 Pacific. The suggestions generator runs at
+// 02:xx PT, so by 03:00 the queue has the day's fresh additions
+// ready to drain.
+//
+// Multiple sources can enqueue (suggestion generator today; future:
+// hover-to-prefetch, LOC backfill, crowd submissions). Worker
+// doesn't care — it just walks priority DESC, requested_at ASC.
+const _SUGG_WARM_RATE_MS = 1100; // ~55 req/min, under Discogs's 60/min OAuth limit
+const _SUGG_WARM_DRAIN_MAX = 5000; // hard cap per nightly window
+const _SUGG_WARM_BATCH_SIZE = 100; // dequeue this many at a time
+const _SUGG_WARM_TICK_MS = 15 * 60 * 1000; // window-check cadence
+const _SUGG_WARM_TZ = "America/Los_Angeles";
+const _SUGG_WARM_HOUR_START = 3;
+const _SUGG_WARM_HOUR_END = 7; // exclusive — last fire-eligible hour is 6:xx
+const _suggCacheWarmState = {
+    running: false, startedAt: null, endedAt: null,
+    fetched: 0, skipped: 0, errors: 0, total: 0, lastError: null,
+};
+function _inSuggWarmWindow() {
+    // Pull the current hour-of-day in Pacific time without dragging in a
+    // tz library. toLocaleString with timeZone gives the local string;
+    // hour: "2-digit", hour12: false yields "00".."23". DST handling
+    // comes free since the OS / Node ICU data does the conversion.
+    try {
+        const hourStr = new Date().toLocaleString("en-US", {
+            timeZone: _SUGG_WARM_TZ, hour: "2-digit", hour12: false,
+        });
+        const hour = parseInt(hourStr, 10);
+        if (!Number.isFinite(hour))
+            return false;
+        return hour >= _SUGG_WARM_HOUR_START && hour < _SUGG_WARM_HOUR_END;
+    }
+    catch {
+        return false;
+    }
+}
+async function _runSuggestionsCacheWarm(opts) {
+    if (_suggCacheWarmState.running)
+        return;
+    const adminId = process.env.ADMIN_CLERK_ID;
+    if (!adminId) {
+        console.warn("[cache-warm] ADMIN_CLERK_ID not configured; skipping");
+        return;
+    }
+    const client = await getDiscogsClientForUser(adminId);
+    if (!client) {
+        console.warn("[cache-warm] admin Discogs OAuth not connected; skipping");
+        return;
+    }
+    _suggCacheWarmState.running = true;
+    _suggCacheWarmState.startedAt = new Date().toISOString();
+    _suggCacheWarmState.endedAt = null;
+    _suggCacheWarmState.fetched = 0;
+    _suggCacheWarmState.skipped = 0;
+    _suggCacheWarmState.errors = 0;
+    _suggCacheWarmState.lastError = null;
+    let totalDrained = 0;
+    try {
+        // Drain the queue in batches. The queue can grow mid-pass (the
+        // suggestions generator might add to it during early-morning
+        // overlap), so we keep dequeuing until either we hit the cap,
+        // the queue is empty, or the window closes.
+        while (totalDrained < _SUGG_WARM_DRAIN_MAX) {
+            if (!opts?.ignoreWindow && !_inSuggWarmWindow()) {
+                console.log(`[cache-warm] window closed; stopping at ${_suggCacheWarmState.fetched} fetched / ${totalDrained} drained`);
+                break;
+            }
+            const batch = await dequeueCacheFetches(_SUGG_WARM_BATCH_SIZE);
+            if (!batch.length)
+                break;
+            _suggCacheWarmState.total += batch.length;
+            for (const ref of batch) {
+                if (!opts?.ignoreWindow && !_inSuggWarmWindow())
+                    break;
+                totalDrained++;
+                const path = ref.entity_type === "master" ? `/masters/${ref.discogs_id}` : `/releases/${ref.discogs_id}`;
+                try {
+                    const data = await client.get(path);
+                    if (data && typeof data === "object") {
+                        await cacheRelease(ref.discogs_id, ref.entity_type, data, { warmOnly: true });
+                        await markCacheFetchSucceeded(ref.id);
+                        _suggCacheWarmState.fetched++;
+                    }
+                    else {
+                        // Empty response — treat as a soft failure so the row
+                        // gets retried but eventually drops if it persists.
+                        _suggCacheWarmState.skipped++;
+                        await markCacheFetchFailed(ref.id, "empty response");
+                    }
+                }
+                catch (err) {
+                    _suggCacheWarmState.errors++;
+                    _suggCacheWarmState.lastError = `${path}: ${err?.message ?? String(err)}`;
+                    console.warn(`[cache-warm] ${path} failed:`, err?.message ?? err);
+                    await markCacheFetchFailed(ref.id, err?.message ?? String(err));
+                }
+                await new Promise(r => setTimeout(r, _SUGG_WARM_RATE_MS));
+            }
+        }
+        console.log(`[cache-warm] done; fetched ${_suggCacheWarmState.fetched}, errors ${_suggCacheWarmState.errors}, drained ${totalDrained}`);
+    }
+    catch (err) {
+        _suggCacheWarmState.lastError = err?.message ?? String(err);
+        console.error("[cache-warm] worker crashed:", err);
+    }
+    finally {
+        _suggCacheWarmState.running = false;
+        _suggCacheWarmState.endedAt = new Date().toISOString();
+    }
+}
+function _maybeStartSuggCacheWarm() {
+    if (_suggCacheWarmState.running)
+        return;
+    if (!_inSuggWarmWindow())
+        return;
+    _runSuggestionsCacheWarm().catch(() => { });
+}
+if (process.env.APP_DB_URL && process.env.ADMIN_CLERK_ID) {
+    // Boot-time check: if the server starts up DURING the window
+    // (e.g. a 3am redeploy) we still want the job to run today.
+    setTimeout(() => { _maybeStartSuggCacheWarm(); }, 30_000);
+    // Tick — every 15 min check if we're in window. The job's own
+    // `running` guard prevents double-firing if a tick lands while a
+    // previous run is still draining.
+    setInterval(() => { _maybeStartSuggCacheWarm(); }, _SUGG_WARM_TICK_MS);
+}
+// Admin: status — fetched / errors / current state.
+app.get("/api/admin/cache-warm/status", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    res.json({
+        ..._suggCacheWarmState,
+        inWindow: _inSuggWarmWindow(),
+        windowStartHourPT: _SUGG_WARM_HOUR_START,
+        windowEndHourPT: _SUGG_WARM_HOUR_END,
+    });
+});
+// Admin: force a run NOW, ignoring the window. Useful for testing,
+// re-warming after a release_cache wipe, or filling new suggestions
+// the same day they're generated. Bails if a run is already in flight.
+app.post("/api/admin/cache-warm/run", express.json({ limit: "1kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    if (_suggCacheWarmState.running) {
+        res.status(409).json({ error: "Cache-warm already running", startedAt: _suggCacheWarmState.startedAt });
+        return;
+    }
+    // Fire and forget — admin UI shouldn't block on what may be a
+    // multi-hour walk through Discogs at 1 req/sec. ignoreWindow=true
+    // so a manual click doesn't silently no-op outside the 3-7am PT
+    // window.
+    _runSuggestionsCacheWarm({ ignoreWindow: true }).catch(() => { });
+    res.json({ ok: true, message: "Cache-warm started" });
+});
+// Admin: cache-fetch queue stats — total queued, oldest waiter, by
+// source breakdown. Useful for sizing the nightly window.
+app.get("/api/admin/cache-fetch-queue/stats", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const stats = await getCacheFetchQueueStats();
+        res.json(stats);
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// Admin: bootstrap — enqueue every uncached personal suggestion that
+// existed BEFORE the queue was introduced. One-shot operation; after
+// this point the suggestion generator handles enqueueing as it adds
+// new rows. Safe to run repeatedly (enqueueCacheFetches dedupes).
+app.post("/api/admin/cache-fetch-queue/bootstrap", express.json({ limit: "1kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const refs = await getUncachedSuggestionRefs(50000);
+        const queued = await enqueueCacheFetches(refs.map(r => ({ entity_type: r.entity_type, discogs_id: r.discogs_id })), "bootstrap", 0);
+        res.json({ ok: true, considered: refs.length, queued });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
 // Admin manual trigger — useful for testing without waiting an hour.
 app.post("/api/admin/run-suggestions", express.json({ limit: "1kb" }), async (req, res) => {
     if (!await requireAdmin(req, res))

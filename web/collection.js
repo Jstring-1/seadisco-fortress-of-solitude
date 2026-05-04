@@ -9,20 +9,54 @@ function setCwStatus(msg) {
   el.style.display = msg ? "block" : "none";
 }
 
+// Per-tab default sort. favorites and wantlist default to "added"
+// (most-recently-favorited / added first) since that's the most
+// useful view for those tabs — what did I save lately? collection
+// keeps the artist-A-Z default; inventory + lists fall back to that
+// too. The user's manual choice (saved per-tab in localStorage)
+// always wins over the default once they pick anything.
+const _CW_SORT_DEFAULTS = {
+  favorites: "added",
+  wantlist:  "added",
+  collection: "",
+  inventory:  "",
+  lists:      "",
+};
+function _cwSortKey(tab) { return "cw-sort:" + (tab || "collection"); }
+function _cwSortDefault(tab) { return _CW_SORT_DEFAULTS[tab] ?? ""; }
+
 function saveCwSort() {
   const v = document.getElementById("cw-sort")?.value ?? "";
-  try { localStorage.setItem("cw-sort", v); } catch {}
-  // Mirror sort to URL
+  const tab = (typeof _cwTab !== "undefined" && _cwTab) || "collection";
+  try { localStorage.setItem(_cwSortKey(tab), v); } catch {}
+  // Mirror sort to URL — single ?sort= for backwards compat with old
+  // shareable links; per-tab localStorage handles the cross-tab
+  // memory.
   const u = new URL(window.location.href);
   if (v) u.searchParams.set("sort", v);
   else u.searchParams.delete("sort");
   history.replaceState(history.state, "", u.toString());
 }
 function restoreCwSort() {
+  const el = document.getElementById("cw-sort");
+  if (!el) return;
+  const tab = (typeof _cwTab !== "undefined" && _cwTab) || "collection";
+  // One-shot migration: legacy single-key "cw-sort" was global across
+  // tabs. Read it once and seed the per-tab key for collection, then
+  // forget it. Anything stored in the new per-tab keys wins.
   try {
-    const v = localStorage.getItem("cw-sort");
-    if (v !== null) { const el = document.getElementById("cw-sort"); if (el) el.value = v; }
+    const legacy = localStorage.getItem("cw-sort");
+    if (legacy !== null && localStorage.getItem(_cwSortKey("collection")) === null) {
+      localStorage.setItem(_cwSortKey("collection"), legacy);
+    }
+    if (legacy !== null) localStorage.removeItem("cw-sort");
   } catch {}
+  try {
+    const v = localStorage.getItem(_cwSortKey(tab));
+    if (v !== null) { el.value = v; return; }
+  } catch {}
+  // No saved per-tab value — apply the per-tab default.
+  el.value = _cwSortDefault(tab);
 }
 
 // ── Synonym info display (always on for collection pages) ────────────────
@@ -996,6 +1030,9 @@ function switchRecordsTab(tab, skipPush) {
   // Filters are shared across collection/wantlist — just save current state
   saveFilterState();
   _cwTab = tab;
+  // Re-apply the sort dropdown for the new tab (per-tab localStorage,
+  // with the favorites/wantlist defaulting to "added" desc).
+  if (typeof restoreCwSort === "function") restoreCwSort();
   // Update URL to reflect active sub-tab (flattened: v=collection, v=wantlist, etc.)
   if (!skipPush) {
     const sort = document.getElementById("cw-sort")?.value || "";
