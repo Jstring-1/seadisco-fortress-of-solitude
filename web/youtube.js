@@ -635,8 +635,19 @@ async function openYoutubePopup(query) {
       if (r.status === 429) {
         const ytExtUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
         const msg = errJson?.message || "YouTube quota reached.";
+        // Hover hint: when did we last cache results for this exact
+        // query? Tells the admin whether re-searching externally is
+        // likely to surface anything new vs. duplicating yesterday's
+        // work. Server returns lastSearchedAt regardless of TTL.
+        let hoverTitle = "Open this search on youtube.com";
+        if (errJson?.lastSearchedAt) {
+          const rel = _ytFormatRelativeTime(errJson.lastSearchedAt);
+          if (rel) hoverTitle = `Last searched ${rel} on SeaDisco — youtube.com may have newer results`;
+        } else {
+          hoverTitle = "Never searched here before — youtube.com result will be the first lookup";
+        }
         if (statusEl) {
-          statusEl.innerHTML = `<span style="color:#f0c95c">${escHtml(msg)}</span> <a href="${escHtml(ytExtUrl)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline">Search YouTube ↗</a>${albumCtx ? ' — copy any URL into the form above to stage it.' : ''}`;
+          statusEl.innerHTML = `<span style="color:#f0c95c">${escHtml(msg)}</span> <a href="${escHtml(ytExtUrl)}" target="_blank" rel="noopener" title="${escHtml(hoverTitle)}" style="color:var(--accent);text-decoration:underline">Search YouTube ↗</a>${albumCtx ? ' — copy any URL into the form above to stage it.' : ''}`;
         }
       } else if (statusEl) {
         statusEl.textContent = `Search failed (${r.status}).`;
@@ -671,6 +682,29 @@ async function openYoutubePopup(query) {
 //   https://www.youtube.com/embed/ABCDEFGHIJK
 //   https://www.youtube.com/shorts/ABCDEFGHIJK
 //   ABCDEFGHIJK (raw 11-char ID)
+// Render an ISO timestamp as "5 minutes ago", "2 hours ago", "3 days
+// ago", etc. — used for the external-YouTube fallback link's hover
+// text on quota-error 429s. Returns "" if the input can't be parsed.
+function _ytFormatRelativeTime(iso) {
+  if (!iso) return "";
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "";
+  const diffMs = Date.now() - t;
+  if (diffMs < 0) return "just now";
+  const sec = Math.floor(diffMs / 1000);
+  if (sec < 60) return `${sec} second${sec === 1 ? "" : "s"} ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} minute${min === 1 ? "" : "s"} ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr} hour${hr === 1 ? "" : "s"} ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 30) return `${day} day${day === 1 ? "" : "s"} ago`;
+  const mo = Math.floor(day / 30);
+  if (mo < 12) return `${mo} month${mo === 1 ? "" : "s"} ago`;
+  const yr = Math.floor(day / 365);
+  return `${yr} year${yr === 1 ? "" : "s"} ago`;
+}
+
 function _ytExtractVideoId(input) {
   const s = String(input || "").trim();
   if (!s) return "";
