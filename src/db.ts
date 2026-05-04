@@ -2559,6 +2559,65 @@ export async function deletePlaylist(id: number, clerkUserId: string): Promise<b
   return (r.rowCount ?? 0) > 0;
 }
 
+// Owner-only items replace. Used by the "overwrite this playlist"
+// flow on save: keep the same id (and share-URL), wipe items, write
+// the new ones, bump updated_at. Optionally renames the playlist
+// in the same transaction. Returns false if the playlist isn't
+// the caller's.
+export async function replacePlaylistItems(
+  id: number,
+  clerkUserId: string,
+  items: QueueItem[],
+  newName?: string,
+): Promise<boolean> {
+  const capped = items.slice(0, PLAYLIST_ITEMS_MAX);
+  const pool = getPool();
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // Owner check + optional rename. UPDATE with RETURNING gives us
+    // both ownership confirmation AND the row id in one round-trip.
+    const ownerCheck = newName
+      ? await client.query(
+          `UPDATE user_playlists SET name = $3, updated_at = NOW()
+            WHERE id = $1 AND clerk_user_id = $2
+            RETURNING id`,
+          [id, clerkUserId, newName.trim().slice(0, PLAYLIST_NAME_MAX) || "Untitled playlist"],
+        )
+      : await client.query(
+          `UPDATE user_playlists SET updated_at = NOW()
+            WHERE id = $1 AND clerk_user_id = $2
+            RETURNING id`,
+          [id, clerkUserId],
+        );
+    if (!ownerCheck.rows.length) {
+      await client.query("ROLLBACK");
+      return false;
+    }
+    await client.query(`DELETE FROM user_playlist_items WHERE playlist_id = $1`, [id]);
+    if (capped.length) {
+      const values: any[] = [];
+      const placeholders: string[] = [];
+      capped.forEach((it, i) => {
+        const base = values.length;
+        placeholders.push(`($1, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5})`);
+        values.push(i + 1, it.source, it.externalId, JSON.stringify(it.data ?? {}));
+      });
+      await client.query(
+        `INSERT INTO user_playlist_items (playlist_id, position, source, external_id, data) VALUES ${placeholders.join(", ")}`,
+        [id, ...values],
+      );
+    }
+    await client.query("COMMIT");
+    return true;
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 // ── Phase 4: Price intelligence DB functions ─────────────────────────────
 
 export async function upsertPriceCache(releaseId: number, lowest: number | null, median: number | null, highest: number | null, numForSale: number, currency: string = "USD"): Promise<void> {
