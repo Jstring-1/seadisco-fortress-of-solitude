@@ -76,6 +76,60 @@ function fmtTime(ts, fallback = "\u2014") {
 // Back-compat alias \u2014 admin UI calls fmtRelativeTime in a few places.
 const fmtRelativeTime = fmtTime;
 
+// \u2500\u2500 YouTube search-meta hover hint \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+// Lives here (eagerly loaded with shared.js) so hover handlers on
+// inline-rendered modal markup work even when youtube.js hasn't been
+// pulled in yet. Used by the album-suggest "\ud83c\udfb5 N missing" link to show
+// "last searched X ago" in the title attribute on first hover.
+//
+// Render an ISO timestamp as "5 minutes ago", "2 hours ago", "3 days ago",
+// etc. Returns "" if the input can't be parsed.
+function _ytFormatRelativeTime(iso) {
+  if (!iso) return "";
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "";
+  const diffMs = Date.now() - t;
+  if (diffMs < 0) return "just now";
+  const sec = Math.floor(diffMs / 1000);
+  if (sec < 60) return `${sec} second${sec === 1 ? "" : "s"} ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min} minute${min === 1 ? "" : "s"} ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr} hour${hr === 1 ? "" : "s"} ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 30) return `${day} day${day === 1 ? "" : "s"} ago`;
+  const mo = Math.floor(day / 30);
+  if (mo < 12) return `${mo} month${mo === 1 ? "" : "s"} ago`;
+  const yr = Math.floor(day / 365);
+  return `${yr} year${yr === 1 ? "" : "s"} ago`;
+}
+window._ytFormatRelativeTime = _ytFormatRelativeTime;
+
+// Hover enrichment for any YT-submission affordance carrying
+// data-yt-q="<query>". On first hover, fire one /api/youtube/search-meta
+// lookup (no quota cost \u2014 pure cache read) and update the title
+// attribute with " \u00b7 last searched X ago" / " \u00b7 not searched yet".
+// Subsequent hovers no-op via data-yt-meta-fetched flag.
+async function _ytEnrichLastSearched(el) {
+  if (!el || el.dataset.ytMetaFetched === "1") return;
+  const q = el.dataset.ytQ || "";
+  if (!q) return;
+  el.dataset.ytMetaFetched = "1";   // optimistic \u2014 block re-fetches even if this errors
+  if (typeof apiFetch !== "function") return;
+  try {
+    const r = await apiFetch(`/api/youtube/search-meta?q=${encodeURIComponent(q)}`);
+    if (!r.ok) return;
+    const j = await r.json();
+    const baseTitle = el.dataset.ytTitleBase || el.title || "";
+    if (!el.dataset.ytTitleBase) el.dataset.ytTitleBase = baseTitle;
+    const suffix = j.lastSearchedAt
+      ? ` \u00b7 last searched ${_ytFormatRelativeTime(j.lastSearchedAt)}`
+      : " \u00b7 not searched yet";
+    el.title = baseTitle + suffix;
+  } catch { /* leave title as-is */ }
+}
+window._ytEnrichLastSearched = _ytEnrichLastSearched;
+
 // \u2500\u2500 localStorage JSON helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 // Parse a JSON value out of localStorage, falling back to `defaultVal`
 // on missing key, parse errors, or sandboxed/disabled storage. Replaces
