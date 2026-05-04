@@ -801,10 +801,17 @@ window._sdSyncHomeStripTabsVisual = _sdSyncHomeStripTabsVisual;
 // the static markup (Recent active by default) matches whatever
 // mode was selected via ?strip=. Idempotent.
 if (typeof document !== "undefined") {
+  const _sdInitStripControls = () => {
+    _sdSyncHomeStripTabsVisual();
+    // Sort options are per-tab — make sure the dropdown reflects the
+    // initial mode before any data lands. Genre rebuild happens once
+    // _randomAll is populated.
+    if (typeof _sdRebuildHomeStripSort === "function") _sdRebuildHomeStripSort();
+  };
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => _sdSyncHomeStripTabsVisual());
+    document.addEventListener("DOMContentLoaded", _sdInitStripControls);
   } else {
-    setTimeout(_sdSyncHomeStripTabsVisual, 0);
+    setTimeout(_sdInitStripControls, 0);
   }
 }
 
@@ -832,6 +839,10 @@ function _sdSwitchHomeStripTab(mode) {
   window._sdHomeStripMode = m;
   _sdSyncHomeStripTabsVisual();
   _sdReflectHomeStripModeInUrl(m);
+  // Rebuild sort dropdown options for the new tab BEFORE the fetch
+  // kicks off — _applyFavoritesSort reads the dropdown's current value
+  // when items arrive, so it must already reflect the new tab.
+  _sdRebuildHomeStripSort();
   // Reload strip from the appropriate source.
   loadRandomRecords(false);
 }
@@ -870,8 +881,15 @@ window._sdHomeStripFilterChanged = _sdHomeStripFilterChanged;
 // individual artist field, label, year — broad to feel responsive.
 function _sdFilterRandom(items) {
   const q = window._sdHomeStripFilter || "";
-  if (!q) return items;
+  const g = (typeof _sdHomeStripGenreCurrent === "function" ? _sdHomeStripGenreCurrent() : "");
+  if (!q && !g) return items;
+  const gLower = g.toLowerCase();
   return items.filter(it => {
+    if (g) {
+      const list = Array.isArray(it.genre) ? it.genre : [];
+      if (!list.some(x => String(x || "").toLowerCase() === gLower)) return false;
+    }
+    if (!q) return true;
     const hay = [
       it.title, it.artist, (it.label || []).join(" "),
       it.country, String(it.year || "")
@@ -889,7 +907,8 @@ function _sdRenderRandomSlice() {
   const filtered = _sdFilterRandom(_randomAll);
   const slice = filtered.slice(_randomShown, _randomShown + _RANDOM_PAGE);
   if (!slice.length && _randomShown === 0) {
-    if (window._sdHomeStripFilter) {
+    const hasGenre = (typeof _sdHomeStripGenreCurrent === "function" && _sdHomeStripGenreCurrent());
+    if (window._sdHomeStripFilter || hasGenre) {
       grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;color:var(--muted);font-size:0.85rem;padding:1rem 0">No matches.</div>`;
     }
     return;
@@ -1502,16 +1521,92 @@ function _favTitle(item) {
   return (i > 0 ? t.slice(i + 3) : t).toLowerCase();
 }
 
+// ── Per-tab sort definitions for the home strip ───────────────────────
+//
+// Each tab carries a different shape of data, so the sort dropdown is
+// rebuilt per tab. The first entry in each list is that tab's default.
+// Field names map to _applyFavoritesSort's getVal switch below.
+const _HOME_STRIP_SORTS = {
+  recent: [
+    ["added:desc",          "Opened ↓"],
+    ["added:asc",           "Opened ↑"],
+    ["year:desc",           "Year ↓"],
+    ["year:asc",            "Year ↑"],
+    ["title:asc",           "Title A→Z"],
+    ["title:desc",          "Title Z→A"],
+    ["artist:asc",          "Artist A→Z"],
+  ],
+  suggestions: [
+    ["score:desc",          "Best match ↓"],
+    ["year:desc",           "Year ↓"],
+    ["year:asc",            "Year ↑"],
+    ["title:asc",           "Title A→Z"],
+    ["title:desc",          "Title Z→A"],
+    ["artist:asc",          "Artist A→Z"],
+  ],
+  submitted: [
+    ["lastSubmitted:desc",  "Recently submitted ↓"],
+    ["count:desc",          "Most contributions ↓"],
+    ["firstSubmitted:asc",  "First submitted ↑"],
+    ["year:desc",           "Year ↓"],
+    ["year:asc",            "Year ↑"],
+    ["title:asc",           "Title A→Z"],
+    ["title:desc",          "Title Z→A"],
+    ["artist:asc",          "Artist A→Z"],
+  ],
+  feed: [
+    ["random:0",            "Random"],
+    ["year:desc",           "Year ↓"],
+    ["year:asc",            "Year ↑"],
+    ["title:asc",           "Title A→Z"],
+    ["title:desc",          "Title Z→A"],
+    ["artist:asc",          "Artist A→Z"],
+  ],
+};
+
+// Rebuild #favorites-sort options for the active tab. Restores the
+// user's last-used sort for that tab (localStorage), falling back to
+// the tab's default. Idempotent — safe to call on every tab switch.
+function _sdRebuildHomeStripSort() {
+  const sel = document.getElementById("favorites-sort");
+  if (!sel) return;
+  const mode = window._sdHomeStripMode || "recent";
+  const opts = _HOME_STRIP_SORTS[mode] || _HOME_STRIP_SORTS.recent;
+  const saved = (() => {
+    try { return localStorage.getItem("sd_strip_sort:" + mode) || ""; } catch { return ""; }
+  })();
+  const allowed = new Set(opts.map(o => o[0]));
+  const desired = allowed.has(saved) ? saved : opts[0][0];
+  sel.innerHTML = opts.map(([v, label]) =>
+    `<option value="${v}"${v === desired ? " selected" : ""}>${label}</option>`
+  ).join("");
+}
+window._sdRebuildHomeStripSort = _sdRebuildHomeStripSort;
+
 function _applyFavoritesSort() {
   const sel = document.getElementById("favorites-sort");
   const sort = sel?.value || "added:desc";
   const [field, order] = sort.split(":");
+  // "Random" preserves whatever order the server sent — typical for
+  // the Feed tab. No-op here; the Load More page-append path keeps
+  // adding to the tail.
+  if (field === "random") return;
   const dir = order === "desc" ? -1 : 1;
+  const tsOf = (v) => {
+    if (!v) return 0;
+    if (typeof v === "number") return v;
+    const t = Date.parse(String(v));
+    return Number.isFinite(t) ? t : 0;
+  };
   const getVal = (it) => {
-    if (field === "added") return it._addedAt ?? 0;
-    if (field === "year")  return parseInt(it.year) || 0;
-    if (field === "title") return _favTitle(it);
-    if (field === "artist") return _favArtist(it);
+    if (field === "added")          return it._addedAt ?? 0;
+    if (field === "year")           return parseInt(it.year) || 0;
+    if (field === "title")          return _favTitle(it);
+    if (field === "artist")         return _favArtist(it);
+    if (field === "score")          return Number(it._suggestionScore) || 0;
+    if (field === "count")          return Number(it._contributionCount) || 0;
+    if (field === "lastSubmitted")  return tsOf(it._lastContributedAt);
+    if (field === "firstSubmitted") return tsOf(it._firstContributedAt);
     return 0;
   };
   _randomAll.sort((a, b) => {
@@ -1523,6 +1618,12 @@ function _applyFavoritesSort() {
 
 // Called when the sort dropdown changes
 function sortFavoritesGrid() {
+  // Persist per-tab so each tab remembers its own last-used sort.
+  try {
+    const sel = document.getElementById("favorites-sort");
+    const mode = window._sdHomeStripMode || "recent";
+    if (sel) localStorage.setItem("sd_strip_sort:" + mode, sel.value || "");
+  } catch {}
   if (!_randomAll.length) return;
   _applyFavoritesSort();
   _randomShown = 0;
@@ -1530,6 +1631,69 @@ function sortFavoritesGrid() {
   if (grid) grid.innerHTML = "";
   loadRandomRecords(true);
 }
+
+// ── Home-strip genre filter ─────────────────────────────────────────
+//
+// Populated from the distinct top-level `genre` values in _randomAll
+// (Rock / Jazz / Blues / Electronic / Folk, etc — Discogs's ~15 broad
+// buckets, not the noisy `style` taxonomy). Selection persists per tab.
+window._sdHomeStripGenre = {};
+function _sdHomeStripGenreSavedKey(mode) {
+  return "sd_strip_genre:" + (mode || "recent");
+}
+function _sdHomeStripGenreCurrent() {
+  const mode = window._sdHomeStripMode || "recent";
+  if (mode in window._sdHomeStripGenre) return window._sdHomeStripGenre[mode] || "";
+  let v = "";
+  try { v = localStorage.getItem(_sdHomeStripGenreSavedKey(mode)) || ""; } catch {}
+  window._sdHomeStripGenre[mode] = v;
+  return v;
+}
+function _sdRebuildHomeStripGenre() {
+  const sel = document.getElementById("random-records-genre");
+  if (!sel) return;
+  // Distinct top-level genres in current dataset.
+  const counts = new Map();
+  for (const it of (_randomAll || [])) {
+    const list = Array.isArray(it.genre) ? it.genre : [];
+    for (const g of list) {
+      const name = String(g || "").trim();
+      if (!name) continue;
+      counts.set(name, (counts.get(name) || 0) + 1);
+    }
+  }
+  const sorted = Array.from(counts.entries()).sort((a, b) => a[0].localeCompare(b[0]));
+  const cur = _sdHomeStripGenreCurrent();
+  // If the saved selection no longer exists in this dataset, leave the
+  // dropdown on All (don't surface an empty filter result on tab switch).
+  const stillValid = !cur || counts.has(cur);
+  const effective = stillValid ? cur : "";
+  if (!stillValid) {
+    const mode = window._sdHomeStripMode || "recent";
+    window._sdHomeStripGenre[mode] = "";
+    try { localStorage.setItem(_sdHomeStripGenreSavedKey(mode), ""); } catch {}
+  }
+  sel.innerHTML =
+    `<option value=""${effective ? "" : " selected"}>All</option>` +
+    sorted.map(([g]) => `<option value="${g.replace(/"/g, "&quot;")}"${g === effective ? " selected" : ""}>${g}</option>`).join("");
+  // Hide the whole genre dropdown if there's nothing useful to filter
+  // by (e.g. everything has a single genre or no genres at all).
+  const wrap = sel.closest(".sd-filter-label");
+  if (wrap) wrap.style.display = sorted.length >= 2 ? "" : "none";
+}
+window._sdRebuildHomeStripGenre = _sdRebuildHomeStripGenre;
+
+function _sdHomeStripGenreChanged(sel) {
+  const mode = window._sdHomeStripMode || "recent";
+  const v = String(sel?.value || "");
+  window._sdHomeStripGenre[mode] = v;
+  try { localStorage.setItem(_sdHomeStripGenreSavedKey(mode), v); } catch {}
+  _randomShown = 0;
+  const grid = document.getElementById("random-records-grid");
+  if (grid) grid.innerHTML = "";
+  _sdRenderRandomSlice();
+}
+window._sdHomeStripGenreChanged = _sdHomeStripGenreChanged;
 
 // ── Recent front-page strip ─────────────────────────────────────────────
 //
@@ -1764,14 +1928,20 @@ async function loadRandomRecords(more) {
     }
 
     if (titleEl) titleEl.textContent = titleText;
-    // Filter + Sort are available in both Recent and Suggestions
-    // modes — same control set so the toggle feels symmetric. Clear
-    // is Recent-only (it wipes local history; meaningless against a
-    // server-generated suggestions feed).
-    const sortLabel = document.querySelector('#random-records-controls .sd-filter-label');
+    // Filter + Sort + Genre are available on every tab — same control
+    // set so toggling between tabs feels symmetric. Clear is Recent-
+    // only (wipes local history; meaningless against a server feed).
+    const allLabels = document.querySelectorAll('#random-records-controls .sd-filter-label');
+    allLabels.forEach(l => { l.style.display = ""; });
     const clearBtn = document.getElementById("recent-clear-btn");
-    if (sortLabel) sortLabel.style.display = "";
     if (clearBtn) clearBtn.style.display = isSuggested ? "none" : "";
+    // Rebuild sort + genre to match the just-loaded data. Sort options
+    // are tab-specific; genre options are derived from this dataset.
+    if (typeof _sdRebuildHomeStripSort === "function") _sdRebuildHomeStripSort();
+    if (typeof _sdRebuildHomeStripGenre === "function") _sdRebuildHomeStripGenre();
+    // Sort dropdown might have changed defaults — re-sort _randomAll
+    // before paging so the visible order matches the dropdown.
+    _applyFavoritesSort();
 
     if (!_randomAll.length) {
       if (window._sdHomeStripMode === "submitted") {

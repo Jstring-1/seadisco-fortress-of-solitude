@@ -493,7 +493,16 @@
       <div id="random-records-controls" class="rr-controls">
         <input type="search" id="random-records-filter" class="sd-filter-input" placeholder="filter…" oninput="_sdHomeStripFilterChanged(this)">
         <label class="sd-filter-label">
+          Genre
+          <select id="random-records-genre" class="sd-filter-select" onchange="_sdHomeStripGenreChanged(this)">
+            <option value="">All</option>
+          </select>
+        </label>
+        <label class="sd-filter-label">
           Sort
+          <!-- Options are rebuilt per tab by _sdRebuildHomeStripSort() in
+               search.js. The static markup below is a sane fallback for
+               first paint before that runs. -->
           <select id="favorites-sort" class="sd-filter-select" onchange="sortFavoritesGrid()">
             <option value="added:desc">Opened ↓</option>
             <option value="added:asc">Opened ↑</option>
