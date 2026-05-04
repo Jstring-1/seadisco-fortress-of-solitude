@@ -1106,14 +1106,12 @@ const _SD_NAV_ICONS = {
   // YouTube videos for tracks Discogs missed. Tinted purple via the
   // tab's color rule so it reads as a distinct contribution surface.
   picks: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17V5l11-2v12"/><circle cx="6.5" cy="17" r="2.5" fill="currentColor"/><circle cx="17.5" cy="15" r="2.5" fill="currentColor"/></svg>`,
-  // Monocle for the "Discover" tab — LOC / Wikipedia / Archive /
-  // YouTube external-source group. Deliberately distinct from the
-  // search magnifier: NO vinyl grooves / NO center dot in the lens
-  // (those are reserved for vinyl-themed icons), a small attachment
-  // ring at the rim's upper edge, and a decorative ribbon-style
-  // chain arcing off above the lens. Reads as a gentleman's monocle
-  // from a distance vs. the magnifier's straight-handle look.
-  discover: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="14" r="6"/><circle cx="14" cy="8.6" r="1"/><path d="M14.7 7.9c1.3-1.7 4-3 6.3-1.5 1.7 1.1 1 2.7-1.5 3.4"/></svg>`,
+  // Question mark in a circle for the "Discover" tab — LOC /
+  // Wikipedia / Archive / YouTube external-source group. Reads as
+  // "look it up." Plain circle outline with no inner grooves so it
+  // doesn't echo the vinyl-themed icons (search magnifier,
+  // collection, wantlist, favorites all share those grooves).
+  discover: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5c0-2 1-3 2.5-3s2.5 1 2.5 2.5-1 2.2-2.5 3v1.5"/><circle cx="12" cy="16.5" r="0.7" fill="currentColor"/></svg>`,
 };
 // Expose icons globally so card badges (and any future surfaces) can
 // reuse the same line-art set without duplicating SVG markup.
