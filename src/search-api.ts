@@ -6022,6 +6022,48 @@ app.get("/api/admin/blues/enrich-discogs/status", async (req, res) => {
   res.json(_bluesDiscogsIdJob);
 });
 
+// Disambiguation: return the top Discogs artist matches for a name so
+// the admin can pick the right one when several artists share a name.
+// Read-only — does NOT touch the row. Caller persists the chosen id
+// via the existing PUT /api/admin/blues/:id { discogs_id }.
+//   GET /api/admin/blues/discogs-candidates?q=<name>[&per_page=10]
+app.get("/api/admin/blues/discogs-candidates", async (req, res) => {
+  const adminId = await requireAdmin(req, res);
+  if (!adminId) return;
+  const client = await getDiscogsClientForUser(adminId);
+  if (!client) {
+    res.status(400).json({ error: "Admin has not connected Discogs via OAuth. Connect Discogs on the Account page first." });
+    return;
+  }
+  const q = String(req.query.q ?? "").trim();
+  if (!q) { res.status(400).json({ error: "q required" }); return; }
+  const perPageRaw = parseInt(String(req.query.per_page ?? "10"), 10);
+  const perPage = Number.isFinite(perPageRaw) ? Math.max(1, Math.min(25, perPageRaw)) : 10;
+  try {
+    const data: any = await (client as any).get("/database/search", {
+      q, type: "artist", per_page: String(perPage),
+    });
+    const results = Array.isArray(data?.results) ? data.results : [];
+    // Slim each result down to what the picker needs: id, the
+    // possibly-suffixed display name (Discogs disambiguates dupes
+    // with "(2)" / "(3)" etc.), thumbnail, and the resource URL so
+    // the admin can click through to confirm. We deliberately don't
+    // hit /artists/:id per result — that'd cost N extra requests
+    // for a screen the admin might just glance at.
+    const items = results.map((r: any) => ({
+      id: r?.id ?? null,
+      title: r?.title ?? "",
+      thumb: r?.thumb ?? r?.cover_image ?? "",
+      uri: r?.uri ?? (r?.id ? `/artist/${r.id}` : ""),
+      resource_url: r?.resource_url ?? "",
+    })).filter((it: any) => it.id);
+    res.json({ items });
+  } catch (err: any) {
+    console.error("[blues discogs-candidates]", err);
+    res.status(502).json({ error: err?.message ?? String(err) });
+  }
+});
+
 // Phase 4 — full Discogs artist record. Walks every row with a
 // discogs_id and pulls /artists/:id, storing bio (profile), aliases,
 // realname, namevariations, members, groups, first image and the
@@ -6042,7 +6084,13 @@ app.post("/api/admin/blues/enrich-discogs-full", async (req, res) => {
   const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
   if (Number.isFinite(idFilter as number)) {
     try {
-      const result = await enrichBluesFromDiscogsArtists(client, { idFilter });
+      // requireExistingId: per-row admin click should NOT silently
+      // pick the top search result. Admin uses the candidate picker
+      // to confirm an id first, then this just pulls the chosen
+      // artist's full record. Bulk path (no idFilter) keeps the old
+      // auto-resolve behaviour so it can sweep through unidentified
+      // rows.
+      const result = await enrichBluesFromDiscogsArtists(client, { idFilter, requireExistingId: true });
       res.json({ ok: true, ...result });
     } catch (err: any) {
       console.error("[blues enrich-discogs-full single]", err);

@@ -867,11 +867,13 @@ export async function enrichBluesFromDiscogsArtists(client, opts = {}) {
                 continue;
             attempted++;
             reportProgress(row.name);
-            // Fallback: resolve missing discogs_id by name search before
-            // skipping. Persist on success so future passes don't pay the
-            // extra lookup. Mirrors the MB / Wikipedia enricher pattern.
+            // Resolve missing discogs_id by name search ONLY in bulk mode
+            // (idFilter unset). Per-row mode should never silently pick the
+            // top search result — the admin uses the candidate picker to
+            // confirm an id explicitly, and a per-row run after that just
+            // pulls the chosen artist's record.
             let resolvedId = row.discogs_id;
-            if (!resolvedId) {
+            if (!resolvedId && !opts.requireExistingId) {
                 try {
                     resolvedId = await _searchDiscogsArtist(client, row.name);
                 }

@@ -206,12 +206,31 @@
                 <button type="button" class="admin-btn admin-btn-danger" id="blues-editor-delete" onclick="bluesDbDeleteFromEditor()" style="margin-right:auto;display:none">Delete</button>
                 <button type="button" class="admin-btn" id="blues-editor-mb" onclick="bluesDbEnrichEditorRow()" title="Pull first/last recording year + title from MusicBrainz for THIS artist (uses the MBID in the field above)" style="display:none">Enrich from MB</button>
                 <button type="button" class="admin-btn" id="blues-editor-wiki" onclick="bluesDbEnrichEditorWiki()" title="Pull the Wikipedia lead paragraph into the notes field (uses wikipedia_suffix). Force-overwrites existing notes." style="display:none">Wiki notes</button>
-                <button type="button" class="admin-btn" id="blues-editor-discogs" onclick="bluesDbEnrichEditorDiscogs()" title="Search Discogs by artist name and fill discogs_id" style="display:none">Find Discogs ID</button>
+                <button type="button" class="admin-btn" id="blues-editor-discogs" onclick="bluesDbOpenDiscogsPicker()" title="Search Discogs by name and let YOU pick the right match (vs. silently taking the top result)" style="display:none">Pick Discogs match</button>
                 <button type="button" class="admin-btn" id="blues-editor-yt" onclick="bluesDbEnrichEditorYt()" title="Search YouTube for the artist + first known recording, append top 3 video URLs (~100 quota units)" style="display:none">Find YouTube</button>
                 <button type="button" class="admin-btn" onclick="bluesDbCloseEditor()">Cancel</button>
                 <button type="submit" class="admin-btn admin-btn-extras">Save</button>
               </div>
             </form>
+          </div>
+        </div>
+
+        <!-- Discogs candidate picker — opened from the editor's "Pick
+             Discogs match" button. Lists top Discogs artists matching
+             the row's name so the admin can choose explicitly (instead
+             of letting the server silently grab the top search hit). -->
+        <div id="blues-discogs-picker" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.78);z-index:310;align-items:flex-start;justify-content:center;padding:2rem 1rem;overflow:auto" onclick="if(event.target===this)bluesDbCloseDiscogsPicker()">
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;width:min(640px,90vw);max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
+            <div style="display:flex;align-items:center;gap:0.6rem;padding:0.6rem 0.8rem;border-bottom:1px solid var(--border)">
+              <span style="font-weight:600;font-size:0.9rem;color:#ddd">Pick a Discogs match</span>
+              <span id="blues-discogs-picker-status" style="font-size:0.72rem;color:var(--muted);flex:1"></span>
+              <button type="button" class="admin-btn" onclick="bluesDbCloseDiscogsPicker()">Close</button>
+            </div>
+            <div style="display:flex;gap:0.5rem;padding:0.5rem 0.8rem;border-bottom:1px solid var(--border)">
+              <input id="blues-discogs-picker-q" type="search" placeholder="Search Discogs for…" style="flex:1;padding:0.4rem 0.6rem;font-size:0.85rem" onkeydown="if(event.key==='Enter')bluesDbRunDiscogsPicker()" />
+              <button type="button" class="admin-btn" onclick="bluesDbRunDiscogsPicker()">Search</button>
+            </div>
+            <div id="blues-discogs-picker-results" style="overflow-y:auto;padding:0.5rem 0.8rem 0.8rem;flex:1;font-size:0.82rem;color:var(--muted)"></div>
           </div>
         </div>
       </div>
@@ -1964,8 +1983,108 @@ function bluesDbEnrichYt(id) {
   });
 }
 function bluesDbEnrichEditorWiki()    { const id = _bluesDbState.editingId; if (id) bluesDbEnrichWiki(id); }
-function bluesDbEnrichEditorDiscogs() { const id = _bluesDbState.editingId; if (id) bluesDbEnrichDiscogs(id); }
 function bluesDbEnrichEditorYt()      { const id = _bluesDbState.editingId; if (id) bluesDbEnrichYt(id); }
+
+// ── Discogs candidate picker ────────────────────────────────────────
+// Opened from the editor's "Pick Discogs match" button. Shows the top
+// Discogs artist hits for the row's name so the admin can pick the
+// right one when several artists share a name. The chosen id is
+// PUT onto the row via the existing /api/admin/blues/:id endpoint.
+function bluesDbOpenDiscogsPicker() {
+  const id = _bluesDbState.editingId;
+  if (!id) return;
+  // Default the search box to whatever's currently in the name field.
+  const form = document.getElementById("blues-editor-form");
+  const nameVal = form?.elements?.namedItem("name")?.value?.trim() || "";
+  const overlay = document.getElementById("blues-discogs-picker");
+  const qInput = document.getElementById("blues-discogs-picker-q");
+  const status = document.getElementById("blues-discogs-picker-status");
+  const results = document.getElementById("blues-discogs-picker-results");
+  if (!overlay || !qInput || !results) return;
+  qInput.value = nameVal;
+  if (status) status.textContent = "";
+  results.innerHTML = nameVal
+    ? `<div style="color:#777">Click Search to fetch candidates.</div>`
+    : `<div style="color:#777">Type a name above and click Search.</div>`;
+  overlay.style.display = "flex";
+  setTimeout(() => qInput.focus(), 30);
+  // Auto-fetch if we have a name to save the user a click.
+  if (nameVal) bluesDbRunDiscogsPicker();
+}
+function bluesDbCloseDiscogsPicker() {
+  const overlay = document.getElementById("blues-discogs-picker");
+  if (overlay) overlay.style.display = "none";
+}
+async function bluesDbRunDiscogsPicker() {
+  const qInput = document.getElementById("blues-discogs-picker-q");
+  const status = document.getElementById("blues-discogs-picker-status");
+  const results = document.getElementById("blues-discogs-picker-results");
+  if (!qInput || !results) return;
+  const q = qInput.value.trim();
+  if (!q) { results.innerHTML = `<div style="color:#a55">Enter a name first.</div>`; return; }
+  if (status) status.textContent = "Searching…";
+  results.innerHTML = `<div style="color:#777">Loading…</div>`;
+  try {
+    const r = await apiFetch("/api/admin/blues/discogs-candidates?q=" + encodeURIComponent(q));
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      results.innerHTML = `<div style="color:#a55">${(err.error || "Search failed").replace(/</g,"&lt;")}</div>`;
+      if (status) status.textContent = "";
+      return;
+    }
+    const data = await r.json();
+    const items = Array.isArray(data?.items) ? data.items : [];
+    if (status) status.textContent = `${items.length} match${items.length === 1 ? "" : "es"}`;
+    if (!items.length) {
+      results.innerHTML = `<div style="color:#777">No matches on Discogs for "${q.replace(/</g,"&lt;")}".</div>`;
+      return;
+    }
+    const esc = (s) => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
+    results.innerHTML = `<ul style="list-style:none;margin:0;padding:0">${items.map(it => {
+      const thumbHtml = it.thumb
+        ? `<img src="${esc(it.thumb)}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:3px;flex-shrink:0;background:#222" />`
+        : `<span style="width:48px;height:48px;border-radius:3px;background:#222;flex-shrink:0;display:inline-block"></span>`;
+      const discogsLink = it.uri
+        ? `https://www.discogs.com${it.uri}`
+        : `https://www.discogs.com/artist/${it.id}`;
+      return `<li style="display:flex;align-items:center;gap:0.6rem;padding:0.4rem 0.3rem;border-bottom:1px solid rgba(255,255,255,0.06)">
+        ${thumbHtml}
+        <span style="flex:1;min-width:0">
+          <a href="${esc(discogsLink)}" target="_blank" rel="noopener" style="color:#ddd;text-decoration:none;font-weight:600">${esc(it.title)}</a>
+          <div style="font-size:0.7rem;color:#777">id ${it.id} · <a href="${esc(discogsLink)}" target="_blank" rel="noopener" style="color:#888;text-decoration:underline">view on Discogs</a></div>
+        </span>
+        <button type="button" class="admin-btn" onclick="bluesDbPickDiscogsCandidate(${it.id})">Pick</button>
+      </li>`;
+    }).join("")}</ul>`;
+  } catch (e) {
+    results.innerHTML = `<div style="color:#a55">Search error: ${String(e).replace(/</g,"&lt;")}</div>`;
+    if (status) status.textContent = "";
+  }
+}
+async function bluesDbPickDiscogsCandidate(discogsId) {
+  const id = _bluesDbState.editingId;
+  if (!id) return;
+  if (!confirm(`Set this row's discogs_id to ${discogsId}?`)) return;
+  try {
+    const r = await apiFetch("/api/admin/blues/" + id, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ discogs_id: discogsId }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert("Save failed: " + (err.error ?? r.status));
+      return;
+    }
+    // Refresh the editor with the new id so the user can immediately
+    // hit "Get all info from Discogs" against the confirmed match.
+    bluesDbCloseDiscogsPicker();
+    bluesDbOpenEditor(id);
+    bluesDbLoadList();
+  } catch (e) {
+    alert("Save failed: " + e);
+  }
+}
 
 async function bluesDbOpenEditor(id) {
   _bluesDbState.editingId = id;
