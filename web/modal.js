@@ -3515,7 +3515,16 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     ? `<span class="tracklist-playable">(${playableCount}${firstPlayableUrl ? ` <a href="#" class="tracklist-play-all" onclick="event.preventDefault();event.stopPropagation();playAlbumAndQueue(this,'${firstPlayableUrl.replace(/'/g, "\\'")}')" title="Play the first track and queue the rest of the album">▶</a>` : ""}${playableCount >= 1 ? ` <a href="#" class="tracklist-queue-album" onclick="event.preventDefault();event.stopPropagation();queueAddAlbum(this)" title="Add all playable tracks to the bottom of your queue">＋</a>` : ""}${albumFindMissingLink})</span>`
     : (albumFindMissingLink ? `<span class="tracklist-playable">(${albumFindMissingLink})</span>` : "");
   const tracklistOpen = localStorage.getItem("tracklist-open") !== "false";
-  const trackHTML = tracks.length ? `
+  // Render the tracklist block whenever there's something to show in
+  // it: regular tracks OR a Full Album row (existing override or
+  // admin-submittable). Without this, an album with zero tracks but
+  // a Full Album override never renders the row, so the play / queue
+  // affordances + the data-release-id / data-release-type attrs
+  // don't reach the DOM — the disc icon in the mini-player can't
+  // backfill its album link from the queue entry's data, and the
+  // user can't even play the override from the modal.
+  const _showTrackHTML = tracks.length > 0 || fullAlbumRowVisible;
+  const trackHTML = _showTrackHTML ? `
     <div class="album-tracklist">
       <div class="tracklist-header">
         <div class="tracklist-heading tracklist-toggle" onclick="toggleTracklist(this)" title="Click to collapse/expand tracklist"><span class="tracklist-arrow">${tracklistOpen ? "▼" : "▶"}</span> Tracklist ${playableMeta}</div>
