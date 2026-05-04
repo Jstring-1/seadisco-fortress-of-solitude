@@ -1775,11 +1775,18 @@ footer a.nav-rec-empty { display: none !important; }
 }
 /* ── Unified pill base ────────────────────────────────────────────────── */
 .pill {
-  display: inline-block;
+  /* inline-flex + align-items:center + line-height:1 strips the
+     descender / line-height padding that inline-block inherits from
+     the document's default 1.5 line-height, so the pill height
+     matches its text + padding exactly instead of having an extra
+     ~6px of empty space below the glyph. */
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 20px;
-  padding: 0.2rem 0.65rem;
+  padding: 0.3rem 0.65rem;
   font-size: 0.72rem;
   color: var(--muted-dim);
   cursor: pointer;
