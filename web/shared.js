@@ -1314,6 +1314,11 @@ function renderSharedFooter(opts) {
     info:       "About SeaDisco",
     privacy:    "Privacy policy",
     terms:      "Terms of service",
+    // Home-strip tabs (footer column shortcut)
+    recent:      "Albums you've recently viewed",
+    suggestions: "Personalized suggestions from your taste profile",
+    submitted:   "Albums you've contributed YouTube videos for",
+    feed:        "Random sample from the catalog cache — explore freely",
   };
   // data-sd-view marks the link for the live href-sync system below.
   // `idAttr` is used for admin-only gated links so the post-/api/me
@@ -1344,6 +1349,21 @@ function renderSharedFooter(opts) {
     return `<a${cls} href="${href}" data-sd-view="${tab}" title="${escHtml(tip)}">${label}</a>`;
   };
 
+  // Home-strip tab footer link — drops the user on the search/home
+  // view with the named strip mode active. recent is the default so
+  // it omits the ?strip= param; the rest deep-link via ?strip=<mode>
+  // (the search page picks that up on load via _sdInitialHomeStripMode).
+  // SPA path uses the in-page switcher when the search view is
+  // already mounted — no full reload, no flash.
+  const stripLink = (label, mode) => {
+    const tip = HINTS[mode] || "";
+    const href = mode === "recent" ? "/" : `/?strip=${mode}`;
+    if (isSPA) {
+      return `<a href="${href}" title="${escHtml(tip)}" onclick="event.preventDefault();switchView('search');setTimeout(()=>{if(typeof _sdSwitchHomeStripTab==='function')_sdSwitchHomeStripTab('${mode}');},0);return false">${label}</a>`;
+    }
+    return `<a href="${href}" title="${escHtml(tip)}">${label}</a>`;
+  };
+
   const footer = document.querySelector("footer");
   if (!footer) return;
   footer.innerHTML = `
@@ -1355,6 +1375,12 @@ function renderSharedFooter(opts) {
         ${recLink("Favorites", "favorites")}
         ${recLink("Inventory", "inventory", true)}
         ${recLink("Lists", "lists", true)}
+      </div>
+      <div class="footer-col">
+        ${stripLink("Recent",      "recent")}
+        ${stripLink("Suggestions", "suggestions")}
+        ${stripLink("Submitted",   "submitted")}
+        ${stripLink("Feed",        "feed")}
       </div>
       <div class="footer-col">
         ${link("LOC",       "loc")}
