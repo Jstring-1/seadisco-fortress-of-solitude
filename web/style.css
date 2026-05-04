@@ -1473,7 +1473,7 @@ body {
    brand presence; mobile breakpoints below scale back down. */
 .text-logo {
   font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
-  font-size: 2.7rem;
+  font-size: 2rem;
   letter-spacing: 0.03em;
   line-height: 1;
   user-select: none;
@@ -1592,18 +1592,19 @@ footer a.nav-rec-empty { display: none !important; }
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  /* Desktop nav icons (~32px → 56px, +75%) so the line-art vinyl
-     details read clearly. Scaled back down at small breakpoints. */
-  width: 56px;
-  height: 56px;
+  /* Trimmed from 56/40/28 — the original sizing was tuned for a
+     vinyl-detail-rich icon set, but at full size the bar dominated
+     the header. Smaller still keeps the line-art readable. */
+  width: 40px;
+  height: 40px;
   opacity: 0.85;
   transition: opacity 0.15s, transform 0.15s;
 }
 @media (max-width: 1024px) {
-  .nav-tab-top.icon-nav .nav-icon { width: 40px; height: 40px; }
+  .nav-tab-top.icon-nav .nav-icon { width: 32px; height: 32px; }
 }
 @media (max-width: 720px) {
-  .nav-tab-top.icon-nav .nav-icon { width: 28px; height: 28px; }
+  .nav-tab-top.icon-nav .nav-icon { width: 22px; height: 22px; }
 }
 .nav-tab-top.icon-nav .nav-icon svg {
   /* SVG markup carries no fixed width/height — fill the container
@@ -1620,21 +1621,22 @@ footer a.nav-rec-empty { display: none !important; }
 }
 /* Discover tab: a bit smaller + greyer than the rest so the
    question-mark glyph reads as "secondary / lookup tool" rather
-   than dominating the bar. Lights up to the accent color on hover
-   / active just like any other tab. */
+   than dominating the bar. Sized at ~80% of the new baseline
+   (40/32/22) and tinted grey. Lights up to the accent color on
+   hover / active just like any other tab. */
 .nav-tab-top.icon-nav[data-view="discover"] .nav-icon {
-  width: 44px;
-  height: 44px;
+  width: 32px;
+  height: 32px;
   color: #6a6a6a;
 }
 @media (max-width: 1024px) {
   .nav-tab-top.icon-nav[data-view="discover"] .nav-icon {
-    width: 32px; height: 32px;
+    width: 26px; height: 26px;
   }
 }
 @media (max-width: 720px) {
   .nav-tab-top.icon-nav[data-view="discover"] .nav-icon {
-    width: 22px; height: 22px;
+    width: 18px; height: 18px;
   }
 }
 .nav-tab-top.icon-nav[data-view="discover"]:hover .nav-icon,
