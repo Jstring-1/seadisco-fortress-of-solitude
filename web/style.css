@@ -3396,6 +3396,13 @@ button.wiki-link-btn:active {
   border-bottom: 1px solid var(--border);
   padding-bottom: 0.4rem;
   margin-bottom: 0.6rem;
+  /* Override .rr-header's justify-content: space-between — the home
+     strip has both a title (left) and filter controls (right), so
+     space-between distributes them. The extras strip only has the
+     tabs, so without this they bunch at the far-left edge of the
+     content gutter. Center them so the strip reads as a balanced
+     sub-nav row. */
+  justify-content: center;
 }
 .rr-controls {
   display: flex;
