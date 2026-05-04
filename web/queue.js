@@ -1634,11 +1634,46 @@ async function _playlistSavePrompt() {
     const items = _queue.map(it => ({
       source: it.source, externalId: it.externalId, data: it.data || {},
     }));
-    const r = await apiFetch("/api/user/playlists", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: trimmed, items }),
-    });
+    // Check for an existing playlist with the same name (case-
+    // insensitive). If one exists, ask whether to overwrite it or
+    // save a copy as a new entry. Overwrite keeps the same id +
+    // share-URL; "Save copy" creates a fresh playlist alongside.
+    let existingId = null;
+    try {
+      const listR = await apiFetch("/api/user/playlists");
+      if (listR.ok) {
+        const { items: existing = [] } = await listR.json();
+        const norm = trimmed.toLowerCase();
+        const match = existing.find(p => String(p.name || "").toLowerCase() === norm);
+        if (match) existingId = match.id;
+      }
+    } catch { /* fall through — treat as no match */ }
+
+    let r, savedId, savedAsOverwrite = false;
+    if (existingId != null) {
+      const overwrite = window.confirm(`A playlist named "${trimmed}" already exists.\n\nOK = overwrite it (keeps the same share link)\nCancel = save a new copy alongside`);
+      if (overwrite) {
+        r = await apiFetch(`/api/user/playlists/${existingId}/replace`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: trimmed, items }),
+        });
+        savedId = existingId;
+        savedAsOverwrite = true;
+      } else {
+        r = await apiFetch("/api/user/playlists", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: trimmed, items }),
+        });
+      }
+    } else {
+      r = await apiFetch("/api/user/playlists", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed, items }),
+      });
+    }
     if (!r.ok) {
       const err = await r.json().catch(() => ({}));
       if (typeof showToast === "function") {
@@ -1646,9 +1681,11 @@ async function _playlistSavePrompt() {
       }
       return;
     }
-    const { id } = await r.json();
+    const j = await r.json();
+    const id = savedId ?? j.id;
     if (typeof showToast === "function") {
-      showToast(`Saved as "${trimmed}" — click 📂 to load it later`);
+      const verb = savedAsOverwrite ? "Overwrote" : "Saved as";
+      showToast(`${verb} "${trimmed}" — click 📂 to load it later`);
     }
     // Drop the share URL onto the clipboard so the user has it ready
     // without an extra step. Best-effort; clipboard API may be blocked.
