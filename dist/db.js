@@ -3640,11 +3640,24 @@ export async function getUserBehaviorStats() {
     // user_tokens row, just in case (defensive — shouldn't happen in
     // practice but cheap to include).
     const r = await getPool().query(`
-    WITH all_users AS (
+    WITH activity_users AS (
+      -- Every clerk_user_id that has touched ANY tracked surface,
+      -- not just user_tokens. Demo accounts authenticate via Clerk
+      -- but route Discogs calls through the admin's OAuth — they
+      -- never write a user_tokens row, so they were invisible here.
+      -- Including every source table means anyone with at least
+      -- one favorite / suggestion / view / play / search shows up.
+      SELECT clerk_user_id FROM user_favorites
+      UNION SELECT clerk_user_id FROM user_personal_suggestions
+      UNION SELECT clerk_user_id FROM user_recent_views
+      UNION SELECT clerk_user_id FROM user_play_events
+      UNION SELECT clerk_user_id FROM user_search_events
+    ), all_users AS (
       SELECT clerk_user_id, discogs_username, last_active_at FROM user_tokens
       UNION
-      SELECT DISTINCT clerk_user_id, NULL::text, NULL::timestamptz FROM user_favorites
-      WHERE NOT EXISTS (SELECT 1 FROM user_tokens t WHERE t.clerk_user_id = user_favorites.clerk_user_id)
+      SELECT DISTINCT a.clerk_user_id, NULL::text, NULL::timestamptz
+        FROM activity_users a
+       WHERE NOT EXISTS (SELECT 1 FROM user_tokens t WHERE t.clerk_user_id = a.clerk_user_id)
     )
     SELECT u.clerk_user_id,
            u.discogs_username     AS username,
