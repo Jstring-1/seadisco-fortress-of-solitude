@@ -67,6 +67,7 @@
         <button class="admin-tab" onclick="switchAdminTab('blues-db')">Blues DB</button>
         <button class="admin-tab" onclick="switchAdminTab('submissions')">Submissions</button>
         <button class="admin-tab" onclick="switchAdminTab('suggestions')">Suggestions</button>
+        <button class="admin-tab" onclick="switchAdminTab('behavior')">Behavior</button>
         <button class="admin-tab" onclick="switchAdminTab('unavailable')">Unavailable</button>
         <button class="admin-tab" onclick="switchAdminTab('theme')">View</button>
       </div>
@@ -261,6 +262,25 @@
         <div id="suggestions-list" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
       </div>
 
+      <!-- Per-user behavior stats -->
+      <div class="admin-tab-panel" id="panel-behavior" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
+          <h2 style="margin:0">User Behavior</h2>
+          <button class="admin-refresh-btn" id="behavior-refresh-btn" onclick="_adminClickRefresh(this, loadAdminBehavior)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <span id="behavior-refresh-status" class="admin-refresh-status"></span>
+        </div>
+        <p style="font-size:0.78rem;color:var(--muted);margin:0 0 0.6rem">
+          Per-user activity counts.
+          Favs = total favorites.
+          Sugg pool = current personal-suggestion row count.
+          Sugg fav'd = how many of those suggestions the user has actually favorited.
+          Album clicks = release/master modal opens (last 30d / lifetime).
+          Plays = media-player track plays (last 30d / lifetime).
+          Searches = Discogs main-search calls (last 30d / lifetime).
+        </p>
+        <div id="behavior-list" style="font-size:0.78rem;color:var(--muted)">Loading…</div>
+      </div>
+
       <!-- Unavailable YouTube videos (auto-flagged via IFrame Player onError) -->
       <div class="admin-tab-panel" id="panel-unavailable" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
@@ -411,6 +431,7 @@ const _adminTabLoaders = {
   'blues-db': () => bluesDbInit(),
   'submissions': () => loadAdminSubmissions(),
   'suggestions': () => loadAdminSuggestions(),
+  'behavior': () => loadAdminBehavior(),
   'unavailable': () => loadAdminUnavailable(),
   'theme': () => initThemePicker(),
 };
@@ -2419,6 +2440,57 @@ async function loadAdminSuggestions() {
   }
 }
 window.loadAdminSuggestions = loadAdminSuggestions;
+
+async function loadAdminBehavior() {
+  const el = document.getElementById("behavior-list");
+  if (!el) return;
+  el.textContent = "Loading…";
+  try {
+    const r = await apiFetch("/api/admin/behavior-stats");
+    if (!r.ok) { el.textContent = "Could not load behavior stats."; return; }
+    const j = await r.json();
+    const rows = Array.isArray(j?.items) ? j.items : [];
+    if (!rows.length) {
+      el.innerHTML = `<div style="color:var(--muted);padding:1rem;text-align:center">No users yet.</div>`;
+      return;
+    }
+    const fmtDate = (d) => d ? new Date(d).toLocaleString() : "—";
+    const fmt2 = (recent, total) => {
+      const r = recent ?? 0; const t = total ?? 0;
+      return `<span style="color:#fff">${r}</span><span style="color:var(--muted)"> / ${t}</span>`;
+    };
+    // Two-line column header so the "30d / total" pair reads
+    // unambiguously without burning horizontal space.
+    const head = `<thead style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted);text-align:left">
+      <tr>
+        <th style="padding:0.3rem 0.5rem">User</th>
+        <th style="padding:0.3rem 0.5rem;text-align:right">Favs</th>
+        <th style="padding:0.3rem 0.5rem;text-align:right">Sugg pool</th>
+        <th style="padding:0.3rem 0.5rem;text-align:right">Sugg fav'd</th>
+        <th style="padding:0.3rem 0.5rem;text-align:right" title="last 30 days / lifetime">Album clicks<br><span style="font-size:0.62rem;text-transform:none;letter-spacing:0">30d / total</span></th>
+        <th style="padding:0.3rem 0.5rem;text-align:right" title="last 30 days / lifetime">Plays<br><span style="font-size:0.62rem;text-transform:none;letter-spacing:0">30d / total</span></th>
+        <th style="padding:0.3rem 0.5rem;text-align:right" title="last 30 days / lifetime">Searches<br><span style="font-size:0.62rem;text-transform:none;letter-spacing:0">30d / total</span></th>
+        <th style="padding:0.3rem 0.5rem">Last active</th>
+      </tr></thead>`;
+    const body = rows.map(u => `<tr style="border-top:1px solid var(--border);font-size:0.78rem">
+      <td style="padding:0.35rem 0.5rem">
+        <div style="font-weight:600">${escHtml(u.username || "—")}</div>
+        <div style="font-family:monospace;font-size:0.65rem;color:var(--muted)">${escHtml(u.clerk_user_id)}</div>
+      </td>
+      <td style="padding:0.35rem 0.5rem;text-align:right;font-variant-numeric:tabular-nums">${u.favorites}</td>
+      <td style="padding:0.35rem 0.5rem;text-align:right;font-variant-numeric:tabular-nums">${u.suggestions_pool}</td>
+      <td style="padding:0.35rem 0.5rem;text-align:right;font-variant-numeric:tabular-nums">${u.suggestions_favorited}</td>
+      <td style="padding:0.35rem 0.5rem;text-align:right;font-variant-numeric:tabular-nums">${fmt2(u.album_clicks_30d, u.album_clicks_total)}</td>
+      <td style="padding:0.35rem 0.5rem;text-align:right;font-variant-numeric:tabular-nums">${fmt2(u.player_plays_30d, u.player_plays_total)}</td>
+      <td style="padding:0.35rem 0.5rem;text-align:right;font-variant-numeric:tabular-nums">${fmt2(u.searches_30d, u.searches_total)}</td>
+      <td style="padding:0.35rem 0.5rem;color:var(--muted);font-size:0.72rem">${escHtml(fmtDate(u.last_active))}</td>
+    </tr>`).join("");
+    el.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">${head}<tbody>${body}</tbody></table></div>`;
+  } catch (e) {
+    el.textContent = "Could not load behavior stats: " + (e?.message || e);
+  }
+}
+window.loadAdminBehavior = loadAdminBehavior;
 
 async function adminSuggestionsRunSelf() {
   const status = document.getElementById("suggestions-action-status");

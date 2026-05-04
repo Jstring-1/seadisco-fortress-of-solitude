@@ -1469,6 +1469,26 @@ async function _locPlay(item) {
     if (typeof showToast === "function") showToast("Playback needs a connection", "error");
     return;
   }
+  // Behavior log (admin stats). Best-effort; anon users no-op
+  // server-side. Logged here at the play-intent moment rather than on
+  // the audio element's "playing" event so a fast-forward through
+  // multiple tracks still gets each one counted. Archive items
+  // (identifier#filename pattern) bucket as "archive" so the admin
+  // stats can tell LOC and Archive plays apart.
+  try {
+    if (typeof apiFetch === "function" && item.id) {
+      const isArchive = String(item.id).includes("#");
+      apiFetch("/api/user/events/play", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          source: isArchive ? "archive" : "loc",
+          externalId: String(item.id),
+          title: item.title || "",
+        }),
+      }).catch(() => {});
+    }
+  } catch {}
   // Unified persistent bar — was a separate #loc-audio-bar element;
   // now LOC playback shares the .mini-player chrome with YouTube and
   // dispatches via window._currentEngine.
