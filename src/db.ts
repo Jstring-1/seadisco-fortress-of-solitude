@@ -4818,6 +4818,21 @@ export async function getYoutubeSearchCache(cacheKey: string, maxAgeSeconds: num
   } catch { return null; }
 }
 
+// Last time we cached a result for this query, regardless of TTL.
+// Used to surface a "last searched <time> ago" hover hint on the
+// external-YouTube fallback link when the popup couldn't fetch
+// fresh results (quota error, etc.).
+export async function getYoutubeSearchCacheTimestamp(cacheKey: string): Promise<Date | null> {
+  try {
+    const r = await getPool().query(
+      `SELECT cached_at FROM youtube_search_cache WHERE cache_key = $1 LIMIT 1`,
+      [cacheKey]
+    );
+    const ca = r.rows[0]?.cached_at;
+    return ca ? new Date(ca) : null;
+  } catch { return null; }
+}
+
 export async function setYoutubeSearchCache(cacheKey: string, body: any): Promise<void> {
   try {
     await getPool().query(
