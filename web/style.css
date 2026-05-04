@@ -1618,6 +1618,30 @@ footer a.nav-rec-empty { display: none !important; }
   opacity: 1;
   transform: scale(1.06);
 }
+/* Discover tab: a bit smaller + greyer than the rest so the
+   question-mark glyph reads as "secondary / lookup tool" rather
+   than dominating the bar. Lights up to the accent color on hover
+   / active just like any other tab. */
+.nav-tab-top.icon-nav[data-view="discover"] .nav-icon {
+  width: 44px;
+  height: 44px;
+  color: #6a6a6a;
+}
+@media (max-width: 1024px) {
+  .nav-tab-top.icon-nav[data-view="discover"] .nav-icon {
+    width: 32px; height: 32px;
+  }
+}
+@media (max-width: 720px) {
+  .nav-tab-top.icon-nav[data-view="discover"] .nav-icon {
+    width: 22px; height: 22px;
+  }
+}
+.nav-tab-top.icon-nav[data-view="discover"]:hover .nav-icon,
+.nav-tab-top.icon-nav[data-view="discover"]:focus-visible .nav-icon,
+.nav-tab-top.icon-nav[data-view="discover"].active .nav-icon {
+  color: var(--accent);
+}
 .nav-tab-top.icon-nav.active::after {
   content: "";
   position: absolute;
@@ -3400,9 +3424,16 @@ button.wiki-link-btn:active {
      strip has both a title (left) and filter controls (right), so
      space-between distributes them. The extras strip only has the
      tabs, so without this they bunch at the far-left edge of the
-     content gutter. Center them so the strip reads as a balanced
-     sub-nav row. */
-  justify-content: center;
+     content gutter. !important needed to beat .rr-header's earlier
+     declaration when both classes apply to the same element. */
+  justify-content: center !important;
+}
+/* Belt-and-suspenders: also center the inner .rr-title-wrap via
+   auto margins so even if a future CSS change overrides the flex
+   centering, the tabs stay visually balanced. */
+.extras-tabs .rr-title-wrap {
+  margin-left: auto;
+  margin-right: auto;
 }
 .rr-controls {
   display: flex;
