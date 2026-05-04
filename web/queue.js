@@ -1728,13 +1728,11 @@ async function _playlistRefreshPicker() {
 }
 
 async function _playlistLoad(id) {
-  // "Load" replaces the queue. Confirm before nuking what's there
-  // unless the queue is already empty.
-  await _queueLoad(false);
-  if (_queue?.length) {
-    const ok = window.confirm(`Replace the current queue (${_queue.length} item${_queue.length === 1 ? "" : "s"}) with this playlist?`);
-    if (!ok) return;
-  }
+  // "Load" replaces the queue. No confirm prompt — clicking Load
+  // is itself the explicit action; popping a dialog made the flow
+  // feel hostile. Existing queue contents are gone after this
+  // call but a Load is reversible (the previous queue items are
+  // still in the user's other playlists / favorites).
   try {
     const r = await apiFetch(`/api/playlists/${id}`);
     if (!r.ok) { if (typeof showToast === "function") showToast("Playlist not found", "error"); return; }
@@ -1834,8 +1832,8 @@ async function _playlistHandleDeepLink() {
       }
       return;
     }
-    const ok = window.confirm(`Load shared playlist "${playlist.name}" (${playlist.items.length} items) into your queue? This replaces the current queue.`);
-    if (!ok) return;
+    // No confirm — clicking the share URL is the user's explicit
+    // intent. A toast announces what just landed in their queue.
     await queueClear();
     await queueAdd(playlist.items.map(it => ({
       source: it.source, externalId: it.externalId, data: it.data || {},

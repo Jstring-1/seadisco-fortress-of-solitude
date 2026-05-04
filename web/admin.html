@@ -548,9 +548,15 @@ async function loadAdminSyncStatus() {
       const authBadge = badges.join('');
       const lastActiveStr = u.lastActiveAt ? fmtRelativeTime(u.lastActiveAt) : "\u2014";
       const lastActiveColor = u.online ? "#4caf50" : "#777";
+      // Display name: prefer Clerk username when present, fall back
+      // to the @discogs-handle. When both are present and differ,
+      // show "clerk (@discogs)" so the admin can match across.
+      const dispName = u.clerkUsername
+        ? (u.clerkUsername !== u.username ? `${u.clerkUsername} (@${u.username})` : u.clerkUsername)
+        : `@${u.username}`;
       return `<div class="sync-row">
         <div class="sync-row-header">
-          <span style="color:var(--fg);font-weight:600;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${u.online ? '#4caf50' : '#444'};margin-right:0.4rem;vertical-align:middle" title="${u.online ? 'Active in last 24h' : 'Inactive 24h+'}"></span>@${u.username}${authBadge}</span>
+          <span style="color:var(--fg);font-weight:600;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${u.online ? '#4caf50' : '#444'};margin-right:0.4rem;vertical-align:middle" title="${u.online ? 'Active in last 24h' : 'Inactive 24h+'}"></span>${dispName}${authBadge}</span>
           <span style="display:flex;gap:0.3rem;align-items:center;flex-shrink:0">
             <a href="#" onclick="event.preventDefault();openAdminItems('${u.username}','collection')" style="font-size:0.68rem;color:var(--accent);text-decoration:none" title="View collection">C</a>
             <a href="#" onclick="event.preventDefault();openAdminItems('${u.username}','wantlist')" style="font-size:0.68rem;color:var(--accent);text-decoration:none" title="View wantlist">W</a>
@@ -2430,7 +2436,10 @@ async function loadAdminSuggestions() {
         <th style="padding:0.3rem 0.5rem">Last generated</th>
       </tr></thead>`;
     const body = rows.map(u => `<tr style="border-top:1px solid var(--border);font-size:0.78rem">
-      <td style="padding:0.35rem 0.5rem;font-family:monospace;font-size:0.72rem;color:var(--muted)">${escHtml(u.clerkUserId)}</td>
+      <td style="padding:0.35rem 0.5rem">
+        ${u.clerkUsername ? `<div style="font-weight:600">${escHtml(u.clerkUsername)}</div>` : ""}
+        <div style="font-family:monospace;font-size:0.65rem;color:var(--muted)">${escHtml(u.clerkUserId)}</div>
+      </td>
       <td style="padding:0.35rem 0.5rem;font-weight:600">${u.count}</td>
       <td style="padding:0.35rem 0.5rem;color:var(--muted)">${escHtml(fmtDate(u.lastGeneratedAt))}</td>
     </tr>`).join("");
@@ -2472,9 +2481,18 @@ async function loadAdminBehavior() {
         <th style="padding:0.3rem 0.5rem;text-align:right" title="last 30 days / lifetime">Searches<br><span style="font-size:0.62rem;text-transform:none;letter-spacing:0">30d / total</span></th>
         <th style="padding:0.3rem 0.5rem">Last active</th>
       </tr></thead>`;
-    const body = rows.map(u => `<tr style="border-top:1px solid var(--border);font-size:0.78rem">
+    const body = rows.map(u => {
+      // Display priority: Clerk username (fresh handle) → Discogs
+      // username (their connected Discogs handle) → "—". When both
+      // are present and differ, the secondary line shows the Discogs
+      // one so the admin can disambiguate.
+      const primary = u.clerk_username || u.username || "—";
+      const secondary = (u.clerk_username && u.username && u.clerk_username !== u.username)
+        ? `discogs: ${u.username}` : "";
+      return `<tr style="border-top:1px solid var(--border);font-size:0.78rem">
       <td style="padding:0.35rem 0.5rem">
-        <div style="font-weight:600">${escHtml(u.username || "—")}</div>
+        <div style="font-weight:600">${escHtml(primary)}</div>
+        ${secondary ? `<div style="font-size:0.65rem;color:var(--muted)">${escHtml(secondary)}</div>` : ""}
         <div style="font-family:monospace;font-size:0.65rem;color:var(--muted)">${escHtml(u.clerk_user_id)}</div>
       </td>
       <td style="padding:0.35rem 0.5rem;text-align:right;font-variant-numeric:tabular-nums">${u.favorites}</td>
@@ -2484,7 +2502,8 @@ async function loadAdminBehavior() {
       <td style="padding:0.35rem 0.5rem;text-align:right;font-variant-numeric:tabular-nums">${fmt2(u.player_plays_30d, u.player_plays_total)}</td>
       <td style="padding:0.35rem 0.5rem;text-align:right;font-variant-numeric:tabular-nums">${fmt2(u.searches_30d, u.searches_total)}</td>
       <td style="padding:0.35rem 0.5rem;color:var(--muted);font-size:0.72rem">${escHtml(fmtDate(u.last_active))}</td>
-    </tr>`).join("");
+    </tr>`;
+    }).join("");
     el.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">${head}<tbody>${body}</tbody></table></div>`;
   } catch (e) {
     el.textContent = "Could not load behavior stats: " + (e?.message || e);

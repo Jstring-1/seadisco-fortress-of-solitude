@@ -333,6 +333,67 @@ async function getClerkUserId(req: express.Request): Promise<string | null> {
   } catch { return null; }
 }
 
+// Map of clerk_user_id → clerk username, populated lazily by
+// _refreshClerkUsernameCache. Cleared every CLERK_USERNAME_TTL_MS so
+// renamed accounts get picked up. The map is module-scoped (not
+// per-request) so admin panels reading multiple endpoints don't pay
+// the Clerk pagination cost more than once per TTL.
+const _CLERK_USERNAME_TTL_MS = 10 * 60 * 1000; // 10 min
+let _clerkUsernameCache: Map<string, string> | null = null;
+let _clerkUsernameCacheAt = 0;
+let _clerkUsernameInflight: Promise<Map<string, string>> | null = null;
+
+async function _refreshClerkUsernameCache(force = false): Promise<Map<string, string>> {
+  const now = Date.now();
+  if (!force && _clerkUsernameCache && now - _clerkUsernameCacheAt < _CLERK_USERNAME_TTL_MS) {
+    return _clerkUsernameCache;
+  }
+  // Coalesce concurrent calls so we only paginate Clerk once per
+  // refresh window even under burst traffic.
+  if (_clerkUsernameInflight) return _clerkUsernameInflight;
+  _clerkUsernameInflight = (async () => {
+    const out = new Map<string, string>();
+    const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
+    if (!clerkSecret) return out;
+    try {
+      let offset = 0;
+      while (true) {
+        const resp = await fetch(`https://api.clerk.com/v1/users?limit=100&offset=${offset}`, {
+          headers: { Authorization: `Bearer ${clerkSecret}` },
+        });
+        if (!resp.ok) break;
+        const clerkUsers = await resp.json() as Array<{
+          id: string;
+          username: string | null;
+          first_name: string | null;
+          last_name: string | null;
+          email_addresses?: Array<{ email_address: string }>;
+        }>;
+        if (!clerkUsers.length) break;
+        for (const u of clerkUsers) {
+          // Prefer username; fall back to first+last name; then email
+          // local-part. Empty string just means "no display name set"
+          // which the caller can treat as missing.
+          const display = u.username
+            || [u.first_name, u.last_name].filter(Boolean).join(" ")
+            || u.email_addresses?.[0]?.email_address?.split("@")[0]
+            || "";
+          if (display) out.set(u.id, display);
+        }
+        if (clerkUsers.length < 100) break;
+        offset += 100;
+      }
+      _clerkUsernameCache = out;
+      _clerkUsernameCacheAt = Date.now();
+    } catch (e) {
+      console.warn("[clerk username cache]", (e as any)?.message ?? e);
+    }
+    return out;
+  })();
+  try { return await _clerkUsernameInflight; }
+  finally { _clerkUsernameInflight = null; }
+}
+
 /** Build a DiscogsClient from a request's authenticated user. OAuth-only —
  *  Personal Access Token support has been removed. Returns null if the user
  *  is unauthenticated or has not connected via OAuth. */
@@ -607,7 +668,14 @@ app.use((_req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  // clipboard-read=() disables the navigator.clipboard.readText() API
+  // for every origin, so any third-party widget (Clerk's auth modal
+  // had been triggering this) that tries to autofill from the user's
+  // clipboard fails silently instead of popping the "seadisco.com
+  // wants to See text and images copied to the clipboard" prompt.
+  // Doesn't affect clipboard.writeText() — share / copy buttons keep
+  // working since clipboard-write is not in this list.
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), clipboard-read=()");
   next();
 });
 
@@ -5483,8 +5551,15 @@ app.post("/api/user/events/play", express.json({ limit: "4kb" }), async (req, re
 app.get("/api/admin/behavior-stats", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   try {
-    const items = await getUserBehaviorStats();
-    res.json({ items });
+    const [items, clerkUsernames] = await Promise.all([
+      getUserBehaviorStats(),
+      _refreshClerkUsernameCache().catch(() => new Map<string, string>()),
+    ]);
+    const enriched = items.map((u: any) => ({
+      ...u,
+      clerk_username: clerkUsernames.get(u.clerk_user_id) ?? null,
+    }));
+    res.json({ items: enriched });
   } catch (e: any) {
     res.status(500).json({ error: String(e?.message ?? e) });
   }
@@ -5606,11 +5681,21 @@ app.get("/api/admin/sync-status", async (req, res) => {
     } catch { /* ignore — activity data is best-effort */ }
   }
 
+  // Clerk usernames — populate from the same cache used by the
+  // behavior-stats panel so admin views agree on display names.
+  const clerkUsernames = await _refreshClerkUsernameCache().catch(() => new Map<string, string>());
+
   const oneDayAgoMs = Date.now() - 24 * 60 * 60 * 1000;
   const enriched = users.map(u => {
     const lastActiveAt = lastActiveMap.get(u.clerkUserId) ?? null;
     const favoriteCount = favCounts.get(u.clerkUserId) ?? 0;
-    return { ...u, online: lastActiveAt ? lastActiveAt > oneDayAgoMs : false, lastActiveAt, favoriteCount };
+    return {
+      ...u,
+      clerkUsername: clerkUsernames.get(u.clerkUserId) ?? null,
+      online: lastActiveAt ? lastActiveAt > oneDayAgoMs : false,
+      lastActiveAt,
+      favoriteCount,
+    };
   });
   res.json({ users: enriched });
 });
@@ -7352,8 +7437,15 @@ app.get("/api/admin/db-table/:name", async (req, res) => {
 app.get("/api/admin/suggestions-stats", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   try {
-    const stats = await getPersonalSuggestionsStats();
-    res.json({ users: stats });
+    const [stats, clerkUsernames] = await Promise.all([
+      getPersonalSuggestionsStats(),
+      _refreshClerkUsernameCache().catch(() => new Map<string, string>()),
+    ]);
+    const enriched = stats.map((u: any) => ({
+      ...u,
+      clerkUsername: clerkUsernames.get(u.clerkUserId) ?? null,
+    }));
+    res.json({ users: enriched });
   } catch (e: any) {
     console.error("[/api/admin/suggestions-stats]", e?.message ?? e);
     res.status(500).json({ error: String(e?.message ?? e) });
