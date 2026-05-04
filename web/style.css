@@ -5492,6 +5492,72 @@ body.card-mode-wide .card-tracklist {
 /* Slightly brighter overlay backdrop so the dimmed page reads as
    a clear "behind the modal" surface and the modal pops forward. */
 .cl-modalBackdrop { background: rgba(0, 0, 0, 0.65) !important; }
+
+/* ── Clerk button colors (sign-in / sign-up / verification code) ──
+   The appearance.elements API only sets inline styles, which Clerk's
+   own stylesheet sometimes wins against (notably the primary submit
+   button rendering as white-on-white). Hardened !important rules
+   below cover every modal: SignIn, SignUp, code verification, password
+   reset, user-button menu, and the inline #clerk-sign-in widget on
+   the Account view. */
+.cl-formButtonPrimary,
+.cl-formButtonPrimary:hover,
+.cl-formButtonPrimary:focus,
+.cl-formButtonPrimary:active {
+  background: var(--accent, #ff6b35) !important;
+  color: #fff !important;
+  border: none !important;
+  font-weight: 600 !important;
+  text-shadow: none !important;
+  box-shadow: none !important;
+}
+.cl-formButtonPrimary:hover { filter: brightness(1.08); }
+.cl-formButtonPrimary:disabled,
+.cl-formButtonPrimary[disabled] {
+  background: #4a3220 !important;
+  color: #d8c6a8 !important;
+  opacity: 0.85 !important;
+}
+/* Secondary / reset (Back, Cancel, etc.) — dark surface, light text. */
+.cl-formButtonReset,
+.cl-formButtonReset:hover {
+  background: transparent !important;
+  color: var(--muted, #a89880) !important;
+  border: 1px solid var(--border, #2e2518) !important;
+}
+.cl-formButtonReset:hover { color: var(--text, #e8dcc8) !important; }
+/* Social provider buttons — Google, GitHub, etc. */
+.cl-socialButtonsBlockButton,
+.cl-socialButtonsIconButton {
+  background: var(--surface, #0e0c08) !important;
+  color: var(--text, #e8dcc8) !important;
+  border: 1px solid var(--border, #2e2518) !important;
+}
+.cl-socialButtonsBlockButton:hover,
+.cl-socialButtonsIconButton:hover {
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+/* Footer "Sign in" / "Sign up" swap link — accent, no white-on-white. */
+.cl-footerActionLink,
+.cl-footerActionLink:hover,
+.cl-footerActionLink:visited {
+  color: var(--accent, #ff6b35) !important;
+}
+/* Verification-code input cells — Clerk renders them as separate boxes
+   that can default to white. Match the dark form field styling. */
+.cl-otpCodeFieldInput {
+  background: var(--surface, #0e0c08) !important;
+  color: var(--text, #e8dcc8) !important;
+  border: 1px solid var(--border, #2e2518) !important;
+}
+/* Form inputs (email / password) — make sure they're not the source
+   of any other white surface. Belt-and-suspenders alongside the
+   appearance string. */
+.cl-formFieldInput {
+  background: var(--surface, #0e0c08) !important;
+  color: var(--text, #e8dcc8) !important;
+  border: 1px solid var(--border, #2e2518) !important;
+}
 .user-email { color: #aaa; font-size: 0.85rem; margin-bottom: 1.2rem; }
 .section-divider { border: none; border-top: 1px solid #333; margin: 1.5rem 0; }
 
