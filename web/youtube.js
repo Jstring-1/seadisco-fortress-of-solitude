@@ -682,55 +682,12 @@ async function openYoutubePopup(query) {
 //   https://www.youtube.com/embed/ABCDEFGHIJK
 //   https://www.youtube.com/shorts/ABCDEFGHIJK
 //   ABCDEFGHIJK (raw 11-char ID)
-// Render an ISO timestamp as "5 minutes ago", "2 hours ago", "3 days
-// ago", etc. — used for the external-YouTube fallback link's hover
-// text on quota-error 429s. Returns "" if the input can't be parsed.
-function _ytFormatRelativeTime(iso) {
-  if (!iso) return "";
-  const t = Date.parse(iso);
-  if (!Number.isFinite(t)) return "";
-  const diffMs = Date.now() - t;
-  if (diffMs < 0) return "just now";
-  const sec = Math.floor(diffMs / 1000);
-  if (sec < 60) return `${sec} second${sec === 1 ? "" : "s"} ago`;
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min} minute${min === 1 ? "" : "s"} ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr} hour${hr === 1 ? "" : "s"} ago`;
-  const day = Math.floor(hr / 24);
-  if (day < 30) return `${day} day${day === 1 ? "" : "s"} ago`;
-  const mo = Math.floor(day / 30);
-  if (mo < 12) return `${mo} month${mo === 1 ? "" : "s"} ago`;
-  const yr = Math.floor(day / 365);
-  return `${yr} year${yr === 1 ? "" : "s"} ago`;
-}
-
-// Lazy hover enrichment for any YT-submission affordance carrying
-// data-yt-q="<query>". On first hover, fire one /api/youtube/search-meta
-// lookup (no quota cost — pure cache read) and update the title
-// attribute with "Last searched X ago" or "Never searched here yet".
-// Subsequent hovers no-op via data-yt-meta-fetched flag.
-window._ytEnrichLastSearched = window._ytEnrichLastSearched || async function (el) {
-  if (!el || el.dataset.ytMetaFetched === "1") return;
-  const q = el.dataset.ytQ || "";
-  if (!q) return;
-  el.dataset.ytMetaFetched = "1";   // optimistic — block re-fetches even if this errors
-  try {
-    const r = await apiFetch(`/api/youtube/search-meta?q=${encodeURIComponent(q)}`);
-    if (!r.ok) return;
-    const j = await r.json();
-    const baseTitle = el.dataset.ytTitleBase || el.title || "";
-    if (!el.dataset.ytTitleBase) el.dataset.ytTitleBase = baseTitle;
-    let suffix;
-    if (j.lastSearchedAt) {
-      const rel = (typeof _ytFormatRelativeTime === "function") ? _ytFormatRelativeTime(j.lastSearchedAt) : "";
-      suffix = rel ? ` · last searched ${rel}` : "";
-    } else {
-      suffix = ` · not searched yet`;
-    }
-    el.title = baseTitle + suffix;
-  } catch { /* leave title as-is */ }
-};
+// _ytFormatRelativeTime + _ytEnrichLastSearched moved to shared.js so
+// the hover handler on the album-suggest "🎵 N missing" link works
+// from a cold modal — youtube.js is lazy-loaded and wasn't on the
+// page yet when the handler fired. Re-exported here under the same
+// name for any in-file callers.
+const _ytFormatRelativeTime = window._ytFormatRelativeTime || (() => "");
 
 function _ytExtractVideoId(input) {
   const s = String(input || "").trim();
