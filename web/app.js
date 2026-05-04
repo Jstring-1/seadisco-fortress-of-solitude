@@ -29,6 +29,11 @@ function _hasSearch(p) { return p.get("q") || p.get("a") || p.get("ar") || p.get
 // routing (wiki/loc are admin-only) so we don't briefly render the
 // page before shared.js's footer probe resolves. Returns the cached
 // boolean if already known.
+// Exposed on window so other modules (e.g. switchView's extras-tab
+// gating in collection.js) can wait for the admin probe before
+// deciding whether to show admin-only affordances. Without this,
+// a direct URL nav like /?v=loc evaluates _isAdmin before the
+// flag resolves and hides the YouTube tab even for admin.
 async function _ensureAdminFlag() {
   if (typeof window._isAdmin === "boolean") return window._isAdmin;
   try {
@@ -47,6 +52,7 @@ async function _ensureAdminFlag() {
     return false;
   }
 }
+window._ensureAdminFlag = _ensureAdminFlag;
 
 // ── Restore from URL on page load ────────────────────────────────────────
 (async function () {

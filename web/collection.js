@@ -521,14 +521,26 @@ function switchView(view, skipPushState = false) {
         if (el) el.classList.toggle("rr-tab-active", k === view);
       }
       // Reveal the YouTube tab + its preceding separator only when
-      // the user has YT submission access — anons / regular users
-      // never see it. Same gate as the footer YouTube link.
-      const ytAccess = typeof window._sdHasYtAccess === "function"
-        ? window._sdHasYtAccess()
-        : !!window._isAdmin;
-      const ytSep = document.getElementById("extras-tab-youtube-sep");
-      if (tabs.youtube) tabs.youtube.style.display = ytAccess ? "" : "none";
-      if (ytSep)        ytSep.style.display       = ytAccess ? "" : "none";
+      // the user has YT submission access. Race condition guard:
+      // _isAdmin / _sdYtOpen are populated lazily by _ensureAdminFlag,
+      // so on direct URL nav (/?v=loc) the first call here may see
+      // them undefined and hide the YouTube tab even for admin. Run
+      // _ensureAdminFlag first if it hasn't resolved yet, then sync.
+      const _syncYt = () => {
+        const ytAccess = typeof window._sdHasYtAccess === "function"
+          ? window._sdHasYtAccess()
+          : !!window._isAdmin;
+        const ytSep = document.getElementById("extras-tab-youtube-sep");
+        if (tabs.youtube) tabs.youtube.style.display = ytAccess ? "" : "none";
+        if (ytSep)        ytSep.style.display       = ytAccess ? "" : "none";
+      };
+      _syncYt();
+      if (typeof window._isAdmin !== "boolean" && typeof window._ensureAdminFlag === "function") {
+        // Fire the admin probe and re-sync once it resolves so the
+        // YouTube tab pops in for admin/demo without requiring a
+        // page reload.
+        window._ensureAdminFlag().then(() => _syncYt()).catch(() => {});
+      }
     } else {
       _extrasTabs.style.display = "none";
     }

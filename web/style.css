@@ -5795,13 +5795,15 @@ body:has(.queue-drawer.open) #scroll-top-btn {
   gap: 3rem;
   margin-bottom: 1.5rem;
 }
-/* Three columns aligned around the center: left col right-aligned,
-   middle col centered, right col left-aligned. Visually mirrored
-   around the page midpoint. Column titles (h4) were removed —
-   each column is just a stack of links now. */
+/* Four columns mirrored around the page midpoint: outer two
+   right/left-aligned to pull the labels inward, inner two
+   right/left-aligned closer to center. Reads as two pairs that
+   visually frame the middle. (Was three cols before the home-strip
+   shortcut column was added between Records and LOC.) */
 .footer-grid > .footer-col:nth-child(1) { text-align: right; }
-.footer-grid > .footer-col:nth-child(2) { text-align: center; }
+.footer-grid > .footer-col:nth-child(2) { text-align: right; }
 .footer-grid > .footer-col:nth-child(3) { text-align: left; }
+.footer-grid > .footer-col:nth-child(4) { text-align: left; }
 .footer-col h4 {
   font-size: 0.72rem;
   text-transform: uppercase;
