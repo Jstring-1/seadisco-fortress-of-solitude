@@ -543,6 +543,54 @@ export async function initDb() {
     )
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_id_type_idx ON release_cache (discogs_id, type)`);
+  // seen_at: NULL = pre-warmed-only (cache-warm job pulled it but no
+  // human has opened the modal yet). Set to NOW() on the first user
+  // click. Feed queries filter WHERE seen_at IS NOT NULL so warmed-
+  // but-unviewed entries don't pollute the public feed pool.
+  //
+  // Wrapped in a DO block so the backfill ONLY runs the first time
+  // the column is added — every prior row was written via the user-
+  // click path (no warm code existed yet), so all of them are
+  // legitimately "engaged" and get stamped. After that initial pass,
+  // NULL seen_at means "still warm-only" and we leave them alone.
+  await getPool().query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+         WHERE table_schema = current_schema()
+           AND table_name = 'release_cache'
+           AND column_name = 'seen_at'
+      ) THEN
+        ALTER TABLE release_cache ADD COLUMN seen_at TIMESTAMPTZ;
+        UPDATE release_cache SET seen_at = cached_at;
+      END IF;
+    END $$;
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_seen_at_idx ON release_cache (seen_at) WHERE seen_at IS NOT NULL`);
+
+  // ── Cache-fetch queue ───────────────────────────────────────────────
+  // Generic backlog of "fetch this album from Discogs and cache it".
+  // Multiple sources enqueue (suggestion generator, future hover-to-
+  // prefetch, LOC backfill, crowd submissions, …) and a single rate-
+  // limited worker drains it during the overnight window. Dedupe is
+  // enforced by the unique (entity_type, discogs_id) constraint —
+  // re-enqueueing a popular album just bumps its priority/source if
+  // higher, no row spam.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS cache_fetch_queue (
+      id            SERIAL      PRIMARY KEY,
+      entity_type   TEXT        NOT NULL,    -- 'master' | 'release'
+      discogs_id    INTEGER     NOT NULL,
+      source        TEXT        NOT NULL DEFAULT 'unknown',
+      priority      INTEGER     NOT NULL DEFAULT 0,
+      requested_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      attempts      INTEGER     NOT NULL DEFAULT 0,
+      last_error    TEXT,
+      UNIQUE(entity_type, discogs_id)
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS cache_fetch_queue_drain_idx ON cache_fetch_queue (priority DESC, requested_at ASC)`);
 
   // ── Phase 4: Price intelligence tables ──────────────────────────────────
   await getPool().query(`
@@ -3663,18 +3711,58 @@ export async function getCachedRelease(
     const ageMs = Date.now() - new Date(row.cached_at).getTime();
     if (ageMs > maxAgeSeconds * 1000) return null;
   }
+  // Promote on first read: a row whose seen_at is NULL was pre-warmed
+  // by the overnight job and hasn't yet been touched by a real user.
+  // Reaching it via getCachedRelease almost always means a user just
+  // opened it (modal / version / suggestion click), so stamp seen_at
+  // now so the feed pool starts including it. Fire-and-forget — no
+  // need to block the response on the bookkeeping. Bare release/
+  // master types only; master-versions / artist are infra caches that
+  // don't need promotion since they don't appear in the feed anyway.
+  if (type === "release" || type === "master") {
+    getPool().query(
+      `UPDATE release_cache SET seen_at = NOW()
+        WHERE discogs_id = $1 AND type = $2 AND seen_at IS NULL`,
+      [discogsId, type],
+    ).catch(() => {});
+  }
   return row.data ?? null;
 }
 
-/** Save a metadata response to cache. Overwrites if already present. */
-export async function cacheRelease(discogsId: number, type: DiscogsCacheType, data: object): Promise<void> {
-  await getPool().query(
-    `INSERT INTO release_cache (discogs_id, type, data, cached_at)
-     VALUES ($1, $2, $3, NOW())
-     ON CONFLICT (discogs_id, type)
-     DO UPDATE SET data = EXCLUDED.data, cached_at = NOW()`,
-    [discogsId, type, JSON.stringify(data)]
-  );
+/** Save a metadata response to cache. Overwrites if already present.
+ *  Default behaviour stamps seen_at = NOW() — i.e. this write came
+ *  from a user click (or any path where surfacing in the feed is
+ *  appropriate). Pass `warmOnly: true` for the cache-warm job so
+ *  the row stays out of the feed until a user actually opens it. */
+export async function cacheRelease(
+  discogsId: number,
+  type: DiscogsCacheType,
+  data: object,
+  opts?: { warmOnly?: boolean },
+): Promise<void> {
+  const warmOnly = !!opts?.warmOnly;
+  if (warmOnly) {
+    // Don't downgrade an existing engaged row back to warm-only —
+    // COALESCE keeps any prior seen_at intact, only sets it if the
+    // current value is NULL (which for a fresh row means leaving it
+    // NULL, i.e. warm-only).
+    await getPool().query(
+      `INSERT INTO release_cache (discogs_id, type, data, cached_at, seen_at)
+       VALUES ($1, $2, $3, NOW(), NULL)
+       ON CONFLICT (discogs_id, type)
+       DO UPDATE SET data = EXCLUDED.data, cached_at = NOW()`,
+      [discogsId, type, JSON.stringify(data)]
+    );
+  } else {
+    await getPool().query(
+      `INSERT INTO release_cache (discogs_id, type, data, cached_at, seen_at)
+       VALUES ($1, $2, $3, NOW(), NOW())
+       ON CONFLICT (discogs_id, type)
+       DO UPDATE SET data = EXCLUDED.data, cached_at = NOW(),
+                     seen_at = COALESCE(release_cache.seen_at, NOW())`,
+      [discogsId, type, JSON.stringify(data)]
+    );
+  }
 }
 
 /** Prune stale cache entries — masters/artists older than 30 days,
@@ -4110,6 +4198,12 @@ export async function getFeedRandomAlbums(
       // Restrict to the two real album types.
       where += `WHERE type IN ('master','release') `;
     }
+    // Hide pre-warmed-but-unviewed rows. The overnight cache-warm job
+    // pulls thousands of suggested albums into release_cache; without
+    // this filter they'd flood the public feed even though no human
+    // has interacted with them. seen_at stamps on first user click,
+    // so the feed only surfaces albums someone actually engaged with.
+    where += "AND seen_at IS NOT NULL ";
     if (exclude.length) {
       params.push(excludeIdsArr);
       const idIdx = params.length;
@@ -4290,6 +4384,95 @@ export async function getUserLibraryMasterIds(clerkUserId: string): Promise<Set<
   return out;
 }
 
+// Diff-based merge: keep existing rows, add only the candidates the
+// user hasn't seen yet. Returns the list of newly-added (id, type)
+// pairs so the caller can enqueue cache-warm fetches just for the
+// genuinely new ones (no point re-fetching what already cached).
+//
+// Old behaviour (replaceUserPersonalSuggestions) wipe-and-replace
+// burned a full Discogs API budget every hour even when 95% of
+// candidates overlapped with the previous run. mergeUserPersonalSuggestions
+// keeps stable rows (no UI shuffle for users) and only writes the
+// genuinely new finds.
+//
+// `excludeKeys` is the union of dismissals + recently-clicked +
+// owned-library masters: candidates that match are skipped at insert
+// time, AND existing rows matching those keys are deleted in the
+// same transaction so already-clicked items get suppressed even on
+// passes where they're not in the new candidate list.
+export async function mergeUserPersonalSuggestions(
+  clerkUserId: string,
+  items: Array<{ id: number; type: "master" | "release"; score: number; data: any }>,
+  opts?: { excludeKeys?: Set<string>; maxRows?: number },
+): Promise<{ added: Array<{ discogs_id: number; entity_type: "master" | "release" }>; suppressed: number }> {
+  const exclude = opts?.excludeKeys ?? new Set<string>();
+  const maxRows = Math.max(50, Math.min(2000, opts?.maxRows ?? 1000));
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    // Suppress excluded keys (e.g. recently-clicked) from any existing
+    // rows. They might have been added in a previous pass before the
+    // user opened them.
+    if (exclude.size) {
+      const arr = Array.from(exclude);
+      const ids   = arr.map(k => Number(k.split(":")[1])).filter(n => Number.isFinite(n));
+      const types = arr.map(k => k.split(":")[0]);
+      if (ids.length) {
+        await client.query(
+          `DELETE FROM user_personal_suggestions
+            WHERE clerk_user_id = $1
+              AND (discogs_id, entity_type) IN (
+                SELECT * FROM unnest($2::int[], $3::text[])
+              )`,
+          [clerkUserId, ids, types],
+        );
+      }
+    }
+    // Pull existing keys so we can tell new rows from updates.
+    const existingRows = await client.query(
+      `SELECT discogs_id, entity_type FROM user_personal_suggestions WHERE clerk_user_id = $1`,
+      [clerkUserId],
+    );
+    const existing = new Set<string>(existingRows.rows.map(r => `${r.entity_type}:${r.discogs_id}`));
+    const added: Array<{ discogs_id: number; entity_type: "master" | "release" }> = [];
+    let suppressed = 0;
+    for (const it of items) {
+      const key = `${it.type}:${it.id}`;
+      if (exclude.has(key)) { suppressed++; continue; }
+      const isNew = !existing.has(key);
+      await client.query(
+        `INSERT INTO user_personal_suggestions
+           (clerk_user_id, discogs_id, entity_type, score, data, generated_at)
+         VALUES ($1, $2, $3, $4, $5::jsonb, NOW())
+         ON CONFLICT (clerk_user_id, discogs_id, entity_type) DO UPDATE
+           SET score = EXCLUDED.score, data = EXCLUDED.data`,  // generated_at intentionally NOT touched on conflict
+        [clerkUserId, it.id, it.type, it.score, JSON.stringify(it.data ?? {})],
+      );
+      if (isNew) added.push({ discogs_id: it.id, entity_type: it.type });
+    }
+    // Cap row count: drop the lowest-score rows past maxRows so the
+    // table doesn't grow unbounded over many merges.
+    await client.query(
+      `DELETE FROM user_personal_suggestions
+        WHERE clerk_user_id = $1
+          AND (discogs_id, entity_type) NOT IN (
+            SELECT discogs_id, entity_type FROM user_personal_suggestions
+             WHERE clerk_user_id = $1
+             ORDER BY score DESC, generated_at DESC
+             LIMIT $2
+          )`,
+      [clerkUserId, maxRows],
+    );
+    await client.query("COMMIT");
+    return { added, suppressed };
+  } catch (e) {
+    await client.query("ROLLBACK").catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 // Wipe + insert: the job overwrites the user's previous batch each
 // run so the row count never grows beyond N per user. data is the
 // card snapshot so the UI can render without further Discogs calls.
@@ -4373,6 +4556,162 @@ export async function getUserPersonalSuggestions(
     );
     return r.rows;
   } catch { return []; }
+}
+
+// ── cache_fetch_queue helpers ─────────────────────────────────────
+//
+// Single chokepoint for "I want this album cached but I don't want
+// to wait on a Discogs fetch." Anyone who wants an album cached
+// drops a row in via enqueueCacheFetches; the rate-limited worker
+// drains it. Dedupe is automatic via the unique constraint on
+// (entity_type, discogs_id).
+
+export async function enqueueCacheFetches(
+  refs: Array<{ entity_type: "master" | "release"; discogs_id: number }>,
+  source: string = "unknown",
+  priority: number = 0,
+): Promise<number> {
+  if (!Array.isArray(refs) || !refs.length) return 0;
+  // Skip rows already in release_cache — no point queueing a fetch
+  // for something we already have. Doing this filter in SQL beats
+  // round-tripping each id individually.
+  const types = refs.map(r => r.entity_type);
+  const ids   = refs.map(r => Number(r.discogs_id));
+  // INSERT ... SELECT ... LEFT JOIN release_cache so already-cached
+  // rows skip insertion. ON CONFLICT bumps priority+source if the
+  // new request is higher priority — useful for "user just clicked
+  // this from search results, prioritize the prefetch."
+  const r = await getPool().query(
+    `INSERT INTO cache_fetch_queue (entity_type, discogs_id, source, priority)
+     SELECT u.entity_type, u.discogs_id, $3, $4
+       FROM unnest($1::text[], $2::int[]) AS u(entity_type, discogs_id)
+       LEFT JOIN release_cache rc
+         ON rc.discogs_id = u.discogs_id AND rc.type = u.entity_type
+      WHERE rc.discogs_id IS NULL
+     ON CONFLICT (entity_type, discogs_id) DO UPDATE
+       SET priority = GREATEST(cache_fetch_queue.priority, EXCLUDED.priority),
+           source   = CASE WHEN EXCLUDED.priority > cache_fetch_queue.priority
+                            THEN EXCLUDED.source
+                            ELSE cache_fetch_queue.source END`,
+    [types, ids, source, priority],
+  );
+  return r.rowCount ?? 0;
+}
+
+// Pull the next batch of items to fetch. Highest priority first,
+// oldest-requested-first within priority. Caller should fetch each
+// and call markCacheFetchSucceeded / markCacheFetchFailed.
+export async function dequeueCacheFetches(limit = 50): Promise<Array<{
+  id: number; entity_type: "master" | "release"; discogs_id: number; source: string; attempts: number;
+}>> {
+  const r = await getPool().query(
+    `SELECT id, entity_type, discogs_id, source, attempts
+       FROM cache_fetch_queue
+      ORDER BY priority DESC, requested_at ASC
+      LIMIT $1`,
+    [Math.max(1, Math.min(1000, limit))],
+  );
+  return r.rows;
+}
+
+export async function markCacheFetchSucceeded(id: number): Promise<void> {
+  await getPool().query(`DELETE FROM cache_fetch_queue WHERE id = $1`, [id]);
+}
+
+const _CACHE_FETCH_MAX_ATTEMPTS = 5;
+
+// Increment attempts; drop the row once it's failed too many times
+// so the queue doesn't accumulate permanent stuck entries (e.g.
+// deleted Discogs IDs that always 404). Returns true if the row
+// was kept, false if dropped.
+export async function markCacheFetchFailed(id: number, error: string): Promise<boolean> {
+  const r = await getPool().query(
+    `UPDATE cache_fetch_queue
+        SET attempts   = attempts + 1,
+            last_error = $2
+      WHERE id = $1
+      RETURNING attempts`,
+    [id, error.slice(0, 500)],
+  );
+  const attempts = r.rows[0]?.attempts ?? 0;
+  if (attempts >= _CACHE_FETCH_MAX_ATTEMPTS) {
+    await getPool().query(`DELETE FROM cache_fetch_queue WHERE id = $1`, [id]);
+    return false;
+  }
+  return true;
+}
+
+export async function getCacheFetchQueueStats(): Promise<{
+  total: number; oldest_requested_at: string | null;
+  by_source: Array<{ source: string; n: number }>;
+}> {
+  const totalRow = await getPool().query(
+    `SELECT COUNT(*)::int AS total, MIN(requested_at) AS oldest_requested_at
+       FROM cache_fetch_queue`,
+  );
+  const sourceRows = await getPool().query(
+    `SELECT source, COUNT(*)::int AS n
+       FROM cache_fetch_queue
+      GROUP BY source ORDER BY n DESC`,
+  );
+  return {
+    total: totalRow.rows[0]?.total ?? 0,
+    oldest_requested_at: totalRow.rows[0]?.oldest_requested_at ?? null,
+    by_source: sourceRows.rows,
+  };
+}
+
+// "Recently clicked" — return the set of "type:id" keys the user has
+// opened in the last N days, pulled from recent_views. Used by the
+// suggestions generator to soft-suppress albums the user already
+// looked at: they don't get auto-dismissed (they may want to revisit)
+// but the generator avoids re-suggesting them while interest is
+// fresh, keeping the suggestions slot occupied by something new.
+export async function getRecentlyClickedSuggestionKeys(
+  clerkUserId: string, days = 30,
+): Promise<Set<string>> {
+  const out = new Set<string>();
+  try {
+    const r = await getPool().query(
+      `SELECT discogs_id, entity_type
+         FROM user_recent_views
+        WHERE clerk_user_id = $1
+          AND opened_at >= NOW() - INTERVAL '${Math.max(1, Math.min(365, days))} days'
+          AND entity_type IN ('master','release')`,
+      [clerkUserId],
+    );
+    for (const row of r.rows) {
+      out.add(`${row.entity_type}:${row.discogs_id}`);
+    }
+  } catch { /* table may not exist on cold install — best effort */ }
+  return out;
+}
+
+// Suggestions cache-warm: list every (discogs_id, entity_type) pair
+// that appears in user_personal_suggestions but is NOT yet in
+// release_cache. The nightly cache-warm job uses this to know what
+// to fetch from Discogs. Deduped across all users (one fetch covers
+// every user who has the same suggestion). Sorted oldest-suggestion-
+// first so newer suggestions wait their turn — fairness across users.
+export async function getUncachedSuggestionRefs(
+  limit = 5000,
+): Promise<Array<{ discogs_id: number; entity_type: "master" | "release" }>> {
+  const r = await getPool().query(
+    `SELECT s.discogs_id, s.entity_type
+       FROM (
+         SELECT discogs_id, entity_type, MIN(generated_at) AS first_seen
+           FROM user_personal_suggestions
+           WHERE entity_type IN ('master', 'release')
+           GROUP BY discogs_id, entity_type
+       ) s
+       LEFT JOIN release_cache rc
+         ON rc.discogs_id = s.discogs_id AND rc.type = s.entity_type
+      WHERE rc.discogs_id IS NULL
+      ORDER BY s.first_seen ASC
+      LIMIT $1`,
+    [Math.max(1, Math.min(50000, limit))],
+  );
+  return r.rows;
 }
 
 // ── Unavailable YouTube videos ──────────────────────────────────────
