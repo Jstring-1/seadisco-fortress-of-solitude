@@ -244,10 +244,16 @@ function switchView(view, skipPushState = false) {
 
   // Highlight nav — single row has both data-view and data-rtab tabs
   const isRecords = view === "records";
+  // The Discover tab covers the LOC/Wiki/Archive/YouTube group, so
+  // it should highlight on any of those four sub-views (none of
+  // which match data-view="discover" directly).
+  const _DISCOVER_VIEWS_NAV = new Set(["loc", "wiki", "archive", "youtube"]);
   document.querySelectorAll(".nav-tab-top").forEach(btn => {
     if (btn.dataset.rtab) {
       // Record tab — active when in records view and matching the current sub-tab
       btn.classList.toggle("active", isRecords && btn.dataset.rtab === (_cwTab || "collection"));
+    } else if (btn.dataset.view === "discover") {
+      btn.classList.toggle("active", _DISCOVER_VIEWS_NAV.has(view));
     } else {
       btn.classList.toggle("active", btn.dataset.view === view);
     }
@@ -494,6 +500,38 @@ function switchView(view, skipPushState = false) {
     shownEl.classList.remove("view-enter");
     void shownEl.offsetWidth;
     shownEl.classList.add("view-enter");
+  }
+
+  // Extras sub-nav (LOC / Wikipedia / Archive / YouTube). Show
+  // whenever the current view is one of those four; mark the
+  // active tab; otherwise hide the strip. YouTube tab is only
+  // visible to YT-access users (admin / YT_OPEN_TO_USERS demo).
+  const _extrasViews = ["loc", "wiki", "archive", "youtube"];
+  const _extrasTabs = document.getElementById("extras-tabs");
+  if (_extrasTabs) {
+    if (_extrasViews.includes(view)) {
+      _extrasTabs.style.display = "";
+      const tabs = {
+        loc:     document.getElementById("extras-tab-loc"),
+        wiki:    document.getElementById("extras-tab-wiki"),
+        archive: document.getElementById("extras-tab-archive"),
+        youtube: document.getElementById("extras-tab-youtube"),
+      };
+      for (const [k, el] of Object.entries(tabs)) {
+        if (el) el.classList.toggle("rr-tab-active", k === view);
+      }
+      // Reveal the YouTube tab + its preceding separator only when
+      // the user has YT submission access — anons / regular users
+      // never see it. Same gate as the footer YouTube link.
+      const ytAccess = typeof window._sdHasYtAccess === "function"
+        ? window._sdHasYtAccess()
+        : !!window._isAdmin;
+      const ytSep = document.getElementById("extras-tab-youtube-sep");
+      if (tabs.youtube) tabs.youtube.style.display = ytAccess ? "" : "none";
+      if (ytSep)        ytSep.style.display       = ytAccess ? "" : "none";
+    } else {
+      _extrasTabs.style.display = "none";
+    }
   }
 }
 

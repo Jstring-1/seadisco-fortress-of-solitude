@@ -676,6 +676,23 @@
   <p style="font-size:0.84rem;color:#aaa;margin:0">Questions? Use the "Send feedback" button on the <a href="/?v=account" onclick="switchView('account');return false;" style="color:#5a9aaa">Account</a> page or email <strong style="color:#ccc">hello@seadisco.com</strong>.</p>
 </div>
 
+<!-- ── External-source sub-nav ──────────────────────────────────────
+     Shared strip across LOC / Wikipedia / Archive / YouTube views,
+     styled like the home Recent / Suggestions / Submitted / Feed
+     strip. Hidden by default; switchView shows it whenever the
+     active view is one of those four and marks the active tab. -->
+<div id="extras-tabs" class="content-narrow rr-header extras-tabs" style="display:none">
+  <div class="rr-title-wrap">
+    <span id="extras-tab-loc"     class="rr-tab" onclick="switchView('loc')"     title="Library of Congress audio archive — public-domain American music">LOC</span>
+    <span class="rr-tab-sep">/</span>
+    <span id="extras-tab-wiki"    class="rr-tab" onclick="switchView('wiki')"    title="Wikipedia article search">Wikipedia</span>
+    <span class="rr-tab-sep">/</span>
+    <span id="extras-tab-archive" class="rr-tab" onclick="switchView('archive')" title="Live recordings from the Aadam Jacobs collection on Internet Archive">Archive</span>
+    <span id="extras-tab-youtube-sep" class="rr-tab-sep" style="display:none">/</span>
+    <span id="extras-tab-youtube" class="rr-tab" onclick="switchView('youtube')" title="YouTube submissions tools" style="display:none">YouTube</span>
+  </div>
+</div>
+
 <div id="loc-view" class="content-narrow" style="display:none"></div>
 
 <!-- Archive.org curated-collection page (admin-only). The list is fetched

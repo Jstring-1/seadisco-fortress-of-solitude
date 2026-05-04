@@ -5548,6 +5548,23 @@ app.post("/api/user/events/play", express.json({ limit: "4kb" }), async (req, re
   res.json({ ok: true, logged: true });
 });
 
+// GET /api/youtube/search-meta?q=<query> — pure read, returns whether
+// (and when) we have a cached YouTube search for this exact query.
+// Used for the "Last searched X ago" hover hint on submission buttons
+// — no API call to Google, no quota cost. Sign-in + YT-access gated
+// because it leaks query-cache existence (low-stakes but not public).
+app.get("/api/youtube/search-meta", async (req, res) => {
+  if (!await requireYtAccess(req, res)) return;
+  const q = String(req.query?.q ?? "").trim().slice(0, 200);
+  if (!q) { res.status(400).json({ error: "q required" }); return; }
+  // Same normalization as /api/youtube/search so the lookup matches
+  // the actual cache key the search endpoint writes under.
+  const normQ = q.toLowerCase().replace(/\s+/g, " ").trim();
+  const cacheKey = `${normQ}|`;  // empty pageToken — first-page key
+  const ts = await getYoutubeSearchCacheTimestamp(cacheKey).catch(() => null);
+  res.json({ lastSearchedAt: ts ? ts.toISOString() : null });
+});
+
 app.get("/api/admin/behavior-stats", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   try {
