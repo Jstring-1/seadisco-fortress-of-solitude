@@ -3388,6 +3388,15 @@ button.wiki-link-btn:active {
 }
 .rr-tab.rr-tab-disabled:hover { color: #444 !important; }
 .rr-tab-sep { color: #444; }
+/* External-source sub-nav strip (LOC / Wikipedia / Archive / YouTube).
+   Shares .rr-header + .rr-tab styling so it visually matches the home
+   Recent / Suggestions / Submitted / Feed strip. The bottom border
+   reads as "this row is a sub-nav heading the page below it." */
+.extras-tabs {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.4rem;
+  margin-bottom: 0.6rem;
+}
 .rr-controls {
   display: flex;
   align-items: center;

@@ -705,6 +705,33 @@ function _ytFormatRelativeTime(iso) {
   return `${yr} year${yr === 1 ? "" : "s"} ago`;
 }
 
+// Lazy hover enrichment for any YT-submission affordance carrying
+// data-yt-q="<query>". On first hover, fire one /api/youtube/search-meta
+// lookup (no quota cost — pure cache read) and update the title
+// attribute with "Last searched X ago" or "Never searched here yet".
+// Subsequent hovers no-op via data-yt-meta-fetched flag.
+window._ytEnrichLastSearched = window._ytEnrichLastSearched || async function (el) {
+  if (!el || el.dataset.ytMetaFetched === "1") return;
+  const q = el.dataset.ytQ || "";
+  if (!q) return;
+  el.dataset.ytMetaFetched = "1";   // optimistic — block re-fetches even if this errors
+  try {
+    const r = await apiFetch(`/api/youtube/search-meta?q=${encodeURIComponent(q)}`);
+    if (!r.ok) return;
+    const j = await r.json();
+    const baseTitle = el.dataset.ytTitleBase || el.title || "";
+    if (!el.dataset.ytTitleBase) el.dataset.ytTitleBase = baseTitle;
+    let suffix;
+    if (j.lastSearchedAt) {
+      const rel = (typeof _ytFormatRelativeTime === "function") ? _ytFormatRelativeTime(j.lastSearchedAt) : "";
+      suffix = rel ? ` · last searched ${rel}` : "";
+    } else {
+      suffix = ` · not searched yet`;
+    }
+    el.title = baseTitle + suffix;
+  } catch { /* leave title as-is */ }
+};
+
 function _ytExtractVideoId(input) {
   const s = String(input || "").trim();
   if (!s) return "";

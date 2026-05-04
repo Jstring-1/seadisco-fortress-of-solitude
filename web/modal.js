@@ -3501,8 +3501,15 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const missingCount = tracks.filter(t => t.title && !findVideo(t.title || "", t.position || "")).length
     + (fullAlbumIsMissing ? 1 : 0);
   // Normally admin-only; relaxed by YT_OPEN_TO_USERS env-var.
+  // Album-suggest query — same shape _trackYtOpenAlbumSuggest builds
+  // when the user clicks. Baked into data-yt-q so the hover handler
+  // knows what to look up; the click handler ignores it (still pulls
+  // artist/title fresh from the popup DOM at click time).
+  const _albumFirstArtist = (artists && artists[0]) ? String(artists[0]) : "";
+  const _ytAlbumQ = [_albumFirstArtist ? `"${_albumFirstArtist}"` : "", title ? `"${title}"` : ""]
+    .filter(Boolean).join(" ");
   const albumFindMissingLink = (missingCount >= 1 && window._clerk?.user && hasYtAccess)
-    ? ` <a href="#" class="tracklist-find-missing" onclick="event.preventDefault();event.stopPropagation();_trackYtOpenAlbumSuggest(this);return false" title="Search YouTube once for the whole album and assign videos to all missing tracks at once">🎵 ${missingCount} missing</a>`
+    ? ` <a href="#" class="tracklist-find-missing" data-yt-q="${escHtml(_ytAlbumQ)}" onmouseenter="_ytEnrichLastSearched(this)" onclick="event.preventDefault();event.stopPropagation();_trackYtOpenAlbumSuggest(this);return false" title="Search YouTube once for the whole album and assign videos to all missing tracks at once">🎵 ${missingCount} missing</a>`
     : "";
   const playableMeta = playableCount
     ? `<span class="tracklist-playable">(${playableCount}${firstPlayableUrl ? ` <a href="#" class="tracklist-play-all" onclick="event.preventDefault();event.stopPropagation();playAlbumAndQueue(this,'${firstPlayableUrl.replace(/'/g, "\\'")}')" title="Play the first track and queue the rest of the album">▶</a>` : ""}${playableCount >= 1 ? ` <a href="#" class="tracklist-queue-album" onclick="event.preventDefault();event.stopPropagation();queueAddAlbum(this)" title="Add all playable tracks to the bottom of your queue">＋</a>` : ""}${albumFindMissingLink})</span>`

@@ -1106,6 +1106,12 @@ const _SD_NAV_ICONS = {
   // YouTube videos for tracks Discogs missed. Tinted purple via the
   // tab's color rule so it reads as a distinct contribution surface.
   picks: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 17V5l11-2v12"/><circle cx="6.5" cy="17" r="2.5" fill="currentColor"/><circle cx="17.5" cy="15" r="2.5" fill="currentColor"/></svg>`,
+  // Monocle for the "Discover" tab — LOC / Wikipedia / Archive /
+  // YouTube external-source group. Lens uses the same vinyl
+  // grooves + center-dot motif as the rest of the set; a small
+  // chain arcs off to the right and ends in a tiny tassel circle
+  // so the monocle reads as "look up elsewhere."
+  discover: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="6"/><circle cx="10" cy="10" r="2.5"/><circle cx="10" cy="10" r="0.6" fill="currentColor"/><path d="M15.5 13.5c1.8 1.8 3.5 3 5.5 4.5"/><circle cx="21" cy="18" r="0.9"/></svg>`,
 };
 // Expose icons globally so card badges (and any future surfaces) can
 // reuse the same line-art set without duplicating SVG markup.
@@ -1137,6 +1143,22 @@ function renderSharedHeader(opts) {
     const href = view === "search" ? "/" : `/?v=${view}`;
     const activeCls = view === active ? ' active' : '';
     return `<a class="${navTabClass}${activeCls}" href="${href}" title="${label}">${labelMarkup(label, iconKey)}</a>`;
+  };
+
+  // Discover tab — covers the LOC / Wikipedia / Archive / YouTube
+  // group. Default click lands on LOC (most-used external source);
+  // the in-page sub-nav strip handles cross-tab switching once
+  // you're on one. data-view is set to "discover" so syncDiscoverTabActive
+  // (defined below) can flip the active class when any of the four
+  // sub-views is active.
+  const _DISCOVER_VIEWS = new Set(["loc", "wiki", "archive", "youtube"]);
+  const discoverTab = (label, iconKey) => {
+    const isActive = _DISCOVER_VIEWS.has(active);
+    const activeCls = isActive ? ' active' : '';
+    if (isSPA) {
+      return `<button class="${navTabClass}${activeCls}" data-view="discover" onclick="switchView('loc')" title="${label}">${labelMarkup(label, iconKey)}</button>`;
+    }
+    return `<a class="${navTabClass}${activeCls}" href="/?v=loc" data-view="discover" title="${label}">${labelMarkup(label, iconKey)}</a>`;
   };
 
   // Record tab — starts disabled until signed in. `startEmpty` adds
@@ -1185,6 +1207,7 @@ function renderSharedHeader(opts) {
             ${recTab("Wantlist", "wantlist", "wantlist")}
             ${recTab("Inventory", "inventory", "inventory", true)}
             ${recTab("Lists", "lists", "lists", true)}
+            ${discoverTab("Discover", "discover")}
           </div>
         </div>
       </div>
