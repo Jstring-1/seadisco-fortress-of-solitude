@@ -98,13 +98,21 @@ CUR="$(grep -oE 'v=[0-9]{8}\.[0-9]{4}' web/index.html | head -1 | cut -d= -f2 ||
 # pushes land in the same minute).
 if [ "$CUR" = "$TS" ]; then exit 0; fi
 
+# 1. Cache-bust query string in HTML (forces the browser to refetch
+#    each /shared.js?v=… etc. on a deploy).
 sed -i "s/v=[0-9]\{8\}\.[0-9]\{4\}/v=$TS/g" web/index.html web/admin.html
+# 2. SITE_VERSION constant in shared.js — the small grey "build …"
+#    tag under the logo. Same timestamp as the cache-bust so the
+#    visible label always matches what the user just received.
+if [ -f web/shared.js ]; then
+  sed -i "s/build [0-9]\{8\}\.[0-9]\{4\}/build $TS/g" web/shared.js
+fi
 
 # Nothing actually changed (e.g. files had no matching pattern) —
 # nothing to commit, let the push proceed.
-if git diff --quiet -- web/index.html web/admin.html; then exit 0; fi
+if git diff --quiet -- web/index.html web/admin.html web/shared.js; then exit 0; fi
 
-git add web/index.html web/admin.html
+git add web/index.html web/admin.html web/shared.js
 git commit -m "chore: bump cache-bust to $TS" >/dev/null
 
 # JSON output → Claude Code surfaces this as a system message in the
