@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const anthropicKey = process.env.ANTHROPIC_API_KEY ?? "";
@@ -4815,23 +4815,29 @@ app.get("/api/youtube/search", async (req, res) => {
     // restart) backed by the DB row (survives deploys). Hot queries
     // stay in RAM; cold queries that are still within 24h hit the DB
     // and avoid burning quota every deploy.
-    const memCached = _ytCacheGet(cacheKey);
-    if (memCached) {
-        // Backfill durations on cached bodies that predate the duration
-        // enrichment (added 4/30). One-time cost per stale cache row;
-        // subsequent reads return the enriched body straight from cache.
-        const enriched = await _ytBackfillDurationsIfNeeded(cacheKey, memCached);
-        res.setHeader("X-SeaDisco-Cache", "hit-mem");
-        res.json(enriched);
-        return;
-    }
-    const dbCached = await getYoutubeSearchCache(cacheKey, _YT_SEARCH_TTL_MS / 1000).catch(() => null);
-    if (dbCached) {
-        _ytCacheSet(cacheKey, dbCached);
-        const enriched = await _ytBackfillDurationsIfNeeded(cacheKey, dbCached);
-        res.setHeader("X-SeaDisco-Cache", "hit-db");
-        res.json(enriched);
-        return;
+    // ?nocache=1 — admin/debug bypass so a stale empty-result cache
+    // can be re-verified against a fresh search.list. Costs 100 quota
+    // units per call so it's deliberately not exposed in regular UI.
+    const noCache = req.query?.nocache === "1" || req.query?.nocache === "true";
+    if (!noCache) {
+        const memCached = _ytCacheGet(cacheKey);
+        if (memCached) {
+            // Backfill durations on cached bodies that predate the duration
+            // enrichment (added 4/30). One-time cost per stale cache row;
+            // subsequent reads return the enriched body straight from cache.
+            const enriched = await _ytBackfillDurationsIfNeeded(cacheKey, memCached);
+            res.setHeader("X-SeaDisco-Cache", "hit-mem");
+            res.json(enriched);
+            return;
+        }
+        const dbCached = await getYoutubeSearchCache(cacheKey, _YT_SEARCH_TTL_MS / 1000).catch(() => null);
+        if (dbCached) {
+            _ytCacheSet(cacheKey, dbCached);
+            const enriched = await _ytBackfillDurationsIfNeeded(cacheKey, dbCached);
+            res.setHeader("X-SeaDisco-Cache", "hit-db");
+            res.json(enriched);
+            return;
+        }
     }
     // Cache miss → about to spend 100 quota units. Apply guards.
     // 1) Project-wide soft cap. _ytQuotaUnitsToday is best-effort but
@@ -4987,10 +4993,19 @@ app.get("/api/youtube/search", async (req, res) => {
             nextPageToken: j?.nextPageToken ?? null,
             totalResults: j?.pageInfo?.totalResults ?? null,
         };
-        _ytCacheSet(cacheKey, body);
-        // Persist to DB so the next deploy doesn't force this query to
-        // pay quota again. Fire-and-forget — caller already has the body.
-        setYoutubeSearchCache(cacheKey, body).catch(() => { });
+        // Don't cache empty result sets — a transient empty (network
+        // hiccup, weird query encoding, etc.) shouldn't poison the cache
+        // for 7 days. Burn the 100 quota on retry; genuinely-empty queries
+        // are rare so the extra cost is negligible.
+        if (body.items.length > 0) {
+            _ytCacheSet(cacheKey, body);
+            // Persist to DB so the next deploy doesn't force this query to
+            // pay quota again. Fire-and-forget — caller already has the body.
+            setYoutubeSearchCache(cacheKey, body).catch(() => { });
+        }
+        else {
+            console.warn(`[youtube/search] 0 results for q="${q}" — not caching`);
+        }
         return body;
     })();
     _ytInflight.set(cacheKey, work);
@@ -6000,6 +6015,42 @@ app.post("/api/admin/cache-warm/run", express.json({ limit: "1kb" }), async (req
     // window.
     _runSuggestionsCacheWarm({ ignoreWindow: true }).catch(() => { });
     res.json({ ok: true, message: "Cache-warm started" });
+});
+// ── Behavior events (admin stats) ─────────────────────────────────
+//
+// POST /api/user/events/play — best-effort track-play log. Client
+// fires this when YT/LOC/Archive playback actually starts (not on
+// queue add). Anon users no-op; signed-in users get one row per
+// play event. Body: { source: 'yt'|'loc'|'archive', externalId, title? }
+app.post("/api/user/events/play", express.json({ limit: "4kb" }), async (req, res) => {
+    const userId = await getClerkUserId(req).catch(() => null);
+    // Anon users silently no-op so the client can call unconditionally.
+    if (!userId) {
+        res.json({ ok: true, logged: false });
+        return;
+    }
+    const body = req.body ?? {};
+    const source = body.source === "loc" || body.source === "archive" ? body.source : "yt";
+    const externalId = String(body.externalId ?? "").slice(0, 100);
+    const title = body.title ? String(body.title).slice(0, 200) : undefined;
+    if (!externalId) {
+        res.status(400).json({ error: "externalId required" });
+        return;
+    }
+    // Fire-and-forget so the player doesn't block on logging.
+    logUserPlay(userId, source, externalId, title).catch(() => { });
+    res.json({ ok: true, logged: true });
+});
+app.get("/api/admin/behavior-stats", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const items = await getUserBehaviorStats();
+        res.json({ items });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
 });
 // Admin: cache-fetch queue stats — total queued, oldest waiter, by
 // source breakdown. Useful for sizing the nightly window.
@@ -7334,6 +7385,17 @@ app.get("/search", async (req, res) => {
     const searchLabel = rawLabel || undefined;
     const searchRelease = rawRelease || undefined;
     touchUserActivity(userId).catch(() => { });
+    // Behavior log (best-effort, fire-and-forget). Compose a single
+    // string so the admin panel can grep / display the actual queries
+    // — keeps the row schema simple. Empty searches are still logged
+    // so we can see how many "browse" hits land on /search.
+    const logQuery = [
+        rawQ && `q=${rawQ}`,
+        artist && `artist=${artist}`,
+        rawLabel && `label=${rawLabel}`,
+        rawRelease && `release=${rawRelease}`,
+    ].filter(Boolean).join(" ").slice(0, 200);
+    logUserSearch(userId, logQuery).catch(() => { });
     const dc = await getDiscogsForRequest(req);
     if (!dc) {
         res.status(401).json({ error: "no_token", message: "Connect your Discogs account in Account settings to search." });

@@ -1564,6 +1564,23 @@ function _createYTPlayer(id) {
           // iframe API doesn't fire one) so the mini-progress strip
           // animates without us hand-rolling rAF.
           if (typeof _startYtProgressLoop === "function") _startYtProgressLoop();
+          // Behavior log (admin stats). Best-effort, fire-and-forget;
+          // anon users no-op server-side. Only fires once per video
+          // load via _ytHasPlayed guard above so a pause/resume
+          // cycle doesn't double-count.
+          try {
+            const playMeta = (window._videoQueueMeta ?? [])[window._videoQueueIndex ?? 0];
+            if (typeof apiFetch === "function") {
+              apiFetch("/api/user/events/play", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  source: "yt", externalId: id,
+                  title: playMeta?.track || "",
+                }),
+              }).catch(() => {});
+            }
+          } catch {}
           // If no track meta (e.g. loaded from URL param), grab title from YT player
           const meta = (window._videoQueueMeta ?? [])[window._videoQueueIndex ?? 0];
           let msTitle = meta?.track || "";

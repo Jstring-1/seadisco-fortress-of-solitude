@@ -592,6 +592,32 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS cache_fetch_queue_drain_idx ON cache_fetch_queue (priority DESC, requested_at ASC)`);
 
+  // ── Behavior events (admin "behavior stats" panel) ───────────────────
+  // Two narrow append-only tables. Album-click counts already live in
+  // user_recent_views and favorite counts in user_favorites, so we
+  // only need new tables for the events that aren't otherwise logged
+  // per-user: Discogs main-page searches and media-player track plays.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_search_events (
+      id            SERIAL      PRIMARY KEY,
+      clerk_user_id TEXT        NOT NULL,
+      query         TEXT        NOT NULL DEFAULT '',
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS user_search_events_user_time_idx ON user_search_events (clerk_user_id, created_at DESC)`);
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_play_events (
+      id            SERIAL      PRIMARY KEY,
+      clerk_user_id TEXT        NOT NULL,
+      source        TEXT        NOT NULL,    -- 'yt' | 'loc' | 'archive'
+      external_id   TEXT        NOT NULL,
+      title         TEXT,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS user_play_events_user_time_idx ON user_play_events (clerk_user_id, created_at DESC)`);
+
   // ── Phase 4: Price intelligence tables ──────────────────────────────────
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS price_cache (
@@ -4659,6 +4685,119 @@ export async function getCacheFetchQueueStats(): Promise<{
     oldest_requested_at: totalRow.rows[0]?.oldest_requested_at ?? null,
     by_source: sourceRows.rows,
   };
+}
+
+// ── Behavior-event logging ─────────────────────────────────────────
+// Append-only writes — best-effort, never block a real request on
+// the log write. Caller passes through `.catch(() => {})`.
+
+export async function logUserSearch(clerkUserId: string, query: string): Promise<void> {
+  if (!clerkUserId) return;
+  await getPool().query(
+    `INSERT INTO user_search_events (clerk_user_id, query) VALUES ($1, $2)`,
+    [clerkUserId, (query || "").slice(0, 200)],
+  );
+}
+
+export async function logUserPlay(
+  clerkUserId: string,
+  source: "yt" | "loc" | "archive",
+  externalId: string,
+  title?: string,
+): Promise<void> {
+  if (!clerkUserId || !externalId) return;
+  await getPool().query(
+    `INSERT INTO user_play_events (clerk_user_id, source, external_id, title)
+     VALUES ($1, $2, $3, $4)`,
+    [clerkUserId, source, String(externalId).slice(0, 100), (title || "").slice(0, 200) || null],
+  );
+}
+
+// Per-user behavior summary for the admin panel. Aggregates across
+// existing tables (favorites, recent_views, suggestions) and the new
+// event tables (searches, plays). Window is configurable; default is
+// "all time" + last 30 days side by side.
+export async function getUserBehaviorStats(): Promise<Array<{
+  clerk_user_id: string;
+  username: string | null;
+  favorites:               number;
+  suggestions_pool:        number;
+  suggestions_favorited:   number;
+  album_clicks_total:      number;
+  album_clicks_30d:        number;
+  player_plays_total:      number;
+  player_plays_30d:        number;
+  searches_total:          number;
+  searches_30d:            number;
+  last_active:             string | null;
+}>> {
+  // Single query with LEFT JOINs on per-user counts. Building the
+  // counts as subqueries keeps each row self-contained — no risk of
+  // double-counting due to JOIN cardinality.
+  // Use user_tokens as the user list — every signed-in user with a
+  // Discogs connection has a row there. Pre-OAuth users (Clerk
+  // account but no Discogs link) won't appear, but they also can't
+  // search / favorite / play anything yet, so the omission is fine.
+  // Union in any clerk_user_ids that DO have activity but no
+  // user_tokens row, just in case (defensive — shouldn't happen in
+  // practice but cheap to include).
+  const r = await getPool().query(`
+    WITH all_users AS (
+      SELECT clerk_user_id, discogs_username, last_active_at FROM user_tokens
+      UNION
+      SELECT DISTINCT clerk_user_id, NULL::text, NULL::timestamptz FROM user_favorites
+      WHERE NOT EXISTS (SELECT 1 FROM user_tokens t WHERE t.clerk_user_id = user_favorites.clerk_user_id)
+    )
+    SELECT u.clerk_user_id,
+           u.discogs_username     AS username,
+           COALESCE(f.n, 0)       AS favorites,
+           COALESCE(s.n, 0)       AS suggestions_pool,
+           COALESCE(sf.n, 0)      AS suggestions_favorited,
+           COALESCE(rv.n_total, 0) AS album_clicks_total,
+           COALESCE(rv.n_30d, 0)   AS album_clicks_30d,
+           COALESCE(pe.n_total, 0) AS player_plays_total,
+           COALESCE(pe.n_30d, 0)   AS player_plays_30d,
+           COALESCE(se.n_total, 0) AS searches_total,
+           COALESCE(se.n_30d, 0)   AS searches_30d,
+           u.last_active_at        AS last_active
+      FROM all_users u
+      LEFT JOIN (SELECT clerk_user_id, COUNT(*)::int AS n FROM user_favorites GROUP BY clerk_user_id) f
+             ON f.clerk_user_id = u.clerk_user_id
+      LEFT JOIN (SELECT clerk_user_id, COUNT(*)::int AS n FROM user_personal_suggestions GROUP BY clerk_user_id) s
+             ON s.clerk_user_id = u.clerk_user_id
+      LEFT JOIN (
+        SELECT ps.clerk_user_id, COUNT(*)::int AS n
+          FROM user_personal_suggestions ps
+          JOIN user_favorites uf
+            ON uf.clerk_user_id = ps.clerk_user_id
+           AND uf.discogs_id    = ps.discogs_id
+           AND uf.entity_type   = ps.entity_type
+         GROUP BY ps.clerk_user_id
+      ) sf ON sf.clerk_user_id = u.clerk_user_id
+      LEFT JOIN (
+        SELECT clerk_user_id,
+               COUNT(*)::int AS n_total,
+               COUNT(*) FILTER (WHERE opened_at >= NOW() - INTERVAL '30 days')::int AS n_30d
+          FROM user_recent_views
+         GROUP BY clerk_user_id
+      ) rv ON rv.clerk_user_id = u.clerk_user_id
+      LEFT JOIN (
+        SELECT clerk_user_id,
+               COUNT(*)::int AS n_total,
+               COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days')::int AS n_30d
+          FROM user_play_events
+         GROUP BY clerk_user_id
+      ) pe ON pe.clerk_user_id = u.clerk_user_id
+      LEFT JOIN (
+        SELECT clerk_user_id,
+               COUNT(*)::int AS n_total,
+               COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 days')::int AS n_30d
+          FROM user_search_events
+         GROUP BY clerk_user_id
+      ) se ON se.clerk_user_id = u.clerk_user_id
+      ORDER BY u.last_active_at DESC NULLS LAST
+  `);
+  return r.rows;
 }
 
 // "Recently clicked" — return the set of "type:id" keys the user has
