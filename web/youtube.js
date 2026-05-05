@@ -682,12 +682,15 @@ async function openYoutubePopup(query) {
 //   https://www.youtube.com/embed/ABCDEFGHIJK
 //   https://www.youtube.com/shorts/ABCDEFGHIJK
 //   ABCDEFGHIJK (raw 11-char ID)
-// _ytFormatRelativeTime + _ytEnrichLastSearched moved to shared.js so
+// _ytFormatRelativeTime + _ytEnrichLastSearched live in shared.js so
 // the hover handler on the album-suggest "🎵 N missing" link works
 // from a cold modal — youtube.js is lazy-loaded and wasn't on the
-// page yet when the handler fired. Re-exported here under the same
-// name for any in-file callers.
-const _ytFormatRelativeTime = window._ytFormatRelativeTime || (() => "");
+// page yet when the handler fired. Bare references in this file
+// resolve to shared.js's top-level function declaration via the
+// shared classic-script global scope. Don't redeclare here: a top-
+// level `const` with the same name would collide with shared.js's
+// function declaration and throw "Identifier already declared",
+// killing the entire module at parse time.
 
 function _ytExtractVideoId(input) {
   const s = String(input || "").trim();
