@@ -67,7 +67,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260505.1443" />
+  <link rel="stylesheet" href="/style.css?v=20260505.1456" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -105,7 +105,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260505.1443"></script>
+<script defer src="/shared.js?v=20260505.1456"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -493,7 +493,7 @@ e.g.  miles davis | coltrane
        _applySplashVisibility in app.js. -->
   <div id="anon-splash" class="content-area anon-splash" style="display:none">
     <p class="anon-splash-lead">
-      <strong>SeaDisco</strong> — music discovery for vinyl collectors. Browse the Feed below, search the catalog, play tracks. <a href="#" onclick="event.preventDefault();openSignUpModal();return false">Sign up</a> to sync your collection, build a personalized feed, contribute YouTube videos, and more. <a href="#" onclick="event.preventDefault();openSignInModal();return false">Sign in</a>.
+      <strong>SeaDisco</strong> — music discovery for vinyl collectors. Browse the Feed below, search the catalog, play tracks. <a href="#" onclick="event.preventDefault();openSignUpModal();return false">Sign up</a> to sync your collection, build a personalized feed, and more. <a href="#" onclick="event.preventDefault();openSignInModal();return false">Sign in</a>.
     </p>
   </div>
 
@@ -504,7 +504,11 @@ e.g.  miles davis | coltrane
         <span id="rr-tab-recent" class="rr-tab rr-tab-active" onclick="_sdSwitchHomeStripTab('recent')" title="Albums you've recently viewed (kept locally in this browser)">Recent</span>
         <span class="rr-tab-sep">/</span>
         <span id="rr-tab-suggestions" class="rr-tab" onclick="_sdSwitchHomeStripTab('suggestions')" title="Personalized suggestions generated hourly from your library's taste profile">Suggestions</span>
-        <span class="rr-tab-sep">/</span>
+        <!-- The separator BEFORE Submitted gets a marker class so the
+             admin/demo gating in _sdSyncHomeStripTabsVisual can hide
+             it together with the tab — otherwise non-admin users
+             would see "Suggestions / / Feed" with a stray slash. -->
+        <span class="rr-tab-sep rr-tab-sep-submitted">/</span>
         <span id="rr-tab-submitted" class="rr-tab" onclick="_sdSwitchHomeStripTab('submitted')" title="Albums you've contributed YouTube videos for">Submitted</span>
         <span class="rr-tab-sep">/</span>
         <span id="rr-tab-feed" class="rr-tab" onclick="_sdSwitchHomeStripTab('feed')" title="A random sample from every album in our catalog cache — explore freely">Feed</span>
@@ -1141,13 +1145,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260505.1443"></script>
-<script defer src="/search.js?v=20260505.1443"></script>
-<script defer src="/collection.js?v=20260505.1443"></script>
+<script defer src="/utils.js?v=20260505.1456"></script>
+<script defer src="/search.js?v=20260505.1456"></script>
+<script defer src="/collection.js?v=20260505.1456"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260505.1443"></script>
-<script defer src="/app.js?v=20260505.1443"></script>
+<script defer src="/modal.js?v=20260505.1456"></script>
+<script defer src="/app.js?v=20260505.1456"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1158,13 +1162,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260505.1443"></script>
-<script defer src="/queue.js?v=20260505.1443"></script>
+<script defer src="/loc.js?v=20260505.1456"></script>
+<script defer src="/queue.js?v=20260505.1456"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260505.1443";
+  window._SD_LAZY_VERSION = "20260505.1456";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1193,8 +1197,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260505.1443"></script>
-<script defer src="/offline.js?v=20260505.1443"></script>
+<script defer src="/idb.js?v=20260505.1456"></script>
+<script defer src="/offline.js?v=20260505.1456"></script>
 
 </body>
 </html>

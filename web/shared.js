@@ -1247,7 +1247,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260505.1443";
+  const SITE_VERSION = "build 20260505.1456";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -1439,7 +1439,7 @@ function renderSharedFooter(opts) {
       <div class="footer-col">
         ${stripLink("Recent",      "recent")}
         ${stripLink("Suggestions", "suggestions")}
-        ${stripLink("Submitted",   "submitted")}
+        ${(window._isAdmin || window._sdIsDemo) ? stripLink("Submitted", "submitted") : ""}
         ${stripLink("Feed",        "feed")}
       </div>
       <div class="footer-col">
