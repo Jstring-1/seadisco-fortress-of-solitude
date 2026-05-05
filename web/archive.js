@@ -921,9 +921,15 @@ function _archiveOnSearchSubmit(form) {
       history.pushState({}, "", next);
     }
   }
-  // Empty form → clear results.
+  // Empty form → clear results. Category counts as a filter when
+  // it narrows below "all" — see _archiveDoSearch for the matching
+  // gate. Without this, picking "All music" + a sort and submitting
+  // would silently no-op because none of the freeform inputs are
+  // set.
+  const _categoryNarrows = _archiveSearchCategory && _archiveSearchCategory !== "all";
   const anyFilter = !!(_archiveSearchQuery || _archiveSearchCreator || _archiveSearchSubject ||
-                       _archiveSearchCollection || _archiveSearchYearFrom || _archiveSearchYearTo);
+                       _archiveSearchCollection || _archiveSearchYearFrom || _archiveSearchYearTo ||
+                       _categoryNarrows);
   if (!anyFilter) {
     _archiveSearchResults = null;
     _archiveSearchNumFound = 0;
@@ -943,13 +949,18 @@ window._archiveOnSearchSubmit = _archiveOnSearchSubmit;
 
 async function _archiveDoSearch() {
   // A search is meaningful as long as ANY filter is set — q is no
-  // longer required by itself.
+  // longer required by itself. Category dropdown counts: anything
+  // other than "all" maps to a real collection constraint, so a
+  // category-only search ("All music" + Sort=highest rated, nothing
+  // else) is valid.
+  const _categoryNarrows = _archiveSearchCategory && _archiveSearchCategory !== "all";
   const anyFilter = !!(_archiveSearchQuery
     || _archiveSearchCreator
     || _archiveSearchSubject
     || _archiveSearchCollection
     || _archiveSearchYearFrom
-    || _archiveSearchYearTo);
+    || _archiveSearchYearTo
+    || _categoryNarrows);
   if (!anyFilter) return;
   if (_archiveSearchLoading) return;
   _archiveSearchLoading = true;
