@@ -817,14 +817,18 @@ window._sdToggleExcludeCd = _sdToggleExcludeCd;
 // what the user sees. We deliberately do NOT persist across
 // sessions — only this URL handshake.
 function _sdInitialHomeStripMode() {
-  // Anon users default to "feed" since Recent / Suggestions / Submitted
-  // all require a signed-in account. ?strip= URL param wins for both
-  // anon and signed-in so deep links keep working.
+  // ?strip= URL param wins for both anon and signed-in so deep links
+  // keep working.
   try {
     const v = new URLSearchParams(location.search).get("strip");
     if (v === "suggestions" || v === "submitted" || v === "feed") return v;
   } catch {}
-  if (!window._clerk?.user) return "feed";
+  // Optimistic default: "recent" — matches the static markup's
+  // rr-tab-recent.rr-tab-active class, so signed-in users see no
+  // visual jump while Clerk is hydrating. applyAuthState will flip
+  // unresolved-but-actually-anon users to "feed" once auth lands.
+  // The previous "feed for unresolved auth" default was the cause
+  // of the recent-loads-then-disappears flicker on every page load.
   return "recent";
 }
 window._sdHomeStripMode = _sdInitialHomeStripMode();
