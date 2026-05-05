@@ -65,12 +65,19 @@ if [ -n "$CMD" ]; then
   while [[ "$STRIPPED" =~ ^[[:space:]]*[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]+[[:space:]]+(.*)$ ]]; do
     STRIPPED="${BASH_REMATCH[1]}"
   done
+  # Match either a bare `git push` OR a chain whose final command is
+  # `git push` (e.g. `git add … && git commit … && git push`). The
+  # tail-of-chain check looks for ` && git push` or `; git push` near
+  # the end of the command. This widening is safe because the hook's
+  # commit is path-confined below — even a HEREDOC false positive
+  # only ever commits the cache-bust files, never the user's staged
+  # changes (the v1 footgun that v2's strict gate was guarding
+  # against).
   case "$STRIPPED" in
-    "git push"|"git push "*|"git push;"*|"git push&"*)
-      ;;
-    *)
-      exit 0
-      ;;
+    "git push"|"git push "*|"git push;"*|"git push&"*) ;;
+    *"&& git push"|*"&& git push "*|*"&& git push;"*) ;;
+    *"; git push"|*"; git push "*|*"; git push;"*) ;;
+    *) exit 0 ;;
   esac
   # Confirm the push targets THIS repo: command mentions repo path,
   # OR the cwd is inside the repo. Otherwise some other clone's push
@@ -118,8 +125,14 @@ fi
 # nothing to commit, let the push proceed.
 if git diff --quiet -- web/index.html web/admin.html web/shared.js; then exit 0; fi
 
+# Path-confined commit: `git commit -- <files>` only commits the
+# listed paths even if other files are staged. Critical safety net —
+# v1 used a bare `git commit` after `git add <files>`, which would
+# also include any user-staged work, accidentally retitling it as a
+# cache-bust commit. With path-confinement, even a false-positive
+# trigger leaves the user's other staged changes untouched.
 git add web/index.html web/admin.html web/shared.js
-git commit -m "chore: bump cache-bust to $TS" >/dev/null
+git commit -m "chore: bump cache-bust to $TS" -- web/index.html web/admin.html web/shared.js >/dev/null
 
 # JSON output → Claude Code surfaces this as a system message in the
 # transcript so the user sees the bump landed before the push went out.
