@@ -7986,22 +7986,16 @@ body.is-offline button.offline-disabled {
   font-size: 0.72rem;
 }
 
-/* Advanced-toggle arrow turns blue when the panel is open. Applied
-   on both the main search (#advanced-arrow) and collection
-   (#cw-advanced-arrow) toggles. Hardcoded blue so it reads as a
-   "panel is engaged" cue regardless of theme accent (which is
-   often orange / yellow / teal — the blue gives it a distinct
-   "this panel is on" signal). */
+/* Advanced-toggle arrow + "Returned :: …" meta line use the same
+   theme-aware blue as the populated-field highlight (var(--catno)
+   with --accent fallback). All three signal "an active search /
+   filter is engaged" so they share the visual language. */
 #advanced-arrow.is-open,
 #cw-advanced-arrow.is-open {
-  color: #4a9eff;
+  color: var(--catno, var(--accent));
 }
-
-/* "Returned :: 36 results — showing 36" line above the result grid.
-   Same blue as the engaged Advanced arrow + italic so the row reads
-   as a quiet meta line rather than competing with the cards below. */
 #search-returned {
-  color: #4a9eff;
+  color: var(--catno, var(--accent));
   font-style: italic;
 }
 
