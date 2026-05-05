@@ -3259,15 +3259,18 @@ button.wiki-link-btn:active {
   border: 1px solid #333;
   border-radius: 4px;
   color: var(--fg);
-  font-size: 0.78rem;
-  padding: 0.3rem 0.5rem;
+  /* Sized one notch below the main search-form chrome (0.78rem) so
+     the home-strip controls read as secondary — they filter an
+     already-loaded grid rather than launching a new search. */
+  font-size: 0.7rem;
+  padding: 0.22rem 0.42rem;
   outline: none;
   font-family: inherit;
   line-height: 1.2;
   transition: border-color 0.15s;
   color-scheme: dark;
 }
-.sd-filter-input { width: 9rem; }
+.sd-filter-input { width: 7.5rem; }
 .sd-filter-input:focus,
 .sd-filter-select:focus { border-color: var(--accent); }
 .sd-filter-input::placeholder { color: #555; }
@@ -3292,7 +3295,7 @@ button.wiki-link-btn:active {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
-  font-size: 0.72rem;
+  font-size: 0.64rem;
   color: var(--muted);
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -3453,7 +3456,7 @@ button.wiki-link-btn:active {
   background: none;
   border: none;
   padding: 0 0.4rem;
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   color: var(--muted);
   cursor: pointer;
   line-height: 1;
