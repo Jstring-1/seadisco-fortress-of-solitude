@@ -47,42 +47,27 @@ let _archiveSearchSubject  = "";
 let _archiveSearchCollection = "";
 let _archiveSearchYearFrom = "";
 let _archiveSearchYearTo   = "";
-// Category dropdown — picks one archive.org audio category for the
-// search. Grouped via <optgroup> so the relationship between the
-// broad "Music" default and its narrower sub-scopes (etree live
-// recordings, 78rpm, LibriVox, etc.) is visible — they're all
-// music, just different cuts of it. Picking any single value
-// constrains the search to that exact bucket.
+// Category dropdown — flat list, no sub-headings. Picking "music"
+// (the default) searches the union of all music-y collections
+// (audio_music + etree + 78rpm + opensource_audio) so the user
+// doesn't have to think about which sub-bucket their target sits in.
+// Other categories map 1:1 to a single collection slug.
 let _archiveSearchCategory = "music";
-const _ARCHIVE_CATEGORY_GROUPS = [
-  {
-    label: "Music",
-    options: [
-      ["music",          "All music"],
-      ["audio_music",    "  Community-contributed music"],
-      ["etree",          "  Live music recordings (etree)"],
-      ["78rpm",          "  78 RPMs & cylinder recordings"],
-    ],
-  },
-  {
-    label: "Spoken word",
-    options: [
-      ["librivoxaudio",     "LibriVox audiobooks"],
-      ["audio_bookspoetry", "Audiobooks & poetry"],
-      ["audio_religion",    "Religion"],
-      ["radioprograms",     "Old-time radio programs"],
-      ["audio_news",        "News & public affairs"],
-      ["audio_podcast",     "Podcasts"],
-    ],
-  },
-  {
-    label: "Other",
-    options: [
-      ["all",           "All audio (no filter)"],
-      ["audio_tech",    "Computers, technology, science"],
-      ["audio_foreign", "Non-English audio"],
-    ],
-  },
+const _ARCHIVE_CATEGORY_OPTIONS = [
+  ["music",             "Music"],
+  // Audiobooks-or-poetry is the union of librivoxaudio (LibriVox
+  // recordings, the largest free-audiobook archive) AND
+  // audio_bookspoetry (a broader bucket with non-LibriVox
+  // recordings + poetry readings). The comma-list goes through the
+  // same multi-collection OR path the music union uses.
+  ["librivoxaudio,audio_bookspoetry", "Audiobooks & poetry"],
+  ["radioprograms",     "Old-time radio programs"],
+  ["audio_religion",    "Religion"],
+  ["audio_news",        "News & public affairs"],
+  ["audio_tech",        "Computers, technology, science"],
+  ["audio_foreign",     "Non-English audio"],
+  ["audio_podcast",     "Podcasts"],
+  ["all",               "All audio (no filter)"],
 ];
 
 // ── Tab + saves state ────────────────────────────────────────────────
@@ -745,11 +730,9 @@ function _renderArchiveList() {
           <label><span>Collection</span><input type="text" id="archive-collection" placeholder="e.g. etree, audio_music" value="${escHtml(_archiveSearchCollection)}" /></label>
           <label><span>Category</span>
             <select id="archive-category">
-              ${_ARCHIVE_CATEGORY_GROUPS.map(g => `
-                <optgroup label="${escHtml(g.label)}">${g.options.map(([val, label]) =>
-                  `<option value="${escHtml(val)}"${val === _archiveSearchCategory ? " selected" : ""}>${escHtml(label)}</option>`
-                ).join("")}</optgroup>
-              `).join("")}
+              ${_ARCHIVE_CATEGORY_OPTIONS.map(([val, label]) =>
+                `<option value="${escHtml(val)}"${val === _archiveSearchCategory ? " selected" : ""}>${escHtml(label)}</option>`
+              ).join("")}
             </select>
           </label>
           <label><span>Year from</span><input type="text" id="archive-year-from" placeholder="yyyy" inputmode="numeric" maxlength="4" value="${escHtml(_archiveSearchYearFrom)}" /></label>
