@@ -537,6 +537,33 @@ app.set("trust proxy", 1); // trust exactly 1 hop (Railway's reverse proxy)
 // Gzip/brotli compression for all responses
 app.use(compression());
 
+// Security headers — MUST be mounted before any route handlers
+// (explicit `app.get("/")` for the SPA HTML, express.static for
+// /style.css and /shared.js etc.) or those routes return responses
+// without the headers. Previously this lived just before the API
+// routes near line 666, and as a result HSTS / X-Frame-Options /
+// Permissions-Policy never reached the browser for the root HTML
+// or any static asset — which broke HSTS preload eligibility too.
+app.use((_req, res, next) => {
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  // `preload` flag enables submission to the HSTS preload list at
+  // hstspreload.org — once accepted, browsers skip the HTTP→HTTPS
+  // redirect on the FIRST visit too instead of only after they've
+  // seen the header once.
+  res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  // clipboard-read=() disables the navigator.clipboard.readText() API
+  // for every origin, so any third-party widget (Clerk's auth modal
+  // had been triggering this) that tries to autofill from the user's
+  // clipboard fails silently instead of popping the "seadisco.com
+  // wants to See text and images copied to the clipboard" prompt.
+  // Doesn't affect clipboard.writeText() — share / copy buttons keep
+  // working since clipboard-write is not in this list.
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), clipboard-read=()");
+  next();
+});
+
 // Redirect old /account URL to SPA view so existing links/bookmarks still work
 app.get("/account", (req, res) => {
   const qs = req.url.includes("?") ? "&" + req.url.split("?")[1] : "";
@@ -662,27 +689,10 @@ app.use((req, res, next) => {
   next();
 });
 
-// Security headers
-app.use((_req, res, next) => {
-  res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("X-Content-Type-Options", "nosniff");
-  // `preload` flag enables submission to the HSTS preload list at
-  // hstspreload.org — once accepted, browsers skip the HTTP→HTTPS
-  // redirect on the FIRST visit too instead of only after they've
-  // seen the header once. After deploy: submit seadisco.com at
-  // https://hstspreload.org to claim the win.
-  res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
-  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-  // clipboard-read=() disables the navigator.clipboard.readText() API
-  // for every origin, so any third-party widget (Clerk's auth modal
-  // had been triggering this) that tries to autofill from the user's
-  // clipboard fails silently instead of popping the "seadisco.com
-  // wants to See text and images copied to the clipboard" prompt.
-  // Doesn't affect clipboard.writeText() — share / copy buttons keep
-  // working since clipboard-write is not in this list.
-  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), clipboard-read=()");
-  next();
-});
+// Security headers were here — moved up to run before static / route
+// handlers (see top of file, just after compression()). Without that
+// move, HSTS / X-Frame-Options / Permissions-Policy never reached
+// the browser for the SPA HTML or any static asset.
 
 // ── Auth / account endpoints ──────────────────────────────────────────────
 
