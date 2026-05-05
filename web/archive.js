@@ -711,10 +711,10 @@ function _renderArchiveList() {
           }`
         : "");
   listEl.innerHTML = `
-    <div class="archive-tabs">
-      <button type="button" class="archive-tab archive-tab-search${showSearch ? " active" : ""}" onclick="_archiveSwitchTab('search')">Search</button>
-      <button type="button" class="archive-tab archive-tab-curated${showCurated ? " active" : ""}" onclick="_archiveSwitchTab('curated')">Curated</button>
-      <button type="button" class="archive-tab archive-tab-saved${showSaved ? " active" : ""}" onclick="_archiveSwitchTab('saved')">Saved</button>
+    <div class="loc-tabs archive-tabs">
+      <button type="button" class="loc-tab archive-tab archive-tab-search${showSearch ? " active" : ""}" onclick="_archiveSwitchTab('search')">Search</button>
+      <button type="button" class="loc-tab archive-tab archive-tab-curated${showCurated ? " active" : ""}" onclick="_archiveSwitchTab('curated')">Curated</button>
+      <button type="button" class="loc-tab archive-tab archive-tab-saved${showSaved ? " active" : ""}" onclick="_archiveSwitchTab('saved')">Saved</button>
     </div>
 
     <div class="archive-panel archive-panel-search" style="display:${showSearch ? "" : "none"}">
