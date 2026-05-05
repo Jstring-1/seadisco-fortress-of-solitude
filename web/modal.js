@@ -3498,12 +3498,12 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   // Used everywhere a "user can submit YT overrides" gate fires.
   const hasYtAccess = typeof window._sdHasYtAccess === "function" ? window._sdHasYtAccess() : !!window._isAdmin;
   const fullAlbumRowVisible = !!fullAlbumUrl || hasYtAccess;
-  // Count Full Album as "missing" only when the user can act on it
-  // (admin or YT_OPEN_TO_USERS) AND no override exists. Visitors who
-  // can't submit don't see the album-suggest entry point at all.
-  const fullAlbumIsMissing = hasYtAccess && !fullAlbumUrl;
-  const missingCount = tracks.filter(t => t.title && !findVideo(t.title || "", t.position || "")).length
-    + (fullAlbumIsMissing ? 1 : 0);
+  // Per-track missing count only — the Full Album row is its own
+  // submission affordance (it gets its own ＋ next to the play cell)
+  // and including it would surface a misleading "1 missing" on albums
+  // where every individual track already has a video. The full-album
+  // row is still submittable via the Full row UI.
+  const missingCount = tracks.filter(t => t.title && !findVideo(t.title || "", t.position || "")).length;
   // Normally admin-only; relaxed by YT_OPEN_TO_USERS env-var.
   // Album-suggest query — same shape _trackYtOpenAlbumSuggest builds
   // when the user clicks. Baked into data-yt-q so the hover handler
@@ -3572,9 +3572,9 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         // revealed once the override fetch reconciles.
         const hideStyle = (!fullAlbumUrl && !hasYtAccess) ? ' style="display:none"' : "";
         return `<div class="track track-fullalbum" data-pos="ALBUM"${fullAlbumUrl ? ' data-yt-override="1"' : ""}${hideStyle}>
-          <span class="track-play-cell">${playCellFA}</span>
+          <span class="track-play-cell">${playCellFA}${queueAddFA}</span>
           <span class="track-pos">Full</span>
-          <span class="track-title"><span class="track-title-link">Full album</span>${queueAddFA}${overrideBadgeFA}</span>
+          <span class="track-title"><span class="track-title-link">Full album</span>${overrideBadgeFA}</span>
         </div>`;
       })()}
       ${tracks.map(t => {
@@ -3655,9 +3655,9 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
             }).join('<span class="credit-sep"> · </span>')}</div>`
           : "";
         return `<div class="track" data-pos="${escHtml(trackPos)}"${overrideRow ? ' data-yt-override="1"' : ""}>
-          <span class="track-play-cell">${playCell}</span>
+          <span class="track-play-cell">${playCell}${queueAdd}</span>
           <span class="track-pos">${escHtml(t.position || "")}</span>
-          <span class="track-title">${titleLink}${searchIcon}${wikiW}${locL}${ytSearchEnd}${queueAdd}${overrideBadge}${suggestBtn}${trackCredits}</span>
+          <span class="track-title">${titleLink}${searchIcon}${wikiW}${locL}${ytSearchEnd}${overrideBadge}${suggestBtn}${trackCredits}</span>
           ${t.duration ? `<span class="track-dur">${escHtml(t.duration)}</span>` : ""}
         </div>`;
       }).join("")}
