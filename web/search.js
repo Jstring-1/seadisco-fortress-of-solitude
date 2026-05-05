@@ -1074,7 +1074,25 @@ function renderCard(item, index, opts) {
   const label   = (item.label ?? []).slice(0, 2).join(", ");
   const catno   = (type === "release" || type === "master") ? (item.catno ?? "") : "";
   const formats = (item.format  ?? []).slice(0, 3).join(" · ");
-  const genre   = (item.genre   ?? []).slice(0, 1).join("");
+  // Discogs releases can carry several genres ("Jazz", "Blues") and
+  // their array order isn't stable. We only show the first one on the
+  // card. If the user has a genre filter active in any view, promote
+  // that filter's value to position 0 so the card label matches the
+  // search intent — without dropping any results. Pure cosmetic
+  // re-order; the underlying item.genre array is left intact.
+  const _activeGenreFilter = (
+    document.getElementById("f-genre")?.value
+    || document.getElementById("cw-genre")?.value
+    || document.getElementById("random-records-genre")?.value
+    || ""
+  ).trim();
+  const _genreList = item.genre ?? [];
+  const _gMatchIdx = _activeGenreFilter
+    ? _genreList.findIndex(g => String(g).toLowerCase() === _activeGenreFilter.toLowerCase())
+    : -1;
+  const genre = _gMatchIdx > 0
+    ? String(_genreList[_gMatchIdx])           // promote matched genre to display
+    : (_genreList.slice(0, 1).join(""));
   const country = item.country ?? "";
   const year    = item.year    ?? "";
 
