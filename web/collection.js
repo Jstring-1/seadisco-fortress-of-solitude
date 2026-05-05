@@ -1962,17 +1962,18 @@ async function loadDiscogsIds() {
       window._defaultAddFolderId = Number(data.defaultAddFolderId) || 1;
       window._userCurrency = data.currency || "USD";
       try { _updateEmptyRecordTabs(); } catch { /* ignore */ }
-      const cb = document.getElementById("hide-owned");
-      const lbl = document.getElementById("hide-owned-label");
-      if (cb && cb.disabled) {
-        cb.disabled = false; cb.style.opacity = "1"; cb.style.cursor = "pointer";
-        cb.addEventListener("change", () => { if (window._lastResults) renderResults(window._lastResults); });
-      }
-      if (lbl) {
-        lbl.style.color = "var(--muted)";
-        lbl.style.opacity = "1";
-        lbl.style.cursor = "pointer";
-        lbl.title = window._collectionIds.size > 0 ? "Hide releases already in your collection" : "Sync your collection on the Account page to use this filter";
+      // Enable the Hide-owned icon toggle once the user's collection
+      // ids have loaded. The button starts disabled (with a "sign in
+      // and sync" tooltip); flip it on now and update the tooltip to
+      // reflect actual state. _sdHideOwnedToggled handles click → re-
+      // render of any cached _lastResults.
+      const btn = document.getElementById("hide-owned");
+      if (btn) {
+        btn.disabled = false;
+        btn.removeAttribute("aria-disabled");
+        btn.title = window._collectionIds.size > 0
+          ? "Hide owned: hide releases already in your collection"
+          : "Hide owned: sync your collection on the Account page to use this filter";
       }
     }
   } catch { /* ignore */ }
