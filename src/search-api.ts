@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 
 
@@ -192,6 +192,10 @@ const anonWikiLimiter = new PerIpRateLimiter(50, 60 * 60_000,   "wiki-anon");
 // without the Clerk Bearer attached). The DB-backed search cache
 // makes repeated queries free regardless.
 const anonYoutubeLimiter = new PerIpRateLimiter(120, 60 * 60_000, "youtube-anon");
+// archive.org search: signed-in users skip; anons get 30/hour. Most
+// queries hit our 90-day cache and never reach upstream, so this is
+// just a backstop against bots scanning the q-space.
+const anonArchiveLimiter = new PerIpRateLimiter(30, 60 * 60_000, "archive-anon");
 
 /** Open gate: allows any caller (anon or authenticated). Anonymous
  *  callers are rate-limited per IP via the supplied limiter; signed-in
@@ -3529,6 +3533,100 @@ app.get("/api/archive/aadamjacobs", async (_req, res) => {
     res.json(fresh ?? { items: [], fetchedAt: new Date().toISOString(), count });
   } catch (e: any) {
     console.error("[archive/aadamjacobs]", e?.message ?? e);
+    res.status(502).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// GET /api/archive/search?q=...&page=1&rows=48 — general archive.org
+// search restricted to playable audio. The q is wrapped in a query
+// that requires `mediatype:audio` AND at least one MP3 file in the
+// item, so every returned row should have something the client can
+// play through the existing _locPlay → /api/archive/item/:id resolver.
+//
+// Cache: 90 days in archive_search_cache, keyed on canonicalized
+// (q | page | rows). Once a query is cached, subsequent hits never
+// reach archive.org — by design, since their catalog is essentially
+// stable on that horizon. Anons are rate-limited 30/hour as a bot
+// backstop on the cache-miss path.
+const _ARCHIVE_SEARCH_TTL_S = 90 * 24 * 60 * 60;  // 90 days
+app.get("/api/archive/search", async (req, res) => {
+  // Open to anons — the page itself is too. Rate limiter only
+  // matters on cache misses (cached responses skip upstream entirely).
+  const callerId = await allowAnonRateLimited(req, res, anonArchiveLimiter);
+  if (callerId === null) return;
+
+  // Validate inputs. q is required, page/rows are bounded.
+  const qRaw = String(req.query.q ?? "").trim();
+  if (!qRaw) {
+    res.json({ items: [], numFound: 0, page: 1, rows: 48 });
+    return;
+  }
+  if (qRaw.length > 200) {
+    res.status(400).json({ error: "q too long" });
+    return;
+  }
+  const page = Math.max(1, Math.min(20, parseInt(String(req.query.page ?? "1"), 10) || 1));
+  const rows = Math.max(1, Math.min(96, parseInt(String(req.query.rows ?? "48"), 10) || 48));
+
+  // Canonicalize q for cache stability (whitespace + case fold).
+  const qNorm = qRaw.toLowerCase().replace(/\s+/g, " ");
+  const cacheKey = `archive-search|${qNorm}|p=${page}|r=${rows}`;
+  const cached = await getArchiveSearchCache(cacheKey, _ARCHIVE_SEARCH_TTL_S);
+  if (cached) {
+    res.setHeader("X-SeaDisco-Cache", "hit");
+    res.json(cached);
+    return;
+  }
+
+  // Build the upstream query. Wrap user's q in parens so any operators
+  // in the cached strict query (mediatype, format) AND it cleanly.
+  // format:("MP3" OR "VBR MP3") matches items that have at least one
+  // MP3 file in the bucket — what _locPlay knows how to stream.
+  const filtered = `(${qRaw}) AND mediatype:audio AND format:("MP3" OR "VBR MP3")`;
+  const fl = ["identifier", "title", "date", "description", "creator"]
+    .map(f => `&fl[]=${f}`).join("");
+  const url =
+    `https://archive.org/advancedsearch.php?q=${encodeURIComponent(filtered)}` +
+    fl +
+    `&rows=${rows}&page=${page}&output=json&sort[]=downloads+desc`;
+
+  try {
+    const r = await loggedFetch("archive", url, {
+      headers: {
+        "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)",
+        "Accept":     "application/json",
+      },
+      context: `archive-search`,
+    });
+    if (!r.ok) {
+      res.status(502).json({ error: `archive HTTP ${r.status}` });
+      return;
+    }
+    const body = await r.json() as any;
+    const docs: any[] = (body?.response?.docs ?? []).filter((d: any) => d?.identifier);
+    const numFound = Number(body?.response?.numFound ?? docs.length);
+    const items = docs.map((d: any) => ({
+      identifier:  d.identifier,
+      title:       String(d.title ?? d.identifier),
+      date:        Array.isArray(d.date) ? d.date[0] : (d.date ?? ""),
+      description: Array.isArray(d.description) ? d.description.join(" ") : (d.description ?? ""),
+      creator:     Array.isArray(d.creator) ? d.creator.join(", ") : (d.creator ?? ""),
+      itemUrl:     `https://archive.org/details/${encodeURIComponent(d.identifier)}`,
+      streamUrl:   "",  // resolved lazily by /api/archive/item/:id on play
+      duration:    "",
+    }));
+    const payload = {
+      items,
+      numFound,
+      page,
+      rows,
+      fetchedAt: new Date().toISOString(),
+    };
+    await setArchiveSearchCache(cacheKey, payload);
+    res.setHeader("X-SeaDisco-Cache", "miss");
+    res.json(payload);
+  } catch (e: any) {
+    console.error("[archive/search]", e?.message ?? e);
     res.status(502).json({ error: String(e?.message ?? e) });
   }
 });

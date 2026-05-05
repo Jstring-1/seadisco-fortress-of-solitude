@@ -350,6 +350,20 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS youtube_search_cache_age_idx ON youtube_search_cache (cached_at)`);
 
+  // ── archive.org search cache ─────────────────────────────────────────
+  // Long-TTL cache for archive.org's advancedsearch responses. Each
+  // (q, page, rows) tuple gets its own row; once cached, repeat queries
+  // serve from here instead of hitting archive.org. 90-day TTL since
+  // archive search results are essentially stable for that horizon.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS archive_search_cache (
+      cache_key  TEXT PRIMARY KEY,
+      body       JSONB NOT NULL,
+      cached_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS archive_search_cache_age_idx ON archive_search_cache (cached_at)`);
+
   // ── Per-user "banished" suggestions ──────────────────────────────────────
   // When a user dismisses a personal-suggestion card with the × button,
   // the (id,type) is recorded here and the background generator skips it
@@ -5061,6 +5075,48 @@ export async function pruneYoutubeSearchCache(): Promise<number> {
   try {
     const r = await getPool().query(
       `DELETE FROM youtube_search_cache WHERE cached_at < NOW() - INTERVAL '7 days'`
+    );
+    return r.rowCount ?? 0;
+  } catch { return 0; }
+}
+
+// ── archive.org search cache helpers ───────────────────────────────
+// Mirrors the youtube_search_cache helpers above. Long-lived 90-day
+// TTL — archive.org's catalog is extremely stable, and we want to
+// avoid burning any goodwill with their public search API. Cache key
+// is a normalized "q|page|rows" string built by the route handler.
+
+export async function getArchiveSearchCache(cacheKey: string, maxAgeSeconds: number): Promise<any | null> {
+  try {
+    const r = await getPool().query(
+      `SELECT body, cached_at FROM archive_search_cache WHERE cache_key = $1 LIMIT 1`,
+      [cacheKey]
+    );
+    const row = r.rows[0];
+    if (!row) return null;
+    const ageMs = Date.now() - new Date(row.cached_at).getTime();
+    if (ageMs > maxAgeSeconds * 1000) return null;
+    return row.body ?? null;
+  } catch { return null; }
+}
+
+export async function setArchiveSearchCache(cacheKey: string, body: any): Promise<void> {
+  try {
+    await getPool().query(
+      `INSERT INTO archive_search_cache (cache_key, body, cached_at)
+       VALUES ($1, $2::jsonb, NOW())
+       ON CONFLICT (cache_key) DO UPDATE SET body = EXCLUDED.body, cached_at = NOW()`,
+      [cacheKey, JSON.stringify(body)]
+    );
+  } catch { /* cache is best-effort */ }
+}
+
+// Drop rows past the 90-day TTL. Wired to the existing prune
+// scheduler (or run manually). Returns # of rows deleted.
+export async function pruneArchiveSearchCache(): Promise<number> {
+  try {
+    const r = await getPool().query(
+      `DELETE FROM archive_search_cache WHERE cached_at < NOW() - INTERVAL '90 days'`
     );
     return r.rowCount ?? 0;
   } catch { return 0; }
