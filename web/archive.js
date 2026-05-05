@@ -58,7 +58,7 @@ const _ARCHIVE_CATEGORY_GROUPS = [
   {
     label: "Music",
     options: [
-      ["music",          "All music (excludes podcasts)"],
+      ["music",          "All music"],
       ["audio_music",    "  Community-contributed music"],
       ["etree",          "  Live music recordings (etree)"],
       ["78rpm",          "  78 RPMs & cylinder recordings"],
@@ -966,13 +966,17 @@ async function _archiveDoSearch() {
     if (_archiveSearchYearTo)     u.searchParams.set("yearTo", _archiveSearchYearTo);
     u.searchParams.set("sort", _archiveSearchSort);
     // Category dropdown → server params:
-    //   "music"  → all audio with -collection:audio_podcast (default)
-    //   "all"    → no extra constraint (podcasts allowed)
-    //   anything else → constrain to that collection (overrides any
-    //                   freeform collection text input).
+    //   "music"  → union of music-y collections
+    //              (audio_music + etree + 78rpm + opensource_audio).
+    //              Sent as a comma-separated `collection=` and the
+    //              server ORs them. Tighter than "everything except
+    //              podcasts" — only items in real music collections.
+    //   "all"    → no extra constraint (every audio item).
+    //   anything else → constrain to that single collection.
     const cat = _archiveSearchCategory || "music";
     if (cat === "music") {
-      u.searchParams.set("excludePodcasts", "1");
+      u.searchParams.set("collection", "audio_music,etree,78rpm,opensource_audio");
+      u.searchParams.set("excludePodcasts", "0");  // music collections inherently exclude podcasts
     } else if (cat === "all") {
       u.searchParams.set("excludePodcasts", "0");
     } else {
