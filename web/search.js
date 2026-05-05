@@ -834,17 +834,30 @@ window._sdHomeStripFilter = "";
 // Called both on click (via _sdSwitchHomeStripTab) and on initial
 // render so the visual state can never drift from the data state.
 function _sdSyncHomeStripTabsVisual() {
-  const m = window._sdHomeStripMode || "recent";
   const tabs = {
     recent:      document.getElementById("rr-tab-recent"),
     suggestions: document.getElementById("rr-tab-suggestions"),
     submitted:   document.getElementById("rr-tab-submitted"),
     feed:        document.getElementById("rr-tab-feed"),
   };
+  // Submitted tab is admin/demo-only while YouTube quota request is
+  // pending — hide for everyone else (and hide its leading separator
+  // so the strip doesn't have a dangling " / " between Suggestions
+  // and Feed). When (if) the quota lifts, revert this gate.
+  const submittedAllowed = !!window._isAdmin || !!window._sdIsDemo;
+  if (tabs.submitted) tabs.submitted.style.display = submittedAllowed ? "" : "none";
+  const sepSubmitted = document.querySelector(".rr-tab-sep-submitted");
+  if (sepSubmitted) sepSubmitted.style.display = submittedAllowed ? "" : "none";
+  // If a non-admin/demo user landed on Submitted via URL (?strip=submitted)
+  // before this gate ran, snap them back to Recent so they don't see
+  // an empty strip with no active tab.
+  if (!submittedAllowed && window._sdHomeStripMode === "submitted") {
+    window._sdHomeStripMode = window._clerk?.user ? "recent" : "feed";
+  }
   for (const [k, el] of Object.entries(tabs)) {
     if (!el) continue;
-    el.classList.toggle("rr-tab-active", k === m);
-    el.style.color = k === m ? "var(--text)" : "var(--muted)";
+    el.classList.toggle("rr-tab-active", k === window._sdHomeStripMode);
+    el.style.color = k === window._sdHomeStripMode ? "var(--text)" : "var(--muted)";
   }
   // Anon users see all four tabs but Recent / Suggestions / Submitted
   // are visually disabled (greyed out) — clicking them is a no-op
