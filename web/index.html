@@ -67,7 +67,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260505.1617" />
+  <link rel="stylesheet" href="/style.css?v=20260505.1622" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -105,7 +105,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260505.1617"></script>
+<script defer src="/shared.js?v=20260505.1622"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -744,7 +744,6 @@ e.g.  miles davis | coltrane
 <div id="archive-view" class="content-narrow" style="display:none">
   <div class="loc-header">
     <h2 class="loc-title">Archive.org</h2>
-    <p class="loc-sub">Search audio recordings on the <a href="https://archive.org" target="_blank" rel="noopener" class="loc-attribution-link">Internet Archive</a>. Results are filtered to items with MP3 streams the in-app player can handle. Or click <strong style="color:#ccc">Curated</strong> to browse a featured collection — pick from the dropdown.</p>
   </div>
   <div id="archive-list" class="archive-list">Loading…</div>
 </div>
@@ -752,7 +751,6 @@ e.g.  miles davis | coltrane
 <div id="wiki-view" class="content-narrow" style="display:none">
   <div class="loc-header">
     <h2 class="loc-title">Wikipedia</h2>
-    <p class="loc-sub">Search across Wikipedia. Articles are courtesy of <a href="https://www.wikipedia.org" target="_blank" rel="noopener" class="loc-attribution-link">Wikipedia</a> contributors and licensed under <a href="https://en.wikipedia.org/wiki/Wikipedia:Text_of_Creative_Commons_Attribution-ShareAlike_4.0_International_License" target="_blank" rel="noopener" class="loc-attribution-link">CC BY-SA 4.0</a> — click ★ on any result to save it for later.</p>
     <div class="loc-tabs">
       <button type="button" class="loc-tab loc-tab-search active" onclick="_wikiSwitchTab('search')">Search</button>
       <button type="button" class="loc-tab loc-tab-saved" onclick="_wikiSwitchTab('saved')">Saved</button>
@@ -782,7 +780,6 @@ e.g.  miles davis | coltrane
 <div id="youtube-view" class="content-narrow" style="display:none">
   <div class="loc-header">
     <h2 class="loc-title">YouTube</h2>
-    <p class="loc-sub">Search YouTube without leaving the site — results play in the mini-player. Save videos to revisit later, queue tracks just like any other source. Powered by the YouTube Data API.</p>
     <div class="loc-tabs">
       <button type="button" class="loc-tab loc-tab-search active" onclick="_youtubeSwitchTab('search')">Search</button>
       <button type="button" class="loc-tab loc-tab-saved" onclick="_youtubeSwitchTab('saved')">Saved</button>
@@ -1152,13 +1149,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260505.1617"></script>
-<script defer src="/search.js?v=20260505.1617"></script>
-<script defer src="/collection.js?v=20260505.1617"></script>
+<script defer src="/utils.js?v=20260505.1622"></script>
+<script defer src="/search.js?v=20260505.1622"></script>
+<script defer src="/collection.js?v=20260505.1622"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260505.1617"></script>
-<script defer src="/app.js?v=20260505.1617"></script>
+<script defer src="/modal.js?v=20260505.1622"></script>
+<script defer src="/app.js?v=20260505.1622"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1169,13 +1166,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260505.1617"></script>
-<script defer src="/queue.js?v=20260505.1617"></script>
+<script defer src="/loc.js?v=20260505.1622"></script>
+<script defer src="/queue.js?v=20260505.1622"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260505.1617";
+  window._SD_LAZY_VERSION = "20260505.1622";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1204,8 +1201,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260505.1617"></script>
-<script defer src="/offline.js?v=20260505.1617"></script>
+<script defer src="/idb.js?v=20260505.1622"></script>
+<script defer src="/offline.js?v=20260505.1622"></script>
 
 </body>
 </html>
