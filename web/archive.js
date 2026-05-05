@@ -523,7 +523,11 @@ function _updateArchiveCount(filtered) {
 
 function archiveLoadMore() {
   _archiveShown += _ARCHIVE_PAGE;
-  _archiveRenderRowsOnly({ append: false }); // re-render entire visible block
+  // Pass append: true so _archiveRenderRowsOnly doesn't reset
+  // _archiveShown back to one page. The function still re-renders
+  // the entire visible block from index 0 — the flag only controls
+  // the count reset, not the render strategy.
+  _archiveRenderRowsOnly({ append: true });
 }
 
 // Build the row HTML. Used for both Browse rows (idx is the position in
