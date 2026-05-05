@@ -305,7 +305,13 @@ function _sdCardOuterClick(event, id, type, url) {
   if (event && event.preventDefault) event.preventDefault();
   if (document.body.classList.contains("card-mode-wide")) {
     const card = event.currentTarget;
-    const main = card?.querySelector(".card-thumb-wrap > img:first-of-type");
+    // Accept either the main cover image OR the placeholder div as
+    // the clickable cover — items without artwork render a
+    // .thumb-placeholder in the same slot, and previously the click
+    // filter only matched <img>, so cover-less wide cards were
+    // unclickable.
+    const main = card?.querySelector(".card-thumb-wrap > img:first-of-type")
+              || card?.querySelector(".card-thumb-wrap > .thumb-placeholder");
     const onMain = main && (event.target === main || main.contains(event.target));
     if (!onMain) return;
   }
@@ -1241,7 +1247,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260505.1005";
+  const SITE_VERSION = "build 20260505.1222";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
