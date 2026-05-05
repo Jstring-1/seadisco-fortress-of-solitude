@@ -973,7 +973,10 @@ function toggleCwAdvanced(forceOpen) {
   if (!panel) return;
   _cwAdvOpen = forceOpen === true ? true : forceOpen === false ? false : !_cwAdvOpen;
   panel.style.display = _cwAdvOpen ? "" : "none";
-  if (arrow) arrow.textContent = _cwAdvOpen ? "▼" : "▶";
+  if (arrow) {
+    arrow.textContent = _cwAdvOpen ? "▼" : "▶";
+    arrow.classList.toggle("is-open", _cwAdvOpen);
+  }
 }
 
 function getCwFilters() {
@@ -1707,10 +1710,23 @@ async function loadCollectionTab(page = 1, filters) {
     if (cwSort) url += `&sort=${encodeURIComponent(cwSort)}`;
     const r = await apiFetch(url);
     const data = await r.json();
-    const items = data.items ?? [];
+    let items = data.items ?? [];
     showSynonymInfo(data.synonymsApplied);
+    // Strict-genre filter: drop items whose first listed genre isn't
+    // the selected one. Server returns the broader "any genre matches"
+    // set; this client-side step tightens to genre-first matches when
+    // the ! toggle is on. Filter description below reflects strict.
+    const strictGenre = (typeof _sdGenreStrictActive === "function" && _sdGenreStrictActive("cw"))
+      ? (f.genre || "").toLowerCase()
+      : "";
+    if (strictGenre) {
+      items = items.filter(it => {
+        const first = (it.genre?.[0] ?? it.genres?.[0] ?? "").toString().toLowerCase();
+        return first === strictGenre;
+      });
+    }
     const hasFilter = Object.keys(f).length > 0 || cwRating || cwNotes;
-    const filterDesc = Object.values(f).join(" + ");
+    const filterDesc = Object.values(f).join(" + ") + (strictGenre ? " (strict)" : "");
     if (!items.length) {
       setCwStatus("");
       document.getElementById("results").innerHTML = hasFilter
@@ -1758,10 +1774,20 @@ async function loadWantlistTab(page = 1, filters) {
     if (cwSort) url += `&sort=${encodeURIComponent(cwSort)}`;
     const r = await apiFetch(url);
     const data = await r.json();
-    const items = data.items ?? [];
+    let items = data.items ?? [];
     showSynonymInfo(data.synonymsApplied);
+    // Strict-genre filter — symmetric with loadCollectionTab.
+    const strictGenre = (typeof _sdGenreStrictActive === "function" && _sdGenreStrictActive("cw"))
+      ? (f.genre || "").toLowerCase()
+      : "";
+    if (strictGenre) {
+      items = items.filter(it => {
+        const first = (it.genre?.[0] ?? it.genres?.[0] ?? "").toString().toLowerCase();
+        return first === strictGenre;
+      });
+    }
     const hasFilter = Object.keys(f).length > 0 || cwRating || cwNotes;
-    const filterDesc = Object.values(f).join(" + ");
+    const filterDesc = Object.values(f).join(" + ") + (strictGenre ? " (strict)" : "");
     if (!items.length) {
       setCwStatus("");
       document.getElementById("results").innerHTML = hasFilter

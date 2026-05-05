@@ -388,6 +388,7 @@ document.querySelectorAll('input[name="result-type"]').forEach(radio => {
       const arrow = document.getElementById("advanced-arrow");
       panel.dataset.open = "false";
       arrow.textContent = "▶";
+      arrow.classList.remove("is-open");
     }
     const toggleBtn = document.getElementById("advanced-toggle");
     if (toggleBtn) {

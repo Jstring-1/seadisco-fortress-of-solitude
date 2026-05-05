@@ -49,6 +49,7 @@ function toggleAdvanced(forceOpen) {
   const open  = forceOpen !== undefined ? forceOpen : panel.dataset.open !== "true";
   panel.dataset.open = open ? "true" : "false";
   arrow.textContent  = open ? "▼" : "▶";
+  arrow.classList.toggle("is-open", open);
 }
 
 // ── URL state helpers ────────────────────────────────────────────────────
@@ -222,37 +223,18 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
   }
 
   if (page === 1) {
-    const parts = [];
-    if (q)       parts.push(q);
-    if (artist)  parts.push(`Artist: ${artist}`);
-    if (release) parts.push(`Release: ${release}`);
-    if (yearForSearch) parts.push(`Year: ${yearForSearch}`);
-    if (label)   parts.push(`Label: ${label}`);
-    if (genre)   parts.push(`Genre: ${genre}`);
-    if (style)   parts.push(`Style: ${style}`);
-    if (format)  parts.push(`Format: ${format}`);
-    if (country) parts.push(`Country: ${country}`);
-    if (hard2find) parts.push(`Hard to Find`);
-    const typeLabels = { "master":"Masters", "master+":"Masters+", "release":"Releases", "artist":"Artists", "label":"Labels" };
-    const typeLabel = typeLabels[resultType] ?? "";
-    const sortLabels = { "year:asc":"Year ↑", "year:desc":"Year ↓", "title:asc":"Title A→Z", "title:desc":"Title Z→A", "label:asc":"Label A→Z" };
-    const sortLabel = sortLabels[sort] ?? "";
-    const extras = [typeLabel, sortLabel].filter(Boolean).join(" · ");
-    const searchTerms = parts.join(", ") + (extras ? "  ·  " + extras : "");
+    // "Searched :: …" recap blurb retired per request — the form
+    // already shows what was searched, the recap was redundant
+    // chrome above the result grid. Clearing the elements ensures a
+    // stale recap from a prior session doesn't linger.
     const descEl = document.getElementById("search-desc");
-    if (parts.length) {
-      const fullText = `Searched :: ${searchTerms}`;
-      descEl.title = fullText;
-      descEl.innerHTML = `Searched :: <span onclick="copySearchUrl(this)" title="Click to copy search link" style="cursor:pointer;border-bottom:1px dotted transparent;transition:border-color 0.2s" onmouseover="this.style.borderBottomColor='var(--accent)'" onmouseout="this.style.borderBottomColor='transparent'">${escHtml(searchTerms)}</span>`;
-    } else {
-      descEl.textContent = "";
-      descEl.title = "";
-    }
+    if (descEl) { descEl.textContent = ""; descEl.title = ""; }
     const retClr = document.getElementById("search-returned");
-    retClr.textContent = ""; retClr.title = "";
+    if (retClr) { retClr.textContent = ""; retClr.title = ""; }
     const aiClr = document.getElementById("search-ai-summary");
-    aiClr.textContent = ""; aiClr.title = "";
-    if (parts.length) document.getElementById("search-info-block").style.display = "";
+    if (aiClr) { aiClr.textContent = ""; aiClr.title = ""; }
+    const blockEl = document.getElementById("search-info-block");
+    if (blockEl) blockEl.style.display = "none";
   }
 
   const buildParams = (perPage) => {
@@ -662,6 +644,21 @@ function renderResults(items, append = false) {
   if (excludeCd) {
     filtered = filtered.filter(_sdItemIsNotCdMain);
   }
+  // Strict-genre filter: when the ! toggle next to the Genre dropdown
+  // is on, drop any result whose first listed genre doesn't match.
+  // Discogs's genres array isn't strictly primary-first but we treat
+  // [0] as the "lead" tag — that's what the card shows. Reuse helper
+  // from the shared toggle module so home-strip / collection / search
+  // all enforce the same semantics.
+  if (typeof _sdGenreStrictActive === "function" && _sdGenreStrictActive("search")) {
+    const want = (document.getElementById("f-genre")?.value || "").trim().toLowerCase();
+    if (want) {
+      filtered = filtered.filter(item => {
+        const first = (item.genre?.[0] ?? "").toString().toLowerCase();
+        return first === want;
+      });
+    }
+  }
   const grid = document.getElementById("results");
   const startIdx = append ? grid.querySelectorAll(".card, .card-animate").length : 0;
   const html = filtered.map((item, i) => renderCard(item, startIdx + i)).join("");
@@ -691,6 +688,53 @@ function _sdHard2FindActive() {
   return !!btn && btn.getAttribute("aria-pressed") === "true";
 }
 window._sdHard2FindActive = _sdHard2FindActive;
+
+// ── Genre-strict (!) toggle ─────────────────────────────────────────
+// Three buttons share the same semantic: "drop items where genre[0]
+// doesn't match the selected genre filter." One per page where it's
+// useful — main search, collection, and the home strip — each gated
+// on its own aria-pressed flag. Helpers below let the relevant render
+// path read its scope's flag without reaching for the DOM directly.
+const _GENRE_STRICT_BTN_IDS = {
+  search: "f-genre-strict",
+  cw:     "cw-genre-strict",
+  strip:  "random-records-genre-strict",
+};
+function _sdGenreStrictActive(scope) {
+  const id = _GENRE_STRICT_BTN_IDS[scope];
+  if (!id) return false;
+  const btn = document.getElementById(id);
+  return !!btn && btn.getAttribute("aria-pressed") === "true";
+}
+window._sdGenreStrictActive = _sdGenreStrictActive;
+
+function _sdToggleGenreStrict(scope, btn) {
+  const next = btn.getAttribute("aria-pressed") !== "true";
+  btn.setAttribute("aria-pressed", next ? "true" : "false");
+  btn.classList.toggle("active", next);
+  // Re-render the relevant grid so the new strict state takes effect
+  // without requiring the user to re-submit the search.
+  if (scope === "search") {
+    if (window._lastResults && typeof renderResults === "function") {
+      try { renderResults(window._lastResults); } catch {}
+    }
+  } else if (scope === "cw") {
+    // Collection / wantlist results aren't stashed on a global, so
+    // re-run the active tab loader on whatever page we're on. Server
+    // returns the same data; the new client filter applies on render.
+    if (typeof doCwSearch === "function") {
+      try { doCwSearch(typeof currentPage === "number" ? currentPage : 1); } catch {}
+    }
+  } else if (scope === "strip") {
+    // Home strip is pure client-side: re-render against _randomAll
+    // with the strict filter folded into _sdFilterRandom.
+    _randomShown = 0;
+    const grid = document.getElementById("random-records-grid");
+    if (grid) grid.innerHTML = "";
+    if (typeof _sdRenderRandomSlice === "function") _sdRenderRandomSlice();
+  }
+}
+window._sdToggleGenreStrict = _sdToggleGenreStrict;
 
 // ── "Hide owned" toggle (icon button, parallel to 💎 / 💿) ───────────
 // Disabled until collection.js has loaded the user's collection IDs;
@@ -913,12 +957,20 @@ window._sdHomeStripFilterChanged = _sdHomeStripFilterChanged;
 function _sdFilterRandom(items) {
   const q = window._sdHomeStripFilter || "";
   const g = (typeof _sdHomeStripGenreCurrent === "function" ? _sdHomeStripGenreCurrent() : "");
+  const strict = (typeof _sdGenreStrictActive === "function" && _sdGenreStrictActive("strip"));
   if (!q && !g) return items;
   const gLower = g.toLowerCase();
   return items.filter(it => {
     if (g) {
       const list = Array.isArray(it.genre) ? it.genre : [];
-      if (!list.some(x => String(x || "").toLowerCase() === gLower)) return false;
+      if (strict) {
+        // Strict: only items whose FIRST listed genre matches the
+        // filter. Cross-tagged hybrids (Jazz/Blues) fall away.
+        if ((list[0] ?? "").toString().toLowerCase() !== gLower) return false;
+      } else {
+        // Default: any genre in the array matches.
+        if (!list.some(x => String(x || "").toLowerCase() === gLower)) return false;
+      }
     }
     if (!q) return true;
     const hay = [
@@ -1074,25 +1126,7 @@ function renderCard(item, index, opts) {
   const label   = (item.label ?? []).slice(0, 2).join(", ");
   const catno   = (type === "release" || type === "master") ? (item.catno ?? "") : "";
   const formats = (item.format  ?? []).slice(0, 3).join(" · ");
-  // Discogs releases can carry several genres ("Jazz", "Blues") and
-  // their array order isn't stable. We only show the first one on the
-  // card. If the user has a genre filter active in any view, promote
-  // that filter's value to position 0 so the card label matches the
-  // search intent — without dropping any results. Pure cosmetic
-  // re-order; the underlying item.genre array is left intact.
-  const _activeGenreFilter = (
-    document.getElementById("f-genre")?.value
-    || document.getElementById("cw-genre")?.value
-    || document.getElementById("random-records-genre")?.value
-    || ""
-  ).trim();
-  const _genreList = item.genre ?? [];
-  const _gMatchIdx = _activeGenreFilter
-    ? _genreList.findIndex(g => String(g).toLowerCase() === _activeGenreFilter.toLowerCase())
-    : -1;
-  const genre = _gMatchIdx > 0
-    ? String(_genreList[_gMatchIdx])           // promote matched genre to display
-    : (_genreList.slice(0, 1).join(""));
+  const genre   = (item.genre   ?? []).slice(0, 1).join("");
   const country = item.country ?? "";
   const year    = item.year    ?? "";
 

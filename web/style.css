@@ -7940,6 +7940,71 @@ body.is-offline button.offline-disabled {
 }
 .f-hard2find-btn.active .f-hard2find-glyph { filter: grayscale(0); }
 
+/* Genre strict-mode (!) toggle — sits next to a Genre dropdown and
+   tightens the filter to "first listed genre only." Off by default;
+   when on, an accent ring + bold ! glyph signals strict mode. The
+   button intentionally looks distinct from the 💎/💿 toggles since
+   it modifies a different filter, not a result-set bias. */
+.select-with-strict {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: 100%;
+}
+.select-with-strict > select { flex: 1; min-width: 0; }
+.genre-strict-btn {
+  flex-shrink: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+}
+.genre-strict-btn:hover { transform: scale(1.06); color: var(--text); }
+.genre-strict-btn.active,
+.genre-strict-btn[aria-pressed="true"] {
+  background: rgba(255, 107, 53, 0.14);
+  border-color: rgba(255, 107, 53, 0.55);
+  color: var(--accent);
+}
+/* Smaller variant for the home-strip slot — its sibling controls are
+   ~22px tall now, so the strict button needs to match. */
+.genre-strict-btn-sm {
+  width: 1.25rem;
+  height: 1.25rem;
+  font-size: 0.72rem;
+}
+
+/* Advanced-toggle arrow turns blue when the panel is open. Applied
+   on both the main search (#advanced-arrow) and collection
+   (#cw-advanced-arrow) toggles. Hardcoded blue so it reads as a
+   "panel is engaged" cue regardless of theme accent (which is
+   often orange / yellow / teal — the blue gives it a distinct
+   "this panel is on" signal). */
+#advanced-arrow.is-open,
+#cw-advanced-arrow.is-open {
+  color: #4a9eff;
+}
+
+/* "Returned :: 36 results — showing 36" line above the result grid.
+   Same blue as the engaged Advanced arrow + italic so the row reads
+   as a quiet meta line rather than competing with the cards below. */
+#search-returned {
+  color: #4a9eff;
+  font-style: italic;
+}
+
 /* "Hide owned" toggle — same circular shape as the 💎 / 💿 pair, but
    with a "C" letter glyph (mirrors the existing collection badge) and
    a green-strike overlay that brightens when active. The button is
