@@ -8376,6 +8376,37 @@ body.is-offline button.offline-disabled {
 .archive-meta-bar-search {
   margin-bottom: 0.4rem;
 }
+
+/* Curated-tab picker — dropdown selector for which featured archive
+   collection to browse. Sits above the filter/sort row so the
+   collection-level choice reads as primary. */
+.archive-curated-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+.archive-curated-picker-label {
+  font-size: 0.78rem;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.archive-curated-select {
+  flex: 1;
+  max-width: 320px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.5rem;
+  color-scheme: dark;
+  cursor: pointer;
+}
+.archive-curated-select:focus { border-color: var(--accent); outline: none; }
 /* ★ save toggle on each archive row. Outline by default; filled in
    the accent color once saved so the user can scan the list for
    their bookmarks at a glance. */
