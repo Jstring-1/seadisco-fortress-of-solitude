@@ -221,6 +221,98 @@ function _archiveOnSavedSortChange(select) {
 }
 
 // ── Save toggle ──────────────────────────────────────────────────────
+// Public probe used by the player-bar save button to decide which
+// glyph to render (★ vs ☆). Defined as a function rather than direct
+// Set access so the bar can do `window._archiveSavedIdsHas?.(id)`
+// without crashing if archive.js hasn't loaded yet.
+window._archiveSavedIdsHas = (id) => !!_archiveSavedIds?.has(id);
+
+// Save / unsave by archive identifier (no DOM button). Used by the
+// mini-player bar's save toggle, which only has the playing item's
+// id. Mirrors the body of archiveToggleSave but adapts the save
+// payload to be data-driven rather than read from a row element.
+// Returns the new saved state (true = saved, false = unsaved).
+async function _archiveToggleSaveById(id) {
+  if (!id) return null;
+  if (!window._clerk?.user) {
+    if (typeof showToast === "function") showToast("Sign in to save items", "error");
+    return null;
+  }
+  if (!_archiveSavedIds) _archiveSavedIds = new Set();
+  const saving = !_archiveSavedIds.has(id);
+  // Try to find the item in any in-memory list. If not found (e.g. the
+  // user shared a queue link with an archive item that's not loaded
+  // anywhere on this page), fetch metadata via /api/archive/item/:id
+  // so the save row gets a usable title / date.
+  let src = (_archiveList          || []).find(x => x.identifier === id)
+         || (_archiveSearchResults || []).find(x => x.identifier === id)
+         || (_archiveSavedItems    || []).find(x => x.identifier === id);
+  if (!src && saving) {
+    try {
+      const meta = await _archiveResolveMeta(id);
+      if (meta) {
+        src = {
+          identifier:  id,
+          title:       meta.title || meta.identifier || id,
+          date:        meta.date || "",
+          description: meta.description || "",
+          itemUrl:     `https://archive.org/details/${encodeURIComponent(id)}`,
+          streamUrl:   meta.audioFiles?.[0]?.streamUrl || "",
+        };
+      }
+    } catch { /* fall through with empty src */ }
+  }
+  // Optimistic toggle (no DOM elements to update here — the bar's
+  // _locUpdateQueueButtons is called by its own handler after we return).
+  _archiveSavedIds[saving ? "add" : "delete"](id);
+  try {
+    if (saving) {
+      const r = await apiFetch("/api/user/archive-saves", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          archiveId: id,
+          title: src?.title || "",
+          streamUrl: src?.streamUrl || "",
+          data: src ? {
+            title: src.title || "",
+            date: src.date || "",
+            description: src.description || "",
+            itemUrl: src.itemUrl || "",
+            streamUrl: src.streamUrl || "",
+          } : {},
+        }),
+      });
+      if (!r.ok) throw new Error(`save failed (${r.status})`);
+      showToast?.("Saved");
+    } else {
+      const r = await apiFetch("/api/user/archive-saves", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ archiveId: id }),
+      });
+      if (!r.ok) throw new Error(`remove failed (${r.status})`);
+      showToast?.("Removed from Saved");
+      if (_archiveSavedItems) _archiveSavedItems = _archiveSavedItems.filter(i => i.identifier !== id);
+      if (_archiveTab === "saved") _archiveRenderSavedRows();
+    }
+    // Reflect the new state on any visible ★ button for this id —
+    // covers all three tabs simultaneously since rows in the inactive
+    // tabs stay in the DOM (just display:none).
+    document.querySelectorAll(`.archive-row[data-id="${CSS.escape(id)}"] .archive-save-btn`).forEach(btn => {
+      btn.classList.toggle("is-saved", saving);
+      btn.textContent = saving ? "★" : "☆";
+      btn.title = saving ? "Remove from Saved" : "Save to your list";
+    });
+    return saving;
+  } catch (e) {
+    _archiveSavedIds[saving ? "delete" : "add"](id);
+    showToast?.(e?.message || "Action failed", "error");
+    return null;
+  }
+}
+window._archiveToggleSaveById = _archiveToggleSaveById;
+
 async function archiveToggleSave(btn) {
   const row = btn?.closest(".archive-row");
   const id = row?.dataset.id;
@@ -238,10 +330,12 @@ async function archiveToggleSave(btn) {
   btn.classList.toggle("is-saved", saving);
   btn.textContent = saving ? "★" : "☆";
   btn.title = saving ? "Remove from Saved" : "Save to your list";
-  // Find the source item — could be in main list (browse) or saved list.
-  // We try both; the row data-id is enough to look up by identifier.
-  const src = (_archiveList || []).find(x => x.identifier === id)
-           || (_archiveSavedItems || []).find(x => x.identifier === id);
+  // Find the source item — could be in curated list, search results,
+  // or the saved list. Try all three so save works from any tab; the
+  // row data-id is enough to look up by identifier.
+  const src = (_archiveList           || []).find(x => x.identifier === id)
+           || (_archiveSearchResults  || []).find(x => x.identifier === id)
+           || (_archiveSavedItems     || []).find(x => x.identifier === id);
   try {
     if (saving) {
       const r = await apiFetch("/api/user/archive-saves", {
@@ -700,12 +794,17 @@ function _archiveSwitchTab(tab, { pushUrl = true } = {}) {
 // it through the existing engine. archive.org and LOC both serve direct
 // mp3 streams — same code path, different metadata source.
 function _archiveItemToLoc(it) {
+  // Pull contributor(s) from the upstream item if present; the search-
+  // tab payload includes `creator`, the curated payload doesn't.
+  const cr = it.creator
+    ? (Array.isArray(it.creator) ? it.creator : [it.creator])
+    : [];
   return {
     id:           it.identifier,                       // unique key; not a URL but unique enough
     title:        it.title || it.identifier,
     streamUrl:    it.streamUrl,
     streamType:   "mp3",
-    contributors: ["Aadam Jacobs"],
+    contributors: cr,
     image:        "",
     year:         (it.date || "").slice(0, 4),
   };
@@ -733,12 +832,19 @@ async function _archiveResolveMeta(identifier) {
 // in queueAddAlbumOrPlay catches "already in queue" correctly.
 function _archiveItemsFromMeta(d) {
   if (!Array.isArray(d?.audioFiles)) return [];
+  // Resolve the show-level artist from the metadata. The page used to
+  // default to "Aadam Jacobs" since it was a one-collection viewer;
+  // now the search tab can surface anyone, so fall back to the
+  // upstream `creator` (string OR string[]) before any hardcoded name.
+  const showArtist =
+    (Array.isArray(d.creator) ? d.creator[0] : d.creator) ||
+    d.uploader || d.identifier || "";
   return d.audioFiles.map(f => ({
     source: "loc",
     externalId: `${d.identifier}#${f.name}`,
     data: {
       title:      f.title || f.name.replace(/\.[^.]+$/, ""),
-      artist:     d.creator?.[0] || "Aadam Jacobs",
+      artist:     showArtist,
       streamUrl:  f.streamUrl,
       streamType: "mp3",
       image:      d.coverUrl || "",
@@ -1057,7 +1163,7 @@ function _archiveInfoPlayFile(id, idx) {
     title: f.title || f.name,
     streamUrl: f.streamUrl,
     streamType: "mp3",
-    contributors: d.creator?.length ? d.creator : ["Aadam Jacobs"],
+    contributors: d.creator?.length ? d.creator : [],
     image: d.coverUrl || "",
     year: (d.date || "").slice(0, 4),
   });
@@ -1073,7 +1179,7 @@ function _archiveInfoQueueFile(id, idx) {
     title: f.title || f.name,
     streamUrl: f.streamUrl,
     streamType: "mp3",
-    contributors: d.creator?.length ? d.creator : ["Aadam Jacobs"],
+    contributors: d.creator?.length ? d.creator : [],
     image: d.coverUrl || "",
     year: (d.date || "").slice(0, 4),
   }, { mode: "append" });
