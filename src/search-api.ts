@@ -666,7 +666,12 @@ app.use((req, res, next) => {
 app.use((_req, res, next) => {
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("X-Content-Type-Options", "nosniff");
-  res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  // `preload` flag enables submission to the HSTS preload list at
+  // hstspreload.org — once accepted, browsers skip the HTTP→HTTPS
+  // redirect on the FIRST visit too instead of only after they've
+  // seen the header once. After deploy: submit seadisco.com at
+  // https://hstspreload.org to claim the win.
+  res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   // clipboard-read=() disables the navigator.clipboard.readText() API
   // for every origin, so any third-party widget (Clerk's auth modal

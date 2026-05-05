@@ -348,7 +348,17 @@ function switchView(view, skipPushState = false) {
     if (mainForm) mainForm.style.display = "none";
     if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
-    if (typeof initAccountView === "function") initAccountView();
+    // account.js is lazy — load on first nav into the view, then init.
+    // Already-loaded path goes through the same _sdLoadModule call
+    // (cached promise) so it's a no-op the second time. orders.js is
+    // pulled in by account.js itself if the user has Discogs tokens.
+    if (typeof initAccountView === "function") {
+      initAccountView();
+    } else if (typeof window._sdLoadModule === "function") {
+      window._sdLoadModule("/account.js")
+        .then(() => window.initAccountView?.())
+        .catch(() => {});
+    }
   } else if (view === "loc") {
     // LOC / Wiki / Archive are open to anons too — public APIs with
     // generous rate limits and per-IP caps. Anons can search & view

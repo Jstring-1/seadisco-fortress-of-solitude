@@ -58,8 +58,10 @@
   <link rel="preconnect" href="https://i.discogs.com" crossorigin />
   <!-- Clerk CDN: full preconnect (not just DNS prefetch) so TLS handshake
        overlaps with HTML parsing instead of happening after shared.js
-       starts loadClerkInstance() -->
-  <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
+       starts loadClerkInstance(). We use Clerk's dev tenant URL since
+       there's no production Clerk environment configured — a preconnect
+       to a non-existent clerk.seadisco.com would be wasted. -->
+  <link rel="preconnect" href="https://driven-pheasant-9.clerk.accounts.dev" crossorigin />
   <link rel="dns-prefetch" href="https://api.anthropic.com" />
   <!-- CLERK_SCRIPT_INJECT — server replaces this with a preloaded
        <script async> tag for clerk-js so the bundle starts downloading
@@ -1091,12 +1093,14 @@
   <div id="lightbox-counter"></div>
 </div>
 
-<!-- Core scripts — needed for search page interactivity -->
+<!-- Core scripts — needed for search page interactivity. account.js
+     and orders.js are NOT here: they're view-specific (Account view)
+     and load lazily via _sdLoadModule when switchView('account') fires
+     and when the orders panel actually renders. Saves ~15 KB and 2
+     round trips on every non-Account page load. -->
 <script defer src="/utils.js?v=20260504.1256"></script>
 <script defer src="/search.js?v=20260504.1256"></script>
 <script defer src="/collection.js?v=20260504.1256"></script>
-<script defer src="/account.js?v=20260504.1256"></script>
-<script defer src="/orders.js?v=20260504.1256"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
 <script defer src="/modal.js?v=20260504.1256"></script>
@@ -1104,11 +1108,13 @@
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
-     youtube.js, inventory-editor.js are pure view code — loaded
-     lazily by shared.js's _sdLoadModule(...) on first need
-     (switchView for archive/youtube; openInventoryEditor stub for
-     the editor). After window.load they're idle-preloaded so a
-     subsequent nav into those views is instant. -->
+     youtube.js, inventory-editor.js, account.js, orders.js are
+     pure view code — loaded lazily by shared.js's _sdLoadModule(...)
+     on first need (switchView for archive/youtube/account;
+     openInventoryEditor stub for the editor; orders.js as a
+     dependency of account.js's loadOrdersSection). After
+     window.load they're idle-preloaded so a subsequent nav into
+     those views is instant. -->
 <script defer src="/loc.js?v=20260504.1256"></script>
 <script defer src="/queue.js?v=20260504.1256"></script>
 <script>
@@ -1127,6 +1133,12 @@
         try { window._sdLoadModule?.("/archive.js"); } catch {}
         try { window._sdLoadModule?.("/youtube.js"); } catch {}
         try { window._sdLoadModule?.("/inventory-editor.js"); } catch {}
+        // account.js + orders.js are view-specific (Account view).
+        // Idle-preload after the critical path so a click on Account
+        // is instant, but they don't gate first paint or cost RTTs
+        // for users who never visit Account in this session.
+        try { window._sdLoadModule?.("/account.js"); } catch {}
+        try { window._sdLoadModule?.("/orders.js"); } catch {}
       });
     }
     if (document.readyState === "complete") preload();

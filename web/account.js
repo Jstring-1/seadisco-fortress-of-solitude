@@ -69,7 +69,22 @@ async function showAuthSection() {
     oauthSection.style.display = data?.authMethod === "oauth" ? "none" : "";
   }
 
-  if (data?.hasToken) { loadProfilePanel(); loadSyncStatus(); if (typeof loadOrdersSection === "function") loadOrdersSection(); renderMarketplaceScopeBanner(); }
+  if (data?.hasToken) {
+    loadProfilePanel();
+    loadSyncStatus();
+    // orders.js is lazy — load on demand, then call. Already-loaded
+    // path returns the cached promise so this is a no-op the second
+    // time. Idle-preload (in index.html) usually warms it before the
+    // user lands here so the call is synchronous in practice.
+    if (typeof loadOrdersSection === "function") {
+      loadOrdersSection();
+    } else if (typeof window._sdLoadModule === "function") {
+      window._sdLoadModule("/orders.js")
+        .then(() => window.loadOrdersSection?.())
+        .catch(() => {});
+    }
+    renderMarketplaceScopeBanner();
+  }
   // Surface the offline-access section. Independent of the OAuth /
   // hasToken state — it just caches whatever the user can already see
   // when signed in. Re-rendered on reconnect by offline.js.
