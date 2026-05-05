@@ -67,7 +67,7 @@ const _ARCHIVE_CATEGORY_OPTIONS = [
   ["audio_tech",        "Computers, technology, science"],
   ["audio_foreign",     "Non-English audio"],
   ["audio_podcast",     "Podcasts"],
-  ["all",               "All audio (no filter)"],
+  ["all",               "All audio"],
 ];
 
 // ── Tab + saves state ────────────────────────────────────────────────
