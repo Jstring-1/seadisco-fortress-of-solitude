@@ -1787,41 +1787,53 @@ function _ytPruneUnavailable(videoId, advance) {
   if (typeof showToast === "function") {
     showToast("Track unavailable — skipping", "error");
   }
-  // Was the dead track sitting in the cross-source queue? If yes,
-  // queueRemove(null, externalId) sweeps every matching position AND
-  // auto-advances to the next queue row when the removed one was
-  // the playing row. If no — the play was a one-off (URL share,
-  // album modal click without queueing), and we fall back to
-  // playNextVideo so the per-album _videoQueue still advances.
-  const queueHadIt =
-    Array.isArray(window._queue) /* not exposed, fall through */ ? false :
-    (typeof window._queueGetCurrentPosition === "function" &&
-     typeof queueRemove === "function");
-  let queueRemoveTriggered = false;
+  // Snapshot the album-track fallback BEFORE queueRemove fires.
+  // queueRemove → playerClose → closeVideo synchronously WIPES
+  // window._videoQueue when the dead video was the only or last
+  // queued item. Without this snapshot, the album auto-advance
+  // fallback below has nothing to walk and the player just stops.
+  const savedVideoQueue      = Array.isArray(window._videoQueue)     ? window._videoQueue.slice()     : [];
+  const savedVideoQueueIndex = window._videoQueueIndex;
+  const savedVideoQueueMeta  = Array.isArray(window._videoQueueMeta) ? window._videoQueueMeta.slice() : [];
+  const tokenAtSchedule = _ytVideoToken;
+
+  // Best-effort remove the dead video from the cross-source queue.
+  // queueRemove's sync path may auto-advance to the next queue item
+  // (which bumps _ytVideoToken — we detect below) OR call
+  // playerClose() if there's nothing to advance to.
   try {
-    if (typeof queueRemove === "function") {
-      queueRemove(null, String(videoId));
-      queueRemoveTriggered = true;
-    }
+    if (typeof queueRemove === "function") queueRemove(null, String(videoId));
   } catch (e) {
     console.warn("[yt-prune] queueRemove threw:", e);
   }
   if (!advance) return;
-  // If queueRemove handled the advance (dead row was playing), we'd
-  // double-advance by also calling playNextVideo. Detect this by
-  // checking whether the engine has switched away from yt OR the
-  // ytPlayer is now loading a different video. Crude but effective:
-  // wait 1500ms for queueRemove's async _queuePlayItem to dispatch,
-  // then only fall through to playNextVideo if nothing else fired.
-  const tokenAtSchedule = _ytVideoToken;
+
+  // Microtask defer so any sync state changes inside queueRemove's
+  // async body (which runs synchronously up to its first await)
+  // settle before we read tokens / engine.
   setTimeout(() => {
-    // If _ytVideoToken changed, something else (queueRemove's
-    // auto-advance) already started loading a new video — leave it
-    // alone. Same if engine flipped to LOC.
+    // queueRemove found a next item AND already loaded it (via
+    // _queuePlayItem → openVideo → loadYTVideo, which bumps the
+    // token). Don't double-advance.
     if (_ytVideoToken !== tokenAtSchedule) return;
-    if (window._currentEngine !== "yt") return;
+
+    // queueRemove → playerClose may have wiped _videoQueue. Restore
+    // the snapshot so the album-track fallback below still has
+    // something to walk through.
+    if (!Array.isArray(window._videoQueue) || !window._videoQueue.length) {
+      window._videoQueue      = savedVideoQueue;
+      window._videoQueueIndex = savedVideoQueueIndex;
+      window._videoQueueMeta  = savedVideoQueueMeta;
+    }
+
+    // Hand off to playNextVideo. It checks the cross-source queue
+    // first (now empty for this case), falls through to _videoQueue
+    // (which we just restored), and either plays the next album
+    // track or surfaces "ended" if the album's done. This works
+    // even when _currentEngine has been cleared by playerClose —
+    // loadYTVideo recreates the iframe.
     if (typeof playNextVideo === "function") playNextVideo();
-  }, 1500);
+  }, 0);
 }
 
 function _createYTPlayer(id) {
