@@ -2939,10 +2939,23 @@ function videoPrev() {
 function playNextVideo() {
   // Cross-source queue takes precedence over the per-album internal
   // _videoQueue: a user-curated queue should drive auto-advance, falling
-  // back to the album's track list only when the queue is empty.
+  // back to the album's track list ONLY when the queue is genuinely
+  // empty (length 0). The previous behavior fell back whenever
+  // _queuePlayNext returned falsy — including the "queue had items but
+  // is now exhausted" case — which made the player jump into the
+  // source-album tracks the user never queued. Now we check
+  // _queueHasPlayable() to decide whether the queue exists at all.
   if (typeof _queuePlayNext === "function") {
     Promise.resolve(_queuePlayNext()).then(handled => {
       if (handled) return;
+      // Queue handled it as "exhausted" — don't auto-advance into
+      // album tracks the user didn't add. Stop cleanly.
+      const hasQueue = (typeof _queueHasPlayable === "function") && _queueHasPlayable();
+      if (hasQueue) {
+        updatePlayerStatus("ended");
+        updateVideoNavButtons();
+        return;
+      }
       _playNextVideoInternal();
     }).catch(() => _playNextVideoInternal());
     return;
