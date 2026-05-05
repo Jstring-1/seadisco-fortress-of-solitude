@@ -1,14 +1,19 @@
-// ── Archive.org curated collection (admin-only) ──────────────────────────
+// ── Archive.org page ─────────────────────────────────────────────────────
 //
-// Renders the Aadam Jacobs live-show collection as a flat list of cards.
-// Two tabs:
-//   Browse — the full collection, filterable + sortable + paginated
-//   Saved  — the user's bookmarked items (★ toggle on each row)
+// Three tabs:
+//   Search  — general archive.org search filtered to MP3-playable items
+//             (server proxies advancedsearch.php with mediatype:audio +
+//              format MP3 constraints, 90-day DB cache per query)
+//   Curated — Aadam Jacobs live-show collection (the original page;
+//             still on /api/archive/aadamjacobs, filterable + sortable)
+//   Saved   — the user's bookmarked items (★ toggle on each row)
 // ▶ Play loads into the unified mini-player via the LOC audio engine
 // (archive.org serves direct mp3 URLs the same way LOC does); ➕ Queue
 // inserts into the cross-source play queue; ★ toggles save state on the
-// server (admin-only endpoint).
+// server.
 
+// Curated-tab state (kept identical to the pre-refactor names so the
+// existing render path doesn't churn).
 let _archiveList = null;
 let _archiveLoading = false;
 let _archiveFilter = "";
@@ -16,8 +21,16 @@ let _archiveSort = "title-asc"; // title-asc | title-desc | date-desc | date-asc
 let _archiveShown = 0;          // how many filtered+sorted rows currently rendered
 const _ARCHIVE_PAGE = 48;       // matches the Recent strip page size
 
+// ── Search-tab state ────────────────────────────────────────────────
+let _archiveSearchQuery   = "";       // last-submitted query text
+let _archiveSearchResults = null;     // Array of normalized result items
+let _archiveSearchPage    = 1;
+let _archiveSearchRows    = 48;
+let _archiveSearchNumFound = 0;
+let _archiveSearchLoading  = false;
+
 // ── Tab + saves state ────────────────────────────────────────────────
-let _archiveTab = "browse";        // "browse" | "saved"
+let _archiveTab = "search";        // "search" | "curated" | "saved"
 let _archiveSavedIds = null;       // Set<string> of saved archive identifiers
 let _archiveSavedItems = null;     // Array of saved items (loaded on Saved tab open)
 let _archiveSavedLoading = false;
@@ -27,48 +40,69 @@ let _archiveSavedSort = "recent";  // recent | title | date-asc | date-desc
 async function initArchiveView(forceRefresh = false) {
   const root = document.getElementById("archive-view");
   if (!root) return;
-  // Archive page is now open to all callers (the GET endpoint reads
-  // from our DB cache only, no upstream call). Saving requires
+  // Archive page is open to all callers (search is rate-limited per
+  // IP; curated reads from the DB cache only). Saving requires
   // sign-in: _archiveLoadSavedIds 401s for anons and falls back to
   // an empty Set, which just hides the ★ as already-saved (the click
   // handler will still try and surface a "sign in" toast).
   if (window._clerk?.user && _archiveSavedIds == null) _archiveLoadSavedIds();
 
-  // Honor ?tab=saved in the URL so saved-list links are shareable.
+  // Honor ?tab=...&q=... in the URL so search/saved-list links are
+  // shareable. Default lands on the Search tab with an empty input.
   try {
     const qs = new URLSearchParams(location.search);
     const t = qs.get("tab");
     if (t === "saved") _archiveTab = "saved";
+    else if (t === "curated" || t === "browse") _archiveTab = "curated";
+    else _archiveTab = "search";
+    const q = qs.get("q");
+    if (q && _archiveTab === "search") _archiveSearchQuery = q;
   } catch {}
 
-  // If we already have items in memory and nothing's forcing a refresh,
-  // re-render and return immediately. The server cache is effectively
-  // permanent (5-year TTL) so once loaded the data is stable.
-  if (_archiveList?.length && !forceRefresh) {
-    _renderArchiveList();
-    return;
+  // Render the page shell + tabs first so the user always sees the
+  // search input + tab strip even if the data fetches haven't returned.
+  _renderArchiveList();
+
+  // Curated data: only fetch when the curated tab is the active one
+  // (or when forceRefresh is set). Mirrors the pattern in
+  // _archiveSwitchTab where switching INTO curated triggers the load.
+  if (_archiveTab === "curated") {
+    _archiveLoadCurated(forceRefresh).catch(() => {});
   }
+  // Search tab with a pre-filled q: kick off the search automatically
+  // so a shared URL lands on the result grid, not the empty state.
+  if (_archiveTab === "search" && _archiveSearchQuery) {
+    _archiveDoSearch().catch(() => {});
+  }
+}
+
+// Fetch the curated Aadam Jacobs collection. Extracted from the
+// pre-refactor initArchiveView body so the search-tab path can skip
+// it entirely. Idempotent: bails if already loaded or in flight
+// unless forceRefresh is true.
+async function _archiveLoadCurated(forceRefresh = false) {
+  if (_archiveList?.length && !forceRefresh) return;
   if (_archiveLoading) return;
   _archiveLoading = true;
-  const listEl = document.getElementById("archive-list");
-  if (listEl) listEl.innerHTML = `<div class="loc-empty">Loading collection — first load may take a few seconds.</div>`;
+  const rowsEl = document.getElementById("archive-rows");
+  if (rowsEl) rowsEl.innerHTML = `<div class="loc-empty">Loading collection — first load may take a few seconds.</div>`;
   try {
     const url = forceRefresh ? "/api/archive/aadamjacobs?nocache=1" : "/api/archive/aadamjacobs";
     const r = await apiFetch(url);
     if (r.status === 429) {
       const body = await r.json().catch(() => ({}));
-      if (listEl) listEl.innerHTML = `<div class="loc-empty">${escHtml(body?.message || "Too many Archive requests from your network — wait a minute and try again.")}</div>`;
+      if (rowsEl) rowsEl.innerHTML = `<div class="loc-empty">${escHtml(body?.message || "Too many Archive requests from your network — wait a minute and try again.")}</div>`;
       return;
     }
     if (!r.ok) {
-      if (listEl) listEl.innerHTML = `<div class="loc-empty">Could not load archive collection (HTTP ${r.status}).</div>`;
+      if (rowsEl) rowsEl.innerHTML = `<div class="loc-empty">Could not load archive collection (HTTP ${r.status}).</div>`;
       return;
     }
     const j = await r.json();
     _archiveList = Array.isArray(j?.items) ? j.items : [];
     _renderArchiveList();
   } catch (err) {
-    if (listEl) listEl.innerHTML = `<div class="loc-empty">Could not load archive collection.</div>`;
+    if (rowsEl) rowsEl.innerHTML = `<div class="loc-empty">Could not load archive collection.</div>`;
   } finally {
     _archiveLoading = false;
   }
@@ -340,10 +374,17 @@ function _archiveRowHtml(it, i, opts = {}) {
   const playable  = true;
   const isSaved   = !!_archiveSavedIds?.has(it.identifier);
   const saveBtn = `<button type="button" class="archive-btn archive-save-btn${isSaved ? " is-saved" : ""}" onclick="archiveToggleSave(this)" title="${isSaved ? "Remove from Saved" : "Save to your list"}">${isSaved ? "★" : "☆"}</button>`;
-  // Saved-view rows get distinct play/queue handlers that source from
-  // the row's data-* (since `i` is meaningless without _archiveList).
-  const playHandler  = opts.savedView ? `archivePlaySavedFromRow(this)`  : `archivePlayItem(${i})`;
-  const queueHandler = opts.savedView ? `archiveQueueSavedFromRow(this)` : `archiveQueueItem(${i})`;
+  // Saved-view rows source from the row's data-* (since `i` is
+  // meaningless without _archiveList). Search-view rows have their
+  // own array so they get an index-based handler that reads from
+  // _archiveSearchResults instead of _archiveList. Default (curated)
+  // uses the original index path.
+  const playHandler  = opts.savedView  ? `archivePlaySavedFromRow(this)`
+                     : opts.searchView ? `archivePlaySearchItem(${i})`
+                     :                   `archivePlayItem(${i})`;
+  const queueHandler = opts.savedView  ? `archiveQueueSavedFromRow(this)`
+                     : opts.searchView ? `archiveQueueSearchItem(${i})`
+                     :                   `archiveQueueItem(${i})`;
   const playBtn = playable
     ? `<button type="button" class="archive-btn archive-btn-play" onclick="${playHandler}" title="Play in the bar">▶ Play</button>`
     : `<button type="button" class="archive-btn archive-btn-play is-disabled" disabled>▶ No stream</button>`;
@@ -363,10 +404,16 @@ function _archiveRowHtml(it, i, opts = {}) {
   // actions column (▶ / ＋ / ★ / Open) keeps its own click handlers
   // and event-bubbling stops at .archive-row-actions to avoid
   // triggering the popup as a side effect.
+  // Creator is only present on search-result rows (the upstream
+  // advancedsearch payload includes it); curated/saved rows leave it
+  // blank. Surface it as a small line above the date when set so
+  // search results read with author context.
+  const safeCreator = it.creator ? escHtml(String(it.creator).slice(0, 120)) : "";
   return `
     <div class="archive-row" data-id="${safeId}"${dataAttrs}>
       <div class="archive-row-main" onclick="_archiveOpenInfoPopup('${safeId.replace(/'/g, "\\'")}')" style="cursor:pointer">
         <div class="archive-row-title">${safeTitle}</div>
+        ${safeCreator ? `<div class="archive-row-creator">${safeCreator}</div>` : ""}
         ${safeDate ? `<div class="archive-row-date">${safeDate}</div>` : ""}
         ${safeDesc ? `<div class="archive-row-desc">${safeDesc}${cleanDesc.length > 280 ? "…" : ""}</div>` : ""}
       </div>
@@ -388,11 +435,6 @@ function _archiveOnSortChange(select) {
 function _renderArchiveList() {
   const listEl = document.getElementById("archive-list");
   if (!listEl) return;
-  if (!_archiveList?.length) {
-    listEl.innerHTML = `<div class="loc-empty">No items in this collection.</div>`;
-    return;
-  }
-  const total = _archiveList.length;
   const filterVal = escHtml(_archiveFilter);
   const sortOpts = [
     ["title-asc",  "Title A → Z"],
@@ -407,24 +449,63 @@ function _renderArchiveList() {
     ["date-asc",  "Date (oldest)"],
   ].map(([v, label]) => `<option value="${v}"${v === _archiveSavedSort ? " selected" : ""}>${label}</option>`).join("");
   const savedFilterVal = escHtml(_archiveSavedFilter);
-  // Tabs + both panels (the inactive one is hidden with display:none).
-  // Using inline display rather than separate render-on-tab functions
-  // keeps the controls' input state during tab switches.
-  const showBrowse = _archiveTab === "browse";
+  // Three-tab strip. Inactive panels stay in the DOM hidden with
+  // display:none so input/filter state persists across switches.
+  const showSearch  = _archiveTab === "search";
+  const showCurated = _archiveTab === "curated";
+  const showSaved   = _archiveTab === "saved";
+  const searchQ     = escHtml(_archiveSearchQuery || "");
+  const curatedTotal = _archiveList?.length || 0;
+  // Search results meta: "N results" or "Loading…" or empty.
+  const searchMeta = _archiveSearchLoading
+    ? "Searching…"
+    : (_archiveSearchResults
+        ? `${_archiveSearchNumFound.toLocaleString()} result${_archiveSearchNumFound === 1 ? "" : "s"}${
+            _archiveSearchResults.length < _archiveSearchNumFound
+              ? ` · showing ${_archiveSearchResults.length}` : ""
+          }`
+        : "");
   listEl.innerHTML = `
     <div class="archive-tabs">
-      <button type="button" class="archive-tab archive-tab-browse${showBrowse ? " active" : ""}" onclick="_archiveSwitchTab('browse')">Browse</button>
-      <button type="button" class="archive-tab archive-tab-saved${!showBrowse ? " active" : ""}" onclick="_archiveSwitchTab('saved')">Saved</button>
+      <button type="button" class="archive-tab archive-tab-search${showSearch ? " active" : ""}" onclick="_archiveSwitchTab('search')">Search</button>
+      <button type="button" class="archive-tab archive-tab-curated${showCurated ? " active" : ""}" onclick="_archiveSwitchTab('curated')">Curated</button>
+      <button type="button" class="archive-tab archive-tab-saved${showSaved ? " active" : ""}" onclick="_archiveSwitchTab('saved')">Saved</button>
     </div>
-    <div class="archive-panel archive-panel-browse" style="display:${showBrowse ? "" : "none"}">
+
+    <div class="archive-panel archive-panel-search" style="display:${showSearch ? "" : "none"}">
+      <form class="archive-search-form" onsubmit="event.preventDefault();_archiveOnSearchSubmit(this)">
+        <input type="search" id="archive-q" name="q" class="archive-search-input" placeholder="Search audio on archive.org" autocomplete="off" value="${searchQ}" />
+        <button type="submit" class="archive-search-btn">Search</button>
+        <button type="button" class="archive-search-curated-btn" onclick="_archiveSwitchTab('curated')" title="Browse the Aadam Jacobs live-shows collection we feature">Curated</button>
+      </form>
+      <div class="archive-meta-bar archive-meta-bar-search">
+        <span class="archive-meta-count" id="archive-search-count">${searchMeta}</span>
+      </div>
+      <div id="archive-search-rows">${
+        _archiveSearchResults && !_archiveSearchResults.length && _archiveSearchQuery
+          ? `<div class="loc-empty">No playable audio matches for "${escHtml(_archiveSearchQuery)}". Try a broader query.</div>`
+          : _archiveSearchResults
+            ? ""  // populated below by _archiveRenderSearchRows()
+            : (_archiveSearchQuery
+                ? `<div class="loc-empty">Searching…</div>`
+                : `<div class="loc-empty">Search archive.org for audio you can play. Results are filtered to items with MP3 streams the in-app player can handle.</div>`)
+      }</div>
+    </div>
+
+    <div class="archive-panel archive-panel-curated" style="display:${showCurated ? "" : "none"}">
       <div class="archive-meta-bar">
         <input type="text" class="archive-filter" placeholder="Filter title, date, description…" value="${filterVal}" oninput="_archiveOnFilterInput(this)" />
         <select class="archive-sort" onchange="_archiveOnSortChange(this)">${sortOpts}</select>
-        <span class="archive-meta-count" id="archive-count">${total} item${total === 1 ? "" : "s"}</span>
+        <span class="archive-meta-count" id="archive-count">${
+          _archiveList ? `${curatedTotal} item${curatedTotal === 1 ? "" : "s"}` : "Loading…"
+        }</span>
       </div>
-      <div id="archive-rows"></div>
+      <div id="archive-rows">${
+        _archiveList && !_archiveList.length ? `<div class="loc-empty">No items in this collection.</div>` : ""
+      }</div>
     </div>
-    <div class="archive-panel archive-panel-saved" style="display:${showBrowse ? "none" : ""}">
+
+    <div class="archive-panel archive-panel-saved" style="display:${showSaved ? "" : "none"}">
       <div class="archive-meta-bar">
         <input type="text" class="archive-filter" placeholder="Filter saved…" value="${savedFilterVal}" oninput="_archiveOnSavedFilterInput(this)" />
         <select class="archive-sort" onchange="_archiveOnSavedSortChange(this)">${savedSortOpts}</select>
@@ -433,29 +514,181 @@ function _renderArchiveList() {
       <div id="archive-saved-rows"><div class="loc-empty">Loading…</div></div>
     </div>
   `;
-  if (showBrowse) {
+  // Populate the active panel's row content.
+  if (showSearch && _archiveSearchResults?.length) {
+    _archiveRenderSearchRows();
+  }
+  if (showCurated && _archiveList?.length) {
     _archiveRenderRowsOnly();
-  } else {
+  }
+  if (showSaved) {
     _archiveLoadSaved();
   }
 }
 
+// ── Search tab handlers ─────────────────────────────────────────────
+// Submit handler for the form. Stashes the query, kicks off the
+// fetch, re-renders. URL gets ?q= so a shared link reproduces the
+// search.
+function _archiveOnSearchSubmit(form) {
+  const input = form?.querySelector('input[name="q"]');
+  const q = String(input?.value || "").trim();
+  _archiveSearchQuery = q;
+  _archiveSearchPage  = 1;
+  // Reflect in the URL so a shared link loads the same query.
+  if (typeof history?.pushState === "function") {
+    const qs = new URLSearchParams(location.search);
+    qs.set("v", "archive");
+    qs.set("tab", "search");
+    if (q) qs.set("q", q); else qs.delete("q");
+    const next = "/?" + qs.toString();
+    if (location.pathname + location.search !== next) {
+      history.pushState({}, "", next);
+    }
+  }
+  if (!q) {
+    _archiveSearchResults = null;
+    _archiveSearchNumFound = 0;
+    _renderArchiveList();
+    return;
+  }
+  _archiveDoSearch().catch(() => {});
+}
+window._archiveOnSearchSubmit = _archiveOnSearchSubmit;
+
+async function _archiveDoSearch() {
+  if (!_archiveSearchQuery) return;
+  if (_archiveSearchLoading) return;
+  _archiveSearchLoading = true;
+  // Show the loading state without losing the previous results — the
+  // input + tab strip stay in place.
+  _renderArchiveList();
+  try {
+    const u = new URL("/api/archive/search", location.origin);
+    u.searchParams.set("q", _archiveSearchQuery);
+    u.searchParams.set("page", String(_archiveSearchPage));
+    u.searchParams.set("rows", String(_archiveSearchRows));
+    const r = await apiFetch(u.pathname + u.search);
+    if (r.status === 429) {
+      const body = await r.json().catch(() => ({}));
+      _archiveSearchResults = [];
+      _archiveSearchNumFound = 0;
+      if (typeof showToast === "function") {
+        showToast(body?.message || "Too many archive searches — wait a minute.", "error");
+      }
+      return;
+    }
+    if (!r.ok) {
+      _archiveSearchResults = [];
+      _archiveSearchNumFound = 0;
+      return;
+    }
+    const j = await r.json();
+    _archiveSearchResults  = Array.isArray(j?.items) ? j.items : [];
+    _archiveSearchNumFound = Number(j?.numFound || 0);
+  } catch {
+    _archiveSearchResults = [];
+    _archiveSearchNumFound = 0;
+  } finally {
+    _archiveSearchLoading = false;
+    _renderArchiveList();
+  }
+}
+
+// Render search results into #archive-search-rows. Keeps the row
+// markup identical to curated/saved (same _archiveRowHtml), but
+// passes searchView:true so the play / queue handlers route to the
+// search-results array instead of the curated _archiveList.
+function _archiveRenderSearchRows() {
+  const rowsEl = document.getElementById("archive-search-rows");
+  if (!rowsEl) return;
+  const items = _archiveSearchResults || [];
+  if (!items.length) {
+    rowsEl.innerHTML = `<div class="loc-empty">No playable audio matches.</div>`;
+    return;
+  }
+  rowsEl.innerHTML = items.map((it, i) => _archiveRowHtml(it, i, { searchView: true })).join("");
+  if (typeof _locUpdatePlayingCard === "function") _locUpdatePlayingCard();
+}
+window._archiveRenderSearchRows = _archiveRenderSearchRows;
+
+// Search-row Play / Queue handlers — mirror archivePlayItem /
+// archiveQueueItem but read from _archiveSearchResults so a row
+// click resolves the right item even with multiple lists in scope.
+async function archivePlaySearchItem(idx) {
+  const it = _archiveSearchResults?.[idx];
+  if (!it?.identifier) return;
+  const meta = await _archiveResolveMeta(it.identifier);
+  const items = _archiveItemsFromMeta(meta);
+  if (!items.length) {
+    if (typeof showToast === "function") showToast("This item has no playable audio", "error");
+    return;
+  }
+  if (typeof queueAddAlbumOrPlay === "function") {
+    await queueAddAlbumOrPlay(items, { mode: "play" });
+  }
+}
+window.archivePlaySearchItem = archivePlaySearchItem;
+
+async function archiveQueueSearchItem(idx) {
+  const it = _archiveSearchResults?.[idx];
+  if (!it?.identifier) return;
+  const meta = await _archiveResolveMeta(it.identifier);
+  const items = _archiveItemsFromMeta(meta);
+  if (!items.length) {
+    if (typeof showToast === "function") showToast("This item has no playable audio", "error");
+    return;
+  }
+  if (typeof queueAddAlbumOrPlay === "function") {
+    await queueAddAlbumOrPlay(items, { mode: "append" });
+  }
+}
+window.archiveQueueSearchItem = archiveQueueSearchItem;
+
 function _archiveSwitchTab(tab, { pushUrl = true } = {}) {
-  _archiveTab = tab === "saved" ? "saved" : "browse";
+  // Normalize: legacy "browse" param maps to the renamed "curated" tab.
+  if (tab === "browse") tab = "curated";
+  _archiveTab = (tab === "saved" || tab === "curated") ? tab : "search";
   // Toggle tab button + panel visibility without re-rendering everything
-  // (preserves filter/sort state in both panels).
+  // (preserves filter/sort state in all panels).
   document.querySelectorAll(".archive-tab").forEach(b => b.classList.remove("active"));
   document.querySelector(`.archive-tab-${_archiveTab}`)?.classList.add("active");
-  const browse = document.querySelector(".archive-panel-browse");
-  const saved  = document.querySelector(".archive-panel-saved");
-  if (browse) browse.style.display = _archiveTab === "browse" ? "" : "none";
-  if (saved)  saved.style.display  = _archiveTab === "saved"  ? "" : "none";
-  if (_archiveTab === "saved" && _archiveSavedItems == null) _archiveLoadSaved();
-  // Reflect in URL so /?v=archive&tab=saved is shareable.
+  const search  = document.querySelector(".archive-panel-search");
+  const curated = document.querySelector(".archive-panel-curated");
+  const saved   = document.querySelector(".archive-panel-saved");
+  if (search)  search.style.display  = _archiveTab === "search"  ? "" : "none";
+  if (curated) curated.style.display = _archiveTab === "curated" ? "" : "none";
+  if (saved)   saved.style.display   = _archiveTab === "saved"   ? "" : "none";
+  // Lazy load whichever tab needs data.
+  if (_archiveTab === "curated" && !_archiveList?.length) {
+    _archiveLoadCurated().catch(() => {});
+  }
+  if (_archiveTab === "saved" && _archiveSavedItems == null) {
+    _archiveLoadSaved();
+  }
+  if (_archiveTab === "search") {
+    // Focus the input on tab activation so the user can start typing
+    // immediately. Skip if there's already a query loaded — they may
+    // be reviewing results.
+    if (!_archiveSearchQuery) {
+      setTimeout(() => document.getElementById("archive-q")?.focus(), 0);
+    }
+  }
+  // Reflect in URL so each tab is shareable. Search tab also persists
+  // its q param.
   if (pushUrl && typeof history?.pushState === "function") {
     const qs = new URLSearchParams(location.search);
     qs.set("v", "archive");
-    if (_archiveTab === "saved") qs.set("tab", "saved"); else qs.delete("tab");
+    if (_archiveTab === "search") {
+      qs.set("tab", "search");
+      if (_archiveSearchQuery) qs.set("q", _archiveSearchQuery); else qs.delete("q");
+    } else if (_archiveTab === "saved") {
+      qs.set("tab", "saved");
+      qs.delete("q");
+    } else {
+      qs.set("tab", "curated");
+      qs.delete("q");
+    }
     const next = "/?" + qs.toString();
     if (location.pathname + location.search !== next) {
       history.pushState({}, "", next);

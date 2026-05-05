@@ -8284,6 +8284,39 @@ body.is-offline button.offline-disabled {
   color: var(--accent);
   border-bottom-color: var(--accent);
 }
+
+/* Search-tab form: query input + Search button + "Curated" shortcut.
+   Mirrors the LOC search-form layout so the page reads as a peer of
+   the LOC view. The Curated button visually de-emphasizes vs the
+   primary Search button — it's a sidegrade, not the default action. */
+.archive-search-form {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+.archive-search-input {
+  flex: 1;
+  min-width: 0;
+}
+.archive-search-btn,
+.archive-search-curated-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.archive-search-curated-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.archive-search-curated-btn:hover {
+  color: var(--text);
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.04);
+}
+.archive-meta-bar-search {
+  margin-bottom: 0.4rem;
+}
 /* ★ save toggle on each archive row. Outline by default; filled in
    the accent color once saved so the user can scan the list for
    their bookmarks at a glance. */
@@ -8485,6 +8518,15 @@ body.is-offline button.offline-disabled {
   color: var(--accent-hi, var(--accent));
   margin-top: 0.15rem;
   font-variant-numeric: tabular-nums;
+}
+/* Creator (search-tab only): small italic line under the title for
+   author context. Curated rows skip this since the whole collection
+   is by one creator. */
+.archive-row-creator {
+  font-size: 0.74rem;
+  color: var(--muted);
+  font-style: italic;
+  margin-top: 0.1rem;
 }
 .archive-row-desc {
   font-size: 0.78rem;
