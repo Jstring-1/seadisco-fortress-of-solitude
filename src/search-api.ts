@@ -3657,9 +3657,23 @@ app.get("/api/archive/search", async (req, res) => {
   const callerId = await allowAnonRateLimited(req, res, anonArchiveLimiter);
   if (callerId === null) return;
 
-  // Validate inputs. q is required, page/rows are bounded.
+  // ── Inputs ────────────────────────────────────────────────────
   const qRaw = String(req.query.q ?? "").trim();
-  if (!qRaw) {
+  // q is technically optional now — a creator-only or subject-only
+  // search is meaningful — but require AT LEAST one filter so we
+  // don't return the entire archive.
+  const creator    = String(req.query.creator    ?? "").trim().slice(0, 120);
+  const subject    = String(req.query.subject    ?? "").trim().slice(0, 80);
+  const collection = String(req.query.collection ?? "").trim().slice(0, 80);
+  const yearFromRaw = String(req.query.yearFrom ?? "").trim();
+  const yearToRaw   = String(req.query.yearTo   ?? "").trim();
+  const yearFrom = /^\d{4}$/.test(yearFromRaw) ? yearFromRaw : "";
+  const yearTo   = /^\d{4}$/.test(yearToRaw)   ? yearToRaw   : "";
+  // excludePodcasts default true — most users browsing for music
+  // don't want podcast feeds polluting results. Client toggles via
+  // ?excludePodcasts=0.
+  const excludePodcasts = String(req.query.excludePodcasts ?? "1") !== "0";
+  if (!qRaw && !creator && !subject && !collection && !yearFrom && !yearTo) {
     res.json({ items: [], numFound: 0, page: 1, rows: 48 });
     return;
   }
@@ -3670,9 +3684,28 @@ app.get("/api/archive/search", async (req, res) => {
   const page = Math.max(1, Math.min(20, parseInt(String(req.query.page ?? "1"), 10) || 1));
   const rows = Math.max(1, Math.min(96, parseInt(String(req.query.rows ?? "48"), 10) || 48));
 
-  // Canonicalize q for cache stability (whitespace + case fold).
+  // Sort whitelist. Each entry is the upstream sort directive that
+  // gets passed directly to archive.org's `sort[]=` param. Default
+  // is downloads desc (popularity). Adding entries here is safe —
+  // unrecognized values fall back to the default.
+  const sortKey = String(req.query.sort ?? "popularity").trim();
+  const SORT_MAP: Record<string, string> = {
+    popularity:  "downloads desc",
+    newest:      "publicdate desc",
+    oldest:      "publicdate asc",
+    showNewest:  "date desc",
+    showOldest:  "date asc",
+    titleAsc:    "titleSorter asc",
+    titleDesc:   "titleSorter desc",
+    rated:       "avg_rating desc",
+  };
+  const sortDirective = SORT_MAP[sortKey] || SORT_MAP.popularity;
+
+  // ── Cache key ─────────────────────────────────────────────────
+  // Canonicalize all inputs that affect the result set so two
+  // semantically identical queries collapse to one cache row.
   const qNorm = qRaw.toLowerCase().replace(/\s+/g, " ");
-  const cacheKey = `archive-search|${qNorm}|p=${page}|r=${rows}`;
+  const cacheKey = `archive-search|q=${qNorm}|cr=${creator.toLowerCase()}|sb=${subject.toLowerCase()}|cl=${collection.toLowerCase()}|yf=${yearFrom}|yt=${yearTo}|ep=${excludePodcasts ? 1 : 0}|so=${sortKey}|p=${page}|r=${rows}`;
   const cached = await getArchiveSearchCache(cacheKey, _ARCHIVE_SEARCH_TTL_S);
   if (cached) {
     res.setHeader("X-SeaDisco-Cache", "hit");
@@ -3680,17 +3713,41 @@ app.get("/api/archive/search", async (req, res) => {
     return;
   }
 
-  // Build the upstream query. Wrap user's q in parens so any operators
-  // in the cached strict query (mediatype, format) AND it cleanly.
-  // format:("MP3" OR "VBR MP3") matches items that have at least one
-  // MP3 file in the bucket — what _locPlay knows how to stream.
-  const filtered = `(${qRaw}) AND mediatype:audio AND format:("MP3" OR "VBR MP3")`;
-  const fl = ["identifier", "title", "date", "description", "creator"]
-    .map(f => `&fl[]=${f}`).join("");
+  // ── Compose upstream query ───────────────────────────────────
+  // Always require playable audio + an MP3 file. Then AND in
+  // user-supplied filters. Each filter wraps in quotes so values
+  // with spaces (multi-word names / tags) bind correctly.
+  const parts: string[] = [`mediatype:audio`, `format:("MP3" OR "VBR MP3")`];
+  if (qRaw)      parts.push(`(${qRaw})`);
+  if (creator)   parts.push(`creator:"${creator.replace(/"/g, "")}"`);
+  if (subject)   parts.push(`subject:"${subject.replace(/"/g, "")}"`);
+  if (collection) parts.push(`collection:"${collection.replace(/"/g, "")}"`);
+  if (yearFrom || yearTo) {
+    const lo = yearFrom || "1800";
+    const hi = yearTo   || new Date().getFullYear().toString();
+    parts.push(`year:[${lo} TO ${hi}]`);
+  }
+  if (excludePodcasts) {
+    // archive.org tags every podcast item with the audio_podcast
+    // collection. Subtracting that collection from the search
+    // cleanly cuts feed-style content out of music browsing.
+    parts.push(`-collection:audio_podcast`);
+  }
+  const filtered = parts.join(" AND ");
+
+  // Request the extended field set for richer cards. avg_rating,
+  // num_reviews, downloads land as numbers; subject/collection
+  // as multi-valued arrays. Anything missing on the doc is just
+  // absent — we render conditionally.
+  const fl = [
+    "identifier", "title", "date", "year", "description", "creator",
+    "subject", "collection", "avg_rating", "num_reviews", "downloads",
+  ].map(f => `&fl[]=${f}`).join("");
+
   const url =
     `https://archive.org/advancedsearch.php?q=${encodeURIComponent(filtered)}` +
     fl +
-    `&rows=${rows}&page=${page}&output=json&sort[]=downloads+desc`;
+    `&rows=${rows}&page=${page}&output=json&sort[]=${encodeURIComponent(sortDirective)}`;
 
   try {
     const r = await loggedFetch("archive", url, {
@@ -3707,12 +3764,21 @@ app.get("/api/archive/search", async (req, res) => {
     const body = await r.json() as any;
     const docs: any[] = (body?.response?.docs ?? []).filter((d: any) => d?.identifier);
     const numFound = Number(body?.response?.numFound ?? docs.length);
+    const arrStr = (v: any): string[] =>
+      Array.isArray(v) ? v.filter((x: any) => typeof x === "string") :
+      typeof v === "string" ? [v] : [];
     const items = docs.map((d: any) => ({
       identifier:  d.identifier,
       title:       String(d.title ?? d.identifier),
       date:        Array.isArray(d.date) ? d.date[0] : (d.date ?? ""),
+      year:        typeof d.year === "string" ? d.year : (Array.isArray(d.year) ? d.year[0] : ""),
       description: Array.isArray(d.description) ? d.description.join(" ") : (d.description ?? ""),
       creator:     Array.isArray(d.creator) ? d.creator.join(", ") : (d.creator ?? ""),
+      subject:     arrStr(d.subject).slice(0, 8),     // cap to keep payloads bounded
+      collection:  arrStr(d.collection).slice(0, 6),
+      avgRating:   Number.isFinite(Number(d.avg_rating))  ? Number(d.avg_rating)  : null,
+      numReviews:  Number.isFinite(Number(d.num_reviews)) ? Number(d.num_reviews) : null,
+      downloads:   Number.isFinite(Number(d.downloads))   ? Number(d.downloads)   : null,
       itemUrl:     `https://archive.org/details/${encodeURIComponent(d.identifier)}`,
       streamUrl:   "",  // resolved lazily by /api/archive/item/:id on play
       duration:    "",

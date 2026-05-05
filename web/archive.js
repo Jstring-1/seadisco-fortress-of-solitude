@@ -40,6 +40,15 @@ let _archiveSearchPage    = 1;
 let _archiveSearchRows    = 48;
 let _archiveSearchNumFound = 0;
 let _archiveSearchLoading  = false;
+// Filter state — submitted with each search and reflected in the URL.
+let _archiveSearchSort     = "popularity"; // popularity|newest|oldest|showNewest|showOldest|titleAsc|titleDesc|rated
+let _archiveSearchCreator  = "";
+let _archiveSearchSubject  = "";
+let _archiveSearchCollection = "";
+let _archiveSearchYearFrom = "";
+let _archiveSearchYearTo   = "";
+let _archiveSearchExcludePodcasts = true;  // default on per spec
+let _archiveSearchFiltersOpen = false;     // collapsible filter panel
 
 // ── Tab + saves state ────────────────────────────────────────────────
 let _archiveTab = "search";        // "search" | "curated" | "saved"
@@ -72,6 +81,18 @@ async function initArchiveView(forceRefresh = false) {
     if (q && _archiveTab === "search") _archiveSearchQuery = q;
     const col = qs.get("col");
     if (col) _archiveCuratedSlug = col;
+    // Filter params for the search tab. Each is read once at boot
+    // and pushed back into the URL on every submit so deep links
+    // round-trip cleanly.
+    if (_archiveTab === "search") {
+      _archiveSearchSort       = qs.get("sort")       || "popularity";
+      _archiveSearchCreator    = qs.get("creator")    || "";
+      _archiveSearchSubject    = qs.get("subject")    || "";
+      _archiveSearchCollection = qs.get("col2")       || "";
+      _archiveSearchYearFrom   = qs.get("yf")         || "";
+      _archiveSearchYearTo     = qs.get("yt")         || "";
+      _archiveSearchExcludePodcasts = qs.get("ep") !== "0";
+    }
   } catch {}
 
   // Kick off the dropdown population fetch in parallel with the rest
@@ -585,12 +606,41 @@ function _archiveRowHtml(it, i, opts = {}) {
   // blank. Surface it as a small line above the date when set so
   // search results read with author context.
   const safeCreator = it.creator ? escHtml(String(it.creator).slice(0, 120)) : "";
+  // Subject chips (search-tab only — curated rows skip this since
+  // every item shares the collection's subject). Cap at 3 to avoid
+  // a chip wall on items tagged into many collections.
+  const subjectChipsHtml = (Array.isArray(it.subject) && it.subject.length)
+    ? `<div class="archive-row-chips">${it.subject.slice(0, 3).map(s =>
+         `<span class="archive-row-chip">${escHtml(String(s))}</span>`
+       ).join("")}</div>`
+    : "";
+  // Rating + reviews. avgRating is 0-5; only show if at least one
+  // review exists so we don't surface a stale "★ 0 (0)" on every row.
+  const ratingHtml = (typeof it.avgRating === "number" && (it.numReviews || 0) > 0)
+    ? `<span class="archive-row-rating" title="${escHtml(String(it.numReviews))} review${it.numReviews === 1 ? "" : "s"}">★ ${it.avgRating.toFixed(1)}<span class="archive-row-rating-count"> · ${it.numReviews}</span></span>`
+    : "";
+  // Collection badge — first non-meta collection from the array
+  // (skip system tags like "audio", "podcasts", which are present
+  // on every row and not informative). Slug-form is what archive
+  // returns, so we display it as-is without trying to resolve to
+  // a friendlier name.
+  const _COLLECTION_HIDE = new Set(["audio", "audio_podcast", "audio_music"]);
+  const visibleCollection = (Array.isArray(it.collection) ? it.collection : [])
+    .find(c => c && !_COLLECTION_HIDE.has(String(c).toLowerCase()));
+  const collectionBadgeHtml = visibleCollection
+    ? `<span class="archive-row-collection" title="archive.org collection">${escHtml(String(visibleCollection))}</span>`
+    : "";
   return `
     <div class="archive-row" data-id="${safeId}"${dataAttrs}>
       <div class="archive-row-main" onclick="_archiveOpenInfoPopup('${safeId.replace(/'/g, "\\'")}')" style="cursor:pointer">
         <div class="archive-row-title">${safeTitle}</div>
         ${safeCreator ? `<div class="archive-row-creator">${safeCreator}</div>` : ""}
-        ${safeDate ? `<div class="archive-row-date">${safeDate}</div>` : ""}
+        ${(safeDate || ratingHtml || collectionBadgeHtml) ? `<div class="archive-row-meta-row">
+          ${safeDate ? `<span class="archive-row-date">${safeDate}</span>` : ""}
+          ${ratingHtml}
+          ${collectionBadgeHtml}
+        </div>` : ""}
+        ${subjectChipsHtml}
         ${safeDesc ? `<div class="archive-row-desc">${safeDesc}${cleanDesc.length > 280 ? "…" : ""}</div>` : ""}
       </div>
       <div class="archive-row-actions">${saveBtn}${playBtn}${queueBtn}${linkBtn}</div>
@@ -652,8 +702,50 @@ function _renderArchiveList() {
       <form class="archive-search-form" onsubmit="event.preventDefault();_archiveOnSearchSubmit(this)">
         <input type="search" id="archive-q" name="q" class="archive-search-input" placeholder="Search audio on archive.org" autocomplete="off" value="${searchQ}" />
         <button type="submit" class="archive-search-btn">Search</button>
-        <button type="button" class="archive-search-curated-btn" onclick="_archiveSwitchTab('curated')" title="Browse the Aadam Jacobs live-shows collection we feature">Curated</button>
+        <button type="button" class="archive-search-curated-btn" onclick="_archiveSwitchTab('curated')" title="Browse our featured curated collections">Curated</button>
+        <button type="button" class="archive-search-filters-toggle" onclick="_archiveToggleFilters()" title="Show / hide additional filters">${_archiveSearchFiltersOpen ? "▾" : "▸"} Filters</button>
       </form>
+      <div class="archive-search-filters" style="display:${_archiveSearchFiltersOpen ? "" : "none"}">
+        <div class="archive-search-filter-grid">
+          <label class="archive-search-filter">
+            <span>Sort</span>
+            <select id="archive-sort-select" class="archive-curated-select">
+              <option value="popularity"${_archiveSearchSort === "popularity" ? " selected" : ""}>Most popular</option>
+              <option value="newest"${_archiveSearchSort === "newest" ? " selected" : ""}>Newest upload</option>
+              <option value="oldest"${_archiveSearchSort === "oldest" ? " selected" : ""}>Oldest upload</option>
+              <option value="showNewest"${_archiveSearchSort === "showNewest" ? " selected" : ""}>Show date (newest)</option>
+              <option value="showOldest"${_archiveSearchSort === "showOldest" ? " selected" : ""}>Show date (oldest)</option>
+              <option value="titleAsc"${_archiveSearchSort === "titleAsc" ? " selected" : ""}>Title A → Z</option>
+              <option value="titleDesc"${_archiveSearchSort === "titleDesc" ? " selected" : ""}>Title Z → A</option>
+              <option value="rated"${_archiveSearchSort === "rated" ? " selected" : ""}>Highest rated</option>
+            </select>
+          </label>
+          <label class="archive-search-filter">
+            <span>Creator</span>
+            <input type="text" id="archive-creator" placeholder="e.g. Grateful Dead" value="${escHtml(_archiveSearchCreator)}" />
+          </label>
+          <label class="archive-search-filter">
+            <span>Subject / genre</span>
+            <input type="text" id="archive-subject" placeholder="e.g. Jazz, Live, Folk" value="${escHtml(_archiveSearchSubject)}" />
+          </label>
+          <label class="archive-search-filter">
+            <span>Collection</span>
+            <input type="text" id="archive-collection" placeholder="e.g. etree, audio_music" value="${escHtml(_archiveSearchCollection)}" />
+          </label>
+          <label class="archive-search-filter archive-search-filter-narrow">
+            <span>Year from</span>
+            <input type="text" id="archive-year-from" placeholder="1950" inputmode="numeric" maxlength="4" value="${escHtml(_archiveSearchYearFrom)}" />
+          </label>
+          <label class="archive-search-filter archive-search-filter-narrow">
+            <span>Year to</span>
+            <input type="text" id="archive-year-to" placeholder="1985" inputmode="numeric" maxlength="4" value="${escHtml(_archiveSearchYearTo)}" />
+          </label>
+          <label class="archive-search-filter archive-search-filter-checkbox" title="Hides items in the audio_podcast collection — usually what you want when browsing for music.">
+            <input type="checkbox" id="archive-exclude-podcasts"${_archiveSearchExcludePodcasts ? " checked" : ""} />
+            <span>Exclude podcasts</span>
+          </label>
+        </div>
+      </div>
       <div class="archive-meta-bar archive-meta-bar-search">
         <span class="archive-meta-count" id="archive-search-count">${searchMeta}</span>
       </div>
@@ -715,22 +807,48 @@ function _renderArchiveList() {
 // fetch, re-renders. URL gets ?q= so a shared link reproduces the
 // search.
 function _archiveOnSearchSubmit(form) {
-  const input = form?.querySelector('input[name="q"]');
-  const q = String(input?.value || "").trim();
-  _archiveSearchQuery = q;
-  _archiveSearchPage  = 1;
-  // Reflect in the URL so a shared link loads the same query.
+  // Read every visible filter from the form. Falls back to empty
+  // strings if the inputs aren't present (filter panel collapsed).
+  const get = (id) => String(document.getElementById(id)?.value ?? "").trim();
+  _archiveSearchQuery       = get("archive-q");
+  _archiveSearchCreator     = get("archive-creator");
+  _archiveSearchSubject     = get("archive-subject");
+  _archiveSearchCollection  = get("archive-collection");
+  _archiveSearchYearFrom    = get("archive-year-from");
+  _archiveSearchYearTo      = get("archive-year-to");
+  const sortSel = document.getElementById("archive-sort-select");
+  if (sortSel) _archiveSearchSort = sortSel.value || "popularity";
+  const epEl = document.getElementById("archive-exclude-podcasts");
+  if (epEl) _archiveSearchExcludePodcasts = !!epEl.checked;
+  _archiveSearchPage = 1;
+  // Reflect every populated filter in the URL so a shared link
+  // round-trips the same search.
   if (typeof history?.pushState === "function") {
     const qs = new URLSearchParams(location.search);
     qs.set("v", "archive");
     qs.set("tab", "search");
-    if (q) qs.set("q", q); else qs.delete("q");
+    const setOrDel = (key, val) => {
+      if (val) qs.set(key, val); else qs.delete(key);
+    };
+    setOrDel("q",       _archiveSearchQuery);
+    setOrDel("creator", _archiveSearchCreator);
+    setOrDel("subject", _archiveSearchSubject);
+    setOrDel("col2",    _archiveSearchCollection);
+    setOrDel("yf",      _archiveSearchYearFrom);
+    setOrDel("yt",      _archiveSearchYearTo);
+    if (_archiveSearchSort && _archiveSearchSort !== "popularity") qs.set("sort", _archiveSearchSort);
+    else qs.delete("sort");
+    if (!_archiveSearchExcludePodcasts) qs.set("ep", "0");
+    else qs.delete("ep");
     const next = "/?" + qs.toString();
     if (location.pathname + location.search !== next) {
       history.pushState({}, "", next);
     }
   }
-  if (!q) {
+  // Empty form → clear results.
+  const anyFilter = !!(_archiveSearchQuery || _archiveSearchCreator || _archiveSearchSubject ||
+                       _archiveSearchCollection || _archiveSearchYearFrom || _archiveSearchYearTo);
+  if (!anyFilter) {
     _archiveSearchResults = null;
     _archiveSearchNumFound = 0;
     _renderArchiveList();
@@ -740,8 +858,23 @@ function _archiveOnSearchSubmit(form) {
 }
 window._archiveOnSearchSubmit = _archiveOnSearchSubmit;
 
+// Toggle handler for the collapsible filter panel.
+function _archiveToggleFilters() {
+  _archiveSearchFiltersOpen = !_archiveSearchFiltersOpen;
+  _renderArchiveList();
+}
+window._archiveToggleFilters = _archiveToggleFilters;
+
 async function _archiveDoSearch() {
-  if (!_archiveSearchQuery) return;
+  // A search is meaningful as long as ANY filter is set — q is no
+  // longer required by itself.
+  const anyFilter = !!(_archiveSearchQuery
+    || _archiveSearchCreator
+    || _archiveSearchSubject
+    || _archiveSearchCollection
+    || _archiveSearchYearFrom
+    || _archiveSearchYearTo);
+  if (!anyFilter) return;
   if (_archiveSearchLoading) return;
   _archiveSearchLoading = true;
   // Show the loading state without losing the previous results — the
@@ -749,7 +882,14 @@ async function _archiveDoSearch() {
   _renderArchiveList();
   try {
     const u = new URL("/api/archive/search", location.origin);
-    u.searchParams.set("q", _archiveSearchQuery);
+    if (_archiveSearchQuery)      u.searchParams.set("q", _archiveSearchQuery);
+    if (_archiveSearchCreator)    u.searchParams.set("creator", _archiveSearchCreator);
+    if (_archiveSearchSubject)    u.searchParams.set("subject", _archiveSearchSubject);
+    if (_archiveSearchCollection) u.searchParams.set("collection", _archiveSearchCollection);
+    if (_archiveSearchYearFrom)   u.searchParams.set("yearFrom", _archiveSearchYearFrom);
+    if (_archiveSearchYearTo)     u.searchParams.set("yearTo", _archiveSearchYearTo);
+    u.searchParams.set("sort", _archiveSearchSort);
+    u.searchParams.set("excludePodcasts", _archiveSearchExcludePodcasts ? "1" : "0");
     u.searchParams.set("page", String(_archiveSearchPage));
     u.searchParams.set("rows", String(_archiveSearchRows));
     const r = await apiFetch(u.pathname + u.search);

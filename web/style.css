@@ -8377,6 +8377,127 @@ body.is-offline button.offline-disabled {
   margin-bottom: 0.4rem;
 }
 
+/* "▸ Filters" toggle on the search form. Quiet by default; brightens
+   on hover. Position keeps it on the same row as the search button. */
+.archive-search-filters-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 0.78rem;
+  padding: 0.3rem 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.archive-search-filters-toggle:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+/* Collapsible filter panel below the main search form. Two-column
+   grid on desktop; single column on narrow screens. */
+.archive-search-filters {
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.02);
+  padding: 0.7rem 0.85rem;
+  margin-bottom: 0.55rem;
+}
+.archive-search-filter-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.55rem 0.7rem;
+  align-items: end;
+}
+.archive-search-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  font-size: 0.72rem;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+.archive-search-filter input[type="text"],
+.archive-search-filter select {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg);
+  font-family: inherit;
+  font-size: 0.82rem;
+  padding: 0.3rem 0.5rem;
+  color-scheme: dark;
+  width: 100%;
+  box-sizing: border-box;
+}
+.archive-search-filter input[type="text"]:focus,
+.archive-search-filter select:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+.archive-search-filter-narrow { max-width: 110px; }
+.archive-search-filter-checkbox {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+  color: var(--text);
+  cursor: pointer;
+  align-self: center;
+}
+.archive-search-filter-checkbox input { accent-color: var(--accent); }
+
+/* Per-row meta line for search results: date · rating · collection,
+   horizontal flow with small gaps. */
+.archive-row-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: 0.15rem;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+.archive-row-meta-row .archive-row-date {
+  margin-top: 0;
+  font-size: inherit;
+}
+.archive-row-rating {
+  color: var(--accent-hi, var(--accent));
+  font-variant-numeric: tabular-nums;
+}
+.archive-row-rating-count { color: var(--muted); }
+.archive-row-collection {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+/* Subject tag chips below the meta row. Small inline chips clipped
+   to one line — overflow hides instead of wrapping the whole row. */
+.archive-row-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.3rem;
+}
+.archive-row-chip {
+  background: rgba(255, 107, 53, 0.08);
+  border: 1px solid rgba(255, 107, 53, 0.25);
+  border-radius: 3px;
+  padding: 0.05rem 0.4rem;
+  font-size: 0.7rem;
+  color: var(--accent);
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 /* Curated-tab picker — dropdown selector for which featured archive
    collection to browse. Sits above the filter/sort row so the
    collection-level choice reads as primary. */
