@@ -3320,6 +3320,63 @@ const _ARCHIVE_CACHE_TTL_S = 60 * 60 * 24 * 365 * 5; // ~5 years
 // listing. Any positive int that won't collide with a real master.
 const _ARCHIVE_AADAM_CACHE_KEY = 999_900_001;
 
+// ── Curated archive.org collections featured in the Curated tab ──
+// Each entry: {slug, title, cacheKey}. The slug is the archive.org
+// collection identifier (the bit after /details/ in the URL); title
+// is what shows in the dropdown; cacheKey is the synthetic
+// release_cache row id. Keys are stable per slug — adding new
+// entries appends to the bottom and gets a fresh sequential id.
+// Removing an entry leaves an orphan cache row that the prune job
+// will clean up over time. Aadam Jacobs is preserved at the top so
+// the existing /api/archive/aadamjacobs endpoint + weekly cron
+// keep working.
+type CuratedCollection = { slug: string; title: string; cacheKey: number };
+const _ARCHIVE_CURATED_COLLECTIONS: CuratedCollection[] = [
+  { slug: "aadamjacobs",                title: "Aadam Jacobs",                cacheKey: 999_900_001 },
+  { slug: "AlabamaShakes",              title: "Alabama Shakes",              cacheKey: 999_900_002 },
+  { slug: "AsylumStreetSpankers",       title: "Asylum Street Spankers",      cacheKey: 999_900_003 },
+  { slug: "BadLivers",                  title: "Bad Livers",                  cacheKey: 999_900_004 },
+  { slug: "beatletapescollection",      title: "Beatle Tapes Collection",     cacheKey: 999_900_005 },
+  { slug: "BelleAndSebastian",          title: "Belle and Sebastian",         cacheKey: 999_900_006 },
+  { slug: "BillyCorgan",                title: "Billy Corgan",                cacheKey: 999_900_007 },
+  { slug: "ButtholeSurfers",            title: "Butthole Surfers",            cacheKey: 999_900_008 },
+  { slug: "Calexico",                   title: "Calexico",                    cacheKey: 999_900_009 },
+  { slug: "CaliforniaHoneydrops",       title: "California Honeydrops",       cacheKey: 999_900_010 },
+  { slug: "CharlieParr",                title: "Charlie Parr",                cacheKey: 999_900_011 },
+  { slug: "ClintonFearon",              title: "Clinton Fearon",              cacheKey: 999_900_012 },
+  { slug: "CowboyJunkies",              title: "Cowboy Junkies",              cacheKey: 999_900_013 },
+  { slug: "DaveAlvin",                  title: "Dave Alvin",                  cacheKey: 999_900_014 },
+  { slug: "DeathCabforCutie",           title: "Death Cab for Cutie",         cacheKey: 999_900_015 },
+  { slug: "DelMcCouryBand",             title: "Del McCoury Band",            cacheKey: 999_900_016 },
+  { slug: "Drive-ByTruckers",           title: "Drive-By Truckers",           cacheKey: 999_900_017 },
+  { slug: "ElliottSmith",               title: "Elliott Smith",               cacheKey: 999_900_018 },
+  { slug: "Fishbone",                   title: "Fishbone",                    cacheKey: 999_900_019 },
+  { slug: "Fugazi",                     title: "Fugazi",                      cacheKey: 999_900_020 },
+  { slug: "GlenHansard",                title: "Glen Hansard",                cacheKey: 999_900_021 },
+  { slug: "GratefulDead",               title: "Grateful Dead",               cacheKey: 999_900_022 },
+  { slug: "HayseedDixie",               title: "Hayseed Dixie",               cacheKey: 999_900_023 },
+  { slug: "TheJayhawks",                title: "The Jayhawks",                cacheKey: 999_900_024 },
+  { slug: "LittleFeat",                 title: "Little Feat",                 cacheKey: 999_900_025 },
+  { slug: "LosLobosMusic",              title: "Los Lobos",                   cacheKey: 999_900_026 },
+  { slug: "LosLonelyBoys",              title: "Los Lonely Boys",             cacheKey: 999_900_027 },
+  { slug: "LutherDickinson",            title: "Luther Dickinson",            cacheKey: 999_900_028 },
+  { slug: "MeatPuppets",                title: "Meat Puppets",                cacheKey: 999_900_029 },
+  { slug: "MelvinSeals",                title: "Melvin Seals",                cacheKey: 999_900_030 },
+  { slug: "MelvinSparksBand",           title: "Melvin Sparks Band",          cacheKey: 999_900_031 },
+  { slug: "Minutemen",                  title: "Minutemen",                   cacheKey: 999_900_032 },
+  { slug: "MojoNixon",                  title: "Mojo Nixon",                  cacheKey: 999_900_033 },
+  { slug: "NelsCline",                  title: "Nels Cline",                  cacheKey: 999_900_034 },
+  { slug: "NorthMississippiAllstars",   title: "North Mississippi Allstars",  cacheKey: 999_900_035 },
+  { slug: "RebirthBrassBand",           title: "Rebirth Brass Band",          cacheKey: 999_900_036 },
+  { slug: "SharonVanEtten",             title: "Sharon Van Etten",            cacheKey: 999_900_037 },
+  { slug: "SmashingPumpkins",           title: "Smashing Pumpkins",           cacheKey: 999_900_038 },
+  { slug: "TedeschiTrucksBand",         title: "Tedeschi Trucks Band",        cacheKey: 999_900_039 },
+  { slug: "TroutSteakRevival",          title: "Trout Steak Revival",         cacheKey: 999_900_040 },
+  { slug: "WayneHancock",               title: "Wayne Hancock",               cacheKey: 999_900_041 },
+  { slug: "Ween",                       title: "Ween",                        cacheKey: 999_900_042 },
+  { slug: "YonderMountainStringBand",   title: "Yonder Mountain String Band", cacheKey: 999_900_043 },
+];
+
 type ArchiveItem = {
   identifier: string;
   title: string;
@@ -3533,6 +3590,51 @@ app.get("/api/archive/aadamjacobs", async (_req, res) => {
     res.json(fresh ?? { items: [], fetchedAt: new Date().toISOString(), count });
   } catch (e: any) {
     console.error("[archive/aadamjacobs]", e?.message ?? e);
+    res.status(502).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// GET /api/archive/curated/list — return the dropdown shape for the
+// client. Static config; safe to fetch from anyone. Used by archive.js
+// to populate the curated-tab dropdown without duplicating the slug ↔
+// title map on the client.
+app.get("/api/archive/curated/list", (_req, res) => {
+  // Return only slug + title — cacheKey is server-internal and the
+  // client never needs it. Sorted alphabetically by title (with the
+  // "The " prefix dropped for sort purposes so "The Jayhawks" lands
+  // under J like a library card).
+  const sortKey = (t: string) => t.replace(/^The\s+/i, "").toLowerCase();
+  const items = _ARCHIVE_CURATED_COLLECTIONS
+    .map(c => ({ slug: c.slug, title: c.title }))
+    .sort((a, b) => sortKey(a.title).localeCompare(sortKey(b.title)));
+  res.setHeader("Cache-Control", "public, max-age=3600");
+  res.json({ items });
+});
+
+// GET /api/archive/curated/:slug — generic per-collection endpoint.
+// Same flow as /api/archive/aadamjacobs but parameterized over the
+// curated whitelist. Cache miss triggers an on-demand refresh; subsequent
+// hits serve from the per-collection release_cache row.
+app.get("/api/archive/curated/:slug", async (req, res) => {
+  const slug = String(req.params.slug || "").trim();
+  const entry = _ARCHIVE_CURATED_COLLECTIONS.find(c => c.slug === slug);
+  if (!entry) {
+    res.status(404).json({ error: "unknown collection" });
+    return;
+  }
+  const cached = await getCachedRelease(entry.cacheKey, "master-versions", _ARCHIVE_CACHE_TTL_S);
+  if (cached?.items) {
+    res.setHeader("X-SeaDisco-Cache", "hit");
+    res.json(cached);
+    return;
+  }
+  try {
+    const { count } = await _refreshArchiveCache(entry.slug, entry.cacheKey);
+    const fresh = await getCachedRelease(entry.cacheKey, "master-versions");
+    res.setHeader("X-SeaDisco-Cache", "miss");
+    res.json(fresh ?? { items: [], fetchedAt: new Date().toISOString(), count });
+  } catch (e: any) {
+    console.error(`[archive/curated/${slug}]`, e?.message ?? e);
     res.status(502).json({ error: String(e?.message ?? e) });
   }
 });

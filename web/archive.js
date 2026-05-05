@@ -13,13 +13,22 @@
 // server.
 
 // Curated-tab state (kept identical to the pre-refactor names so the
-// existing render path doesn't churn).
+// existing render path doesn't churn). _archiveCuratedSlug tracks
+// which collection from the dropdown is currently selected — the
+// dropdown options come from /api/archive/curated/list and selecting
+// one swaps _archiveList.
 let _archiveList = null;
 let _archiveLoading = false;
 let _archiveFilter = "";
 let _archiveSort = "title-asc"; // title-asc | title-desc | date-desc | date-asc
 let _archiveShown = 0;          // how many filtered+sorted rows currently rendered
 const _ARCHIVE_PAGE = 48;       // matches the Recent strip page size
+let _archiveCuratedSlug = "aadamjacobs";  // active curated collection slug
+let _archiveCuratedList = null;            // [{slug, title}, ...] from server
+// Per-slug cache of loaded item arrays, keyed by slug. Lets the user
+// switch between collections without re-fetching ones they've
+// already seen this session.
+const _archiveCuratedCache = new Map();
 
 // ── Search-tab state ────────────────────────────────────────────────
 let _archiveSearchQuery   = "";       // last-submitted query text
@@ -47,8 +56,9 @@ async function initArchiveView(forceRefresh = false) {
   // handler will still try and surface a "sign in" toast).
   if (window._clerk?.user && _archiveSavedIds == null) _archiveLoadSavedIds();
 
-  // Honor ?tab=...&q=... in the URL so search/saved-list links are
-  // shareable. Default lands on the Search tab with an empty input.
+  // Honor ?tab=...&q=...&col=... in the URL so search/saved-list/
+  // curated-collection links are shareable. Default lands on the
+  // Search tab with an empty input.
   try {
     const qs = new URLSearchParams(location.search);
     const t = qs.get("tab");
@@ -57,7 +67,14 @@ async function initArchiveView(forceRefresh = false) {
     else _archiveTab = "search";
     const q = qs.get("q");
     if (q && _archiveTab === "search") _archiveSearchQuery = q;
+    const col = qs.get("col");
+    if (col) _archiveCuratedSlug = col;
   } catch {}
+
+  // Kick off the dropdown population fetch in parallel with the rest
+  // of init. The first render uses the static fallback ("Aadam Jacobs"
+  // only) and re-renders once the full list lands.
+  _archiveLoadCuratedList().catch(() => {});
 
   // Render the page shell + tabs first so the user always sees the
   // search input + tab strip even if the data fetches haven't returned.
@@ -76,18 +93,52 @@ async function initArchiveView(forceRefresh = false) {
   }
 }
 
-// Fetch the curated Aadam Jacobs collection. Extracted from the
-// pre-refactor initArchiveView body so the search-tab path can skip
-// it entirely. Idempotent: bails if already loaded or in flight
-// unless forceRefresh is true.
-async function _archiveLoadCurated(forceRefresh = false) {
-  if (_archiveList?.length && !forceRefresh) return;
+// Fetch the dropdown options once per page. Cached on the module
+// scope so subsequent tab switches don't re-fetch. Re-renders the
+// list panel once the items land so the dropdown gets populated.
+async function _archiveLoadCuratedList() {
+  if (_archiveCuratedList) return _archiveCuratedList;
+  try {
+    const r = await apiFetch("/api/archive/curated/list");
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    _archiveCuratedList = Array.isArray(j?.items) ? j.items : [];
+  } catch {
+    // Fallback: just the legacy default. Better than an empty dropdown.
+    _archiveCuratedList = [{ slug: "aadamjacobs", title: "Aadam Jacobs" }];
+  }
+  // Re-render the curated panel if it's the active tab so the
+  // dropdown picks up the freshly-loaded options.
+  if (_archiveTab === "curated") _renderArchiveList();
+  return _archiveCuratedList;
+}
+
+// Fetch a curated collection by slug. Cached per-slug so switching
+// between collections doesn't re-fetch ones already loaded this
+// session. Idempotent: bails if already loaded or in flight unless
+// forceRefresh is true.
+async function _archiveLoadCurated(forceRefresh = false, slug = null) {
+  const targetSlug = slug || _archiveCuratedSlug;
+  // Pull from the per-slug cache first.
+  if (!forceRefresh && _archiveCuratedCache.has(targetSlug)) {
+    _archiveList = _archiveCuratedCache.get(targetSlug);
+    _archiveCuratedSlug = targetSlug;
+    _renderArchiveList();
+    return;
+  }
   if (_archiveLoading) return;
   _archiveLoading = true;
+  _archiveCuratedSlug = targetSlug;
   const rowsEl = document.getElementById("archive-rows");
   if (rowsEl) rowsEl.innerHTML = `<div class="loc-empty">Loading collection — first load may take a few seconds.</div>`;
   try {
-    const url = forceRefresh ? "/api/archive/aadamjacobs?nocache=1" : "/api/archive/aadamjacobs";
+    // Legacy path: aadamjacobs uses the original endpoint (and gets
+    // its weekly cron refresh). Other slugs go through the generic
+    // /api/archive/curated/:slug endpoint.
+    const base = targetSlug === "aadamjacobs"
+      ? "/api/archive/aadamjacobs"
+      : `/api/archive/curated/${encodeURIComponent(targetSlug)}`;
+    const url = forceRefresh ? `${base}?nocache=1` : base;
     const r = await apiFetch(url);
     if (r.status === 429) {
       const body = await r.json().catch(() => ({}));
@@ -99,7 +150,9 @@ async function _archiveLoadCurated(forceRefresh = false) {
       return;
     }
     const j = await r.json();
-    _archiveList = Array.isArray(j?.items) ? j.items : [];
+    const list = Array.isArray(j?.items) ? j.items : [];
+    _archiveList = list;
+    _archiveCuratedCache.set(targetSlug, list);
     _renderArchiveList();
   } catch (err) {
     if (rowsEl) rowsEl.innerHTML = `<div class="loc-empty">Could not load archive collection.</div>`;
@@ -107,6 +160,28 @@ async function _archiveLoadCurated(forceRefresh = false) {
     _archiveLoading = false;
   }
 }
+
+// Dropdown change handler — switch the active curated collection.
+// Kicks off the load (cache hit or fetch) and pushes the new slug
+// into the URL so the link is shareable.
+function _archiveCuratedSelect(sel) {
+  const slug = sel?.value || "aadamjacobs";
+  _archiveCuratedSlug = slug;
+  _archiveFilter = "";       // reset filter when switching collections
+  _archiveShown  = 0;
+  if (typeof history?.pushState === "function") {
+    const qs = new URLSearchParams(location.search);
+    qs.set("v", "archive");
+    qs.set("tab", "curated");
+    qs.set("col", slug);
+    const next = "/?" + qs.toString();
+    if (location.pathname + location.search !== next) {
+      history.pushState({}, "", next);
+    }
+  }
+  _archiveLoadCurated(false, slug).catch(() => {});
+}
+window._archiveCuratedSelect = _archiveCuratedSelect;
 
 // archiveRefresh kept for backwards-compat only — the page no longer
 // renders a refresh button, but admin.html's "Get archive data"
@@ -587,6 +662,14 @@ function _renderArchiveList() {
     </div>
 
     <div class="archive-panel archive-panel-curated" style="display:${showCurated ? "" : "none"}">
+      <div class="archive-curated-picker">
+        <label class="archive-curated-picker-label" for="archive-curated-select">Collection</label>
+        <select id="archive-curated-select" class="archive-curated-select" onchange="_archiveCuratedSelect(this)">${
+          (_archiveCuratedList || [{ slug: "aadamjacobs", title: "Aadam Jacobs" }])
+            .map(c => `<option value="${escHtml(c.slug)}"${c.slug === _archiveCuratedSlug ? " selected" : ""}>${escHtml(c.title)}</option>`)
+            .join("")
+        }</select>
+      </div>
       <div class="archive-meta-bar">
         <input type="text" class="archive-filter" placeholder="Filter title, date, description…" value="${filterVal}" oninput="_archiveOnFilterInput(this)" />
         <select class="archive-sort" onchange="_archiveOnSortChange(this)">${sortOpts}</select>
