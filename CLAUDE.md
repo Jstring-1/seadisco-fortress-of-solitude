@@ -1,11 +1,11 @@
 # SeaDisco — project context for Claude Code
 
-> **Repo nickname:** "SeaDisco" or "discogs-mcp-server" — same project. The repo name is historical (it started as a Discogs MCP server) but the active product is **SeaDisco**, a music-discovery web app for vinyl collectors.
+> **Repo nickname:** "SeaDisco" or "seadisco-fortress-of-solitude" — same project. The repo was renamed from `discogs-mcp-server` after it grew past its MCP-server origins. The active product is **SeaDisco**, a music-discovery web app for vinyl collectors. Local working directory still uses the legacy name.
 
 ## Where things live
 
-- **Repo root:** `C:\Users\KJ-NoJesteringStudio\GitHub\discogs-mcp-server` (Windows path; bash sees it as `/c/Users/KJ-NoJesteringStudio/GitHub/discogs-mcp-server`)
-- **Git remote:** `https://github.com/Jstring-1/discogs-mcp-server` (branch: `main`)
+- **Repo root:** `C:\Users\KJ-NoJesteringStudio\GitHub\discogs-mcp-server` (Windows path; bash sees it as `/c/Users/KJ-NoJesteringStudio/GitHub/discogs-mcp-server`). Local directory still uses the legacy name; remote is `seadisco-fortress-of-solitude`.
+- **Git remote:** `https://github.com/Jstring-1/seadisco-fortress-of-solitude` (branch: `main`)
 - **Deployment:** Railway, auto-deploys from `main`
 - **Production URL:** https://seadisco.com
 
