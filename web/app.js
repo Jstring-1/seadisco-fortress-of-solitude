@@ -226,6 +226,15 @@ window.addEventListener("popstate", () => {
     }
     switchView(rawView, true);
   } else {
+    // Bare home URL with no query params: drop any cached search
+    // results FIRST, before switchView runs. Otherwise switchView's
+    // "restore _lastResults if populated" branch keeps showing the
+    // previous search and hides the random-records strip — leaving
+    // back-button-to-home users staring at an empty grid (results
+    // get cleared just below, but the strip stays hidden).
+    if (!p.toString()) {
+      window._lastResults = null;
+    }
     switchView("search", true);
     restoreFromParams(p);
     if (p.toString()) {
@@ -240,6 +249,12 @@ window.addEventListener("popstate", () => {
       document.getElementById("search-returned").textContent = "";
       document.getElementById("search-ai-summary").textContent = "";
       document.getElementById("search-info-block").style.display = "none";
+      // Belt-and-suspenders: ensure the strip is visible + populated
+      // even if switchView's no-results path didn't kick (e.g. a race
+      // where _lastResults landed mid-flight). Idempotent.
+      const ws = document.getElementById("random-records");
+      if (ws) ws.style.display = "";
+      if (typeof loadRandomRecords === "function") loadRandomRecords();
     }
   }
 });
