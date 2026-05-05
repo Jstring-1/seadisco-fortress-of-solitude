@@ -101,7 +101,13 @@ if [ "$CUR" = "$TS" ]; then exit 0; fi
 # 1. Cache-bust query string in HTML (forces the browser to refetch
 #    each /shared.js?v=… etc. on a deploy).
 sed -i "s/v=[0-9]\{8\}\.[0-9]\{4\}/v=$TS/g" web/index.html web/admin.html
-# 2. SITE_VERSION constant in shared.js — the small grey "build …"
+# 2. _SD_LAZY_VERSION in HTML — used by _sdLoadModule for the lazy
+#    chunks (account, orders, archive, youtube, inventory-editor).
+#    Without bumping this, lazy modules keep the previous deploy's
+#    version forever and stale code lingers. Pattern matches:
+#    _SD_LAZY_VERSION = "YYYYMMDD.HHMM"
+sed -i "s/_SD_LAZY_VERSION[[:space:]]*=[[:space:]]*\"[0-9]\{8\}\.[0-9]\{4\}\"/_SD_LAZY_VERSION = \"$TS\"/g" web/index.html
+# 3. SITE_VERSION constant in shared.js — the small grey "build …"
 #    tag under the logo. Same timestamp as the cache-bust so the
 #    visible label always matches what the user just received.
 if [ -f web/shared.js ]; then
