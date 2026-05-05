@@ -292,7 +292,6 @@ function _locRenderShell() {
   return `
     <div class="loc-header">
       <h2 class="loc-title">Library of Congress</h2>
-      <p class="loc-sub">Search digitized audio from the Library of Congress. Audio and metadata courtesy of the <a href="https://www.loc.gov" target="_blank" rel="noopener" class="loc-attribution-link">Library of Congress</a>. Rights vary per item — see the info popup for each recording's <em>rights_advisory</em> note before reusing any clip.</p>
       <div class="loc-tabs">
         <button type="button" class="loc-tab loc-tab-search active" onclick="_locSwitchTab('search')">Search</button>
         <button type="button" class="loc-tab loc-tab-saved" onclick="_locSwitchTab('saved')">Saved</button>

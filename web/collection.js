@@ -403,6 +403,27 @@ function switchView(view, skipPushState = false) {
     if (typeof _renderWikiRecentDatalist === "function") {
       try { _renderWikiRecentDatalist(); } catch {}
     }
+    // Mount the shared bookmark dropdown into the wiki search form
+    // so wiki queries can be saved the same way as every other
+    // search page. Idempotent — guards on existing .saved-search-wrap.
+    if (typeof buildSavedSearchUI === "function" && window._clerk?.user) {
+      const wikiFormRow = document.querySelector("#wiki-view .loc-form-row");
+      if (wikiFormRow && !wikiFormRow.querySelector(".saved-search-wrap")) {
+        buildSavedSearchUI(
+          "wikipedia",
+          () => {
+            const v = document.getElementById("wiki-view-q")?.value?.trim();
+            return v ? { q: v } : {};
+          },
+          (params) => {
+            const qInput = document.getElementById("wiki-view-q");
+            if (qInput) qInput.value = params.q || "";
+            if (params.q && typeof runWikiPageSearch === "function") runWikiPageSearch(params.q);
+          },
+          wikiFormRow,
+        );
+      }
+    }
     // Restore search results + field value from ?wq=… so the page is
     // shareable AND survives back-button navigation. Wait for auth so
     // apiFetch attaches the Bearer token.

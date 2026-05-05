@@ -40,6 +40,27 @@ async function initYoutubeView() {
     }
     if (initialQuery) runYoutubeSearch(initialQuery);
   }
+  // Mount the shared saved-search dropdown (the bookmark icon) in
+  // the YT search-row so YouTube searches can be bookmarked the
+  // same way as main / collection / LOC searches.
+  if (typeof buildSavedSearchUI === "function" && window._clerk?.user) {
+    const formRow = document.querySelector("#youtube-view .loc-form-row");
+    if (formRow && !formRow.querySelector(".saved-search-wrap")) {
+      buildSavedSearchUI(
+        "youtube",
+        () => {
+          const v = document.getElementById("youtube-view-q")?.value?.trim();
+          return v ? { q: v } : {};
+        },
+        (params) => {
+          const qInput = document.getElementById("youtube-view-q");
+          if (qInput) qInput.value = params.q || "";
+          if (params.q && typeof runYoutubeSearch === "function") runYoutubeSearch(params.q);
+        },
+        formRow,
+      );
+    }
+  }
 }
 
 function _youtubeSwitchTab(tab, { pushUrl = true } = {}) {
