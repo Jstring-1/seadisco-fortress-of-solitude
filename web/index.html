@@ -67,7 +67,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260504.2151" />
+  <link rel="stylesheet" href="/style.css?v=20260504.2201" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -105,7 +105,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260504.2151"></script>
+<script defer src="/shared.js?v=20260504.2201"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -170,7 +170,7 @@
          selector. -->
     <button type="button" id="f-hard2find" class="f-hard2find-btn"
             onclick="_sdHard2FindChanged(this)"
-            title="Hard to find: bias the search toward physical, pre-streaming-era pressings. Empty Format defaults to Vinyl, empty Year to 1900-1985, sort to least-owned first. Cards whose master has no embedded YouTube videos get a 🎵 marker so you can spot contribution opportunities. Filters you set yourself are respected."
+            title="Hard to find: bias toward physical, pre-streaming-era pressings. Defaults blank Format to Vinyl, Year to 1900–1985, sort to least-owned first."
             aria-pressed="false">
       <span class="f-hard2find-glyph">💎</span>
     </button>
@@ -220,24 +220,30 @@
       <label>Year <input type="text" id="f-year" placeholder="e.g. 1959" /></label>
       <label>Country <input type="text" id="f-country" placeholder="e.g. US" list="country-list" /></label>
       <label>Genre
-        <select id="f-genre" onchange="populateStyles()">
-          <option value="">Any</option>
-          <option>Blues</option>
-          <option>Brass &amp; Military</option>
-          <option>Children's</option>
-          <option>Classical</option>
-          <option>Electronic</option>
-          <option>Folk, World, &amp; Country</option>
-          <option>Funk / Soul</option>
-          <option>Hip Hop</option>
-          <option>Jazz</option>
-          <option>Latin</option>
-          <option>Non-Music</option>
-          <option>Pop</option>
-          <option>Reggae</option>
-          <option>Rock</option>
-          <option>Stage &amp; Screen</option>
-        </select>
+        <span class="select-with-strict">
+          <select id="f-genre" onchange="populateStyles()">
+            <option value="">Any</option>
+            <option>Blues</option>
+            <option>Brass &amp; Military</option>
+            <option>Children's</option>
+            <option>Classical</option>
+            <option>Electronic</option>
+            <option>Folk, World, &amp; Country</option>
+            <option>Funk / Soul</option>
+            <option>Hip Hop</option>
+            <option>Jazz</option>
+            <option>Latin</option>
+            <option>Non-Music</option>
+            <option>Pop</option>
+            <option>Reggae</option>
+            <option>Rock</option>
+            <option>Stage &amp; Screen</option>
+          </select>
+          <button type="button" id="f-genre-strict" class="genre-strict-btn"
+                  onclick="_sdToggleGenreStrict('search', this)"
+                  aria-pressed="false"
+                  title="Strict: only show results where the selected genre is the FIRST one Discogs lists for that release. Off by default so cross-tagged albums (Jazz/Blues) still appear; on tightens the grid to genre-first matches.">!</button>
+        </span>
       </label>
       <label>Style
         <select id="f-style" disabled>
@@ -428,9 +434,15 @@ e.g.  miles davis | coltrane
         </label>
         <label class="cw-year-field">Year <input type="text" id="cw-year" placeholder="e.g. 1959" onkeydown="if(event.key==='Enter'){doCwSearch(1)}" /></label>
         <label>Genre
-          <select id="cw-genre" onchange="onCwGenreChange()" style="color-scheme:dark">
-            <option value="">Any</option>
-          </select>
+          <span class="select-with-strict">
+            <select id="cw-genre" onchange="onCwGenreChange()" style="color-scheme:dark">
+              <option value="">Any</option>
+            </select>
+            <button type="button" id="cw-genre-strict" class="genre-strict-btn"
+                    onclick="_sdToggleGenreStrict('cw', this)"
+                    aria-pressed="false"
+                    title="Strict: only show results where the selected genre is the FIRST one Discogs lists for that release. Off by default so cross-tagged albums (Jazz/Blues) still appear.">!</button>
+          </span>
         </label>
         <label>Style
           <select id="cw-style" onchange="doCwSearch(1)" style="color-scheme:dark">
@@ -507,6 +519,10 @@ e.g.  miles davis | coltrane
           <select id="random-records-genre" class="sd-filter-select" onchange="_sdHomeStripGenreChanged(this)">
             <option value="">All</option>
           </select>
+          <button type="button" id="random-records-genre-strict" class="genre-strict-btn genre-strict-btn-sm"
+                  onclick="_sdToggleGenreStrict('strip', this)"
+                  aria-pressed="false"
+                  title="Strict: only show items where the selected genre is the FIRST one Discogs lists. Off by default keeps cross-tagged hybrids (Jazz/Blues) visible.">!</button>
         </label>
         <label class="sd-filter-label">
           Sort
@@ -1102,13 +1118,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260504.2151"></script>
-<script defer src="/search.js?v=20260504.2151"></script>
-<script defer src="/collection.js?v=20260504.2151"></script>
+<script defer src="/utils.js?v=20260504.2201"></script>
+<script defer src="/search.js?v=20260504.2201"></script>
+<script defer src="/collection.js?v=20260504.2201"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260504.2151"></script>
-<script defer src="/app.js?v=20260504.2151"></script>
+<script defer src="/modal.js?v=20260504.2201"></script>
+<script defer src="/app.js?v=20260504.2201"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1119,13 +1135,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260504.2151"></script>
-<script defer src="/queue.js?v=20260504.2151"></script>
+<script defer src="/loc.js?v=20260504.2201"></script>
+<script defer src="/queue.js?v=20260504.2201"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260504.2151";
+  window._SD_LAZY_VERSION = "20260504.2201";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1154,8 +1170,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260504.2151"></script>
-<script defer src="/offline.js?v=20260504.2151"></script>
+<script defer src="/idb.js?v=20260504.2201"></script>
+<script defer src="/offline.js?v=20260504.2201"></script>
 
 </body>
 </html>
