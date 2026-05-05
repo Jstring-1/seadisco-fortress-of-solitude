@@ -6867,10 +6867,10 @@ a.profile-stat-link:hover {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.3rem;
-  height: 2.3rem;
+  width: 1.7rem;
+  height: 1.7rem;
   border: 1px solid var(--border);
-  border-radius: 5px;
+  border-radius: 4px;
   background: var(--bg);
   color: var(--muted);
   cursor: pointer;
@@ -6888,7 +6888,7 @@ a.profile-stat-link:hover {
   background: var(--accent-soft);
 }
 .loc-playable-icon {
-  font-size: 1.1rem;
+  font-size: 0.9rem;
   line-height: 1;
   pointer-events: none;
 }
@@ -8377,76 +8377,10 @@ body.is-offline button.offline-disabled {
   margin-bottom: 0.4rem;
 }
 
-/* "▸ Filters" toggle on the search form. Quiet by default; brightens
-   on hover. Position keeps it on the same row as the search button. */
-.archive-search-filters-toggle {
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--muted);
-  font-size: 0.78rem;
-  padding: 0.3rem 0.5rem;
-  border-radius: 4px;
-  cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.archive-search-filters-toggle:hover {
-  color: var(--text);
-  border-color: var(--accent);
-}
-
-/* Collapsible filter panel below the main search form. Two-column
-   grid on desktop; single column on narrow screens. */
-.archive-search-filters {
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  background: rgba(255, 255, 255, 0.02);
-  padding: 0.7rem 0.85rem;
-  margin-bottom: 0.55rem;
-}
-.archive-search-filter-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 0.55rem 0.7rem;
-  align-items: end;
-}
-.archive-search-filter {
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  font-size: 0.72rem;
-  color: var(--muted);
-  letter-spacing: 0.02em;
-}
-.archive-search-filter input[type="text"],
-.archive-search-filter select {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--fg);
-  font-family: inherit;
-  font-size: 0.82rem;
-  padding: 0.3rem 0.5rem;
-  color-scheme: dark;
-  width: 100%;
-  box-sizing: border-box;
-}
-.archive-search-filter input[type="text"]:focus,
-.archive-search-filter select:focus {
-  border-color: var(--accent);
-  outline: none;
-}
-.archive-search-filter-narrow { max-width: 110px; }
-.archive-search-filter-checkbox {
-  flex-direction: row;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.78rem;
-  color: var(--text);
-  cursor: pointer;
-  align-self: center;
-}
-.archive-search-filter-checkbox input { accent-color: var(--accent); }
+/* Archive search form now reuses the LOC form's classes (.loc-form
+   / .loc-form-row / .loc-form-grid / .loc-form-split) so the four
+   discover-tab search forms share visual chrome. The legacy
+   .archive-search-filters / -toggle / -grid styles were retired. */
 
 /* Per-row meta line for search results: date · rating · collection,
    horizontal flow with small gaps. */

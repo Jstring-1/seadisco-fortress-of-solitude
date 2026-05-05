@@ -407,6 +407,14 @@ async function _locRunSearchFromForm({ resetPage = true, pushUrl = true } = {}) 
   if (resetPage) params.sp = "1";
   else if (_locLastQuery?.sp) params.sp = _locLastQuery.sp;
   if (pushUrl) _locPushUrlState(params);
+  // Auto-save populated form fields into the per-field history
+  // dropdown so future focus on each input surfaces past values.
+  // Only fires on resetPage (the user-initiated submit path) — pagination
+  // and sort-change re-runs share the same handler but shouldn't pollute
+  // history with the same values on every page click.
+  if (resetPage && typeof saveSearchHistory === "function") {
+    try { saveSearchHistory("loc"); } catch {}
+  }
   return _locRunSearch(params);
 }
 

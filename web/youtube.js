@@ -75,6 +75,16 @@ async function runYoutubeSearch(query, opts) {
     if (pageEl) pageEl.innerHTML = "";
     return;
   }
+  // Stash q into the input so saveSearchHistory("youtube") sees it,
+  // then auto-save into the focus-dropdown history. Skip on pagination
+  // re-runs to avoid duplicate saves of the same value.
+  if (!opts?.pageToken) {
+    const qInput = document.getElementById("youtube-view-q");
+    if (qInput && qInput.value !== q) qInput.value = q;
+    if (typeof saveSearchHistory === "function") {
+      try { saveSearchHistory("youtube"); } catch {}
+    }
+  }
   // Update URL so the search is shareable / back-button-able.
   try {
     const qs = new URLSearchParams(location.search);
