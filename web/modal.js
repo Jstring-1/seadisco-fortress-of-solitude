@@ -736,6 +736,287 @@ document.getElementById("wiki-overlay")?.addEventListener("click", e => {
   if (e.target === document.getElementById("wiki-overlay")) closeWikiPopup();
 });
 
+// ── LOC search popup ────────────────────────────────────────────────
+//
+// Opens an overlay on top of the album / version modal so the user
+// can pick a Library of Congress recording without losing the album
+// context they were browsing. Mirrors openWikiPopup's shape: fetch +
+// render a list of results, each with ▶ Play / ★ Save handled by the
+// existing LOC engine helpers.
+async function openLocPopup(query) {
+  const q = String(query || "").trim();
+  if (!q) return;
+  const overlay = document.getElementById("loc-popup-overlay");
+  const loading = document.getElementById("loc-popup-loading");
+  const content = document.getElementById("loc-popup-content");
+  if (!overlay || !content) return;
+  overlay.classList.add("open");
+  if (loading) loading.style.display = "";
+  content.innerHTML = "";
+  if (typeof _sdLockBodyScroll === "function") _sdLockBodyScroll("loc-popup");
+  try {
+    const r = await apiFetch(`/api/loc/search?q=${encodeURIComponent(q)}&playable=1&c=20`);
+    if (loading) loading.style.display = "none";
+    if (r.status === 401) {
+      content.innerHTML = `<div class="wiki-results-error">Sign in to search the Library of Congress.</div>`;
+      return;
+    }
+    if (r.status === 429) {
+      const body = await r.json().catch(() => ({}));
+      content.innerHTML = `<div class="wiki-results-error">${escHtml(body?.message || "Too many LOC searches — wait a minute.")}</div>`;
+      return;
+    }
+    if (!r.ok) {
+      content.innerHTML = `<div class="wiki-results-error">LOC search failed (HTTP ${r.status}).</div>`;
+      return;
+    }
+    const body = await r.json();
+    const items = (Array.isArray(body?.results) ? body.results : [])
+      .filter(it => it && typeof it.streamUrl === "string" && it.streamUrl);
+    // Stash items on the popup so per-row click handlers can resolve
+    // by index without re-fetching. Keyed by the popup element so
+    // multiple opens don't trample each other.
+    window._sdLocPopupItems = items;
+    if (!items.length) {
+      content.innerHTML = `
+        <div class="wiki-header">
+          <h2 style="margin:0 0 0.3rem 0">Library of Congress: ${escHtml(q)}</h2>
+        </div>
+        <div class="wiki-results-empty">No public-domain LOC matches for <em>${escHtml(q)}</em>.</div>`;
+      return;
+    }
+    // Make sure the saved-set is loaded so ★ state on each row is right.
+    if (typeof _locLoadSavedIds === "function" && window._clerk?.user) {
+      try { await _locLoadSavedIds(); } catch {}
+    }
+    const rowsHtml = items.map((it, i) => {
+      const safeTitle = escHtml(it.title || "Untitled");
+      const contributors = Array.isArray(it.contributors) ? it.contributors.join(", ") : (it.contributors || "");
+      const safeMeta = escHtml([it.year, contributors].filter(Boolean).join(" · "));
+      // _locSavedIds is a top-level `let` in loc.js → shared classic-
+      // script lexical environment makes a bare reference resolve here.
+      // typeof guard covers the moments before loc.js has initialized
+      // (fire-and-forget _locLoadSavedIds populates it after the
+      // overlay opens; ★ icons just default to ☆ until the first
+      // toggle click reconciles).
+      const sset = (typeof _locSavedIds !== "undefined") ? _locSavedIds : null;
+      const isSaved = !!(sset && sset.has(it.id));
+      return `
+        <div class="loc-popup-row">
+          <div class="loc-popup-row-main">
+            <div class="loc-popup-row-title">${safeTitle}</div>
+            ${safeMeta ? `<div class="loc-popup-row-meta">${safeMeta}</div>` : ""}
+          </div>
+          <div class="loc-popup-row-actions">
+            <button type="button" class="archive-btn archive-save-btn${isSaved ? " is-saved" : ""}" onclick="_sdLocPopupToggleSave(this,${i})" title="${isSaved ? "Remove from Saved" : "Save"}">${isSaved ? "★" : "☆"}</button>
+            <button type="button" class="archive-btn archive-btn-play" onclick="_sdLocPopupPlay(${i})" title="Play in the bar">▶ Play</button>
+          </div>
+        </div>`;
+    }).join("");
+    content.innerHTML = `
+      <div class="wiki-header">
+        <h2 style="margin:0 0 0.3rem 0">Library of Congress: ${escHtml(q)}</h2>
+        <div class="wiki-popup-subnote">${items.length} result${items.length === 1 ? "" : "s"} · plays in the bar without leaving this album.</div>
+      </div>
+      <div class="loc-popup-rows">${rowsHtml}</div>`;
+  } catch (err) {
+    if (loading) loading.style.display = "none";
+    content.innerHTML = `<div class="wiki-results-error">LOC search failed.</div>`;
+  }
+}
+window.openLocPopup = openLocPopup;
+
+function closeLocPopup() {
+  const overlay = document.getElementById("loc-popup-overlay");
+  if (overlay) overlay.classList.remove("open");
+  if (typeof _sdUnlockBodyScroll === "function") _sdUnlockBodyScroll("loc-popup");
+}
+window.closeLocPopup = closeLocPopup;
+
+// LOC popup row handlers — read from the stash on window so we don't
+// have to scrape the DOM. Each click resolves the item by index.
+function _sdLocPopupPlay(idx) {
+  const items = window._sdLocPopupItems || [];
+  const it = items[idx];
+  if (!it) return;
+  if (typeof _locPlay === "function") _locPlay(it);
+}
+window._sdLocPopupPlay = _sdLocPopupPlay;
+
+async function _sdLocPopupToggleSave(btn, idx) {
+  const items = window._sdLocPopupItems || [];
+  const it = items[idx];
+  if (!it?.id) return;
+  if (!window._clerk?.user) {
+    if (typeof showToast === "function") showToast("Sign in to save items", "error");
+    return;
+  }
+  // Cache the item so _locToggleSaveFromInfo can find it via _locItemCache.
+  if (typeof _locItemCache !== "undefined" && _locItemCache?.set) {
+    try { _locItemCache.set(it.id, it); } catch {}
+  }
+  if (typeof _locToggleSaveFromInfo === "function") {
+    await _locToggleSaveFromInfo(it.id);
+  }
+  // Reflect new state on the button. _locSavedIds via shared lexical
+  // scope (see openLocPopup comment).
+  const sset = (typeof _locSavedIds !== "undefined") ? _locSavedIds : null;
+  const isSaved = !!(sset && sset.has(it.id));
+  btn.classList.toggle("is-saved", isSaved);
+  btn.textContent = isSaved ? "★" : "☆";
+  btn.title = isSaved ? "Remove from Saved" : "Save";
+}
+window._sdLocPopupToggleSave = _sdLocPopupToggleSave;
+
+// ── Archive.org search popup ────────────────────────────────────────
+//
+// Same shape as the LOC popup, pointed at /api/archive/search (which
+// is filtered to items with MP3 streams the in-app player can handle).
+// Opens from the entity-lookup popup's "Archive" option, without
+// leaving the album modal underneath.
+async function openArchivePopup(query) {
+  const q = String(query || "").trim();
+  if (!q) return;
+  const overlay = document.getElementById("archive-popup-overlay");
+  const loading = document.getElementById("archive-popup-loading");
+  const content = document.getElementById("archive-popup-content");
+  if (!overlay || !content) return;
+  overlay.classList.add("open");
+  if (loading) loading.style.display = "";
+  content.innerHTML = "";
+  if (typeof _sdLockBodyScroll === "function") _sdLockBodyScroll("archive-popup");
+  try {
+    const u = new URL("/api/archive/search", location.origin);
+    u.searchParams.set("q", q);
+    u.searchParams.set("page", "1");
+    u.searchParams.set("rows", "30");
+    const r = await apiFetch(u.pathname + u.search);
+    if (loading) loading.style.display = "none";
+    if (r.status === 429) {
+      const body = await r.json().catch(() => ({}));
+      content.innerHTML = `<div class="wiki-results-error">${escHtml(body?.message || "Too many archive searches — wait a minute.")}</div>`;
+      return;
+    }
+    if (!r.ok) {
+      content.innerHTML = `<div class="wiki-results-error">Archive search failed (HTTP ${r.status}).</div>`;
+      return;
+    }
+    const body = await r.json();
+    const items = Array.isArray(body?.items) ? body.items : [];
+    // Stash for index-based handlers.
+    window._sdArchivePopupItems = items;
+    if (!items.length) {
+      content.innerHTML = `
+        <div class="wiki-header">
+          <h2 style="margin:0 0 0.3rem 0">Archive.org: ${escHtml(q)}</h2>
+        </div>
+        <div class="wiki-results-empty">No playable audio matches for <em>${escHtml(q)}</em>.</div>`;
+      return;
+    }
+    // Sync archive saved-ids so ★ state renders correctly.
+    if (typeof _archiveLoadSavedIds === "function" && window._clerk?.user) {
+      try { _archiveLoadSavedIds(); } catch {}
+    }
+    const rowsHtml = items.map((it, i) => {
+      const safeTitle = escHtml(it.title || it.identifier || "Untitled");
+      const date = it.date ? String(it.date).slice(0, 10) : "";
+      const creator = it.creator || "";
+      const safeMeta = escHtml([date, creator].filter(Boolean).join(" · "));
+      const isSaved = !!(window._archiveSavedIdsHas && window._archiveSavedIdsHas(it.identifier));
+      const safeId = escHtml(it.identifier || "");
+      return `
+        <div class="loc-popup-row" data-id="${safeId}">
+          <div class="loc-popup-row-main">
+            <div class="loc-popup-row-title">${safeTitle}</div>
+            ${safeMeta ? `<div class="loc-popup-row-meta">${safeMeta}</div>` : ""}
+          </div>
+          <div class="loc-popup-row-actions">
+            <button type="button" class="archive-btn archive-save-btn${isSaved ? " is-saved" : ""}" onclick="_sdArchivePopupToggleSave(this,${i})" title="${isSaved ? "Remove from Saved" : "Save"}">${isSaved ? "★" : "☆"}</button>
+            <button type="button" class="archive-btn archive-btn-play" onclick="_sdArchivePopupPlay(${i})" title="Play in the bar">▶ Play</button>
+          </div>
+        </div>`;
+    }).join("");
+    content.innerHTML = `
+      <div class="wiki-header">
+        <h2 style="margin:0 0 0.3rem 0">Archive.org: ${escHtml(q)}</h2>
+        <div class="wiki-popup-subnote">${items.length} result${items.length === 1 ? "" : "s"} · MP3-playable only · plays in the bar without leaving this album.</div>
+      </div>
+      <div class="loc-popup-rows">${rowsHtml}</div>`;
+  } catch (err) {
+    if (loading) loading.style.display = "none";
+    content.innerHTML = `<div class="wiki-results-error">Archive search failed.</div>`;
+  }
+}
+window.openArchivePopup = openArchivePopup;
+
+function closeArchivePopup() {
+  const overlay = document.getElementById("archive-popup-overlay");
+  if (overlay) overlay.classList.remove("open");
+  if (typeof _sdUnlockBodyScroll === "function") _sdUnlockBodyScroll("archive-popup");
+}
+window.closeArchivePopup = closeArchivePopup;
+
+async function _sdArchivePopupPlay(idx) {
+  const items = window._sdArchivePopupItems || [];
+  const it = items[idx];
+  if (!it?.identifier) return;
+  // archive.js handles the lazy stream resolution + queue dispatch.
+  // Fall back to a load-then-call if the helper isn't bound yet
+  // (archive.js is lazy on the search/curated/saved view but the
+  // entity-lookup popup can fire from anywhere).
+  const tryPlay = () => {
+    if (typeof window._archiveResolveMeta !== "function") return false;
+    // Inline the play flow rather than delegating to a search-tab
+    // index that doesn't apply here.
+    Promise.resolve(window._archiveResolveMeta(it.identifier)).then(meta => {
+      if (typeof window._archiveItemsFromMeta !== "function") return;
+      const queueItems = window._archiveItemsFromMeta(meta);
+      if (!queueItems.length) {
+        if (typeof showToast === "function") showToast("This item has no playable audio", "error");
+        return;
+      }
+      if (typeof queueAddAlbumOrPlay === "function") {
+        queueAddAlbumOrPlay(queueItems, { mode: "play" });
+      }
+    }).catch(() => {});
+    return true;
+  };
+  if (tryPlay()) return;
+  // archive.js not loaded yet — load + retry.
+  if (typeof window._sdLoadModule === "function") {
+    try {
+      await window._sdLoadModule("/archive.js");
+      tryPlay();
+    } catch {}
+  }
+}
+window._sdArchivePopupPlay = _sdArchivePopupPlay;
+
+async function _sdArchivePopupToggleSave(btn, idx) {
+  const items = window._sdArchivePopupItems || [];
+  const it = items[idx];
+  if (!it?.identifier) return;
+  if (!window._clerk?.user) {
+    if (typeof showToast === "function") showToast("Sign in to save items", "error");
+    return;
+  }
+  // Lazy-load archive.js if we haven't yet.
+  if (typeof window._archiveToggleSaveById !== "function" && typeof window._sdLoadModule === "function") {
+    try { await window._sdLoadModule("/archive.js"); } catch {}
+  }
+  if (typeof window._archiveToggleSaveById !== "function") {
+    if (typeof showToast === "function") showToast("Couldn't reach archive saver", "error");
+    return;
+  }
+  const newState = await window._archiveToggleSaveById(it.identifier);
+  if (newState != null) {
+    btn.classList.toggle("is-saved", !!newState);
+    btn.textContent = newState ? "★" : "☆";
+    btn.title = newState ? "Remove from Saved" : "Save";
+  }
+}
+window._sdArchivePopupToggleSave = _sdArchivePopupToggleSave;
+
 // localStorage-backed recent-searches list for the wiki SPA page.
 // Keeps last 8 unique queries (most recent first) and rehydrates the
 // <datalist> so the input gets a native autocomplete dropdown — same
