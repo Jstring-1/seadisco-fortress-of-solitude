@@ -3224,7 +3224,7 @@ button.wiki-link-btn:active {
   display: inline-block;
   color: var(--muted);
   text-decoration: none;
-  font-size: 0.7rem;
+  font-size: 0.95rem;
   margin-left: 0.45rem;
   cursor: pointer;
   letter-spacing: 0.02em;
@@ -9133,7 +9133,10 @@ body.is-offline button.offline-disabled {
 #album-info .track,
 #version-info .track {
   display: grid;
-  grid-template-columns: 28px 2.4rem 1fr auto;
+  /* Widened from 28px → 56px to host both ▶ and ＋ side-by-side. The
+     ＋ used to live mid-title-row; moving it adjacent to the play
+     button makes "play / queue" feel like a paired affordance. */
+  grid-template-columns: 56px 2.4rem 1fr auto;
   align-items: baseline;
   gap: 0.5rem;
   padding: 0.25rem 0;
@@ -9141,10 +9144,16 @@ body.is-offline button.offline-disabled {
 .track-play-cell {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  width: 28px;
-  min-width: 28px;
+  justify-content: flex-start;
+  gap: 0.15rem;
+  width: 56px;
+  min-width: 56px;
   height: 1.2rem;
+}
+/* When rendered inside .track-play-cell (next to ▶) the queue add
+   button drops its left margin so the two icons sit flush. */
+.track-play-cell .queue-add-icon {
+  margin-left: 0;
 }
 /* Play arrow — bare ▶ in accent colour, no orange circle background.
    Selectors scoped to album/version popups to outrank the existing
@@ -9585,7 +9594,17 @@ a:focus-visible {
   font-family: inherit;
   white-space: nowrap;
 }
-.lookup-popup-btn:hover { background: rgba(255, 255, 255, 0.08); color: #fff; }
+/* Hover state: accent-tinted dark band + white text. The previous
+   rgba(255,255,255,0.08) was so faint it disappeared against the
+   already-light row text and read as "no feedback at all". The
+   accent tint here is dark enough to give clear contrast against
+   #fff while signaling the row as the active choice. */
+.lookup-popup-btn:hover,
+.lookup-popup-btn:focus-visible {
+  background: rgba(255, 107, 53, 0.22);
+  color: #fff;
+  outline: none;
+}
 /* Icon column has a fixed width so the text labels line up vertically
    regardless of glyph variation (emoji widths differ per OS).
    `overflow:hidden` clips wide emoji to the column so they can't push
