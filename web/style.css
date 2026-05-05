@@ -3261,14 +3261,23 @@ button.wiki-link-btn:active {
   color: var(--fg);
   /* Sized one notch below the main search-form chrome (0.78rem) so
      the home-strip controls read as secondary — they filter an
-     already-loaded grid rather than launching a new search. */
+     already-loaded grid rather than launching a new search.
+     Explicitly override the global input[type="search"] rule that
+     forces height: var(--input-h) (~32px) and a matching line-height,
+     otherwise font + padding shrinks here are steamrolled. */
   font-size: 0.7rem;
-  padding: 0.22rem 0.42rem;
+  height: auto !important;
+  padding: 0.1rem 0.42rem !important;
   outline: none;
   font-family: inherit;
-  line-height: 1.2;
+  line-height: 1.1 !important;
   transition: border-color 0.15s;
   color-scheme: dark;
+  /* `flex: 1` from the global input[type="search"] rule would stretch
+     the search input across whatever flex container it lands in;
+     reset to a fixed-content layout so the explicit width below
+     wins. */
+  flex: 0 0 auto;
 }
 .sd-filter-input { width: 7.5rem; }
 .sd-filter-input:focus,
