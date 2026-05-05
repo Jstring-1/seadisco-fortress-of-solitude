@@ -2620,7 +2620,11 @@ async function _trackYtOpenAlbumSuggest(el) {
   };
   // Clear the per-track context so the popup knows it's in album mode.
   window._sdSuggestForTrack = null;
-  const q = [albumArtist ? `"${albumArtist}"` : "", albumTitle ? `"${albumTitle}"` : ""]
+  // Tail with the literal word "album" so YouTube biases toward full-
+  // album uploads (which is what the missing-tracks flow can actually
+  // chop apart) rather than a single-track music video that happens to
+  // share the title.
+  const q = [albumArtist ? `"${albumArtist}"` : "", albumTitle ? `"${albumTitle}"` : "", "album"]
     .filter(Boolean).join(" ");
   if (typeof window.openYoutubePopup === "function") {
     window.openYoutubePopup(q);
@@ -3506,7 +3510,11 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   // knows what to look up; the click handler ignores it (still pulls
   // artist/title fresh from the popup DOM at click time).
   const _albumFirstArtist = (artists && artists[0]) ? String(artists[0]) : "";
-  const _ytAlbumQ = [_albumFirstArtist ? `"${_albumFirstArtist}"` : "", title ? `"${title}"` : ""]
+  // Keep this in sync with _trackYtOpenAlbumSuggest's query — trailing
+  // "album" biases YouTube toward full-album uploads. The hover-preview
+  // lookup uses this query so what the user sees on hover matches what
+  // the click actually searches.
+  const _ytAlbumQ = [_albumFirstArtist ? `"${_albumFirstArtist}"` : "", title ? `"${title}"` : "", "album"]
     .filter(Boolean).join(" ");
   const albumFindMissingLink = (missingCount >= 1 && window._clerk?.user && hasYtAccess)
     ? ` <a href="#" class="tracklist-find-missing" data-yt-q="${escHtml(_ytAlbumQ)}" onmouseenter="_ytEnrichLastSearched(this)" onclick="event.preventDefault();event.stopPropagation();_trackYtOpenAlbumSuggest(this);return false" title="Search YouTube once for the whole album and assign videos to all missing tracks at once">🎵 ${missingCount} missing</a>`
