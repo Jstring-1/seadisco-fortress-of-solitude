@@ -1247,7 +1247,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260505.1456";
+  const SITE_VERSION = "build 20260505.1547";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -1793,19 +1793,27 @@ function openLookupPopup(ev, scope, label, ctx) {
       _closeLookupPopup();
       try {
         if (b.key === "copy") {
-          // Universal copy-to-clipboard. Prefer the modern async API;
-          // fall back to a hidden textarea + execCommand for older
-          // browsers / non-secure contexts. Toast confirms either way.
+          // Universal copy-to-clipboard. Always copy ONLY the literal
+          // `label` (the entity text the popup was opened for) — never
+          // grab DOM textContent or any neighboring text. Reports of
+          // copy pulling in tracklists / artist context were caused
+          // by the page's text selection state leaking through some
+          // browsers' clipboard write path; defensively snapshot the
+          // string and trim whitespace before writing so what lands
+          // in the user's clipboard is exactly what's shown in the
+          // popup's heading. Shows the snippet in the toast for
+          // visibility.
+          const toCopy = String(label || "").trim();
           const tryToast = (msg, type) => {
             if (typeof showToast === "function") showToast(msg, type);
           };
           (async () => {
             try {
               if (navigator.clipboard?.writeText) {
-                await navigator.clipboard.writeText(label);
+                await navigator.clipboard.writeText(toCopy);
               } else {
                 const ta = document.createElement("textarea");
-                ta.value = label;
+                ta.value = toCopy;
                 ta.style.position = "fixed";
                 ta.style.left = "-1000px";
                 document.body.appendChild(ta);
@@ -1813,7 +1821,8 @@ function openLookupPopup(ev, scope, label, ctx) {
                 document.execCommand("copy");
                 ta.remove();
               }
-              tryToast("Copied to clipboard");
+              const preview = toCopy.length > 40 ? toCopy.slice(0, 40) + "…" : toCopy;
+              tryToast(`Copied: ${preview}`);
             } catch {
               tryToast("Could not copy", "error");
             }
