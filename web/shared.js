@@ -1247,7 +1247,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260505.1400";
+  const SITE_VERSION = "build 20260505.1443";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -1730,6 +1730,11 @@ function openLookupPopup(ev, scope, label, ctx) {
   if (scope === "track" || scope === "artist") {
     internal.push({ key: "loc", icon: "🏛", text: "Library of Congress" });
   }
+  // Archive.org for tracks / artists / releases. Catno / label scopes
+  // skip — Archive's index isn't well-suited to those.
+  if (scope === "track" || scope === "artist" || scope === "release") {
+    internal.push({ key: "archive", icon: "📼", text: "Archive.org" });
+  }
 
   // YouTube is now an IN-APP search — popup overlay so users don't
   // lose context when initiated from an album / version modal.
@@ -1885,11 +1890,24 @@ function openLookupPopup(ev, scope, label, ctx) {
           if (typeof openWikiPopup === "function") openWikiPopup(q);
         }
         else if (b.key === "loc") {
-          if (scope === "track" && typeof locTrackSearch === "function") {
-            locTrackSearch(e, label, trackArtist || "");
-          } else if (typeof _locSearchByName === "function") {
-            _locSearchByName(label);
-          }
+          // Open in a popup overlay so the album / version modal
+          // underneath stays put. Track scope quotes both track +
+          // artist for an exact-phrase combo; broader scopes just
+          // quote the label.
+          const locQ = scope === "track" && trackArtist
+            ? `"${label}" "${trackArtist}"`
+            : `"${label}"`;
+          if (typeof openLocPopup === "function") openLocPopup(locQ);
+        }
+        else if (b.key === "archive") {
+          // Same popup-overlay pattern. archive.org's search supports
+          // the same exact-phrase quoted-string convention LOC does;
+          // wrap in quotes so cross-tagged unrelated items don't
+          // dominate the result list.
+          const archiveQ = scope === "track" && trackArtist
+            ? `"${label}" "${trackArtist}"`
+            : `"${label}"`;
+          if (typeof openArchivePopup === "function") openArchivePopup(archiveQ);
         }
       } catch (err) { console.error("lookup action failed:", err); }
     });
