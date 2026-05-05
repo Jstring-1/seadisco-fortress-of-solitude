@@ -20,7 +20,10 @@
 let _archiveList = null;
 let _archiveLoading = false;
 let _archiveFilter = "";
-let _archiveSort = "title-asc"; // title-asc | title-desc | date-desc | date-asc
+// Default sort: oldest show first. Curated collections are live-show
+// archives where chronological order is the natural way to browse —
+// title sort would have looked alphabetical with no real signal.
+let _archiveSort = "date-asc"; // title-asc | title-desc | date-desc | date-asc
 let _archiveShown = 0;          // how many filtered+sorted rows currently rendered
 const _ARCHIVE_PAGE = 48;       // matches the Recent strip page size
 let _archiveCuratedSlug = "aadamjacobs";  // active curated collection slug
