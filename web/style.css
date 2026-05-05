@@ -4871,6 +4871,10 @@ body.card-mode-wide .card-tracklist {
   overflow: hidden;
   text-overflow: ellipsis;
   font-family: inherit;
+  /* Override the global `button { justify-content: center }` rule —
+     it was centering the flex content even though text-align said
+     left, so saved-search rows looked centered in the dropdown. */
+  justify-content: flex-start !important;
 }
 .ss-item-btn:hover { background: rgba(255,255,255,0.05); color: #fff; }
 .ss-item-del {
