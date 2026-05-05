@@ -804,6 +804,59 @@ function _renderArchiveList() {
   if (showSaved) {
     _archiveLoadSaved();
   }
+  // Mount the bookmark dropdown into the search-row whenever the
+  // search panel is visible. Idempotent — guards on the existing
+  // .saved-search-wrap so the form re-render in this function
+  // doesn't keep re-mounting it.
+  if (showSearch && typeof buildSavedSearchUI === "function" && window._clerk?.user) {
+    const formRow = document.querySelector(".archive-panel-search .loc-form-row");
+    if (formRow && !formRow.querySelector(".saved-search-wrap")) {
+      buildSavedSearchUI(
+        "archive",
+        () => {
+          const out = {};
+          const get = (id, key) => {
+            const v = document.getElementById(id)?.value?.trim();
+            if (v) out[key || id] = v;
+          };
+          get("archive-q",          "q");
+          get("archive-creator",    "creator");
+          get("archive-subject",    "subject");
+          get("archive-collection", "collection");
+          get("archive-year-from",  "yearFrom");
+          get("archive-year-to",    "yearTo");
+          const cat = document.getElementById("archive-category")?.value;
+          if (cat && cat !== "music") out.cat = cat;
+          const sort = document.getElementById("archive-sort-select")?.value;
+          if (sort && sort !== "popularity") out.sort = sort;
+          return out;
+        },
+        (params) => {
+          const setVal = (id, key) => {
+            const el = document.getElementById(id);
+            if (el) el.value = params[key] ?? "";
+          };
+          setVal("archive-q",          "q");
+          setVal("archive-creator",    "creator");
+          setVal("archive-subject",    "subject");
+          setVal("archive-collection", "collection");
+          setVal("archive-year-from",  "yearFrom");
+          setVal("archive-year-to",    "yearTo");
+          const catEl = document.getElementById("archive-category");
+          if (catEl) catEl.value = params.cat || "music";
+          const sortEl = document.getElementById("archive-sort-select");
+          if (sortEl) sortEl.value = params.sort || "popularity";
+          // Submit the form so state + URL update through the same
+          // path the user-driven submit uses.
+          const form = document.querySelector(".archive-panel-search .archive-search-form");
+          if (form && typeof _archiveOnSearchSubmit === "function") {
+            _archiveOnSearchSubmit(form);
+          }
+        },
+        formRow,
+      );
+    }
+  }
 }
 
 // ── Search tab handlers ─────────────────────────────────────────────
