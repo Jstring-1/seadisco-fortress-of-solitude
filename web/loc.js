@@ -1618,13 +1618,26 @@ async function _locPlay(item) {
   if (!isCurrent()) return;
 
   // play() returns a Promise that rejects with AbortError if the element
-  // is paused/re-sourced before it resolves. That's expected during rapid
-  // switching — we only surface NON-abort errors.
+  // is paused/re-sourced before it resolves — expected during rapid
+  // switching. Other rejections fall into a one-shot retry: archive.org
+  // streams are 302-redirected to remote CDN edges (dn7*.ca.archive.org
+  // etc.) and the first play() can fire before the audio element has
+  // resolved the redirect + buffered enough to start. A short wait + retry
+  // catches that case (the previous symptom: "first click fails, second
+  // click works"). Genuine failures still surface via the second catch.
   try {
     await audio.play();
   } catch (err) {
-    if (err?.name !== "AbortError") {
-      showToast?.("Playback failed: " + (err?.message || "unknown"), "error");
+    if (err?.name === "AbortError") return;
+    // Wait ~600ms for the redirect / first chunk to land, then retry.
+    await new Promise(r => setTimeout(r, 600));
+    if (!isCurrent()) return;
+    try {
+      await audio.play();
+    } catch (err2) {
+      if (err2?.name !== "AbortError") {
+        showToast?.("Playback failed: " + (err2?.message || "unknown"), "error");
+      }
     }
   }
 }

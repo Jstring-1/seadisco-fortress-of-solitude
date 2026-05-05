@@ -1323,6 +1323,19 @@ async function queueAddAlbumOrPlay(items, opts) {
   }
   if (mode === "play") {
     await queueAdd(items, { mode: "next" });
+    // queueAdd already did _queueLoad(true) after the POST, so _queue
+    // is fresh in memory. queuePlayHead would normally re-load — that
+    // was a redundant server roundtrip on the user-gesture path,
+    // long enough for slow archive.org CDN-redirected streams to
+    // outrun the browser's autoplay policy window. Play the head
+    // directly from the in-memory cache instead.
+    if (Array.isArray(_queue) && _queue.length > 0) {
+      const head = _queueCurrentPosition != null
+        ? (_queue.find(it => it.position === _queueCurrentPosition) ?? _queue[0])
+        : _queue[0];
+      return _queuePlayItem(head);
+    }
+    // Fallback for the unlikely case _queue didn't repopulate.
     await queuePlayHead();
     return true;
   }
