@@ -161,6 +161,23 @@
       <label>Artist <input type="text" id="f-artist" placeholder="e.g. Miles Davis" oninput="currentArtistId=null" /></label>
       <label>Release <input type="text" id="f-release" placeholder="e.g. Kind of Blue" /></label>
       <label>Label <input type="text" id="f-label" placeholder="e.g. Columbia" /></label>
+      <!-- Hard-to-find + CD-exclude moved up here so the filter row
+           feels packed instead of leaving a wide Label cell next to
+           dead space. The cell has no header text — the toggles
+           label themselves via icon + tooltip. -->
+      <div class="filters-toggles-inline">
+        <label class="f-h2f-inline-label"
+               title="Bias the search toward physical, pre-streaming-era pressings. Empty Format defaults to Vinyl, empty Year to 1900-1985, sort to least-owned first. Cards whose master has no embedded YouTube videos get a 🎵 marker so you can spot contribution opportunities. Filters you set yourself are respected.">
+          <input type="checkbox" id="f-hard2find" onchange="_sdHard2FindChanged(this)" />
+          <span>Hard to find</span>
+        </label>
+        <button type="button" id="f-exclude-cd" class="f-exclude-cd-btn"
+                onclick="_sdToggleExcludeCd(this)"
+                title="Exclude releases whose main format is CD, DVD, SACD, or any digital (File / MP3 / FLAC / streaming)"
+                aria-pressed="false">
+          <span class="f-exclude-cd-glyph">💿</span>
+        </button>
+      </div>
       <label>Format
         <select id="f-format">
           <option value="">All Formats</option>
@@ -219,26 +236,10 @@
         </select>
       </label>
     </div>
-    <!-- "Hard to Find" toggle — biases the search toward physical-format
-         pre-streaming-era masters and badges those without any embedded
-         YouTube videos so users can spot contribution opportunities.
-         When enabled, blank Format and Year fields default to Vinyl /
-         1900-1985; explicit user values are respected. -->
-    <div class="filters-hard2find" style="margin-top:0.45rem;display:flex;align-items:center;gap:0.6rem;font-size:0.78rem;color:var(--muted);flex-wrap:wrap">
-      <label style="display:inline-flex;align-items:center;gap:0.35rem;cursor:pointer"
-             title="Bias the search toward physical, pre-streaming-era pressings. Empty Format defaults to Vinyl, empty Year to 1900-1985, sort to least-owned first. Cards whose master has no embedded YouTube videos get a 🎵 marker so you can spot contribution opportunities. Filters you set yourself are respected.">
-        <input type="checkbox" id="f-hard2find" onchange="_sdHard2FindChanged(this)" />
-        <span>Hard to find</span>
-      </label>
-      <!-- "No CDs" toggle — pure client-side filter on the format array
-           Discogs returns with each search result. Toggle re-filters the
-           cached result set without re-querying. -->
-      <button type="button" id="f-exclude-cd" class="f-exclude-cd-btn"
-              onclick="_sdToggleExcludeCd(this)"
-              title="Exclude releases whose main format is CD, DVD, SACD, or any digital (File / MP3 / FLAC / streaming)"
-              aria-pressed="false">
-        <span class="f-exclude-cd-glyph">💿</span>
-      </button>
+    <!-- Hint row for the "Hard to find" toggle (which now lives up in
+         the filter grid alongside Label). Shown only when the toggle is
+         active — _sdHard2FindChanged in search.js flips display. -->
+    <div class="filters-hard2find" style="margin-top:0.4rem;display:flex;align-items:center;font-size:0.78rem;color:var(--muted)">
       <span id="f-hard2find-hint" style="display:none;font-size:0.72rem;color:var(--muted)">
         Vinyl/Shellac, ≤1985, sorted by least-owned · cards with no YouTube get a 🎵
       </span>

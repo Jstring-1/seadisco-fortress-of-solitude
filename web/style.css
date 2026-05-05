@@ -5358,24 +5358,59 @@ body.card-mode-wide .card-tracklist {
   color-scheme: dark;
 }
 
-/* Main search: row 1 has 3 wide fields (Artist, Release, Label),
-   row 2 has 5 short fields (Format, Year, Country, Genre, Style).
-   We use a 15-col grid (LCM of 3 and 5) so each row divides evenly:
-   row-1 children span 5, row-2 children span 3. */
+/* Main search: row 1 has Artist (5), Release (5), Label (3),
+   and a Hard-to-find / no-CDs toggle cluster (2). Row 2 has 5
+   short fields each spanning 3. 15-col grid so 5+5+3+2 and 3+3+3+3+3
+   both divide evenly. .filters-toggles-inline is the toggle cluster
+   on row 1; row-2 labels (nth-child >= 5) span 3. */
 .main-filters { grid-template-columns: repeat(15, 1fr); }
-.main-filters > label:nth-child(-n+3) { grid-column: span 5; }
-.main-filters > label:nth-child(n+4)  { grid-column: span 3; }
+.main-filters > label:nth-child(1),
+.main-filters > label:nth-child(2)            { grid-column: span 5; }
+.main-filters > label:nth-child(3)            { grid-column: span 3; }
+.main-filters > .filters-toggles-inline       { grid-column: span 2; }
+.main-filters > label:nth-child(n+5)          { grid-column: span 3; }
+/* Toggle cluster: aligns to the bottom of the row so the controls sit
+   on the same baseline as the Label input below its caption. Compact
+   horizontal layout with a small gap between the checkbox and the CD
+   button. */
+.filters-toggles-inline {
+  display: inline-flex;
+  align-items: end;
+  justify-content: flex-start;
+  gap: 0.5rem;
+  padding-bottom: 0.15rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  /* Match the line-height of sibling label inputs so the bottom edge
+     lines up with the inputs in row 1 instead of floating above. */
+  min-height: calc(0.75rem + 0.35rem + 1.7rem);
+}
+.f-h2f-inline-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
 /* Collection: 3 columns on desktop */
 .cw-filters { grid-template-columns: repeat(3, 1fr); }
 
 /* ── Mobile: 2-col grid layouts for filter forms ── */
 @media (max-width: 640px) {
-  /* Main search: 2 cols on mobile — natural flow gives
-     Artist/Release, Label/Format, Year/Country, Genre/Style.
-     Reset desktop's nth-child span rules so each label takes one slot. */
+  /* Main search: 2 cols on mobile — reset every desktop span so each
+     cell (label OR toggle cluster) takes one column. The toggle
+     cluster spans BOTH columns on mobile so the checkbox + CD button
+     get full width without crowding the Label input next to them. */
   .main-filters { grid-template-columns: repeat(2, 1fr); }
-  .main-filters > label:nth-child(-n+3),
-  .main-filters > label:nth-child(n+4) { grid-column: auto; }
+  .main-filters > label:nth-child(1),
+  .main-filters > label:nth-child(2),
+  .main-filters > label:nth-child(3),
+  .main-filters > label:nth-child(n+5) { grid-column: auto; }
+  .main-filters > .filters-toggles-inline {
+    grid-column: 1 / -1;
+    min-height: 0;
+    padding-top: 0.1rem;
+  }
 
   /* Collection: 6-col grid for flexible row sizing */
   .cw-filters {
