@@ -1047,7 +1047,16 @@ function _locUpdateQueueButtons() {
   if (info) info.disabled = !baseId;
   if (save) {
     save.disabled = !baseId;
-    const isSaved = !!(baseId && _locSavedIds?.has(baseId));
+    // Check the right saved-set per item kind: archive items (bare-slug
+    // ids) live in _archiveSavedIds; LOC items (URL ids) live in
+    // _locSavedIds. Without this branch, archive items would always
+    // show ☆ on the bar even when they're saved.
+    const isArchiveId = baseId && !/^https?:\/\//i.test(baseId);
+    const isSaved = !!(baseId && (
+      isArchiveId
+        ? window._archiveSavedIdsHas?.(baseId)
+        : _locSavedIds?.has(baseId)
+    ));
     save.classList.toggle("is-saved", isSaved);
     save.textContent = isSaved ? "★" : "☆";
     save.title = isSaved ? "Remove from Saved" : "Save this item";
@@ -1117,12 +1126,24 @@ function _locOpenFromBar() {
   _locOpenInfoPopup(id);
 }
 
-// Bar button: toggle save for whatever is playing.
+// Bar button: toggle save for whatever is playing. Two engines share
+// the bar — LOC and archive.org — and they save to different
+// endpoints (/api/user/loc-saves vs /api/user/archive-saves). Detect
+// which kind of item is playing by id shape (LOC ids are http(s) URLs,
+// archive identifiers are bare slugs) and route accordingly.
 async function _locToggleSaveFromBar() {
   const id = _locCurrentBarItemId();
   if (!id) return;
-  // Reuse the popup save path — it already handles the full item cache
-  // lookup, payload construction, and state sync across card + popup.
+  if (!/^https?:\/\//i.test(id)) {
+    // Archive item — delegate to archive.js's by-id save helper.
+    if (typeof window._archiveToggleSaveById === "function") {
+      await window._archiveToggleSaveById(id);
+      // Reflect new save state on the bar's ★ button.
+      _locUpdateQueueButtons();
+    }
+    return;
+  }
+  // LOC item — reuse the popup save path.
   await _locToggleSaveFromInfo(id);
   _locUpdateQueueButtons();
 }
