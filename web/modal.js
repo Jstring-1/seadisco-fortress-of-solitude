@@ -1249,6 +1249,11 @@ async function runWikiPageSearch(query) {
   resultsEl.dataset.offset = "0";
   // Save to recents + refresh the datalist for native autocomplete.
   _pushWikiRecent(q);
+  // Also feed the unified focus-dropdown saved-search history so
+  // wiki-view-q matches the cross-page UX of every other search input.
+  if (typeof saveSearchHistory === "function") {
+    try { saveSearchHistory("wikipedia"); } catch {}
+  }
   // Reflect the query in the URL. pushState (vs replaceState) so each
   // search becomes a back-button entry — typing a new search and then
   // hitting back returns to the previous wiki search list.

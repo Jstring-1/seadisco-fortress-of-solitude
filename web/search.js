@@ -2525,6 +2525,26 @@ function saveSearchHistory(context) {
     _shAdd("cw-label",   document.getElementById("cw-label")?.value);
     _shAdd("cw-year",    document.getElementById("cw-year")?.value);
     _shAdd("cw-notes",   document.getElementById("cw-notes")?.value);
+  } else if (context === "archive") {
+    _shAdd("archive-q",          document.getElementById("archive-q")?.value);
+    _shAdd("archive-creator",    document.getElementById("archive-creator")?.value);
+    _shAdd("archive-subject",    document.getElementById("archive-subject")?.value);
+    _shAdd("archive-collection", document.getElementById("archive-collection")?.value);
+    _shAdd("archive-year-from",  document.getElementById("archive-year-from")?.value);
+    _shAdd("archive-year-to",    document.getElementById("archive-year-to")?.value);
+  } else if (context === "loc") {
+    _shAdd("loc-q",            document.getElementById("loc-q")?.value);
+    _shAdd("loc-contributor",  document.getElementById("loc-contributor")?.value);
+    _shAdd("loc-subject",      document.getElementById("loc-subject")?.value);
+    _shAdd("loc-location",     document.getElementById("loc-location")?.value);
+    _shAdd("loc-language",     document.getElementById("loc-language")?.value);
+    _shAdd("loc-partof",       document.getElementById("loc-partof")?.value);
+    _shAdd("loc-start-date",   document.getElementById("loc-start-date")?.value);
+    _shAdd("loc-end-date",     document.getElementById("loc-end-date")?.value);
+  } else if (context === "youtube") {
+    _shAdd("youtube-view-q",   document.getElementById("youtube-view-q")?.value);
+  } else if (context === "wikipedia") {
+    _shAdd("wiki-view-q",      document.getElementById("wiki-view-q")?.value);
   }
 }
 
@@ -2581,17 +2601,40 @@ function _shHide() {
   document.getElementById("sh-dropdown")?.remove();
 }
 
-const _shFieldIds = [
+// Field IDs that participate in the saved-search dropdown. The set
+// includes IDs that are dynamically rendered (LOC + archive search
+// forms build their inputs at view-init time, not in index.html), so
+// _shInit uses event delegation instead of per-element listeners —
+// new inputs with these ids work the moment they appear in the DOM.
+const _shFieldIds = new Set([
+  // Main Discogs search
   "query", "f-artist", "f-release", "f-label", "f-year", "f-country",
+  // Collection / wantlist search
   "cw-query", "cw-artist", "cw-release", "cw-label", "cw-year", "cw-notes",
-];
+  // Archive.org search (filter panel)
+  "archive-q", "archive-creator", "archive-subject", "archive-collection",
+  "archive-year-from", "archive-year-to",
+  // Library of Congress search
+  "loc-q", "loc-contributor", "loc-subject", "loc-location", "loc-language",
+  "loc-partof", "loc-start-date", "loc-end-date",
+  // YouTube view + Wikipedia view (single q each)
+  "youtube-view-q", "wiki-view-q",
+]);
 
 function _shInit() {
-  _shFieldIds.forEach(id => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener("focus", () => _shShow(el));
-    el.addEventListener("input", () => _shHide());
+  // Event delegation: focusin bubbles unlike focus, so we can attach
+  // a single handler at document level and react to whichever
+  // tracked input the user lands on. Same for input (which also
+  // bubbles) — typing in any tracked field hides the dropdown.
+  document.addEventListener("focusin", (e) => {
+    const el = e.target;
+    if (!el || el.tagName !== "INPUT") return;
+    if (!_shFieldIds.has(el.id)) return;
+    _shShow(el);
+  });
+  document.addEventListener("input", (e) => {
+    const el = e.target;
+    if (el && _shFieldIds.has(el.id)) _shHide();
   });
   document.addEventListener("mousedown", (e) => {
     // Dismiss when the click target is outside the dropdown AND

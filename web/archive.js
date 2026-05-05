@@ -47,8 +47,27 @@ let _archiveSearchSubject  = "";
 let _archiveSearchCollection = "";
 let _archiveSearchYearFrom = "";
 let _archiveSearchYearTo   = "";
-let _archiveSearchExcludePodcasts = true;  // default on per spec
-let _archiveSearchFiltersOpen = false;     // collapsible filter panel
+// Category dropdown — replaces the old "Exclude podcasts" checkbox
+// with a richer category picker. Each option maps to either a
+// collection slug (constrains search to that audio sub-collection) or
+// "music" (the default — includes audio.org's broader audio set
+// while excluding the podcast feed).
+let _archiveSearchCategory = "music";
+const _ARCHIVE_CATEGORY_OPTIONS = [
+  ["music",          "Music (excludes podcasts)"],
+  ["all",            "All audio"],
+  ["etree",          "Live music recordings"],
+  ["audio_music",    "Community-contributed music"],
+  ["78rpm",          "78 RPMs & cylinder recordings"],
+  ["librivoxaudio",  "LibriVox audiobooks"],
+  ["audio_bookspoetry", "Audiobooks & poetry"],
+  ["audio_religion", "Religion"],
+  ["audio_news",     "News & public affairs"],
+  ["audio_tech",     "Computers, technology, science"],
+  ["audio_foreign",  "Non-English audio"],
+  ["audio_podcast",  "Podcasts only"],
+  ["radioprograms",  "Old-time radio programs"],
+];
 
 // ── Tab + saves state ────────────────────────────────────────────────
 let _archiveTab = "search";        // "search" | "curated" | "saved"
@@ -91,7 +110,7 @@ async function initArchiveView(forceRefresh = false) {
       _archiveSearchCollection = qs.get("col2")       || "";
       _archiveSearchYearFrom   = qs.get("yf")         || "";
       _archiveSearchYearTo     = qs.get("yt")         || "";
-      _archiveSearchExcludePodcasts = qs.get("ep") !== "0";
+      _archiveSearchCategory   = qs.get("cat")        || "music";
     }
   } catch {}
 
@@ -699,17 +718,26 @@ function _renderArchiveList() {
     </div>
 
     <div class="archive-panel archive-panel-search" style="display:${showSearch ? "" : "none"}">
-      <form class="archive-search-form" onsubmit="event.preventDefault();_archiveOnSearchSubmit(this)">
-        <input type="search" id="archive-q" name="q" class="archive-search-input" placeholder="Search audio on archive.org" autocomplete="off" value="${searchQ}" />
-        <button type="submit" class="archive-search-btn">Search</button>
-        <button type="button" class="archive-search-curated-btn" onclick="_archiveSwitchTab('curated')" title="Browse our featured curated collections">Curated</button>
-        <button type="button" class="archive-search-filters-toggle" onclick="_archiveToggleFilters()" title="Show / hide additional filters">${_archiveSearchFiltersOpen ? "▾" : "▸"} Filters</button>
-      </form>
-      <div class="archive-search-filters" style="display:${_archiveSearchFiltersOpen ? "" : "none"}">
-        <div class="archive-search-filter-grid">
-          <label class="archive-search-filter">
-            <span>Sort</span>
-            <select id="archive-sort-select" class="archive-curated-select">
+      <form class="loc-form archive-search-form" onsubmit="event.preventDefault();_archiveOnSearchSubmit(this)">
+        <div class="loc-form-row">
+          <input type="search" id="archive-q" name="q" placeholder="Search audio on archive.org" autocomplete="off" value="${searchQ}" />
+          <button type="submit" class="loc-submit">Search</button>
+        </div>
+        <div class="loc-form-grid">
+          <label><span>Creator</span><input type="text" id="archive-creator" placeholder="e.g. Grateful Dead" value="${escHtml(_archiveSearchCreator)}" /></label>
+          <label><span>Subject / genre</span><input type="text" id="archive-subject" placeholder="e.g. Jazz, Live, Folk" value="${escHtml(_archiveSearchSubject)}" /></label>
+          <label><span>Collection</span><input type="text" id="archive-collection" placeholder="e.g. etree, audio_music" value="${escHtml(_archiveSearchCollection)}" /></label>
+          <label><span>Category</span>
+            <select id="archive-category">
+              ${_ARCHIVE_CATEGORY_OPTIONS.map(([val, label]) =>
+                `<option value="${escHtml(val)}"${val === _archiveSearchCategory ? " selected" : ""}>${escHtml(label)}</option>`
+              ).join("")}
+            </select>
+          </label>
+          <label><span>Year from</span><input type="text" id="archive-year-from" placeholder="1950" inputmode="numeric" maxlength="4" value="${escHtml(_archiveSearchYearFrom)}" /></label>
+          <label><span>Year to</span><input type="text" id="archive-year-to" placeholder="1985" inputmode="numeric" maxlength="4" value="${escHtml(_archiveSearchYearTo)}" /></label>
+          <label class="loc-form-split"><span>Sort</span>
+            <select id="archive-sort-select">
               <option value="popularity"${_archiveSearchSort === "popularity" ? " selected" : ""}>Most popular</option>
               <option value="newest"${_archiveSearchSort === "newest" ? " selected" : ""}>Newest upload</option>
               <option value="oldest"${_archiveSearchSort === "oldest" ? " selected" : ""}>Oldest upload</option>
@@ -720,32 +748,8 @@ function _renderArchiveList() {
               <option value="rated"${_archiveSearchSort === "rated" ? " selected" : ""}>Highest rated</option>
             </select>
           </label>
-          <label class="archive-search-filter">
-            <span>Creator</span>
-            <input type="text" id="archive-creator" placeholder="e.g. Grateful Dead" value="${escHtml(_archiveSearchCreator)}" />
-          </label>
-          <label class="archive-search-filter">
-            <span>Subject / genre</span>
-            <input type="text" id="archive-subject" placeholder="e.g. Jazz, Live, Folk" value="${escHtml(_archiveSearchSubject)}" />
-          </label>
-          <label class="archive-search-filter">
-            <span>Collection</span>
-            <input type="text" id="archive-collection" placeholder="e.g. etree, audio_music" value="${escHtml(_archiveSearchCollection)}" />
-          </label>
-          <label class="archive-search-filter archive-search-filter-narrow">
-            <span>Year from</span>
-            <input type="text" id="archive-year-from" placeholder="1950" inputmode="numeric" maxlength="4" value="${escHtml(_archiveSearchYearFrom)}" />
-          </label>
-          <label class="archive-search-filter archive-search-filter-narrow">
-            <span>Year to</span>
-            <input type="text" id="archive-year-to" placeholder="1985" inputmode="numeric" maxlength="4" value="${escHtml(_archiveSearchYearTo)}" />
-          </label>
-          <label class="archive-search-filter archive-search-filter-checkbox" title="Hides items in the audio_podcast collection — usually what you want when browsing for music.">
-            <input type="checkbox" id="archive-exclude-podcasts"${_archiveSearchExcludePodcasts ? " checked" : ""} />
-            <span>Exclude podcasts</span>
-          </label>
         </div>
-      </div>
+      </form>
       <div class="archive-meta-bar archive-meta-bar-search">
         <span class="archive-meta-count" id="archive-search-count">${searchMeta}</span>
       </div>
@@ -818,8 +822,8 @@ function _archiveOnSearchSubmit(form) {
   _archiveSearchYearTo      = get("archive-year-to");
   const sortSel = document.getElementById("archive-sort-select");
   if (sortSel) _archiveSearchSort = sortSel.value || "popularity";
-  const epEl = document.getElementById("archive-exclude-podcasts");
-  if (epEl) _archiveSearchExcludePodcasts = !!epEl.checked;
+  const catSel = document.getElementById("archive-category");
+  if (catSel) _archiveSearchCategory = catSel.value || "music";
   _archiveSearchPage = 1;
   // Reflect every populated filter in the URL so a shared link
   // round-trips the same search.
@@ -838,8 +842,9 @@ function _archiveOnSearchSubmit(form) {
     setOrDel("yt",      _archiveSearchYearTo);
     if (_archiveSearchSort && _archiveSearchSort !== "popularity") qs.set("sort", _archiveSearchSort);
     else qs.delete("sort");
-    if (!_archiveSearchExcludePodcasts) qs.set("ep", "0");
-    else qs.delete("ep");
+    if (_archiveSearchCategory && _archiveSearchCategory !== "music") qs.set("cat", _archiveSearchCategory);
+    else qs.delete("cat");
+    qs.delete("ep");  // legacy param from the old Exclude-Podcasts checkbox
     const next = "/?" + qs.toString();
     if (location.pathname + location.search !== next) {
       history.pushState({}, "", next);
@@ -854,16 +859,16 @@ function _archiveOnSearchSubmit(form) {
     _renderArchiveList();
     return;
   }
+  // Auto-save every populated input into the per-field history so
+  // the focus-dropdown surfaces past values on the next visit.
+  if (typeof saveSearchHistory === "function") {
+    try { saveSearchHistory("archive"); } catch {}
+  }
   _archiveDoSearch().catch(() => {});
 }
 window._archiveOnSearchSubmit = _archiveOnSearchSubmit;
 
-// Toggle handler for the collapsible filter panel.
-function _archiveToggleFilters() {
-  _archiveSearchFiltersOpen = !_archiveSearchFiltersOpen;
-  _renderArchiveList();
-}
-window._archiveToggleFilters = _archiveToggleFilters;
+// (Filter-panel toggle retired — filters are always visible now.)
 
 async function _archiveDoSearch() {
   // A search is meaningful as long as ANY filter is set — q is no
@@ -889,7 +894,20 @@ async function _archiveDoSearch() {
     if (_archiveSearchYearFrom)   u.searchParams.set("yearFrom", _archiveSearchYearFrom);
     if (_archiveSearchYearTo)     u.searchParams.set("yearTo", _archiveSearchYearTo);
     u.searchParams.set("sort", _archiveSearchSort);
-    u.searchParams.set("excludePodcasts", _archiveSearchExcludePodcasts ? "1" : "0");
+    // Category dropdown → server params:
+    //   "music"  → all audio with -collection:audio_podcast (default)
+    //   "all"    → no extra constraint (podcasts allowed)
+    //   anything else → constrain to that collection (overrides any
+    //                   freeform collection text input).
+    const cat = _archiveSearchCategory || "music";
+    if (cat === "music") {
+      u.searchParams.set("excludePodcasts", "1");
+    } else if (cat === "all") {
+      u.searchParams.set("excludePodcasts", "0");
+    } else {
+      u.searchParams.set("excludePodcasts", "0");
+      u.searchParams.set("collection", cat);
+    }
     u.searchParams.set("page", String(_archiveSearchPage));
     u.searchParams.set("rows", String(_archiveSearchRows));
     const r = await apiFetch(u.pathname + u.search);
