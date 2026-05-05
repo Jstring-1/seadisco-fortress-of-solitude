@@ -3267,6 +3267,11 @@ button.wiki-link-btn:active {
      otherwise font + padding shrinks here are steamrolled. */
   font-size: 0.7rem;
   height: auto !important;
+  /* The global `select` rule sets min-height: var(--input-h) (~32px),
+     which kept the dropdowns tall even after height/padding shrunk.
+     Reset min-height so the select collapses to its content height
+     like the input does. */
+  min-height: 0 !important;
   padding: 0.1rem 0.42rem !important;
   outline: none;
   font-family: inherit;
