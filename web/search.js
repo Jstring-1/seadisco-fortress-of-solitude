@@ -173,7 +173,8 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
   // pre-streaming-era masters that are likely to need YT contributions.
   // Only fills in defaults the user hasn't explicitly set; an explicit
   // Format / Year / Sort always wins.
-  const hard2find = !!document.getElementById("f-hard2find")?.checked;
+  const hard2find = (typeof _sdHard2FindActive === "function") ? _sdHard2FindActive()
+    : (document.getElementById("f-hard2find")?.getAttribute("aria-pressed") === "true");
   let yearForSearch = year;
   if (hard2find) {
     if (!format) format = "Vinyl";
@@ -670,17 +671,27 @@ function renderResults(items, append = false) {
   // "Hard to Find" mode — decorate cards that have no embedded YT
   // videos with a small purple 🎵 badge so users can spot contribution
   // opportunities. No-op when the toggle isn't on.
-  if (document.getElementById("f-hard2find")?.checked) {
+  if (typeof _sdHard2FindActive === "function" && _sdHard2FindActive()) {
     _sdDecorateNoVideoCards(filtered);
   }
 }
 
 // ── "Hard to Find" toggle UX ─────────────────────────────────────────
-// Show/hide the helper hint text when the toggle flips. Doesn't auto-
-// re-run the search — the user still hits the search button.
-function _sdHard2FindChanged(cb) {
+// Now a button (parallel to the 💿 CD-exclude). aria-pressed holds the
+// state so other call sites (search builder + post-search YT badge
+// pass) can read it without depending on a hidden checkbox. Doesn't
+// auto-re-run the search — the user still hits the search button.
+function _sdHard2FindActive() {
+  const btn = document.getElementById("f-hard2find");
+  return !!btn && btn.getAttribute("aria-pressed") === "true";
+}
+window._sdHard2FindActive = _sdHard2FindActive;
+function _sdHard2FindChanged(btn) {
+  const next = btn.getAttribute("aria-pressed") !== "true";
+  btn.setAttribute("aria-pressed", next ? "true" : "false");
+  btn.classList.toggle("active", next);
   const hint = document.getElementById("f-hard2find-hint");
-  if (hint) hint.style.display = cb.checked ? "" : "none";
+  if (hint) hint.style.display = next ? "" : "none";
 }
 window._sdHard2FindChanged = _sdHard2FindChanged;
 

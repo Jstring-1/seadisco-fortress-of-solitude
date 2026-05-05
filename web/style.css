@@ -5385,13 +5385,6 @@ body.card-mode-wide .card-tracklist {
      lines up with the inputs in row 1 instead of floating above. */
   min-height: calc(0.75rem + 0.35rem + 1.7rem);
 }
-.f-h2f-inline-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  cursor: pointer;
-  white-space: nowrap;
-}
 /* Collection: 3 columns on desktop */
 .cw-filters { grid-template-columns: repeat(3, 1fr); }
 
@@ -7904,6 +7897,41 @@ body.is-offline button.offline-disabled {
   border-color: rgba(255, 80, 80, 0.55);
 }
 .f-exclude-cd-btn.active::after { opacity: 1; }
+
+/* "Hard to Find" toggle — same circular button shape as the CD-exclude
+   above, but uses a 💎 glyph and accent-orange active state so the
+   two filters read as a deliberate pair without looking identical.
+   No strike overlay — it's a positive bias, not an exclusion. */
+.f-hard2find-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.95rem;
+  line-height: 1;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.f-hard2find-btn:hover { transform: scale(1.06); }
+.f-hard2find-btn .f-hard2find-glyph {
+  filter: grayscale(0.4);
+  font-size: 0.95rem;
+  line-height: 1;
+  display: inline-block;
+  transition: filter 0.15s;
+}
+.f-hard2find-btn.active {
+  background: rgba(255, 107, 53, 0.14);
+  border-color: rgba(255, 107, 53, 0.55);
+}
+.f-hard2find-btn.active .f-hard2find-glyph { filter: grayscale(0); }
 
 /* "Hard to Find" search-mode badge — decorates result cards whose
    master/release has no embedded YouTube videos, signaling a place

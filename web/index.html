@@ -166,11 +166,16 @@
            dead space. The cell has no header text — the toggles
            label themselves via icon + tooltip. -->
       <div class="filters-toggles-inline">
-        <label class="f-h2f-inline-label"
-               title="Bias the search toward physical, pre-streaming-era pressings. Empty Format defaults to Vinyl, empty Year to 1900-1985, sort to least-owned first. Cards whose master has no embedded YouTube videos get a 🎵 marker so you can spot contribution opportunities. Filters you set yourself are respected.">
-          <input type="checkbox" id="f-hard2find" onchange="_sdHard2FindChanged(this)" />
-          <span>Hard to find</span>
-        </label>
+        <!-- Hard-to-find toggle, styled as a 💎 button (parallel to the
+             💿 CD-exclude button next to it). Active state pulses the
+             accent color so the two filters read as a pair. State is
+             stored on aria-pressed; _sdHard2FindActive() reads it. -->
+        <button type="button" id="f-hard2find" class="f-hard2find-btn"
+                onclick="_sdHard2FindChanged(this)"
+                title="Hard to find: bias the search toward physical, pre-streaming-era pressings. Empty Format defaults to Vinyl, empty Year to 1900-1985, sort to least-owned first. Cards whose master has no embedded YouTube videos get a 🎵 marker so you can spot contribution opportunities. Filters you set yourself are respected."
+                aria-pressed="false">
+          <span class="f-hard2find-glyph">💎</span>
+        </button>
         <button type="button" id="f-exclude-cd" class="f-exclude-cd-btn"
                 onclick="_sdToggleExcludeCd(this)"
                 title="Exclude releases whose main format is CD, DVD, SACD, or any digital (File / MP3 / FLAC / streaming)"
