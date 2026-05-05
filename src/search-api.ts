@@ -3721,7 +3721,19 @@ app.get("/api/archive/search", async (req, res) => {
   if (qRaw)      parts.push(`(${qRaw})`);
   if (creator)   parts.push(`creator:"${creator.replace(/"/g, "")}"`);
   if (subject)   parts.push(`subject:"${subject.replace(/"/g, "")}"`);
-  if (collection) parts.push(`collection:"${collection.replace(/"/g, "")}"`);
+  if (collection) {
+    // Accept either a single slug or a comma-separated list. The
+    // client uses the comma-list to pass a "union of music
+    // collections" set when the Category dropdown's broader entries
+    // are selected (e.g. audio_music,etree,78rpm,opensource_audio).
+    // Strip quotes defensively, then OR them together.
+    const slugs = collection.split(",").map(s => s.trim().replace(/"/g, "")).filter(Boolean);
+    if (slugs.length === 1) {
+      parts.push(`collection:"${slugs[0]}"`);
+    } else if (slugs.length > 1) {
+      parts.push(`collection:(${slugs.map(s => `"${s}"`).join(" OR ")})`);
+    }
+  }
   if (yearFrom || yearTo) {
     const lo = yearFrom || "1800";
     const hi = yearTo   || new Date().getFullYear().toString();
