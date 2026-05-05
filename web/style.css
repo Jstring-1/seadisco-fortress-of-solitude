@@ -8891,7 +8891,9 @@ body.is-offline button.offline-disabled {
 }
 
 /* ── Wikipedia popup (stacks above other modals) ─────────────────────── */
-#wiki-overlay {
+#wiki-overlay,
+#loc-popup-overlay,
+#archive-popup-overlay {
   display: none;
   position: fixed;
   inset: 0;
@@ -8901,7 +8903,55 @@ body.is-offline button.offline-disabled {
   justify-content: center;
   padding: 1rem;
 }
-#wiki-overlay.open { display: flex; }
+#wiki-overlay.open,
+#loc-popup-overlay.open,
+#archive-popup-overlay.open { display: flex; }
+#loc-popup-box,
+#archive-popup-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius);
+  max-width: 760px;
+  width: 100%;
+  max-height: 86vh;
+  overflow-y: auto;
+  position: relative;
+  padding: 1.25rem 1.4rem 1.4rem;
+}
+/* Result rows for the LOC + Archive lookup popups. Same compact
+   row layout: title + secondary line, action buttons on the right. */
+.loc-popup-rows { display: flex; flex-direction: column; gap: 0.45rem; }
+.loc-popup-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: rgba(255,255,255,0.02);
+}
+.loc-popup-row-main { flex: 1; min-width: 0; }
+.loc-popup-row-title {
+  font-size: 0.86rem;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.loc-popup-row-meta {
+  font-size: 0.74rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.loc-popup-row-actions {
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
 
 #wiki-box {
   background: var(--surface);
