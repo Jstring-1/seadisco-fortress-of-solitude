@@ -1241,7 +1241,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260504.2208";
+  const SITE_VERSION = "build 20260504.2209";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -1695,10 +1695,12 @@ function openLookupPopup(ev, scope, label, ctx) {
     : (trackArtist ? `${trackArtist} ${label}` : label);
   const dcUrl = `https://www.discogs.com/search?q=${encodeURIComponent(dcQ)}&type=all`;
 
-  // In-app group — universal "copy to clipboard" first, then the
-  // scope-appropriate search options.
+  // In-app group — primary actions first (search across our integrated
+  // sources), then "Copy to clipboard" as a quiet fallback at the bottom.
+  // Copy used to be at the top; demoted because it's the least-clicked
+  // option in everyday use and the visual primary slot is better spent
+  // on the most-used SeaDisco / Wikipedia / YouTube entries.
   const internal = [];
-  internal.push({ key: "copy", icon: "⎘", text: "Copy to clipboard" });
   // SeaDisco / collection use the same line-art SVGs as the navbar so
   // the popup feels like an extension of the nav. Wrapped in a span
   // tagged `lookup-popup-icon-svg` so CSS forces white stroke (the
@@ -1728,6 +1730,8 @@ function openLookupPopup(ev, scope, label, ctx) {
   if (scope !== "catno") {
     internal.push({ key: "ytapp", icon: "▶", text: "YouTube", _ytQ: ytQ });
   }
+  // Copy to clipboard sits last — universal across every scope.
+  internal.push({ key: "copy", icon: "⎘", text: "Copy to clipboard" });
   // External Discogs.com link removed — internal SeaDisco search
   // covers the same ground without leaving the site.
   const external = [];
