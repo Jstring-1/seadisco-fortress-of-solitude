@@ -119,7 +119,9 @@ html { overflow-x: hidden; }
   .type-radios     { order: 1; flex-basis: 100%; justify-content: center; gap: 0.3rem; flex-wrap: wrap; }
   #advanced-toggle { order: 10; }
   .sort-label      { order: 10; }
-  #hide-owned-label { order: 10; font-size: 0.72rem; }
+  #hide-owned     { order: 10; }
+  .f-hard2find-btn { order: 10; }
+  .f-exclude-cd-btn { order: 10; }
   #clear-btn       { order: 10; }
   .type-radios label { font-size: 0.72rem; }
 
@@ -5358,52 +5360,24 @@ body.card-mode-wide .card-tracklist {
   color-scheme: dark;
 }
 
-/* Main search: row 1 has Artist (5), Release (5), Label (3),
-   and a Hard-to-find / no-CDs toggle cluster (2). Row 2 has 5
-   short fields each spanning 3. 15-col grid so 5+5+3+2 and 3+3+3+3+3
-   both divide evenly. .filters-toggles-inline is the toggle cluster
-   on row 1; row-2 labels (nth-child >= 5) span 3. */
+/* Main search: row 1 has 3 wide fields (Artist, Release, Label),
+   row 2 has 5 short fields (Format, Year, Country, Genre, Style).
+   We use a 15-col grid (LCM of 3 and 5) so each row divides evenly:
+   row-1 children span 5, row-2 children span 3. */
 .main-filters { grid-template-columns: repeat(15, 1fr); }
-.main-filters > label:nth-child(1),
-.main-filters > label:nth-child(2)            { grid-column: span 5; }
-.main-filters > label:nth-child(3)            { grid-column: span 3; }
-.main-filters > .filters-toggles-inline       { grid-column: span 2; }
-.main-filters > label:nth-child(n+5)          { grid-column: span 3; }
-/* Toggle cluster: aligns to the bottom of the row so the controls sit
-   on the same baseline as the Label input below its caption. Compact
-   horizontal layout with a small gap between the checkbox and the CD
-   button. */
-.filters-toggles-inline {
-  display: inline-flex;
-  align-items: end;
-  justify-content: flex-start;
-  gap: 0.5rem;
-  padding-bottom: 0.15rem;
-  font-size: 0.78rem;
-  color: var(--muted);
-  /* Match the line-height of sibling label inputs so the bottom edge
-     lines up with the inputs in row 1 instead of floating above. */
-  min-height: calc(0.75rem + 0.35rem + 1.7rem);
-}
+.main-filters > label:nth-child(-n+3) { grid-column: span 5; }
+.main-filters > label:nth-child(n+4)  { grid-column: span 3; }
 /* Collection: 3 columns on desktop */
 .cw-filters { grid-template-columns: repeat(3, 1fr); }
 
 /* ── Mobile: 2-col grid layouts for filter forms ── */
 @media (max-width: 640px) {
-  /* Main search: 2 cols on mobile — reset every desktop span so each
-     cell (label OR toggle cluster) takes one column. The toggle
-     cluster spans BOTH columns on mobile so the checkbox + CD button
-     get full width without crowding the Label input next to them. */
+  /* Main search: 2 cols on mobile — natural flow gives
+     Artist/Release, Label/Format, Year/Country, Genre/Style.
+     Reset desktop's nth-child span rules so each label takes one slot. */
   .main-filters { grid-template-columns: repeat(2, 1fr); }
-  .main-filters > label:nth-child(1),
-  .main-filters > label:nth-child(2),
-  .main-filters > label:nth-child(3),
-  .main-filters > label:nth-child(n+5) { grid-column: auto; }
-  .main-filters > .filters-toggles-inline {
-    grid-column: 1 / -1;
-    min-height: 0;
-    padding-top: 0.1rem;
-  }
+  .main-filters > label:nth-child(-n+3),
+  .main-filters > label:nth-child(n+4) { grid-column: auto; }
 
   /* Collection: 6-col grid for flexible row sizing */
   .cw-filters {
@@ -7932,6 +7906,79 @@ body.is-offline button.offline-disabled {
   border-color: rgba(255, 107, 53, 0.55);
 }
 .f-hard2find-btn.active .f-hard2find-glyph { filter: grayscale(0); }
+
+/* "Hide owned" toggle — same circular shape as the 💎 / 💿 pair, but
+   with a "C" letter glyph (mirrors the existing collection badge) and
+   a green-strike overlay that brightens when active. The button is
+   disabled until collection.js loads the user's collection IDs. */
+.hide-owned-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 1.7rem;
+  height: 1.7rem;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+}
+.hide-owned-btn:not(:disabled):hover { transform: scale(1.06); }
+.hide-owned-btn:disabled,
+.hide-owned-btn[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.hide-owned-btn .hide-owned-glyph {
+  display: inline-block;
+  font-family: inherit;
+  font-size: 0.85rem;
+  line-height: 1;
+  letter-spacing: 0;
+  /* Match the green of the existing collection badge. */
+  color: #6ddf70;
+  filter: grayscale(0.55);
+  transition: filter 0.15s;
+}
+.hide-owned-btn::after {
+  content: "";
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 50%;
+  height: 2px;
+  background: #6ddf70;
+  border-radius: 1px;
+  transform: rotate(-30deg);
+  transform-origin: center;
+  opacity: 0.45;
+  box-shadow: 0 0 1px rgba(0,0,0,0.7);
+  transition: opacity 0.15s;
+  pointer-events: none;
+}
+.hide-owned-btn.active {
+  background: rgba(109, 223, 112, 0.12);
+  border-color: rgba(109, 223, 112, 0.55);
+}
+.hide-owned-btn.active::after { opacity: 1; }
+.hide-owned-btn.active .hide-owned-glyph { filter: grayscale(0); }
+
+/* Bookmark / saved-search dropdown is appended to the END of
+   .search-row by buildSavedSearchUI; pin it to the LEFT via flex
+   order so the visual order is [🔖] [input] [Search] [▦] [⇄] [✕]
+   without having to rewire the JS append site. */
+.search-row > .saved-search-wrap { order: -1; }
+/* When pinned to the left of the row, anchor the dropdown to the
+   LEFT edge of its toggle (instead of the default right-edge anchor)
+   so it extends rightward INTO the row instead of running off the
+   page to the left of the viewport. */
+.search-row > .saved-search-wrap > .saved-search-dropdown { left: 0; right: auto; }
 
 /* "Hard to Find" search-mode badge — decorates result cards whose
    master/release has no embedded YouTube videos, signaling a place

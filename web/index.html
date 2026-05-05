@@ -117,7 +117,14 @@
   <div class="search-row">
     <input type="text" id="query" placeholder="Search Discogs" autocomplete="off" />
     <button id="search-btn" onclick="doSearch(1)" style="flex-shrink:0">Search</button>
+    <!-- Wide card mode toggle moved up next to the Search button so the
+         primary view-mode control sits inline with submission instead of
+         buried at the end of the controls row. _sdApplyCardMode keeps
+         every .card-mode-toggle-btn in sync, so toggling here mirrors
+         on the records page. -->
+    <button type="button" id="card-mode-toggle" class="card-mode-toggle-btn" onclick="_sdToggleCardMode()" title="Toggle wide card mode (shows full title + artist)" style="background:none;border:1px solid var(--border);color:var(--muted);padding:0.2rem 0.55rem;border-radius:4px;font-size:0.72rem;cursor:pointer;flex-shrink:0;letter-spacing:0.02em">▦ Wide</button>
     <button type="button" id="swap-to-collection-btn" onclick="swapSearchToCollection()" title="Sign in to search your collection" class="swap-search-btn" disabled>⇄</button>
+    <button type="button" id="clear-btn" onclick="clearForm()" title="Clear form" style="background:none;border:none;padding:0.3rem 0.5rem;font-size:1.5rem;color:#555;cursor:pointer;line-height:1;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
   </div>
 
   <div class="type-sort-row">
@@ -146,14 +153,30 @@
         <option value="label:asc">Label A→Z</option>
       </select>
     </label>
-    <label id="hide-owned-label" style="display:flex;align-items:center;gap:0.3rem;font-size:0.78rem;color:var(--muted);opacity:0.55;cursor:not-allowed;flex-shrink:0;user-select:none" title="Sign in and sync your collection to use this filter">
-      <input type="checkbox" id="hide-owned" disabled style="accent-color:var(--accent);cursor:not-allowed;opacity:0.4"> Hide owned
-    </label>
-    <!-- Wide card mode toggle: doubles card width site-wide and shows
-         all artist + title text without clamping. Persisted per browser
-         in localStorage so the choice sticks across reloads. -->
-    <button type="button" id="card-mode-toggle" class="card-mode-toggle-btn" onclick="_sdToggleCardMode()" title="Toggle wide card mode (shows full title + artist)" style="background:none;border:1px solid var(--border);color:var(--muted);padding:0.2rem 0.55rem;border-radius:4px;font-size:0.72rem;cursor:pointer;flex-shrink:0;letter-spacing:0.02em">▦ Wide</button>
-    <button type="button" id="clear-btn" onclick="clearForm()" title="Clear form" style="background:none;border:none;padding:0.3rem 0.5rem;font-size:1.5rem;color:#555;cursor:pointer;line-height:1;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
+    <!-- Hide-owned: now a circular icon button (parallel to the 💎 / 💿
+         pair to its right). State on aria-pressed; collection.js enables
+         it once the user's _collectionIds are loaded. -->
+    <button type="button" id="hide-owned" class="hide-owned-btn"
+            onclick="_sdHideOwnedToggled(this)"
+            title="Sign in and sync your collection to use this filter"
+            aria-pressed="false" aria-disabled="true" disabled>
+      <span class="hide-owned-glyph">C</span>
+    </button>
+    <!-- Hard-to-find / CD-exclude relocated here so all three result-
+         filtering toggles cluster together to the right of the Sort
+         selector. -->
+    <button type="button" id="f-hard2find" class="f-hard2find-btn"
+            onclick="_sdHard2FindChanged(this)"
+            title="Hard to find: bias the search toward physical, pre-streaming-era pressings. Empty Format defaults to Vinyl, empty Year to 1900-1985, sort to least-owned first. Cards whose master has no embedded YouTube videos get a 🎵 marker so you can spot contribution opportunities. Filters you set yourself are respected."
+            aria-pressed="false">
+      <span class="f-hard2find-glyph">💎</span>
+    </button>
+    <button type="button" id="f-exclude-cd" class="f-exclude-cd-btn"
+            onclick="_sdToggleExcludeCd(this)"
+            title="Exclude releases whose main format is CD, DVD, SACD, or any digital (File / MP3 / FLAC / streaming)"
+            aria-pressed="false">
+      <span class="f-exclude-cd-glyph">💿</span>
+    </button>
   </div>
 
   <div id="advanced-panel">
@@ -161,28 +184,6 @@
       <label>Artist <input type="text" id="f-artist" placeholder="e.g. Miles Davis" oninput="currentArtistId=null" /></label>
       <label>Release <input type="text" id="f-release" placeholder="e.g. Kind of Blue" /></label>
       <label>Label <input type="text" id="f-label" placeholder="e.g. Columbia" /></label>
-      <!-- Hard-to-find + CD-exclude moved up here so the filter row
-           feels packed instead of leaving a wide Label cell next to
-           dead space. The cell has no header text — the toggles
-           label themselves via icon + tooltip. -->
-      <div class="filters-toggles-inline">
-        <!-- Hard-to-find toggle, styled as a 💎 button (parallel to the
-             💿 CD-exclude button next to it). Active state pulses the
-             accent color so the two filters read as a pair. State is
-             stored on aria-pressed; _sdHard2FindActive() reads it. -->
-        <button type="button" id="f-hard2find" class="f-hard2find-btn"
-                onclick="_sdHard2FindChanged(this)"
-                title="Hard to find: bias the search toward physical, pre-streaming-era pressings. Empty Format defaults to Vinyl, empty Year to 1900-1985, sort to least-owned first. Cards whose master has no embedded YouTube videos get a 🎵 marker so you can spot contribution opportunities. Filters you set yourself are respected."
-                aria-pressed="false">
-          <span class="f-hard2find-glyph">💎</span>
-        </button>
-        <button type="button" id="f-exclude-cd" class="f-exclude-cd-btn"
-                onclick="_sdToggleExcludeCd(this)"
-                title="Exclude releases whose main format is CD, DVD, SACD, or any digital (File / MP3 / FLAC / streaming)"
-                aria-pressed="false">
-          <span class="f-exclude-cd-glyph">💿</span>
-        </button>
-      </div>
       <label>Format
         <select id="f-format">
           <option value="">All Formats</option>
@@ -348,7 +349,10 @@
       <input type="text" id="cw-query" placeholder="Search your collection…" autocomplete="off"
         onkeydown="if(event.key==='Enter'){doCwSearch(1)}" />
       <button onclick="doCwSearch(1)" style="flex-shrink:0">Search</button>
+      <!-- Mirrors the main search-row order: Search → ▦ Wide → ⇄ → ✕ -->
+      <button type="button" id="cw-card-mode-toggle" class="card-mode-toggle-btn" onclick="_sdToggleCardMode()" title="Toggle wide card mode (shows full title + artist)" style="background:none;border:1px solid var(--border);color:var(--muted);padding:0.2rem 0.55rem;border-radius:4px;font-size:0.72rem;cursor:pointer;flex-shrink:0;letter-spacing:0.02em">▦ Wide</button>
       <button type="button" onclick="swapSearchToMain()" title="Search Discogs with these criteria" class="swap-search-btn">⇄</button>
+      <button type="button" onclick="clearCwSearch()" title="Clear all filters" style="background:none;border:none;padding:0.3rem 0.5rem;font-size:1.5rem;color:#555;cursor:pointer;line-height:1;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
     </div>
     <div id="cw-controls-row" class="type-sort-row" style="margin-top:0.3rem">
       <button type="button" id="cw-advanced-toggle" onclick="toggleCwAdvanced()" style="background:none;border:none;padding:0;font-size:0.78rem;color:#666;cursor:pointer;display:flex;align-items:center;gap:0.3rem;white-space:nowrap" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#666'">
@@ -376,14 +380,8 @@
       </label>
       <span style="color:#333;margin:0 0.25rem">|</span>
       <button type="button" id="cw-export-btn" onclick="_cwTab==='collection'?exportCollection():exportWantlist()" title="Download as CSV" style="background:none;border:none;padding:0;font-size:0.78rem;color:#555;cursor:pointer;white-space:nowrap;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">⬇ CSV</button>
-      <span style="color:#333;margin:0 0.25rem">|</span>
-      <!-- Wide-cards toggle on the records-view controls row, mirrors
-           the one on the search-page form. _sdApplyCardMode keeps
-           every .card-mode-toggle-btn in sync, so toggling here
-           reflects on the search page (and vice versa). Order
-           matches the main search bar: ▦ Wide → ✕ Clear. -->
-      <button type="button" id="cw-card-mode-toggle" class="card-mode-toggle-btn" onclick="_sdToggleCardMode()" title="Toggle wide card mode (shows full title + artist)" style="background:none;border:1px solid var(--border);color:var(--muted);padding:0.2rem 0.55rem;border-radius:4px;font-size:0.72rem;cursor:pointer;flex-shrink:0;letter-spacing:0.02em">▦ Wide</button>
-      <button type="button" onclick="clearCwSearch()" title="Clear all filters" style="background:none;border:none;padding:0 0.4rem;font-size:1.2rem;color:#555;cursor:pointer;line-height:1;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
+      <!-- Wide-cards + Clear moved up into the search-row to match the
+           main search page. -->
     </div>
     <div id="cw-advanced-panel" style="display:none;margin-top:0.5rem">
       <div style="font-size:0.72rem;color:#444;margin-bottom:0.4rem;line-height:1.6">Filters support operators: use <span style="color:#888">+</span> to require multiple terms, <span style="color:#888">|</span> for either/or, and <span style="color:#888">-</span> before a term to exclude it &nbsp;·&nbsp; e.g. Artist: <span style="color:#777">miles davis | coltrane</span> &nbsp; Label: <span style="color:#777">columbia + -legacy</span></div>

@@ -648,7 +648,12 @@ function renderResults(items, append = false) {
     items = items.filter(it => !existingKeys.has(`${it.type}:${it.id}`));
     window._lastResults = (window._lastResults || []).concat(items);
   }
-  const hideOwned = document.getElementById("hide-owned")?.checked;
+  const hideOwnedEl = document.getElementById("hide-owned");
+  const hideOwned = !!hideOwnedEl && (
+    hideOwnedEl.tagName === "INPUT"
+      ? hideOwnedEl.checked
+      : hideOwnedEl.getAttribute("aria-pressed") === "true"
+  );
   const excludeCd = document.getElementById("f-exclude-cd")?.classList.contains("active");
   let filtered = items;
   if (hideOwned && window._collectionIds?.size) {
@@ -686,6 +691,21 @@ function _sdHard2FindActive() {
   return !!btn && btn.getAttribute("aria-pressed") === "true";
 }
 window._sdHard2FindActive = _sdHard2FindActive;
+
+// ── "Hide owned" toggle (icon button, parallel to 💎 / 💿) ───────────
+// Disabled until collection.js has loaded the user's collection IDs;
+// _sdEnableHideOwnedBtn flips the disabled flag once that lands.
+function _sdHideOwnedToggled(btn) {
+  if (btn.disabled) return;
+  const next = btn.getAttribute("aria-pressed") !== "true";
+  btn.setAttribute("aria-pressed", next ? "true" : "false");
+  btn.classList.toggle("active", next);
+  // Same re-render hook the old checkbox change listener used.
+  if (window._lastResults && typeof renderResults === "function") {
+    try { renderResults(window._lastResults); } catch {}
+  }
+}
+window._sdHideOwnedToggled = _sdHideOwnedToggled;
 function _sdHard2FindChanged(btn) {
   const next = btn.getAttribute("aria-pressed") !== "true";
   btn.setAttribute("aria-pressed", next ? "true" : "false");
