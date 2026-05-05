@@ -6740,8 +6740,16 @@ a.profile-stat-link:hover {
   .profile-name { font-size: 1rem; }
 }
 
-/* ── Library of Congress view ─────────────────────────────────────────── */
-#loc-view { padding: 1rem 0 4rem; }
+/* ── Discover-page view chrome (shared by LOC / Archive / Wikipedia /
+   YouTube). Same vertical rhythm everywhere so the four pages don't
+   look different. Bottom padding leaves room above the mini-player
+   chrome; top padding zero so the page title sits flush under the
+   discover sub-nav strip — the user-perceived "space above the
+   title" was an inconsistent #loc-view padding rule. */
+#loc-view,
+#archive-view,
+#wiki-view,
+#youtube-view { padding: 0 0 4rem; }
 .loc-header { margin-bottom: 1rem; }
 .loc-title {
   font-size: 1.4rem;
@@ -6785,10 +6793,10 @@ a.profile-stat-link:hover {
   display: flex;
   flex-direction: column;
   gap: 0.7rem;
-  padding: 0.9rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  /* Form sits directly on the page bg — no surrounding box, border,
+     or padding. Used to wrap content in a panel; that just added
+     visual clutter and made the form feel like a separate widget
+     instead of part of the page. */
   margin-bottom: 0.9rem;
 }
 .loc-form-row {
@@ -6853,6 +6861,11 @@ a.profile-stat-link:hover {
   font-size: 0.82rem;
   text-transform: none;
   letter-spacing: 0;
+  /* Without width:100% the inputs default to their intrinsic
+     ~150px width and look tiny next to their full-width grid
+     column labels. box-sizing keeps padding inside the column. */
+  width: 100%;
+  box-sizing: border-box;
   /* Override sitewide `select { height: var(--input-h) }` so padding
      controls the box — otherwise the 28px fixed height clips text. */
   height: auto;
@@ -8319,50 +8332,24 @@ body.is-offline button.offline-disabled {
   border-color: var(--accent);
   color: var(--accent);
 }
-/* Browse / Saved tab switcher — mirrors the LOC tab look. */
-.archive-tabs {
-  display: flex;
-  gap: 0.4rem;
-  margin-bottom: 0.7rem;
-  border-bottom: 1px solid var(--border);
-}
+/* Archive tab strip retired its bespoke underline-active style and
+   adopted .loc-tabs / .loc-tab from the LOC view so all four
+   discover-tab pages share the same boxed-active tab look. The
+   classes below are kept on the markup as semantic hooks but emit
+   no styles; the .loc-tab rules above handle the visual chrome. */
+.archive-tabs {}
 .archive-tab {
-  background: none;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  padding: 0.5rem 0.95rem;
-  border-bottom: 2px solid transparent;
-  font-size: 0.85rem;
-  font-weight: 500;
-  font-family: inherit;
-  margin-bottom: -1px;
-}
-.archive-tab:hover { color: var(--text); }
-.archive-tab.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
+  /* Empty — handled by .loc-tab. */
 }
 
-/* Search-tab form: query input + Search button + "Curated" shortcut.
-   Mirrors the LOC search-form layout so the page reads as a peer of
-   the LOC view. The Curated button visually de-emphasizes vs the
-   primary Search button — it's a sidegrade, not the default action. */
-.archive-search-form {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  margin-bottom: 0.6rem;
-}
-.archive-search-input {
-  flex: 1;
-  min-width: 0;
-}
-.archive-search-btn,
-.archive-search-curated-btn {
-  flex-shrink: 0;
-  white-space: nowrap;
-}
+/* Legacy archive-search-form rules retired — the form now uses
+   .loc-form / .loc-form-row / .loc-form-grid like every other
+   discover-tab search form. The flex-row override here was fighting
+   .loc-form's flex-column layout, which was why fields stacked
+   weirdly. Selector kept (with no rules) so any stray inline class
+   reference isn't a parse error.
+   Old kept-around rule for the Curated shortcut button below — it
+   still applies to the legacy markup if someone resurrects it. */
 .archive-search-curated-btn {
   background: none;
   border: 1px solid var(--border);
@@ -9091,7 +9078,9 @@ body.is-offline button.offline-disabled {
 /* Wikipedia SPA page — matches the LOC SPA's spacing/heading layout
    so the two browse pages feel like siblings (same .loc-header, same
    .loc-tabs). The .wiki-panel-* divs swap visibility based on tab. */
-#wiki-view { padding: 1rem 0 4rem; }
+/* #wiki-view padding now lives in the unified discover-page rule
+   above (LOC + Archive + Wikipedia + YouTube share the same
+   `padding: 0 0 4rem` so the four pages have identical chrome). */
 .wiki-panel { margin-top: 1rem; }
 
 /* Wikipedia SPA page results list — each row is a clickable title plus
@@ -9218,17 +9207,13 @@ body.is-offline button.offline-disabled {
 }
 .wiki-load-more:disabled { opacity: 0.5; cursor: default; }
 
-/* Wikipedia SPA page — clean, themed search form. */
-/* .wiki-search-form retired — the wiki + youtube views now use the
-   shared .search-row class so their forms match the main-page
-   Search bar exactly. Input + button styles come from the global
-   input[type="text"|"search"] + .search-row rules. */
-.wiki-search-form {
-  display: flex;
-  gap: 0.5rem;
-  margin: 0.4rem 0 1rem 0;
-  align-items: center;
-}
+/* Wikipedia + YouTube search forms reuse .loc-form / .loc-form-row
+   for chrome unification across all four discover pages. The legacy
+   .wiki-search-form rule used to set its own flex layout that
+   conflicted with .loc-form's flex-column — retired. Selector left
+   with empty rule body so unmodified callers don't break, but no
+   styles attach. */
+.wiki-search-form {}
 
 /* Inline W icon used after every magnifying glass in popups.
    Sized relative to context so it matches the neighbouring ⌕ visually,
