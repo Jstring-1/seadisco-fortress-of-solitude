@@ -734,8 +734,8 @@ function _renderArchiveList() {
               ).join("")}
             </select>
           </label>
-          <label><span>Year from</span><input type="text" id="archive-year-from" placeholder="1950" inputmode="numeric" maxlength="4" value="${escHtml(_archiveSearchYearFrom)}" /></label>
-          <label><span>Year to</span><input type="text" id="archive-year-to" placeholder="1985" inputmode="numeric" maxlength="4" value="${escHtml(_archiveSearchYearTo)}" /></label>
+          <label><span>Year from</span><input type="text" id="archive-year-from" placeholder="yyyy" inputmode="numeric" maxlength="4" value="${escHtml(_archiveSearchYearFrom)}" /></label>
+          <label><span>Year to</span><input type="text" id="archive-year-to" placeholder="yyyy" inputmode="numeric" maxlength="4" value="${escHtml(_archiveSearchYearTo)}" /></label>
           <label class="loc-form-split"><span>Sort</span>
             <select id="archive-sort-select">
               <option value="popularity"${_archiveSearchSort === "popularity" ? " selected" : ""}>Most popular</option>
@@ -760,7 +760,7 @@ function _renderArchiveList() {
             ? ""  // populated below by _archiveRenderSearchRows()
             : (_archiveSearchQuery
                 ? `<div class="loc-empty">Searching…</div>`
-                : `<div class="loc-empty">Search archive.org for audio you can play. Results are filtered to items with MP3 streams the in-app player can handle.</div>`)
+                : "")  // empty state — no placeholder blurb
       }</div>
     </div>
 

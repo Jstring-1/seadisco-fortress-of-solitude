@@ -451,19 +451,19 @@ async function applyAuthState(clerk) {
   // tabs show as disabled for signed-in users on first paint
   // because Clerk hadn't hydrated yet when the strip first rendered.
   window._sdAuthResolved = true;
-  // _sdInitialHomeStripMode runs at module load — if Clerk hadn't
-  // hydrated yet at that point, signed-in users got the anon default
-  // ("feed"). Now that auth has resolved, switch them back to the
-  // intended signed-in default ("recent") UNLESS the URL explicitly
-  // asked for another tab via ?strip=, in which case respect that.
-  if (clerk?.user && window._sdHomeStripMode === "feed") {
+  // _sdInitialHomeStripMode runs at module load with the optimistic
+  // default "recent" (matches the static HTML's rr-tab-active class
+  // so signed-in users never flicker). Anons need to flip to "feed"
+  // since Recent / Suggestions / Submitted all require sign-in. Only
+  // switch when there's no URL pin asking for a specific tab.
+  if (!clerk?.user && window._sdHomeStripMode === "recent") {
     let urlPinned = false;
     try {
       const v = new URLSearchParams(location.search).get("strip");
-      urlPinned = (v === "feed" || v === "submitted" || v === "suggestions");
+      urlPinned = (v === "feed" || v === "submitted" || v === "suggestions" || v === "recent");
     } catch {}
     if (!urlPinned && typeof window._sdSwitchHomeStripTab === "function") {
-      try { window._sdSwitchHomeStripTab("recent"); } catch {}
+      try { window._sdSwitchHomeStripTab("feed"); } catch {}
     }
   }
   if (typeof window._sdSyncHomeStripTabsVisual === "function") {
