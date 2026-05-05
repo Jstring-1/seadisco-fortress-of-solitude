@@ -4122,6 +4122,12 @@ button.wiki-link-btn:active {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
   gap: 1rem;
+  /* Row-equalize so cards in the same row stretch to the tallest's
+     height instead of each ending at its own content height. Pairs
+     with `.card { height: 100% }` below — without that, the flex
+     column inside .card collapses to sum-of-children regardless of
+     this stretch. */
+  align-items: stretch;
 }
 
 /* Wide card mode (toggled via the ▦ Wide button — body.card-mode-wide).
@@ -4608,6 +4614,12 @@ body.card-mode-wide .card-tracklist {
   color: inherit;
   display: flex;
   flex-direction: column;
+  /* Claim the full grid-row height so all cards in a row match the
+     tallest (otherwise the column flex sizes to its children sum,
+     producing a ragged-bottom row whenever covers vary in aspect
+     ratio). Empty space below the meta gets the card's background
+     fill — clean, no ghost border between cards. */
+  height: 100%;
   /* Subtle resting elevation — barely visible against body bg, but
      gives the grid a hint of dimension when scanning many cards. */
   box-shadow: 0 1px 2px rgba(0,0,0,0.25), 0 1px 0 rgba(255,255,255,0.025) inset;
