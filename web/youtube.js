@@ -631,15 +631,36 @@ async function openYoutubePopup(query) {
     if (titleEl) titleEl.textContent = `YouTube · "${q}"`;
     if (ctxStrip) ctxStrip.style.display = "none";
   }
-  if (statusEl) statusEl.textContent = "Searching…";
   if (resultsEl) resultsEl.innerHTML = "";
-  // Album-mode admin paste-URL form: rebuild the track dropdown and
-  // reveal the form so admin can stage videos by URL without firing
-  // a 100-unit search. Hidden in per-track / non-admin / non-album
-  // mode so it doesn't clutter regular YT searches.
+  // Album-mode paste-URL form: rebuild the track dropdown and
+  // reveal the form so signed-in users can stage videos by URL
+  // without firing a 100-unit search. Hidden in per-track / non-
+  // album mode so it doesn't clutter regular YT searches.
   _youtubeRenderPasteForm();
   // Sync ★ state once per session.
   if (_ytSavedIds == null) _youtubeLoadSavedIds();
+
+  // ── Auto-search gated to admin / demo while quota request pending ──
+  // The 100-unit search.list call only fires for users on the YT-
+  // access allowlist (admin, DEMO_CLERK_IDS, or YT_OPEN_TO_USERS env
+  // toggle). Other signed-in users still see the popup and can stage
+  // videos they found on youtube.com via the paste-URL form (1 unit
+  // per /api/youtube/video-info, cached). Set window._sdYtAutoSearch
+  // = true at runtime to override without redeploying.
+  const autoSearchEnabled = !!window._sdYtAutoSearch
+    || (typeof window._sdHasYtAccess === "function"
+        ? window._sdHasYtAccess()
+        : (!!window._isAdmin || !!window._sdIsDemo));
+  if (!autoSearchEnabled) {
+    if (statusEl) {
+      const ytExtUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+      statusEl.innerHTML = `<span style="color:var(--muted)">Search YouTube directly and paste any video URL above to stage it.</span> <a href="${escHtml(ytExtUrl)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline" title="Open this search on youtube.com">Search YouTube ↗</a>`;
+    }
+    if (albumCtx) _albumRenderFooter();
+    return;
+  }
+
+  if (statusEl) statusEl.textContent = "Searching…";
   try {
     // apiFetch attaches the Clerk Bearer so signed-in callers bypass
     // the anon-IP rate limit. Raw fetch would have the server treat
@@ -750,10 +771,12 @@ function _youtubeRenderPasteForm() {
   const wrap = document.getElementById("youtube-popup-paste");
   if (!wrap) return;
   const ctx = window._sdSuggestAlbumContext;
-  // Show paste form to anyone who can submit YT overrides — admin
-  // always, plus all signed-in users when YT_OPEN_TO_USERS is on.
-  const hasYt = typeof window._sdHasYtAccess === "function" ? window._sdHasYtAccess() : !!window._isAdmin;
-  if (!ctx || !hasYt) {
+  // Open to every signed-in user while auto-search is suspended.
+  // The per-paste /api/youtube/video-info fetch is only 1 unit
+  // (cached server-side) so even widespread URL submissions stay
+  // well within quota — the costly thing is search.list (100
+  // units), and that's gated separately by _sdYtAutoSearch.
+  if (!ctx || !window._clerk?.user) {
     wrap.style.display = "none";
     return;
   }
