@@ -818,10 +818,22 @@ window._sdToggleExcludeCd = _sdToggleExcludeCd;
 // sessions — only this URL handshake.
 function _sdInitialHomeStripMode() {
   // ?strip= URL param wins for both anon and signed-in so deep links
-  // keep working.
+  // keep working — EXCEPT for "submitted", which is gated to admin/
+  // demo. We can't know whether the user qualifies until Clerk
+  // resolves, so we stash the pin in window._sdHomeStripPendingPin
+  // and start on "recent". applyAuthState replays the pin once it
+  // confirms the user is admin/demo (or drops it if they're not).
+  // Without this deferral, an admin reload on /?strip=submitted
+  // would flash the Submitted tab as active-but-display:none during
+  // the unresolved window — the whole strip looked like it was on
+  // Feed because no tab appeared highlighted until auth caught up.
   try {
     const v = new URLSearchParams(location.search).get("strip");
-    if (v === "suggestions" || v === "submitted" || v === "feed") return v;
+    if (v === "suggestions" || v === "feed") return v;
+    if (v === "submitted") {
+      window._sdHomeStripPendingPin = "submitted";
+      return "recent";
+    }
   } catch {}
   // Optimistic default: "recent" — matches the static markup's
   // rr-tab-recent.rr-tab-active class, so signed-in users see no

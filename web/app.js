@@ -466,6 +466,28 @@ async function applyAuthState(clerk) {
       try { window._sdSwitchHomeStripTab("feed"); } catch {}
     }
   }
+  // Replay a deferred ?strip=submitted URL pin now that we know
+  // whether the user is admin/demo. _sdInitialHomeStripMode parks
+  // the pin on window._sdHomeStripPendingPin instead of applying it
+  // optimistically (the pre-auth Submitted tab is hidden, so an
+  // optimistic apply leaves the strip with no visible active tab —
+  // the strip looks like it "defaulted to Feed" then briefly shows
+  // Submitted once auth resolves).
+  if (window._sdHomeStripPendingPin === "submitted") {
+    const allow = !!window._isAdmin || !!window._sdIsDemo;
+    if (allow && typeof window._sdSwitchHomeStripTab === "function") {
+      try { window._sdSwitchHomeStripTab("submitted"); } catch {}
+    } else {
+      // User doesn't qualify — drop the param so the URL doesn't
+      // resurrect on next reload, and stay on whatever mode we have.
+      try {
+        const u = new URL(location.href);
+        u.searchParams.delete("strip");
+        history.replaceState(history.state, "", u.toString());
+      } catch {}
+    }
+    window._sdHomeStripPendingPin = null;
+  }
   if (typeof window._sdSyncHomeStripTabsVisual === "function") {
     try { window._sdSyncHomeStripTabsVisual(); } catch {}
   }
