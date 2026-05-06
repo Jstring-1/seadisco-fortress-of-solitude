@@ -1588,23 +1588,55 @@ let ytPlayer = null;
 let _ytLoading = false;
 let _ytSession = 0;        // incremented on each openVideo, checked by async callbacks
 let _ytPollId  = null;     // polling interval for YT API readiness
-// Repeat modes: "off" → "album" → "one" → "off"
-let _ytRepeat = "off";
+// Mini-player repeat button is now a thin wrapper over the queue
+// drawer's cross-source repeat state (persisted in localStorage as
+// sd_queue_repeat). Previously this had its own `_ytRepeat` module
+// variable, which meant a "Repeat: one" set in the queue drawer in
+// a prior session survived the reload and kept looping the current
+// track even though the mini-player bar showed "off". Single source
+// of truth via _queueGetRepeat / _queueCycleRepeat closes the bug.
+
+// Drives the visual sync. Reads the live _queueRepeat value, applies
+// labels/colors/icons to every .repeat-btn on the page (mini bar +
+// expanded nav). Called from toggleRepeat after the cycle and from
+// boot so the button reflects the persisted state on first paint.
+// Also called by queue.js's _renderRepeatBtn so toggles from the
+// drawer side stay in sync.
+function _syncMiniBarRepeatBtn() {
+  const mode = typeof window._queueGetRepeat === "function" ? window._queueGetRepeat() : "off";
+  // Visual labels keep the historical mini-bar wording (Album)
+  // while internally the mode is the queue's "all".
+  const labels  = { off: "Repeat: off", all: "Repeat: album", one: "Repeat: one" };
+  const colors  = { off: "#666", all: "#4caf50", one: "var(--accent)" };
+  const miniIcons = { off: "↻", all: "⟳ ALL", one: "⟳ 1" };
+  const navLabels = { off: "↻ repeat", all: "⟳ repeat all", one: "⟳ repeat 1" };
+  document.querySelectorAll(".repeat-btn").forEach(btn => {
+    btn.style.color = colors[mode];
+    btn.title = labels[mode];
+    if (btn.closest("#video-nav")) btn.innerHTML = navLabels[mode];
+    else btn.innerHTML = miniIcons[mode];
+  });
+}
+window._syncMiniBarRepeatBtn = _syncMiniBarRepeatBtn;
 
 function toggleRepeat() {
-  _ytRepeat = _ytRepeat === "off" ? "album" : _ytRepeat === "album" ? "one" : "off";
-  const labels  = { off: "Repeat: off", album: "Repeat: album", one: "Repeat: one" };
-  const colors  = { off: "#666", album: "#4caf50", one: "var(--accent)" };
-  // Mini bar icons: off = plain arrow, album = circled arrows, one = circled 1
-  const miniIcons = { off: "↻", album: "⟳ ALL", one: "⟳ 1" };
-  // Expanded nav labels
-  const navLabels = { off: "↻ repeat", album: "⟳ repeat all", one: "⟳ repeat 1" };
-  document.querySelectorAll(".repeat-btn").forEach(btn => {
-    btn.style.color = colors[_ytRepeat];
-    btn.title = labels[_ytRepeat];
-    if (btn.closest("#video-nav")) btn.innerHTML = navLabels[_ytRepeat];
-    else btn.innerHTML = miniIcons[_ytRepeat];
-  });
+  // Delegate to the queue drawer's cycler so both UIs reflect the
+  // same state and the new mode is persisted to localStorage.
+  if (typeof window._queueCycleRepeat === "function") {
+    window._queueCycleRepeat();
+  }
+  _syncMiniBarRepeatBtn();
+}
+
+// Sync the mini-bar repeat button on boot so users who toggled the
+// queue drawer to "one" / "all" in a prior session see the correct
+// indicator immediately, instead of a stale "off" until they click.
+if (typeof document !== "undefined") {
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", _syncMiniBarRepeatBtn);
+  } else {
+    setTimeout(_syncMiniBarRepeatBtn, 0);
+  }
 }
 window.onYouTubeIframeAPIReady = function() { window._ytAPIReady = true; };
 
@@ -3359,25 +3391,22 @@ function _playNextVideoInternal() {
 }
 
 function onVideoEnded() {
+  // Single source of truth: the cross-source queue repeat state
+  // (persisted to localStorage as sd_queue_repeat). The mini-player
+  // bar's toggleRepeat now drives the same value, so there's no
+  // longer a separate _ytRepeat module variable that could fall
+  // out of sync and silently loop tracks the user thought were "off".
+  const repeat = typeof window._queueGetRepeat === "function" ? window._queueGetRepeat() : "off";
   console.debug("[onVideoEnded]", {
-    queueRepeat: typeof window._queueGetRepeat === "function" ? window._queueGetRepeat() : "n/a",
-    ytRepeat: _ytRepeat,
+    repeat,
     videoQueueIdx: window._videoQueueIndex,
     videoQueueLen: (window._videoQueue ?? []).length,
   });
-  // Cross-source repeat-one (toggled in the queue drawer) takes
-  // precedence over the per-album _ytRepeat setting — it's the
-  // user's most recent intent. Replay without advancing the queue.
-  if (typeof window._queueGetRepeat === "function" && window._queueGetRepeat() === "one" && ytPlayer) {
+  if (repeat === "one" && ytPlayer) {
     try { ytPlayer.seekTo(0); ytPlayer.playVideo(); } catch {}
     return;
   }
-  if (_ytRepeat === "one" && ytPlayer) {
-    ytPlayer.seekTo(0);
-    ytPlayer.playVideo();
-    return;
-  }
-  if (_ytRepeat === "album") {
+  if (repeat === "all") {
     const queue = window._videoQueue ?? [];
     let next = (window._videoQueueIndex ?? -1) + 1;
     // Try next track; if at end, loop back to first
