@@ -1247,7 +1247,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260506.0905";
+  const SITE_VERSION = "build 20260506.0914";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -1621,20 +1621,30 @@ function entityLookupLinkHtml(scope, label, opts = {}) {
   if (!label) return "";
   const safeLabel  = escHtml(label);
   const artistAttr = opts.trackArtist ? ` data-lk-artist="${escHtml(opts.trackArtist)}"` : "";
-  const titleAttr  = opts.title       ? ` title="${escHtml(opts.title)}"`              : "";
+  // entityId is the Discogs ID for the entity (artist, label, etc.).
+  // When present it's stashed in data-lk-id and routed through the
+  // popup → _lookupSearchSeaDisco so artist-bio can use the fast
+  // (by-id) path. Without it, bio falls back to a name search that
+  // can match same-named neighbors (e.g. "John Lee (26)" vs "John
+  // Lee Hooker"), and the wrong bio surfaces above results.
+  const idAttr     = opts.entityId    ? ` data-lk-id="${escHtml(String(opts.entityId))}"`  : "";
+  const titleAttr  = opts.title       ? ` title="${escHtml(opts.title)}"`                  : "";
   const cls = ["entity-lookup-link", opts.className || ""].filter(Boolean).join(" ");
   // <span> not <a> — these markups can be embedded inside card <a>
   // wrappers, and HTML5 auto-closes the outer anchor when a nested
   // anchor is encountered, which broke wide-card layout (each card
   // split across multiple grid cells). Click semantics are unchanged
   // because the onclick handler does the work.
-  return `<span class="${cls}" data-lk-scope="${escHtml(scope)}" data-lk-label="${safeLabel}"${artistAttr} role="button" tabindex="0" onclick="event.preventDefault();event.stopPropagation();_handleLookupClick(this,event);return false"${titleAttr}>${safeLabel}</span>`;
+  return `<span class="${cls}" data-lk-scope="${escHtml(scope)}" data-lk-label="${safeLabel}"${artistAttr}${idAttr} role="button" tabindex="0" onclick="event.preventDefault();event.stopPropagation();_handleLookupClick(this,event);return false"${titleAttr}>${safeLabel}</span>`;
 }
 
 function _handleLookupClick(el, ev) {
   const scope = el.dataset.lkScope || "track";
   const label = el.dataset.lkLabel || "";
-  const ctx   = { trackArtist: el.dataset.lkArtist || "" };
+  const ctx   = {
+    trackArtist: el.dataset.lkArtist || "",
+    entityId:    el.dataset.lkId     || "",
+  };
   openLookupPopup(ev, scope, label, ctx);
 }
 
@@ -1644,7 +1654,7 @@ function _handleLookupClick(el, ev) {
 //   artist  → f-artist field, advanced panel open
 //   release → main query field
 //   label   → f-label field, advanced panel open
-function _lookupSearchSeaDisco(scope, label) {
+function _lookupSearchSeaDisco(scope, label, entityId) {
   if (typeof closeModal === "function") { try { closeModal(); } catch {} }
   if (typeof _locCloseInfoPopup === "function") { try { _locCloseInfoPopup(); } catch {} }
   if (typeof clearForm === "function") { try { clearForm(); } catch {} }
@@ -1654,6 +1664,11 @@ function _lookupSearchSeaDisco(scope, label) {
       const el = document.getElementById("f-artist");
       if (el) el.value = label;
       if (typeof toggleAdvanced === "function") { try { toggleAdvanced(true); } catch {} }
+      // Pin the Discogs artist ID so the bio fetch uses the fast,
+      // by-id path. Without this, bio falls back to a name search
+      // that can match a same-named neighbor and surface the wrong
+      // artist's bio above the result grid.
+      try { if (entityId) window.currentArtistId = String(entityId); else window.currentArtistId = null; } catch {}
     } else if (scope === "label") {
       const el = document.getElementById("f-label");
       if (el) el.value = label;
@@ -1664,14 +1679,19 @@ function _lookupSearchSeaDisco(scope, label) {
       if (qEl) qEl.value = label;
     }
     // Default every popup-driven SeaDisco search to Masters+ result
-    // type and oldest-first ordering — surfaces the canonical groupings
-    // and the earliest / original pressings at the top, which is
-    // almost always what the user wants when they jump from a credit
-    // / track / artist / label / catno link.
+    // type. Sort default depends on scope:
+    //   - artist:  no sort (Discogs relevance) — the user wants to
+    //     "see more" by this artist, including the album they jumped
+    //     from. year:asc surfaces 1950s/60s pressings first and pushes
+    //     the originating album off page 1 even when it's the
+    //     artist's best-known release.
+    //   - track / release / label / catno: year:asc — for these scopes
+    //     the user is usually hunting the canonical / original
+    //     pressing, so oldest-first is the right default.
     const masterPlusRadio = document.querySelector('input[name="result-type"][value="master+"]');
     if (masterPlusRadio) masterPlusRadio.checked = true;
     const sortEl = document.getElementById("f-sort");
-    if (sortEl) sortEl.value = "year:asc";
+    if (sortEl) sortEl.value = scope === "artist" ? "" : "year:asc";
     if (typeof doSearch === "function") doSearch(1);
   }, 30);
 }
@@ -1686,6 +1706,7 @@ function openLookupPopup(ev, scope, label, ctx) {
   _closeLookupPopup();
   if (!label) return;
   const trackArtist = ctx?.trackArtist || "";
+  const entityId    = ctx?.entityId    || "";
 
   // Build the YouTube search query — scope-aware for disambiguation.
   // We send users to the in-app YouTube view (results play in the
@@ -1828,7 +1849,7 @@ function openLookupPopup(ev, scope, label, ctx) {
             }
           })();
         }
-        else if (b.key === "sd")    _lookupSearchSeaDisco(scope, label);
+        else if (b.key === "sd")    _lookupSearchSeaDisco(scope, label, entityId);
         else if (b.key === "coll") {
           if (typeof searchCollectionFor === "function") {
             const cwField =
