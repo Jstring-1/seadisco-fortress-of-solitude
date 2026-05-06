@@ -1564,6 +1564,10 @@ async function _locPlay(item) {
   bar.classList.add("open");
   if (typeof _setPlayerEngine === "function") _setPlayerEngine("loc");
   document.body.classList.add("player-open");
+  // Same un-hide on play as the YT path — clears the persisted
+  // hide flag so a previously-dismissed idle bar comes back when
+  // the user actually starts playing something.
+  if (typeof window.showMiniPlayerBar === "function") window.showMiniPlayerBar();
   // Push to the OS media session so the lock-screen / Bluetooth /
   // notification controls show track info + cover art for LOC items.
   if (typeof window._mediaSessionUpdate === "function") {
