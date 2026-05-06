@@ -161,19 +161,10 @@ async function initLocView() {
   const root = document.getElementById("loc-view");
   if (!root) return;
 
-  // Auth gate: any signed-in user can browse LOC. Backend endpoints use
-  // requireUser, so this is just a UX guard — the server is the source
-  // of truth.
-  if (!window._clerk?.user) {
-    root.dataset.mounted = "1";
-    root.innerHTML = `
-      <div class="loc-empty" style="padding:3rem 1rem">
-        <div style="font-size:1rem;color:var(--text);margin-bottom:0.5rem">Sign in to browse LOC.</div>
-        <div style="font-size:0.82rem">The Library of Congress search is available to any signed-in SeaDisco account.</div>
-      </div>
-    `;
-    return;
-  }
+  // LOC is open to anons — the backend's /api/loc/search uses
+  // allowAnonRateLimited (per-IP throttle), and the page itself
+  // works without auth. Saving (★) requires sign-in; the click
+  // handlers surface a "Sign in to save" toast for anons.
 
   if (root.dataset.mounted === "1") {
     // Already rendered — re-sync from URL params (back/forward navigation
@@ -195,12 +186,16 @@ async function initLocView() {
     // behavior, no extra wiring needed.
   }
 
-  // Load saved IDs once so the ★ state is correct on first render
-  _locLoadSavedIds();
+  // Load saved IDs once so the ★ state is correct on first render.
+  // Anons skip — the endpoint 401s for them and there's nothing to
+  // load (saves are per-account).
+  if (window._clerk?.user) _locLoadSavedIds();
   // Mount the shared saved-search dropdown next to the submit button.
   // Reuses buildSavedSearchUI() from utils.js so LOC bookmarks look and
-  // feel identical to the main search and collection bookmarks.
-  if (typeof buildSavedSearchUI === "function") {
+  // feel identical to the main search and collection bookmarks. Anons
+  // skip — bookmarks are per-account and a non-functional bookmark
+  // chip on the form would be confusing.
+  if (typeof buildSavedSearchUI === "function" && window._clerk?.user) {
     const topRow = document.getElementById("loc-form-row-top");
     if (topRow && !topRow.querySelector(".saved-search-wrap")) {
       buildSavedSearchUI(
