@@ -46,6 +46,12 @@ async function _ensureAdminFlag() {
     // state without waiting for shared.js's separate /api/me probe.
     window._sdIsDemo = !!j?.isDemo;
     window._sdYtOpen = !!j?.ytOpen;
+    // Strip's Submitted tab visibility gates on these flags. If we
+    // populated them ahead of shared.js's own /api/me probe, kick a
+    // resync so the tab unhides immediately.
+    if (typeof window._sdSyncHomeStripTabsVisual === "function") {
+      try { window._sdSyncHomeStripTabsVisual(); } catch {}
+    }
     return window._isAdmin;
   } catch {
     window._isAdmin = false;
