@@ -7382,6 +7382,12 @@ app.get("/artist-bio", async (req, res) => {
   // Strip suffix for the Discogs search query, but keep original for exact matching
   const nameForSearch = nameRaw.replace(/\s*\(\d+\)$/, "").trim();
   const nameForMatch  = nameRaw.trim();
+  // Whether the original name carries a "(N)" disambiguator suffix.
+  // When set, we MUST find an exact-disambig match — falling back to
+  // a same-base neighbor (e.g. "John Lee Hooker" when the user asked
+  // for "John Lee (26)") would surface the wrong artist's bio above
+  // the result grid. Better to return no bio than the wrong bio.
+  const hasDisambig = /\s*\(\d+\)$/.test(nameRaw);
 
   try {
     const discogsResults = await dc.search(nameForSearch, { type: "artist", perPage: 20 }) as any;
@@ -7391,12 +7397,19 @@ app.get("/artist-bio", async (req, res) => {
     const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
     // Match against the full name (including suffix) so "Snail Mail (2)" finds the right entry
     const searchNorm = norm(nameForMatch);
-    let best = candidates.find(a => norm(a.title) === searchNorm)
-            ?? candidates.find(a => {
-                 const an = norm(a.title);
-                 return an.startsWith(norm(nameForSearch)) || norm(nameForSearch).startsWith(an);
-               })
-            ?? candidates[0];
+    let best: any;
+    if (hasDisambig) {
+      // Strict: exact-disambig match only. No startsWith fallback.
+      best = candidates.find(a => norm(a.title) === searchNorm);
+      if (!best) { res.json({ profile: null, name: nameForMatch }); return; }
+    } else {
+      best = candidates.find(a => norm(a.title) === searchNorm)
+          ?? candidates.find(a => {
+               const an = norm(a.title);
+               return an.startsWith(norm(nameForSearch)) || norm(nameForSearch).startsWith(an);
+             })
+          ?? candidates[0];
+    }
 
     if (!best?.id) { res.json({ profile: null, name: nameForMatch }); return; }
 
@@ -7404,8 +7417,10 @@ app.get("/artist-bio", async (req, res) => {
     let profile: string | null = artist?.profile ?? null;
 
     // If best match has no profile, check remaining candidates in parallel
-    // but only accept a fallback whose name has word overlap with the search
-    if (!profile && candidates.length > 1) {
+    // but only accept a fallback whose name has word overlap with the search.
+    // Skip this fallback when the user asked for a specific "(N)" disambig —
+    // returning a same-base neighbor's bio would surface the wrong artist.
+    if (!profile && !hasDisambig && candidates.length > 1) {
       const sigWords = (s: string) => new Set(
         s.toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter(w => w.length > 3)
       );
