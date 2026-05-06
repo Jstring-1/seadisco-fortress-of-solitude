@@ -855,7 +855,16 @@ function _sdSyncHomeStripTabsVisual() {
   // If a non-admin/demo user landed on Submitted via URL (?strip=submitted)
   // before this gate ran, snap them back to Recent so they don't see
   // an empty strip with no active tab.
-  if (!submittedAllowed && window._sdHomeStripMode === "submitted") {
+  //
+  // GATE on _sdAuthResolved: _isAdmin / _sdIsDemo are populated by
+  // applyAuthState, so before auth resolves submittedAllowed=false
+  // even for users who actually qualify. Without this gate, an admin
+  // landing on ?strip=submitted got clobbered to "feed" on first
+  // sync and the URL pin was lost forever — manifesting as Submitted
+  // briefly highlighting then dropping out. Once auth resolves,
+  // applyAuthState calls this fn again and the snap kicks in
+  // correctly for users who genuinely shouldn't see Submitted.
+  if (window._sdAuthResolved && !submittedAllowed && window._sdHomeStripMode === "submitted") {
     window._sdHomeStripMode = window._clerk?.user ? "recent" : "feed";
   }
   for (const [k, el] of Object.entries(tabs)) {
@@ -1921,7 +1930,15 @@ async function loadRandomRecords(more) {
   // Force the strip mode to "feed" since Recent / Suggestions /
   // Submitted all require signin — keeps the rendering path clean
   // for anon visitors.
-  if (!window._clerk?.user) {
+  //
+  // GATE on _sdAuthResolved: before Clerk hydrates, window._clerk is
+  // undefined and `!window._clerk?.user` is true even for users who
+  // are about to resolve as signed-in. Without this gate, signed-in
+  // users on a fresh page load got their mode clobbered from "recent"
+  // → "feed" before auth resolved, and applyAuthState never flipped
+  // it back (it only flips for confirmed-anon). That manifested as
+  // "main subnav defaulting to Feed" for signed-in users.
+  if (window._sdAuthResolved && !window._clerk?.user) {
     if (window._sdHomeStripMode !== "feed") window._sdHomeStripMode = "feed";
     if (typeof _sdSyncHomeStripTabsVisual === "function") _sdSyncHomeStripTabsVisual();
     wrap.style.display = "";
