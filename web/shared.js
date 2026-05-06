@@ -1247,7 +1247,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260506.0937";
+  const SITE_VERSION = "build 20260506.0952";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -1534,6 +1534,15 @@ function renderSharedFooter(opts) {
       // Broad YT_OPEN_TO_USERS toggle — off by default. Off means
       // signed-in non-admin/demo users see the standard splash.
       window._sdYtOpen = !!data?.ytOpen;
+      // Home-strip Submitted tab gates on _isAdmin / _sdIsDemo, both
+      // populated above. applyAuthState already calls the sync once
+      // when Clerk resolves, but that fires BEFORE this /api/me
+      // probe completes — so admins/demo accounts saw the Submitted
+      // tab stay hidden until the next manual tab click forced a
+      // resync. Re-running the sync here closes that race.
+      if (typeof window._sdSyncHomeStripTabsVisual === "function") {
+        try { window._sdSyncHomeStripTabsVisual(); } catch {}
+      }
       if (window._serverIsAdmin) {
         const adminA = document.getElementById("footer-admin-link");
         if (adminA) adminA.style.display = "";
