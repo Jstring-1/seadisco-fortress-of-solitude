@@ -7801,14 +7801,15 @@ app.get("/search", async (req, res) => {
     if (!userId)
         return;
     const rawQ = req.query.q ?? "";
-    // Preserve the Discogs disambiguator suffix "(N)" verbatim — it's the
-    // only thing that distinguishes "John Lee (26)" from "John Lee Hooker"
-    // when the user clicks an artist credit. We previously stripped it
-    // before forwarding to Discogs, which collapsed every variant of the
-    // base name into one bag of results. We now also post-filter the
-    // returned items to require the same disambiguator in their titles —
-    // Discogs's `artist=` filter does substring matching on artist names,
-    // so the upstream call alone isn't enough to enforce uniqueness.
+    // Discogs disambiguator suffix "(N)" — distinguishes "John Lee (26)"
+    // from "John Lee Hooker" etc. Discogs's `artist=` search filter
+    // doesn't tokenize parentheses cleanly: passing "John Lee (26)"
+    // upstream returns zero results. So we send the BASE name to
+    // Discogs (which returns the merged "John Lee*" set) and post-
+    // filter the response to keep only items whose title carries the
+    // exact "(N)" suffix on the artist segment. The disambiguator is
+    // preserved end-to-end so the right artist surfaces, even though
+    // Discogs itself can't filter by it.
     const rawArtist = req.query.artist;
     const artist = rawArtist ? rawArtist.trim() : undefined;
     const artistSuffixMatch = artist ? /\s*\((\d+)\)$/.exec(artist) : null;
@@ -7816,9 +7817,11 @@ app.get("/search", async (req, res) => {
     const artistSuffix = artistSuffixMatch ? artistSuffixMatch[0].trim() : "";
     const rawLabel = req.query.label ?? "";
     const rawRelease = req.query.release_title ?? "";
-    // Each field is sent as its own dedicated Discogs param — no promotion to q
+    // Each field is sent as its own dedicated Discogs param — no promotion to q.
+    // searchArtist drops the "(N)" so Discogs returns the full sibling set;
+    // the post-filter below trims it back to the requested disambiguator.
     const q = rawQ;
-    const searchArtist = artist || undefined;
+    const searchArtist = artistSuffix ? (artistBase || undefined) : (artist || undefined);
     const searchLabel = rawLabel || undefined;
     const searchRelease = rawRelease || undefined;
     touchUserActivity(userId).catch(() => { });
@@ -7839,6 +7842,15 @@ app.get("/search", async (req, res) => {
         return;
     }
     try {
+        // When a disambiguated artist is requested, ask Discogs for as
+        // many candidates as possible per page (Discogs caps at 100). The
+        // upstream call uses the BASE name so the response is dominated
+        // by the most popular sibling (e.g. John Lee Hooker); a less-
+        // popular "(N)" claimant might not surface at all in the first
+        // 12-48 hits, making the post-filter return nothing. Bumping to
+        // 100 gives the filter enough candidates to land actual matches.
+        const requestedPerPage = req.query.per_page ? parseInt(req.query.per_page) : 12;
+        const upstreamPerPage = artistSuffix ? Math.max(requestedPerPage, 100) : requestedPerPage;
         const results = await dc.search(q, {
             type: req.query.type,
             artist: searchArtist,
@@ -7852,7 +7864,7 @@ app.get("/search", async (req, res) => {
             sort: req.query.sort,
             sortOrder: req.query.sort_order,
             page: req.query.page ? parseInt(req.query.page) : 1,
-            perPage: req.query.per_page ? parseInt(req.query.per_page) : 12,
+            perPage: upstreamPerPage,
         });
         // Disambiguator post-filter: when the artist has "(N)" suffix the
         // user means that specific Discogs artist, not every artist whose
