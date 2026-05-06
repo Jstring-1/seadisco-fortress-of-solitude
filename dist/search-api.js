@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
+import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const anthropicKey = process.env.ANTHROPIC_API_KEY ?? "";
@@ -199,6 +199,10 @@ const anonWikiLimiter = new PerIpRateLimiter(50, 60 * 60_000, "wiki-anon");
 // without the Clerk Bearer attached). The DB-backed search cache
 // makes repeated queries free regardless.
 const anonYoutubeLimiter = new PerIpRateLimiter(120, 60 * 60_000, "youtube-anon");
+// archive.org search: signed-in users skip; anons get 30/hour. Most
+// queries hit our 90-day cache and never reach upstream, so this is
+// just a backstop against bots scanning the q-space.
+const anonArchiveLimiter = new PerIpRateLimiter(30, 60 * 60_000, "archive-anon");
 /** Open gate: allows any caller (anon or authenticated). Anonymous
  *  callers are rate-limited per IP via the supplied limiter; signed-in
  *  users pass through unchecked (they pay the global limiter / cache).
@@ -553,6 +557,32 @@ const app = express();
 app.set("trust proxy", 1); // trust exactly 1 hop (Railway's reverse proxy)
 // Gzip/brotli compression for all responses
 app.use(compression());
+// Security headers — MUST be mounted before any route handlers
+// (explicit `app.get("/")` for the SPA HTML, express.static for
+// /style.css and /shared.js etc.) or those routes return responses
+// without the headers. Previously this lived just before the API
+// routes near line 666, and as a result HSTS / X-Frame-Options /
+// Permissions-Policy never reached the browser for the root HTML
+// or any static asset — which broke HSTS preload eligibility too.
+app.use((_req, res, next) => {
+    res.setHeader("X-Frame-Options", "DENY");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    // `preload` flag enables submission to the HSTS preload list at
+    // hstspreload.org — once accepted, browsers skip the HTTP→HTTPS
+    // redirect on the FIRST visit too instead of only after they've
+    // seen the header once.
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    // clipboard-read=() disables the navigator.clipboard.readText() API
+    // for every origin, so any third-party widget (Clerk's auth modal
+    // had been triggering this) that tries to autofill from the user's
+    // clipboard fails silently instead of popping the "seadisco.com
+    // wants to See text and images copied to the clipboard" prompt.
+    // Doesn't affect clipboard.writeText() — share / copy buttons keep
+    // working since clipboard-write is not in this list.
+    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), clipboard-read=()");
+    next();
+});
 // Redirect old /account URL to SPA view so existing links/bookmarks still work
 app.get("/account", (req, res) => {
     const qs = req.url.includes("?") ? "&" + req.url.split("?")[1] : "";
@@ -690,22 +720,10 @@ app.use((req, res, next) => {
     }
     next();
 });
-// Security headers
-app.use((_req, res, next) => {
-    res.setHeader("X-Frame-Options", "DENY");
-    res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
-    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
-    // clipboard-read=() disables the navigator.clipboard.readText() API
-    // for every origin, so any third-party widget (Clerk's auth modal
-    // had been triggering this) that tries to autofill from the user's
-    // clipboard fails silently instead of popping the "seadisco.com
-    // wants to See text and images copied to the clipboard" prompt.
-    // Doesn't affect clipboard.writeText() — share / copy buttons keep
-    // working since clipboard-write is not in this list.
-    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), clipboard-read=()");
-    next();
-});
+// Security headers were here — moved up to run before static / route
+// handlers (see top of file, just after compression()). Without that
+// move, HSTS / X-Frame-Options / Permissions-Policy never reached
+// the browser for the SPA HTML or any static asset.
 // ── Auth / account endpoints ──────────────────────────────────────────────
 // GET /api/config — public config for the frontend (always invite-only)
 app.get("/api/config", (_req, res) => {
@@ -3651,6 +3669,51 @@ const _ARCHIVE_CACHE_TTL_S = 60 * 60 * 24 * 365 * 5; // ~5 years
 // Synthetic discogs_id used as the cache key for this collection's
 // listing. Any positive int that won't collide with a real master.
 const _ARCHIVE_AADAM_CACHE_KEY = 999_900_001;
+const _ARCHIVE_CURATED_COLLECTIONS = [
+    { slug: "aadamjacobs", title: "Aadam Jacobs", cacheKey: 999_900_001 },
+    { slug: "AlabamaShakes", title: "Alabama Shakes", cacheKey: 999_900_002 },
+    { slug: "AsylumStreetSpankers", title: "Asylum Street Spankers", cacheKey: 999_900_003 },
+    { slug: "BadLivers", title: "Bad Livers", cacheKey: 999_900_004 },
+    { slug: "beatletapescollection", title: "Beatle Tapes Collection", cacheKey: 999_900_005 },
+    { slug: "BelleAndSebastian", title: "Belle and Sebastian", cacheKey: 999_900_006 },
+    { slug: "BillyCorgan", title: "Billy Corgan", cacheKey: 999_900_007 },
+    { slug: "ButtholeSurfers", title: "Butthole Surfers", cacheKey: 999_900_008 },
+    { slug: "Calexico", title: "Calexico", cacheKey: 999_900_009 },
+    { slug: "CaliforniaHoneydrops", title: "California Honeydrops", cacheKey: 999_900_010 },
+    { slug: "CharlieParr", title: "Charlie Parr", cacheKey: 999_900_011 },
+    { slug: "ClintonFearon", title: "Clinton Fearon", cacheKey: 999_900_012 },
+    { slug: "CowboyJunkies", title: "Cowboy Junkies", cacheKey: 999_900_013 },
+    { slug: "DaveAlvin", title: "Dave Alvin", cacheKey: 999_900_014 },
+    { slug: "DeathCabforCutie", title: "Death Cab for Cutie", cacheKey: 999_900_015 },
+    { slug: "DelMcCouryBand", title: "Del McCoury Band", cacheKey: 999_900_016 },
+    { slug: "Drive-ByTruckers", title: "Drive-By Truckers", cacheKey: 999_900_017 },
+    { slug: "ElliottSmith", title: "Elliott Smith", cacheKey: 999_900_018 },
+    { slug: "Fishbone", title: "Fishbone", cacheKey: 999_900_019 },
+    { slug: "Fugazi", title: "Fugazi", cacheKey: 999_900_020 },
+    { slug: "GlenHansard", title: "Glen Hansard", cacheKey: 999_900_021 },
+    { slug: "GratefulDead", title: "Grateful Dead", cacheKey: 999_900_022 },
+    { slug: "HayseedDixie", title: "Hayseed Dixie", cacheKey: 999_900_023 },
+    { slug: "TheJayhawks", title: "The Jayhawks", cacheKey: 999_900_024 },
+    { slug: "LittleFeat", title: "Little Feat", cacheKey: 999_900_025 },
+    { slug: "LosLobosMusic", title: "Los Lobos", cacheKey: 999_900_026 },
+    { slug: "LosLonelyBoys", title: "Los Lonely Boys", cacheKey: 999_900_027 },
+    { slug: "LutherDickinson", title: "Luther Dickinson", cacheKey: 999_900_028 },
+    { slug: "MeatPuppets", title: "Meat Puppets", cacheKey: 999_900_029 },
+    { slug: "MelvinSeals", title: "Melvin Seals", cacheKey: 999_900_030 },
+    { slug: "MelvinSparksBand", title: "Melvin Sparks Band", cacheKey: 999_900_031 },
+    { slug: "Minutemen", title: "Minutemen", cacheKey: 999_900_032 },
+    { slug: "MojoNixon", title: "Mojo Nixon", cacheKey: 999_900_033 },
+    { slug: "NelsCline", title: "Nels Cline", cacheKey: 999_900_034 },
+    { slug: "NorthMississippiAllstars", title: "North Mississippi Allstars", cacheKey: 999_900_035 },
+    { slug: "RebirthBrassBand", title: "Rebirth Brass Band", cacheKey: 999_900_036 },
+    { slug: "SharonVanEtten", title: "Sharon Van Etten", cacheKey: 999_900_037 },
+    { slug: "SmashingPumpkins", title: "Smashing Pumpkins", cacheKey: 999_900_038 },
+    { slug: "TedeschiTrucksBand", title: "Tedeschi Trucks Band", cacheKey: 999_900_039 },
+    { slug: "TroutSteakRevival", title: "Trout Steak Revival", cacheKey: 999_900_040 },
+    { slug: "WayneHancock", title: "Wayne Hancock", cacheKey: 999_900_041 },
+    { slug: "Ween", title: "Ween", cacheKey: 999_900_042 },
+    { slug: "YonderMountainStringBand", title: "Yonder Mountain String Band", cacheKey: 999_900_043 },
+];
 async function _fetchArchiveMeta(identifier) {
     const metaUrl = `https://archive.org/metadata/${encodeURIComponent(identifier)}`;
     try {
@@ -3858,6 +3921,218 @@ app.get("/api/archive/aadamjacobs", async (_req, res) => {
     }
     catch (e) {
         console.error("[archive/aadamjacobs]", e?.message ?? e);
+        res.status(502).json({ error: String(e?.message ?? e) });
+    }
+});
+// GET /api/archive/curated/list — return the dropdown shape for the
+// client. Static config; safe to fetch from anyone. Used by archive.js
+// to populate the curated-tab dropdown without duplicating the slug ↔
+// title map on the client.
+app.get("/api/archive/curated/list", (_req, res) => {
+    // Return only slug + title — cacheKey is server-internal and the
+    // client never needs it. Sorted alphabetically by title (with the
+    // "The " prefix dropped for sort purposes so "The Jayhawks" lands
+    // under J like a library card).
+    const sortKey = (t) => t.replace(/^The\s+/i, "").toLowerCase();
+    const items = _ARCHIVE_CURATED_COLLECTIONS
+        .map(c => ({ slug: c.slug, title: c.title }))
+        .sort((a, b) => sortKey(a.title).localeCompare(sortKey(b.title)));
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.json({ items });
+});
+// GET /api/archive/curated/:slug — generic per-collection endpoint.
+// Same flow as /api/archive/aadamjacobs but parameterized over the
+// curated whitelist. Cache miss triggers an on-demand refresh; subsequent
+// hits serve from the per-collection release_cache row.
+app.get("/api/archive/curated/:slug", async (req, res) => {
+    const slug = String(req.params.slug || "").trim();
+    const entry = _ARCHIVE_CURATED_COLLECTIONS.find(c => c.slug === slug);
+    if (!entry) {
+        res.status(404).json({ error: "unknown collection" });
+        return;
+    }
+    const cached = await getCachedRelease(entry.cacheKey, "master-versions", _ARCHIVE_CACHE_TTL_S);
+    if (cached?.items) {
+        res.setHeader("X-SeaDisco-Cache", "hit");
+        res.json(cached);
+        return;
+    }
+    try {
+        const { count } = await _refreshArchiveCache(entry.slug, entry.cacheKey);
+        const fresh = await getCachedRelease(entry.cacheKey, "master-versions");
+        res.setHeader("X-SeaDisco-Cache", "miss");
+        res.json(fresh ?? { items: [], fetchedAt: new Date().toISOString(), count });
+    }
+    catch (e) {
+        console.error(`[archive/curated/${slug}]`, e?.message ?? e);
+        res.status(502).json({ error: String(e?.message ?? e) });
+    }
+});
+// GET /api/archive/search?q=...&page=1&rows=48 — general archive.org
+// search restricted to playable audio. The q is wrapped in a query
+// that requires `mediatype:audio` AND at least one MP3 file in the
+// item, so every returned row should have something the client can
+// play through the existing _locPlay → /api/archive/item/:id resolver.
+//
+// Cache: 90 days in archive_search_cache, keyed on canonicalized
+// (q | page | rows). Once a query is cached, subsequent hits never
+// reach archive.org — by design, since their catalog is essentially
+// stable on that horizon. Anons are rate-limited 30/hour as a bot
+// backstop on the cache-miss path.
+const _ARCHIVE_SEARCH_TTL_S = 90 * 24 * 60 * 60; // 90 days
+app.get("/api/archive/search", async (req, res) => {
+    // Open to anons — the page itself is too. Rate limiter only
+    // matters on cache misses (cached responses skip upstream entirely).
+    const callerId = await allowAnonRateLimited(req, res, anonArchiveLimiter);
+    if (callerId === null)
+        return;
+    // ── Inputs ────────────────────────────────────────────────────
+    const qRaw = String(req.query.q ?? "").trim();
+    // q is technically optional now — a creator-only or subject-only
+    // search is meaningful — but require AT LEAST one filter so we
+    // don't return the entire archive.
+    const creator = String(req.query.creator ?? "").trim().slice(0, 120);
+    const subject = String(req.query.subject ?? "").trim().slice(0, 80);
+    const collection = String(req.query.collection ?? "").trim().slice(0, 80);
+    const yearFromRaw = String(req.query.yearFrom ?? "").trim();
+    const yearToRaw = String(req.query.yearTo ?? "").trim();
+    const yearFrom = /^\d{4}$/.test(yearFromRaw) ? yearFromRaw : "";
+    const yearTo = /^\d{4}$/.test(yearToRaw) ? yearToRaw : "";
+    // excludePodcasts default true — most users browsing for music
+    // don't want podcast feeds polluting results. Client toggles via
+    // ?excludePodcasts=0.
+    const excludePodcasts = String(req.query.excludePodcasts ?? "1") !== "0";
+    if (!qRaw && !creator && !subject && !collection && !yearFrom && !yearTo) {
+        res.json({ items: [], numFound: 0, page: 1, rows: 48 });
+        return;
+    }
+    if (qRaw.length > 200) {
+        res.status(400).json({ error: "q too long" });
+        return;
+    }
+    const page = Math.max(1, Math.min(20, parseInt(String(req.query.page ?? "1"), 10) || 1));
+    const rows = Math.max(1, Math.min(96, parseInt(String(req.query.rows ?? "48"), 10) || 48));
+    // Sort whitelist. Each entry is the upstream sort directive that
+    // gets passed directly to archive.org's `sort[]=` param. Default
+    // is downloads desc (popularity). Adding entries here is safe —
+    // unrecognized values fall back to the default.
+    const sortKey = String(req.query.sort ?? "popularity").trim();
+    const SORT_MAP = {
+        popularity: "downloads desc",
+        newest: "publicdate desc",
+        oldest: "publicdate asc",
+        showNewest: "date desc",
+        showOldest: "date asc",
+        titleAsc: "titleSorter asc",
+        titleDesc: "titleSorter desc",
+        rated: "avg_rating desc",
+    };
+    const sortDirective = SORT_MAP[sortKey] || SORT_MAP.popularity;
+    // ── Cache key ─────────────────────────────────────────────────
+    // Canonicalize all inputs that affect the result set so two
+    // semantically identical queries collapse to one cache row.
+    const qNorm = qRaw.toLowerCase().replace(/\s+/g, " ");
+    const cacheKey = `archive-search|q=${qNorm}|cr=${creator.toLowerCase()}|sb=${subject.toLowerCase()}|cl=${collection.toLowerCase()}|yf=${yearFrom}|yt=${yearTo}|ep=${excludePodcasts ? 1 : 0}|so=${sortKey}|p=${page}|r=${rows}`;
+    const cached = await getArchiveSearchCache(cacheKey, _ARCHIVE_SEARCH_TTL_S);
+    if (cached) {
+        res.setHeader("X-SeaDisco-Cache", "hit");
+        res.json(cached);
+        return;
+    }
+    // ── Compose upstream query ───────────────────────────────────
+    // Always require playable audio + an MP3 file. Then AND in
+    // user-supplied filters. Each filter wraps in quotes so values
+    // with spaces (multi-word names / tags) bind correctly.
+    const parts = [`mediatype:audio`, `format:("MP3" OR "VBR MP3")`];
+    if (qRaw)
+        parts.push(`(${qRaw})`);
+    if (creator)
+        parts.push(`creator:"${creator.replace(/"/g, "")}"`);
+    if (subject)
+        parts.push(`subject:"${subject.replace(/"/g, "")}"`);
+    if (collection) {
+        // Accept either a single slug or a comma-separated list. The
+        // client uses the comma-list to pass a "union of music
+        // collections" set when the Category dropdown's broader entries
+        // are selected (e.g. audio_music,etree,78rpm,opensource_audio).
+        // Strip quotes defensively, then OR them together.
+        const slugs = collection.split(",").map(s => s.trim().replace(/"/g, "")).filter(Boolean);
+        if (slugs.length === 1) {
+            parts.push(`collection:"${slugs[0]}"`);
+        }
+        else if (slugs.length > 1) {
+            parts.push(`collection:(${slugs.map(s => `"${s}"`).join(" OR ")})`);
+        }
+    }
+    if (yearFrom || yearTo) {
+        const lo = yearFrom || "1800";
+        const hi = yearTo || new Date().getFullYear().toString();
+        parts.push(`year:[${lo} TO ${hi}]`);
+    }
+    if (excludePodcasts) {
+        // archive.org tags every podcast item with the audio_podcast
+        // collection. Subtracting that collection from the search
+        // cleanly cuts feed-style content out of music browsing.
+        parts.push(`-collection:audio_podcast`);
+    }
+    const filtered = parts.join(" AND ");
+    // Request the extended field set for richer cards. avg_rating,
+    // num_reviews, downloads land as numbers; subject/collection
+    // as multi-valued arrays. Anything missing on the doc is just
+    // absent — we render conditionally.
+    const fl = [
+        "identifier", "title", "date", "year", "description", "creator",
+        "subject", "collection", "avg_rating", "num_reviews", "downloads",
+    ].map(f => `&fl[]=${f}`).join("");
+    const url = `https://archive.org/advancedsearch.php?q=${encodeURIComponent(filtered)}` +
+        fl +
+        `&rows=${rows}&page=${page}&output=json&sort[]=${encodeURIComponent(sortDirective)}`;
+    try {
+        const r = await loggedFetch("archive", url, {
+            headers: {
+                "User-Agent": "SeaDisco/1.0 (+https://seadisco.com)",
+                "Accept": "application/json",
+            },
+            context: `archive-search`,
+        });
+        if (!r.ok) {
+            res.status(502).json({ error: `archive HTTP ${r.status}` });
+            return;
+        }
+        const body = await r.json();
+        const docs = (body?.response?.docs ?? []).filter((d) => d?.identifier);
+        const numFound = Number(body?.response?.numFound ?? docs.length);
+        const arrStr = (v) => Array.isArray(v) ? v.filter((x) => typeof x === "string") :
+            typeof v === "string" ? [v] : [];
+        const items = docs.map((d) => ({
+            identifier: d.identifier,
+            title: String(d.title ?? d.identifier),
+            date: Array.isArray(d.date) ? d.date[0] : (d.date ?? ""),
+            year: typeof d.year === "string" ? d.year : (Array.isArray(d.year) ? d.year[0] : ""),
+            description: Array.isArray(d.description) ? d.description.join(" ") : (d.description ?? ""),
+            creator: Array.isArray(d.creator) ? d.creator.join(", ") : (d.creator ?? ""),
+            subject: arrStr(d.subject).slice(0, 8), // cap to keep payloads bounded
+            collection: arrStr(d.collection).slice(0, 6),
+            avgRating: Number.isFinite(Number(d.avg_rating)) ? Number(d.avg_rating) : null,
+            numReviews: Number.isFinite(Number(d.num_reviews)) ? Number(d.num_reviews) : null,
+            downloads: Number.isFinite(Number(d.downloads)) ? Number(d.downloads) : null,
+            itemUrl: `https://archive.org/details/${encodeURIComponent(d.identifier)}`,
+            streamUrl: "", // resolved lazily by /api/archive/item/:id on play
+            duration: "",
+        }));
+        const payload = {
+            items,
+            numFound,
+            page,
+            rows,
+            fetchedAt: new Date().toISOString(),
+        };
+        await setArchiveSearchCache(cacheKey, payload);
+        res.setHeader("X-SeaDisco-Cache", "miss");
+        res.json(payload);
+    }
+    catch (e) {
+        console.error("[archive/search]", e?.message ?? e);
         res.status(502).json({ error: String(e?.message ?? e) });
     }
 });
@@ -7526,7 +7801,19 @@ app.get("/search", async (req, res) => {
     if (!userId)
         return;
     const rawQ = req.query.q ?? "";
-    const artist = stripArtistSuffix(req.query.artist);
+    // Preserve the Discogs disambiguator suffix "(N)" verbatim — it's the
+    // only thing that distinguishes "John Lee (26)" from "John Lee Hooker"
+    // when the user clicks an artist credit. We previously stripped it
+    // before forwarding to Discogs, which collapsed every variant of the
+    // base name into one bag of results. We now also post-filter the
+    // returned items to require the same disambiguator in their titles —
+    // Discogs's `artist=` filter does substring matching on artist names,
+    // so the upstream call alone isn't enough to enforce uniqueness.
+    const rawArtist = req.query.artist;
+    const artist = rawArtist ? rawArtist.trim() : undefined;
+    const artistSuffixMatch = artist ? /\s*\((\d+)\)$/.exec(artist) : null;
+    const artistBase = artistSuffixMatch ? artist.slice(0, artistSuffixMatch.index).trim() : (artist ?? "");
+    const artistSuffix = artistSuffixMatch ? artistSuffixMatch[0].trim() : "";
     const rawLabel = req.query.label ?? "";
     const rawRelease = req.query.release_title ?? "";
     // Each field is sent as its own dedicated Discogs param — no promotion to q
@@ -7567,6 +7854,28 @@ app.get("/search", async (req, res) => {
             page: req.query.page ? parseInt(req.query.page) : 1,
             perPage: req.query.per_page ? parseInt(req.query.per_page) : 12,
         });
+        // Disambiguator post-filter: when the artist has "(N)" suffix the
+        // user means that specific Discogs artist, not every artist whose
+        // name starts with the base. Discogs's `artist=` filter alone does
+        // substring matching, so "John Lee (26)" still returns John Lee
+        // Hooker etc. We require the result title to carry the same "(N)"
+        // suffix on the artist segment.
+        //
+        // Result titles are shaped "Artist - Title" or "Artist (N) - Title"
+        // for releases/masters, "Artist (N)" or "Artist" for artists. We
+        // strict-match the disambiguator only — bare-base matches go to
+        // the canonical artist (Discogs reserves the unsuffixed name for
+        // the first claimant) which is a different entity from "(26)".
+        if (artistSuffix && results?.results?.length) {
+            const r = results;
+            const fullDisambig = `${artistBase.toLowerCase()} ${artistSuffix.toLowerCase()}`;
+            r.results = r.results.filter((it) => {
+                const title = (it?.title ?? "").toLowerCase();
+                if (!title)
+                    return false;
+                return title.startsWith(fullDisambig + " - ") || title === fullDisambig;
+            });
+        }
         res.json(results);
     }
     catch (err) {
@@ -7733,18 +8042,35 @@ app.get("/artist-bio", async (req, res) => {
     // Strip suffix for the Discogs search query, but keep original for exact matching
     const nameForSearch = nameRaw.replace(/\s*\(\d+\)$/, "").trim();
     const nameForMatch = nameRaw.trim();
+    // Whether the original name carries a "(N)" disambiguator suffix.
+    // When set, we MUST find an exact-disambig match — falling back to
+    // a same-base neighbor (e.g. "John Lee Hooker" when the user asked
+    // for "John Lee (26)") would surface the wrong artist's bio above
+    // the result grid. Better to return no bio than the wrong bio.
+    const hasDisambig = /\s*\(\d+\)$/.test(nameRaw);
     try {
         const discogsResults = await dc.search(nameForSearch, { type: "artist", perPage: 20 });
         const candidates = discogsResults?.results ?? [];
         const norm = (s) => s.toLowerCase().replace(/[^a-z0-9\s]/g, "").trim();
         // Match against the full name (including suffix) so "Snail Mail (2)" finds the right entry
         const searchNorm = norm(nameForMatch);
-        let best = candidates.find(a => norm(a.title) === searchNorm)
-            ?? candidates.find(a => {
-                const an = norm(a.title);
-                return an.startsWith(norm(nameForSearch)) || norm(nameForSearch).startsWith(an);
-            })
-            ?? candidates[0];
+        let best;
+        if (hasDisambig) {
+            // Strict: exact-disambig match only. No startsWith fallback.
+            best = candidates.find(a => norm(a.title) === searchNorm);
+            if (!best) {
+                res.json({ profile: null, name: nameForMatch });
+                return;
+            }
+        }
+        else {
+            best = candidates.find(a => norm(a.title) === searchNorm)
+                ?? candidates.find(a => {
+                    const an = norm(a.title);
+                    return an.startsWith(norm(nameForSearch)) || norm(nameForSearch).startsWith(an);
+                })
+                ?? candidates[0];
+        }
         if (!best?.id) {
             res.json({ profile: null, name: nameForMatch });
             return;
@@ -7752,8 +8078,10 @@ app.get("/artist-bio", async (req, res) => {
         let artist = await dc.getArtist(best.id);
         let profile = artist?.profile ?? null;
         // If best match has no profile, check remaining candidates in parallel
-        // but only accept a fallback whose name has word overlap with the search
-        if (!profile && candidates.length > 1) {
+        // but only accept a fallback whose name has word overlap with the search.
+        // Skip this fallback when the user asked for a specific "(N)" disambig —
+        // returning a same-base neighbor's bio would surface the wrong artist.
+        if (!profile && !hasDisambig && candidates.length > 1) {
             const sigWords = (s) => new Set(s.toLowerCase().replace(/[^a-z0-9\s]/g, "").split(/\s+/).filter(w => w.length > 3));
             const searchWords = sigWords(nameForSearch);
             const nameMatches = (title) => [...sigWords(title)].some(w => searchWords.has(w));

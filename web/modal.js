@@ -3717,7 +3717,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
       // Credit name uses the unified lookup popup (SeaDisco / collection
       // / YouTube / Wiki / LOC). The blues-DB add icon stays inline as
       // an admin mutation, not a search.
-      const nameEl = entityLookupLinkHtml("artist", a.name, { className: "credit-name", title: `Lookup options for ${a.name}` });
+      const nameEl = entityLookupLinkHtml("artist", a.name, { className: "credit-name", title: `Lookup options for ${a.name}`, entityId: a.id });
       const searchIcon = bluesAddIcon(a.id, a.name);
       return `<span class="credit-item">${nameEl}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}${searchIcon}</span>`;
     });
@@ -4033,7 +4033,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         const suggestBtn = "";
         const trackCredits = (t.extraartists ?? []).length
           ? `<div class="track-credits">${t.extraartists.map(a => {
-              const nameEl = entityLookupLinkHtml("artist", a.name, { className: "credit-name", title: `Lookup options for ${a.name}` });
+              const nameEl = entityLookupLinkHtml("artist", a.name, { className: "credit-name", title: `Lookup options for ${a.name}`, entityId: a.id });
               const credSearchIcon = `${bluesAddIcon(a.id, a.name)}`;
               // Role parentheses come right after the name; the blues-DB
               // admin mutation (if any) trails. The \u2315 / W / \ud83c\udfdb / YT
@@ -4081,7 +4081,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         ${typeLabel ? `<div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.3rem"><div class="album-type-badge" style="cursor:pointer;user-select:none" onclick="navigator.clipboard.writeText('${escHtml(String(releaseId))}');this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy ID">${escHtml(typeLabel)}</div><button class="popup-share-inline" onclick="sharePopup(this)" title="Copy share link">share</button></div>` : ""}
         ${d._signInForMore ? `<div style="font-size:0.75rem;color:var(--muted);background:rgba(255,255,255,0.04);border-left:2px solid var(--accent);padding:0.4rem 0.6rem;border-radius:4px;margin-bottom:0.5rem">Sign in to load full release details (tracklist, credits, marketplace).</div>` : ""}
         <h2>${entityLookupLinkHtml("release", title, { className: "modal-title-link", title: `Lookup options for "${title}"` })}</h2>
-        ${artistEntries.length ? `<div class="album-artist">${artistEntries.map(({ id: aId, name: n }) => `${entityLookupLinkHtml("artist", n, { className: "modal-artist-link", title: `Lookup options for ${n}` })}${bluesAddIcon(aId, n)}`).join(", ")}</div>` : ""}
+        ${artistEntries.length ? `<div class="album-artist">${artistEntries.map(({ id: aId, name: n }) => `${entityLookupLinkHtml("artist", n, { className: "modal-artist-link", title: `Lookup options for ${n}`, entityId: aId })}${bluesAddIcon(aId, n)}`).join(", ")}</div>` : ""}
         ${detailRows ? `<div class="album-detail-grid">${detailRows}</div>` : ""}
         ${(() => {
           const r = d.community?.rating;
