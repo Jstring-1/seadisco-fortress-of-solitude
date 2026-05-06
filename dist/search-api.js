@@ -7974,6 +7974,128 @@ app.get("/master/:id", async (req, res) => {
         res.status(500).json({ error: "Discogs API error" });
     }
 });
+// GET /artist-releases?id=N&page=P&per_page=M&sort=year|title&sort_order=asc|desc
+//
+// Reliable "show me only THIS artist's records" path, used when the
+// caller already has the Discogs artist ID (e.g. clicking an artist
+// credit in a popup that plumbs entityId through). Hits Discogs's
+// /artists/:id/releases endpoint directly — bypasses the substring
+// matching of /database/search?artist= which can't disambiguate
+// "John Lee (26)" from "John Lee Hooker".
+//
+// Response is reshaped to look like /search results so the existing
+// client-side renderCard / renderResults pipeline works unchanged:
+//   { results: [{ id, type, title: "Artist - Album", year, thumb,
+//                 cover_image, format[], label[], uri, master_id?, role }],
+//     pagination: {...} }
+//
+// Genre / style / country / catno are not part of Discogs's artist
+// discography response, so cards from this surface render those
+// fields blank — acceptable trade-off for ensuring the artist match
+// is exact. Per-card enrichment (the cached release fetch on hover
+// or popup open) backfills the missing metadata.
+app.get("/artist-releases", async (req, res) => {
+    if (!await requireUser(req, res))
+        return;
+    const id = parseInt(req.query.id, 10);
+    if (!Number.isFinite(id) || id <= 0) {
+        res.status(400).json({ error: "Missing or invalid id" });
+        return;
+    }
+    const dc = await getDiscogsForRequest(req);
+    if (!dc) {
+        res.status(503).json({ error: "No Discogs OAuth connection" });
+        return;
+    }
+    const page = req.query.page ? parseInt(req.query.page, 10) : 1;
+    const perPage = req.query.per_page ? parseInt(req.query.per_page, 10) : 48;
+    const sortRaw = req.query.sort || "";
+    const sortOrderRaw = req.query.sort_order || "";
+    // Discogs only supports sort=year|title|format on this endpoint.
+    // Map the search.js sort field names through; anything else
+    // (relevance, label, catno) — drop the param so Discogs's own
+    // ordering applies (most recent year first).
+    const sort = sortRaw === "year" || sortRaw === "title" || sortRaw === "format"
+        ? sortRaw
+        : undefined;
+    const sortOrder = sortOrderRaw === "asc" || sortOrderRaw === "desc"
+        ? sortOrderRaw
+        : undefined;
+    // Optional role filter — default to "Main" so feat/cameo/credit-only
+    // appearances don't drown out actual primary releases. Pass
+    // role=all to include every contribution.
+    const roleParam = req.query.role || "main";
+    const onlyMain = roleParam !== "all";
+    // Optional type filter — "master" / "release" / "all" (default).
+    const typeParam = req.query.type || "all";
+    try {
+        const data = await dc.getArtistReleases(id, {
+            sort,
+            sortOrder,
+            page,
+            perPage,
+        });
+        const releases = data?.releases ?? [];
+        let items = releases;
+        if (onlyMain)
+            items = items.filter(r => (r?.role ?? "Main") === "Main");
+        if (typeParam === "master")
+            items = items.filter(r => r?.type === "master");
+        if (typeParam === "release")
+            items = items.filter(r => r?.type === "release");
+        // Reshape to /search response shape. Title becomes "Artist - Album"
+        // so renderCard's split-on-" - " correctly recovers the artist
+        // segment for hover / lookup affordances.
+        const reshaped = items.map(r => {
+            const artistName = (r?.artist ?? "").toString();
+            const albumTitle = (r?.title ?? "").toString();
+            const composedTitle = artistName && albumTitle
+                ? `${artistName} - ${albumTitle}`
+                : (albumTitle || artistName || "");
+            const fmt = r?.format ?? "";
+            const formatArr = Array.isArray(fmt)
+                ? fmt
+                : (typeof fmt === "string" && fmt ? fmt.split(",").map((s) => s.trim()).filter(Boolean) : []);
+            const lbl = r?.label ?? "";
+            const labelArr = Array.isArray(lbl)
+                ? lbl
+                : (typeof lbl === "string" && lbl ? lbl.split(",").map((s) => s.trim()).filter(Boolean) : []);
+            const itemType = r?.type === "master" ? "master" : "release";
+            const uri = itemType === "master"
+                ? `/master/${r?.id}`
+                : `/release/${r?.id}`;
+            return {
+                id: r?.id,
+                type: itemType,
+                title: composedTitle,
+                year: r?.year ?? "",
+                thumb: r?.thumb ?? "",
+                cover_image: r?.thumb ?? "", // search uses cover_image; renderCard reads it
+                format: formatArr,
+                label: labelArr,
+                genre: [],
+                style: [],
+                country: "",
+                catno: "",
+                uri,
+                // Surface main_release so the master+ orphan-detection path
+                // (which keys off "release with no master") can be made
+                // smarter later if we want; today the client de-dupes by
+                // ${type}:${id} which is enough for most cases.
+                ...(itemType === "master" && r?.main_release ? { main_release: r.main_release } : {}),
+                role: r?.role ?? "Main",
+            };
+        });
+        res.json({
+            pagination: data?.pagination ?? { page, pages: 1, per_page: perPage, items: reshaped.length },
+            results: reshaped,
+        });
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Discogs API error" });
+    }
+});
 // GET /artist/:id
 app.get("/artist/:id", async (req, res) => {
     if (!await requireUser(req, res))
