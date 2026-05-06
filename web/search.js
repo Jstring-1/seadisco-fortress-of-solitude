@@ -1972,10 +1972,21 @@ function _loadHistoryIntoRandom() {
   _applyFavoritesSort();
 }
 
+// Sequence counter: every loadRandomRecords invocation bumps this,
+// captures the value, and re-checks it before each state mutation.
+// Stops a stale in-flight call (e.g. Feed's slow /api/feed/random
+// fetch) from clobbering _randomAll after the user has already
+// switched tabs to Recent and seen the new render — the bug
+// manifested as "Recent cards flash, then Feed cards replace them"
+// when clicking between strip tabs quickly.
+let _randomLoadSeq = 0;
+
 async function loadRandomRecords(more) {
   const grid = document.getElementById("random-records-grid");
   const wrap = document.getElementById("random-records");
   if (!grid || !wrap) return;
+  const _mySeq = ++_randomLoadSeq;
+  const _stillCurrent = () => _mySeq === _randomLoadSeq;
   // Anon-mode default: load the public Feed (random cached albums).
   // Force the strip mode to "feed" since Recent / Suggestions /
   // Submitted all require signin — keeps the rendering path clean
@@ -2018,8 +2029,10 @@ async function loadRandomRecords(more) {
       if (window._clerk?.user) {
         try {
           const r = await apiFetch("/api/user/my-submitted-albums?limit=200");
+          if (!_stillCurrent()) return;
           if (r.ok) {
             const j = await r.json();
+            if (!_stillCurrent()) return;
             if (Array.isArray(j?.items) && j.items.length) {
               _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
             }
@@ -2044,8 +2057,10 @@ async function loadRandomRecords(more) {
           // through it client-side via Load More so dismissing many
           // doesn't leave the user empty-handed.
           const r = await apiFetch("/api/user/personal-suggestions?limit=1000");
+          if (!_stillCurrent()) return;
           if (r.ok) {
             const j = await r.json();
+            if (!_stillCurrent()) return;
             if (Array.isArray(j?.items) && j.items.length) {
               _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
             }
@@ -2054,8 +2069,10 @@ async function loadRandomRecords(more) {
       } else {
         try {
           const r = await fetch("/api/contributed-favorites/sample?limit=24&order=most", { cache: "no-store" });
+          if (!_stillCurrent()) return;
           if (r.ok) {
             const j = await r.json();
+            if (!_stillCurrent()) return;
             if (Array.isArray(j?.items) && j.items.length) {
               _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
             }
@@ -2072,8 +2089,10 @@ async function loadRandomRecords(more) {
       _randomAll = [];
       try {
         const r = await fetch("/api/feed/random?limit=96", { cache: "no-store" });
+        if (!_stillCurrent()) return;
         if (r.ok) {
           const j = await r.json();
+          if (!_stillCurrent()) return;
           if (Array.isArray(j?.items) && j.items.length) {
             _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
           }
@@ -2090,8 +2109,10 @@ async function loadRandomRecords(more) {
         let gotIt = false;
         try {
           const r = await fetch("/api/contributed-favorites/sample?limit=24&order=most", { cache: "no-store" });
+          if (!_stillCurrent()) return;
           if (r.ok) {
             const j = await r.json();
+            if (!_stillCurrent()) return;
             if (Array.isArray(j?.items) && j.items.length) {
               _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
               gotIt = true;
@@ -2101,8 +2122,10 @@ async function loadRandomRecords(more) {
         if (!gotIt) {
           try {
             const r = await fetch("/api/admin-favorites/sample?limit=24", { cache: "no-store" });
+            if (!_stillCurrent()) return;
             if (r.ok) {
               const j = await r.json();
+              if (!_stillCurrent()) return;
               if (Array.isArray(j?.items) && j.items.length) {
                 _randomAll = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
               }
@@ -2169,8 +2192,10 @@ async function loadRandomRecords(more) {
           .join(",");
         const url = `/api/feed/random?limit=48${seen ? "&exclude=" + encodeURIComponent(seen) : ""}`;
         const r = await fetch(url, { cache: "no-store" });
+        if (!_stillCurrent()) return;
         if (r.ok) {
           const j = await r.json();
+          if (!_stillCurrent()) return;
           if (Array.isArray(j?.items) && j.items.length) {
             const fresh = j.items.map(it => ({ ...it, _addedAt: 0, _isSuggested: true }));
             _randomAll = (_randomAll || []).concat(fresh);
