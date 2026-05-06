@@ -4368,11 +4368,10 @@ body.card-mode-wide .card-images-strip {
 }
 .card-tracklist-rows li {
   display: grid;
-  /* Columns: actions | pos | title | dur. Actions moved to the left
-     of the position column so the play/queue buttons are the first
-     visual element on each row. Tightened: gap 0.4 → 0.2rem and
-     pos column 2 → 1.5rem so the title column claims back the room. */
-  grid-template-columns: auto 1.5rem 1fr auto;
+  /* Columns: actions | pos | title. Duration column dropped — it was
+     rendering inconsistently across cards and doesn't earn its space
+     at card-tile size. Saved for the album popup. */
+  grid-template-columns: auto 1.5rem 1fr;
   gap: 0.2rem;
   align-items: center;
   padding: 0.12rem 0;
@@ -4385,7 +4384,6 @@ body.card-mode-wide .card-images-strip {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.card-track-dur { color: #777; font-variant-numeric: tabular-nums; }
 /* Per-track ▶ / ＋ buttons. Tiny so the row stays compact. Disabled
    variant (no YT match) is dimmed and non-clickable. */
 .card-track-actions {
