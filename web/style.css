@@ -4451,7 +4451,12 @@ body.card-mode-wide .card-images-strip {
   justify-content: space-between;
   gap: 0.4rem;
 }
-.card-tracklist-head-label { flex: 0 1 auto; }
+/* margin-left:auto pins the label to the right edge regardless of
+   whether the play/queue-all actions are present. justify-content:
+   space-between only spreads when there are 2+ children — when only
+   the label renders (no playable tracks → no actions), it would
+   otherwise collapse to the left. */
+.card-tracklist-head-label { flex: 0 1 auto; margin-left: auto; }
 .card-tracklist-head-actions {
   display: inline-flex;
   gap: 0.3rem;
