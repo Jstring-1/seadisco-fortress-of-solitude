@@ -2250,6 +2250,18 @@ function goHome() {
     }
     // Collapse the advanced panel but keep its inputs filled
     if (typeof toggleAdvanced === "function") toggleAdvanced(false);
+    // Reset the home strip to its default tab. Without this, clicking
+    // the logo from /?strip=suggestions left the strip on Suggestions
+    // even though the URL pin had been stripped — the in-memory mode
+    // wasn't tied to the URL and there was no other path that brought
+    // it back. Anons land on Feed (Recent / Suggestions / Submitted
+    // require sign-in); everyone else lands on Recent.
+    if (window._sdHomeStripMode !== undefined && typeof window._sdSwitchHomeStripTab === "function") {
+      const defaultMode = (typeof window._clerk !== "undefined" && window._clerk?.user) ? "recent" : "feed";
+      if (window._sdHomeStripMode !== defaultMode) {
+        try { window._sdSwitchHomeStripTab(defaultMode); } catch {}
+      }
+    }
     // Scroll back to the top so the user lands on the search box
     window.scrollTo({ top: 0, behavior: "smooth" });
   } catch {
