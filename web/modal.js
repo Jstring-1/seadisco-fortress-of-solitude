@@ -2700,11 +2700,11 @@ function _trackYtRefreshHeadingMissingCount(root) {
   });
   const link = root.querySelector(".tracklist-find-missing");
   if (!link) return;
-  // YT submission is normally admin-only (quota-constrained). The
-  // YT_OPEN_TO_USERS env-var relaxes this to all signed-in users for
-  // the Google API quota demo — _sdHasYtAccess() encapsulates the rule.
-  const hasYt = typeof window._sdHasYtAccess === "function" ? window._sdHasYtAccess() : !!window._isAdmin;
-  if (missing < 1 || !window._clerk?.user || !hasYt) {
+  // Surfaces for every signed-in user while YT auto-search is
+  // suspended — the popup opens the paste-URL form so users can
+  // stage videos they found externally. Was previously gated on
+  // _sdHasYtAccess() (admin/demo/YT_OPEN_TO_USERS).
+  if (missing < 1 || !window._clerk?.user) {
     link.style.display = "none";
     return;
   }
@@ -2799,12 +2799,9 @@ function _trackYtOpenSuggest(el) {
     if (typeof showToast === "function") showToast("Sign in to suggest videos", "info");
     return;
   }
-  // Normally admin-only; relaxed via YT_OPEN_TO_USERS env-var.
-  const hasYt = typeof window._sdHasYtAccess === "function" ? window._sdHasYtAccess() : !!window._isAdmin;
-  if (!hasYt) {
-    if (typeof showToast === "function") showToast("YouTube submissions are admin-only right now (quota request pending).", "info");
-    return;
-  }
+  // Open to all signed-in users while YT auto-search is suspended.
+  // The popup falls through to the paste-URL flow so users can
+  // stage videos they found on youtube.com directly.
   // Walk up to the popup root to find the masterId / releaseId.
   // The album popup body has #album-info or #version-info as the
   // closest container; the type+id come from the popup share button's
@@ -2897,12 +2894,12 @@ async function _trackYtOpenAlbumSuggest(el) {
     if (typeof showToast === "function") showToast("Sign in to suggest videos", "info");
     return;
   }
-  // Normally admin-only; relaxed via YT_OPEN_TO_USERS env-var.
-  const hasYt = typeof window._sdHasYtAccess === "function" ? window._sdHasYtAccess() : !!window._isAdmin;
-  if (!hasYt) {
-    if (typeof showToast === "function") showToast("YouTube submissions are admin-only right now (quota request pending).", "info");
-    return;
-  }
+  // Open to all signed-in users while the YouTube quota-increase
+  // request is pending. The popup auto-search is suppressed for
+  // everyone (see openYoutubePopup) so we don't burn the existing
+  // quota before the bump lands; users can still paste URLs they
+  // found externally and stage them as track overrides via the
+  // popup's paste form.
   const popupRoot = el.closest("#album-info, #version-info");
   if (!popupRoot) return;
   const releaseId   = popupRoot.dataset?.releaseId  || "";
@@ -2995,17 +2992,15 @@ async function _trackYtOpenAlbumSuggest(el) {
   };
   // Clear the per-track context so the popup knows it's in album mode.
   window._sdSuggestForTrack = null;
-  // Tail with the literal word "album" so YouTube biases toward full-
-  // album uploads (which is what the missing-tracks flow can actually
-  // chop apart) rather than a single-track music video that happens to
-  // share the title. Append "-live" to filter out live recordings,
-  // UNLESS the album title itself contains "live" (in which case the
-  // excluded keyword would gut the actual results).
+  // Append "-live" to filter out live recordings, UNLESS the album
+  // title itself contains "live" (in which case the excluded
+  // keyword would gut the actual results). Previously we also
+  // tailed with the literal word "album" to bias toward full-album
+  // uploads, but it stifled too many otherwise-valid results.
   const _albumTitleHasLive = /\blive\b/i.test(albumTitle || "");
   const q = [
     albumArtist ? `"${albumArtist}"` : "",
     albumTitle ? `"${albumTitle}"` : "",
-    "album",
     _albumTitleHasLive ? "" : "-live",
   ].filter(Boolean).join(" ");
   if (typeof window.openYoutubePopup === "function") {
@@ -3905,22 +3900,24 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   // knows what to look up; the click handler ignores it (still pulls
   // artist/title fresh from the popup DOM at click time).
   const _albumFirstArtist = (artists && artists[0]) ? String(artists[0]) : "";
-  // Keep this in sync with _trackYtOpenAlbumSuggest's query — trailing
-  // "album" biases YouTube toward full-album uploads. The hover-preview
-  // lookup uses this query so what the user sees on hover matches what
-  // the click actually searches. We append "-live" to filter out live-
-  // recording uploads UNLESS the album itself is a live record (its
-  // title carries the word "live"), in which case excluding it would
-  // strip the very thing we're searching for.
+  // Keep this in sync with _trackYtOpenAlbumSuggest's query. We
+  // append "-live" to filter out live-recording uploads UNLESS the
+  // album itself is a live record (its title carries the word
+  // "live"), in which case excluding it would strip the very thing
+  // we're searching for. The trailing "album" hint was dropped —
+  // it was suppressing too many otherwise-valid results.
   const _albumTitleHasLive = /\blive\b/i.test(title || "");
   const _ytAlbumQ = [
     _albumFirstArtist ? `"${_albumFirstArtist}"` : "",
     title ? `"${title}"` : "",
-    "album",
     _albumTitleHasLive ? "" : "-live",
   ].filter(Boolean).join(" ");
-  const albumFindMissingLink = (missingCount >= 1 && window._clerk?.user && hasYtAccess)
-    ? ` <a href="#" class="tracklist-find-missing" data-yt-q="${escHtml(_ytAlbumQ)}" onmouseenter="_ytEnrichLastSearched(this)" onclick="event.preventDefault();event.stopPropagation();_trackYtOpenAlbumSuggest(this);return false" title="Search YouTube once for the whole album and assign videos to all missing tracks at once">🎵 ${missingCount} missing</a>`
+  // Surface the missing-tracks link for every signed-in user while
+  // the YT auto-search is suspended — the popup itself opens the
+  // paste-URL form so users can stage videos they found externally.
+  // hasYtAccess is no longer required (was admin/demo/YT_OPEN_TO_USERS).
+  const albumFindMissingLink = (missingCount >= 1 && window._clerk?.user)
+    ? ` <a href="#" class="tracklist-find-missing" data-yt-q="${escHtml(_ytAlbumQ)}" onmouseenter="_ytEnrichLastSearched(this)" onclick="event.preventDefault();event.stopPropagation();_trackYtOpenAlbumSuggest(this);return false" title="Stage YouTube URLs for missing tracks (paste links you found on youtube.com)">🎵 ${missingCount} missing</a>`
     : "";
   const playableMeta = playableCount
     ? `<span class="tracklist-playable">(${playableCount}${firstPlayableUrl ? ` <a href="#" class="tracklist-play-all" onclick="event.preventDefault();event.stopPropagation();playAlbumAndQueue(this,'${firstPlayableUrl.replace(/'/g, "\\'")}')" title="Play the first track and queue the rest of the album">▶</a>` : ""}${playableCount >= 1 ? ` <a href="#" class="tracklist-queue-album" onclick="event.preventDefault();event.stopPropagation();queueAddAlbum(this)" title="Add all playable tracks to the bottom of your queue">＋</a>` : ""}${albumFindMissingLink})</span>`

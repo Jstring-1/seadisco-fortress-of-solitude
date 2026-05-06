@@ -842,10 +842,12 @@ app.get("/api/track-yt/for-release", async (req, res) => {
 // already exists at that (releaseId, releaseType, trackPosition) — so
 // the client can treat "already taken" as a successful no-op.
 app.post("/api/track-yt/suggest", express.json({ limit: "8kb" }), async (req, res) => {
-  // YT submission flow normally admin-only; relaxed to all signed-in
-  // users when YT_OPEN_TO_USERS=1 (Google API quota demo). Toggle
-  // back via Railway env-var, no redeploy needed.
-  const userId = await requireYtAccess(req, res);
+  // Open to every signed-in user. The submission flow itself
+  // doesn't spend YouTube quota (the row goes straight into
+  // track_youtube_overrides), so widening access here just means
+  // more users can contribute video matches they found on
+  // youtube.com. Auto-search remains gated separately.
+  const userId = await requireUser(req, res);
   if (!userId) return;
   const b = req.body ?? {};
   const releaseId   = b.releaseId != null ? String(b.releaseId) : "";
@@ -881,8 +883,8 @@ app.post("/api/track-yt/suggest", express.json({ limit: "8kb" }), async (req, re
 // are silently skipped. Caps batch size at 64 so a hand-edited POST
 // can't try to write a thousand rows in one go.
 app.post("/api/track-yt/suggest-batch", express.json({ limit: "64kb" }), async (req, res) => {
-  // See /api/track-yt/suggest comment for the YT_OPEN_TO_USERS toggle.
-  const userId = await requireYtAccess(req, res);
+  // See /api/track-yt/suggest comment — open to all signed-in users.
+  const userId = await requireUser(req, res);
   if (!userId) return;
   const raw = Array.isArray(req.body?.assignments) ? req.body.assignments : [];
   const items: Parameters<typeof suggestTrackYtOverridesBatch>[0] = [];
@@ -4925,7 +4927,12 @@ app.get("/api/youtube/search", async (req, res) => {
 const _ytVideoInfoCache = new Map<string, { ts: number; body: any }>();
 const _YT_VIDEO_INFO_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 app.get("/api/youtube/video-info", async (req, res) => {
-  if (!await requireYtAccess(req, res)) return;
+  // Open to every signed-in user while the YT auto-search is
+  // suspended — the per-video info call is only 1 quota unit
+  // (cached) and lets users stage URLs they found on youtube.com
+  // without burning the 100-unit search.list cost. The daily soft-
+  // cap below still gates total usage.
+  if (!await requireUser(req, res)) return;
   const videoId = String(req.query?.videoId ?? "").trim();
   if (!/^[A-Za-z0-9_-]{11}$/.test(videoId)) {
     res.status(400).json({ error: "Bad videoId" });
