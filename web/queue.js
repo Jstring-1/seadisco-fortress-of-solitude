@@ -787,6 +787,12 @@ function _renderRepeatBtn() {
   btn.title = _queueRepeat === "off" ? "Repeat: off (click to cycle)"
             : _queueRepeat === "all" ? "Repeat: all (click to cycle)"
             :                          "Repeat: one (click to cycle)";
+  // Mini-player bar's repeat indicator mirrors the same state — kept
+  // in lockstep here so toggling from the drawer side also updates
+  // the bar's icon/color/title without an event-bus roundtrip.
+  if (typeof window._syncMiniBarRepeatBtn === "function") {
+    try { window._syncMiniBarRepeatBtn(); } catch {}
+  }
 }
 
 // ── Drawer UI ───────────────────────────────────────────────────────
