@@ -7148,7 +7148,19 @@ app.get("/search", async (req, res) => {
   if (!userId) return;
 
   const rawQ   = (req.query.q as string) ?? "";
-  const artist = stripArtistSuffix(req.query.artist as string | undefined);
+  // Preserve the Discogs disambiguator suffix "(N)" verbatim — it's the
+  // only thing that distinguishes "John Lee (26)" from "John Lee Hooker"
+  // when the user clicks an artist credit. We previously stripped it
+  // before forwarding to Discogs, which collapsed every variant of the
+  // base name into one bag of results. We now also post-filter the
+  // returned items to require the same disambiguator in their titles —
+  // Discogs's `artist=` filter does substring matching on artist names,
+  // so the upstream call alone isn't enough to enforce uniqueness.
+  const rawArtist = req.query.artist as string | undefined;
+  const artist = rawArtist ? rawArtist.trim() : undefined;
+  const artistSuffixMatch = artist ? /\s*\((\d+)\)$/.exec(artist) : null;
+  const artistBase = artistSuffixMatch ? artist!.slice(0, artistSuffixMatch.index).trim() : (artist ?? "");
+  const artistSuffix = artistSuffixMatch ? artistSuffixMatch[0].trim() : "";
   const rawLabel = (req.query.label as string) ?? "";
   const rawRelease = (req.query.release_title as string) ?? "";
 
@@ -7193,6 +7205,27 @@ app.get("/search", async (req, res) => {
       page: req.query.page ? parseInt(req.query.page as string) : 1,
       perPage: req.query.per_page ? parseInt(req.query.per_page as string) : 12,
     });
+    // Disambiguator post-filter: when the artist has "(N)" suffix the
+    // user means that specific Discogs artist, not every artist whose
+    // name starts with the base. Discogs's `artist=` filter alone does
+    // substring matching, so "John Lee (26)" still returns John Lee
+    // Hooker etc. We require the result title to carry the same "(N)"
+    // suffix on the artist segment.
+    //
+    // Result titles are shaped "Artist - Title" or "Artist (N) - Title"
+    // for releases/masters, "Artist (N)" or "Artist" for artists. We
+    // strict-match the disambiguator only — bare-base matches go to
+    // the canonical artist (Discogs reserves the unsuffixed name for
+    // the first claimant) which is a different entity from "(26)".
+    if (artistSuffix && (results as any)?.results?.length) {
+      const r = results as any;
+      const fullDisambig = `${artistBase.toLowerCase()} ${artistSuffix.toLowerCase()}`;
+      r.results = r.results.filter((it: any) => {
+        const title = (it?.title ?? "").toLowerCase();
+        if (!title) return false;
+        return title.startsWith(fullDisambig + " - ") || title === fullDisambig;
+      });
+    }
     res.json(results);
   } catch (err) {
     console.error(err);
