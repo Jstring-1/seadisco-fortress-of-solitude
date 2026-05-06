@@ -2441,14 +2441,42 @@ function playerClose() {
 // user can hide the chrome to reach those rows, then restore via the
 // floating tab. Distinct from playerClose / playerStop which actually
 // stop the audio.
+// Hide-state is persisted in localStorage so a reload doesn't
+// resurrect the bar — without the persist, returning to /
+// re-rendered the queue's idle-mode bar even though the user had
+// explicitly dismissed it. _BAR_HIDDEN_KEY is cleared whenever a
+// new track is played (openVideo / _locPlay), so playing anything
+// implicitly re-shows the bar without forcing the user to hunt
+// for the floating "show player" tab.
+const _BAR_HIDDEN_KEY = "sd_player_bar_hidden";
 function hideMiniPlayerBar() {
   document.body.classList.add("mini-player-bar-hidden");
+  try { localStorage.setItem(_BAR_HIDDEN_KEY, "1"); } catch {}
 }
 function showMiniPlayerBar() {
   document.body.classList.remove("mini-player-bar-hidden");
+  try { localStorage.removeItem(_BAR_HIDDEN_KEY); } catch {}
 }
 window.hideMiniPlayerBar = hideMiniPlayerBar;
 window.showMiniPlayerBar = showMiniPlayerBar;
+
+// Apply persisted hide state on first paint so the body class lands
+// before _queueRefreshIdleBar tries to surface the bar. Any new
+// track play will clear the flag (see openVideo / LOC engine).
+if (typeof document !== "undefined") {
+  const _applyHiddenState = () => {
+    try {
+      if (localStorage.getItem(_BAR_HIDDEN_KEY) === "1") {
+        document.body.classList.add("mini-player-bar-hidden");
+      }
+    } catch {}
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", _applyHiddenState);
+  } else {
+    _applyHiddenState();
+  }
+}
 
 // ⏹ button on the media bar — stop whatever's playing and forget the
 // current track + progress. The queue itself is preserved (use Clear
@@ -3325,6 +3353,10 @@ function openVideo(event, url) {
   mp.classList.add("open");
   _setPlayerEngine("yt");
   document.body.classList.add("player-open");
+  // Playing a new track implicitly un-hides the bar — clear the
+  // persisted hide flag so the user doesn't have to hunt for the
+  // restore tab after dismissing the idle bar earlier.
+  if (typeof showMiniPlayerBar === "function") showMiniPlayerBar();
   loadYTVideo(id);
   updateVideoNavButtons();
 }
