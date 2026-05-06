@@ -2998,9 +2998,16 @@ async function _trackYtOpenAlbumSuggest(el) {
   // Tail with the literal word "album" so YouTube biases toward full-
   // album uploads (which is what the missing-tracks flow can actually
   // chop apart) rather than a single-track music video that happens to
-  // share the title.
-  const q = [albumArtist ? `"${albumArtist}"` : "", albumTitle ? `"${albumTitle}"` : "", "album"]
-    .filter(Boolean).join(" ");
+  // share the title. Append "-live" to filter out live recordings,
+  // UNLESS the album title itself contains "live" (in which case the
+  // excluded keyword would gut the actual results).
+  const _albumTitleHasLive = /\blive\b/i.test(albumTitle || "");
+  const q = [
+    albumArtist ? `"${albumArtist}"` : "",
+    albumTitle ? `"${albumTitle}"` : "",
+    "album",
+    _albumTitleHasLive ? "" : "-live",
+  ].filter(Boolean).join(" ");
   if (typeof window.openYoutubePopup === "function") {
     window.openYoutubePopup(q);
   } else if (typeof window._sdLoadModule === "function") {
@@ -3901,9 +3908,17 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   // Keep this in sync with _trackYtOpenAlbumSuggest's query — trailing
   // "album" biases YouTube toward full-album uploads. The hover-preview
   // lookup uses this query so what the user sees on hover matches what
-  // the click actually searches.
-  const _ytAlbumQ = [_albumFirstArtist ? `"${_albumFirstArtist}"` : "", title ? `"${title}"` : "", "album"]
-    .filter(Boolean).join(" ");
+  // the click actually searches. We append "-live" to filter out live-
+  // recording uploads UNLESS the album itself is a live record (its
+  // title carries the word "live"), in which case excluding it would
+  // strip the very thing we're searching for.
+  const _albumTitleHasLive = /\blive\b/i.test(title || "");
+  const _ytAlbumQ = [
+    _albumFirstArtist ? `"${_albumFirstArtist}"` : "",
+    title ? `"${title}"` : "",
+    "album",
+    _albumTitleHasLive ? "" : "-live",
+  ].filter(Boolean).join(" ");
   const albumFindMissingLink = (missingCount >= 1 && window._clerk?.user && hasYtAccess)
     ? ` <a href="#" class="tracklist-find-missing" data-yt-q="${escHtml(_ytAlbumQ)}" onmouseenter="_ytEnrichLastSearched(this)" onclick="event.preventDefault();event.stopPropagation();_trackYtOpenAlbumSuggest(this);return false" title="Search YouTube once for the whole album and assign videos to all missing tracks at once">🎵 ${missingCount} missing</a>`
     : "";

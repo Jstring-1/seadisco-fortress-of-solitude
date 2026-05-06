@@ -594,15 +594,6 @@ async function openYoutubePopup(query) {
   if (!overlay) return;
   overlay.classList.add("open");
   if (typeof _sdLockBodyScroll === "function") _sdLockBodyScroll("yt-popup");
-  // Loosen-search button: surface only when the caller has YT-submit
-  // access AND the current query actually contains exact-phrase quotes
-  // (otherwise loosening would re-fire the same query for no reason).
-  const loosenBtn = document.getElementById("youtube-popup-loosen");
-  if (loosenBtn) {
-    const hasYt = typeof window._sdHasYtAccess === "function" ? window._sdHasYtAccess() : !!window._isAdmin;
-    const hasQuotes = /"/.test(q);
-    loosenBtn.style.display = (hasYt && hasQuotes) ? "" : "none";
-  }
   // Album mode: show "Find missing tracks for ALBUM" + clear any
   // prior staged-assignments map. Per-track mode keeps the original
   // YouTube · "query" title.
@@ -1106,28 +1097,6 @@ async function _youtubeSuggestForTrack(btn) {
     btn.textContent = oldText;
   }
 }
-
-// "Loosen ↻" button — re-runs the current popup search with the
-// exact-phrase quotes stripped. Useful when the canonical
-// "Artist" "Album" query returns nothing because the YouTube uploader
-// titled the video with a slightly different artist/album spelling
-// (compilations, mistitled live tapes, alternate transliterations,
-// etc.). The looser query (no quotes) is also a fresh cache key so
-// the result set is independent. Stays in album mode if applicable —
-// re-using openYoutubePopup preserves the album context strip + paste
-// form + Stage flow.
-function _youtubePopupLoosen() {
-  const q = _ytPopupQuery || "";
-  if (!q) return;
-  // Strip every double-quote — leaves the bare bag-of-words query.
-  // Collapse any double spaces it created.
-  const loosened = q.replace(/"/g, "").replace(/\s+/g, " ").trim();
-  if (!loosened || loosened === q) return;
-  // Re-open with the loosened query. openYoutubePopup is idempotent
-  // wrt overlay state — it'll re-fire the search and re-render.
-  openYoutubePopup(loosened);
-}
-window._youtubePopupLoosen = _youtubePopupLoosen;
 
 // "Full page ↗" link click — close the popup, navigate to the
 // standalone /?v=youtube view with the same query so the user can

@@ -4790,7 +4790,12 @@ app.get("/api/youtube/search", async (req, res) => {
     const params = [
       "part=snippet",
       "type=video",
-      "maxResults=24",
+      // 50 is the YouTube Data API v3 ceiling per request and the
+      // quota cost (100 units) is flat regardless of count — so
+      // pulling the max per call gives us the most candidates per
+      // unit spent. Cached server-side so subsequent identical
+      // queries cost zero.
+      "maxResults=50",
       `q=${encodeURIComponent(q)}`,
       `key=${encodeURIComponent(_youtubeApiKey)}`,
     ];
