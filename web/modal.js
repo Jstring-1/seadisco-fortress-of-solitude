@@ -2636,10 +2636,9 @@ function _trackYtApplyToDom(targetId, masterId, releaseId, isMaster) {
       const albumTitle  = root?.querySelector?.("h2")?.textContent?.trim() || "";
       const entityType  = isMaster ? "master" : "release";
       const playHtml = `<a class="track-play-btn track-link" href="#" data-video="${url}" data-track="${escHtml(trackTitle)}" data-album="${escHtml(albumTitle)}" data-artist="${escHtml(trackArtist)}" data-release-type="${entityType}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="openVideo(event,'${url}')" title="Play this track">▶</a>`;
-      if (playCell) playCell.innerHTML = playHtml;
-      // Append ＋ queue button at the end of the title cell, before
-      // any badges/credits. Just put it at the very end — credits
-      // come later via the credits row layout.
+      // ＋ queue button sits immediately after ▶ in the play-cell so
+      // the play / queue affordances stay grouped together (matches
+      // the static render at <span class="track-play-cell">${playCell}${queueAdd}</span>).
       // Mark the Full Album row's queue-add icon so the album-level
       // bulk-queue (queueAddAlbum) skips it — without this attr, post-
       // render override injection would let "Queue album" pick up the
@@ -2647,15 +2646,12 @@ function _trackYtApplyToDom(targetId, masterId, releaseId, isMaster) {
       const isFullAlbumRow = String(pos) === "ALBUM";
       const fullAlbumAttr = isFullAlbumRow ? ' data-fullalbum="1"' : "";
       const queueAddHtml = ` <a href="#" class="queue-add-icon"${fullAlbumAttr} data-yt-url="${url}" data-track="${escHtml(trackTitle)}" data-album="${escHtml(albumTitle)}" data-artist="${escHtml(trackArtist)}" data-release-type="${entityType}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackQueueAdd(this);return false" title="${isFullAlbumRow ? "Add full album to play queue" : "Add to play queue"}">＋</a>`;
-      // Avoid double-inserting: only add if not already there.
-      if (!titleCell.querySelector(`.queue-add-icon[data-yt-url="${url}"]`)) {
-        // Insert before any .track-credits subtree so credits stay last.
-        const credits = titleCell.querySelector(".track-credits");
-        const tmpl = document.createElement("template");
-        tmpl.innerHTML = queueAddHtml.trim();
-        if (credits) credits.before(tmpl.content);
-        else titleCell.appendChild(tmpl.content);
-      }
+      if (playCell) playCell.innerHTML = `${playHtml}${queueAddHtml}`;
+      // Migrate any pre-existing queue-add icon that was historically
+      // injected into the title cell back into the play cell — keeps
+      // older sessions consistent without leaving a stray ＋ behind.
+      const stale = titleCell.querySelector(`.queue-add-icon[data-yt-url="${url}"]`);
+      if (stale) stale.remove();
       row.dataset.ytOverride = "1";
     }
     // Now decorate the row's title with the badge / admin delete /
