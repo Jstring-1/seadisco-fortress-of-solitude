@@ -2680,6 +2680,10 @@ function _trackYtApplyToDom(targetId, masterId, releaseId, isMaster) {
   // (which counted overrides as missing because the cache was empty
   // before the fetch landed).
   _trackYtRefreshHeadingMissingCount(root);
+  // Same idea for the playable count + Play-all / Queue-all affordances:
+  // override-patched rows didn't exist when the heading was first
+  // built, so the (count ▶ ＋) block was empty. Recount + rebuild.
+  _trackYtRefreshHeadingPlayableCount(root);
 }
 window._trackYtApplyToDom = _trackYtApplyToDom;
 
@@ -2708,6 +2712,83 @@ function _trackYtRefreshHeadingMissingCount(root) {
   link.textContent = `🎵 ${missing} missing`;
 }
 window._trackYtRefreshHeadingMissingCount = _trackYtRefreshHeadingMissingCount;
+
+// Recount playable tracks from the DOM (rows with a .track-link in
+// .track-play-cell, excluding the Full Album pseudo-row) and rebuild
+// the .tracklist-playable affordance block — "(N ▶ ＋ 🎵 N missing)".
+// Needed when the render-time count was zero (no Discogs videos and
+// the override cache was cold) but per-track ▶ ＋ buttons subsequently
+// got patched in by _trackYtApplyToDom — the heading was stuck on
+// "()" with no Play-all / Queue-all affordances.
+function _trackYtRefreshHeadingPlayableCount(root) {
+  if (!root) return;
+  const heading = root.querySelector(".album-tracklist .tracklist-heading");
+  if (!heading) return;
+  const rows = root.querySelectorAll(".album-tracklist .track[data-pos]");
+  let count = 0;
+  let firstUrl = "";
+  rows.forEach(row => {
+    if (row.dataset.pos === "ALBUM") return;     // skip Full Album row
+    const link = row.querySelector(".track-play-cell .track-link");
+    if (!link) return;
+    count++;
+    if (!firstUrl) firstUrl = link.getAttribute("data-video") || "";
+  });
+  let span = heading.querySelector(".tracklist-playable");
+  // Preserve any existing 🎵-missing link so we don't have to rebuild
+  // its dataset attrs (yt-q etc) — _trackYtRefreshHeadingMissingCount
+  // will re-tune its text + visibility on its own pass.
+  const existingMissing = span?.querySelector(".tracklist-find-missing") || null;
+  if (count === 0) {
+    if (!span) return;
+    if (existingMissing) {
+      span.textContent = "(";
+      span.appendChild(existingMissing);
+      span.append(")");
+    } else {
+      span.remove();
+    }
+    return;
+  }
+  if (!span) {
+    span = document.createElement("span");
+    span.className = "tracklist-playable";
+    heading.appendChild(span);
+  }
+  span.textContent = "";
+  span.append(`(${count}`);
+  if (firstUrl) {
+    const playAll = document.createElement("a");
+    playAll.href = "#";
+    playAll.className = "tracklist-play-all";
+    playAll.title = "Play the first track and queue the rest of the album";
+    playAll.textContent = "▶";
+    const safeUrl = firstUrl.replace(/'/g, "\\'");
+    playAll.setAttribute(
+      "onclick",
+      `event.preventDefault();event.stopPropagation();playAlbumAndQueue(this,'${safeUrl}')`
+    );
+    span.append(" ");
+    span.appendChild(playAll);
+  }
+  const queueAll = document.createElement("a");
+  queueAll.href = "#";
+  queueAll.className = "tracklist-queue-album";
+  queueAll.title = "Add all playable tracks to the bottom of your queue";
+  queueAll.textContent = "＋";
+  queueAll.setAttribute(
+    "onclick",
+    "event.preventDefault();event.stopPropagation();queueAddAlbum(this)"
+  );
+  span.append(" ");
+  span.appendChild(queueAll);
+  if (existingMissing) {
+    span.append(" ");
+    span.appendChild(existingMissing);
+  }
+  span.append(")");
+}
+window._trackYtRefreshHeadingPlayableCount = _trackYtRefreshHeadingPlayableCount;
 
 // Click handler for the per-row 🎵 suggest affordance. Stashes the
 // track context on window so youtube.js's popup can pick it up + show
