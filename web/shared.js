@@ -1247,7 +1247,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260506.0932";
+  const SITE_VERSION = "build 20260506.0936";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -1679,19 +1679,17 @@ function _lookupSearchSeaDisco(scope, label, entityId) {
       if (qEl) qEl.value = label;
     }
     // Default every popup-driven SeaDisco search to Masters+ result
-    // type. Sort default depends on scope:
-    //   - artist:  no sort (Discogs relevance) — the user wants to
-    //     "see more" by this artist, including the album they jumped
-    //     from. year:asc surfaces 1950s/60s pressings first and pushes
-    //     the originating album off page 1 even when it's the
-    //     artist's best-known release.
-    //   - track / release / label / catno: year:asc — for these scopes
-    //     the user is usually hunting the canonical / original
-    //     pressing, so oldest-first is the right default.
+    // type and oldest-first (year:asc) sort. The earlier concern
+    // that year:asc on an artist click would push the originating
+    // album off page 1 no longer applies: artist clicks now route
+    // through /artist-releases (exact match by Discogs ID), which
+    // returns the artist's entire discography rather than a
+    // substring-matched bag, so chronological order is the
+    // expected default.
     const masterPlusRadio = document.querySelector('input[name="result-type"][value="master+"]');
     if (masterPlusRadio) masterPlusRadio.checked = true;
     const sortEl = document.getElementById("f-sort");
-    if (sortEl) sortEl.value = scope === "artist" ? "" : "year:asc";
+    if (sortEl) sortEl.value = "year:asc";
     if (typeof doSearch === "function") doSearch(1);
   }, 30);
 }
