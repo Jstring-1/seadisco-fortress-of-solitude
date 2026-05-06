@@ -109,6 +109,9 @@ function clearFormFieldsOnly() {
   document.getElementById("f-style").innerHTML = '<option value="">Any</option>';
   document.getElementById("f-style").disabled = true;
   document.querySelector('input[name="result-type"][value=""]').checked = true;
+  // Also drop any pinned Discogs artist ID so the next search isn't
+  // accidentally narrowed to the previous popup-clicked artist.
+  try { window.currentArtistId = null; } catch {}
 
   document.getElementById("search-desc").textContent = "";
   document.getElementById("search-returned").textContent = "";
@@ -281,17 +284,46 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
 
     let items, totalPages_new, totalItems_new = 0;
 
+    // Pure artist-by-id discography: when currentArtistId is pinned
+    // (set by the lookup popup or alt-artist click) and the user
+    // hasn't layered any other constraints onto the search, route
+    // through /artist-releases — Discogs's /database/search?artist=
+    // does substring matching that can't disambiguate "John Lee (26)"
+    // from "John Lee Hooker", but /artists/:id/releases is exact by
+    // construction. This guarantees the user only sees releases by
+    // the specific artist they clicked.
+    const useArtistById = !!(window.currentArtistId && artist && !q && !release && !year && !label && !genre && !style && !format && !country);
+    const buildArtistByIdParams = (perPage, type) => {
+      const p = new URLSearchParams({
+        id: String(window.currentArtistId),
+        page: String(page),
+        per_page: String(perPage),
+      });
+      if (type) p.set("type", type);
+      // /artist-releases supports sort=year|title|format only; map
+      // through what we can, drop the rest.
+      if (sort) {
+        const [sf, so] = sort.split(":");
+        if (sf === "year" || sf === "title" || sf === "format") {
+          p.set("sort", sf);
+          if (so === "asc" || so === "desc") p.set("sort_order", so);
+        }
+      }
+      return p;
+    };
+
     // Masters+ mode: run master + release searches in parallel, merge.
     // Resilient to partial failures — if one endpoint errors or returns
     // nothing (e.g. exhausted pagination), use whatever succeeded.
     const isMasterPlus = resultType === "master+";
     let searchPromise;
     if (isMasterPlus) {
-      const masterParams = buildParams(48); masterParams.set("type", "master");
-      const releaseParams = buildParams(48); releaseParams.set("type", "release");
+      const masterParams  = useArtistById ? buildArtistByIdParams(48, "master")  : (() => { const p = buildParams(48); p.set("type", "master");  return p; })();
+      const releaseParams = useArtistById ? buildArtistByIdParams(48, "release") : (() => { const p = buildParams(48); p.set("type", "release"); return p; })();
+      const endpoint = useArtistById ? "artist-releases" : "search";
       searchPromise = Promise.all([
-        apiFetch(`${API}/search?${masterParams}`).catch(e => ({ ok: false, status: 0, _err: e })),
-        apiFetch(`${API}/search?${releaseParams}`).catch(e => ({ ok: false, status: 0, _err: e })),
+        apiFetch(`${API}/${endpoint}?${masterParams}`).catch(e => ({ ok: false, status: 0, _err: e })),
+        apiFetch(`${API}/${endpoint}?${releaseParams}`).catch(e => ({ ok: false, status: 0, _err: e })),
       ]).then(async ([mRes, rRes]) => {
         mRes._masterPlus = true;
         // Forward auth/rate-limit errors (check both responses)
@@ -336,6 +368,12 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
         }
         return mRes;
       });
+    } else if (useArtistById) {
+      // Single-type artist-by-id (or no result-type chosen) — same
+      // /artist-releases route, just one call. type=all returns both
+      // masters and releases mixed.
+      const typeForId = (resultType === "master" || resultType === "release") ? resultType : "all";
+      searchPromise = apiFetch(`${API}/artist-releases?${buildArtistByIdParams(48, typeForId === "all" ? "" : typeForId)}`);
     } else {
       searchPromise = apiFetch(`${API}/search?${buildParams(48)}`);
     }
