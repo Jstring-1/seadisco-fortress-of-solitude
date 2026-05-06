@@ -612,11 +612,17 @@ function _sdInjectEnrichmentIntoCards(row) {
           // Actions column moved to the LEFT of pos so the play/queue
           // affordances are the first thing the eye lands on. Grid
           // template in style.css matches: actions | pos | title | dur.
+          // Track duration was rendering inconsistently across cards
+          // (only present on items whose Discogs metadata included it
+          // and only after enrichment landed) and added little value
+          // at card-tile size. Saved for the album popup, where the
+          // tracklist heading + per-row duration column has space to
+          // render cleanly. The grid-template in style.css still
+          // reserves the column so existing CSS doesn't reflow.
           return `<li>
             <span class="card-track-actions">${playBtn}${queueBtn}</span>
             <span class="card-track-pos">${escText(t.position || "")}</span>
             <span class="card-track-title">${titleHtml}</span>
-            ${t.duration ? `<span class="card-track-dur">${escText(t.duration)}</span>` : ""}
           </li>`;
         };
         const fullAlbumRow = fullAlbumUrl
@@ -1247,7 +1253,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260506.1248";
+  const SITE_VERSION = "build 20260506.1302";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
