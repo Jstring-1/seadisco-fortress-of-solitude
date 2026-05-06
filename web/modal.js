@@ -3885,7 +3885,7 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         return `<div class="track track-fullalbum" data-pos="ALBUM"${fullAlbumUrl ? ' data-yt-override="1"' : ""}${hideStyle}>
           <span class="track-play-cell">${playCellFA}${queueAddFA}</span>
           <span class="track-pos">Full</span>
-          <span class="track-title"><span class="track-title-link">Full album</span>${overrideBadgeFA}</span>
+          <span class="track-title"><span class="track-title-link">Full album as one track</span>${overrideBadgeFA}</span>
         </div>`;
       })()}
       ${tracks.map(t => {
