@@ -8108,6 +8108,76 @@ app.get("/artist-releases", async (req, res) => {
         res.status(500).json({ error: "Discogs API error" });
     }
 });
+// GET /label-releases?id=N&page=P&per_page=M
+//
+// Same idea as /artist-releases but for labels. Discogs's
+// /labels/:id/releases is exact-match by label ID and avoids the
+// "Vee-Jay" / "Vee-Jay Records" / "Vee Jay" substring quirks of
+// /database/search?label=. Used by the lookup popup when a Label
+// detail-row is clicked, so "Search SeaDisco" only surfaces actual
+// releases on that specific label.
+//
+// Response items only have type=release (Discogs doesn't expose
+// masters in this endpoint), so master+ result-type is collapsed
+// to release-only when this route is taken.
+app.get("/label-releases", async (req, res) => {
+    if (!await requireUser(req, res))
+        return;
+    const id = parseInt(req.query.id, 10);
+    if (!Number.isFinite(id) || id <= 0) {
+        res.status(400).json({ error: "Missing or invalid id" });
+        return;
+    }
+    const dc = await getDiscogsForRequest(req);
+    if (!dc) {
+        res.status(503).json({ error: "No Discogs OAuth connection" });
+        return;
+    }
+    const page = req.query.page ? parseInt(req.query.page, 10) : 1;
+    const perPage = req.query.per_page ? parseInt(req.query.per_page, 10) : 48;
+    try {
+        const data = await dc.getLabelReleases(id, { page, perPage });
+        const releases = data?.releases ?? [];
+        const reshaped = releases.map(r => {
+            const artistName = (r?.artist ?? "").toString();
+            const albumTitle = (r?.title ?? "").toString();
+            const composedTitle = artistName && albumTitle
+                ? `${artistName} - ${albumTitle}`
+                : (albumTitle || artistName || "");
+            const fmt = r?.format ?? "";
+            const formatArr = Array.isArray(fmt)
+                ? fmt
+                : (typeof fmt === "string" && fmt ? fmt.split(",").map((s) => s.trim()).filter(Boolean) : []);
+            const uri = `/release/${r?.id}`;
+            return {
+                id: r?.id,
+                type: "release",
+                title: composedTitle,
+                year: r?.year ?? "",
+                thumb: r?.thumb ?? "",
+                cover_image: r?.thumb ?? "",
+                format: formatArr,
+                // Echo the queried label as the result label so cards keep
+                // their "Label" line populated. The Discogs response doesn't
+                // re-include label info on each item.
+                label: [],
+                genre: [],
+                style: [],
+                country: "",
+                catno: r?.catno ?? "",
+                uri,
+            };
+        });
+        res.json({
+            pagination: data?.pagination ?? { page, pages: 1, per_page: perPage, items: reshaped.length },
+            results: reshaped,
+        });
+    }
+    catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Discogs API error" });
+    }
+});
 // GET /artist/:id
 app.get("/artist/:id", async (req, res) => {
     if (!await requireUser(req, res))
