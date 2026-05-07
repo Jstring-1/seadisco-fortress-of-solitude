@@ -1824,6 +1824,48 @@ function _ytPruneUnavailable(videoId, advance) {
   if (typeof showToast === "function") {
     showToast("Track unavailable — skipping", "error");
   }
+
+  // Add to the in-session unavailable set so subsequent renders
+  // (popup reopen, switchView away/back) treat the track as
+  // missing immediately, instead of waiting for the server-side
+  // threshold to flip its status. findVideo() already consults
+  // window._sdYtUnavailable on every lookup.
+  try {
+    if (!(window._sdYtUnavailable instanceof Set)) window._sdYtUnavailable = new Set();
+    window._sdYtUnavailable.add(String(videoId));
+  } catch {}
+
+  // Drop any matching rows from any currently-open album / version
+  // popup tracklist so the user doesn't see a row that the engine
+  // just confirmed is dead. We match against either the play
+  // button's data-video URL or any embedded videoId substring.
+  // Then refresh the heading's missing + playable counts so the
+  // (N ▶ ＋) block and the "🎵 N missing" link reflect the new
+  // state. (Server-side report-unavailable already happens in the
+  // onError handler — this is just the visual cleanup.)
+  try {
+    const matches = document.querySelectorAll(
+      `.album-tracklist .track-play-cell .track-link[data-video*="${CSS.escape(String(videoId))}"]`
+    );
+    const popupRoots = new Set();
+    matches.forEach(link => {
+      const row = link.closest(".track[data-pos]");
+      if (!row) return;
+      // The Full Album pseudo-row vanishing on a single dead video
+      // would be aggressive — leave it in place so the user can
+      // still resubmit. Only prune real per-track rows.
+      if (row.dataset.pos === "ALBUM") return;
+      const popupRoot = row.closest("#album-info, #version-info");
+      row.remove();
+      if (popupRoot) popupRoots.add(popupRoot);
+    });
+    popupRoots.forEach(root => {
+      if (typeof _trackYtRefreshHeadingMissingCount === "function") _trackYtRefreshHeadingMissingCount(root);
+      if (typeof _trackYtRefreshHeadingPlayableCount === "function") _trackYtRefreshHeadingPlayableCount(root);
+    });
+  } catch (e) {
+    console.warn("[yt-prune] popup-row cleanup failed:", e);
+  }
   // Snapshot the album-track fallback BEFORE queueRemove fires.
   // queueRemove → playerClose → closeVideo synchronously WIPES
   // window._videoQueue when the dead video was the only or last
@@ -2756,6 +2798,11 @@ function _trackYtRefreshHeadingMissingCount(root) {
   const rows = root.querySelectorAll(".album-tracklist .track[data-pos]");
   let missing = 0;
   rows.forEach(row => {
+    // Skip the Full Album pseudo-row — it's a freebie/perk when an
+    // override exists, not a "missing track" the user is responsible
+    // for. Counting it surfaced misleading "1 missing" / "3 missing"
+    // values when only the full-album entry was unset.
+    if (row.dataset.pos === "ALBUM") return;
     if (!row.querySelector(".track-play-cell .track-link")) missing++;
   });
   const link = root.querySelector(".tracklist-find-missing");
