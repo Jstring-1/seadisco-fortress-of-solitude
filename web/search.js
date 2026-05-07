@@ -358,7 +358,11 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
           results: merged,
           pagination: {
             pages: Math.max(mData?.pagination?.pages ?? 0, rData?.pagination?.pages ?? 0, 1),
-            items: (mData?.pagination?.items ?? 0) + uniqueOrphans.length,
+            // Floor master_total to masters.length so a missing/zero
+            // pagination.items from Discogs (seen on some label
+            // queries) doesn't make the headline read "6" when the
+            // actual master sub-call returned 48 rows.
+            items: Math.max(mData?.pagination?.items ?? 0, masters.length) + uniqueOrphans.length,
           }
         };
         // Ensure the response we return looks OK to the caller even if
@@ -409,7 +413,15 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
     const data = res._mergedData ?? await res.json();
     items = data.results ?? [];
     totalPages_new = data.pagination?.pages ?? 1;
-    totalItems_new = data.pagination?.items ?? items.length;
+    // Discogs's pagination.items can come back missing or unreliably
+    // low for some queries (notably label searches in master+ mode,
+    // where the merged total = master_pagination.items + orphan-
+    // releases on this page; if Discogs omits the master count, the
+    // headline "Returned :: 6" undercounts the 54 cards we just
+    // rendered). Clamp to at least items.length so the meta line
+    // never reads lower than what's on screen.
+    const rawReported = data.pagination?.items ?? items.length;
+    totalItems_new = Math.max(rawReported, items.length);
     totalPages = totalPages_new;
 
     const blurbEl = document.getElementById("blurb");
