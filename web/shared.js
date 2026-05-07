@@ -1253,7 +1253,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260507.0759";
+  const SITE_VERSION = "build 20260507.0817";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -1688,6 +1688,10 @@ function _lookupSearchSeaDisco(scope, label, entityId) {
       const el = document.getElementById("f-label");
       if (el) el.value = label;
       if (typeof toggleAdvanced === "function") { try { toggleAdvanced(true); } catch {} }
+      // Pin the Discogs label ID so doSearch can route through
+      // /label-releases (exact match) instead of /database/search?label=,
+      // which does substring matching and pulls in same-named neighbors.
+      try { if (entityId) window.currentLabelId = String(entityId); else window.currentLabelId = null; } catch {}
     } else {
       // track / release / catno / unknown — generic free-text query
       const qEl = document.getElementById("query");
