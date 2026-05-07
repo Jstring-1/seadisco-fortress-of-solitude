@@ -109,9 +109,11 @@ function clearFormFieldsOnly() {
   document.getElementById("f-style").innerHTML = '<option value="">Any</option>';
   document.getElementById("f-style").disabled = true;
   document.querySelector('input[name="result-type"][value=""]').checked = true;
-  // Also drop any pinned Discogs artist ID so the next search isn't
-  // accidentally narrowed to the previous popup-clicked artist.
+  // Also drop any pinned Discogs artist / label IDs so the next
+  // search isn't accidentally narrowed to the previous popup-clicked
+  // entity.
   try { window.currentArtistId = null; } catch {}
+  try { window.currentLabelId  = null; } catch {}
 
   document.getElementById("search-desc").textContent = "";
   document.getElementById("search-returned").textContent = "";
@@ -312,12 +314,34 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
       return p;
     };
 
+    // Same idea for labels — when currentLabelId is pinned (set by
+    // the lookup popup on a Label detail-row click), route through
+    // /label-releases so we get exactly that label's catalog
+    // instead of substring-matching "Vee-Jay" against "Vee-Jay
+    // International" etc. /labels/:id/releases only returns
+    // releases (no masters), so master+ collapses to release-only
+    // when this route is taken.
+    const useLabelById = !!(window.currentLabelId && label && !q && !artist && !release && !year && !genre && !style && !format && !country);
+    const buildLabelByIdParams = (perPage) => {
+      const p = new URLSearchParams({
+        id: String(window.currentLabelId),
+        page: String(page),
+        per_page: String(perPage),
+      });
+      return p;
+    };
+
     // Masters+ mode: run master + release searches in parallel, merge.
     // Resilient to partial failures — if one endpoint errors or returns
     // nothing (e.g. exhausted pagination), use whatever succeeded.
     const isMasterPlus = resultType === "master+";
     let searchPromise;
-    if (isMasterPlus) {
+    // Label-by-id wins over master+ since /labels/:id/releases is
+    // releases-only — there's no master sub-call to make. Collapses
+    // the master+ result type to release-only for that route.
+    if (useLabelById) {
+      searchPromise = apiFetch(`${API}/label-releases?${buildLabelByIdParams(48)}`);
+    } else if (isMasterPlus) {
       const masterParams  = useArtistById ? buildArtistByIdParams(48, "master")  : (() => { const p = buildParams(48); p.set("type", "master");  return p; })();
       const releaseParams = useArtistById ? buildArtistByIdParams(48, "release") : (() => { const p = buildParams(48); p.set("type", "release"); return p; })();
       const endpoint = useArtistById ? "artist-releases" : "search";
