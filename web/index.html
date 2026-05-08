@@ -67,7 +67,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260508.0812" />
+  <link rel="stylesheet" href="/style.css?v=20260508.0852" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -105,7 +105,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260508.0812"></script>
+<script defer src="/shared.js?v=20260508.0852"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -118,6 +118,7 @@
   <div id="main-search-form" class="content-narrow">
   <div class="search-row">
     <input type="text" id="query" placeholder="Search Discogs" autocomplete="off"
+      oninput="window.currentBarcode=null"
       title="Operators: + to require multiple terms, | for either/or, - before a term to exclude." />
     <button id="search-btn" onclick="doSearch(1)" style="flex-shrink:0">Search</button>
     <!-- Wide card mode toggle moved up next to the Search button so the
@@ -126,6 +127,25 @@
          every .card-mode-toggle-btn in sync, so toggling here mirrors
          on the records page. -->
     <button type="button" id="card-mode-toggle" class="card-mode-toggle-btn" onclick="_sdToggleCardMode()" title="Toggle wide card mode (shows full title + artist)" style="background:none;border:1px solid var(--border);color:var(--muted);padding:0.2rem 0.55rem;border-radius:4px;font-size:0.72rem;cursor:pointer;flex-shrink:0;letter-spacing:0.02em">▦ Wide</button>
+    <!-- Barcode scan / lookup button. Admin-only in Phase 1; revealed
+         by shared.js once _isAdmin resolves. Inline SVG keeps the
+         icon crisp at every zoom level and avoids dragging in an
+         emoji-font fallback. Click → loads scanner.js lazily. -->
+    <button type="button" id="barcode-scan-btn" onclick="window._sdLoadModule&&window._sdLoadModule('/scanner.js').then(()=>window._sdOpenScanner&&window._sdOpenScanner())" title="Scan or enter a barcode" class="barcode-scan-btn" style="display:none">
+      <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
+        <g fill="currentColor">
+          <rect x="2"  y="5" width="1.6" height="14"/>
+          <rect x="4.6" y="5" width="0.8" height="14"/>
+          <rect x="6.6" y="5" width="2"   height="14"/>
+          <rect x="9.6" y="5" width="0.8" height="14"/>
+          <rect x="11.4" y="5" width="1.6" height="14"/>
+          <rect x="14"  y="5" width="0.8" height="14"/>
+          <rect x="15.6" y="5" width="2"   height="14"/>
+          <rect x="18.6" y="5" width="0.8" height="14"/>
+          <rect x="20.4" y="5" width="1.6" height="14"/>
+        </g>
+      </svg>
+    </button>
     <button type="button" id="swap-to-collection-btn" onclick="swapSearchToCollection()" title="Sign in to search your collection" class="swap-search-btn" disabled>⇄</button>
     <button type="button" id="clear-btn" onclick="clearForm()" title="Clear form" style="background:none;border:none;padding:0.3rem 0.5rem;font-size:1.5rem;color:#555;cursor:pointer;line-height:1;flex-shrink:0" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#555'">✕</button>
   </div>
@@ -184,9 +204,9 @@
 
   <div id="advanced-panel">
     <div class="filters-grid main-filters" style="margin-top:0.5rem">
-      <label>Artist <input type="text" id="f-artist" placeholder="e.g. Miles Davis" oninput="currentArtistId=null" /></label>
+      <label>Artist <input type="text" id="f-artist" placeholder="e.g. Miles Davis" oninput="currentArtistId=null;window.currentBarcode=null" /></label>
       <label>Release <input type="text" id="f-release" placeholder="e.g. Kind of Blue" /></label>
-      <label>Label <input type="text" id="f-label" placeholder="e.g. Columbia" oninput="currentLabelId=null" /></label>
+      <label>Label <input type="text" id="f-label" placeholder="e.g. Columbia" oninput="currentLabelId=null;window.currentBarcode=null" /></label>
       <label>Format
         <select id="f-format">
           <option value="">All Formats</option>
@@ -1042,6 +1062,31 @@ e.g.  miles davis | coltrane
   </div>
 </div>
 
+<!-- Barcode scanner overlay. Admin-only in Phase 1. Shown when the
+     ▮ scan button is tapped. Camera path uses the native
+     BarcodeDetector when available; a manual-entry input below
+     handles desktop / no-camera / denied-permission cases. The actual
+     boot logic lives in scanner.js (lazy-loaded on first open). -->
+<div id="barcode-scan-overlay" onclick="if(event.target===this)window._sdCloseScanner&&window._sdCloseScanner()" style="display:none">
+  <div id="barcode-scan-box">
+    <button class="loc-info-close" onclick="window._sdCloseScanner&&window._sdCloseScanner()" title="Close">×</button>
+    <h3 style="margin:0 0 0.5rem;font-size:1rem">Barcode lookup</h3>
+    <div id="barcode-scan-camera-wrap" style="display:none">
+      <video id="barcode-scan-video" playsinline muted autoplay></video>
+      <div class="barcode-scan-frame"></div>
+      <div id="barcode-scan-hint" class="barcode-scan-hint">Point the camera at a barcode</div>
+    </div>
+    <div id="barcode-scan-camera-status" class="barcode-scan-status"></div>
+    <div class="barcode-scan-manual">
+      <label for="barcode-scan-input" class="barcode-scan-manual-label">Or enter a barcode</label>
+      <div class="barcode-scan-manual-row">
+        <input id="barcode-scan-input" type="text" inputmode="numeric" pattern="[0-9 -]*" placeholder="UPC / EAN (8–14 digits)" autocomplete="off" />
+        <button type="button" id="barcode-scan-submit" onclick="window._sdSubmitBarcodeManual&&window._sdSubmitBarcodeManual()">Search</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="loc-info-overlay" class="loc-info-overlay" onclick="if(event.target===this)_locCloseInfoPopup()">
   <div class="loc-info-box">
     <button class="loc-info-close" onclick="_locCloseInfoPopup()">×</button>
@@ -1145,13 +1190,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260508.0812"></script>
-<script defer src="/search.js?v=20260508.0812"></script>
-<script defer src="/collection.js?v=20260508.0812"></script>
+<script defer src="/utils.js?v=20260508.0852"></script>
+<script defer src="/search.js?v=20260508.0852"></script>
+<script defer src="/collection.js?v=20260508.0852"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260508.0812"></script>
-<script defer src="/app.js?v=20260508.0812"></script>
+<script defer src="/modal.js?v=20260508.0852"></script>
+<script defer src="/app.js?v=20260508.0852"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1162,13 +1207,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260508.0812"></script>
-<script defer src="/queue.js?v=20260508.0812"></script>
+<script defer src="/loc.js?v=20260508.0852"></script>
+<script defer src="/queue.js?v=20260508.0852"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260508.0812";
+  window._SD_LAZY_VERSION = "20260508.0852";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1197,8 +1242,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260508.0812"></script>
-<script defer src="/offline.js?v=20260508.0812"></script>
+<script defer src="/idb.js?v=20260508.0852"></script>
+<script defer src="/offline.js?v=20260508.0852"></script>
 
 </body>
 </html>

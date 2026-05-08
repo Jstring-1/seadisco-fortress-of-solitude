@@ -1253,7 +1253,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260508.0812";
+  const SITE_VERSION = "build 20260508.0852";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -1575,6 +1575,12 @@ function renderSharedFooter(opts) {
         if (locA) locA.style.display = "";
         const archA = document.getElementById("footer-archive-link");
         if (archA) archA.style.display = "";
+        // Phase 1 barcode scanner: admin-only, hidden in markup,
+        // revealed once admin status confirms. Uses inline-flex so
+        // the icon centers vertically alongside the other search-row
+        // buttons that use that layout.
+        const scanBtn = document.getElementById("barcode-scan-btn");
+        if (scanBtn) scanBtn.style.display = "inline-flex";
       }
       // YouTube footer link reveals for admin, demo accounts (per-
       // user DEMO_CLERK_IDS allowlist), or when the broad
