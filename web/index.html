@@ -67,7 +67,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260508.0852" />
+  <link rel="stylesheet" href="/style.css?v=20260508.0900" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -105,7 +105,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260508.0852"></script>
+<script defer src="/shared.js?v=20260508.0900"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -131,7 +131,7 @@
          by shared.js once _isAdmin resolves. Inline SVG keeps the
          icon crisp at every zoom level and avoids dragging in an
          emoji-font fallback. Click → loads scanner.js lazily. -->
-    <button type="button" id="barcode-scan-btn" onclick="window._sdLoadModule&&window._sdLoadModule('/scanner.js').then(()=>window._sdOpenScanner&&window._sdOpenScanner())" title="Scan or enter a barcode" class="barcode-scan-btn" style="display:none">
+    <button type="button" id="barcode-scan-btn" onclick="if(window._sdOpenScanner){window._sdOpenScanner()}else if(window._sdLoadModule){window._sdLoadModule('/scanner.js').then(()=>window._sdOpenScanner&&window._sdOpenScanner())}" title="Scan or enter a barcode" class="barcode-scan-btn" style="display:none">
       <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false">
         <g fill="currentColor">
           <rect x="2"  y="5" width="1.6" height="14"/>
@@ -1190,13 +1190,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260508.0852"></script>
-<script defer src="/search.js?v=20260508.0852"></script>
-<script defer src="/collection.js?v=20260508.0852"></script>
+<script defer src="/utils.js?v=20260508.0900"></script>
+<script defer src="/search.js?v=20260508.0900"></script>
+<script defer src="/collection.js?v=20260508.0900"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260508.0852"></script>
-<script defer src="/app.js?v=20260508.0852"></script>
+<script defer src="/modal.js?v=20260508.0900"></script>
+<script defer src="/app.js?v=20260508.0900"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1207,13 +1207,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260508.0852"></script>
-<script defer src="/queue.js?v=20260508.0852"></script>
+<script defer src="/loc.js?v=20260508.0900"></script>
+<script defer src="/queue.js?v=20260508.0900"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260508.0852";
+  window._SD_LAZY_VERSION = "20260508.0900";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1242,8 +1242,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260508.0852"></script>
-<script defer src="/offline.js?v=20260508.0852"></script>
+<script defer src="/idb.js?v=20260508.0900"></script>
+<script defer src="/offline.js?v=20260508.0900"></script>
 
 </body>
 </html>
