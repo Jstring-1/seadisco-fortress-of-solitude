@@ -70,6 +70,12 @@ function pushSearchState(q, artistRaw, release, year, label, genre, sort, result
   if (sort)       p.set("s", sort);
   if (resultType) p.set("r", resultType);
   if (page > 1)   p.set("p", String(page));
+  // Persist the active barcode so deep-links to a scan result work,
+  // and reload + back/forward navigation restore the lookup. Cleared
+  // by clearFormFieldsOnly along with the other pinned IDs.
+  if (typeof window.currentBarcode === "string" && window.currentBarcode) {
+    p.set("bc", window.currentBarcode);
+  }
   history.pushState({}, "", p.toString() ? "?" + p.toString() : location.pathname);
 }
 
@@ -92,6 +98,10 @@ function restoreFromParams(p) {
   const rtype = p.get("r") || p.get("rt") || "";
   const radio = document.querySelector(`input[name="result-type"][value="${rtype}"]`);
   if (radio) radio.checked = true;
+  // Restore an active barcode lookup. doSearch reads this off
+  // window.currentBarcode and threads it through to /search?barcode=.
+  const bcParam = (p.get("bc") || "").replace(/[^0-9]/g, "");
+  try { window.currentBarcode = bcParam || null; } catch {}
   const hasAdvanced = p.get("a") || p.get("ar") || p.get("e") || p.get("re") || p.get("y") || p.get("yr") || p.get("l") || p.get("lb") || p.get("g") || p.get("gn") || p.get("t") || p.get("st") || p.get("f") || p.get("fm") || p.get("c") || p.get("co");
   if (hasAdvanced) toggleAdvanced(true);
 }
@@ -111,9 +121,11 @@ function clearFormFieldsOnly() {
   document.querySelector('input[name="result-type"][value=""]').checked = true;
   // Also drop any pinned Discogs artist / label IDs so the next
   // search isn't accidentally narrowed to the previous popup-clicked
-  // entity.
+  // entity. currentBarcode is similarly cleared so a stale code
+  // can't reattach to a freshly-typed text query.
   try { window.currentArtistId = null; } catch {}
   try { window.currentLabelId  = null; } catch {}
+  try { window.currentBarcode  = null; } catch {}
 
   document.getElementById("search-desc").textContent = "";
   document.getElementById("search-returned").textContent = "";
@@ -152,6 +164,25 @@ function searchFromAiPanel(field, value) {
 }
 
 // ── Main search ──────────────────────────────────────────────────────────
+// Scanner.js handoff: clear the form, pin the barcode, fire the
+// search. Called from a successful camera scan or the manual-entry
+// Search button. Routes through doSearch so the standard URL state /
+// pagination / heading machinery all run unchanged. The query input
+// is intentionally left blank — the URL ?bc= param plus a "Barcode:
+// …" pill above the results carry the visual cue, so a follow-up
+// text search isn't polluted by a literal "barcode:..." string in q.
+function _sdRunBarcodeSearch(barcode) {
+  const cleaned = String(barcode || "").replace(/[^0-9]/g, "");
+  if (!cleaned) return;
+  clearFormFieldsOnly();
+  try { window.currentBarcode = cleaned; } catch {}
+  if (typeof switchView === "function") {
+    try { switchView("search", true); } catch {}
+  }
+  doSearch(1);
+}
+window._sdRunBarcodeSearch = _sdRunBarcodeSearch;
+
 async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
   // A fresh, user-initiated search dismisses the AI results panel. Calls
   // from inside the AI panel pass keepAiPanel=true via searchFromAiPanel
@@ -191,7 +222,10 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
 
   if (resultType === "ai") { doAiSearch(q); return; }
 
-  if (!q && !artist && !release && !year && !label && !genre && !country) {
+  // Barcode counts as "search term" for the empty-form guard so a
+  // pure barcode lookup doesn't bounce off the missing-fields check.
+  const barcode = (typeof window.currentBarcode === "string" && window.currentBarcode) ? window.currentBarcode : "";
+  if (!q && !artist && !release && !year && !label && !genre && !country && !barcode) {
     setStatus("Enter a search term or fill in at least one filter.", false);
     return;
   }
@@ -262,6 +296,7 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
     if (style)   p.set("style",         style);
     if (format)  p.set("format",        format);
     if (country) p.set("country",      country);
+    if (barcode) p.set("barcode",      barcode);
     if (sort) {
       const [sortField, sortOrder] = sort.split(":");
       p.set("sort",       sortField);
@@ -587,7 +622,11 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
         if (lmBtn) { lmBtn.classList.remove("loading"); lmBtn.textContent = "Load more results"; }
         return;
       }
-      document.getElementById("results").innerHTML = renderEmptyState("🔍", "No results found", "Try a different search term or broaden your filters");
+      const emptyTitle = barcode ? `No release matched barcode ${barcode}` : "No results found";
+      const emptySub = barcode
+        ? "Older or independent pressings often aren't barcoded in Discogs. Try a text search by artist + album."
+        : "Try a different search term or broaden your filters";
+      document.getElementById("results").innerHTML = renderEmptyState("🔍", emptyTitle, emptySub);
       const noResAi = document.getElementById("search-ai-summary");
       noResAi.innerHTML = "<i>Couldn't find any results at Discogs.</i>";
       noResAi.title = "Couldn't find any results at Discogs.";
@@ -605,7 +644,9 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
       items = items.filter(it => !existingKeys.has(`${it.type}:${it.id}`));
     }
     const shown = _appendMode ? document.getElementById("results").querySelectorAll(".card, .card-animate").length + items.length : items.length;
-    const returnedMsg = `Returned :: ${totalItems_new.toLocaleString()} results — showing ${shown}`;
+    const returnedMsg = barcode
+      ? `Barcode ${barcode} :: ${totalItems_new.toLocaleString()} results — showing ${shown}`
+      : `Returned :: ${totalItems_new.toLocaleString()} results — showing ${shown}`;
     const retEl = document.getElementById("search-returned");
     retEl.textContent = returnedMsg;
     retEl.title = returnedMsg;

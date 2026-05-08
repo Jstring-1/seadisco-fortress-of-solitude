@@ -23,7 +23,7 @@ function _getView(p) {
   return v;
 }
 function _getPage(p) { return parseInt(p.get("p") || p.get("pg") || "1"); }
-function _hasSearch(p) { return p.get("q") || p.get("a") || p.get("ar") || p.get("e") || p.get("re") || p.get("y") || p.get("yr") || p.get("l") || p.get("lb") || p.get("g") || p.get("gn"); }
+function _hasSearch(p) { return p.get("q") || p.get("a") || p.get("ar") || p.get("e") || p.get("re") || p.get("y") || p.get("yr") || p.get("l") || p.get("lb") || p.get("g") || p.get("gn") || p.get("bc"); }
 
 // Fetch /api/me once and cache the admin flag on window. Used by URL
 // routing (wiki/loc are admin-only) so we don't briefly render the

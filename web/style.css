@@ -10013,3 +10013,135 @@ a:focus-visible {
 .lookup-popup-external:hover .lookup-popup-ext-indicator {
   color: rgba(255, 255, 255, 0.7);
 }
+
+/* ── Barcode scan button + overlay (Phase 1, admin-only) ──────────────
+   Sits in the search-row after ▦ Wide. Inline SVG keeps the icon
+   sharp at every zoom level. Hidden in markup; revealed by shared.js
+   when admin status confirms. */
+.barcode-scan-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 0.45rem;
+  height: var(--input-h);
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+.barcode-scan-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.barcode-scan-btn svg { display: block; }
+
+#barcode-scan-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.78);
+  z-index: 10010;
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 4vh 1rem 1rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+#barcode-scan-box {
+  position: relative;
+  background: #141210;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  width: min(440px, 100%);
+  padding: 1rem 1rem 1.1rem;
+  color: var(--text);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+#barcode-scan-camera-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  background: #000;
+  border-radius: 6px;
+  overflow: hidden;
+  margin: 0.6rem 0;
+}
+#barcode-scan-video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.barcode-scan-frame {
+  position: absolute;
+  top: 18%;
+  left: 10%;
+  right: 10%;
+  bottom: 18%;
+  border: 2px solid rgba(255, 165, 64, 0.7);
+  border-radius: 4px;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+.barcode-scan-hint {
+  position: absolute;
+  bottom: 0.4rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.55);
+  color: #ddd;
+  font-size: 0.74rem;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+}
+.barcode-scan-status {
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin: 0.4rem 0;
+  min-height: 1.1em;
+}
+.barcode-scan-manual {
+  margin-top: 0.6rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 0.7rem;
+}
+.barcode-scan-manual-label {
+  display: block;
+  font-size: 0.74rem;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+  letter-spacing: 0.02em;
+}
+.barcode-scan-manual-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+#barcode-scan-input {
+  flex: 1;
+  background: rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
+  padding: 0.4rem 0.55rem;
+  color: var(--text);
+  font-size: 0.85rem;
+  font-family: inherit;
+  letter-spacing: 0.04em;
+}
+#barcode-scan-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+#barcode-scan-submit {
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  color: #000;
+  cursor: pointer;
+  padding: 0.4rem 0.85rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+#barcode-scan-submit:hover { filter: brightness(1.15); }
