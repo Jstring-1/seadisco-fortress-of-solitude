@@ -7264,6 +7264,34 @@ app.get("/search", async (req, res) => {
         return title.startsWith(fullDisambig + " - ") || title === fullDisambig;
       });
     }
+    // Barcode post-filter: Discogs's `barcode=` is approximate enough
+    // that adjacent releases by the same artist can leak in. If the
+    // result row exposes a `barcode` array (search results often do),
+    // require it to contain the searched code — normalized to digits
+    // only on both sides so UPC vs EAN-13 spellings (with / without a
+    // leading 0, embedded spaces / dashes) still match. When the row
+    // lacks a barcode field we leave it in place; pruning silently
+    // would drop legitimate matches whose search payload simply didn't
+    // include the field.
+    if (searchBarcode && (results as any)?.results?.length) {
+      const r = results as any;
+      const wanted = searchBarcode.replace(/[^0-9]/g, "");
+      const wantedAlt = wanted.length === 12 ? "0" + wanted
+                      : wanted.length === 13 && wanted.startsWith("0") ? wanted.slice(1)
+                      : "";
+      r.results = r.results.filter((it: any) => {
+        const arr = it?.barcode;
+        if (!Array.isArray(arr) || !arr.length) return true; // unknown — keep
+        return arr.some((b: any) => {
+          const norm = String(b ?? "").replace(/[^0-9]/g, "");
+          if (!norm) return false;
+          return norm === wanted || (wantedAlt && norm === wantedAlt);
+        });
+      });
+      // Re-clamp the pagination items so the heading reflects the
+      // post-filter count rather than Discogs's pre-filter total.
+      if (r.pagination) r.pagination.items = r.results.length;
+    }
     res.json(results);
   } catch (err) {
     console.error(err);
