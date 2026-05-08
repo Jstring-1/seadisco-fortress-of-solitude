@@ -4017,14 +4017,15 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const fullAlbumUrl = (fullAlbumOverride && fullAlbumOverride.video_id)
     ? `https://www.youtube.com/watch?v=${fullAlbumOverride.video_id}`
     : "";
-  // Show the full-album row whenever we have an override OR the user is
-  // admin (and signed-in non-admin gates are already in place for the
-  // album-suggest entry points). _renderFullAlbumRow is generated
-  // alongside the normal track rows below.
+  // Show the full-album row only when an override actually exists.
+  // The "🎵 N missing" link in the tracklist heading is the entry
+  // point for staging one — once submitted, _trackYtApplyToDom reveals
+  // the row in-place. Previously admins/demos saw an empty placeholder
+  // row, but it cluttered the popup for albums with no override yet.
   // _sdHasYtAccess() is admin OR (signed-in && YT_OPEN_TO_USERS env on).
   // Used everywhere a "user can submit YT overrides" gate fires.
   const hasYtAccess = typeof window._sdHasYtAccess === "function" ? window._sdHasYtAccess() : !!window._isAdmin;
-  const fullAlbumRowVisible = !!fullAlbumUrl || hasYtAccess;
+  const fullAlbumRowVisible = !!fullAlbumUrl;
   // Per-track missing count only — the Full Album row is its own
   // submission affordance (it gets its own ＋ next to the play cell)
   // and including it would surface a misleading "1 missing" on albums
@@ -4105,11 +4106,12 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
                 : ""
             }`
           : "";
-        // Hide the row by default when no override AND no YT-access —
+        // Hide the row whenever there's no override yet —
         // _trackYtApplyToDom flips this off when an override lands so
-        // signed-in users on cold-cache boots still get the row
-        // revealed once the override fetch reconciles.
-        const hideStyle = (!fullAlbumUrl && !hasYtAccess) ? ' style="display:none"' : "";
+        // a cold-cache boot still reveals the row once the override
+        // fetch reconciles. The empty placeholder row was noise on
+        // albums where no full-album video has been submitted.
+        const hideStyle = !fullAlbumUrl ? ' style="display:none"' : "";
         return `<div class="track track-fullalbum" data-pos="ALBUM"${fullAlbumUrl ? ' data-yt-override="1"' : ""}${hideStyle}>
           <span class="track-play-cell">${playCellFA}${queueAddFA}</span>
           <span class="track-pos">Full</span>
