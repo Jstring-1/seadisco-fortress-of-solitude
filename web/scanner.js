@@ -28,23 +28,112 @@ function _sdScanCleanCode(raw) {
   return String(raw).replace(/[^0-9]/g, "");
 }
 
-async function _sdOpenScanner() {
+// NOT async on purpose — the camera permission prompt only fires when
+// getUserMedia is called inside the same user-activation window as
+// the original click. Any `await` between the click and getUserMedia
+// can drop the gesture on iOS Safari, causing a silent
+// NotAllowedError without a prompt. So we kick getUserMedia off
+// synchronously here and handle the resolved promise asynchronously.
+function _sdOpenScanner() {
   const overlay = _sdScanEl("barcode-scan-overlay");
   if (!overlay) return;
   overlay.style.display = "flex";
   if (typeof _sdLockBodyScroll === "function") _sdLockBodyScroll("scanner");
   _sdScanActive = true;
-  // Reset prior state so reopening the overlay doesn't carry stale
-  // status text or input value.
   const input = _sdScanEl("barcode-scan-input");
   if (input) { input.value = ""; setTimeout(() => input.focus(), 50); }
   const status = _sdScanEl("barcode-scan-camera-status");
   if (status) status.textContent = "";
-  // Try the camera path. If anything fails we silently leave the
-  // camera UI hidden and the manual-entry input is still usable.
-  await _sdScanStartCamera();
+  const wrap = _sdScanEl("barcode-scan-camera-wrap");
+
+  // Camera path bail-outs that don't need permission. Hide the
+  // camera UI; the manual-entry input below stays usable.
+  if (typeof window.BarcodeDetector !== "function") {
+    if (wrap) wrap.style.display = "none";
+    if (status) status.textContent = "Camera scan needs Chrome / Android Chrome / Edge. Type the digits below to look up.";
+    return;
+  }
+  if (!navigator.mediaDevices?.getUserMedia) {
+    if (wrap) wrap.style.display = "none";
+    if (status) status.textContent = "Camera unavailable in this browser.";
+    return;
+  }
+
+  // Kick getUserMedia off SYNCHRONOUSLY — still inside the click's
+  // user-activation window. The promise resolution is handled async
+  // below, but the prompt itself is triggered by this call.
+  let streamPromise;
+  try {
+    streamPromise = navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { ideal: "environment" },  // rear camera on phones
+        width:  { ideal: 1280 },
+        height: { ideal: 720 },
+      },
+      audio: false,
+    });
+  } catch (e) {
+    if (wrap) wrap.style.display = "none";
+    if (status) status.textContent = "Camera unavailable. Type the barcode below.";
+    console.warn("[scanner] getUserMedia threw synchronously:", e);
+    return;
+  }
+  // Init the BarcodeDetector while waiting for the stream — sync, safe.
+  try {
+    _sdScanDetector = new BarcodeDetector({
+      formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "itf"],
+    });
+  } catch (e) {
+    console.warn("[scanner] BarcodeDetector init failed:", e);
+    _sdScanDetector = null;
+  }
+  if (status) status.textContent = "Requesting camera…";
+  streamPromise.then(stream => {
+    _sdScanAttachStream(stream);
+  }).catch(err => {
+    _sdScanHandleStreamError(err);
+  });
 }
 window._sdOpenScanner = _sdOpenScanner;
+
+// Stream-resolved handler: wire up the <video>, hide status, kick
+// off the detect loop. Runs after getUserMedia's promise lands.
+async function _sdScanAttachStream(stream) {
+  if (!_sdScanActive) {
+    // User closed the overlay before permission resolved — release
+    // tracks immediately so the camera light goes off.
+    try { stream.getTracks().forEach(t => t.stop()); } catch {}
+    return;
+  }
+  _sdScanStream = stream;
+  const video = _sdScanEl("barcode-scan-video");
+  const status = _sdScanEl("barcode-scan-camera-status");
+  if (status) status.textContent = "";
+  if (!video) return;
+  video.srcObject = stream;
+  try { await video.play(); } catch {}
+  if (_sdScanDetector) _sdScanDetectLoop();
+}
+
+// Permission / camera failure handler. Hide the camera section,
+// surface a useful message, and let manual-entry carry the day.
+function _sdScanHandleStreamError(e) {
+  const wrap = _sdScanEl("barcode-scan-camera-wrap");
+  const status = _sdScanEl("barcode-scan-camera-status");
+  if (wrap) wrap.style.display = "none";
+  if (status) {
+    if (e?.name === "NotAllowedError") {
+      status.innerHTML = "Camera blocked. To enable: open site settings (lock icon → Permissions → Camera → Allow), reload, then tap ▮ again. Or just type the barcode below.";
+    } else if (e?.name === "NotFoundError") {
+      status.textContent = "No camera detected. Type the barcode below.";
+    } else if (e?.name === "NotReadableError") {
+      status.textContent = "Camera busy in another app. Type the barcode below.";
+    } else {
+      status.textContent = "Camera unavailable. Type the barcode below.";
+    }
+  }
+  console.warn("[scanner] getUserMedia failed:", e?.name || e, e);
+}
 
 function _sdCloseScanner() {
   _sdScanActive = false;
@@ -54,72 +143,6 @@ function _sdCloseScanner() {
   _sdScanStopCamera();
 }
 window._sdCloseScanner = _sdCloseScanner;
-
-async function _sdScanStartCamera() {
-  const wrap = _sdScanEl("barcode-scan-camera-wrap");
-  const video = _sdScanEl("barcode-scan-video");
-  const status = _sdScanEl("barcode-scan-camera-status");
-  if (!wrap || !video) return;
-  // BarcodeDetector is the cheap path — Chromium-only but covers
-  // most mobile traffic. If the browser lacks it, hide the camera
-  // section entirely; the manual-entry input handles those cases.
-  if (typeof window.BarcodeDetector !== "function") {
-    wrap.style.display = "none";
-    if (status) status.textContent = "Camera scan needs Chrome / Android Chrome / Edge. Type the digits below to look up.";
-    return;
-  }
-  // navigator.mediaDevices is gated on a secure context (https or
-  // localhost) — production seadisco.com is HTTPS so this should
-  // always work. Belt-and-suspenders check anyway.
-  if (!navigator.mediaDevices?.getUserMedia) {
-    wrap.style.display = "none";
-    if (status) status.textContent = "Camera unavailable in this browser.";
-    return;
-  }
-  try {
-    _sdScanDetector = new BarcodeDetector({
-      // Vinyl / CD barcodes are typically EAN_13 or UPC_A. Include
-      // the rest of the 1D set so unusual pressings (sticker
-      // overlays, promo barcodes) still parse.
-      formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128", "code_39", "itf"],
-    });
-  } catch (e) {
-    wrap.style.display = "none";
-    if (status) status.textContent = "Scanner init failed.";
-    console.warn("[scanner] BarcodeDetector init failed:", e);
-    return;
-  }
-  try {
-    _sdScanStream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { ideal: "environment" },  // rear camera on phones
-        width:  { ideal: 1280 },
-        height: { ideal: 720 },
-      },
-      audio: false,
-    });
-  } catch (e) {
-    wrap.style.display = "none";
-    if (status) {
-      if (e?.name === "NotAllowedError") {
-        status.textContent = "Camera permission denied. You can still type the barcode below.";
-      } else if (e?.name === "NotFoundError") {
-        status.textContent = "No camera detected. Type the barcode below.";
-      } else {
-        status.textContent = "Camera unavailable. Type the barcode below.";
-      }
-    }
-    console.warn("[scanner] getUserMedia failed:", e?.name || e);
-    return;
-  }
-  video.srcObject = _sdScanStream;
-  wrap.style.display = "";
-  // Some browsers won't actually start playing on srcObject assignment
-  // alone — a defensive .play() covers that and is a no-op when the
-  // stream is already running.
-  try { await video.play(); } catch {}
-  _sdScanDetectLoop();
-}
 
 function _sdScanStopCamera() {
   if (_sdScanRafId) {
