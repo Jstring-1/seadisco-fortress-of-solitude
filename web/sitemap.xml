@@ -6,17 +6,17 @@
     <priority>1.0</priority>
   </url>
   <url>
-    <loc>https://seadisco.com/#info</loc>
+    <loc>https://seadisco.com/?v=info</loc>
     <changefreq>monthly</changefreq>
     <priority>0.6</priority>
   </url>
   <url>
-    <loc>https://seadisco.com/#privacy</loc>
+    <loc>https://seadisco.com/?v=privacy</loc>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
   </url>
   <url>
-    <loc>https://seadisco.com/#terms</loc>
+    <loc>https://seadisco.com/?v=terms</loc>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>
   </url>
