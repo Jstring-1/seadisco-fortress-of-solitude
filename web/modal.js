@@ -1719,26 +1719,25 @@ function loadYTVideo(id) {
   console.debug("[loadYTVideo]", { id, hasPlayer: !!ytPlayer, apiReady: !!window._ytAPIReady });
   updatePlayerStatus("loading");
   // Stall watchdog: if the video hasn't reached the playing state by
-  // 5s, treat it as unavailable and skip. We check _ytHasPlayed
+  // 8s, treat it as unavailable and skip. We check _ytHasPlayed
   // instead of the status-text string because that flag is set once
   // and only by the YT state=1 callback — the previous text-based
   // check could miss intermediate states like "ended" / "error" if
-  // the YT player swallowed them. 5s is the sweet spot: any healthy
-  // video starts within a couple of seconds; anything taking longer
-  // is probably broken (deleted / geo-blocked / embed-disabled / no
-  // network). Was 8s; that felt stalled.
+  // the YT player swallowed them. We also bail on benign mid-load
+  // states (cued/unstarted/buffering) — those mean the video is
+  // still trying, not broken. Real "unavailable" cases trip the
+  // onError handler or the state=0-without-played branch directly.
   if (_ytLoadTimer) clearTimeout(_ytLoadTimer);
   _ytLoadTimer = setTimeout(() => {
     if (vtoken !== _ytVideoToken) return;  // a different video was loaded since
     if (_ytHasPlayed) return;              // it actually started
-    // Distinguish "actually unavailable" from "autoplay-blocked".
-    // YT.PlayerState 5 (cued) means the iframe loaded the video
-    // but the browser's autoplay policy refused to start it — most
-    // common on first-visit URL bootstraps where the user hasn't
-    // interacted with the domain yet. Treating that as "unavailable"
-    // and pruning was wrong (the track is fine; the user just needs
-    // to click play). State -1 (unstarted) is the same situation
-    // before YT has even reported a state.
+    // Distinguish "actually unavailable" from "autoplay-blocked /
+    // still buffering". YT.PlayerState:
+    //   -1 unstarted, 5 cued — autoplay-blocked, user must tap ▶
+    //    3 buffering           — slow network, give it more time
+    //    1 playing             — defensive, _ytHasPlayed should already be true
+    // None of these mean the video is dead; only ended-without-
+    // played (handled elsewhere) and onError errors mean that.
     let state = -1;
     try { state = ytPlayer?.getPlayerState?.() ?? -1; } catch {}
     if (state === 5 || state === -1) {
@@ -1748,9 +1747,14 @@ function loadYTVideo(id) {
       }
       return;
     }
+    if (state === 3 || state === 1) {
+      // Still loading — leave the row alone and let the YT
+      // onStateChange / onError pipeline catch a real failure.
+      return;
+    }
     updatePlayerStatus("unavailable");
     _ytPruneUnavailable(id, /*advance=*/true);
-  }, 5000);
+  }, 8000);
   if (ytPlayer && typeof ytPlayer.loadVideoById === "function") {
     ytPlayer.loadVideoById(id);
     return;
@@ -1821,6 +1825,21 @@ function updatePlayerStatus(state, errorCode) {
 //     moves forward.
 function _ytPruneUnavailable(videoId, advance) {
   if (!videoId) return;
+  // Defensive double-check: if the YT player is currently in state 1
+  // (playing) AND its loaded video is this same id, the upstream
+  // failure detection was wrong — bail before yanking the row out
+  // from under a working playback. Cheap state probe; throws are
+  // caught and we fall through to the normal prune path.
+  try {
+    const stateNow = typeof ytPlayer?.getPlayerState === "function" ? ytPlayer.getPlayerState() : -1;
+    if (stateNow === 1) {
+      const vd = ytPlayer.getVideoData?.();
+      if (vd?.video_id && String(vd.video_id) === String(videoId)) {
+        console.debug("[yt-prune] aborting — player is actively playing", { videoId });
+        return;
+      }
+    }
+  } catch {}
   if (typeof showToast === "function") {
     showToast("Track unavailable — skipping", "error");
   }
@@ -3101,7 +3120,9 @@ async function _trackYtOpenAlbumSuggest(el) {
   window._sdSuggestForTrack = null;
   // Append "-live" to filter out live recordings, UNLESS the album
   // title itself contains "live" (in which case the excluded
-  // keyword would gut the actual results). Previously we also
+  // keyword would gut the actual results). Always exclude
+  // "-karaoke" — karaoke uploads almost never carry that word in
+  // legitimate album titles, and they're noise. Previously we also
   // tailed with the literal word "album" to bias toward full-album
   // uploads, but it stifled too many otherwise-valid results.
   const _albumTitleHasLive = /\blive\b/i.test(albumTitle || "");
@@ -3109,6 +3130,7 @@ async function _trackYtOpenAlbumSuggest(el) {
     albumArtist ? `"${albumArtist}"` : "",
     albumTitle ? `"${albumTitle}"` : "",
     _albumTitleHasLive ? "" : "-live",
+    "-karaoke",
   ].filter(Boolean).join(" ");
   if (typeof window.openYoutubePopup === "function") {
     window.openYoutubePopup(q);
@@ -4019,13 +4041,15 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   // append "-live" to filter out live-recording uploads UNLESS the
   // album itself is a live record (its title carries the word
   // "live"), in which case excluding it would strip the very thing
-  // we're searching for. The trailing "album" hint was dropped —
-  // it was suppressing too many otherwise-valid results.
+  // we're searching for. Always exclude "-karaoke". The trailing
+  // "album" hint was dropped — it was suppressing too many
+  // otherwise-valid results.
   const _albumTitleHasLive = /\blive\b/i.test(title || "");
   const _ytAlbumQ = [
     _albumFirstArtist ? `"${_albumFirstArtist}"` : "",
     title ? `"${title}"` : "",
     _albumTitleHasLive ? "" : "-live",
+    "-karaoke",
   ].filter(Boolean).join(" ");
   // Surface the missing-tracks link for every signed-in user while
   // the YT auto-search is suspended — the popup itself opens the
