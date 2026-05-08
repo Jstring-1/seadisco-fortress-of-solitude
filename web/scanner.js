@@ -45,6 +45,12 @@ function _sdOpenScanner() {
   const status = _sdScanEl("barcode-scan-camera-status");
   if (status) status.textContent = "";
   const wrap = _sdScanEl("barcode-scan-camera-wrap");
+  // Reveal the camera wrapper up front. The HTML ships with
+  // display:none so the camera area doesn't flash empty before
+  // permission resolves; we unhide eagerly here and only re-hide
+  // on a hard bail-out below. _sdScanAttachStream will run when
+  // the user-granted stream arrives.
+  if (wrap) wrap.style.display = "";
 
   // Camera path bail-outs that don't need permission. Hide the
   // camera UI; the manual-entry input below stays usable.
