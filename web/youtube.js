@@ -572,8 +572,7 @@ async function _youtubeToggleSave(btn) {
 // Mirrors the wiki-popup pattern: a small overlay with search results
 // that doesn't navigate away from the underlying modal. Lets users
 // pick a video / play / queue / save without losing the album popup
-// context. Standalone YouTube searches still go to /?v=youtube via
-// the "Full page ↗" link in the popup header.
+// context.
 
 let _ytPopupQuery = "";
 // Snapshot of the items rendered into the popup. Used by the album-
@@ -784,8 +783,18 @@ function _youtubeRenderPasteForm() {
   const sel = document.getElementById("youtube-popup-paste-track");
   const urlInput = document.getElementById("youtube-popup-paste-url");
   const status = document.getElementById("youtube-popup-paste-status");
+  const extLink = document.getElementById("youtube-popup-paste-extlink");
   if (urlInput) urlInput.value = "";
   if (status) status.textContent = "";
+  // Point the "Search YouTube ↗" link at youtube.com pre-loaded with
+  // the same query the popup is built around, so users can hop out,
+  // pick a video, and paste its URL into the input below.
+  if (extLink) {
+    const q = _ytPopupQuery || "";
+    extLink.href = q
+      ? `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`
+      : "https://www.youtube.com/";
+  }
   if (sel) {
     const opts = (ctx.tracks || []).map(t =>
       `<option value="${escHtml(t.position)}">${escHtml(t.position)}. ${escHtml(t.title)}</option>`
@@ -1121,24 +1130,6 @@ async function _youtubeSuggestForTrack(btn) {
   }
 }
 
-// "Full page ↗" link click — close the popup, navigate to the
-// standalone /?v=youtube view with the same query so the user can
-// browse paginated results / use the Saved tab.
-function _youtubePopupOpenFullPage() {
-  const q = _ytPopupQuery;
-  closeYoutubePopup();
-  if (typeof switchView === "function") {
-    try { switchView("youtube"); } catch {}
-    setTimeout(() => {
-      const qInput = document.getElementById("youtube-view-q");
-      if (qInput) qInput.value = q;
-      if (typeof runYoutubeSearch === "function") runYoutubeSearch(q);
-    }, 30);
-  } else if (q) {
-    location.href = "/?v=youtube&yq=" + encodeURIComponent(q);
-  }
-}
-
 // ── Globals ───────────────────────────────────────────────────────────
 window.initYoutubeView           = initYoutubeView;
 window.runYoutubeSearch          = runYoutubeSearch;
@@ -1151,5 +1142,4 @@ window._youtubeOnSavedFilterInput = _youtubeOnSavedFilterInput;
 window._youtubeOnSavedSortChange  = _youtubeOnSavedSortChange;
 window.openYoutubePopup           = openYoutubePopup;
 window.closeYoutubePopup          = closeYoutubePopup;
-window._youtubePopupOpenFullPage  = _youtubePopupOpenFullPage;
 window._youtubeSuggestForTrack    = _youtubeSuggestForTrack;

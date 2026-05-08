@@ -9653,7 +9653,7 @@ body.is-offline button.offline-disabled {
   border-bottom: 1px dotted var(--border);
   cursor: pointer;
 }
- { color: var(--accent-hi); border-bottom-color: var(--accent); }
+.track-title-link:hover { color: var(--accent-hi); border-bottom-color: var(--accent); }
 /* Force orange magnifying glass on tracks */
 .track .track-search-icon,
 .track-search-icon {
@@ -9733,12 +9733,6 @@ a:focus-visible {
   gap: 1rem;
   margin-right: 2rem; /* leave room for the × close button */
 }
-.youtube-popup-head-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-}
 #youtube-popup-overlay .loc-info-close {
   position: absolute;
   top: 0.4rem;
@@ -9751,7 +9745,6 @@ a:focus-visible {
   line-height: 1;
 }
 #youtube-popup-overlay .loc-info-close:hover { color: var(--text); }
-#youtube-popup-fullpage:hover { color: var(--accent) !important; }
 
 /* Album-mode context strip — cover thumb + artist / title / year /
    label. Sits between the popup header and the search status so the
@@ -9820,8 +9813,20 @@ a:focus-visible {
   color: var(--muted);
   margin-bottom: 0.35rem;
   letter-spacing: 0.02em;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
 }
 .youtube-popup-paste-head .muted { color: #666; font-size: 0.68rem; }
+#youtube-popup-paste-extlink {
+  color: var(--accent);
+  text-decoration: underline;
+  font-size: 0.74rem;
+  letter-spacing: 0;
+}
+#youtube-popup-paste-extlink:hover { text-decoration: none; }
 .youtube-popup-paste-row {
   display: flex;
   gap: 0.4rem;
