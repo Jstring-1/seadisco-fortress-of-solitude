@@ -7176,6 +7176,12 @@ app.get("/search", async (req, res) => {
   const artistSuffix = artistSuffixMatch ? artistSuffixMatch[0].trim() : "";
   const rawLabel = (req.query.label as string) ?? "";
   const rawRelease = (req.query.release_title as string) ?? "";
+  // Barcode lookup. Discogs's `?barcode=` filter is exact-match on the
+  // release.barcode field — typical UPC (12) / EAN (13) digit strings.
+  // Used by the scanner UI: the client either pulls a code from the
+  // camera-driven BarcodeDetector or accepts a manually-typed entry.
+  const rawBarcode = (req.query.barcode as string) ?? "";
+  const searchBarcode: string | undefined = rawBarcode.trim() || undefined;
 
   // Each field is sent as its own dedicated Discogs param — no promotion to q.
   // searchArtist drops the "(N)" so Discogs returns the full sibling set;
@@ -7195,6 +7201,7 @@ app.get("/search", async (req, res) => {
     artist && `artist=${artist}`,
     rawLabel && `label=${rawLabel}`,
     rawRelease && `release=${rawRelease}`,
+    searchBarcode && `barcode=${searchBarcode}`,
   ].filter(Boolean).join(" ").slice(0, 200);
   logUserSearch(userId, logQuery).catch(() => {});
 
@@ -7224,6 +7231,7 @@ app.get("/search", async (req, res) => {
       style: req.query.style as string | undefined,
       format: req.query.format as string | undefined,
       country: req.query.country as string | undefined,
+      barcode: searchBarcode,
       sort: req.query.sort as string | undefined,
       sortOrder: req.query.sort_order as "asc" | "desc" | undefined,
       page: req.query.page ? parseInt(req.query.page as string) : 1,
