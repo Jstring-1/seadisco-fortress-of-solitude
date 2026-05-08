@@ -853,8 +853,26 @@ async function _youtubePastePresubmit(btn) {
     if (staged[k] && staged[k].videoId === videoId && k !== pos) delete staged[k];
   }
   staged[pos] = { videoId, videoTitle, trackTitle };
-  if (status) status.innerHTML = `<span style="color:#7eb8da">Staged "${escHtml(videoTitle)}" → ${escHtml(pos)}. ${escHtml(trackTitle)}</span>`;
-  if (urlInput) urlInput.value = "";
+  // Auto-advance the dropdown to the next un-staged track so the
+  // user can paste URL after URL without having to manually change
+  // the selection between each. Otherwise pasting URL_B and clicking
+  // Stage with the dropdown still pointing at track A's position
+  // silently overwrote A's assignment.
+  if (sel) {
+    const tracks = ctx.tracks || [];
+    const next = tracks.find(t => !staged[t.position]);
+    if (next) sel.value = next.position;
+  }
+  // Cumulative status — show count of staged + last action so it's
+  // obvious multiple stages are accumulating (not overwriting).
+  const stagedCount = Object.values(staged).filter(Boolean).length;
+  if (status) {
+    status.innerHTML = `<span style="color:#7eb8da">Staged ${stagedCount}: "${escHtml(videoTitle)}" → ${escHtml(pos)}. ${escHtml(trackTitle)}</span>`;
+  }
+  if (urlInput) {
+    urlInput.value = "";
+    urlInput.focus();
+  }
   btn.disabled = false;
   // Re-render footer + result rows so the staged mark + disabled-options
   // states match.
@@ -910,8 +928,11 @@ function _albumRenderFooter() {
     footer = document.createElement("div");
     footer.id = "album-suggest-footer";
     footer.className = "album-suggest-footer";
-    overlay.querySelector(".youtube-popup-content")?.appendChild(footer)
-      || overlay.appendChild(footer);
+    // Append inside the popup box (not the overlay shell) so the
+    // staged-list + Submit button render beneath the results list,
+    // visible without scrolling outside the popup.
+    const box = document.getElementById("youtube-popup-box") || overlay;
+    box.appendChild(footer);
   }
   const staged = window._sdSuggestStaged || {};
   const stagedCount = Object.values(staged).filter(Boolean).length;
