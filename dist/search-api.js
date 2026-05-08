@@ -580,7 +580,13 @@ app.use((_req, res, next) => {
     // wants to See text and images copied to the clipboard" prompt.
     // Doesn't affect clipboard.writeText() — share / copy buttons keep
     // working since clipboard-write is not in this list.
-    res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=(), clipboard-read=()");
+    // camera=(self) allows seadisco.com itself to call getUserMedia for
+    // the barcode scanner; without it, every getUserMedia attempt is
+    // rejected at the document level (no Chrome permission prompt, no
+    // entry in the site-permissions panel — the request never reaches
+    // the user). microphone / geolocation stay locked off; clipboard-
+    // read=() blocks Clerk's autofill probe.
+    res.setHeader("Permissions-Policy", "camera=(self), microphone=(), geolocation=(), clipboard-read=()");
     next();
 });
 // Redirect old /account URL to SPA view so existing links/bookmarks still work
