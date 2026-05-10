@@ -3517,22 +3517,55 @@ function onVideoEnded() {
     videoQueueLen: (window._videoQueue ?? []).length,
   });
   if (repeat === "one" && ytPlayer) {
-    try { ytPlayer.seekTo(0); ytPlayer.playVideo(); } catch {}
+    // Reset the manual-tail-watch token. After seeking to 0 we'll
+    // play the same video through again, but _ytVideoToken doesn't
+    // change (we're not loading a new video). Without resetting,
+    // the next genuine state=0 / tail-watch trip sees
+    // _ytEndFiredToken === _ytVideoToken and suppresses the second
+    // onVideoEnded — repeat-one only loops once, then stops dead.
+    _ytEndFiredToken = -1;
+    try { ytPlayer.seekTo(0); ytPlayer.playVideo(); } catch (e) {
+      console.warn("[onVideoEnded repeat=one] seek/play threw:", e);
+    }
     return;
   }
   if (repeat === "all") {
-    const queue = window._videoQueue ?? [];
-    let next = (window._videoQueueIndex ?? -1) + 1;
-    // Try next track; if at end, loop back to first
-    while (next < queue.length) {
-      const id = extractYouTubeId(queue[next]);
-      if (id) { window._videoQueueIndex = next; setVideoUrl(id); loadYTVideo(id); updateVideoNavButtons(); return; }
-      next++;
+    // Defer to playNextVideo() which already prefers the cross-
+    // source queue (queue.js) over the album-mode _videoQueue, and
+    // _queuePlayNext handles repeat=all wrapping internally. The
+    // old inline walker only saw window._videoQueue (album-mode),
+    // so a 1-track album queue wrapped to itself and a multi-album
+    // cross-source queue never advanced past the current album.
+    //
+    // Album-mode wrap (when the cross-source queue is empty AND the
+    // current album has multiple tracks) is handled below via the
+    // _videoQueue fallback. _playNextVideoInternal doesn't wrap on
+    // its own, so we still need a small bit of inline logic for that
+    // case.
+    if (typeof _queueHasPlayable === "function" && _queueHasPlayable()) {
+      playNextVideo();
+      return;
     }
-    // Wrap to beginning
-    for (let i = 0; i < queue.length; i++) {
-      const id = extractYouTubeId(queue[i]);
-      if (id) { window._videoQueueIndex = i; setVideoUrl(id); loadYTVideo(id); updateVideoNavButtons(); return; }
+    const queue = window._videoQueue ?? [];
+    if (queue.length > 1) {
+      let next = (window._videoQueueIndex ?? -1) + 1;
+      while (next < queue.length) {
+        const id = extractYouTubeId(queue[next]);
+        if (id) { window._videoQueueIndex = next; setVideoUrl(id); loadYTVideo(id); updateVideoNavButtons(); return; }
+        next++;
+      }
+      for (let i = 0; i < queue.length; i++) {
+        const id = extractYouTubeId(queue[i]);
+        if (i === window._videoQueueIndex) continue; // don't wrap to self if there's another option
+        if (id) { window._videoQueueIndex = i; setVideoUrl(id); loadYTVideo(id); updateVideoNavButtons(); return; }
+      }
+    }
+    // Single-track album-mode queue with no cross-source siblings:
+    // loop the same track. (repeat=all on a 1-item context degrades
+    // to repeat=one.)
+    if (queue.length === 1 && ytPlayer) {
+      _ytEndFiredToken = -1;
+      try { ytPlayer.seekTo(0); ytPlayer.playVideo(); } catch {}
     }
     return;
   }
