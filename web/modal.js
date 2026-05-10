@@ -2510,13 +2510,24 @@ function playerClose() {
 // implicitly re-shows the bar without forcing the user to hunt
 // for the floating "show player" tab.
 const _BAR_HIDDEN_KEY = "sd_player_bar_hidden";
+// Apply visibility to the floating restore tab via inline style. The
+// CSS rule (body.mini-player-bar-hidden #mini-player-show-tab) is in
+// place too, but the inline style is a belt-and-suspenders override
+// so any later style rule, third-party CSS, or stale cache can't
+// silently hide the tab after dismissal.
+function _syncShowTabVisibility(hidden) {
+  const tab = document.getElementById("mini-player-show-tab");
+  if (tab) tab.style.display = hidden ? "flex" : "none";
+}
 function hideMiniPlayerBar() {
   document.body.classList.add("mini-player-bar-hidden");
   try { localStorage.setItem(_BAR_HIDDEN_KEY, "1"); } catch {}
+  _syncShowTabVisibility(true);
 }
 function showMiniPlayerBar() {
   document.body.classList.remove("mini-player-bar-hidden");
   try { localStorage.removeItem(_BAR_HIDDEN_KEY); } catch {}
+  _syncShowTabVisibility(false);
 }
 window.hideMiniPlayerBar = hideMiniPlayerBar;
 window.showMiniPlayerBar = showMiniPlayerBar;
@@ -2527,9 +2538,11 @@ window.showMiniPlayerBar = showMiniPlayerBar;
 if (typeof document !== "undefined") {
   const _applyHiddenState = () => {
     try {
-      if (localStorage.getItem(_BAR_HIDDEN_KEY) === "1") {
+      const isHidden = localStorage.getItem(_BAR_HIDDEN_KEY) === "1";
+      if (isHidden) {
         document.body.classList.add("mini-player-bar-hidden");
       }
+      _syncShowTabVisibility(isHidden);
     } catch {}
   };
   if (document.readyState === "loading") {

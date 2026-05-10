@@ -2463,9 +2463,11 @@ body.mini-player-bar-hidden.player-open.expanded-mini { padding-bottom: 0; }
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
   z-index: 1500;
   line-height: 1;
+  align-items: center;
+  justify-content: center;
 }
 #mini-player-show-tab:hover { filter: brightness(1.1); }
-body.mini-player-bar-hidden #mini-player-show-tab { display: flex; align-items: center; justify-content: center; }
+body.mini-player-bar-hidden #mini-player-show-tab { display: flex; }
 /* When any popup is open, the page underneath must NOT scroll —
    only the popup's own content. overscroll-behavior:none blocks the
    rubber-band that lets a wheel/touch over the dark overlay edges
