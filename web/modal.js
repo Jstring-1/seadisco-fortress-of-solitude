@@ -1711,12 +1711,33 @@ function setVideoUrl(id) {
 let _ytLoadTimer = null;
 let _ytHasPlayed = false;  // true once the current video reaches "playing" state
 let _ytVideoToken = 0;     // increments per video load — guards against stale per-video callbacks
+let _ytPlayCount = 0;      // total loadVideoById calls — rotate the player every N to release Chromium decode buffers
+// Force a fresh YT.Player every N loads. The YouTube IFrame API leaks
+// decode buffers across loadVideoById calls — a long auto-advance
+// session (e.g. queueing 50+ tracks) can push the tab to multi-GB. A
+// periodic destroy + recreate forces Chromium to GC the prior video's
+// state. Trade-off: a sub-second iframe rebuild every N tracks. 20 is
+// a reasonable middle ground.
+const _YT_PLAYER_ROTATE_EVERY = 20;
 function loadYTVideo(id) {
   _ytHasPlayed = false;
   window._ytRetried = false;  // reset retry flag for new video
   _ytVideoToken++;
+  _ytPlayCount++;
+  // Periodic player rotation (memory hygiene). On the rotation tick,
+  // destroy the existing player so the next branch below takes the
+  // _createYTPlayer path with a fresh iframe instead of reusing the
+  // old one via loadVideoById.
+  if (ytPlayer && (_ytPlayCount % _YT_PLAYER_ROTATE_EVERY === 0)) {
+    try {
+      if (typeof ytPlayer.stopVideo === "function") ytPlayer.stopVideo();
+      ytPlayer.destroy();
+    } catch (e) { console.warn("[loadYTVideo] rotation destroy failed:", e); }
+    ytPlayer = null;
+    const slot = document.getElementById("video-player");
+    if (slot) slot.innerHTML = "";
+  }
   const vtoken = _ytVideoToken;
-  console.debug("[loadYTVideo]", { id, hasPlayer: !!ytPlayer, apiReady: !!window._ytAPIReady });
   updatePlayerStatus("loading");
   // Stall watchdog: if the video hasn't reached the playing state by
   // 8s, treat it as unavailable and skip. We check _ytHasPlayed
@@ -3919,9 +3940,18 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     : searchResult.type === "master" ? "Master" : searchResult.type === "release" ? "Release" : "";
   const typeLabel = typeName && releaseId ? `${typeName}: ${releaseId}` : typeName;
 
-  // Store rich card-shaped data for favorites (popup may not have itemCache entry)
+  // Store rich card-shaped data for favorites (popup may not have itemCache entry).
+  // Cap retention at 50 entries; without this, every album the user
+  // opens leaves a permanent entry — a small but unbounded leak.
   const entityType = targetId === "version-info" ? "release" : (searchResult.type || "release");
   if (!window._popupCardData) window._popupCardData = {};
+  const _pcdKeys = Object.keys(window._popupCardData);
+  if (_pcdKeys.length > 50) {
+    // Drop the oldest half. Insertion order in object keys is
+    // preserved in modern JS, so this is effectively LRU-by-arrival.
+    const drop = _pcdKeys.slice(0, _pcdKeys.length - 25);
+    drop.forEach(k => { delete window._popupCardData[k]; });
+  }
   window._popupCardData[String(releaseId)] = {
     id: releaseId,
     type: entityType,
