@@ -1464,12 +1464,17 @@ function _queueRefreshIdleBar() {
   const hasItems = Array.isArray(_queue) && _queue.length > 0;
   if (engineActive) {
     bar.classList.remove("idle-queue");
+    if (typeof window._syncShowTabVisibility === "function") window._syncShowTabVisibility();
     return;
   }
   if (!hasItems) {
     // Truly nothing to show — hide the bar.
     bar.classList.remove("idle-queue", "open", "expanded");
     document.body.classList.remove("player-open", "expanded-mini");
+    // Bar just went dark — re-derive tab visibility so the floating
+    // clicker surfaces, giving the user a way to reach the player /
+    // queue drawer again.
+    if (typeof window._syncShowTabVisibility === "function") window._syncShowTabVisibility();
     return;
   }
   // Surface the bar in idle-queue mode. Title shows the head item +
@@ -1496,6 +1501,9 @@ function _queueRefreshIdleBar() {
     ppBtn.innerHTML = "&#9654;";  // ▶
     ppBtn.title = "Play queue";
   }
+  // Bar surfaced in idle mode — re-sync the tab so it hides
+  // (unless the user has explicitly dismissed the bar).
+  if (typeof window._syncShowTabVisibility === "function") window._syncShowTabVisibility();
 }
 
 // ── Globals ─────────────────────────────────────────────────────────

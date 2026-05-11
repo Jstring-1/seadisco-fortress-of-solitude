@@ -2537,14 +2537,27 @@ function playerClose() {
 // for the floating "show player" tab.
 const _BAR_HIDDEN_KEY = "sd_player_bar_hidden";
 // Apply visibility to the floating restore tab via inline style. The
-// CSS rule (body.mini-player-bar-hidden #mini-player-show-tab) is in
-// place too, but the inline style is a belt-and-suspenders override
-// so any later style rule, third-party CSS, or stale cache can't
-// silently hide the tab after dismissal.
-function _syncShowTabVisibility(hidden) {
-  const tab = document.getElementById("mini-player-show-tab");
-  if (tab) tab.style.display = hidden ? "flex" : "none";
+// tab should appear ANY time the bar isn't currently visible — both
+// when the user explicitly dismissed it (body.mini-player-bar-hidden)
+// AND when the bar is auto-hidden because the queue is empty and no
+// engine is loaded. Previously the tab only surfaced for the dismiss
+// case, so an empty-queue user had no clicker to reach the bar / queue
+// drawer once everything went quiet.
+function _shouldShowRestoreTab() {
+  const userDismissed = document.body.classList.contains("mini-player-bar-hidden");
+  const barOpen = document.body.classList.contains("player-open");
+  return userDismissed || !barOpen;
 }
+function _syncShowTabVisibility(hiddenOverride) {
+  const tab = document.getElementById("mini-player-show-tab");
+  if (!tab) return;
+  // Optional override (back-compat with explicit callers). When unset,
+  // derive from current body classes so any path that toggles
+  // .player-open / .mini-player-bar-hidden refreshes the tab too.
+  const show = (typeof hiddenOverride === "boolean") ? hiddenOverride : _shouldShowRestoreTab();
+  tab.style.display = show ? "flex" : "none";
+}
+window._syncShowTabVisibility = _syncShowTabVisibility;
 function hideMiniPlayerBar() {
   document.body.classList.add("mini-player-bar-hidden");
   try { localStorage.setItem(_BAR_HIDDEN_KEY, "1"); } catch {}
@@ -2553,8 +2566,31 @@ function hideMiniPlayerBar() {
 function showMiniPlayerBar() {
   document.body.classList.remove("mini-player-bar-hidden");
   try { localStorage.removeItem(_BAR_HIDDEN_KEY); } catch {}
-  _syncShowTabVisibility(false);
+  // Defer to derived state — if the bar isn't actually surfacing
+  // (queue still empty + no engine), keep the tab visible so the
+  // user has somewhere to click.
+  _syncShowTabVisibility();
 }
+// Floating tab click target. Behavior depends on state:
+//   - If the user just dismissed the bar (player-open still on body):
+//     restore the bar so they can see what's playing / queued.
+//   - If there's nothing playing AND nothing queued: open the queue
+//     drawer so the user can verify queue status, paste a queue
+//     snapshot, etc. (Bar alone would still be empty — drawer is the
+//     useful surface.)
+function _restorePlayerOrOpenQueue() {
+  const barOpen = document.body.classList.contains("player-open");
+  const userDismissed = document.body.classList.contains("mini-player-bar-hidden");
+  showMiniPlayerBar();
+  if (!barOpen && !userDismissed) {
+    // True "nothing's playing, nothing queued" state — open the
+    // drawer instead so the click does something visible.
+    if (typeof window.queueToggleDrawer === "function") {
+      try { window.queueToggleDrawer(); } catch {}
+    }
+  }
+}
+window._restorePlayerOrOpenQueue = _restorePlayerOrOpenQueue;
 window.hideMiniPlayerBar = hideMiniPlayerBar;
 window.showMiniPlayerBar = showMiniPlayerBar;
 
@@ -2568,7 +2604,11 @@ if (typeof document !== "undefined") {
       if (isHidden) {
         document.body.classList.add("mini-player-bar-hidden");
       }
-      _syncShowTabVisibility(isHidden);
+      // No explicit override — let _syncShowTabVisibility derive
+      // from body classes so the empty-queue + no-engine state also
+      // surfaces the tab (the body won't have .player-open yet at
+      // initial paint).
+      _syncShowTabVisibility();
     } catch {}
   };
   if (document.readyState === "loading") {
