@@ -7917,22 +7917,52 @@ app.get("/master-versions/:id", async (req, res) => {
     const PER_PAGE = 100;
     const MAX_PAGES = 10;  // 1,000 versions ceiling — well above any real master
     const PARALLEL_BATCH = 4;  // tail pages fired in chunks to balance speed vs Discogs rate-limit pressure
-    // Fetch page 1 first to learn total page count.
-    const firstPage = await dc.getMasterVersions(id, { page: 1, perPage: PER_PAGE, sort: "released", sortOrder: "asc" }) as any;
+    // Helper: fetch one page, log + swallow per-page errors so a single
+    // 429 / 500 / null-released-sort-quirk doesn't tank the whole walk.
+    // Previously the route used Promise.all + sort=released — if any
+    // single page rejected (rate-limit blip, Discogs hiccup on a
+    // released-field sort over partially-null data) the entire master
+    // came back as "Failed to load pressings". Early masters with many
+    // pages and many nullable years were the worst offenders.
+    const fetchPage = async (p: number) => {
+      try {
+        return await dc.getMasterVersions(id, { page: p, perPage: PER_PAGE, sort: "released", sortOrder: "asc" }) as any;
+      } catch (e: any) {
+        console.warn(`[master-versions/${id}] page ${p} failed: ${e?.message ?? e}`);
+        return null;
+      }
+    };
+    // Fetch page 1 first to learn total page count. Retry once on a
+    // transient failure — Discogs's per-user 60/min rate limit gets
+    // hit easily by a popular early master (10+ pages × parallelism),
+    // and the first-page failure used to bubble straight back to the
+    // user as "Failed to load pressings" even though a 1-second wait
+    // would have unblocked it.
+    let firstPage: any = null;
+    try {
+      firstPage = await dc.getMasterVersions(id, { page: 1, perPage: PER_PAGE, sort: "released", sortOrder: "asc" }) as any;
+    } catch (e: any) {
+      const msg = String(e?.message ?? e);
+      const isRateLimit = msg.includes(" 429");
+      console.warn(`[master-versions/${id}] page 1 first attempt failed (${msg}); retrying after delay`);
+      await new Promise(r => setTimeout(r, isRateLimit ? 1100 : 400));
+      firstPage = await dc.getMasterVersions(id, { page: 1, perPage: PER_PAGE, sort: "released", sortOrder: "asc" }) as any;
+    }
     const collected: any[] = firstPage?.versions ?? [];
     const totalPages = Math.min(firstPage?.pagination?.pages ?? 1, MAX_PAGES);
-    // Pages 2..N fetched in parallel batches. Was sequential — for masters
-    // with 5+ pages this collapsed 1.5-2.5s of waterfall into one batch
-    // round-trip. (Audit #1.)
+    let pageFailures = 0;
     if (totalPages > 1) {
-      const remaining = [];
+      const remaining: number[] = [];
       for (let p = 2; p <= totalPages; p++) remaining.push(p);
       for (let i = 0; i < remaining.length; i += PARALLEL_BATCH) {
         const batch = remaining.slice(i, i + PARALLEL_BATCH);
-        const results = await Promise.all(
-          batch.map(p => dc.getMasterVersions(id, { page: p, perPage: PER_PAGE, sort: "released", sortOrder: "asc" }) as Promise<any>)
-        );
+        // Promise.all → Promise.allSettled equivalent via fetchPage's
+        // own try/catch. Per-page failure surfaces as null and we
+        // simply skip it; we DO return whatever we collected so the
+        // user still sees most of the pressings.
+        const results = await Promise.all(batch.map(fetchPage));
         for (const r of results) {
+          if (!r) { pageFailures++; continue; }
           const chunk = r?.versions ?? [];
           collected.push(...chunk);
         }
@@ -7949,8 +7979,14 @@ app.get("/master-versions/:id", async (req, res) => {
       majorFormats: v.major_formats ?? [],
       url:          v.resource_url ? `https://www.discogs.com/release/${v.id}` : null,
     }));
-    const payload = { versions };
-    if (Number.isFinite(idNum) && idNum > 0) {
+    const payload: any = { versions };
+    if (pageFailures > 0) {
+      payload.partial = true;
+      payload.pageFailures = pageFailures;
+    }
+    // Cache only complete walks. A partial result shouldn't lock us
+    // into a missing-pages payload for the next day.
+    if (Number.isFinite(idNum) && idNum > 0 && pageFailures === 0) {
       cacheRelease(idNum, "master-versions", payload).catch(() => {});
     }
     res.setHeader("X-SeaDisco-Cache", "miss");
