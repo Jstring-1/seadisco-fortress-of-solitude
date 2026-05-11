@@ -9656,6 +9656,16 @@ body.is-offline button.offline-disabled {
   cursor: pointer;
 }
 .track-title-link:hover { color: var(--accent-hi); border-bottom-color: var(--accent); }
+/* Row marked unavailable by _ytPruneUnavailable. Title text is dimmed
+   so it reads as "this track has no playable video right now", but
+   the lookup popup still works on click so users can hunt down a
+   replacement via Wikipedia / LOC / external YouTube search. */
+.track.track-unavailable .track-title-link {
+  color: var(--muted);
+  text-decoration: line-through;
+  text-decoration-color: rgba(255, 255, 255, 0.25);
+}
+.track.track-unavailable .track-pos { color: var(--muted); }
 /* Force orange magnifying glass on tracks */
 .track .track-search-icon,
 .track-search-icon {
