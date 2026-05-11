@@ -1854,14 +1854,17 @@ function _ytPruneUnavailable(videoId, advance) {
     window._sdYtUnavailable.add(String(videoId));
   } catch {}
 
-  // Drop any matching rows from any currently-open album / version
-  // popup tracklist so the user doesn't see a row that the engine
-  // just confirmed is dead. We match against either the play
-  // button's data-video URL or any embedded videoId substring.
-  // Then refresh the heading's missing + playable counts so the
-  // (N ▶ ＋) block and the "🎵 N missing" link reflect the new
-  // state. (Server-side report-unavailable already happens in the
-  // onError handler — this is just the visual cleanup.)
+  // Strip the play affordance from any matching row in a currently-open
+  // album / version popup, but leave the row itself in place. Previously
+  // we yanked the whole .track row out of the DOM, which made tracks
+  // vanish from the tracklist — confusing when only one video was bad
+  // (the user saw the track disappear, but the title was still a real
+  // track on the release). Now: clear the play cell (▶ and ＋), tag the
+  // row as unavailable so CSS can dim it, leave the title link intact
+  // so the lookup popup still works (user can chase a replacement via
+  // Wikipedia / LOC / YouTube external search). Heading counts get
+  // refreshed afterward so "(N ▶ ＋)" and "🎵 N missing" reflect the
+  // new state.
   try {
     const matches = document.querySelectorAll(
       `.album-tracklist .track-play-cell .track-link[data-video*="${CSS.escape(String(videoId))}"]`
@@ -1870,12 +1873,14 @@ function _ytPruneUnavailable(videoId, advance) {
     matches.forEach(link => {
       const row = link.closest(".track[data-pos]");
       if (!row) return;
-      // The Full Album pseudo-row vanishing on a single dead video
-      // would be aggressive — leave it in place so the user can
-      // still resubmit. Only prune real per-track rows.
+      // The Full Album pseudo-row is the user's submission slot —
+      // keep it fully intact so the user can pick a replacement.
       if (row.dataset.pos === "ALBUM") return;
+      const playCell = row.querySelector(".track-play-cell");
+      if (playCell) playCell.innerHTML = "";
+      row.classList.add("track-unavailable");
+      row.setAttribute("title", "YouTube reports this video is unavailable");
       const popupRoot = row.closest("#album-info, #version-info");
-      row.remove();
       if (popupRoot) popupRoots.add(popupRoot);
     });
     popupRoots.forEach(root => {
