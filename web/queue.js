@@ -383,9 +383,20 @@ async function _queuePlayNext() {
   if (currentIdx < 0 && _queuePlayingExternalId != null) {
     currentIdx = _queue.findIndex(it => String(it.externalId) === String(_queuePlayingExternalId));
   }
+  // If we still can't locate the current track, the player isn't on a
+  // queued row (e.g. user clicked ▶ on a card that bypassed the queue,
+  // a server reconcile renumbered positions, or no-meta openVideo
+  // couldn't insert). Previously this returned false and playNextVideo's
+  // "hasQueue" check halted playback — leaving the player stopped with
+  // a full queue sitting there. Now: start the queue from the head so
+  // auto-advance always carries forward when there's something to play.
   let next = currentIdx >= 0 && currentIdx + 1 < _queue.length
     ? _queue[currentIdx + 1]
     : null;
+  if (!next && currentIdx < 0 && _queue.length) {
+    console.debug("[_queuePlayNext] current track not in queue — starting from head");
+    next = _queue[0];
+  }
   // Repeat-all: wrap to the first item.
   if (!next && _queueRepeat === "all" && _queue.length) {
     next = _queue[0];
@@ -1005,43 +1016,64 @@ async function _bindSortable() {
       onEnd: (evt) => {
         // No-op if the drop didn't actually move anything.
         if (evt.oldIndex === evt.newIndex) return;
-        // Read the new visible order from the DOM. Sortable has
-        // already rearranged the rows; we just snapshot positions.
-        const newPositionsOrder = Array.from(listEl.querySelectorAll(".queue-row"))
-          .map(el => parseInt(el.dataset.position, 10))
-          .filter(n => Number.isFinite(n));
-        if (!newPositionsOrder.length) return;
-        // Optimistically rebuild _queue to match the new order so
-        // any background _queueLoad / re-render uses the user's
-        // intended order — not the stale server order from a reload
-        // that races the PATCH. Keep the data payloads, just shuffle
-        // the array.
-        if (Array.isArray(_queue)) {
-          const byPos = new Map(_queue.map(it => [it.position, it]));
-          _queue = newPositionsOrder
-            .map(p => byPos.get(p))
-            .filter(Boolean);
-          // Re-stamp positions so the order persists across the
-          // next reload-without-PATCH-having-landed (positions are
-          // 1..N after the server PATCH succeeds).
-          _queue.forEach((it, i) => { it.position = i + 1; });
-          // The currently-playing track's position changed too —
-          // re-bind by externalId so the play marker stays correct.
-          if (_queuePlayingExternalId != null) {
-            const cur = _queue.find(it => String(it.externalId) === String(_queuePlayingExternalId));
-            if (cur) _queueCurrentPosition = cur.position;
-          }
+        // Read the new visible order from the DOM — match by
+        // externalId (stable across optimistic-insert fractional
+        // positions and across position renumbering). Previously this
+        // read data-position via parseInt, but an optimistic-insert
+        // row with position=0.5 collapsed to 0 and dropped out of the
+        // byPos lookup — silently corrupting the reorder.
+        const newExternalIdsOrder = Array.from(listEl.querySelectorAll(".queue-row"))
+          .map(el => el.querySelector(".queue-row-remove")?.dataset.ext)
+          .filter(Boolean);
+        if (!newExternalIdsOrder.length) return;
+
+        if (!Array.isArray(_queue)) {
+          console.warn("[queue] reorder: no local _queue, refusing drag");
+          _renderQueueDrawer();
+          return;
         }
+
+        // Capture each visible row's CURRENT position (server-side
+        // identity) BEFORE we re-stamp locally — this is what the PATCH
+        // sends to the server. Match by externalId so dedup'd / fractional
+        // rows still resolve to the right item.
+        const byExt = new Map(_queue.map(it => [String(it.externalId), it]));
+        const orderedItems = newExternalIdsOrder
+          .map(ext => byExt.get(String(ext)))
+          .filter(Boolean);
+        if (!orderedItems.length) return;
+
+        const oldPositions = orderedItems.map(it => it.position);
+        // Guard: optimistic-insert rows have fractional positions the
+        // server can't resolve yet. Refuse the reorder until the POST
+        // reconciles to an integer position — the visual order will
+        // snap back via the re-render below.
+        if (oldPositions.some(p => !Number.isInteger(p))) {
+          console.warn("[queue] reorder refused: optimistic insert pending");
+          if (typeof showToast === "function") showToast("Wait a moment — track still syncing", "info");
+          _renderQueueDrawer();
+          return;
+        }
+
+        // Optimistically rebuild _queue in the new order. Re-stamp
+        // positions to 1..N so the next drag's data-position values
+        // match the server state once the PATCH lands.
+        _queue = orderedItems;
+        _queue.forEach((it, i) => { it.position = i + 1; });
+        if (_queuePlayingExternalId != null) {
+          const cur = _queue.find(it => String(it.externalId) === String(_queuePlayingExternalId));
+          if (cur) _queueCurrentPosition = cur.position;
+        }
+
         // Fire-and-forget PATCH; if it fails we revert via reload.
         apiFetch("/api/user/play-queue/reorder", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ positions: newPositionsOrder }),
+          body: JSON.stringify({ positions: oldPositions }),
         }).then(r => {
           if (!r.ok) {
             console.warn("[queue] reorder failed:", r.status);
             if (typeof showToast === "function") showToast("Reorder failed — restored", "error");
-            // Pull truth from server.
             _queue = null;
             _renderQueueDrawer();
           }
@@ -1051,13 +1083,8 @@ async function _bindSortable() {
           _queue = null;
           _renderQueueDrawer();
         });
-        // Re-render the drawer so each row's data-position attribute
-        // matches the freshly re-stamped _queue positions. Without
-        // this, the FIRST drag works (DOM data-positions match the
-        // server), but subsequent drags read stale data-position
-        // values and the byPos lookup above maps them through the new
-        // _queue positions, scrambling the order. Cheap — just a
-        // re-paint off the cached array.
+        // Re-paint with fresh data-position attrs (1..N) so a follow-up
+        // drag reads the correct values.
         _renderQueueDrawer();
         _refreshPlayerNavButtons();
       },
