@@ -1828,6 +1828,13 @@ function updatePlayerStatus(state, errorCode) {
   const info = map[state] ?? { text: "", cls: "" };
   el.textContent = info.text;
   el.className = "mini-player-status " + info.cls;
+  // Drive a body-level flag so any "playing" visual (queue-row EQ
+  // bouncing bars, etc.) only animates when audio is actually
+  // sounding. Paused / ended / errored / loading states freeze the
+  // animation — that way the drawer doesn't lie about which track
+  // is making noise while the player is stalled.
+  const isActive = state === "playing" || state === "buffering";
+  document.body.classList.toggle("player-active", isActive);
   syncPlayPauseBtn(state);
 }
 
@@ -3886,6 +3893,15 @@ function closeVideo() {
   window._videoQueue = [];
   window._videoQueueMeta = [];
   window._videoQueueIndex = -1;
+  // Drop the queue's "now playing" mark so the drawer doesn't keep
+  // a row lit up after we teardown the engine. Escape-to-close and
+  // any other path that lands here without going through playerStop
+  // (which already calls this) used to leave _queuePlayingExternalId
+  // pointing at the just-stopped track — the EQ indicator stayed
+  // glued to the row even though playback was over.
+  if (typeof window._queueClearPlayingMark === "function") {
+    try { window._queueClearPlayingMark(); } catch {}
+  }
 }
 
 function extractYouTubeId(url) {

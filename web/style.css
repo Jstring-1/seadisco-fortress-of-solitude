@@ -7479,7 +7479,15 @@ body.player-open .queue-drawer.open { bottom: 102px; }
   display: block;
   border-radius: 1px;
   animation: queue-eq-bounce 0.9s ease-in-out infinite;
+  /* Freeze the bars when nothing is actively sounding — paused,
+     ended, errored, or no-engine states all keep the row marked as
+     "current" (still useful for next/prev anchor) but the dancing
+     bars shouldn't claim the track is playing when it isn't.
+     `animation-play-state: paused` snaps the bars to their last
+     frame; the next active-play tick resumes from there. */
+  animation-play-state: paused;
 }
+body.player-active .queue-row-eq i { animation-play-state: running; }
 .queue-row-eq i:nth-child(1) { animation-delay: -0.3s; }
 .queue-row-eq i:nth-child(2) { animation-delay: -0.6s; }
 .queue-row-eq i:nth-child(3) { animation-delay: -0.1s; }
