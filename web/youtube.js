@@ -914,6 +914,25 @@ function closeYoutubePopup() {
   document.getElementById("album-suggest-footer")?.remove();
 }
 
+// User-initiated close gate. The popup closes lose any staged track
+// → URL assignments — easy to do accidentally by clicking the
+// overlay backdrop while the cursor's just outside the popup card.
+// Confirm before closing if anything's staged. Internal callers (post-
+// submit success paths) keep using closeYoutubePopup() directly so
+// they don't prompt after the user already committed.
+function _youtubePopupRequestClose() {
+  const staged = window._sdSuggestStaged;
+  const stagedCount = staged
+    ? Object.values(staged).filter(Boolean).length
+    : 0;
+  if (stagedCount > 0) {
+    const noun = stagedCount === 1 ? "assignment" : "assignments";
+    if (!confirm(`Close and discard ${stagedCount} staged ${noun}?`)) return;
+  }
+  closeYoutubePopup();
+}
+window._youtubePopupRequestClose = _youtubePopupRequestClose;
+
 // ── Album-mode handlers ──────────────────────────────────────────────
 
 // Re-render the staged-assignments status + submit footer below the
@@ -947,7 +966,7 @@ function _albumRenderFooter() {
     <div class="album-suggest-status-list">${rows}</div>
     <div class="album-suggest-submit-row">
       <button type="button" class="archive-btn archive-btn-suggest album-suggest-submit-btn" ${stagedCount ? "" : "disabled"} onclick="_youtubeAlbumSubmit(this)">Submit ${stagedCount} assignment${stagedCount === 1 ? "" : "s"}</button>
-      <button type="button" class="archive-btn" onclick="closeYoutubePopup()">Cancel</button>
+      <button type="button" class="archive-btn" onclick="_youtubePopupRequestClose()">Cancel</button>
     </div>
   `;
 }
