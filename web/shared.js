@@ -231,9 +231,24 @@ window._sdApplyCardMode = _sdApplyCardMode;
 // matching cards in place. Idempotent — already-enriched cards are
 // skipped via a data-card-enriched attribute.
 const _sdEnrichInflight = new Map();
+// Session-level dedup: once we've fetched enrichment for a given
+// type:id, never re-fetch within the same page session even if the
+// DOM nodes are fresh (e.g. a search → popup → back-to-search cycle
+// re-renders the same card with a new node that lacks the
+// data-card-enriched attribute). The MutationObserver fires on every
+// child insertion, so without this gate every render hit
+// /api/cards/enrich again — the server returns {items:[]} fast but
+// it was still 100+ round-trips per session. The manual ↻ refresh
+// button (_sdRefreshSparseCard) deletes its own key from this set so
+// force-refresh still works.
+const _sdEnrichedSession = new Set();
+window._sdEnrichedSession = _sdEnrichedSession;
 let _sdEnrichDebounce = null;
 function _sdScheduleCardEnrich() {
   if (_sdEnrichDebounce) clearTimeout(_sdEnrichDebounce);
+  // Bumped 250 → 400ms. Most card-render mutations from popup
+  // open/close + load-more arrive within ~300ms; the wider window
+  // coalesces them into a single pass.
   _sdEnrichDebounce = setTimeout(() => {
     _sdEnrichDebounce = null;
     _sdEnrichWideCards().catch(() => {}).finally(() => {
@@ -241,7 +256,7 @@ function _sdScheduleCardEnrich() {
       // sparse (cache-missed) so the user sees a ↻ refresh button.
       try { _sdMarkSparseCards(); } catch {}
     });
-  }, 250);
+  }, 400);
 }
 window._sdScheduleCardEnrich = _sdScheduleCardEnrich;
 
@@ -267,6 +282,7 @@ async function _sdEnrichWideCards() {
   const items = [];
   for (const [key, val] of uniq.entries()) {
     if (_sdEnrichInflight.has(key)) continue;
+    if (_sdEnrichedSession.has(key)) continue;
     items.push(val);
   }
   if (!items.length) return;
@@ -285,6 +301,12 @@ async function _sdEnrichWideCards() {
       const j = await r.json();
       const rows = Array.isArray(j?.items) ? j.items : [];
       for (const row of rows) _sdInjectEnrichmentIntoCards(row);
+      // Mark every item in this batch as "done for the session" —
+      // including ids the server didn't return data for (cache-miss
+      // or zero-data entities). Without this, those would re-fire
+      // forever because they never gain the data-card-enriched flag
+      // on the DOM side.
+      for (const it of batch) _sdEnrichedSession.add(`${it.type}:${it.id}`);
     } catch { /* leave un-enriched — cards still render fine */ }
     finally {
       for (const it of batch) _sdEnrichInflight.delete(`${it.type}:${it.id}`);
@@ -455,8 +477,11 @@ async function _sdRefreshSparseCard(btn) {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     // The response is a full Discogs record. Patch the visible
     // card with whatever fields we can scrape. Easiest: re-fire
-    // enrichment which now finds the freshly-cached row.
+    // enrichment which now finds the freshly-cached row. Also drop
+    // the session-cache marker so the enrich call actually hits
+    // the server again (otherwise it'd be a no-op).
     card.removeAttribute("data-card-enriched");
+    try { _sdEnrichedSession.delete(`${type}:${id}`); } catch {}
     if (typeof _sdScheduleCardEnrich === "function") _sdScheduleCardEnrich();
     // Update the visible title + artist immediately from the
     // response so the card stops looking sparse before enrichment
@@ -1253,7 +1278,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260513.0821";
+  const SITE_VERSION = "build 20260513.0837";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>

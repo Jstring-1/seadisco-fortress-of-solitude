@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260513.0821" />
+  <link rel="stylesheet" href="/style.css?v=20260513.0837" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260513.0821"></script>
-<script defer src="/shared.js?v=20260513.0821"></script>
+<script defer src="/utils.js?v=20260513.0837"></script>
+<script defer src="/shared.js?v=20260513.0837"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -382,7 +382,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260513.0821"></script>
+<script defer src="/modal.js?v=20260513.0837"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1242,7 +1242,7 @@ async function loadAdminItems() {
           : type === "label" ? `https://www.discogs.com/label/${id}`
           : `https://www.discogs.com/release/${id}`;
         return `<a href="${href}" target="_blank" rel="noopener" class="admin-item-row">
-          ${thumb ? `<img src="${thumb}" class="admin-item-thumb" loading="lazy" />` : `<div class="admin-item-thumb"></div>`}
+          ${thumb ? `<img src="${thumb}" class="admin-item-thumb" loading="lazy" decoding="async" />` : `<div class="admin-item-thumb"></div>`}
           <div style="flex:1;min-width:0;overflow:hidden">
             <div class="admin-item-title">${escHtml(title)}${addedTag}</div>
             <div class="admin-item-sub">${meta}</div>
@@ -1269,7 +1269,7 @@ async function loadAdminItems() {
       const stars = rating > 0 ? " " + "\u2605".repeat(rating) + "\u2606".repeat(5 - rating) : "";
       const meta = [artist, year, labels, formats].filter(Boolean).map(s => escHtml(String(s))).join(' <span style="color:#444">\u00b7</span> ');
       return `<a href="https://www.discogs.com/release/${id}" target="_blank" rel="noopener" class="admin-item-row">
-        ${thumb ? `<img src="${thumb}" class="admin-item-thumb" loading="lazy" />` : `<div class="admin-item-thumb"></div>`}
+        ${thumb ? `<img src="${thumb}" class="admin-item-thumb" loading="lazy" decoding="async" />` : `<div class="admin-item-thumb"></div>`}
         <div style="flex:1;min-width:0;overflow:hidden">
           <div class="admin-item-title">${escHtml(title)}</div>
           <div class="admin-item-sub">${meta}${stars ? `<span class="admin-item-rating">${stars}</span>` : ""}</div>
@@ -1483,7 +1483,7 @@ function bluesDbRenderList() {
     // click. Empty placeholder square keeps the column aligned for rows
     // with no photo yet.
     const thumbCell = r.photo_url
-      ? `<img src="${esc(r.photo_url)}" alt="" class="blues-row-thumb" loading="lazy" onclick="bluesShowImage('${esc(r.photo_url).replace(/'/g, "&#39;")}')" />`
+      ? `<img src="${esc(r.photo_url)}" alt="" class="blues-row-thumb" loading="lazy" decoding="async" onclick="bluesShowImage('${esc(r.photo_url).replace(/'/g, "&#39;")}')" />`
       : `<span class="blues-row-thumb blues-row-thumb-empty"></span>`;
     return `<tr data-row-id="${r.id}">
       <td>${thumbCell}</td>
@@ -2220,7 +2220,7 @@ async function bluesDbRunDiscogsPicker() {
     const esc = (s) => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
     results.innerHTML = `<ul style="list-style:none;margin:0;padding:0">${items.map(it => {
       const thumbHtml = it.thumb
-        ? `<img src="${esc(it.thumb)}" alt="" style="width:48px;height:48px;object-fit:cover;border-radius:3px;flex-shrink:0;background:#222" />`
+        ? `<img src="${esc(it.thumb)}" alt="" loading="lazy" decoding="async" style="width:48px;height:48px;object-fit:cover;border-radius:3px;flex-shrink:0;background:#222" />`
         : `<span style="width:48px;height:48px;border-radius:3px;background:#222;flex-shrink:0;display:inline-block"></span>`;
       const discogsLink = it.uri
         ? `https://www.discogs.com${it.uri}`
