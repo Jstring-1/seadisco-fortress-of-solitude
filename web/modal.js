@@ -1819,10 +1819,13 @@ function loadYTVideo(id) {
         clearInterval(_ytPollId); _ytPollId = null;
         _createYTPlayer(id);
       } else if (attempts > 40) {
-        // Fallback after ~4s if API never loads
+        // Fallback after ~4s if API never loads. youtube-nocookie
+        // skips ad/cookie state we don't use, and vq=medium caps
+        // the decoded buffer (~50MB vs 150-200MB at HD) since this
+        // fallback has no JS handle to call setPlaybackQuality later.
         clearInterval(_ytPollId); _ytPollId = null;
         document.getElementById("video-player").innerHTML =
-          `<iframe src="https://www.youtube.com/embed/${id}?autoplay=1" style="width:100%;height:100%;border:none" allow="autoplay;encrypted-media" allowfullscreen></iframe>`;
+          `<iframe src="https://www.youtube-nocookie.com/embed/${id}?autoplay=1&vq=medium" style="width:100%;height:100%;border:none" allow="autoplay;encrypted-media" allowfullscreen></iframe>`;
       }
     }, 100);
   }
@@ -2162,6 +2165,18 @@ function _createYTPlayer(id) {
       onReady: function() {
         // onReady fires when iframe is ready, not when video plays — don't set "playing" yet
         if (session === _ytSession) updatePlayerStatus("loading");
+        // Cap playback quality at "medium" (~480p). YT auto-selects
+        // based on iframe size and bandwidth — without a cap it can
+        // climb to 720p/1080p, which inflates the decoded VP9 buffer
+        // from ~50MB to 150–200MB. The popup is small enough that
+        // 480p looks indistinguishable. setPlaybackQuality is a
+        // hint (deprecated but still respected as a ceiling on most
+        // builds); harmless if ignored.
+        try {
+          if (ytPlayer && typeof ytPlayer.setPlaybackQuality === "function") {
+            ytPlayer.setPlaybackQuality("medium");
+          }
+        } catch {}
       }
     }
   });
@@ -2771,6 +2786,24 @@ function _sdYtIdFromUrl(url) {
 // both master scope (via d.master_id) and release scope, with release
 // winning at the same position.
 const _trackYtOverridesCache = new Map();
+// Cap at 50 entries (mirrors _popupCardData). Each entry holds a
+// byPosition map per release/master — usually small (<2KB) but
+// unbounded over a session of poking through dozens of releases.
+const _TRACK_YT_OVERRIDES_CACHE_MAX = 50;
+function _trackYtOverridesCacheSet(k, val) {
+  if (!k) return;
+  if (_trackYtOverridesCache.has(k)) _trackYtOverridesCache.delete(k);
+  _trackYtOverridesCache.set(k, val);
+  if (_trackYtOverridesCache.size > _TRACK_YT_OVERRIDES_CACHE_MAX) {
+    const it = _trackYtOverridesCache.keys();
+    const drop = _trackYtOverridesCache.size - Math.floor(_TRACK_YT_OVERRIDES_CACHE_MAX * 0.75);
+    for (let i = 0; i < drop; i++) {
+      const k2 = it.next().value;
+      if (k2 === undefined) break;
+      _trackYtOverridesCache.delete(k2);
+    }
+  }
+}
 
 function _trackYtCacheKey(masterId, releaseId, isMaster) {
   if (isMaster) return `master:${masterId || releaseId || ""}`;
@@ -2799,14 +2832,14 @@ async function _trackYtFetchOverrides(masterId, releaseId, isMaster) {
   if (!isMaster && releaseId) params.push(`release_id=${encodeURIComponent(releaseId)}`);
   if (!params.length) {
     const empty = new Map();
-    _trackYtOverridesCache.set(k, { byPosition: empty, fetchedAt: Date.now() });
+    _trackYtOverridesCacheSet(k, { byPosition: empty, fetchedAt: Date.now() });
     return empty;
   }
   try {
     const r = await fetch(`/api/track-yt/for-release?${params.join("&")}`);
     if (!r.ok) {
       const empty = new Map();
-      _trackYtOverridesCache.set(k, { byPosition: empty, fetchedAt: Date.now() });
+      _trackYtOverridesCacheSet(k, { byPosition: empty, fetchedAt: Date.now() });
       return empty;
     }
     const j = await r.json();
@@ -2818,11 +2851,11 @@ async function _trackYtFetchOverrides(masterId, releaseId, isMaster) {
     for (const o of (j.overrides || [])) {
       if (o.release_type === "release") byPosition.set(String(o.track_position), o);
     }
-    _trackYtOverridesCache.set(k, { byPosition, fetchedAt: Date.now() });
+    _trackYtOverridesCacheSet(k, { byPosition, fetchedAt: Date.now() });
     return byPosition;
   } catch {
     const empty = new Map();
-    _trackYtOverridesCache.set(k, { byPosition: empty, fetchedAt: Date.now() });
+    _trackYtOverridesCacheSet(k, { byPosition: empty, fetchedAt: Date.now() });
     return empty;
   }
 }
@@ -4406,11 +4439,11 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   el.innerHTML = `
     <div class="album-header">
       ${img ? `<div class="album-cover-wrap">
-        <img class="album-cover" src="${img}" alt="${escHtml(title)}" loading="lazy"
+        <img class="album-cover" src="${img}" alt="${escHtml(title)}" loading="lazy" decoding="async"
              onclick="openLightbox(${escHtml(JSON.stringify(allImages))},0)"
              title="${allImages.length > 1 ? `View ${allImages.length} photos` : 'View photo'}" />
         ${allImages.length > 1 ? `<div class="album-thumb-strip">${allImages.slice(1).map((u, i) =>
-          `<img src="${escHtml(u)}" loading="lazy" class="album-thumb" onclick="openLightbox(${escHtml(JSON.stringify(allImages))},${i + 1})" onerror="this.style.display='none'" title="Photo ${i + 2} of ${allImages.length}">`
+          `<img src="${escHtml(u)}" loading="lazy" decoding="async" class="album-thumb" onclick="openLightbox(${escHtml(JSON.stringify(allImages))},${i + 1})" onerror="this.style.display='none'" title="Photo ${i + 2} of ${allImages.length}">`
         ).join("")}</div>` : ""}
       </div>`
              : `<div class="album-cover-placeholder">♪</div>`}
@@ -5692,7 +5725,7 @@ function renderSeriesReleases() {
       `</span>`;
 
     const thumbHtml = r.thumb
-      ? `<img src="${r.thumb}" alt="" loading="lazy" />`
+      ? `<img src="${r.thumb}" alt="" loading="lazy" decoding="async" />`
       : `<span style="display:inline-block;width:40px;height:40px;background:#1a1a1a;border-radius:3px"></span>`;
 
     const yearStr = r.year && r.year !== 0 ? String(r.year) : "?";

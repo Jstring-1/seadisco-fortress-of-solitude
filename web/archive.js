@@ -30,8 +30,24 @@ let _archiveCuratedSlug = "aadamjacobs";  // active curated collection slug
 let _archiveCuratedList = null;            // [{slug, title}, ...] from server
 // Per-slug cache of loaded item arrays, keyed by slug. Lets the user
 // switch between collections without re-fetching ones they've
-// already seen this session.
+// already seen this session. LRU-capped because each entry can hold
+// 50-200 items × 1-2KB.
 const _archiveCuratedCache = new Map();
+const _ARCHIVE_CURATED_CACHE_MAX = 20;
+function _archiveCuratedCachePut(slug, list) {
+  if (!slug) return;
+  if (_archiveCuratedCache.has(slug)) _archiveCuratedCache.delete(slug);
+  _archiveCuratedCache.set(slug, list);
+  if (_archiveCuratedCache.size > _ARCHIVE_CURATED_CACHE_MAX) {
+    const it = _archiveCuratedCache.keys();
+    const drop = _archiveCuratedCache.size - _ARCHIVE_CURATED_CACHE_MAX;
+    for (let i = 0; i < drop; i++) {
+      const k = it.next().value;
+      if (k === undefined) break;
+      _archiveCuratedCache.delete(k);
+    }
+  }
+}
 
 // ── Search-tab state ────────────────────────────────────────────────
 let _archiveSearchQuery   = "";       // last-submitted query text
@@ -196,7 +212,7 @@ async function _archiveLoadCurated(forceRefresh = false, slug = null) {
     const j = await r.json();
     const list = Array.isArray(j?.items) ? j.items : [];
     _archiveList = list;
-    _archiveCuratedCache.set(targetSlug, list);
+    _archiveCuratedCachePut(targetSlug, list);
     _renderArchiveList();
   } catch (err) {
     if (rowsEl) rowsEl.innerHTML = `<div class="loc-empty">Could not load archive collection.</div>`;
@@ -1139,7 +1155,7 @@ async function _archiveResolveMeta(identifier) {
     const r = await apiFetch(`/api/archive/item/${encodeURIComponent(identifier)}`);
     if (!r.ok) return null;
     const j = await r.json();
-    _archiveInfoCache.set(identifier, j);
+    _archiveInfoCachePut(identifier, j);
     return j;
   } catch { return null; }
 }
@@ -1249,6 +1265,24 @@ async function archiveQueueSavedFromRow(btn) {
 // fetches /metadata/{id} and curates the response (1d cache).
 let _archiveInfoCache = new Map(); // identifier → curated metadata
 let _archiveInfoCurrentId = null;
+// Curated metadata blobs are 5-30KB each (tracklist, description, file
+// list). After a session of poking through 100 items this would have
+// been 1-3MB pinned. LRU cap at 100 keeps memory bounded.
+const _ARCHIVE_INFO_CACHE_MAX = 100;
+function _archiveInfoCachePut(id, data) {
+  if (!id) return;
+  if (_archiveInfoCache.has(id)) _archiveInfoCache.delete(id);
+  _archiveInfoCache.set(id, data);
+  if (_archiveInfoCache.size > _ARCHIVE_INFO_CACHE_MAX) {
+    const it = _archiveInfoCache.keys();
+    const drop = _archiveInfoCache.size - Math.floor(_ARCHIVE_INFO_CACHE_MAX * 0.75);
+    for (let i = 0; i < drop; i++) {
+      const k = it.next().value;
+      if (k === undefined) break;
+      _archiveInfoCache.delete(k);
+    }
+  }
+}
 
 async function _archiveOpenInfoPopup(identifier) {
   if (!identifier) return;
@@ -1272,7 +1306,7 @@ async function _archiveOpenInfoPopup(identifier) {
         return;
       }
       data = await r.json();
-      _archiveInfoCache.set(identifier, data);
+      _archiveInfoCachePut(identifier, data);
     } catch {
       body.innerHTML = `<div class="loc-empty">Could not load item details.</div>`;
       return;

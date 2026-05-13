@@ -307,6 +307,34 @@ function switchView(view, skipPushState = false) {
   if (accountView) accountView.style.display = "none";
   if (youtubeView) youtubeView.style.display = "none";
 
+  // Memory hygiene: empty the heaviest result grids belonging to
+  // views we're not currently showing. Decoded image bitmaps inside
+  // <img> nodes stay GPU-resident while attached even with
+  // display:none on an ancestor, and search results + wiki/youtube
+  // thumb lists are the biggest non-iframe DOM offenders. Skipped
+  // for LOC + archive because their views own non-grid structural
+  // markup that lazy-initialises and is annoying to rebuild from
+  // scratch — those views also tend to be revisited often. The
+  // grids we DO empty here have cheap re-render paths: #results
+  // re-runs the saved search via restoreFromParams on return, and
+  // the wiki/youtube grids re-fetch when their view is shown.
+  if (view !== "search" && view !== "") {
+    const r = document.getElementById("results");
+    if (r && r.children.length) r.innerHTML = "";
+  }
+  if (view !== "wiki") {
+    const w1 = document.getElementById("wiki-view-results");
+    const w2 = document.getElementById("wiki-saved-results");
+    if (w1 && w1.children.length) w1.innerHTML = "";
+    if (w2 && w2.children.length) w2.innerHTML = "";
+  }
+  if (view !== "youtube") {
+    const y1 = document.getElementById("youtube-view-results");
+    const y2 = document.getElementById("youtube-saved-results");
+    if (y1 && y1.children.length) y1.innerHTML = "";
+    if (y2 && y2.children.length) y2.innerHTML = "";
+  }
+
   // Invite-only splash: only show on the home/search view, never on
   // info / privacy / terms / records / account / wanted views.
   const _splashEl = document.getElementById("splash-section");

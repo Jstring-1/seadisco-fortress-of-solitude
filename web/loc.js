@@ -594,14 +594,34 @@ async function _locLoadMore() {
 
 // Item cache by LOC id — lets the info popup look up the full item
 // without re-fetching. Populated in _locRunSearch and _locLoadSaved.
+// LRU-capped: items can be 1-3KB each and a heavy browse session
+// (search → saved → search → saved) used to balloon this to thousands.
 const _locItemCache = new Map();
+const _LOC_ITEM_CACHE_MAX = 200;
+function _locItemCachePut(id, item) {
+  if (!id) return;
+  // Insertion-order Map → deleting + re-setting bumps key to newest.
+  if (_locItemCache.has(id)) _locItemCache.delete(id);
+  _locItemCache.set(id, item);
+  // Drop the oldest entries in a chunk so we don't trim on every single
+  // insert (cheap amortised cost).
+  if (_locItemCache.size > _LOC_ITEM_CACHE_MAX) {
+    const drop = _locItemCache.size - Math.floor(_LOC_ITEM_CACHE_MAX * 0.75);
+    const it = _locItemCache.keys();
+    for (let i = 0; i < drop; i++) {
+      const k = it.next().value;
+      if (k === undefined) break;
+      _locItemCache.delete(k);
+    }
+  }
+}
 
 function _locRenderCard(item, opts) {
   if (!item || !item.id) return "";
   const savedTab = !!(opts && opts.savedTab);
   const saved = !!_locSavedIds?.has(item.id);
   const canPlay = !!item.streamUrl;
-  _locItemCache.set(item.id, item);
+  _locItemCachePut(item.id, item);
 
   const contributor = Array.isArray(item.contributors) && item.contributors.length
     ? item.contributors.join(", ")
@@ -919,7 +939,7 @@ async function _locFetchLookup(locId) {
     const j = await r.json();
     const item = j?.item;
     if (item && item.id) {
-      _locItemCache.set(item.id, item);
+      _locItemCachePut(item.id, item);
       return item;
     }
   } catch { /* fall through */ }

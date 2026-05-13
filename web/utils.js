@@ -225,9 +225,21 @@ function feedApply(raw) {
 // ── Rel-popup overflow helpers ───────────────────────────────────────────
 window._relPopups = {};
 let _relPopupIdx = 0;
+// FIFO cap. Each rendered modal mints a few rp* entries that we never
+// explicitly clean up — the popup element gets re-populated on the
+// next click, but the stale entries leak forever otherwise. 200 is
+// well above the steady-state usage but bounds an extended session.
+const _REL_POPUPS_MAX = 200;
 function _storeRelPopup(items, isLinks) {
   const key = "rp" + (++_relPopupIdx);
   window._relPopups[key] = { items, isLinks };
+  const keys = Object.keys(window._relPopups);
+  if (keys.length > _REL_POPUPS_MAX) {
+    // Drop oldest by mint order (key suffix is monotonically increasing).
+    keys.sort((a, b) => Number(a.slice(2)) - Number(b.slice(2)));
+    const drop = keys.length - Math.floor(_REL_POPUPS_MAX * 0.75);
+    for (let i = 0; i < drop; i++) delete window._relPopups[keys[i]];
+  }
   return key;
 }
 
