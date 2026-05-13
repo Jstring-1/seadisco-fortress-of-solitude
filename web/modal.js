@@ -1729,13 +1729,37 @@ function loadYTVideo(id) {
   // _createYTPlayer path with a fresh iframe instead of reusing the
   // old one via loadVideoById.
   if (ytPlayer && (_ytPlayCount % _YT_PLAYER_ROTATE_EVERY === 0)) {
+    // Memory hygiene: tear down EVERYTHING that pointed at the old
+    // player before swapping in a fresh iframe. Without these, the
+    // previous player's state lingers and Chromium hangs onto its
+    // decode buffers — the prime suspect for multi-GB heap spikes.
+    //   - bump _ytSession so stale onStateChange/onError closures
+    //     from the destroyed player short-circuit (they capture
+    //     session=_ytSession at create time)
+    //   - kill the 8s load watchdog and 500ms progress timer; both
+    //     were pointing at the now-dead player
+    //   - reset _ytEndFiredToken so a leftover "ended" guard from
+    //     the previous video doesn't poison the next one
+    _ytSession++;
+    if (_ytLoadTimer) { clearTimeout(_ytLoadTimer); _ytLoadTimer = null; }
+    if (typeof _stopYtProgressLoop === "function") _stopYtProgressLoop();
+    _ytEndFiredToken = -1;
     try {
       if (typeof ytPlayer.stopVideo === "function") ytPlayer.stopVideo();
       ytPlayer.destroy();
     } catch (e) { console.warn("[loadYTVideo] rotation destroy failed:", e); }
     ytPlayer = null;
     const slot = document.getElementById("video-player");
-    if (slot) slot.innerHTML = "";
+    if (slot) {
+      // Explicitly remove the iframe element before innerHTML="".
+      // Just clearing innerHTML doesn't always reliably tear down
+      // the iframe's content document on Chromium — the MediaSource
+      // / decode buffers attached to it can linger long after
+      // .destroy() returns. Removing the node detaches contentWindow
+      // synchronously and lets V8 + the media pipeline collect.
+      slot.querySelectorAll("iframe").forEach(f => f.remove());
+      slot.innerHTML = "";
+    }
   }
   const vtoken = _ytVideoToken;
   updatePlayerStatus("loading");
@@ -1923,9 +1947,14 @@ function _ytPruneUnavailable(videoId, advance) {
   // window._videoQueue when the dead video was the only or last
   // queued item. Without this snapshot, the album auto-advance
   // fallback below has nothing to walk and the player just stops.
-  const savedVideoQueue      = Array.isArray(window._videoQueue)     ? window._videoQueue.slice()     : [];
-  const savedVideoQueueIndex = window._videoQueueIndex;
-  const savedVideoQueueMeta  = Array.isArray(window._videoQueueMeta) ? window._videoQueueMeta.slice() : [];
+  // NOTE: `let` (not `const`) so we can null these out at the tail
+  // of the deferred callback below — under fast prune cascades
+  // (chain of dead videos) multiple overlapping setTimeouts each
+  // retained a full slice of _videoQueue, which can be hundreds of
+  // entries for "play whole discography" cases.
+  let savedVideoQueue      = Array.isArray(window._videoQueue)     ? window._videoQueue.slice()     : [];
+  let savedVideoQueueIndex = window._videoQueueIndex;
+  let savedVideoQueueMeta  = Array.isArray(window._videoQueueMeta) ? window._videoQueueMeta.slice() : [];
   const tokenAtSchedule = _ytVideoToken;
 
   // Best-effort remove the dead video from the cross-source queue.
@@ -1943,27 +1972,37 @@ function _ytPruneUnavailable(videoId, advance) {
   // async body (which runs synchronously up to its first await)
   // settle before we read tokens / engine.
   setTimeout(() => {
-    // queueRemove found a next item AND already loaded it (via
-    // _queuePlayItem → openVideo → loadYTVideo, which bumps the
-    // token). Don't double-advance.
-    if (_ytVideoToken !== tokenAtSchedule) return;
+    try {
+      // queueRemove found a next item AND already loaded it (via
+      // _queuePlayItem → openVideo → loadYTVideo, which bumps the
+      // token). Don't double-advance.
+      if (_ytVideoToken !== tokenAtSchedule) return;
 
-    // queueRemove → playerClose may have wiped _videoQueue. Restore
-    // the snapshot so the album-track fallback below still has
-    // something to walk through.
-    if (!Array.isArray(window._videoQueue) || !window._videoQueue.length) {
-      window._videoQueue      = savedVideoQueue;
-      window._videoQueueIndex = savedVideoQueueIndex;
-      window._videoQueueMeta  = savedVideoQueueMeta;
+      // queueRemove → playerClose may have wiped _videoQueue. Restore
+      // the snapshot so the album-track fallback below still has
+      // something to walk through.
+      if (!Array.isArray(window._videoQueue) || !window._videoQueue.length) {
+        window._videoQueue      = savedVideoQueue;
+        window._videoQueueIndex = savedVideoQueueIndex;
+        window._videoQueueMeta  = savedVideoQueueMeta;
+      }
+
+      // Hand off to playNextVideo. It checks the cross-source queue
+      // first (now empty for this case), falls through to _videoQueue
+      // (which we just restored), and either plays the next album
+      // track or surfaces "ended" if the album's done. This works
+      // even when _currentEngine has been cleared by playerClose —
+      // loadYTVideo recreates the iframe.
+      if (typeof playNextVideo === "function") playNextVideo();
+    } finally {
+      // Release snapshot references so the closure becomes
+      // collectible. Without this, a chain of dead-video prunes
+      // can stack overlapping closures each holding a full
+      // _videoQueue copy.
+      savedVideoQueue = null;
+      savedVideoQueueMeta = null;
+      savedVideoQueueIndex = null;
     }
-
-    // Hand off to playNextVideo. It checks the cross-source queue
-    // first (now empty for this case), falls through to _videoQueue
-    // (which we just restored), and either plays the next album
-    // track or surfaces "ended" if the album's done. This works
-    // even when _currentEngine has been cleared by playerClose —
-    // loadYTVideo recreates the iframe.
-    if (typeof playNextVideo === "function") playNextVideo();
   }, 0);
 }
 
@@ -3874,7 +3913,15 @@ function closeVideo() {
     ytPlayer.destroy();
     ytPlayer = null;
   }
-  document.getElementById("video-player").innerHTML = "";
+  // Detach the iframe node explicitly before clearing innerHTML —
+  // see the rotation block in loadYTVideo for the rationale. tldr:
+  // innerHTML="" alone leaves Chromium holding the iframe's media
+  // decode buffers, which is the main vector for runaway memory.
+  const _vpSlot = document.getElementById("video-player");
+  if (_vpSlot) {
+    _vpSlot.querySelectorAll("iframe").forEach(f => f.remove());
+    _vpSlot.innerHTML = "";
+  }
   const titleEl = document.getElementById("mini-player-title");
   if (titleEl) titleEl.textContent = "Not playing";
   updatePlayerStatus("");
