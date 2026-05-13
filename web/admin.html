@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260511.2026" />
+  <link rel="stylesheet" href="/style.css?v=20260512.2012" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260511.2026"></script>
-<script defer src="/shared.js?v=20260511.2026"></script>
+<script defer src="/utils.js?v=20260512.2012"></script>
+<script defer src="/shared.js?v=20260512.2012"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -162,8 +162,15 @@
           <button class="admin-btn admin-btn-danger" onclick="bluesDbDeleteAll()" id="blues-delete-all-btn" title="Wipe every row in the blues_artists table. Two-step confirm. Use to clear a noisy seed before re-running.">Delete all</button>
           <span id="blues-stats" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
         </div>
-        <div style="display:flex;gap:0.5rem;margin-bottom:0.6rem">
-          <input id="blues-search" type="search" placeholder="Search name / birthplace / hometown" style="flex:1;padding:0.45rem 0.7rem;font-size:0.88rem" oninput="bluesDbDebouncedSearch()" />
+        <div style="display:flex;gap:0.5rem;margin-bottom:0.6rem;align-items:center;flex-wrap:wrap">
+          <input id="blues-search" type="search" placeholder="Search name / birthplace / hometown" style="flex:1;min-width:200px;padding:0.45rem 0.7rem;font-size:0.88rem" oninput="bluesDbDebouncedSearch()" />
+          <!-- Quick-filter: rows missing a photo_url. Drives client-side
+               filtering against the cached _bluesDbState.rows array, so
+               toggling it is instant — no server round-trip. -->
+          <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:var(--muted);white-space:nowrap;cursor:pointer">
+            <input id="blues-filter-nothumb" type="checkbox" onchange="bluesDbRenderList()" />
+            <span>No thumbnail only</span>
+          </label>
         </div>
         <div id="blues-list" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
         <div id="blues-pager" style="margin-top:0.6rem;display:flex;gap:0.4rem;align-items:center;font-size:0.78rem"></div>
@@ -364,7 +371,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260511.2026"></script>
+<script defer src="/modal.js?v=20260512.2012"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1271,6 +1278,11 @@ async function loadAdminItems() {
 }
 
 // ── Blues DB tab ────────────────────────────────────────────────────────
+// rows = the FULL server-fetched list (one request per page-load).
+// All subsequent sorts / search / filter changes / individual saves
+// operate on this cached array so the UI updates instantly without
+// re-fetching. Server is only re-hit when we genuinely need fresh
+// data (page-load, bulk-enrich completion, etc.).
 let _bluesDbState = { rows: [], total: 0, search: "", editingId: null, sort: "name", order: "asc" };
 let _bluesSearchTimer = null;
 
@@ -1314,9 +1326,12 @@ async function bluesDbLoadList() {
   if (!list) return;
   list.innerHTML = '<div style="padding:0.6rem">Loading…</div>';
   // Admin grid shows ALL rows in one shot — `all=1` sidesteps the
-  // server-side default 50-row cap. Sort still honoured.
+  // server-side default 50-row cap. Server-side sort is still
+  // requested as the initial order, but every subsequent sort /
+  // search / filter pass is purely client-side off the cached rows
+  // array. Don't pass `search` to the server — we let the client
+  // filter so the search input updates instantly.
   const params = new URLSearchParams({
-    search: _bluesDbState.search,
     all: "1",
     sort: _bluesDbState.sort,
     order: _bluesDbState.order,
@@ -1331,10 +1346,108 @@ async function bluesDbLoadList() {
   } catch { list.innerHTML = '<div style="color:#e88">Error loading.</div>'; }
 }
 
+// Pull a single row fresh from the server and patch the cached array
+// in place. Used after save / single-row enrich so the UI updates
+// without re-fetching the entire list.
+async function _bluesDbRefreshRow(id) {
+  if (!id) return false;
+  try {
+    const r = await apiFetch("/api/admin/blues/" + id);
+    if (!r.ok) return false;
+    const fresh = await r.json();
+    const idx = _bluesDbState.rows.findIndex(row => Number(row.id) === Number(id));
+    if (idx >= 0) {
+      _bluesDbState.rows[idx] = fresh;
+    } else {
+      _bluesDbState.rows.push(fresh);
+      _bluesDbState.total = (_bluesDbState.total || 0) + 1;
+    }
+    return true;
+  } catch { return false; }
+}
+
+// Drop a row from the cached array without a server round-trip.
+function _bluesDbRemoveRowLocal(id) {
+  const idx = _bluesDbState.rows.findIndex(row => Number(row.id) === Number(id));
+  if (idx >= 0) {
+    _bluesDbState.rows.splice(idx, 1);
+    _bluesDbState.total = Math.max(0, (_bluesDbState.total || 0) - 1);
+  }
+}
+
+// Client-side sort over the cached rows. Mirrors the column keys the
+// server understands so the header arrows reflect the active order.
+function _bluesDbSortRows(rows) {
+  const key = _bluesDbState.sort || "name";
+  const order = _bluesDbState.order === "desc" ? -1 : 1;
+  // Picker per known sort column — keeps comparisons stable across
+  // null / undefined / string-vs-number rows.
+  const pick = (r) => {
+    if (key === "name") return String(r.name || "").toLowerCase();
+    if (key === "earliest_release") {
+      const direct = r.earliest_release_year;
+      if (Number.isFinite(direct)) return direct;
+      const rels = Array.isArray(r.discogs_releases) ? r.discogs_releases : [];
+      let min = Infinity;
+      for (const x of rels) {
+        const y = Number(x?.year);
+        if (Number.isFinite(y) && y > 0 && y < min) min = y;
+      }
+      return Number.isFinite(min) ? min : null;
+    }
+    if (key === "styles") {
+      const arr = Array.isArray(r.styles) ? r.styles : [];
+      return arr.join(", ").toLowerCase();
+    }
+    if (key === "discogs_id") return Number(r.discogs_id) || 0;
+    if (key === "release_count") {
+      return Array.isArray(r.discogs_releases) ? r.discogs_releases.length : 0;
+    }
+    return String(r[key] ?? "").toLowerCase();
+  };
+  const out = rows.slice();
+  out.sort((a, b) => {
+    const va = pick(a);
+    const vb = pick(b);
+    // Push null/undefined to the bottom regardless of asc/desc so an
+    // empty cell doesn't crowd out actual values.
+    const na = va == null || va === "" || (typeof va === "number" && !Number.isFinite(va));
+    const nb = vb == null || vb === "" || (typeof vb === "number" && !Number.isFinite(vb));
+    if (na && !nb) return 1;
+    if (!na && nb) return -1;
+    if (na && nb) return 0;
+    if (typeof va === "number" && typeof vb === "number") return (va - vb) * order;
+    return String(va).localeCompare(String(vb)) * order;
+  });
+  return out;
+}
+
+// Apply search + thumbnail filter to the cached rows.
+function _bluesDbFilterRows(rows) {
+  const q = (_bluesDbState.search || "").toLowerCase();
+  const noThumb = !!document.getElementById("blues-filter-nothumb")?.checked;
+  return rows.filter(r => {
+    if (noThumb && r.photo_url) return false;
+    if (!q) return true;
+    const hay = `${r.name || ""}\n${r.hometown || ""}\n${r.birthplace || ""}\n${(Array.isArray(r.styles) ? r.styles.join(" ") : "")}`.toLowerCase();
+    return hay.includes(q);
+  });
+}
+
 function bluesDbRenderList() {
   const list = document.getElementById("blues-list");
   if (!_bluesDbState.rows.length) {
     list.innerHTML = '<div style="padding:0.6rem;color:var(--muted)">No artists yet. Click <strong>Seed from Discogs</strong> or <strong>+ Add artist</strong>.</div>';
+    bluesDbRenderPager();
+    return;
+  }
+  // Run filter (search + no-thumbnail) then sort, both client-side
+  // off the cached rows array. Avoids a server round-trip for every
+  // keypress / sort / filter toggle.
+  const visible = _bluesDbSortRows(_bluesDbFilterRows(_bluesDbState.rows));
+  if (!visible.length) {
+    list.innerHTML = '<div style="padding:0.6rem;color:var(--muted)">No artists match the current filter.</div>';
+    bluesDbRenderPager(visible.length);
     return;
   }
   const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
@@ -1344,7 +1457,7 @@ function bluesDbRenderList() {
     if (b) return `d. ${b}`;
     return "";
   };
-  const rows = _bluesDbState.rows.map(r => {
+  const rows = visible.map(r => {
     const styles = (Array.isArray(r.styles) ? r.styles : []).slice(0, 3).join(", ");
     const relCount = Array.isArray(r.discogs_releases) ? r.discogs_releases.length : 0;
     // Cross-links to the main app:
@@ -1417,6 +1530,9 @@ function bluesDbRenderList() {
     el.addEventListener("mouseenter", () => { _bluesHoverCancelHide(); _bluesHoverShow(el); });
     el.addEventListener("mouseleave", _bluesHoverScheduleHide);
   });
+  // Pager shows the filtered vs total count so the user can see how
+  // many rows the active search / "no thumbnail" toggle is hiding.
+  bluesDbRenderPager(visible.length);
 }
 
 let _bluesHoverHideTimer = null;
@@ -1567,10 +1683,15 @@ function bluesShowImage(url) {
 
 // Pager is gone — admin grid shows everything in one shot. Keep this
 // shim for any stale callers but it just renders the row count.
-function bluesDbRenderPager() {
+function bluesDbRenderPager(visibleCount) {
   const pag = document.getElementById("blues-pager");
   if (!pag) return;
-  pag.innerHTML = `<span style="color:var(--muted)">${_bluesDbState.total} rows</span>`;
+  const total = _bluesDbState.total ?? _bluesDbState.rows.length;
+  const v = (typeof visibleCount === "number") ? visibleCount : total;
+  const label = (v === total)
+    ? `${total} rows`
+    : `${v.toLocaleString()} of ${total.toLocaleString()} rows`;
+  pag.innerHTML = `<span style="color:var(--muted)">${label}</span>`;
 }
 
 // Click a column header → if it's already the active sort, flip
@@ -1586,7 +1707,11 @@ function bluesDbToggleSort(key) {
     _bluesDbState.order = numericish.includes(key) ? "desc" : "asc";
   }
   _bluesDbState.offset = 0;
-  bluesDbLoadList();
+  // Sort happens client-side over the cached rows — no server round-
+  // trip. The full list is already in _bluesDbState.rows from the
+  // initial load. Server is only re-hit when something genuinely
+  // mutates the row set (bulk enrich completion, etc).
+  bluesDbRenderList();
 }
 
 async function bluesDbExportCsv() {
@@ -1636,12 +1761,15 @@ async function bluesDbDeleteAll() {
   } catch (e) { alert("Delete failed: " + e); }
 }
 function bluesDbDebouncedSearch() {
+  // Search filters the cached rows in place — no server round-trip.
+  // Tiny debounce so each keystroke doesn't trigger a full re-render
+  // mid-typing on multi-thousand-row datasets.
   clearTimeout(_bluesSearchTimer);
   _bluesSearchTimer = setTimeout(() => {
     _bluesDbState.search = document.getElementById("blues-search").value.trim();
     _bluesDbState.offset = 0;
-    bluesDbLoadList();
-  }, 250);
+    bluesDbRenderList();
+  }, 80);
 }
 
 async function bluesDbSeed() {
@@ -1770,8 +1898,11 @@ async function _bluesEnrichMbSingleRow(id) {
     const summary = `${out.enriched}/${out.attempted} enriched in ${(out.durationMs/1000).toFixed(1)}s` +
       (out.skipped ? ` · ${out.skipped} skipped (no MBID)` : "") +
       (out.errors?.length ? ` · ${out.errors.length} errors` : "");
+    // Patch the cache from the fresh row server returned, then re-
+    // render the list and refresh the editor. No full re-list fetch.
+    await _bluesDbRefreshRow(id);
     bluesDbOpenEditor(id);
-    bluesDbLoadList();
+    bluesDbRenderList();
     alert(summary);
   } catch (e) { alert("Enrich failed: " + e); }
   finally { btn.disabled = false; btn.textContent = orig; }
@@ -1885,9 +2016,18 @@ async function _bluesEnrichGeneric({ id, endpoint, btnId, runningLabel, confirmM
         (out.skipped ? ` · ${out.skipped} skipped` : "") +
         (out.errors?.length ? ` · ${out.errors.length} errors` : "")
       : (Array.isArray(out.added) ? `Added ${out.added.length} URL(s).` : JSON.stringify(out));
-    if (id != null && _bluesDbState.editingId === id) bluesDbOpenEditor(id);
-    bluesDbLoadStats();
-    bluesDbLoadList();
+    // Single-row enrich: patch the cache and re-render rather than
+    // reloading the entire list. Bulk runs (id == null) still need a
+    // full re-list because they mutate many rows server-side.
+    if (id != null) {
+      await _bluesDbRefreshRow(id);
+      if (_bluesDbState.editingId === id) bluesDbOpenEditor(id);
+      bluesDbLoadStats();
+      bluesDbRenderList();
+    } else {
+      bluesDbLoadStats();
+      bluesDbLoadList();
+    }
     alert(summary);
   } catch (e) { alert("Failed: " + e); }
   finally { btn.disabled = false; btn.textContent = orig; }
@@ -2105,9 +2245,11 @@ async function bluesDbPickDiscogsCandidate(discogsId) {
     }
     // Refresh the editor with the new id so the user can immediately
     // hit "Get all info from Discogs" against the confirmed match.
+    // Cache patch + re-render avoids a full re-list fetch.
+    await _bluesDbRefreshRow(id);
     bluesDbCloseDiscogsPicker();
     bluesDbOpenEditor(id);
-    bluesDbLoadList();
+    bluesDbRenderList();
   } catch (e) {
     alert("Save failed: " + e);
   }
@@ -2184,9 +2326,20 @@ async function bluesDbSaveEditor() {
       alert("Save failed: " + (err.error ?? r.status));
       return;
     }
+    // For an edit (PUT): pull the saved row fresh and patch the cache
+    // in place — no full re-list fetch. For a create (POST): the new
+    // id lives in the response body; refresh that single row.
+    let newId = id;
+    if (!newId) {
+      try {
+        const j = await r.json();
+        if (j && j.id) newId = j.id;
+      } catch {}
+    }
+    if (newId) await _bluesDbRefreshRow(newId);
     bluesDbCloseEditor();
     bluesDbLoadStats();
-    bluesDbLoadList();
+    bluesDbRenderList();
   } catch (e) { alert("Save failed: " + e); }
 }
 async function bluesDbDeleteFromEditor() {
@@ -2196,9 +2349,11 @@ async function bluesDbDeleteFromEditor() {
   try {
     const r = await apiFetch("/api/admin/blues/" + id, { method: "DELETE" });
     if (!r.ok) { alert("Delete failed."); return; }
+    // Drop from the local cache and re-render — no need to re-fetch.
+    _bluesDbRemoveRowLocal(id);
     bluesDbCloseEditor();
     bluesDbLoadStats();
-    bluesDbLoadList();
+    bluesDbRenderList();
   } catch (e) { alert("Delete failed: " + e); }
 }
 
