@@ -33,12 +33,19 @@
 // Bumped whenever the SW's caching behavior changes — the activate
 // handler nukes any cache that doesn't match these names, so an
 // updated SW can shed all stale entries from the old strategy in one
-// shot. v2 = network-first shell.
-const SW_VERSION = "v2-20260502.1410";
+// shot. v3 = count-based image cache (byte-based trim was broken for
+// opaque cross-origin responses; blob.size returned 0 so trim never
+// fired and the IMG cache grew to ~60GB in extreme cases).
+const SW_VERSION = "v3-20260513.0900";
 const SHELL_CACHE = `sd-shell-${SW_VERSION}`;
 const API_CACHE   = `sd-api-${SW_VERSION}`;
 const IMG_CACHE   = `sd-img-${SW_VERSION}`;
-const IMG_CACHE_MAX_BYTES = 250 * 1024 * 1024; // ~250 MB ceiling
+// Count-based cap. Cross-origin (Discogs CDN, ytimg, archive.org)
+// responses are opaque — blob().size returns 0, so we can't trim by
+// bytes. Average cover thumb is ~30-100KB, so 2000 entries ≈ 60-200MB
+// of disk. Generous enough that hot-set hit-rates stay high; firm
+// enough that an extended browse session doesn't drift into GB land.
+const IMG_CACHE_MAX_ENTRIES = 2000;
 
 // Files to pre-cache so the offline reload has the whole shell ready
 // without any network. A miss falls back to network on first encounter.
@@ -154,7 +161,7 @@ self.addEventListener("fetch", (event) => {
 
   // Cover images — cache-first, populate on first miss.
   if (_isImageHost(url) && /\.(?:jpe?g|png|webp|gif|svg)(?:\?|$)/i.test(url.pathname + url.search)) {
-    event.respondWith(_cacheFirstWithLimit(req, IMG_CACHE, IMG_CACHE_MAX_BYTES));
+    event.respondWith(_cacheFirstWithLimit(req, IMG_CACHE, IMG_CACHE_MAX_ENTRIES));
     return;
   }
 
@@ -205,7 +212,7 @@ async function _networkFirst(req, cacheName) {
   }
 }
 
-async function _cacheFirstWithLimit(req, cacheName, maxBytes) {
+async function _cacheFirstWithLimit(req, cacheName, maxEntries) {
   const cache = await caches.open(cacheName);
   const cached = await cache.match(req);
   if (cached) return cached;
@@ -219,7 +226,7 @@ async function _cacheFirstWithLimit(req, cacheName, maxBytes) {
       cache.put(req, res.clone());
       // Best-effort LRU sweep — fire-and-forget, no await so the
       // caller doesn't wait on the bookkeeping.
-      _trimImgCache(cache, maxBytes).catch(() => {});
+      _trimImgCache(cache, maxEntries).catch(() => {});
     }
     return res;
   } catch (e) {
@@ -232,31 +239,24 @@ async function _cacheFirstWithLimit(req, cacheName, maxBytes) {
   }
 }
 
-// Crude LRU: count total bytes in the image cache; if over the cap,
-// delete oldest entries (by Cache API insertion order — keys() returns
-// in insertion order) until under. The Cache API doesn't expose
-// per-entry size or atime, so this is approximate.
-async function _trimImgCache(cache, maxBytes) {
+// Count-based LRU. Drops the oldest entries (Cache API keys() returns
+// in insertion order) once the cache exceeds the max entry count.
+//
+// The previous byte-based version was broken: cross-origin opaque
+// responses (Discogs CDN, ytimg, archive.org) report blob.size === 0
+// because the browser hides the body, so the byte-total stayed near
+// zero and trim never fired. Real-world result: an IMG cache that
+// grew to ~60GB before users noticed. Count-based bookkeeping
+// sidesteps the opaque-size limitation entirely.
+async function _trimImgCache(cache, maxEntries) {
   const keys = await cache.keys();
-  if (keys.length === 0) return;
-  // Estimate size by re-reading each response's blob length. This is
-  // O(n) per sweep but only runs after a put when over cap, and we
-  // bail early once we're under the limit again.
-  let total = 0;
-  const sizes = [];
-  for (const req of keys) {
-    try {
-      const r = await cache.match(req);
-      if (!r) { sizes.push(0); continue; }
-      const blob = await r.blob();
-      sizes.push(blob.size);
-      total += blob.size;
-    } catch { sizes.push(0); }
-  }
-  if (total <= maxBytes) return;
-  for (let i = 0; i < keys.length && total > maxBytes; i++) {
+  if (keys.length <= maxEntries) return;
+  // Drop in a single batch — chop down to 75% of cap so we don't run
+  // a trim sweep on every put once we're near the boundary.
+  const target = Math.floor(maxEntries * 0.75);
+  const dropCount = keys.length - target;
+  for (let i = 0; i < dropCount; i++) {
     try { await cache.delete(keys[i]); } catch {}
-    total -= sizes[i] || 0;
   }
 }
 
