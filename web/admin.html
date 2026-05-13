@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260512.2013" />
+  <link rel="stylesheet" href="/style.css?v=20260512.2040" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260512.2013"></script>
-<script defer src="/shared.js?v=20260512.2013"></script>
+<script defer src="/utils.js?v=20260512.2040"></script>
+<script defer src="/shared.js?v=20260512.2040"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -182,7 +182,18 @@
               <h3 id="blues-editor-title" style="margin:0">Edit artist</h3>
               <button class="admin-btn" onclick="bluesDbCloseEditor()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
             </div>
-            <form id="blues-editor-form" onsubmit="event.preventDefault();bluesDbSaveEditor()" style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem 1rem">
+            <!-- External search/deep-link bar — populated by
+                 _bluesDbUpdateEditorLinks() from the current name +
+                 any IDs already on the row. Shortcut for chasing
+                 down missing fields without copy-pasting names. -->
+            <div id="blues-editor-extlinks" style="display:none;gap:0.6rem;flex-wrap:wrap;font-size:0.78rem;margin-bottom:0.7rem;padding:0.4rem 0.6rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:6px">
+              <span style="color:var(--muted)">Lookup:</span>
+              <a id="blues-editor-link-discogs" href="#" target="_blank" rel="noopener">Discogs ↗</a>
+              <a id="blues-editor-link-wikipedia" href="#" target="_blank" rel="noopener">Wikipedia ↗</a>
+              <a id="blues-editor-link-musicbrainz" href="#" target="_blank" rel="noopener">MusicBrainz ↗</a>
+              <a id="blues-editor-link-wikidata" href="#" target="_blank" rel="noopener">Wikidata ↗</a>
+            </div>
+            <form id="blues-editor-form" onsubmit="event.preventDefault();bluesDbSaveEditor()" oninput="_bluesDbUpdateEditorLinks()" style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem 1rem">
               <label style="grid-column:1/-1">Name <input name="name" required style="width:100%"></label>
               <label>Wikidata QID <input name="wikidata_qid" placeholder="Q123456"></label>
               <label>MusicBrainz MBID <input name="musicbrainz_mbid" placeholder="uuid"></label>
@@ -371,7 +382,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260512.2013"></script>
+<script defer src="/modal.js?v=20260512.2040"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -2299,7 +2310,47 @@ async function bluesDbOpenEditor(id) {
     discogsBtn.style.display = "none";
     ytBtn.style.display = "none";
   }
+  _bluesDbUpdateEditorLinks();
   overlay.style.display = "flex";
+}
+
+// Build hrefs for the editor's external-lookup bar from whatever
+// IDs are currently in the form. Falls back to a name search if no
+// stable identifier exists yet — the common case for a brand-new
+// row. Called once when the editor opens; the bar is hidden when
+// there's no name to search on at all.
+function _bluesDbUpdateEditorLinks() {
+  const form = document.getElementById("blues-editor-form");
+  const bar = document.getElementById("blues-editor-extlinks");
+  if (!form || !bar) return;
+  const get = (n) => (form.elements.namedItem(n)?.value || "").trim();
+  const name = get("name");
+  const discogsId = get("discogs_id");
+  const mbid = get("musicbrainz_mbid");
+  const qid = get("wikidata_qid");
+  const wikiSuffix = get("wikipedia_suffix");
+  if (!name && !discogsId && !mbid && !qid && !wikiSuffix) {
+    bar.style.display = "none";
+    return;
+  }
+  bar.style.display = "flex";
+  const enc = encodeURIComponent;
+  const discogs = discogsId
+    ? "https://www.discogs.com/artist/" + enc(discogsId)
+    : "https://www.discogs.com/search/?type=artist&q=" + enc(name);
+  const wiki = wikiSuffix
+    ? "https://en.wikipedia.org" + (wikiSuffix.startsWith("/") ? wikiSuffix : "/wiki/" + wikiSuffix)
+    : "https://en.wikipedia.org/w/index.php?search=" + enc(name);
+  const mb = mbid
+    ? "https://musicbrainz.org/artist/" + enc(mbid)
+    : "https://musicbrainz.org/search?type=artist&query=" + enc(name);
+  const wd = qid
+    ? "https://www.wikidata.org/wiki/" + enc(qid)
+    : "https://www.wikidata.org/w/index.php?search=" + enc(name);
+  document.getElementById("blues-editor-link-discogs").href = discogs;
+  document.getElementById("blues-editor-link-wikipedia").href = wiki;
+  document.getElementById("blues-editor-link-musicbrainz").href = mb;
+  document.getElementById("blues-editor-link-wikidata").href = wd;
 }
 function bluesDbCloseEditor() {
   document.getElementById("blues-editor-overlay").style.display = "none";
