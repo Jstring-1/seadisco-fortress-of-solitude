@@ -5509,8 +5509,20 @@ async function _runPersonalSuggestionsForUser(userId: string): Promise<{ saved: 
   // out of fresh suggestions. 30 tuples × master+release search × per-
   // page 25/15 yields ~1200 raw rows pre-dedupe; cap saved at 1000
   // after sorting.
-  const tuples = await getUserTasteTuples(userId, 30);
+  let tuples = await getUserTasteTuples(userId, 30);
   if (!tuples.length) return { saved: 0, reason: "no-taste" };
+
+  // Admin-only year filter: cap suggestions at <= 1970 to keep the
+  // personal feed focused on pre-1970 material (blues / early rock /
+  // pre-rock-era jazz). Filter tuples upstream so we don't waste
+  // Discogs search calls on years that'd just be discarded. Cheap
+  // hack; if admin's taste profile has no pre-1970 years, fall back
+  // to the unfiltered set so the feed doesn't go empty.
+  if (userId === ADMIN_CLERK_ID) {
+    const filtered = tuples.filter(t => Number(t.year) > 0 && Number(t.year) <= 1970);
+    if (filtered.length) tuples = filtered;
+    else console.log(`[suggestions] admin pre-1970 filter would empty tuples; using unfiltered`);
+  }
 
   const ownedMasters     = await getUserLibraryMasterIds(userId);
   const dismissed        = await getDismissedSuggestionKeys(userId);
@@ -5529,11 +5541,20 @@ async function _runPersonalSuggestionsForUser(userId: string): Promise<{ saved: 
   // over release rows when both exist.
   const candidates = new Map<string, { id: number; type: "master" | "release"; score: number; data: any }>();
 
+  const _isAdmin = userId === ADMIN_CLERK_ID;
   const ingest = (row: any, t: { genre: string; style: string; year: number; n: number }, rank: number) => {
     const id = Number(row?.id);
     if (!Number.isFinite(id) || id <= 0) return;
     const type: "master" | "release" = row.type === "master" ? "master" : row.type === "release" ? "release" : "release";
     if (type !== row.type) return;
+    // Admin pre-1970 filter (defense in depth — tuple filter above
+    // limits the searches, but Discogs's year filter sometimes
+    // returns reissues whose year field reads later than the tuple
+    // year). Drop any row whose visible year is > 1970.
+    if (_isAdmin) {
+      const ry = Number(row.year);
+      if (Number.isFinite(ry) && ry > 1970) return;
+    }
     // Dedup: skip if user owns the underlying master, or if dismissed.
     const masterIdRaw = Number(row.master_id);
     if (Number.isFinite(masterIdRaw) && masterIdRaw > 0 && ownedMasters.has(masterIdRaw)) return;
