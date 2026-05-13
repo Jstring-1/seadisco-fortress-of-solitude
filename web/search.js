@@ -667,17 +667,20 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
       const qualityTitles = items.slice(0, 6).map(it => it.title ?? it.name ?? "").filter(Boolean);
       // Endpoint requires sign-in (anthropic-backed, costs tokens), so
       // skip the call entirely for anon users — saves a 401 in the
-      // console and a wasted server roundtrip per search.
+      // console and a wasted server roundtrip per search. Use
+      // apiFetch (not raw fetch) so the Clerk session token is
+      // attached; raw fetch was hitting requireUser unauthenticated
+      // and 401ing even for signed-in users.
       const _signedIn = !!window._clerk?.user;
-      if (_signedIn && qualityQuery && qualityTitles.length) {
+      if (_signedIn && qualityQuery && qualityTitles.length && typeof apiFetch === "function") {
         const aiEl = document.getElementById("search-ai-summary");
         if (aiEl) aiEl.textContent = "…";
-        fetch("/api/result-quality", {
+        apiFetch("/api/result-quality", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query: qualityQuery, titles: qualityTitles }),
-        }).then(r => r.json()).then(d => {
-          if (aiEl) { aiEl.textContent = d.phrase || ""; aiEl.title = d.phrase || ""; }
+        }).then(r => r.ok ? r.json() : null).then(d => {
+          if (aiEl) { aiEl.textContent = d?.phrase || ""; aiEl.title = d?.phrase || ""; }
         }).catch(() => {
           if (aiEl) { aiEl.textContent = ""; aiEl.title = ""; }
         });
