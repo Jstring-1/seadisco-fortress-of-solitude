@@ -665,7 +665,11 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
         style   ? `Style: ${style}`     : "",
       ].filter(Boolean).join(", ");
       const qualityTitles = items.slice(0, 6).map(it => it.title ?? it.name ?? "").filter(Boolean);
-      if (qualityQuery && qualityTitles.length) {
+      // Endpoint requires sign-in (anthropic-backed, costs tokens), so
+      // skip the call entirely for anon users — saves a 401 in the
+      // console and a wasted server roundtrip per search.
+      const _signedIn = !!window._clerk?.user;
+      if (_signedIn && qualityQuery && qualityTitles.length) {
         const aiEl = document.getElementById("search-ai-summary");
         if (aiEl) aiEl.textContent = "…";
         fetch("/api/result-quality", {
