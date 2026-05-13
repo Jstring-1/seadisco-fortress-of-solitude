@@ -2212,11 +2212,35 @@ function updateVideoNavButtons() {
       if (meta.artist) parts.push(`<span>${escHtml(meta.artist)}</span>`);
       titleEl.innerHTML = parts.join(`<span class="vt-sep">·</span>`);
     } else {
-      // No meta — try to get title from YT player, otherwise leave as-is (onStateChange will fill it)
+      // No per-album meta. Three fallbacks, best → worst:
+      //   1. YT's getVideoData (canonical, but can be empty mid-load)
+      //   2. The currently-playing row in the cross-source queue
+      //      (covers cases where playback started from the queue
+      //      drawer without _videoQueueMeta being populated)
+      //   3. A neutral "Playing" — better than nothing, and crucially
+      //      better than leaving stale idle-bar text behind
+      //      (e.g. "Track <ytid> (+8 queued)" from a previous
+      //      anon-session state that has since been replaced).
+      let resolved = "";
       try {
         const vd = ytPlayer?.getVideoData?.();
-        if (vd?.title) titleEl.innerHTML = `<span class="vt-track">${escHtml(vd.title)}</span>`;
+        if (vd?.title) resolved = vd.title;
       } catch {}
+      if (!resolved) {
+        try {
+          const xq = Array.isArray(window._queue) ? window._queue : [];
+          const playingId = window._queuePlayingExternalId;
+          const row = playingId ? xq.find(it => String(it.externalId) === String(playingId)) : null;
+          if (row?.data?.title) {
+            const t = row.data.title;
+            const a = row.data.artist;
+            resolved = a ? `${t} · ${a}` : t;
+          }
+        } catch {}
+      }
+      titleEl.innerHTML = resolved
+        ? `<span class="vt-track">${escHtml(resolved)}</span>`
+        : `<span class="vt-track">Playing</span>`;
     }
   }
   // Show/hide album + share buttons. Engine-aware: YT needs a release
@@ -2273,6 +2297,11 @@ function _setPlayerEngine(name) {
     // playback state arrives.
     const statusEl = document.getElementById("mini-player-status");
     if (statusEl) statusEl.textContent = "";
+    // Same reason — wipe the idle-bar title so its "(+N queued)" tail
+    // can't survive into active mode. updateVideoNavButtons will write
+    // the real title (from meta / YT / queue lookup) right after.
+    const _titleEl = document.getElementById("mini-player-title");
+    if (_titleEl) _titleEl.innerHTML = `<span class="vt-track">Loading…</span>`;
     const ppBtn = document.getElementById("mini-playpause");
     if (ppBtn) {
       ppBtn.innerHTML = "&#9208;"; // ⏸
