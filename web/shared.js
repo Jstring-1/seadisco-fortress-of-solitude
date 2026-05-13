@@ -231,18 +231,20 @@ window._sdApplyCardMode = _sdApplyCardMode;
 // matching cards in place. Idempotent — already-enriched cards are
 // skipped via a data-card-enriched attribute.
 const _sdEnrichInflight = new Map();
-// Session-level dedup: once we've fetched enrichment for a given
-// type:id, never re-fetch within the same page session even if the
-// DOM nodes are fresh (e.g. a search → popup → back-to-search cycle
-// re-renders the same card with a new node that lacks the
-// data-card-enriched attribute). The MutationObserver fires on every
-// child insertion, so without this gate every render hit
-// /api/cards/enrich again — the server returns {items:[]} fast but
-// it was still 100+ round-trips per session. The manual ↻ refresh
-// button (_sdRefreshSparseCard) deletes its own key from this set so
-// force-refresh still works.
-const _sdEnrichedSession = new Set();
-window._sdEnrichedSession = _sdEnrichedSession;
+// Session-level row cache: once we've fetched enrichment for a given
+// type:id, hold onto the response row so subsequent renders (popup
+// open → back to search, view-switch grid prune + restore, scrolling
+// past + back) can re-inject from cache rather than re-fetching. The
+// MutationObserver fires on every child insertion; without caching,
+// every render either re-hit /api/cards/enrich (100+ chatty
+// round-trips/session) or — if dedup blocked the fetch — left fresh
+// DOM nodes empty forever. Cache fixes both: skip fetch AND still
+// re-populate fresh DOM. The manual ↻ refresh button
+// (_sdRefreshSparseCard) deletes its own key from the cache so
+// force-refresh still bypasses.
+const _sdEnrichedRowCache = new Map();   // "type:id" → row payload
+const _SD_ENRICH_CACHE_MAX = 400;
+window._sdEnrichedRowCache = _sdEnrichedRowCache;
 let _sdEnrichDebounce = null;
 function _sdScheduleCardEnrich() {
   if (_sdEnrichDebounce) clearTimeout(_sdEnrichDebounce);
@@ -279,10 +281,27 @@ async function _sdEnrichWideCards() {
     if (!uniq.has(key)) uniq.set(key, { id: Number(id), type });
   });
   if (!uniq.size) return;
+  // Two buckets: keys we can satisfy from the row-cache (re-inject
+  // synchronously, no network), and keys we actually need to fetch.
+  // The cache hit path is what lets a search → popup → back-to-
+  // search cycle re-paint the cards without firing /api/cards/enrich
+  // again.
   const items = [];
   for (const [key, val] of uniq.entries()) {
     if (_sdEnrichInflight.has(key)) continue;
-    if (_sdEnrichedSession.has(key)) continue;
+    const cached = _sdEnrichedRowCache.get(key);
+    if (cached !== undefined) {
+      // Refresh recency for LRU + re-inject. `null` is a valid cache
+      // entry meaning "server confirmed nothing to enrich for this
+      // id" — we honor it (no network) but obviously have nothing
+      // to inject.
+      _sdEnrichedRowCache.delete(key);
+      _sdEnrichedRowCache.set(key, cached);
+      if (cached) {
+        try { _sdInjectEnrichmentIntoCards(cached); } catch {}
+      }
+      continue;
+    }
     items.push(val);
   }
   if (!items.length) return;
@@ -300,13 +319,35 @@ async function _sdEnrichWideCards() {
       if (!r.ok) continue;
       const j = await r.json();
       const rows = Array.isArray(j?.items) ? j.items : [];
-      for (const row of rows) _sdInjectEnrichmentIntoCards(row);
-      // Mark every item in this batch as "done for the session" —
-      // including ids the server didn't return data for (cache-miss
-      // or zero-data entities). Without this, those would re-fire
-      // forever because they never gain the data-card-enriched flag
-      // on the DOM side.
-      for (const it of batch) _sdEnrichedSession.add(`${it.type}:${it.id}`);
+      const seenInResponse = new Set();
+      for (const row of rows) {
+        if (row && row.id != null && row.type) {
+          const k = `${row.type}:${row.id}`;
+          _sdEnrichedRowCache.set(k, row);
+          seenInResponse.add(k);
+        }
+        _sdInjectEnrichmentIntoCards(row);
+      }
+      // Cache a null sentinel for ids the server didn't return data
+      // for (zero-tracklist / zero-images entities). Without this,
+      // a later render with fresh DOM for the same id would re-fetch
+      // and the server would no-op again on every render.
+      for (const it of batch) {
+        const k = `${it.type}:${it.id}`;
+        if (!seenInResponse.has(k) && !_sdEnrichedRowCache.has(k)) {
+          _sdEnrichedRowCache.set(k, null);
+        }
+      }
+      // LRU sweep — drop oldest insertion-order entries when over cap.
+      if (_sdEnrichedRowCache.size > _SD_ENRICH_CACHE_MAX) {
+        const drop = _sdEnrichedRowCache.size - Math.floor(_SD_ENRICH_CACHE_MAX * 0.75);
+        const it = _sdEnrichedRowCache.keys();
+        for (let i = 0; i < drop; i++) {
+          const k = it.next().value;
+          if (k === undefined) break;
+          _sdEnrichedRowCache.delete(k);
+        }
+      }
     } catch { /* leave un-enriched — cards still render fine */ }
     finally {
       for (const it of batch) _sdEnrichInflight.delete(`${it.type}:${it.id}`);
@@ -478,10 +519,11 @@ async function _sdRefreshSparseCard(btn) {
     // The response is a full Discogs record. Patch the visible
     // card with whatever fields we can scrape. Easiest: re-fire
     // enrichment which now finds the freshly-cached row. Also drop
-    // the session-cache marker so the enrich call actually hits
-    // the server again (otherwise it'd be a no-op).
+    // the row-cache entry so the enrich call actually hits the
+    // server again (otherwise it'd just re-inject the stale cached
+    // row and skip the network).
     card.removeAttribute("data-card-enriched");
-    try { _sdEnrichedSession.delete(`${type}:${id}`); } catch {}
+    try { _sdEnrichedRowCache.delete(`${type}:${id}`); } catch {}
     if (typeof _sdScheduleCardEnrich === "function") _sdScheduleCardEnrich();
     // Update the visible title + artist immediately from the
     // response so the card stops looking sparse before enrichment
@@ -1278,7 +1320,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260513.1102";
+  const SITE_VERSION = "build 20260513.1233";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
