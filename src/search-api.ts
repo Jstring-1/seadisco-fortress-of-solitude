@@ -4091,6 +4091,10 @@ const _GUTENBERG_PRESET_TTL_MS = 60 * 60 * 1000;
 const _gutenbergPresetCache = new Map<string, { at: number; body: any }>();
 
 function _gutenbergNormalizeBook(b: any) {
+  // The cards render rich now — full subjects/bookshelves/formats so
+  // every result has its own download links + audio detection without
+  // a second click. Bigger payload per book (~1–2KB extra) but
+  // saves N popup-fetches when browsing.
   return {
     id: Number(b?.id) || 0,
     title: String(b?.title ?? ""),
@@ -4100,7 +4104,9 @@ function _gutenbergNormalizeBook(b: any) {
       death_year: a?.death_year ?? null,
     })) : [],
     languages: Array.isArray(b?.languages) ? b.languages : [],
-    subjects: Array.isArray(b?.subjects) ? b.subjects.slice(0, 8) : [],
+    subjects: Array.isArray(b?.subjects) ? b.subjects.slice(0, 12) : [],
+    bookshelves: Array.isArray(b?.bookshelves) ? b.bookshelves : [],
+    formats: b?.formats ?? {},
     download_count: Number(b?.download_count) || 0,
     cover: String(b?.formats?.["image/jpeg"] ?? ""),
   };

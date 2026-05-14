@@ -10528,6 +10528,73 @@ a:focus-visible {
   padding-top: 0.4rem;
 }
 
+/* Rich-card inline sections — every result now ships full info
+   (no popup middleman). Each section is a tight chip-row or link-
+   row under a small uppercase label. */
+.gutenberg-card-years {
+  color: #777;
+  font-size: 0.78rem;
+}
+.gutenberg-card-meta-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.8rem;
+  font-size: 0.74rem;
+  color: var(--muted);
+  margin-top: 0.1rem;
+}
+.gutenberg-card-stat {
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+.gutenberg-card-stat-label {
+  color: #999;
+  font-weight: 600;
+}
+.gutenberg-card-section {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  font-size: 0.78rem;
+}
+.gutenberg-card-section-label {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #888;
+  padding-top: 0.15rem;
+  min-width: 5rem;
+}
+.gutenberg-card-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
+}
+.gutenberg-card-formats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.gutenberg-card-format-link {
+  font-size: 0.72rem;
+  color: #aaa;
+  text-decoration: none;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0.15rem 0.5rem;
+  white-space: nowrap;
+}
+.gutenberg-card-format-link:hover {
+  color: #f5c150;
+  border-color: rgba(255, 200, 60, 0.4);
+  background: rgba(255, 200, 60, 0.08);
+}
+
 /* Reader overlay — full-viewport so a book gets the whole screen.
    #gutenberg-reader-body has its own overflow:auto so the auto-bookmark
    scroll handler reads .scrollTop / .scrollHeight from that container,
