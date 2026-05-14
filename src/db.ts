@@ -431,6 +431,36 @@ export async function initDb() {
   await getPool().query(`CREATE INDEX IF NOT EXISTS gutenberg_bookmarks_user_book_idx ON gutenberg_bookmarks (clerk_user_id, book_id, created_at DESC)`);
   await getPool().query(`CREATE UNIQUE INDEX IF NOT EXISTS gutenberg_bookmarks_auto_unique ON gutenberg_bookmarks (clerk_user_id, book_id) WHERE bookmark_kind = 'auto'`);
 
+  // Admin-curated annotations linking book positions to Discogs
+  // entities. Shared (not per-user): one annotation set everyone
+  // sees. Two-way surface — the reader shows them in the sidebar
+  // and as inline anchor markers; the artist/album/label popups
+  // query the same table to surface "📖 Mentioned in books".
+  // entity_id is nullable so name-only links (artist not in Discogs)
+  // still work — those don't surface on the reverse side but still
+  // render in the book.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS gutenberg_annotations (
+      id              SERIAL      PRIMARY KEY,
+      book_id         INTEGER     NOT NULL,
+      position_pct    REAL        NOT NULL DEFAULT 0,
+      position_anchor TEXT,
+      entity_type     TEXT        NOT NULL,    -- 'artist'|'release'|'master'|'label'
+      entity_id       BIGINT,                   -- Discogs id, nullable
+      entity_name     TEXT        NOT NULL,
+      snippet         TEXT,                     -- short quoted excerpt for the reverse-side card
+      label           TEXT,                     -- admin context note
+      created_by      TEXT        NOT NULL,     -- clerk_user_id of admin who created it
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  // Lookup by book (reader side): all annotations for the open book.
+  await getPool().query(`CREATE INDEX IF NOT EXISTS gutenberg_annotations_book_idx ON gutenberg_annotations (book_id, position_pct ASC)`);
+  // Lookup by entity (artist/album popup side): name-based fallback
+  // when entity_id is null, id-based when known.
+  await getPool().query(`CREATE INDEX IF NOT EXISTS gutenberg_annotations_entity_id_idx ON gutenberg_annotations (entity_type, entity_id) WHERE entity_id IS NOT NULL`);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS gutenberg_annotations_entity_name_idx ON gutenberg_annotations (entity_type, lower(entity_name))`);
+
   // ── Per-user "banished" suggestions ──────────────────────────────────────
   // When a user dismisses a personal-suggestion card with the × button,
   // the (id,type) is recorded here and the background generator skips it

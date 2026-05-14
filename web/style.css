@@ -10372,3 +10372,160 @@ body.gutenberg-reader-open { overflow: hidden; }
     font-size: 16px;
   }
 }
+
+/* In-book search */
+#gutenberg-reader-find {
+  width: 12rem;
+  padding: 0.28rem 0.5rem;
+  font-size: 0.82rem;
+  background: rgba(0, 0, 0, 0.3);
+  color: #eee;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.gutenberg-find-count {
+  font-size: 0.72rem;
+  color: var(--muted);
+  min-width: 3em;
+  text-align: center;
+}
+.gutenberg-find-hit {
+  background: #5d4500;
+  color: #fff;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.gutenberg-find-hit.is-active {
+  background: #f0a000;
+  color: #000;
+  outline: 2px solid #ffd54a;
+}
+
+/* Annotation sidebar rows */
+.gutenberg-annotation-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.6rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.gutenberg-annotation-jump {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  padding: 0.25rem 0.2rem;
+  color: #ddd;
+  font-size: 0.8rem;
+  overflow: hidden;
+}
+.gutenberg-annotation-jump:hover { color: #fff; background: rgba(255, 255, 255, 0.04); }
+.gutenberg-annotation-kind {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 3px;
+  background: rgba(255, 200, 60, 0.18);
+  color: #f5c150;
+  font-size: 0.7rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.gutenberg-annotation-kind[data-kind="release"],
+.gutenberg-annotation-kind[data-kind="master"]  { background: rgba(80, 180, 200, 0.18); color: #6cd2e3; }
+.gutenberg-annotation-kind[data-kind="label"]   { background: rgba(170, 120, 220, 0.18); color: #c69bff; }
+.gutenberg-annotation-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gutenberg-annotation-pct {
+  font-size: 0.7rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.gutenberg-annotation-open {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.85rem;
+}
+.gutenberg-annotation-open:hover { color: #fff; }
+
+/* Inline anchor markers inside the book body */
+.gutenberg-anno-marker {
+  display: inline-block;
+  margin-right: 0.35em;
+  font-size: 0.85em;
+  cursor: pointer;
+  opacity: 0.55;
+  user-select: none;
+  transition: opacity 0.2s, transform 0.2s;
+}
+.gutenberg-anno-marker:hover { opacity: 1; transform: scale(1.1); }
+.gutenberg-anno-marker.flash {
+  animation: gutenberg-anno-flash 1.4s ease-out;
+}
+@keyframes gutenberg-anno-flash {
+  0%   { background: #f0a000; opacity: 1; transform: scale(1.4); }
+  100% { background: transparent; opacity: 0.55; transform: scale(1); }
+}
+
+/* "Mentioned in books" panel — used in artist bio + album popup */
+.gutenberg-mentions-panel {
+  margin-top: 1.1rem;
+}
+.gutenberg-mentions-panel:empty { display: none; }
+.gutenberg-mention-head-row {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  padding: 0.4rem 0 0.3rem;
+  border-top: 1px solid var(--border);
+  margin-top: 0.5rem;
+}
+.gutenberg-mention-row {
+  padding: 0.45rem 0.6rem;
+  margin: 0.3rem 0;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.gutenberg-mention-row:hover { background: rgba(255, 255, 255, 0.05); }
+.gutenberg-mention-head {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+}
+.gutenberg-mention-title  { color: #eee; font-weight: 600; }
+.gutenberg-mention-author { color: var(--muted); font-size: 0.78rem; }
+.gutenberg-mention-pct {
+  margin-left: auto;
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.gutenberg-mention-label {
+  font-size: 0.78rem;
+  color: #c8c2b3;
+  margin-top: 0.15rem;
+}
+.gutenberg-mention-snippet {
+  font-size: 0.76rem;
+  color: var(--muted);
+  font-style: italic;
+  margin-top: 0.2rem;
+  line-height: 1.4;
+}

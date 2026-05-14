@@ -4428,6 +4428,204 @@ app.delete("/api/user/gutenberg-bookmarks", express.json({ limit: "1kb" }), asyn
   }
 });
 
+// ── Project Gutenberg annotations (admin-curated, shared) ───────────────
+//
+// Links specific book positions to Discogs entities (artist / release /
+// master / label). Reads are open to anyone who can use the Gutenberg
+// view (admin/demo today); writes are admin-only via requireAdmin.
+//
+// Two-way surface:
+//   - Reader: GET /api/gutenberg/annotations?book_id=N (per-book list,
+//     used by the sidebar + inline markers).
+//   - Discogs entity popups: GET /api/gutenberg/mentions?entity_type=X
+//     &entity_id=Y[&entity_name=Z] (cross-book list, "📖 Mentioned in
+//     books" panel on artist/album popups).
+
+// GET /api/gutenberg/annotations?book_id=N
+app.get("/api/gutenberg/annotations", async (req, res) => {
+  const userId = await requireGutenbergAccess(req, res);
+  if (!userId) return;
+  const bookId = parseInt(String(req.query.book_id ?? ""), 10);
+  if (!Number.isFinite(bookId) || bookId <= 0) {
+    res.status(400).json({ error: "bad_book_id" });
+    return;
+  }
+  try {
+    const r = await getPool().query(
+      `SELECT id, book_id, position_pct, position_anchor,
+              entity_type, entity_id, entity_name, snippet, label,
+              created_by, created_at
+         FROM gutenberg_annotations
+        WHERE book_id = $1
+        ORDER BY position_pct ASC, id ASC`,
+      [bookId],
+    );
+    res.json({
+      items: r.rows.map(row => ({
+        id: row.id,
+        bookId: row.book_id,
+        positionPct: row.position_pct,
+        positionAnchor: row.position_anchor,
+        entityType: row.entity_type,
+        entityId: row.entity_id == null ? null : String(row.entity_id),
+        entityName: row.entity_name,
+        snippet: row.snippet,
+        label: row.label,
+        createdBy: row.created_by,
+        createdAt: row.created_at,
+      })),
+    });
+  } catch (e: any) {
+    console.error("[gutenberg/annotations GET]", e?.message ?? e);
+    res.status(500).json({ error: "fetch_failed" });
+  }
+});
+
+// POST /api/gutenberg/annotations (admin only)
+// Body: { bookId, positionPct, positionAnchor?, entityType, entityId?, entityName, snippet?, label? }
+app.post("/api/gutenberg/annotations", express.json({ limit: "8kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const adminId = await getClerkUserId(req);
+  if (!adminId) {
+    res.status(401).json({ error: "auth_required" });
+    return;
+  }
+  const bookId = parseInt(String(req.body?.bookId ?? ""), 10);
+  if (!Number.isFinite(bookId) || bookId <= 0) {
+    res.status(400).json({ error: "bad_book_id" });
+    return;
+  }
+  const positionPct = Math.max(0, Math.min(100, Number(req.body?.positionPct) || 0));
+  const positionAnchor = req.body?.positionAnchor
+    ? String(req.body.positionAnchor).slice(0, 200)
+    : null;
+  const entityType = String(req.body?.entityType ?? "").trim().toLowerCase();
+  if (!["artist", "release", "master", "label"].includes(entityType)) {
+    res.status(400).json({ error: "bad_entity_type" });
+    return;
+  }
+  const entityIdRaw = req.body?.entityId;
+  const entityId = (entityIdRaw === null || entityIdRaw === undefined || entityIdRaw === "")
+    ? null
+    : (Number.isFinite(Number(entityIdRaw)) ? Math.trunc(Number(entityIdRaw)) : null);
+  const entityName = String(req.body?.entityName ?? "").trim().slice(0, 300);
+  if (!entityName) {
+    res.status(400).json({ error: "entity_name_required" });
+    return;
+  }
+  const snippet = req.body?.snippet ? String(req.body.snippet).slice(0, 600) : null;
+  const label   = req.body?.label   ? String(req.body.label).slice(0, 200)   : null;
+  try {
+    const r = await getPool().query(
+      `INSERT INTO gutenberg_annotations
+         (book_id, position_pct, position_anchor, entity_type, entity_id, entity_name, snippet, label, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING id, created_at`,
+      [bookId, positionPct, positionAnchor, entityType, entityId, entityName, snippet, label, adminId],
+    );
+    res.json({ ok: true, id: r.rows[0]?.id, createdAt: r.rows[0]?.created_at });
+  } catch (e: any) {
+    console.error("[gutenberg/annotations POST]", e?.message ?? e);
+    res.status(500).json({ error: "save_failed" });
+  }
+});
+
+// DELETE /api/gutenberg/annotations  { id } (admin only)
+app.delete("/api/gutenberg/annotations", express.json({ limit: "1kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const id = parseInt(String(req.body?.id ?? ""), 10);
+  if (!Number.isFinite(id) || id <= 0) {
+    res.status(400).json({ error: "bad_id" });
+    return;
+  }
+  try {
+    await getPool().query(`DELETE FROM gutenberg_annotations WHERE id = $1`, [id]);
+    res.json({ ok: true });
+  } catch (e: any) {
+    console.error("[gutenberg/annotations DELETE]", e?.message ?? e);
+    res.status(500).json({ error: "delete_failed" });
+  }
+});
+
+// GET /api/gutenberg/mentions?entity_type=X[&entity_id=Y][&entity_name=Z]
+// Cross-book lookup used by the artist/album/label modal's "Mentioned
+// in books" panel. Open to any signed-in user (no admin gate on read —
+// the annotations are public-facing once curated). Returns annotations
+// joined with book metadata so the panel renders without extra calls.
+//
+// Match precedence:
+//   - If entity_id supplied: match by (entity_type, entity_id).
+//   - Else if entity_name supplied: case-insensitive match by
+//     (entity_type, lower(entity_name)).
+//   - Else: 400.
+app.get("/api/gutenberg/mentions", async (req, res) => {
+  const userId = await requireUser(req, res);
+  if (!userId) return;
+  const entityType = String(req.query.entity_type ?? "").trim().toLowerCase();
+  if (!["artist", "release", "master", "label"].includes(entityType)) {
+    res.status(400).json({ error: "bad_entity_type" });
+    return;
+  }
+  const entityIdRaw = String(req.query.entity_id ?? "").trim();
+  const entityId = entityIdRaw && /^\d+$/.test(entityIdRaw) ? entityIdRaw : null;
+  const entityName = String(req.query.entity_name ?? "").trim().slice(0, 300);
+  if (!entityId && !entityName) {
+    res.status(400).json({ error: "entity_id_or_name_required" });
+    return;
+  }
+  try {
+    let sql: string;
+    let params: any[];
+    if (entityId) {
+      sql = `
+        SELECT a.id, a.book_id, a.position_pct, a.position_anchor,
+               a.entity_type, a.entity_id, a.entity_name,
+               a.snippet, a.label, a.created_at,
+               b.title AS book_title,
+               b.authors AS book_authors
+          FROM gutenberg_annotations a
+          LEFT JOIN gutenberg_books b ON b.book_id = a.book_id
+         WHERE a.entity_type = $1 AND a.entity_id = $2
+         ORDER BY a.created_at DESC
+         LIMIT 100`;
+      params = [entityType, entityId];
+    } else {
+      sql = `
+        SELECT a.id, a.book_id, a.position_pct, a.position_anchor,
+               a.entity_type, a.entity_id, a.entity_name,
+               a.snippet, a.label, a.created_at,
+               b.title AS book_title,
+               b.authors AS book_authors
+          FROM gutenberg_annotations a
+          LEFT JOIN gutenberg_books b ON b.book_id = a.book_id
+         WHERE a.entity_type = $1 AND lower(a.entity_name) = lower($2)
+         ORDER BY a.created_at DESC
+         LIMIT 100`;
+      params = [entityType, entityName];
+    }
+    const r = await getPool().query(sql, params);
+    res.json({
+      items: r.rows.map(row => ({
+        id: row.id,
+        bookId: row.book_id,
+        bookTitle: row.book_title ?? `Book ${row.book_id}`,
+        bookAuthors: row.book_authors ?? [],
+        positionPct: row.position_pct,
+        positionAnchor: row.position_anchor,
+        entityType: row.entity_type,
+        entityId: row.entity_id == null ? null : String(row.entity_id),
+        entityName: row.entity_name,
+        snippet: row.snippet,
+        label: row.label,
+        createdAt: row.created_at,
+      })),
+    });
+  } catch (e: any) {
+    console.error("[gutenberg/mentions]", e?.message ?? e);
+    res.status(500).json({ error: "fetch_failed" });
+  }
+});
+
 // ── Play queue (cross-source: LOC + YouTube) ────────────────────────────
 //
 // The queue lives server-side so it persists across devices/logins. Items

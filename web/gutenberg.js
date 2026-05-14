@@ -25,8 +25,13 @@ let _gutenbergSavedItems     = [];
 let _gutenbergReaderBookId   = null;
 let _gutenbergReaderTitle    = "";
 let _gutenbergReaderBookmarks = { auto: null, manual: [] };
+let _gutenbergReaderAnnotations = [];
 let _gutenbergScrollTimer    = null;
 const _GUTENBERG_AUTO_SAVE_MS = 1500;   // debounce window for auto-bookmark
+// In-book find-as-you-type state.
+let _gutenbergFindMatches    = [];      // [{node, start, end}] — descendants of #gutenberg-reader-body
+let _gutenbergFindIndex      = -1;      // currently-focused match index
+let _gutenbergFindDebounce   = null;
 
 // ── View bootstrap ──────────────────────────────────────────────────
 function initGutenbergView() {
@@ -223,9 +228,15 @@ function _gutenbergRenderSaved() {
 }
 
 // ── Reader overlay ──────────────────────────────────────────────────
-async function _gutenbergOpenReader(bookId, fallbackTitle) {
+async function _gutenbergOpenReader(bookId, fallbackTitle, opts) {
   bookId = Number(bookId);
   if (!Number.isFinite(bookId) || bookId <= 0) return;
+  // Optional start position from caller (e.g. mention-panel deep-link).
+  // Overrides the auto-bookmark resume — if a user clicks a specific
+  // passage they want to land there, not their last-read spot.
+  const startPct = (opts && Number.isFinite(Number(opts.startPositionPct)))
+    ? Number(opts.startPositionPct)
+    : null;
   const overlay = document.getElementById("gutenberg-reader-overlay");
   const titleEl = document.getElementById("gutenberg-reader-title");
   const bodyEl  = document.getElementById("gutenberg-reader-body");
@@ -236,12 +247,17 @@ async function _gutenbergOpenReader(bookId, fallbackTitle) {
   if (titleEl) titleEl.textContent = fallbackTitle || `Book ${bookId}`;
   bodyEl.innerHTML = `<div class="loc-empty" style="padding:3rem 1rem">Loading book… first read may take a few seconds while we fetch from Gutenberg.</div>`;
   if (bmkList) bmkList.innerHTML = "";
+  _gutenbergResetFind();
   _gutenbergReaderBookId = bookId;
-  // Load body + bookmarks in parallel.
+  // Hide/show admin-only 🔗 Link button based on current admin status.
+  const linkBtn = document.getElementById("gutenberg-link-here-btn");
+  if (linkBtn) linkBtn.style.display = window._isAdmin ? "" : "none";
+  // Load body + bookmarks + annotations in parallel.
   try {
-    const [bookRes, bmkRes] = await Promise.all([
+    const [bookRes, bmkRes, annRes] = await Promise.all([
       apiFetch(`/api/gutenberg/book/${bookId}`),
       apiFetch(`/api/user/gutenberg-bookmarks/${bookId}`),
+      apiFetch(`/api/gutenberg/annotations?book_id=${bookId}`),
     ]);
     if (!bookRes.ok) {
       bodyEl.innerHTML = `<div class="loc-empty" style="padding:3rem 1rem">Could not load book (HTTP ${bookRes.status}).</div>`;
@@ -254,17 +270,25 @@ async function _gutenbergOpenReader(bookId, fallbackTitle) {
     _gutenbergReaderBookmarks = bmkRes.ok
       ? await bmkRes.json()
       : { auto: null, manual: [] };
+    _gutenbergReaderAnnotations = annRes.ok
+      ? (await annRes.json()).items || []
+      : [];
     _gutenbergRenderBookmarkList();
-    // Resume scroll if we have an auto-bookmark from a previous session.
-    if (_gutenbergReaderBookmarks.auto && Number(_gutenbergReaderBookmarks.auto.positionPct) > 0) {
-      // Defer one frame so the body's height has stabilized after
-      // innerHTML write.
-      requestAnimationFrame(() => {
+    _gutenbergRenderAnnotationList();
+    // Defer marker injection one frame so the body's height has
+    // stabilized after innerHTML write — _gutenbergInjectAnnotationMarkers
+    // needs accurate scrollHeight to position the markers.
+    requestAnimationFrame(() => {
+      _gutenbergInjectAnnotationMarkers();
+      // Caller-provided start position wins over the auto-bookmark.
+      if (startPct !== null) {
+        _gutenbergScrollToPct(startPct);
+      } else if (_gutenbergReaderBookmarks.auto && Number(_gutenbergReaderBookmarks.auto.positionPct) > 0) {
         _gutenbergScrollToPct(Number(_gutenbergReaderBookmarks.auto.positionPct));
-      });
-    } else {
-      bodyEl.scrollTop = 0;
-    }
+      } else {
+        bodyEl.scrollTop = 0;
+      }
+    });
   } catch (e) {
     console.warn("[gutenberg/reader]", e);
     bodyEl.innerHTML = `<div class="loc-empty" style="padding:3rem 1rem">Could not load book.</div>`;
@@ -287,6 +311,10 @@ function _gutenbergCloseReader() {
   _gutenbergReaderBookId = null;
   _gutenbergReaderTitle = "";
   _gutenbergReaderBookmarks = { auto: null, manual: [] };
+  _gutenbergReaderAnnotations = [];
+  _gutenbergResetFind();
+  const findInput = document.getElementById("gutenberg-reader-find");
+  if (findInput) findInput.value = "";
 }
 window._gutenbergCloseReader = _gutenbergCloseReader;
 
@@ -436,3 +464,399 @@ window._gutenbergAdjustFontSize = _gutenbergAdjustFontSize;
     }
   } catch {}
 })();
+
+// ── In-book text search ─────────────────────────────────────────────
+// Walks all text nodes in the reader body, finds case-insensitive
+// matches of the query, wraps each match in a <span class="gutenberg-
+// find-hit"> so CSS can highlight and getBoundingClientRect can scroll
+// matches into view. Active match additionally carries .is-active.
+//
+// Performance: for a 2MB book we have ~50-200k text nodes. Splitting
+// each match into a span is O(matches) which is bounded by user input
+// length (a 3-character query against "the" hits ~5000 times in a
+// typical book). The render is fast enough on desktop; mobile may
+// stutter for very common short queries. Reset on every input.
+
+function _gutenbergResetFind() {
+  // Undo all wrap spans by replacing them with their text content.
+  // querySelectorAll snapshot is safe to walk while we mutate parents.
+  const body = document.getElementById("gutenberg-reader-body");
+  if (body) {
+    body.querySelectorAll(".gutenberg-find-hit").forEach(span => {
+      const text = span.textContent;
+      const parent = span.parentNode;
+      if (!parent) return;
+      parent.replaceChild(document.createTextNode(text), span);
+      parent.normalize();   // re-merge adjacent text nodes
+    });
+  }
+  _gutenbergFindMatches = [];
+  _gutenbergFindIndex = -1;
+  _gutenbergUpdateFindUI();
+}
+
+function _gutenbergFindOnInput(input) {
+  if (_gutenbergFindDebounce) clearTimeout(_gutenbergFindDebounce);
+  // Debounce so a fast typist doesn't trigger a regex+wrap pass per
+  // keystroke (the wrap pass mutates DOM and can lag for very common
+  // short queries).
+  _gutenbergFindDebounce = setTimeout(() => {
+    _gutenbergFindDebounce = null;
+    _gutenbergRunFind(input.value || "");
+  }, 180);
+}
+window._gutenbergFindOnInput = _gutenbergFindOnInput;
+
+function _gutenbergFindOnKeyDown(event) {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    _gutenbergFindStep(event.shiftKey ? -1 : 1);
+  } else if (event.key === "Escape") {
+    event.preventDefault();
+    event.target.value = "";
+    _gutenbergResetFind();
+  }
+}
+window._gutenbergFindOnKeyDown = _gutenbergFindOnKeyDown;
+
+function _gutenbergRunFind(query) {
+  _gutenbergResetFind();
+  query = String(query || "").trim();
+  if (!query || query.length < 2) return;
+  const body = document.getElementById("gutenberg-reader-body");
+  if (!body) return;
+  // Walk text nodes and wrap matches. Live NodeList from getElementsBy*
+  // is dangerous mid-mutation; use a manual TreeWalker with a static
+  // node array.
+  const walker = document.createTreeWalker(body, NodeFilter.SHOW_TEXT, {
+    acceptNode(node) {
+      // Skip script / style / already-wrapped hits (defensive — reset
+      // should have unwrapped them).
+      const p = node.parentNode;
+      if (!p) return NodeFilter.FILTER_REJECT;
+      const tag = p.nodeName;
+      if (tag === "SCRIPT" || tag === "STYLE") return NodeFilter.FILTER_REJECT;
+      if (p.classList && p.classList.contains("gutenberg-find-hit")) return NodeFilter.FILTER_REJECT;
+      return NodeFilter.FILTER_ACCEPT;
+    },
+  });
+  const textNodes = [];
+  let n;
+  while ((n = walker.nextNode())) textNodes.push(n);
+  const re = new RegExp(_gutenbergEscapeRegex(query), "gi");
+  const matches = [];
+  for (const node of textNodes) {
+    const text = node.nodeValue || "";
+    let m;
+    let lastIndex = 0;
+    const frag = document.createDocumentFragment();
+    let any = false;
+    re.lastIndex = 0;
+    while ((m = re.exec(text)) !== null) {
+      any = true;
+      if (m.index > lastIndex) frag.appendChild(document.createTextNode(text.slice(lastIndex, m.index)));
+      const span = document.createElement("span");
+      span.className = "gutenberg-find-hit";
+      span.textContent = m[0];
+      frag.appendChild(span);
+      matches.push(span);
+      lastIndex = m.index + m[0].length;
+      // Defensive against zero-width matches.
+      if (m[0].length === 0) re.lastIndex++;
+    }
+    if (any) {
+      if (lastIndex < text.length) frag.appendChild(document.createTextNode(text.slice(lastIndex)));
+      node.parentNode.replaceChild(frag, node);
+    }
+  }
+  _gutenbergFindMatches = matches;
+  _gutenbergFindIndex = matches.length ? 0 : -1;
+  if (_gutenbergFindIndex >= 0) _gutenbergActivateFindMatch(0);
+  _gutenbergUpdateFindUI();
+}
+
+function _gutenbergFindStep(direction) {
+  if (!_gutenbergFindMatches.length) return;
+  const next = (_gutenbergFindIndex + direction + _gutenbergFindMatches.length) % _gutenbergFindMatches.length;
+  _gutenbergActivateFindMatch(next);
+}
+window._gutenbergFindStep = _gutenbergFindStep;
+
+function _gutenbergActivateFindMatch(idx) {
+  if (_gutenbergFindIndex >= 0 && _gutenbergFindMatches[_gutenbergFindIndex]) {
+    _gutenbergFindMatches[_gutenbergFindIndex].classList.remove("is-active");
+  }
+  _gutenbergFindIndex = idx;
+  const el = _gutenbergFindMatches[idx];
+  if (!el) return;
+  el.classList.add("is-active");
+  // scrollIntoView with block:center keeps the match visible without
+  // jumping to the very top of the viewport.
+  el.scrollIntoView({ behavior: "smooth", block: "center" });
+  _gutenbergUpdateFindUI();
+}
+
+function _gutenbergUpdateFindUI() {
+  const counter = document.getElementById("gutenberg-reader-find-count");
+  const prev = document.getElementById("gutenberg-find-prev");
+  const next = document.getElementById("gutenberg-find-next");
+  const has = _gutenbergFindMatches.length > 0;
+  if (counter) {
+    counter.textContent = has
+      ? `${_gutenbergFindIndex + 1}/${_gutenbergFindMatches.length}`
+      : "";
+  }
+  if (prev) prev.disabled = !has;
+  if (next) next.disabled = !has;
+}
+
+function _gutenbergEscapeRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// ── Annotations (admin-curated cross-links to Discogs entities) ─────
+// Sidebar rendering — one row per annotation, click jumps reader to
+// that position and (for entity-id-bearing rows) double-click opens
+// the Discogs entity popup.
+
+function _gutenbergRenderAnnotationList() {
+  const list = document.getElementById("gutenberg-reader-annotations-list");
+  if (!list) return;
+  const ann = _gutenbergReaderAnnotations || [];
+  if (!ann.length) {
+    list.innerHTML = `<div class="loc-empty" style="font-size:0.8rem;padding:0.6rem">No links yet.${window._isAdmin ? " Use 🔗 Link to add one." : ""}</div>`;
+    return;
+  }
+  list.innerHTML = ann.map(a => {
+    const kindBadge = a.entityType.charAt(0).toUpperCase();
+    return `
+      <div class="gutenberg-annotation-row" data-id="${a.id}">
+        <button type="button" class="gutenberg-annotation-jump" onclick="_gutenbergJumpToAnnotation(${a.id})" title="${escHtml(a.label || a.entityName)} — jump here">
+          <span class="gutenberg-annotation-kind" data-kind="${escHtml(a.entityType)}">${kindBadge}</span>
+          <span class="gutenberg-annotation-name">${escHtml(a.entityName)}</span>
+          <span class="gutenberg-annotation-pct">${Math.round(a.positionPct)}%</span>
+        </button>
+        <button type="button" class="gutenberg-annotation-open" onclick="_gutenbergOpenAnnotationEntity(${a.id})" title="Open ${escHtml(a.entityType)} in SeaDisco">↗</button>
+        ${window._isAdmin ? `<button type="button" class="gutenberg-bookmark-del" onclick="_gutenbergDeleteAnnotation(${a.id})" title="Delete link">×</button>` : ""}
+      </div>`;
+  }).join("");
+}
+
+function _gutenbergJumpToAnnotation(annId) {
+  const a = _gutenbergReaderAnnotations.find(x => x.id === annId);
+  if (!a) return;
+  _gutenbergScrollToPct(Number(a.positionPct) || 0);
+  // Flash the inline marker so the user sees where it lives.
+  const marker = document.querySelector(`.gutenberg-anno-marker[data-anno-id="${annId}"]`);
+  if (marker) {
+    marker.classList.add("flash");
+    setTimeout(() => marker.classList.remove("flash"), 1500);
+  }
+}
+window._gutenbergJumpToAnnotation = _gutenbergJumpToAnnotation;
+
+function _gutenbergOpenAnnotationEntity(annId) {
+  const a = _gutenbergReaderAnnotations.find(x => x.id === annId);
+  if (!a) return;
+  _gutenbergDispatchEntityOpen(a);
+}
+window._gutenbergOpenAnnotationEntity = _gutenbergOpenAnnotationEntity;
+
+// Open a Discogs entity referenced by an annotation. For artists with
+// no Discogs id we just run a SeaDisco artist search; for entities
+// with ids we route through the existing modal opener fns when
+// available, falling back to a search URL.
+function _gutenbergDispatchEntityOpen(a) {
+  if (!a) return;
+  const id = a.entityId;
+  if (a.entityType === "artist") {
+    if (id && typeof window.openArtistModal === "function") {
+      window.openArtistModal(Number(id), a.entityName);
+      return;
+    }
+    // Fallback — search by name. Routes through index.html's main
+    // search form for a consistent experience.
+    location.href = `/?a=${encodeURIComponent(a.entityName)}`;
+    return;
+  }
+  if (a.entityType === "master") {
+    if (id && typeof window.openMasterModal === "function") {
+      window.openMasterModal(Number(id));
+      return;
+    }
+    location.href = `/master/${id ?? ""}`;
+    return;
+  }
+  if (a.entityType === "release") {
+    if (id && typeof window.openAlbumModal === "function") {
+      window.openAlbumModal(Number(id));
+      return;
+    }
+    location.href = `/release/${id ?? ""}`;
+    return;
+  }
+  if (a.entityType === "label") {
+    if (id && typeof window.openLabelModal === "function") {
+      window.openLabelModal(Number(id), a.entityName);
+      return;
+    }
+    location.href = `/?l=${encodeURIComponent(a.entityName)}`;
+    return;
+  }
+}
+
+async function _gutenbergDeleteAnnotation(annId) {
+  if (!window._isAdmin) return;
+  if (!confirm("Delete this link?")) return;
+  try {
+    const r = await apiFetch("/api/gutenberg/annotations", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: annId }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    _gutenbergReaderAnnotations = _gutenbergReaderAnnotations.filter(a => a.id !== annId);
+    _gutenbergRenderAnnotationList();
+    _gutenbergInjectAnnotationMarkers();
+  } catch (e) {
+    console.warn("[gutenberg/annotation-delete]", e);
+    if (typeof showToast === "function") showToast("Delete failed", "error");
+  }
+}
+window._gutenbergDeleteAnnotation = _gutenbergDeleteAnnotation;
+
+// Inject inline markers next to the closest element to each
+// annotation's position_pct. Idempotent — clears existing markers
+// before re-injecting (used by add/delete/initial-load paths).
+function _gutenbergInjectAnnotationMarkers() {
+  const body = document.getElementById("gutenberg-reader-body");
+  if (!body) return;
+  // Strip previous markers.
+  body.querySelectorAll(".gutenberg-anno-marker").forEach(el => el.remove());
+  const ann = _gutenbergReaderAnnotations || [];
+  if (!ann.length) return;
+  // Snapshot top-level children's offsets — we use these as the anchor
+  // candidates. Working with first-level children only keeps it cheap
+  // even for large books (a few hundred elements vs. tens of thousands
+  // of text nodes).
+  const children = Array.from(body.children);
+  if (!children.length) return;
+  const offsets = children.map(c => c.offsetTop);
+  const maxScroll = body.scrollHeight;
+  for (const a of ann) {
+    const targetTop = (Number(a.positionPct) / 100) * maxScroll;
+    // Pick the LAST child whose offsetTop <= targetTop. That's "where
+    // the user was scrolled to". If targetTop is past the last child,
+    // pin to the last child.
+    let pick = 0;
+    for (let i = 0; i < offsets.length; i++) {
+      if (offsets[i] <= targetTop) pick = i;
+      else break;
+    }
+    const anchor = children[pick];
+    if (!anchor) continue;
+    const marker = document.createElement("span");
+    marker.className = "gutenberg-anno-marker";
+    marker.dataset.annoId = String(a.id);
+    marker.title = `${a.entityType}: ${a.entityName}${a.label ? " — " + a.label : ""}`;
+    marker.textContent = "🔗";
+    marker.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      _gutenbergDispatchEntityOpen(a);
+    });
+    // Prepend so the marker sits at the start of the paragraph/section
+    // rather than after it — keeps it visually attached to the right
+    // content even at large font sizes.
+    anchor.insertBefore(marker, anchor.firstChild);
+  }
+}
+
+// 🔗 Link button handler — admin captures current scroll position,
+// picks entity type + name + (optional) Discogs id via a minimal
+// prompt-driven flow, posts to /api/gutenberg/annotations, and
+// refreshes the sidebar + markers.
+//
+// Prompt-driven for now to keep this small; a richer popup with type-
+// ahead Discogs search would be Phase 3d.
+async function _gutenbergLinkHereStart() {
+  if (!window._isAdmin) {
+    if (typeof showToast === "function") showToast("Linking is admin-only.", "info");
+    return;
+  }
+  if (!_gutenbergReaderBookId) return;
+  const pct = _gutenbergCurrentScrollPct();
+  const entityType = (prompt("Link type? (artist / release / master / label)", "artist") || "")
+    .trim().toLowerCase();
+  if (!["artist", "release", "master", "label"].includes(entityType)) {
+    if (entityType && typeof showToast === "function") showToast("Unknown link type — use artist, release, master, or label.", "error");
+    return;
+  }
+  const entityName = prompt(`${entityType} name?`, "");
+  if (!entityName || !entityName.trim()) return;
+  const entityIdRaw = prompt(
+    `Discogs ${entityType} id? (optional — leave blank to link by name only)`,
+    "",
+  );
+  const entityId = entityIdRaw && /^\d+$/.test(entityIdRaw.trim()) ? Number(entityIdRaw.trim()) : null;
+  const label = prompt("Short label / context (optional)", "") || null;
+  // Capture a small snippet of nearby text for the reverse-side card.
+  const snippet = _gutenbergGetSnippetAtPct(pct);
+  try {
+    const r = await apiFetch("/api/gutenberg/annotations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        bookId: _gutenbergReaderBookId,
+        positionPct: pct,
+        entityType,
+        entityId,
+        entityName: entityName.trim(),
+        snippet,
+        label,
+      }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    // Push the new annotation into local state without a refetch.
+    _gutenbergReaderAnnotations.push({
+      id: j.id,
+      bookId: _gutenbergReaderBookId,
+      positionPct: pct,
+      positionAnchor: null,
+      entityType,
+      entityId: entityId == null ? null : String(entityId),
+      entityName: entityName.trim(),
+      snippet,
+      label,
+      createdAt: j.createdAt,
+    });
+    // Keep the sidebar order canonical (sorted by position).
+    _gutenbergReaderAnnotations.sort((a, b) => (a.positionPct - b.positionPct) || (a.id - b.id));
+    _gutenbergRenderAnnotationList();
+    _gutenbergInjectAnnotationMarkers();
+    if (typeof showToast === "function") showToast("Link saved");
+  } catch (e) {
+    console.warn("[gutenberg/link]", e);
+    if (typeof showToast === "function") showToast("Link failed", "error");
+  }
+}
+window._gutenbergLinkHereStart = _gutenbergLinkHereStart;
+
+// Grab ~160 chars of text near the current scroll position. Used as
+// snippet for the reverse-side "Mentioned in books" card so the user
+// gets a teaser excerpt without opening the book.
+function _gutenbergGetSnippetAtPct(pct) {
+  const body = document.getElementById("gutenberg-reader-body");
+  if (!body) return null;
+  const children = Array.from(body.children);
+  if (!children.length) return null;
+  const target = (pct / 100) * body.scrollHeight;
+  let pick = children[0];
+  for (const c of children) {
+    if (c.offsetTop <= target) pick = c;
+    else break;
+  }
+  const text = (pick.textContent || "").replace(/\s+/g, " ").trim();
+  return text ? text.slice(0, 160) : null;
+}
