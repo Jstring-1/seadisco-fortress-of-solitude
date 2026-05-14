@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260514.1303" />
+  <link rel="stylesheet" href="/style.css?v=20260514.1315" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260514.1303"></script>
+<script defer src="/shared.js?v=20260514.1315"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -891,9 +891,14 @@ e.g.  miles davis | coltrane
     <div id="gutenberg-reader-head">
       <h3 id="gutenberg-reader-title">Reading…</h3>
       <div id="gutenberg-reader-controls">
+        <input type="search" id="gutenberg-reader-find" placeholder="Find in book…" oninput="_gutenbergFindOnInput(this)" onkeydown="_gutenbergFindOnKeyDown(event)" />
+        <span id="gutenberg-reader-find-count" class="gutenberg-find-count"></span>
+        <button type="button" class="archive-btn" id="gutenberg-find-prev" onclick="_gutenbergFindStep(-1)" title="Previous match" disabled>↑</button>
+        <button type="button" class="archive-btn" id="gutenberg-find-next" onclick="_gutenbergFindStep(1)" title="Next match" disabled>↓</button>
         <button type="button" class="archive-btn" onclick="_gutenbergAdjustFontSize(-1)" title="Smaller text">A−</button>
         <button type="button" class="archive-btn" onclick="_gutenbergAdjustFontSize(1)"  title="Larger text">A+</button>
-        <button type="button" class="archive-btn archive-btn-suggest" onclick="_gutenbergPinHere()" title="Pin a bookmark at the current scroll position">📌 Pin here</button>
+        <button type="button" class="archive-btn archive-btn-suggest" onclick="_gutenbergPinHere()" title="Pin a bookmark at the current scroll position">📌 Pin</button>
+        <button type="button" class="archive-btn archive-btn-suggest" id="gutenberg-link-here-btn" onclick="_gutenbergLinkHereStart()" title="Link this passage to a Discogs artist / release / label">🔗 Link</button>
         <button type="button" class="archive-btn" onclick="_gutenbergCloseReader()" title="Close">×</button>
       </div>
     </div>
@@ -901,6 +906,8 @@ e.g.  miles davis | coltrane
       <aside id="gutenberg-reader-sidebar">
         <div class="gutenberg-reader-sidebar-head">Bookmarks</div>
         <div id="gutenberg-reader-bookmarks-list"></div>
+        <div class="gutenberg-reader-sidebar-head" style="margin-top:0.7rem">Links</div>
+        <div id="gutenberg-reader-annotations-list"></div>
       </aside>
       <div id="gutenberg-reader-body" onscroll="_gutenbergOnBodyScroll()"></div>
     </div>
@@ -1265,13 +1272,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260514.1303"></script>
-<script defer src="/search.js?v=20260514.1303"></script>
-<script defer src="/collection.js?v=20260514.1303"></script>
+<script defer src="/utils.js?v=20260514.1315"></script>
+<script defer src="/search.js?v=20260514.1315"></script>
+<script defer src="/collection.js?v=20260514.1315"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260514.1303"></script>
-<script defer src="/app.js?v=20260514.1303"></script>
+<script defer src="/modal.js?v=20260514.1315"></script>
+<script defer src="/app.js?v=20260514.1315"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1282,13 +1289,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260514.1303"></script>
-<script defer src="/queue.js?v=20260514.1303"></script>
+<script defer src="/loc.js?v=20260514.1315"></script>
+<script defer src="/queue.js?v=20260514.1315"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260514.1303";
+  window._SD_LAZY_VERSION = "20260514.1315";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1318,8 +1325,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260514.1303"></script>
-<script defer src="/offline.js?v=20260514.1303"></script>
+<script defer src="/idb.js?v=20260514.1315"></script>
+<script defer src="/offline.js?v=20260514.1315"></script>
 
 </body>
 </html>

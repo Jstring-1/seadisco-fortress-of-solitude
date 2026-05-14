@@ -55,6 +55,73 @@ if (typeof window.openInventoryEditor !== "function") {
   window.openInventoryEditor = stub;
 }
 
+// Lazy bridge for opening the Gutenberg reader from anywhere (e.g.
+// the "Mentioned in books" panel on an artist/album popup). Loads
+// gutenberg.js on first call, then dispatches to _gutenbergOpenReader.
+// Available on every page — even on views that don't render the
+// Gutenberg-tab markup, the reader overlay HTML lives in index.html
+// so it can stack on top of any modal.
+window._sdGutenbergOpenReader = function (bookId, title, opts) {
+  if (typeof window._gutenbergOpenReader === "function") {
+    window._gutenbergOpenReader(bookId, title, opts);
+    return;
+  }
+  if (typeof window._sdLoadModule !== "function") return;
+  window._sdLoadModule("/gutenberg.js").then(() => {
+    if (typeof window._gutenbergOpenReader === "function") {
+      window._gutenbergOpenReader(bookId, title, opts);
+    }
+  }).catch(err => console.warn("[gutenberg-bridge]", err));
+};
+
+// Render a "Mentioned in books" panel for a Discogs entity into the
+// given container element. Fetches /api/gutenberg/mentions, fills the
+// container if non-empty, else clears it. Idempotent — re-runnable as
+// data flows in (e.g. when an artist popup gains a discogs_id after
+// initial render). Open to any signed-in user; server returns empty
+// for anon.
+window._sdGutenbergRenderMentions = async function (container, entityType, entityId, entityName) {
+  if (!container) return;
+  // Server gates on requireUser. Skip the call entirely for anon to
+  // avoid a noisy 401 in console.
+  if (!window._clerk?.user) { container.innerHTML = ""; return; }
+  if (!entityType || (!entityId && !entityName)) { container.innerHTML = ""; return; }
+  try {
+    const params = new URLSearchParams();
+    params.set("entity_type", entityType);
+    if (entityId)   params.set("entity_id",   String(entityId));
+    if (entityName) params.set("entity_name", String(entityName));
+    const r = await apiFetch(`/api/gutenberg/mentions?${params.toString()}`);
+    if (!r.ok) { container.innerHTML = ""; return; }
+    const j = await r.json();
+    const items = Array.isArray(j?.items) ? j.items : [];
+    if (!items.length) { container.innerHTML = ""; return; }
+    const rows = items.map(m => {
+      const authorStr = Array.isArray(m.bookAuthors) && m.bookAuthors.length
+        ? m.bookAuthors.map(a => escHtml(a?.name ?? "")).filter(Boolean).join(", ")
+        : "";
+      const titleEsc = escHtml(m.bookTitle ?? `Book ${m.bookId}`);
+      const snippetEsc = m.snippet ? escHtml(m.snippet) : "";
+      const labelEsc   = m.label   ? escHtml(m.label)   : "";
+      const pct = Math.round(Number(m.positionPct) || 0);
+      return `
+        <div class="gutenberg-mention-row" onclick="window._sdGutenbergOpenReader(${m.bookId}, ${JSON.stringify(m.bookTitle ?? "").replace(/"/g, "&quot;")}, {startPositionPct:${pct}})" title="Open ${titleEsc} at ${pct}%">
+          <div class="gutenberg-mention-head">
+            <span class="gutenberg-mention-title">${titleEsc}</span>
+            ${authorStr ? `<span class="gutenberg-mention-author"> · ${authorStr}</span>` : ""}
+            <span class="gutenberg-mention-pct">${pct}%</span>
+          </div>
+          ${labelEsc   ? `<div class="gutenberg-mention-label">${labelEsc}</div>` : ""}
+          ${snippetEsc ? `<div class="gutenberg-mention-snippet">“${snippetEsc}”</div>` : ""}
+        </div>`;
+    }).join("");
+    container.innerHTML = `<div class="gutenberg-mention-head-row">📖 Mentioned in books (${items.length})</div>${rows}`;
+  } catch (e) {
+    console.debug("[mentions]", e);
+    container.innerHTML = "";
+  }
+};
+
 // ── Relative time formatting ─────────────────────────────────────────────
 // Single helper covers both "syncedAt" displays (use fallback "never")
 // and generic "ago" labels (default em-dash). Accepts ms-numbers or
@@ -1320,7 +1387,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260514.1303";
+  const SITE_VERSION = "build 20260514.1315";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
