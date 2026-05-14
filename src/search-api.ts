@@ -4074,8 +4074,11 @@ function _gutenbergToPlainText(html: string): string {
 const _GUTENBERG_TOPIC_PRESETS: Record<string, string[]> = {
   "non-fiction":  ["biography", "history", "philosophy", "science", "music", "religion", "art", "travel"],
   "fiction":      ["fiction", "science fiction", "fantasy", "mystery", "horror", "romance", "drama", "poetry"],
-  "music & arts": ["music", "art", "performing arts", "architecture"],
-  "music":        ["music", "musicians", "composers", "jazz", "opera"],
+  // Music + arts merged. Was two presets (Music, Music & arts) with
+  // heavy overlap on the "music" subject — collapsed so the chip row
+  // is shorter and one click gets you the full arts spread (music
+  // subgenres + visual / performing arts).
+  "music & arts": ["music", "musicians", "composers", "jazz", "opera", "art", "performing arts", "architecture"],
   "science":      ["science", "natural history", "mathematics", "physics", "biology", "astronomy"],
   "history":      ["history", "biography", "war", "ancient history"],
   "philosophy":   ["philosophy", "ethics", "religion", "psychology"],
