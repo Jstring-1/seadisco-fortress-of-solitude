@@ -336,13 +336,153 @@ function _gutenbergInfoPopupHtml(meta) {
     ${subjectChips ? `<div class="gutenberg-info-section"><div class="gutenberg-info-label">Subjects</div><div class="gutenberg-info-chips">${subjectChips}</div></div>` : ""}
     <div id="gutenberg-info-links" class="gutenberg-info-section" style="display:none"></div>
     <div id="gutenberg-info-more-by" class="gutenberg-info-section" style="display:none"></div>
-    ${formatLinks ? `<div class="gutenberg-info-section"><div class="gutenberg-info-label">Available formats</div><div class="gutenberg-info-formats">${formatLinks}</div></div>` : ""}
+    ${_gutenbergAudioSectionHtml(meta)}
+  ${formatLinks ? `<div class="gutenberg-info-section"><div class="gutenberg-info-label">Available formats</div><div class="gutenberg-info-formats">${formatLinks}</div></div>` : ""}
     <div class="gutenberg-info-actions">
       <button type="button" class="archive-btn archive-btn-suggest" onclick="_gutenbergCloseInfoPopup();_gutenbergOpenReader(${meta.id}, ${JSON.stringify(meta.title || "").replace(/"/g, "&quot;")})">📖 Read</button>
       ${saveBtn}
       <a href="https://www.gutenberg.org/ebooks/${meta.id}" target="_blank" rel="noopener" class="archive-btn" style="text-decoration:none">Project Gutenberg page ↗</a>
       <a href="${escHtml(_gutenbergGoogleSearchUrl(meta))}" target="_blank" rel="noopener" class="archive-btn" style="text-decoration:none" title="Google search for this book + author">Google ↗</a>
     </div>`;
+}
+
+// ── Audio detection (Project Gutenberg human-read / TTS audio books) ─
+// Gutendex exposes audio MIME types in the formats dict when an audio
+// edition exists — usually `audio/mpeg`, `audio/ogg`, sometimes
+// `audio/x-mpegurl`. URLs vary: a single .mp3 file (rare, but
+// directly playable), a .m3u playlist, a directory listing, or a
+// zipped archive. We classify each: directly playable streams get
+// ▶ Play / ＋ Queue buttons that hook into the existing LOC-style
+// engine; others fall back to an external download link.
+
+// Returns the inner HTML of the audio section, or "" if no audio
+// formats are advertised on this book.
+function _gutenbergAudioSectionHtml(meta) {
+  const formats = meta?.formats ?? {};
+  const entries = Object.entries(formats)
+    .filter(([mime]) => /^audio\//i.test(mime))
+    // Drop image cover MIME variants that occasionally leak (e.g.
+    // audio/jpeg from typos in upstream metadata).
+    .filter(([_, url]) => typeof url === "string" && url);
+  if (!entries.length) return "";
+  const rows = entries.map(([mime, url]) => {
+    const playable = _gutenbergAudioIsPlayable(mime, url);
+    const labelText = _gutenbergAudioLabel(mime, url);
+    const urlSafe = escHtml(url);
+    const urlJs = JSON.stringify(url).replace(/"/g, "&quot;");
+    const titleSafe = JSON.stringify(meta?.title || `Book ${meta?.id}`).replace(/"/g, "&quot;");
+    const authorSafe = JSON.stringify((Array.isArray(meta?.authors) && meta.authors[0]?.name) ? meta.authors[0].name : "").replace(/"/g, "&quot;");
+    const idJs = Number(meta?.id) || 0;
+    const playBtn = playable
+      ? `<button type="button" class="archive-btn archive-btn-suggest" onclick="_gutenbergAudioPlay(${idJs}, ${urlJs}, ${titleSafe}, ${authorSafe})" title="Play through the mini-player">▶ Play</button>
+         <button type="button" class="archive-btn" onclick="_gutenbergAudioQueue(${idJs}, ${urlJs}, ${titleSafe}, ${authorSafe})" title="Add to queue">＋ Queue</button>`
+      : `<span class="gutenberg-audio-note" title="Not a direct audio file — opens externally">archive / playlist</span>`;
+    return `
+      <div class="gutenberg-audio-row">
+        <span class="gutenberg-audio-mime">${escHtml(labelText)}</span>
+        <a href="${urlSafe}" target="_blank" rel="noopener" class="gutenberg-audio-url">${escHtml(_gutenbergAudioUrlDisplay(url))} ↗</a>
+        <div class="gutenberg-audio-actions">${playBtn}</div>
+      </div>`;
+  }).join("");
+  return `
+    <div class="gutenberg-info-section">
+      <div class="gutenberg-info-label">🎧 Audio</div>
+      <div class="gutenberg-audio-list">${rows}</div>
+    </div>`;
+}
+
+// Direct-stream detection. We consider a URL playable in-browser if
+// it ends with a known audio extension. Anything else (directory
+// listings, zip archives, m3u playlists pointing at chunked content)
+// falls through to an external link — those need a real audiobook
+// engine to handle chapter enumeration / HLS parsing.
+function _gutenbergAudioIsPlayable(mime, url) {
+  if (!url) return false;
+  return /\.(?:mp3|ogg|wav|m4a|aac|flac|opus)(?:\?|#|$)/i.test(url);
+}
+
+// Human-readable label for the format row. Prefer the URL's file
+// extension when present (more specific than the broad MIME type),
+// else show the MIME.
+function _gutenbergAudioLabel(mime, url) {
+  const m = String(url).match(/\.(mp3|ogg|wav|m4a|aac|flac|opus|m3u|m3u8|zip)(?:\?|#|$)/i);
+  if (m) return m[1].toUpperCase();
+  const sub = String(mime).split("/")[1] || mime;
+  return sub.toUpperCase();
+}
+
+// Trim the URL for display — full URLs are long and visually noisy.
+// Show just the host + last path segment.
+function _gutenbergAudioUrlDisplay(url) {
+  try {
+    const u = new URL(url);
+    const tail = u.pathname.split("/").filter(Boolean).pop() || u.hostname;
+    return tail.length > 36 ? tail.slice(0, 33) + "…" : tail;
+  } catch {
+    return url.length > 36 ? url.slice(0, 33) + "…" : url;
+  }
+}
+
+// Play a Gutenberg audio URL through the existing LOC engine
+// (window._locPlay). Synthesizes a minimal LOC-shaped item so the
+// engine + mini-player can render title / artist on the persistent
+// bar. id is prefixed "gutenberg-" so the play log + cross-source
+// queue can tell PG audio apart from real LOC items.
+function _gutenbergAudioPlay(bookId, streamUrl, title, authorName) {
+  if (!streamUrl) return;
+  const item = {
+    id: `gutenberg-${bookId}`,
+    title: title || `Book ${bookId}`,
+    contributors: authorName ? [authorName] : [],
+    streamUrl,
+    streamType: _gutenbergGuessStreamType(streamUrl),
+    image: "",
+    year: "",
+  };
+  if (typeof window._locPlay === "function") {
+    window._locPlay(item);
+    // Close the info popup so the user can see the player bar.
+    _gutenbergCloseInfoPopup();
+  } else if (typeof showToast === "function") {
+    showToast("Audio engine not loaded — try again in a moment.", "error");
+  }
+}
+window._gutenbergAudioPlay = _gutenbergAudioPlay;
+
+function _gutenbergAudioQueue(bookId, streamUrl, title, authorName) {
+  if (!streamUrl) return;
+  const item = {
+    id: `gutenberg-${bookId}-${_gutenbergQueueCounter++}`,
+    title: title || `Book ${bookId}`,
+    contributors: authorName ? [authorName] : [],
+    streamUrl,
+    streamType: _gutenbergGuessStreamType(streamUrl),
+    image: "",
+    year: "",
+  };
+  if (typeof window.queueAddLoc === "function") {
+    window.queueAddLoc(item, { mode: "append" });
+    if (typeof showToast === "function") showToast("Added to queue");
+  } else if (typeof showToast === "function") {
+    showToast("Queue not loaded — try again in a moment.", "error");
+  }
+}
+window._gutenbergAudioQueue = _gutenbergAudioQueue;
+
+// Counter so multiple ＋ Queue clicks on the same book produce
+// distinct queue entries (queue dedupes by externalId).
+let _gutenbergQueueCounter = 1;
+
+function _gutenbergGuessStreamType(url) {
+  if (/\.mp3(?:\?|#|$)/i.test(url)) return "mp3";
+  if (/\.ogg(?:\?|#|$)/i.test(url)) return "ogg";
+  if (/\.m4a(?:\?|#|$)/i.test(url)) return "m4a";
+  if (/\.aac(?:\?|#|$)/i.test(url)) return "aac";
+  if (/\.wav(?:\?|#|$)/i.test(url)) return "wav";
+  if (/\.flac(?:\?|#|$)/i.test(url)) return "flac";
+  if (/\.opus(?:\?|#|$)/i.test(url)) return "opus";
+  if (/\.m3u8?(?:\?|#|$)/i.test(url)) return "hls";
+  return "";
 }
 
 // Build a Google search URL for a book — title and primary author
