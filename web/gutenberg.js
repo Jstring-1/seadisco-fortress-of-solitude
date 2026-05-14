@@ -339,7 +339,21 @@ function _gutenbergInfoPopupHtml(meta) {
       <button type="button" class="archive-btn archive-btn-suggest" onclick="_gutenbergCloseInfoPopup();_gutenbergOpenReader(${meta.id}, ${JSON.stringify(meta.title || "").replace(/"/g, "&quot;")})">📖 Read</button>
       ${saveBtn}
       <a href="https://www.gutenberg.org/ebooks/${meta.id}" target="_blank" rel="noopener" class="archive-btn" style="text-decoration:none">Project Gutenberg page ↗</a>
+      <a href="${escHtml(_gutenbergGoogleSearchUrl(meta))}" target="_blank" rel="noopener" class="archive-btn" style="text-decoration:none" title="Google search for this book + author">Google ↗</a>
     </div>`;
+}
+
+// Build a Google search URL for a book — title and primary author
+// quoted so the search prefers exact-phrase matches. Falls back to
+// just the title when no author is available.
+function _gutenbergGoogleSearchUrl(meta) {
+  const title = String(meta?.title || "").trim();
+  const primaryAuthor = (Array.isArray(meta?.authors) && meta.authors[0]?.name) ? String(meta.authors[0].name).trim() : "";
+  const parts = [];
+  if (title) parts.push(`"${title}"`);
+  if (primaryAuthor) parts.push(`"${primaryAuthor}"`);
+  const q = parts.join(" ") || `Project Gutenberg ${meta?.id ?? ""}`;
+  return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
 }
 
 // Fire after the popup renders: 3 parallel fetches enrich the panel
