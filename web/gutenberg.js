@@ -21,6 +21,12 @@ let _gutenbergSearchLang     = "";
 let _gutenbergSearchHasMore  = false;
 let _gutenbergSavedIds       = new Set();
 let _gutenbergSavedItems     = [];
+// Lookup of currently-rendered book objects keyed by id. Populated as
+// cards render (search + library both feed it) so the Save handler can
+// pass title / authors / etc. through to the server — otherwise saving
+// a never-read book would leave the gutenberg_books row absent and the
+// Library list would render "Book NNNN / Unknown author".
+const _gutenbergBookById = new Map();
 // Active reader state — used by the auto-bookmark scroll handler.
 let _gutenbergReaderBookId   = null;
 let _gutenbergReaderTitle    = "";
@@ -170,6 +176,8 @@ function _gutenbergRenderPagination() {
 //                 Gutenberg ↗
 // No more popup, no more per-card lazy fetches.
 function _gutenbergCardHtml(b) {
+  // Stash for save-time metadata pass-through (see _gutenbergToggleSave).
+  if (b && b.id) _gutenbergBookById.set(Number(b.id), b);
   const authors = Array.isArray(b.authors) && b.authors.length
     ? b.authors.map(a => {
         const years = (a?.birth_year || a?.death_year)
@@ -267,13 +275,45 @@ function _gutenbergWikipediaSearchUrl(meta) {
 function _gutenbergSearchBySubject(subject) {
   if (!subject) return;
   const topicInput = document.getElementById("gutenberg-topic");
+  const picker = document.getElementById("gutenberg-topic-picker");
   const qInput = document.getElementById("gutenberg-q");
   if (topicInput) topicInput.value = subject;
+  // Sync the picker so its current selection matches the active filter
+  // (when the subject matches a known option). Custom subjects fall
+  // through silently — the picker keeps its previous selection but
+  // the hidden input drives the actual query.
+  if (picker) {
+    const has = Array.from(picker.options).some(o => o.value === subject);
+    if (has) picker.value = subject;
+  }
   if (qInput) qInput.value = "";
   _gutenbergSwitchTab("search");
   runGutenbergSearch("");
 }
 window._gutenbergSearchBySubject = _gutenbergSearchBySubject;
+
+// Subject picker change handler — single source of truth for the
+// subject filter. Writes to the hidden #gutenberg-topic input that
+// the runGutenbergSearch reads. The special "__custom__" value
+// surfaces a prompt for an arbitrary subject; "" clears the filter.
+function _gutenbergOnSubjectPick(selectEl) {
+  if (!selectEl) return;
+  const v = selectEl.value;
+  const topicInput = document.getElementById("gutenberg-topic");
+  if (!topicInput) return;
+  if (v === "__custom__") {
+    const custom = prompt("Custom subject (free text):", topicInput.value || "");
+    if (custom !== null) topicInput.value = String(custom).trim();
+    // Re-sync the picker — if the typed value matches a known option,
+    // select it; otherwise fall back to "Any subject" so the dropdown
+    // doesn't keep showing "Custom…".
+    const matched = Array.from(selectEl.options).find(o => o.value && o.value === topicInput.value);
+    selectEl.value = matched ? matched.value : "";
+  } else {
+    topicInput.value = v || "";
+  }
+}
+window._gutenbergOnSubjectPick = _gutenbergOnSubjectPick;
 
 // ── Removed: info popup machinery ──────────────────────────────────
 // Cards inline everything that used to require a popup-time fetch:
@@ -449,10 +489,24 @@ async function _gutenbergToggleSave(bookId, btn) {
   if (btn) btn.disabled = true;
   try {
     const method = currentlySaved ? "DELETE" : "POST";
+    // On Save, pass the metadata we already have for this book so the
+    // server can seed a gutenberg_books row. Otherwise the Library
+    // list would render "Book NNNN / Unknown author" for books that
+    // were saved-without-read.
+    const body = { id: bookId };
+    if (method === "POST") {
+      const cached = _gutenbergBookById.get(bookId);
+      if (cached) {
+        if (cached.title)     body.title     = cached.title;
+        if (cached.authors)   body.authors   = cached.authors;
+        if (cached.languages) body.languages = cached.languages;
+        if (cached.subjects)  body.subjects  = cached.subjects;
+      }
+    }
     const r = await apiFetch("/api/user/gutenberg-saves", {
       method,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: bookId }),
+      body: JSON.stringify(body),
     });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     if (currentlySaved) _gutenbergSavedIds.delete(bookId);
