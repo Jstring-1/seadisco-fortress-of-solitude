@@ -51,6 +51,44 @@ function initGutenbergView() {
     // open. Run saved fetch in the background so the Library tab is
     // ready instantly on first switch.
     _gutenbergLoadSaved().catch(() => {});
+    // Mount the shared saved-search dropdown into the search row so
+    // PG queries (q + subject) can be bookmarked alongside the rest
+    // of the site's saved searches. Anon users skip — bookmarks are
+    // per-account.
+    if (typeof buildSavedSearchUI === "function" && window._clerk?.user) {
+      const formRow = view.querySelector(".gutenberg-form-row");
+      if (formRow && !formRow.querySelector(".saved-search-wrap")) {
+        buildSavedSearchUI(
+          "gutenberg",
+          () => {
+            // getParams — what gets persisted under the saved-search name.
+            const q     = document.getElementById("gutenberg-q")?.value?.trim() ?? "";
+            const topic = document.getElementById("gutenberg-topic")?.value?.trim() ?? "";
+            const out = {};
+            if (q)     out.q     = q;
+            if (topic) out.topic = topic;
+            return out;
+          },
+          (params) => {
+            // apply — restore the form + fire the search.
+            const qEl     = document.getElementById("gutenberg-q");
+            const topicEl = document.getElementById("gutenberg-topic");
+            const picker  = document.getElementById("gutenberg-topic-picker");
+            if (qEl)     qEl.value     = params.q     ?? "";
+            if (topicEl) topicEl.value = params.topic ?? "";
+            if (picker) {
+              // Sync the visible picker — match by value, else fall
+              // through to "Any subject" so the dropdown isn't stale.
+              const has = Array.from(picker.options).some(o => o.value === (params.topic ?? ""));
+              picker.value = has ? (params.topic ?? "") : "";
+            }
+            _gutenbergSwitchTab("search");
+            runGutenbergSearch(params.q ?? "");
+          },
+          formRow,
+        );
+      }
+    }
   }
   // Focus the input on (re-)entry so the user can start typing
   // immediately. Mirrors LOC / Wiki behaviour.
@@ -63,14 +101,96 @@ function _gutenbergSwitchTab(tab) {
   const view = document.getElementById("gutenberg-view");
   if (!view) return;
   view.querySelectorAll(".loc-tab").forEach(b => {
-    const tabKey = b.classList.contains("loc-tab-search") ? "search" : "saved";
+    const tabKey = b.classList.contains("loc-tab-search")    ? "search"
+                 : b.classList.contains("loc-tab-saved")     ? "saved"
+                 : b.classList.contains("loc-tab-bookmarks") ? "bookmarks"
+                 : "";
     b.classList.toggle("active", tabKey === tab);
   });
-  document.querySelector(".gutenberg-panel-search").style.display = tab === "search" ? "block" : "none";
-  document.querySelector(".gutenberg-panel-saved").style.display  = tab === "saved"  ? "block" : "none";
-  if (tab === "saved") _gutenbergRenderSaved();
+  document.querySelector(".gutenberg-panel-search").style.display    = tab === "search"    ? "block" : "none";
+  document.querySelector(".gutenberg-panel-saved").style.display     = tab === "saved"     ? "block" : "none";
+  document.querySelector(".gutenberg-panel-bookmarks").style.display = tab === "bookmarks" ? "block" : "none";
+  if (tab === "saved")     _gutenbergRenderSaved();
+  if (tab === "bookmarks") _gutenbergLoadAndRenderBookmarks();
 }
 window._gutenbergSwitchTab = _gutenbergSwitchTab;
+
+// ── Bookmarks tab ───────────────────────────────────────────────────
+// Cross-book listing of every manual bookmark the user has pinned.
+// Click a row to open the reader at that position. Renders the
+// server's joined book metadata so titles + authors come through
+// even for books the user never explicitly Saved.
+async function _gutenbergLoadAndRenderBookmarks() {
+  const target = document.getElementById("gutenberg-bookmarks-results");
+  const countEl = document.getElementById("gutenberg-bookmarks-count");
+  if (!target) return;
+  target.innerHTML = `<div class="loc-empty">Loading bookmarks…</div>`;
+  try {
+    const r = await apiFetch("/api/user/gutenberg-bookmarks");
+    if (!r.ok) {
+      target.innerHTML = `<div class="loc-empty">Could not load bookmarks (HTTP ${r.status}).</div>`;
+      return;
+    }
+    const j = await r.json();
+    const items = Array.isArray(j?.items) ? j.items : [];
+    if (countEl) countEl.textContent = String(items.length);
+    if (!items.length) {
+      target.innerHTML = `<div class="loc-empty">No bookmarks yet. Open a book and use 📌 Pin to save your spot.</div>`;
+      return;
+    }
+    target.innerHTML = items.map(b => {
+      const authors = Array.isArray(b.bookAuthors) && b.bookAuthors.length
+        ? b.bookAuthors.map(a => escHtml(a?.name || "")).filter(Boolean).join(", ")
+        : "";
+      const pct = Math.round(Number(b.positionPct) || 0);
+      const labelTxt = b.label || `${pct}%`;
+      const dateStr = b.createdAt ? new Date(b.createdAt).toLocaleDateString() : "";
+      const titleSafe = JSON.stringify(b.bookTitle || "").replace(/"/g, "&quot;");
+      return `
+        <div class="gutenberg-bookmark-list-row" onclick="_gutenbergCloseAndOpenAt(${b.bookId}, ${titleSafe}, ${pct})">
+          <div class="gutenberg-bookmark-list-main">
+            <div class="gutenberg-bookmark-list-label">${escHtml(labelTxt)}</div>
+            <div class="gutenberg-bookmark-list-book">${escHtml(b.bookTitle ?? `Book ${b.bookId}`)}${authors ? ` · <span class="gutenberg-bookmark-list-author">${authors}</span>` : ""}</div>
+          </div>
+          <div class="gutenberg-bookmark-list-meta">
+            <span class="gutenberg-bookmark-list-pct">${pct}%</span>
+            ${dateStr ? `<span class="gutenberg-bookmark-list-date">${escHtml(dateStr)}</span>` : ""}
+            <button type="button" class="gutenberg-bookmark-del" onclick="event.stopPropagation();_gutenbergDeleteBookmarkFromList(${b.id})" title="Delete bookmark">×</button>
+          </div>
+        </div>`;
+    }).join("");
+  } catch (e) {
+    console.warn("[gutenberg/bookmarks list]", e);
+    target.innerHTML = `<div class="loc-empty">Could not load bookmarks.</div>`;
+  }
+}
+window._gutenbergLoadAndRenderBookmarks = _gutenbergLoadAndRenderBookmarks;
+
+// Open reader at the bookmark position from the Bookmarks tab. Wraps
+// the existing reader opener with the optional start-position arg.
+function _gutenbergCloseAndOpenAt(bookId, fallbackTitle, pct) {
+  _gutenbergOpenReader(bookId, fallbackTitle, { startPositionPct: pct });
+}
+window._gutenbergCloseAndOpenAt = _gutenbergCloseAndOpenAt;
+
+// Delete a bookmark from the Bookmarks tab (manual rows only). Then
+// re-render the list so the row disappears immediately.
+async function _gutenbergDeleteBookmarkFromList(bmkId) {
+  if (!confirm("Delete this bookmark?")) return;
+  try {
+    const r = await apiFetch("/api/user/gutenberg-bookmarks", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: bmkId }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    _gutenbergLoadAndRenderBookmarks();
+  } catch (e) {
+    console.warn("[gutenberg/bookmark-delete-from-list]", e);
+    if (typeof showToast === "function") showToast("Delete failed", "error");
+  }
+}
+window._gutenbergDeleteBookmarkFromList = _gutenbergDeleteBookmarkFromList;
 
 // ── Search ──────────────────────────────────────────────────────────
 async function runGutenbergSearch(q, opts) {

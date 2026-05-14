@@ -10595,6 +10595,70 @@ a:focus-visible {
   background: rgba(255, 200, 60, 0.08);
 }
 
+/* Bookmarks tab — cross-book list of all manual bookmarks. */
+.gutenberg-bookmarks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.4rem;
+}
+.gutenberg-bookmark-list-row {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.55rem 0.7rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.gutenberg-bookmark-list-row:hover {
+  background: rgba(255, 200, 60, 0.05);
+  border-color: rgba(255, 200, 60, 0.3);
+}
+.gutenberg-bookmark-list-main {
+  flex: 1;
+  min-width: 0;
+}
+.gutenberg-bookmark-list-label {
+  font-size: 0.88rem;
+  color: #eee;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gutenberg-bookmark-list-book {
+  font-size: 0.76rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gutenberg-bookmark-list-author {
+  color: #777;
+}
+.gutenberg-bookmark-list-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+  font-size: 0.74rem;
+  color: var(--muted);
+}
+.gutenberg-bookmark-list-pct {
+  font-weight: 600;
+  color: #f5c150;
+  min-width: 2.5em;
+  text-align: right;
+}
+.gutenberg-bookmark-list-date {
+  color: #777;
+  min-width: 5em;
+}
+
 /* Reader overlay — full-viewport so a book gets the whole screen.
    #gutenberg-reader-body has its own overflow:auto so the auto-bookmark
    scroll handler reads .scrollTop / .scrollHeight from that container,
