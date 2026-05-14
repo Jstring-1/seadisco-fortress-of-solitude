@@ -10165,3 +10165,210 @@ a:focus-visible {
   letter-spacing: 0.02em;
 }
 #barcode-scan-submit:hover { filter: brightness(1.15); }
+
+/* ── Project Gutenberg view ──────────────────────────────────────── */
+.gutenberg-results-list {
+  display: grid;
+  gap: 0.6rem;
+  margin-top: 0.6rem;
+}
+.gutenberg-card {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  gap: 0.7rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.55rem;
+}
+.gutenberg-cover {
+  width: 92px;
+  height: 132px;
+  object-fit: cover;
+  background: #1a1a1a;
+  border-radius: 4px;
+}
+.gutenberg-cover-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.2rem;
+  color: var(--muted);
+}
+.gutenberg-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+.gutenberg-card-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #eee;
+  line-height: 1.25;
+}
+.gutenberg-card-author { font-size: 0.82rem; color: var(--muted); }
+.gutenberg-card-langs  { font-size: 0.72rem; color: var(--muted); letter-spacing: 0.04em; }
+.gutenberg-card-subjects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.2rem;
+}
+.gutenberg-subject-chip {
+  font-size: 0.7rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 0.08rem 0.5rem;
+  color: var(--muted);
+}
+.gutenberg-card-actions {
+  margin-top: auto;
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  padding-top: 0.4rem;
+}
+
+/* Reader overlay — full-viewport so a book gets the whole screen.
+   #gutenberg-reader-body has its own overflow:auto so the auto-bookmark
+   scroll handler reads .scrollTop / .scrollHeight from that container,
+   not from the page. */
+#gutenberg-reader-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.92);
+  z-index: 260;
+  display: none;
+  padding: 0.6rem;
+}
+#gutenberg-reader-overlay.open { display: block; }
+body.gutenberg-reader-open { overflow: hidden; }
+#gutenberg-reader-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  width: 100%;
+  height: 100%;
+  max-width: 1100px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+#gutenberg-reader-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.02);
+  flex-shrink: 0;
+}
+#gutenberg-reader-head h3 {
+  margin: 0;
+  font-size: 1rem;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+#gutenberg-reader-controls {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+#gutenberg-reader-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  flex: 1;
+  min-height: 0;
+}
+#gutenberg-reader-sidebar {
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  background: rgba(0, 0, 0, 0.2);
+}
+.gutenberg-reader-sidebar-head {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--muted);
+  padding: 0.6rem 0.8rem 0.4rem;
+}
+.gutenberg-bookmark-row {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.6rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.gutenberg-bookmark-jump {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+  padding: 0.3rem 0.2rem;
+  color: #ddd;
+  font-size: 0.82rem;
+}
+.gutenberg-bookmark-jump:hover { color: #fff; background: rgba(255, 255, 255, 0.04); }
+.gutenberg-bookmark-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gutenberg-bookmark-pct {
+  font-size: 0.7rem;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+.gutenberg-bookmark-del {
+  background: transparent;
+  border: 0;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.9rem;
+}
+.gutenberg-bookmark-del:hover { color: #ff6b6b; }
+#gutenberg-reader-body {
+  overflow-y: auto;
+  padding: 1.6rem 2rem;
+  font-size: 17px;
+  line-height: 1.6;
+  color: #d8d2c4;
+  background: #14110d;
+  font-family: Georgia, "Times New Roman", serif;
+}
+#gutenberg-reader-body h1,
+#gutenberg-reader-body h2,
+#gutenberg-reader-body h3 {
+  color: #f0e9d8;
+  margin: 1.5em 0 0.4em;
+}
+#gutenberg-reader-body p { margin: 0.8em 0; }
+#gutenberg-reader-body a { color: #a8c8ff; }
+
+@media (max-width: 720px) {
+  #gutenberg-reader-layout {
+    grid-template-columns: 1fr;
+  }
+  #gutenberg-reader-sidebar {
+    /* On mobile, collapse the sidebar — bookmarks accessible via the
+       Pin button at the top. */
+    display: none;
+  }
+  #gutenberg-reader-body {
+    padding: 1rem 1.1rem;
+    font-size: 16px;
+  }
+}

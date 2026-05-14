@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
+import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 
 
@@ -3980,6 +3980,452 @@ app.post("/api/admin/archive/refresh", async (req, res) => {
   _refreshArchiveCache(_ARCHIVE_AADAM_COLLECTION, _ARCHIVE_AADAM_CACHE_KEY).catch((err) => {
     console.error("[archive/refresh]", err?.message ?? err);
   });
+});
+
+// ── Project Gutenberg integration (admin-only initially) ────────────────
+//
+// Endpoints:
+//   GET  /api/gutenberg/search?q=&page=          → proxy to Gutendex
+//   GET  /api/gutenberg/book/:id                 → metadata + body (DB-as-cache)
+//   GET  /api/user/gutenberg-saves               → list saved books
+//   POST /api/user/gutenberg-saves               → save a book {id}
+//   DELETE /api/user/gutenberg-saves             → unsave {id}
+//   GET  /api/user/gutenberg-bookmarks/:id       → bookmarks (incl. auto-resume) for a book
+//   POST /api/user/gutenberg-bookmarks/:id       → upsert auto or insert manual
+//   DELETE /api/user/gutenberg-bookmarks/:bid    → delete a bookmark by row id
+//
+// First-ever read of a book fetches HTML from gutenberg.org, sanitizes,
+// and writes to gutenberg_books. Every subsequent read serves from the
+// DB row directly — no upstream call, no in-memory cache layer needed
+// (Postgres TOAST handles 2MB rows fine).
+//
+// Admin-gate on all routes initially via requireGutenbergAccess() so
+// the feature can be tested before opening to all signed-in users.
+async function requireGutenbergAccess(req: express.Request, res: express.Response): Promise<string | null> {
+  const userId = await getClerkUserId(req);
+  if (!userId) {
+    res.status(401).json({ error: "auth_required" });
+    return null;
+  }
+  // Admin OR a demo allowlist user can use the feature now. Flip the
+  // condition to `return userId` to open the feature to all signed-in
+  // users once tested.
+  if (userId !== ADMIN_CLERK_ID && !isDemoUser(userId)) {
+    res.status(403).json({ error: "forbidden" });
+    return null;
+  }
+  return userId;
+}
+
+// Strip <script>, <style>, on*= attribute handlers, and javascript: URLs.
+// Gutenberg HTML is well-behaved most of the time, but it's still
+// upstream-fed content we render verbatim — defense in depth.
+function _gutenbergSanitizeHtml(html: string): string {
+  if (!html) return "";
+  let out = html;
+  // Drop scripts + stylesheets entirely.
+  out = out.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, "");
+  out = out.replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, "");
+  // Drop inline event handlers (onclick=, onload=, etc.).
+  out = out.replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+  // Neutralize javascript: URLs (replace with #).
+  out = out.replace(/\b(?:href|src)\s*=\s*("|')\s*javascript:[^"']*\1/gi, 'href="#"');
+  // Strip <meta http-equiv="refresh"> redirects.
+  out = out.replace(/<meta\b[^>]*http-equiv=["']?refresh[^>]*>/gi, "");
+  return out;
+}
+
+// Extract the body innerHTML from a full HTML document. Gutenberg
+// serves complete <html> docs; we only want the readable inner content
+// so the reader overlay can host the chrome (nav, bookmarks).
+function _gutenbergExtractBody(html: string): string {
+  if (!html) return "";
+  const m = html.match(/<body[^>]*>([\s\S]*?)<\/body\s*>/i);
+  return m ? m[1] : html;
+}
+
+// Plain-text fallback for full-text search later. Cheap regex strip;
+// not perfect but adequate for a free-text index (which we don't even
+// build yet — just cache it for forward use).
+function _gutenbergToPlainText(html: string): string {
+  if (!html) return "";
+  return html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// GET /api/gutenberg/search?q=&page=1
+// Thin proxy to Gutendex (https://gutendex.com/books) which mirrors the
+// Gutenberg catalog as JSON. No upstream auth, no documented rate limit,
+// but we still gate by admin/demo so a misbehaving client can't fan out.
+app.get("/api/gutenberg/search", async (req, res) => {
+  const userId = await requireGutenbergAccess(req, res);
+  if (!userId) return;
+  const q = String(req.query.q ?? "").trim().slice(0, 200);
+  const page = Math.max(1, Math.min(50, parseInt(String(req.query.page ?? "1"), 10) || 1));
+  const lang = String(req.query.lang ?? "").trim().toLowerCase().slice(0, 16);  // ISO 639-1, e.g. "en"
+  const topic = String(req.query.topic ?? "").trim().slice(0, 80);
+  const params = new URLSearchParams();
+  if (q) params.set("search", q);
+  if (page > 1) params.set("page", String(page));
+  if (lang) params.set("languages", lang);
+  if (topic) params.set("topic", topic);
+  const url = `https://gutendex.com/books?${params.toString()}`;
+  try {
+    const r = await loggedFetch("gutendex", url, { context: "search" });
+    if (!r.ok) {
+      res.status(502).json({ error: "upstream", status: r.status });
+      return;
+    }
+    const j = await r.json() as any;
+    // Trim the response to fields the client actually uses — Gutendex
+    // returns ~30 fields per book, most unused. Smaller payloads, simpler
+    // client.
+    const items = (Array.isArray(j?.results) ? j.results : []).map((b: any) => ({
+      id: Number(b?.id) || 0,
+      title: String(b?.title ?? ""),
+      authors: Array.isArray(b?.authors) ? b.authors.map((a: any) => ({
+        name: String(a?.name ?? ""),
+        birth_year: a?.birth_year ?? null,
+        death_year: a?.death_year ?? null,
+      })) : [],
+      languages: Array.isArray(b?.languages) ? b.languages : [],
+      subjects: Array.isArray(b?.subjects) ? b.subjects.slice(0, 8) : [],
+      download_count: Number(b?.download_count) || 0,
+      // Pick a thumbnail if available (small.cover.jpg). Gutenberg's
+      // cover format is `formats["image/jpeg"]`.
+      cover: String(b?.formats?.["image/jpeg"] ?? ""),
+    })).filter((b: any) => b.id > 0);
+    res.json({
+      items,
+      count: Number(j?.count) || items.length,
+      page,
+      hasMore: !!j?.next,
+    });
+  } catch (e: any) {
+    console.error("[gutenberg/search]", e?.message ?? e);
+    res.status(500).json({ error: "fetch_failed" });
+  }
+});
+
+// GET /api/gutenberg/book/:id
+// Returns metadata + sanitized HTML body. DB-as-cache:
+//   - Row exists with html populated → serve, bump last_accessed_at.
+//   - Row missing or html null → fetch from gutenberg.org, sanitize,
+//     upsert row, serve.
+// Gutenberg's HTML URL conventions:
+//   https://www.gutenberg.org/cache/epub/{id}/pg{id}-images.html
+//   https://www.gutenberg.org/files/{id}/{id}-h/{id}-h.htm   (fallback)
+// We try both; some books only have one or the other.
+app.get("/api/gutenberg/book/:id", async (req, res) => {
+  const userId = await requireGutenbergAccess(req, res);
+  if (!userId) return;
+  const bookId = parseInt(String(req.params.id ?? ""), 10);
+  if (!Number.isFinite(bookId) || bookId <= 0 || bookId > 9_999_999) {
+    res.status(400).json({ error: "bad_id" });
+    return;
+  }
+  try {
+    // Cache hit path.
+    const cached = await getPool().query(
+      `SELECT book_id, title, authors, languages, subjects, html, byte_size, metadata
+         FROM gutenberg_books
+        WHERE book_id = $1`,
+      [bookId],
+    );
+    if (cached.rows.length && cached.rows[0].html) {
+      // Fire-and-forget bump of last_accessed_at — no need to await.
+      getPool().query(
+        `UPDATE gutenberg_books SET last_accessed_at = NOW() WHERE book_id = $1`,
+        [bookId],
+      ).catch(() => {});
+      const r = cached.rows[0];
+      res.setHeader("X-SeaDisco-Cache", "hit");
+      res.json({
+        id: r.book_id,
+        title: r.title,
+        authors: r.authors,
+        languages: r.languages,
+        subjects: r.subjects,
+        byteSize: r.byte_size,
+        html: r.html,
+      });
+      return;
+    }
+
+    // Need to fetch + cache. Pull metadata from Gutendex AND HTML body
+    // from gutenberg.org in parallel; if metadata fails we can still
+    // serve the body with what we have.
+    const metaUrl = `https://gutendex.com/books/${bookId}`;
+    const htmlUrls = [
+      `https://www.gutenberg.org/cache/epub/${bookId}/pg${bookId}-images.html`,
+      `https://www.gutenberg.org/files/${bookId}/${bookId}-h/${bookId}-h.htm`,
+      `https://www.gutenberg.org/cache/epub/${bookId}/pg${bookId}.html`,
+    ];
+    const [metaRes, ...htmlResults] = await Promise.all([
+      loggedFetch("gutendex", metaUrl, { context: "book-meta" }).catch(() => null),
+      ...htmlUrls.map(u => loggedFetch("gutenberg-html", u, { context: "book-html" }).catch(() => null)),
+    ]);
+    const htmlOk = htmlResults.find(r => r && r.ok);
+    if (!htmlOk) {
+      res.status(404).json({ error: "not_found", message: "Book HTML not available from Gutenberg." });
+      return;
+    }
+    const rawHtml = await htmlOk.text();
+    const bodyHtml = _gutenbergSanitizeHtml(_gutenbergExtractBody(rawHtml));
+    const plainText = _gutenbergToPlainText(bodyHtml);
+    let meta: any = null;
+    if (metaRes && metaRes.ok) {
+      try { meta = await metaRes.json(); } catch {}
+    }
+    const title = String(meta?.title ?? `Book ${bookId}`);
+    const authors = Array.isArray(meta?.authors) ? meta.authors : [];
+    const languages = Array.isArray(meta?.languages) ? meta.languages : [];
+    const subjects = Array.isArray(meta?.subjects) ? meta.subjects.slice(0, 16) : [];
+
+    await getPool().query(
+      `INSERT INTO gutenberg_books
+         (book_id, title, authors, languages, subjects, html, plain_text, byte_size, metadata, fetched_at, last_accessed_at)
+       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6, $7, $8, $9::jsonb, NOW(), NOW())
+       ON CONFLICT (book_id) DO UPDATE SET
+         title = EXCLUDED.title,
+         authors = EXCLUDED.authors,
+         languages = EXCLUDED.languages,
+         subjects = EXCLUDED.subjects,
+         html = EXCLUDED.html,
+         plain_text = EXCLUDED.plain_text,
+         byte_size = EXCLUDED.byte_size,
+         metadata = EXCLUDED.metadata,
+         fetched_at = NOW(),
+         last_accessed_at = NOW()`,
+      [
+        bookId,
+        title,
+        JSON.stringify(authors),
+        JSON.stringify(languages),
+        JSON.stringify(subjects),
+        bodyHtml,
+        plainText,
+        bodyHtml.length,
+        JSON.stringify(meta ?? {}),
+      ],
+    );
+    res.setHeader("X-SeaDisco-Cache", "miss");
+    res.json({
+      id: bookId,
+      title,
+      authors,
+      languages,
+      subjects,
+      byteSize: bodyHtml.length,
+      html: bodyHtml,
+    });
+  } catch (e: any) {
+    console.error("[gutenberg/book]", e?.message ?? e);
+    res.status(500).json({ error: "fetch_failed" });
+  }
+});
+
+// GET /api/user/gutenberg-saves — list the user's saved books with
+// the joined metadata so the Saved tab renders without N+1 lookups.
+app.get("/api/user/gutenberg-saves", async (req, res) => {
+  const userId = await requireGutenbergAccess(req, res);
+  if (!userId) return;
+  try {
+    const r = await getPool().query(
+      `SELECT s.book_id, s.saved_at, b.title, b.authors, b.languages, b.byte_size
+         FROM gutenberg_saved s
+         LEFT JOIN gutenberg_books b ON b.book_id = s.book_id
+        WHERE s.clerk_user_id = $1
+        ORDER BY s.saved_at DESC
+        LIMIT 500`,
+      [userId],
+    );
+    res.json({
+      items: r.rows.map(row => ({
+        id: row.book_id,
+        title: row.title ?? `Book ${row.book_id}`,
+        authors: row.authors ?? [],
+        languages: row.languages ?? [],
+        byteSize: row.byte_size ?? null,
+        savedAt: row.saved_at,
+      })),
+    });
+  } catch (e: any) {
+    console.error("[gutenberg-saves GET]", e?.message ?? e);
+    res.status(500).json({ error: "fetch_failed" });
+  }
+});
+
+// POST /api/user/gutenberg-saves  { id }
+app.post("/api/user/gutenberg-saves", express.json({ limit: "1kb" }), async (req, res) => {
+  const userId = await requireGutenbergAccess(req, res);
+  if (!userId) return;
+  const id = parseInt(String(req.body?.id ?? ""), 10);
+  if (!Number.isFinite(id) || id <= 0) {
+    res.status(400).json({ error: "bad_id" });
+    return;
+  }
+  try {
+    await getPool().query(
+      `INSERT INTO gutenberg_saved (clerk_user_id, book_id) VALUES ($1, $2)
+       ON CONFLICT (clerk_user_id, book_id) DO NOTHING`,
+      [userId, id],
+    );
+    res.json({ ok: true });
+  } catch (e: any) {
+    console.error("[gutenberg-saves POST]", e?.message ?? e);
+    res.status(500).json({ error: "save_failed" });
+  }
+});
+
+// DELETE /api/user/gutenberg-saves  { id }
+app.delete("/api/user/gutenberg-saves", express.json({ limit: "1kb" }), async (req, res) => {
+  const userId = await requireGutenbergAccess(req, res);
+  if (!userId) return;
+  const id = parseInt(String(req.body?.id ?? ""), 10);
+  if (!Number.isFinite(id) || id <= 0) {
+    res.status(400).json({ error: "bad_id" });
+    return;
+  }
+  try {
+    await getPool().query(
+      `DELETE FROM gutenberg_saved WHERE clerk_user_id = $1 AND book_id = $2`,
+      [userId, id],
+    );
+    res.json({ ok: true });
+  } catch (e: any) {
+    console.error("[gutenberg-saves DELETE]", e?.message ?? e);
+    res.status(500).json({ error: "delete_failed" });
+  }
+});
+
+// GET /api/user/gutenberg-bookmarks/:bookId — auto + manual bookmarks
+// for a book. Client renders manual ones in the reader sidebar and
+// uses the auto one to resume scroll position on book reopen.
+app.get("/api/user/gutenberg-bookmarks/:bookId", async (req, res) => {
+  const userId = await requireGutenbergAccess(req, res);
+  if (!userId) return;
+  const bookId = parseInt(String(req.params.bookId ?? ""), 10);
+  if (!Number.isFinite(bookId) || bookId <= 0) {
+    res.status(400).json({ error: "bad_id" });
+    return;
+  }
+  try {
+    const r = await getPool().query(
+      `SELECT id, bookmark_kind, position_pct, position_anchor, label, created_at
+         FROM gutenberg_bookmarks
+        WHERE clerk_user_id = $1 AND book_id = $2
+        ORDER BY bookmark_kind ASC, created_at DESC`,
+      [userId, bookId],
+    );
+    const auto = r.rows.find(b => b.bookmark_kind === "auto") ?? null;
+    const manual = r.rows.filter(b => b.bookmark_kind === "manual");
+    res.json({
+      auto: auto ? {
+        id: auto.id,
+        positionPct: auto.position_pct,
+        positionAnchor: auto.position_anchor,
+        updatedAt: auto.created_at,
+      } : null,
+      manual: manual.map(m => ({
+        id: m.id,
+        positionPct: m.position_pct,
+        positionAnchor: m.position_anchor,
+        label: m.label,
+        createdAt: m.created_at,
+      })),
+    });
+  } catch (e: any) {
+    console.error("[gutenberg-bookmarks GET]", e?.message ?? e);
+    res.status(500).json({ error: "fetch_failed" });
+  }
+});
+
+// POST /api/user/gutenberg-bookmarks/:bookId
+// Body: { kind: "auto"|"manual", positionPct: 0–100, positionAnchor?: string, label?: string }
+// auto → upsert (one per user/book). manual → insert (many per user/book).
+app.post("/api/user/gutenberg-bookmarks/:bookId", express.json({ limit: "2kb" }), async (req, res) => {
+  const userId = await requireGutenbergAccess(req, res);
+  if (!userId) return;
+  const bookId = parseInt(String(req.params.bookId ?? ""), 10);
+  if (!Number.isFinite(bookId) || bookId <= 0) {
+    res.status(400).json({ error: "bad_id" });
+    return;
+  }
+  const kind = req.body?.kind === "auto" ? "auto" : "manual";
+  const positionPct = Math.max(0, Math.min(100, Number(req.body?.positionPct) || 0));
+  const anchor = req.body?.positionAnchor ? String(req.body.positionAnchor).slice(0, 200) : null;
+  const label = req.body?.label ? String(req.body.label).slice(0, 200) : null;
+  try {
+    if (kind === "auto") {
+      // UPSERT against the partial unique index. The WHERE clause on the
+      // index means a vanilla ON CONFLICT can't target it, so do
+      // delete-then-insert in a transaction. Cheap (one row).
+      const client = await getPool().connect();
+      try {
+        await client.query("BEGIN");
+        await client.query(
+          `DELETE FROM gutenberg_bookmarks
+            WHERE clerk_user_id = $1 AND book_id = $2 AND bookmark_kind = 'auto'`,
+          [userId, bookId],
+        );
+        await client.query(
+          `INSERT INTO gutenberg_bookmarks
+             (clerk_user_id, book_id, bookmark_kind, position_pct, position_anchor)
+           VALUES ($1, $2, 'auto', $3, $4)`,
+          [userId, bookId, positionPct, anchor],
+        );
+        await client.query("COMMIT");
+      } catch (e) {
+        await client.query("ROLLBACK"); throw e;
+      } finally {
+        client.release();
+      }
+    } else {
+      await getPool().query(
+        `INSERT INTO gutenberg_bookmarks
+           (clerk_user_id, book_id, bookmark_kind, position_pct, position_anchor, label)
+         VALUES ($1, $2, 'manual', $3, $4, $5)`,
+        [userId, bookId, positionPct, anchor, label],
+      );
+    }
+    res.json({ ok: true });
+  } catch (e: any) {
+    console.error("[gutenberg-bookmarks POST]", e?.message ?? e);
+    res.status(500).json({ error: "save_failed" });
+  }
+});
+
+// DELETE /api/user/gutenberg-bookmarks  { id }
+// Drops a single bookmark row by its serial id (manual bookmarks only;
+// auto resumes are managed implicitly via POST upsert).
+app.delete("/api/user/gutenberg-bookmarks", express.json({ limit: "1kb" }), async (req, res) => {
+  const userId = await requireGutenbergAccess(req, res);
+  if (!userId) return;
+  const id = parseInt(String(req.body?.id ?? ""), 10);
+  if (!Number.isFinite(id) || id <= 0) {
+    res.status(400).json({ error: "bad_id" });
+    return;
+  }
+  try {
+    await getPool().query(
+      `DELETE FROM gutenberg_bookmarks
+        WHERE id = $1 AND clerk_user_id = $2 AND bookmark_kind = 'manual'`,
+      [id, userId],
+    );
+    res.json({ ok: true });
+  } catch (e: any) {
+    console.error("[gutenberg-bookmarks DELETE]", e?.message ?? e);
+    res.status(500).json({ error: "delete_failed" });
+  }
 });
 
 // ── Play queue (cross-source: LOC + YouTube) ────────────────────────────

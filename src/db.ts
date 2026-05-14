@@ -4,7 +4,11 @@ import { expandWithSynonyms } from "./classical-synonyms.js";
 
 let pool: InstanceType<typeof Pool> | null = null;
 
-function getPool() {
+// Exported so feature modules (gutenberg endpoints in search-api.ts, etc.)
+// can run ad-hoc queries without forcing every new feature to land a
+// pile of helper functions in this file. Existing helpers stay in place
+// for stable hot paths.
+export function getPool() {
   if (!pool) {
     const connStr = process.env.APP_DB_URL;
     if (!connStr) throw new Error("APP_DB_URL not set");
@@ -363,6 +367,69 @@ export async function initDb() {
     )
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS archive_search_cache_age_idx ON archive_search_cache (cached_at)`);
+
+  // ── Project Gutenberg book cache (DB-as-cache, no separate proxy layer) ──
+  // First-ever read of a book fetches the HTML body from gutenberg.org,
+  // sanitizes, and stores it here. Every subsequent read serves directly
+  // from this row — no upstream hop, no in-memory cache to manage.
+  // Postgres TOAST handles the large `html` column transparently; a 2MB
+  // book is just a 2MB row. Metadata (title, authors, etc.) is duplicated
+  // out of the JSONB blob into top-level columns to keep saved-list /
+  // search-display queries fast without re-parsing JSON.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS gutenberg_books (
+      book_id          INTEGER     PRIMARY KEY,    -- Gutenberg etext id
+      title            TEXT,
+      authors          JSONB,                      -- [{name, birth_year, death_year}, ...]
+      languages        JSONB,                      -- ["en", ...]
+      subjects         JSONB,                      -- ["topic", ...]
+      html             TEXT,                       -- sanitized body
+      plain_text       TEXT,                       -- optional, populated on first read
+      byte_size        INTEGER,                    -- length(html), for stats
+      metadata         JSONB,                      -- raw Gutendex row (forward-compat)
+      fetched_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_accessed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS gutenberg_books_accessed_idx ON gutenberg_books (last_accessed_at DESC)`);
+
+  // Per-user saved Gutenberg books — the "Library" tab on the
+  // Gutenberg view. Just the membership pointer; rendered metadata
+  // comes from gutenberg_books (joined on book_id).
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS gutenberg_saved (
+      clerk_user_id TEXT        NOT NULL,
+      book_id       INTEGER     NOT NULL,
+      saved_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (clerk_user_id, book_id)
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS gutenberg_saved_user_time_idx ON gutenberg_saved (clerk_user_id, saved_at DESC)`);
+
+  // Per-user, per-book bookmarks. position_pct is the 0–100% scroll
+  // position; position_anchor is an optional element id ("p123",
+  // "chapter-iii", etc.) that the reader can jump to directly when
+  // the HTML body provides stable anchors. label is user-supplied
+  // (or auto-derived from nearby heading text on save).
+  //
+  // Special row: bookmark_kind='auto' is the auto-resume position,
+  // one per (user, book). 'manual' rows are user-pinned bookmarks,
+  // many per (user, book). Composite unique constraint enforces the
+  // singleton on auto.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS gutenberg_bookmarks (
+      id              SERIAL      PRIMARY KEY,
+      clerk_user_id   TEXT        NOT NULL,
+      book_id         INTEGER     NOT NULL,
+      bookmark_kind   TEXT        NOT NULL DEFAULT 'manual',  -- 'manual' | 'auto'
+      position_pct    REAL        NOT NULL DEFAULT 0,
+      position_anchor TEXT,
+      label           TEXT,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS gutenberg_bookmarks_user_book_idx ON gutenberg_bookmarks (clerk_user_id, book_id, created_at DESC)`);
+  await getPool().query(`CREATE UNIQUE INDEX IF NOT EXISTS gutenberg_bookmarks_auto_unique ON gutenberg_bookmarks (clerk_user_id, book_id) WHERE bookmark_kind = 'auto'`);
 
   // ── Per-user "banished" suggestions ──────────────────────────────────────
   // When a user dismisses a personal-suggestion card with the × button,
