@@ -332,6 +332,7 @@ function _gutenbergInfoPopupHtml(meta) {
       ${wordCountFmt ? `<div><span class="gutenberg-info-label">Words:</span> ${wordCountFmt}</div>` : ""}
       ${readingFmt   ? `<div><span class="gutenberg-info-label">Reading time:</span> ${readingFmt}</div>` : ""}
     </div>
+    <div id="gutenberg-info-blurb" class="gutenberg-info-section" style="display:none"></div>
     ${previewHtml}
     <div id="gutenberg-info-user-state" class="gutenberg-info-section" style="display:none"></div>
     ${shelfChips ? `<div class="gutenberg-info-section"><div class="gutenberg-info-label">Bookshelves</div><div class="gutenberg-info-chips">${shelfChips}</div></div>` : ""}
@@ -353,6 +354,41 @@ function _gutenbergInfoPopupHtml(meta) {
 async function _gutenbergFillInfoPopupExtras(meta) {
   if (!meta || !meta.id) return;
   const bookId = Number(meta.id);
+  // 0. Wikipedia blurb — server proxies + caches. Project Gutenberg
+  //    itself ships no descriptions; this is the only way to surface
+  //    a meaningful "About this book" panel.
+  const blurbPanel = document.getElementById("gutenberg-info-blurb");
+  if (blurbPanel && meta.title) {
+    const primaryAuthor = (Array.isArray(meta.authors) && meta.authors[0]?.name) ? meta.authors[0].name : "";
+    try {
+      const params = new URLSearchParams();
+      params.set("title", meta.title);
+      if (primaryAuthor) params.set("author", primaryAuthor);
+      const r = await apiFetch(`/api/gutenberg/blurb?${params.toString()}`);
+      if (r.ok) {
+        const j = await r.json();
+        if (j?.found && j.extract) {
+          const thumb = j.thumbnail
+            ? `<img src="${escHtml(j.thumbnail)}" alt="" class="gutenberg-info-blurb-thumb" loading="lazy" decoding="async">`
+            : "";
+          const desc = j.description
+            ? `<div class="gutenberg-info-blurb-desc">${escHtml(j.description)}</div>`
+            : "";
+          blurbPanel.innerHTML = `
+            <div class="gutenberg-info-label">About this book</div>
+            <div class="gutenberg-info-blurb-body">
+              ${thumb}
+              <div class="gutenberg-info-blurb-text">
+                ${desc}
+                <p>${escHtml(j.extract)}</p>
+                <a href="${escHtml(j.sourceUrl)}" target="_blank" rel="noopener" class="gutenberg-info-blurb-source">Wikipedia ↗</a>
+              </div>
+            </div>`;
+          blurbPanel.style.display = "";
+        }
+      }
+    } catch { /* swallow — blurb is non-critical */ }
+  }
   // 1. User read state + manual bookmarks count.
   const userPanel = document.getElementById("gutenberg-info-user-state");
   if (userPanel && window._clerk?.user) {
