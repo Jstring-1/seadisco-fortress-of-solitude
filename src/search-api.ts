@@ -4228,20 +4228,43 @@ app.get("/api/gutenberg/book-meta/:id", async (req, res) => {
   }
   try {
     // Cache hit from a prior Read — return cached row's metadata fields
-    // (skip the html/plain_text columns so we don't transfer megabytes
-    // for what should be a thin response).
+    // plus derived helpers (first-paragraph preview + word count) so
+    // the info popup can show a real teaser. We pull length(plain_text)
+    // and the leading substring to avoid transferring the whole body.
     const cached = await getPool().query(
-      `SELECT book_id, title, authors, languages, subjects, byte_size, metadata, fetched_at
+      `SELECT book_id, title, authors, languages, subjects, byte_size, metadata, fetched_at,
+              length(plain_text) AS plain_text_len,
+              substring(plain_text from 1 for 600) AS plain_text_head
          FROM gutenberg_books
         WHERE book_id = $1`,
       [bookId],
     );
     if (cached.rows.length) {
       const r = cached.rows[0];
-      // metadata is the raw Gutendex blob captured at first-read time.
-      // Surface bookshelves + formats from it (those aren't in the
-      // first-class columns).
       const meta = (r.metadata ?? {}) as any;
+      // Words ≈ plain-text length / 5.5 (avg English word + space).
+      // Reading time at ~250 wpm.
+      const plainLen = Number(r.plain_text_len) || 0;
+      const wordCount = plainLen > 0 ? Math.round(plainLen / 5.5) : null;
+      const readingMin = wordCount ? Math.max(1, Math.round(wordCount / 250)) : null;
+      // First paragraph preview — Gutendex bodies typically start with
+      // a Project Gutenberg legal header followed by the actual prose.
+      // Skip the boilerplate by scanning forward to the first long
+      // sentence-y chunk. Cheap heuristic: split on double newlines,
+      // pick the first chunk whose length is in the 80–500 char range
+      // and doesn't look like all-caps boilerplate.
+      let preview: string | null = null;
+      if (r.plain_text_head) {
+        const head = String(r.plain_text_head).replace(/\s+/g, " ").trim();
+        // Quick-and-dirty: find a window of 120-280 chars starting
+        // after any preamble keywords. If the head looks short, just
+        // use the first 240 chars.
+        const boilerEnd = head.search(/[\.!?]\s+[A-Z]/);
+        const start = boilerEnd > 0 && boilerEnd < 300 ? boilerEnd + 2 : 0;
+        preview = head.slice(start, start + 280).trim();
+        if (preview && preview.length < 60) preview = head.slice(0, 240);
+        if (preview) preview += head.length > start + 280 ? "…" : "";
+      }
       res.setHeader("X-SeaDisco-Cache", "hit");
       res.json({
         id: r.book_id,
@@ -4253,6 +4276,9 @@ app.get("/api/gutenberg/book-meta/:id", async (req, res) => {
         formats: meta.formats ?? {},
         downloadCount: Number(meta.download_count) || 0,
         byteSize: r.byte_size,
+        wordCount,
+        readingMinutes: readingMin,
+        firstParagraph: preview,
         fetchedAt: r.fetched_at,
         cached: true,
       });
@@ -4278,6 +4304,9 @@ app.get("/api/gutenberg/book-meta/:id", async (req, res) => {
       formats: meta?.formats ?? {},
       downloadCount: Number(meta?.download_count) || 0,
       byteSize: null,
+      wordCount: null,
+      readingMinutes: null,
+      firstParagraph: null,
       fetchedAt: null,
       cached: false,
     });
