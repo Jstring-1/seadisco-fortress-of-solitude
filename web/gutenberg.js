@@ -161,190 +161,126 @@ function _gutenbergRenderPagination() {
 }
 
 // ── Card rendering ──────────────────────────────────────────────────
+// Rich card. Everything that used to live in a separate "Info" popup
+// now renders inline:
+//   - All subjects (capped at 12 server-side) + bookshelves as chips
+//   - Available formats (HTML / EPUB / Kindle / plain / PDF) as links
+//   - 🎧 Audio rows (Play / Queue when directly playable, ↗ otherwise)
+//   - Action row: Read, Save, Wikipedia search ↗, Google search ↗,
+//                 Gutenberg ↗
+// No more popup, no more per-card lazy fetches.
 function _gutenbergCardHtml(b) {
   const authors = Array.isArray(b.authors) && b.authors.length
-    ? b.authors.map(a => escHtml(a?.name || "")).filter(Boolean).join(", ")
+    ? b.authors.map(a => {
+        const years = (a?.birth_year || a?.death_year)
+          ? ` <span class="gutenberg-card-years">(${a.birth_year ?? "?"}–${a.death_year ?? "?"})</span>`
+          : "";
+        return `<span>${escHtml(a?.name || "Unknown")}</span>${years}`;
+      }).join(", ")
     : "Unknown author";
   const langs = Array.isArray(b.languages) && b.languages.length
     ? b.languages.map(l => escHtml(String(l).toUpperCase())).join(" / ")
     : "";
-  const subjects = Array.isArray(b.subjects) && b.subjects.length
-    ? b.subjects.slice(0, 3).map(s => `<span class="gutenberg-subject-chip">${escHtml(s)}</span>`).join("")
+  // Subjects: clickable, pivot to a fresh search filtered by that subject.
+  const subjectChips = (Array.isArray(b.subjects) ? b.subjects : []).map(s =>
+    `<span class="gutenberg-subject-chip" onclick="_gutenbergSearchBySubject(${JSON.stringify(s).replace(/"/g, "&quot;")})" style="cursor:pointer" title="Search for this subject">${escHtml(s)}</span>`
+  ).join("");
+  const shelfChips = (Array.isArray(b.bookshelves) ? b.bookshelves : []).map(s =>
+    `<span class="gutenberg-shelf-chip">${escHtml(s)}</span>`
+  ).join("");
+  const downloadCount = b.download_count
+    ? `<span class="gutenberg-card-stat"><span class="gutenberg-card-stat-label">↓</span> ${Number(b.download_count).toLocaleString()}</span>`
     : "";
   const isSaved = _gutenbergSavedIds.has(b.id);
-  const saveBtn = `<button type="button" class="archive-btn" onclick="event.stopPropagation();_gutenbergToggleSave(${b.id}, this)" title="${isSaved ? "Remove from Library" : "Save to Library"}">${isSaved ? "✓ Saved" : "+ Save"}</button>`;
+  const saveBtn = `<button type="button" class="archive-btn" onclick="_gutenbergToggleSave(${b.id}, this)" title="${isSaved ? "Remove from Library" : "Save to Library"}">${isSaved ? "✓ Saved" : "+ Save"}</button>`;
   const cover = b.cover
     ? `<img class="gutenberg-cover" src="${escHtml(b.cover)}" alt="" loading="lazy" decoding="async">`
     : `<div class="gutenberg-cover gutenberg-cover-placeholder">📖</div>`;
   const titleSafe = JSON.stringify(b.title || "").replace(/"/g, "&quot;");
-  // Card is NOT clickable as a whole — the Info button handles that
-  // explicitly. Avoids accidental popup opens when the user is
-  // selecting text, clicking a subject chip, etc.
+  const formatLinks = _gutenbergFormatLinksHtml(b.formats);
+  const audioSection = _gutenbergAudioSectionHtml(b);
+  // External search URLs — Wikipedia + Google, both with title +
+  // primary author quoted for exact-phrase matching.
+  const wikiUrl = _gutenbergWikipediaSearchUrl(b);
+  const googleUrl = _gutenbergGoogleSearchUrl(b);
   return `
     <div class="gutenberg-card" data-book-id="${b.id}">
       ${cover}
       <div class="gutenberg-card-body">
         <div class="gutenberg-card-title">${escHtml(b.title || `Book ${b.id}`)}</div>
-        <div class="gutenberg-card-author">${authors}</div>
-        ${langs ? `<div class="gutenberg-card-langs">${langs}</div>` : ""}
-        ${subjects ? `<div class="gutenberg-card-subjects">${subjects}</div>` : ""}
+        <div class="gutenberg-card-author">by ${authors}</div>
+        <div class="gutenberg-card-meta-row">
+          ${langs ? `<span class="gutenberg-card-langs">${langs}</span>` : ""}
+          ${downloadCount}
+        </div>
+        ${shelfChips ? `<div class="gutenberg-card-section"><span class="gutenberg-card-section-label">Bookshelves:</span><div class="gutenberg-card-chips">${shelfChips}</div></div>` : ""}
+        ${subjectChips ? `<div class="gutenberg-card-section"><span class="gutenberg-card-section-label">Subjects:</span><div class="gutenberg-card-chips">${subjectChips}</div></div>` : ""}
+        ${audioSection}
+        ${formatLinks ? `<div class="gutenberg-card-section gutenberg-card-formats-section"><span class="gutenberg-card-section-label">Formats:</span><div class="gutenberg-card-formats">${formatLinks}</div></div>` : ""}
         <div class="gutenberg-card-actions">
-          <button type="button" class="archive-btn archive-btn-suggest" onclick="_gutenbergOpenReader(${b.id}, ${titleSafe})">Read</button>
+          <button type="button" class="archive-btn archive-btn-suggest" onclick="_gutenbergOpenReader(${b.id}, ${titleSafe})">📖 Read</button>
           ${saveBtn}
-          <button type="button" class="archive-btn" onclick="_gutenbergOpenInfoPopup(${b.id})" title="More info">Info</button>
+          <a href="${escHtml(wikiUrl)}" target="_blank" rel="noopener" class="archive-btn" style="text-decoration:none" title="Search Wikipedia for this book">Wikipedia ↗</a>
+          <a href="${escHtml(googleUrl)}" target="_blank" rel="noopener" class="archive-btn" style="text-decoration:none" title="Google search for this book">Google ↗</a>
           <a href="https://www.gutenberg.org/ebooks/${b.id}" target="_blank" rel="noopener" class="archive-btn" style="text-decoration:none">Gutenberg ↗</a>
         </div>
       </div>
     </div>`;
 }
 
-// ── Info popup ──────────────────────────────────────────────────────
-// Per-result detail view — fires on card click. Pulls metadata from
-// the dedicated /api/gutenberg/book-meta/:id endpoint (cheap; doesn't
-// trigger the gutenberg.org HTML fetch unless the user actually
-// clicks Read). Cached client-side per session so reopening is
-// instant.
-const _gutenbergInfoCache = new Map();   // bookId → meta
-async function _gutenbergOpenInfoPopup(bookId) {
-  bookId = Number(bookId);
-  if (!Number.isFinite(bookId) || bookId <= 0) return;
-  const overlay = document.getElementById("gutenberg-info-overlay");
-  const body = document.getElementById("gutenberg-info-body");
-  if (!overlay || !body) return;
-  overlay.classList.add("open");
-  if (typeof _sdLockBodyScroll === "function") _sdLockBodyScroll("gutenberg-info");
-  // Cache hit — render immediately.
-  const cached = _gutenbergInfoCache.get(bookId);
-  if (cached) {
-    body.innerHTML = _gutenbergInfoPopupHtml(cached);
-    _gutenbergFillInfoPopupExtras(cached).catch(() => {});
-    return;
-  }
-  body.innerHTML = `<div class="loc-empty">Loading book details…</div>`;
-  try {
-    const r = await apiFetch(`/api/gutenberg/book-meta/${bookId}`);
-    if (!r.ok) {
-      body.innerHTML = `<div class="loc-empty">Could not load details (HTTP ${r.status}).</div>`;
-      return;
-    }
-    const meta = await r.json();
-    _gutenbergInfoCache.set(bookId, meta);
-    if (_gutenbergInfoCache.size > 100) {
-      const oldest = _gutenbergInfoCache.keys().next().value;
-      if (oldest != null) _gutenbergInfoCache.delete(oldest);
-    }
-    body.innerHTML = _gutenbergInfoPopupHtml(meta);
-    // Kick the parallel enrichment fetches — they fill in hidden
-    // mount points in the popup HTML once data lands.
-    _gutenbergFillInfoPopupExtras(meta).catch(() => {});
-  } catch (e) {
-    console.warn("[gutenberg/info-popup]", e);
-    body.innerHTML = `<div class="loc-empty">Could not load details.</div>`;
-  }
-}
-window._gutenbergOpenInfoPopup = _gutenbergOpenInfoPopup;
-
-function _gutenbergCloseInfoPopup() {
-  const overlay = document.getElementById("gutenberg-info-overlay");
-  if (overlay) overlay.classList.remove("open");
-  if (typeof _sdUnlockBodyScroll === "function") _sdUnlockBodyScroll("gutenberg-info");
-}
-window._gutenbergCloseInfoPopup = _gutenbergCloseInfoPopup;
-
-function _gutenbergInfoPopupHtml(meta) {
-  const title = escHtml(meta.title || `Book ${meta.id}`);
-  const authors = Array.isArray(meta.authors) && meta.authors.length
-    ? meta.authors.map(a => {
-        const years = (a?.birth_year || a?.death_year)
-          ? ` <span class="gutenberg-info-years">(${a.birth_year ?? "?"}–${a.death_year ?? "?"})</span>`
-          : "";
-        return `<span>${escHtml(a?.name || "Unknown")}</span>${years}`;
-      }).join(", ")
-    : "Unknown author";
-  const langs = Array.isArray(meta.languages) && meta.languages.length
-    ? meta.languages.map(l => escHtml(String(l).toUpperCase())).join(" / ")
-    : "";
-  const subjectChips = (Array.isArray(meta.subjects) ? meta.subjects : []).map(s =>
-    `<span class="gutenberg-subject-chip" onclick="event.stopPropagation();_gutenbergSearchBySubject(${JSON.stringify(s).replace(/"/g, "&quot;")})" style="cursor:pointer" title="Search for this subject">${escHtml(s)}</span>`
-  ).join("");
-  const shelfChips = (Array.isArray(meta.bookshelves) ? meta.bookshelves : []).map(s =>
-    `<span class="gutenberg-shelf-chip">${escHtml(s)}</span>`
-  ).join("");
+// Compact format-link row builder, extracted so the card render
+// stays readable. Maps known reader-relevant MIME types to friendly
+// labels in a stable order; drops zip-only variants.
+function _gutenbergFormatLinksHtml(formats) {
+  if (!formats || typeof formats !== "object") return "";
   const FORMAT_ORDER = [
-    ["text/html",                 "HTML"],
-    ["application/epub+zip",      "EPUB"],
-    ["application/x-mobipocket-ebook", "Kindle"],
-    ["text/plain; charset=utf-8", "Plain text"],
-    ["text/plain",                "Plain text"],
-    ["application/pdf",           "PDF"],
-    ["application/rdf+xml",       "RDF"],
+    ["text/html",                       "HTML"],
+    ["application/epub+zip",            "EPUB"],
+    ["application/x-mobipocket-ebook",  "Kindle"],
+    ["text/plain; charset=utf-8",       "Plain text"],
+    ["text/plain",                      "Plain text"],
+    ["application/pdf",                 "PDF"],
   ];
-  const formats = meta.formats ?? {};
-  const seenFormatUrls = new Set();
-  const formatLinks = FORMAT_ORDER.map(([mime, label]) => {
+  const seen = new Set();
+  return FORMAT_ORDER.map(([mime, label]) => {
     const key = Object.keys(formats).find(k => k.toLowerCase().startsWith(mime.toLowerCase()) && !/\.zip$/i.test(formats[k]));
     if (!key) return "";
     const url = formats[key];
-    if (!url || seenFormatUrls.has(url)) return "";
-    seenFormatUrls.add(url);
-    return `<a href="${escHtml(url)}" target="_blank" rel="noopener" class="archive-btn" style="text-decoration:none">${label} ↗</a>`;
+    if (!url || seen.has(url)) return "";
+    seen.add(url);
+    return `<a href="${escHtml(url)}" target="_blank" rel="noopener" class="gutenberg-card-format-link">${label} ↗</a>`;
   }).filter(Boolean).join("");
-  const isSaved = _gutenbergSavedIds.has(Number(meta.id));
-  const saveBtn = `<button type="button" class="archive-btn" onclick="_gutenbergToggleSaveFromPopup(${meta.id}, this)" title="${isSaved ? "Remove from Library" : "Save to Library"}">${isSaved ? "✓ Saved" : "+ Save"}</button>`;
-  const cachedNote = meta.cached
-    ? `<span class="gutenberg-info-cached" title="Body already cached in our DB — instant open">cached</span>`
-    : "";
-  // Length stats — only meaningful when cached (we computed them
-  // server-side from plain_text). Format word count with K/M shorthand
-  // for readability ("83K words" beats "82,617 words").
-  const wordCountFmt = (() => {
-    const w = Number(meta.wordCount);
-    if (!w || w <= 0) return null;
-    if (w >= 1_000_000) return `${(w / 1_000_000).toFixed(1)}M`;
-    if (w >= 1_000)     return `${(w / 1_000).toFixed(0)}K`;
-    return String(w);
-  })();
-  const readingMin = Number(meta.readingMinutes) || null;
-  const readingFmt = readingMin
-    ? (readingMin >= 60 ? `${Math.floor(readingMin / 60)}h ${readingMin % 60}m` : `${readingMin} min`)
-    : null;
-  // First paragraph teaser — only present for already-cached books.
-  // Italicized blockquote styling clarifies it's a sample, not editorial.
-  const previewHtml = meta.firstParagraph
-    ? `<div class="gutenberg-info-preview"><span class="gutenberg-info-quote-mark">“</span>${escHtml(meta.firstParagraph)}</div>`
-    : "";
-  // Two async mount points — populated after the popup renders by
-  // _gutenbergFillInfoPopupExtras. One for the user's read state /
-  // bookmarks ("You: last read 23% · 2 bookmarks"), one for the linked
-  // Discogs entities, one for "more by this author".
-  return `
-    <div class="gutenberg-info-header">
-      <h3 class="gutenberg-info-title">${title} ${cachedNote}</h3>
-      <div class="gutenberg-info-author">by ${authors}</div>
-    </div>
-    <div class="gutenberg-info-meta-row">
-      ${langs ? `<div><span class="gutenberg-info-label">Language:</span> ${langs}</div>` : ""}
-      ${meta.downloadCount ? `<div><span class="gutenberg-info-label">Downloads:</span> ${Number(meta.downloadCount).toLocaleString()}</div>` : ""}
-      ${meta.byteSize ? `<div><span class="gutenberg-info-label">Size:</span> ${(Number(meta.byteSize) / 1024).toFixed(0)} KB</div>` : ""}
-      ${wordCountFmt ? `<div><span class="gutenberg-info-label">Words:</span> ${wordCountFmt}</div>` : ""}
-      ${readingFmt   ? `<div><span class="gutenberg-info-label">Reading time:</span> ${readingFmt}</div>` : ""}
-    </div>
-    <div id="gutenberg-info-blurb" class="gutenberg-info-section" style="display:none"></div>
-    ${previewHtml}
-    <div id="gutenberg-info-user-state" class="gutenberg-info-section" style="display:none"></div>
-    ${shelfChips ? `<div class="gutenberg-info-section"><div class="gutenberg-info-label">Bookshelves</div><div class="gutenberg-info-chips">${shelfChips}</div></div>` : ""}
-    ${subjectChips ? `<div class="gutenberg-info-section"><div class="gutenberg-info-label">Subjects</div><div class="gutenberg-info-chips">${subjectChips}</div></div>` : ""}
-    <div id="gutenberg-info-links" class="gutenberg-info-section" style="display:none"></div>
-    <div id="gutenberg-info-more-by" class="gutenberg-info-section" style="display:none"></div>
-    ${_gutenbergAudioSectionHtml(meta)}
-  ${formatLinks ? `<div class="gutenberg-info-section"><div class="gutenberg-info-label">Available formats</div><div class="gutenberg-info-formats">${formatLinks}</div></div>` : ""}
-    <div class="gutenberg-info-actions">
-      <button type="button" class="archive-btn archive-btn-suggest" onclick="_gutenbergCloseInfoPopup();_gutenbergOpenReader(${meta.id}, ${JSON.stringify(meta.title || "").replace(/"/g, "&quot;")})">📖 Read</button>
-      ${saveBtn}
-      <a href="https://www.gutenberg.org/ebooks/${meta.id}" target="_blank" rel="noopener" class="archive-btn" style="text-decoration:none">Project Gutenberg page ↗</a>
-      <a href="${escHtml(_gutenbergGoogleSearchUrl(meta))}" target="_blank" rel="noopener" class="archive-btn" style="text-decoration:none" title="Google search for this book + author">Google ↗</a>
-    </div>`;
 }
+
+function _gutenbergWikipediaSearchUrl(meta) {
+  const title = String(meta?.title || "").trim();
+  const primaryAuthor = (Array.isArray(meta?.authors) && meta.authors[0]?.name) ? String(meta.authors[0].name).trim() : "";
+  const q = [title, primaryAuthor].filter(Boolean).join(" ") || title;
+  return `https://en.wikipedia.org/wiki/Special:Search?search=${encodeURIComponent(q)}`;
+}
+
+// ── Subject pivot ───────────────────────────────────────────────────
+// Used by subject chips on every card — drop into the topic input
+// and run a fresh search for that subject. The info popup is gone
+// (cards are rich enough to render everything inline), but this
+// pivot remains useful when scanning results.
+function _gutenbergSearchBySubject(subject) {
+  if (!subject) return;
+  const topicInput = document.getElementById("gutenberg-topic");
+  const qInput = document.getElementById("gutenberg-q");
+  if (topicInput) topicInput.value = subject;
+  if (qInput) qInput.value = "";
+  _gutenbergSwitchTab("search");
+  runGutenbergSearch("");
+}
+window._gutenbergSearchBySubject = _gutenbergSearchBySubject;
+
+// ── Removed: info popup machinery ──────────────────────────────────
+// Cards inline everything that used to require a popup-time fetch:
+// full subjects + bookshelves, formats, audio detection (Play/Queue/
+// external), and the action row (Read, Save, Wikipedia ↗, Google ↗,
+// Gutenberg ↗). Was: 8+ async fetches per popup open. Now: 0.
+
 
 // ── Audio detection (Project Gutenberg human-read / TTS audio books) ─
 // Gutendex exposes audio MIME types in the formats dict when an audio
@@ -441,8 +377,6 @@ function _gutenbergAudioPlay(bookId, streamUrl, title, authorName) {
   };
   if (typeof window._locPlay === "function") {
     window._locPlay(item);
-    // Close the info popup so the user can see the player bar.
-    _gutenbergCloseInfoPopup();
   } else if (typeof showToast === "function") {
     showToast("Audio engine not loaded — try again in a moment.", "error");
   }
@@ -498,162 +432,15 @@ function _gutenbergGoogleSearchUrl(meta) {
   return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
 }
 
-// Fire after the popup renders: 3 parallel fetches enrich the panel
-// with user-specific state, link-out annotations, and an "also by
-// this author" row. None block the initial render — if a fetch fails
-// or returns empty, its panel just stays hidden.
-async function _gutenbergFillInfoPopupExtras(meta) {
-  if (!meta || !meta.id) return;
-  const bookId = Number(meta.id);
-  // 0. Wikipedia blurb — server proxies + caches. Project Gutenberg
-  //    itself ships no descriptions; this is the only way to surface
-  //    a meaningful "About this book" panel.
-  const blurbPanel = document.getElementById("gutenberg-info-blurb");
-  if (blurbPanel && meta.title) {
-    const primaryAuthor = (Array.isArray(meta.authors) && meta.authors[0]?.name) ? meta.authors[0].name : "";
-    try {
-      const params = new URLSearchParams();
-      params.set("title", meta.title);
-      if (primaryAuthor) params.set("author", primaryAuthor);
-      const r = await apiFetch(`/api/gutenberg/blurb?${params.toString()}`);
-      if (r.ok) {
-        const j = await r.json();
-        if (j?.found && j.extract) {
-          const thumb = j.thumbnail
-            ? `<img src="${escHtml(j.thumbnail)}" alt="" class="gutenberg-info-blurb-thumb" loading="lazy" decoding="async">`
-            : "";
-          const desc = j.description
-            ? `<div class="gutenberg-info-blurb-desc">${escHtml(j.description)}</div>`
-            : "";
-          // Wikipedia match is a guess; if author + book-keywords are
-          // both absent from the extract, mark it so the user knows
-          // to double-check (the title may collide with a film, place,
-          // etc. that Wikipedia returned instead).
-          const lowConf = j.lowConfidence
-            ? `<div class="gutenberg-info-blurb-low-confidence" title="The Wikipedia article doesn't mention the author or book-related keywords; may be the wrong topic.">⚠ low-confidence match — verify on Wikipedia</div>`
-            : "";
-          blurbPanel.innerHTML = `
-            <div class="gutenberg-info-label">About this book</div>
-            <div class="gutenberg-info-blurb-body">
-              ${thumb}
-              <div class="gutenberg-info-blurb-text">
-                ${desc}
-                <p>${escHtml(j.extract)}</p>
-                ${lowConf}
-                <a href="${escHtml(j.sourceUrl)}" target="_blank" rel="noopener" class="gutenberg-info-blurb-source">Wikipedia ↗</a>
-              </div>
-            </div>`;
-          blurbPanel.style.display = "";
-        }
-      }
-    } catch { /* swallow — blurb is non-critical */ }
-  }
-  // 1. User read state + manual bookmarks count.
-  const userPanel = document.getElementById("gutenberg-info-user-state");
-  if (userPanel && window._clerk?.user) {
-    try {
-      const r = await apiFetch(`/api/user/gutenberg-bookmarks/${bookId}`);
-      if (r.ok) {
-        const j = await r.json();
-        const autoPct = j?.auto?.positionPct;
-        const manualCount = Array.isArray(j?.manual) ? j.manual.length : 0;
-        const bits = [];
-        if (Number.isFinite(autoPct) && autoPct > 0.5) {
-          bits.push(`Last read at <b>${Math.round(autoPct)}%</b>`);
-        }
-        if (manualCount > 0) {
-          bits.push(`${manualCount} bookmark${manualCount === 1 ? "" : "s"}`);
-        }
-        if (bits.length) {
-          userPanel.innerHTML = `<div class="gutenberg-info-label">Your progress</div><div class="gutenberg-info-user-state-line">${bits.join(" · ")}</div>`;
-          userPanel.style.display = "";
-        }
-      }
-    } catch { /* swallow — non-critical */ }
-  }
-  // 2. Linked Discogs entities (annotations curated by admin for this book).
-  const linksPanel = document.getElementById("gutenberg-info-links");
-  if (linksPanel) {
-    try {
-      const r = await apiFetch(`/api/gutenberg/annotations?book_id=${bookId}`);
-      if (r.ok) {
-        const j = await r.json();
-        const items = Array.isArray(j?.items) ? j.items : [];
-        if (items.length) {
-          const chips = items.map(a => {
-            const kind = a.entityType || "artist";
-            const kindBadge = kind.charAt(0).toUpperCase();
-            return `<button type="button" class="gutenberg-info-link-chip" data-kind="${escHtml(kind)}" onclick="_gutenbergOpenInfoLinkChip(${a.id})" title="${escHtml(a.label || a.entityName)} — open in SeaDisco"><span class="gutenberg-annotation-kind" data-kind="${escHtml(kind)}">${kindBadge}</span> ${escHtml(a.entityName)}</button>`;
-          }).join("");
-          linksPanel.innerHTML = `<div class="gutenberg-info-label">🔗 Linked entities (${items.length})</div><div class="gutenberg-info-chips">${chips}</div>`;
-          linksPanel.style.display = "";
-          // Stash for chip click handler — keyed by annotation id.
-          _gutenbergInfoLinkCache = new Map(items.map(a => [a.id, a]));
-        }
-      }
-    } catch { /* swallow */ }
-  }
-  // 3. More by this author — single Gutendex search keyed on the
-  // primary author's name. Limited to 6 results, the current book
-  // filtered out.
-  const moreByPanel = document.getElementById("gutenberg-info-more-by");
-  if (moreByPanel && Array.isArray(meta.authors) && meta.authors[0]?.name) {
-    const primary = meta.authors[0].name;
-    try {
-      const r = await apiFetch(`/api/gutenberg/search?q=${encodeURIComponent(primary)}`);
-      if (r.ok) {
-        const j = await r.json();
-        const items = (Array.isArray(j?.items) ? j.items : [])
-          .filter(b => Number(b.id) !== bookId)
-          .slice(0, 6);
-        if (items.length) {
-          const rows = items.map(b => {
-            const t = JSON.stringify(b.title || "").replace(/"/g, "&quot;");
-            return `<button type="button" class="gutenberg-info-related" onclick="_gutenbergCloseInfoPopup();_gutenbergOpenInfoPopup(${b.id})" title="${escHtml(b.title || "")}">${escHtml(b.title || `Book ${b.id}`)}</button>`;
-          }).join("");
-          moreByPanel.innerHTML = `<div class="gutenberg-info-label">More by ${escHtml(primary)}</div><div class="gutenberg-info-related-list">${rows}</div>`;
-          moreByPanel.style.display = "";
-        }
-      }
-    } catch { /* swallow */ }
-  }
-}
-
-// Cache of annotation rows shown in the info popup so the chip
-// onclick handlers can look them up without re-fetching.
-let _gutenbergInfoLinkCache = new Map();
-function _gutenbergOpenInfoLinkChip(annId) {
-  const a = _gutenbergInfoLinkCache.get(annId);
-  if (!a) return;
-  _gutenbergDispatchEntityOpen(a);
-}
-window._gutenbergOpenInfoLinkChip = _gutenbergOpenInfoLinkChip;
-
-// Save toggle invoked from inside the info popup. Differs from the
-// card-level toggle in that it also patches the popup's own button
-// label after success.
-async function _gutenbergToggleSaveFromPopup(bookId, btn) {
-  await _gutenbergToggleSave(bookId, btn);
-  // _gutenbergToggleSave handles the button text update.
-}
-window._gutenbergToggleSaveFromPopup = _gutenbergToggleSaveFromPopup;
-
-// Subject-chip click inside the info popup: drop into the topic input
-// and run a fresh search for that subject. Closes the popup first so
-// the results are visible.
-function _gutenbergSearchBySubject(subject) {
-  if (!subject) return;
-  _gutenbergCloseInfoPopup();
-  const topicInput = document.getElementById("gutenberg-topic");
-  const qInput = document.getElementById("gutenberg-q");
-  if (topicInput) topicInput.value = subject;
-  if (qInput) qInput.value = "";
-  // Ensure we're on the Search tab so the user sees the new results.
-  _gutenbergSwitchTab("search");
-  runGutenbergSearch("");
-}
-window._gutenbergSearchBySubject = _gutenbergSearchBySubject;
-
+// — Second chunk of popup machinery DELETED here: _gutenbergFillInfoPopupExtras,
+//   _gutenbergOpenInfoLinkChip, _gutenbergToggleSaveFromPopup, and the OLD
+//   _gutenbergSearchBySubject (shadowed the live one defined above the
+//   popup-removal banner). Nothing references these from outside any more —
+//   the popup that called them is gone. Re-add from git history if needed.
+//
+//   Inline `/* swallow */` comments inside the original block ruled out a
+//   single big /* */ wrapper, so the code is gone-gone rather than
+//   commented out.
 // ── Save / unsave ───────────────────────────────────────────────────
 async function _gutenbergToggleSave(bookId, btn) {
   bookId = Number(bookId);
