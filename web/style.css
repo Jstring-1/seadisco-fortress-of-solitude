@@ -10184,37 +10184,6 @@ a:focus-visible {
   gap: 0.6rem;
   margin-top: 0.6rem;
 }
-/* Topic preset chips — row under the search form, lets the user
-   browse a curated multi-subject set without typing. */
-.gutenberg-preset-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.5rem;
-  font-size: 0.8rem;
-}
-.gutenberg-preset-label {
-  color: var(--muted);
-  font-size: 0.78rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-.gutenberg-preset-chip {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border);
-  color: #ddd;
-  padding: 0.28rem 0.7rem;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
-}
-.gutenberg-preset-chip:hover {
-  background: rgba(255, 200, 60, 0.12);
-  border-color: rgba(255, 200, 60, 0.45);
-  color: #f5c150;
-}
 .gutenberg-preset-banner {
   font-size: 0.78rem;
   color: #d8c89a;
