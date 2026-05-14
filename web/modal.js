@@ -437,8 +437,20 @@ function openBioFull(event) {
   if (discogsId) {
     html += `<div style="margin-top:1.1rem"><a href="https://www.discogs.com/artist/${discogsId}" target="_blank" rel="noopener" title="Open artist page on Discogs.com" style="font-size:0.75rem;color:#666;text-decoration:none">View profile on Discogs ↗</a></div>`;
   }
+  // Mount point for the "Mentioned in books" panel. Populated async
+  // by _sdGutenbergRenderMentions; stays empty if no annotations
+  // reference this artist (most common case).
+  html += `<div class="gutenberg-mentions-panel" id="bio-gutenberg-mentions"></div>`;
   document.getElementById("bio-full-text").innerHTML = html;
   document.getElementById("bio-full-overlay").classList.add("open");
+  if (typeof window._sdGutenbergRenderMentions === "function") {
+    window._sdGutenbergRenderMentions(
+      document.getElementById("bio-gutenberg-mentions"),
+      "artist",
+      discogsId,
+      name,
+    );
+  }
 }
 
 function closeBioFull() {
@@ -4529,7 +4541,8 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
     </div>
     ${trackHTML}
     ${metaRows ? `<div class="album-extra">${metaRows}</div>` : ""}
-    ${isMaster ? `<div id="master-versions-list" style="padding:0.75rem;font-size:0.78rem;color:var(--muted)">Loading pressings…</div>` : ""}`;
+    ${isMaster ? `<div id="master-versions-list" style="padding:0.75rem;font-size:0.78rem;color:var(--muted)">Loading pressings…</div>` : ""}
+    <div class="gutenberg-mentions-panel" data-mentions-mount="1"></div>`;
 
   if (isMaster) loadMasterVersions(null, searchResult.id);
   // Fetch instance data in background (for rating stars + instanceId)
@@ -4541,6 +4554,18 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   el.dataset.releaseId = String(releaseId || "");
   el.dataset.masterId  = String(d.master_id || (isMaster ? releaseId : "") || "");
   el.dataset.entityType = isMaster ? "master" : "release";
+  // "Mentioned in books" panel — fires once per popup render. Routes
+  // through the master entity when this is a master popup, the
+  // release when it's a release popup. Server returns [] for the
+  // common case so the panel just stays empty.
+  if (typeof window._sdGutenbergRenderMentions === "function") {
+    const mount = el.querySelector('[data-mentions-mount="1"]');
+    if (mount) {
+      const _menType = isMaster ? "master" : "release";
+      const _menId   = isMaster ? (releaseId || d.master_id || null) : releaseId;
+      window._sdGutenbergRenderMentions(mount, _menType, _menId, title);
+    }
+  }
   // Crowd-sourced YouTube overrides — kick the fetch + DOM patch.
   // Anything new lands on the next tick; if there's nothing to apply,
   // this is a no-op. Anonymous viewers still get override-driven play
