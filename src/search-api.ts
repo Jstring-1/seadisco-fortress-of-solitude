@@ -4061,22 +4061,132 @@ function _gutenbergToPlainText(html: string): string {
     .trim();
 }
 
-// GET /api/gutenberg/search?q=&page=1
-// Thin proxy to Gutendex (https://gutendex.com/books) which mirrors the
-// Gutenberg catalog as JSON. No upstream auth, no documented rate limit,
-// but we still gate by admin/demo so a misbehaving client can't fan out.
+// Topic presets — clicking one of these chips client-side fans out
+// to N parallel Gutendex requests (one per constituent subject) and
+// the server merges + dedupes + ranks by download_count. Lets a
+// user browse "all non-fiction" without picking individual subjects.
+//
+// Pagination across a merged set is not coherent (each upstream
+// search has its own page count), so preset queries return up to 96
+// books from page 1 of each constituent and stop there. If the user
+// wants to dig deeper into one topic they pick it singly and the
+// existing per-topic pagination works as before.
+const _GUTENBERG_TOPIC_PRESETS: Record<string, string[]> = {
+  "non-fiction":  ["biography", "history", "philosophy", "science", "music", "religion", "art", "travel"],
+  "fiction":      ["fiction", "science fiction", "fantasy", "mystery", "horror", "romance", "drama", "poetry"],
+  "music & arts": ["music", "art", "performing arts", "architecture"],
+  "music":        ["music", "musicians", "composers", "jazz", "opera"],
+  "science":      ["science", "natural history", "mathematics", "physics", "biology", "astronomy"],
+  "history":      ["history", "biography", "war", "ancient history"],
+  "philosophy":   ["philosophy", "ethics", "religion", "psychology"],
+};
+// 1-hour in-memory cache for preset fan-out responses, keyed on
+// preset|lang|q. Gutendex is fast but a preset fires ~8 parallel
+// upstream calls; once a user lands the merged set, caching makes
+// browsing snappy (and saves bandwidth + courtesy).
+const _GUTENBERG_PRESET_TTL_MS = 60 * 60 * 1000;
+const _gutenbergPresetCache = new Map<string, { at: number; body: any }>();
+
+function _gutenbergNormalizeBook(b: any) {
+  return {
+    id: Number(b?.id) || 0,
+    title: String(b?.title ?? ""),
+    authors: Array.isArray(b?.authors) ? b.authors.map((a: any) => ({
+      name: String(a?.name ?? ""),
+      birth_year: a?.birth_year ?? null,
+      death_year: a?.death_year ?? null,
+    })) : [],
+    languages: Array.isArray(b?.languages) ? b.languages : [],
+    subjects: Array.isArray(b?.subjects) ? b.subjects.slice(0, 8) : [],
+    download_count: Number(b?.download_count) || 0,
+    cover: String(b?.formats?.["image/jpeg"] ?? ""),
+  };
+}
+
+// GET /api/gutenberg/search?q=&page=1[&topic=][&lang=]
+// Thin proxy to Gutendex (https://gutendex.com/books). If `topic`
+// matches a known preset, fan out across its constituent subjects
+// and merge; otherwise pass through as a single Gutendex request.
 app.get("/api/gutenberg/search", async (req, res) => {
   const userId = await requireGutenbergAccess(req, res);
   if (!userId) return;
   const q = String(req.query.q ?? "").trim().slice(0, 200);
   const page = Math.max(1, Math.min(50, parseInt(String(req.query.page ?? "1"), 10) || 1));
-  const lang = String(req.query.lang ?? "").trim().toLowerCase().slice(0, 16);  // ISO 639-1, e.g. "en"
-  const topic = String(req.query.topic ?? "").trim().slice(0, 80);
+  const lang = String(req.query.lang ?? "").trim().toLowerCase().slice(0, 16);
+  const topicRaw = String(req.query.topic ?? "").trim().slice(0, 80);
+  const presetKey = topicRaw.toLowerCase();
+  const preset = _GUTENBERG_TOPIC_PRESETS[presetKey];
+
+  // ── Preset fan-out path ─────────────────────────────────────────
+  if (preset && preset.length > 0) {
+    // Cache check first. Preset queries don't paginate, so page is
+    // ignored in the cache key.
+    const cacheKey = `pre|${presetKey}|${lang}|${q.toLowerCase()}`;
+    const cached = _gutenbergPresetCache.get(cacheKey);
+    if (cached && (Date.now() - cached.at) < _GUTENBERG_PRESET_TTL_MS) {
+      res.setHeader("X-SeaDisco-Cache", "hit");
+      res.json(cached.body);
+      return;
+    }
+    try {
+      const fetches = preset.map(t => {
+        const p = new URLSearchParams();
+        if (q) p.set("search", q);
+        if (lang) p.set("languages", lang);
+        p.set("topic", t);
+        return loggedFetch("gutendex", `https://gutendex.com/books?${p.toString()}`, { context: `search-preset:${t}` })
+          .then(r => r.ok ? r.json() : null)
+          .catch(() => null);
+      });
+      const responses = await Promise.all(fetches) as (any | null)[];
+      // Merge: dedupe by id (first occurrence wins), then sort by
+      // download_count desc. Cap at 96 — "top of the pool" across
+      // the preset's constituent subjects.
+      const seen = new Set<number>();
+      const merged: any[] = [];
+      for (const resp of responses) {
+        const list = Array.isArray(resp?.results) ? resp.results : [];
+        for (const b of list) {
+          const id = Number(b?.id);
+          if (!Number.isFinite(id) || id <= 0 || seen.has(id)) continue;
+          seen.add(id);
+          merged.push(_gutenbergNormalizeBook(b));
+        }
+      }
+      merged.sort((a, b) => b.download_count - a.download_count);
+      const items = merged.slice(0, 96);
+      const body = {
+        items,
+        count: items.length,
+        page: 1,
+        hasMore: false,
+        // Echo back which preset was used so the client can confirm
+        // and surface a "Preset: Non-fiction (8 subjects)" pill.
+        preset: presetKey,
+        presetSubjects: preset,
+      };
+      _gutenbergPresetCache.set(cacheKey, { at: Date.now(), body });
+      // Bound the cache so it doesn't grow without limit. Crude FIFO
+      // drop once we cross 64 entries.
+      if (_gutenbergPresetCache.size > 64) {
+        const oldest = _gutenbergPresetCache.keys().next().value as string | undefined;
+        if (oldest) _gutenbergPresetCache.delete(oldest);
+      }
+      res.setHeader("X-SeaDisco-Cache", "miss");
+      res.json(body);
+    } catch (e: any) {
+      console.error("[gutenberg/search preset]", e?.message ?? e);
+      res.status(500).json({ error: "fetch_failed" });
+    }
+    return;
+  }
+
+  // ── Single-topic / no-topic path (existing behaviour) ───────────
   const params = new URLSearchParams();
   if (q) params.set("search", q);
   if (page > 1) params.set("page", String(page));
   if (lang) params.set("languages", lang);
-  if (topic) params.set("topic", topic);
+  if (topicRaw) params.set("topic", topicRaw);
   const url = `https://gutendex.com/books?${params.toString()}`;
   try {
     const r = await loggedFetch("gutendex", url, { context: "search" });
@@ -4085,24 +4195,9 @@ app.get("/api/gutenberg/search", async (req, res) => {
       return;
     }
     const j = await r.json() as any;
-    // Trim the response to fields the client actually uses — Gutendex
-    // returns ~30 fields per book, most unused. Smaller payloads, simpler
-    // client.
-    const items = (Array.isArray(j?.results) ? j.results : []).map((b: any) => ({
-      id: Number(b?.id) || 0,
-      title: String(b?.title ?? ""),
-      authors: Array.isArray(b?.authors) ? b.authors.map((a: any) => ({
-        name: String(a?.name ?? ""),
-        birth_year: a?.birth_year ?? null,
-        death_year: a?.death_year ?? null,
-      })) : [],
-      languages: Array.isArray(b?.languages) ? b.languages : [],
-      subjects: Array.isArray(b?.subjects) ? b.subjects.slice(0, 8) : [],
-      download_count: Number(b?.download_count) || 0,
-      // Pick a thumbnail if available (small.cover.jpg). Gutenberg's
-      // cover format is `formats["image/jpeg"]`.
-      cover: String(b?.formats?.["image/jpeg"] ?? ""),
-    })).filter((b: any) => b.id > 0);
+    const items = (Array.isArray(j?.results) ? j.results : [])
+      .map(_gutenbergNormalizeBook)
+      .filter((b: any) => b.id > 0);
     res.json({
       items,
       count: Number(j?.count) || items.length,
