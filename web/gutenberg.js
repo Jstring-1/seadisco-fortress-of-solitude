@@ -70,9 +70,15 @@ window._gutenbergSwitchTab = _gutenbergSwitchTab;
 async function runGutenbergSearch(q, opts) {
   const append = !!(opts && opts.append);
   q = String(q || "").trim();
-  if (!q) {
+  const topicInput = document.getElementById("gutenberg-topic");
+  const topic = topicInput ? String(topicInput.value || "").trim() : "";
+  // A bare topic (no q, no preset name) is still a meaningful query —
+  // Gutendex's `topic=` filter alone returns the subject's full catalog
+  // (downloads-desc by default). Same for a preset selection. Only
+  // empty-everything renders the empty state.
+  if (!q && !topic) {
     document.getElementById("gutenberg-results").innerHTML =
-      `<div class="loc-empty">Type a title, author, or topic to search Project Gutenberg.</div>`;
+      `<div class="loc-empty">Type a title, author, or topic — or click a preset above — to search Project Gutenberg.</div>`;
     document.getElementById("gutenberg-pagination").innerHTML = "";
     return;
   }
@@ -90,9 +96,10 @@ async function runGutenbergSearch(q, opts) {
   _gutenbergSearchLang = langSel ? langSel.value : "";
   try {
     const params = new URLSearchParams();
-    params.set("q", q);
+    if (q) params.set("q", q);
     if (_gutenbergSearchPage > 1) params.set("page", String(_gutenbergSearchPage));
     if (_gutenbergSearchLang) params.set("lang", _gutenbergSearchLang);
+    if (topic) params.set("topic", topic);
     const r = await apiFetch(`/api/gutenberg/search?${params.toString()}`);
     if (!r.ok) {
       document.getElementById("gutenberg-results").innerHTML =
@@ -108,10 +115,18 @@ async function runGutenbergSearch(q, opts) {
       document.getElementById("gutenberg-pagination").innerHTML = "";
       return;
     }
+    // Preset banner — server echoes back `preset` + `presetSubjects`
+    // when the topic matched a known preset. Show a small chip above
+    // the results so the user knows it's a merged set.
+    let header = "";
+    if (!append && j?.preset && Array.isArray(j?.presetSubjects)) {
+      const subjectStr = j.presetSubjects.join(", ");
+      header = `<div class="gutenberg-preset-banner" title="Merged across: ${escHtml(subjectStr)}">Preset: <b>${escHtml(j.preset)}</b> · ${j.presetSubjects.length} subjects · top ${items.length} by popularity</div>`;
+    }
     const html = items.map(_gutenbergCardHtml).join("");
     const target = document.getElementById("gutenberg-results");
     if (append) target.insertAdjacentHTML("beforeend", html);
-    else        target.innerHTML = html;
+    else        target.innerHTML = header + html;
     _gutenbergRenderPagination();
   } catch (e) {
     console.warn("[gutenberg/search]", e);
@@ -122,6 +137,19 @@ async function runGutenbergSearch(q, opts) {
   }
 }
 window.runGutenbergSearch = runGutenbergSearch;
+
+// Preset chip click: drop into the topic input, clear the free-text
+// query so we don't accidentally narrow the preset to "books about X
+// matching keyword Y" (usually empty), and fire the search. Server
+// fans out across the preset's constituent subjects and merges.
+function _gutenbergRunPreset(presetName) {
+  const topicInput = document.getElementById("gutenberg-topic");
+  const qInput = document.getElementById("gutenberg-q");
+  if (topicInput) topicInput.value = presetName;
+  if (qInput) qInput.value = "";
+  runGutenbergSearch("");
+}
+window._gutenbergRunPreset = _gutenbergRunPreset;
 
 function _gutenbergRenderPagination() {
   const pag = document.getElementById("gutenberg-pagination");
