@@ -4213,6 +4213,115 @@ app.get("/api/gutenberg/search", async (req, res) => {
   }
 });
 
+// GET /api/gutenberg/blurb?title=&author=
+// Project Gutenberg doesn't ship book descriptions, so for the info-
+// popup "About this book" panel we lean on Wikipedia. This endpoint
+// fetches the Wikipedia summary for the title, with fallback
+// disambiguation suffixes ("(novel)", "(book)", "(<author>)") for
+// common-phrase titles that resolve to a disambig page on first try.
+// 24h in-memory cache keyed on title|author lowercased.
+const _GUTENBERG_BLURB_TTL_MS = 24 * 60 * 60 * 1000;
+const _gutenbergBlurbCache = new Map<string, { at: number; body: any }>();
+
+async function _gutenbergFetchWikiSummary(title: string): Promise<any | null> {
+  const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
+  try {
+    const r = await loggedFetch("wikipedia", url, { context: "gutenberg-blurb" });
+    if (!r.ok) return null;
+    const j = await r.json() as any;
+    if (!j || j.type === "disambiguation") return null;
+    return j;
+  } catch { return null; }
+}
+
+app.get("/api/gutenberg/blurb", async (req, res) => {
+  const userId = await requireGutenbergAccess(req, res);
+  if (!userId) return;
+  const titleRaw = String(req.query.title ?? "").trim().slice(0, 300);
+  const authorRaw = String(req.query.author ?? "").trim().slice(0, 200);
+  if (!titleRaw) {
+    res.status(400).json({ error: "title_required" });
+    return;
+  }
+  // Normalize the title for lookups + cache: drop subtitle after a
+  // colon (Wikipedia articles usually omit subtitles), strip volume /
+  // book / part markers, collapse whitespace.
+  const cleanTitle = titleRaw
+    .split(/:\s/)[0]
+    .replace(/\s*[—-]\s*Volume\s+[IVXLC\d]+.*$/i, "")
+    .replace(/\s*Vol\.?\s*[IVXLC\d]+.*$/i, "")
+    .replace(/\s*Book\s+[IVXLC\d]+.*$/i, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const authorLast = authorRaw.split(/,/)[0].trim().split(/\s+/).pop() || "";
+  const cacheKey = `${cleanTitle.toLowerCase()}|${authorRaw.toLowerCase()}`;
+  const cached = _gutenbergBlurbCache.get(cacheKey);
+  if (cached && (Date.now() - cached.at) < _GUTENBERG_BLURB_TTL_MS) {
+    res.setHeader("X-SeaDisco-Cache", "hit");
+    res.json(cached.body);
+    return;
+  }
+  // Try the exact title first; if no result or disambiguation page,
+  // walk through fallback suffixes that nudge Wikipedia toward the
+  // book article rather than a place / film / song with the same name.
+  const candidates = [
+    cleanTitle,
+    `${cleanTitle} (novel)`,
+    `${cleanTitle} (book)`,
+    `${cleanTitle} (play)`,
+    `${cleanTitle} (poem)`,
+    authorLast ? `${cleanTitle} (${authorLast})` : null,
+  ].filter(Boolean) as string[];
+
+  let summary: any = null;
+  for (const cand of candidates) {
+    summary = await _gutenbergFetchWikiSummary(cand);
+    if (summary) break;
+  }
+  if (!summary) {
+    const body = { found: false };
+    _gutenbergBlurbCache.set(cacheKey, { at: Date.now(), body });
+    res.setHeader("X-SeaDisco-Cache", "miss");
+    res.json(body);
+    return;
+  }
+  // Heuristic relevance check: if we have an author, the summary
+  // should mention them (or at least the last name). Lots of book
+  // titles collide with movies / songs / unrelated topics; if the
+  // first-paragraph extract doesn't reference the author, it's
+  // probably the wrong article.
+  if (authorLast && summary?.extract) {
+    const ex = String(summary.extract).toLowerCase();
+    const lastLc = authorLast.toLowerCase();
+    if (!ex.includes(lastLc) && !ex.includes("book") && !ex.includes("novel")
+        && !ex.includes("play") && !ex.includes("poem") && !ex.includes("treatise")
+        && !ex.includes("memoir") && !ex.includes("essay")) {
+      // Looks off-topic — bail rather than show a misleading blurb.
+      const body = { found: false, rejected: "off-topic" };
+      _gutenbergBlurbCache.set(cacheKey, { at: Date.now(), body });
+      res.setHeader("X-SeaDisco-Cache", "miss");
+      res.json(body);
+      return;
+    }
+  }
+  const body = {
+    found: true,
+    title: String(summary?.title ?? ""),
+    extract: String(summary?.extract ?? ""),
+    thumbnail: summary?.thumbnail?.source ? String(summary.thumbnail.source) : null,
+    sourceUrl: String(summary?.content_urls?.desktop?.page ?? `https://en.wikipedia.org/wiki/${encodeURIComponent(summary?.title ?? cleanTitle)}`),
+    description: summary?.description ? String(summary.description) : null,
+  };
+  _gutenbergBlurbCache.set(cacheKey, { at: Date.now(), body });
+  // Cap cache size — crude FIFO drop at 256 entries.
+  if (_gutenbergBlurbCache.size > 256) {
+    const oldest = _gutenbergBlurbCache.keys().next().value as string | undefined;
+    if (oldest) _gutenbergBlurbCache.delete(oldest);
+  }
+  res.setHeader("X-SeaDisco-Cache", "miss");
+  res.json(body);
+});
+
 // GET /api/gutenberg/book-meta/:id
 // Returns metadata only (no HTML body) for the info popup. Cheaper
 // than /api/gutenberg/book/:id because it doesn't trigger the
