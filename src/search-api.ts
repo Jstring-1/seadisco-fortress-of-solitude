@@ -4210,6 +4210,83 @@ app.get("/api/gutenberg/search", async (req, res) => {
   }
 });
 
+// GET /api/gutenberg/book-meta/:id
+// Returns metadata only (no HTML body) for the info popup. Cheaper
+// than /api/gutenberg/book/:id because it doesn't trigger the
+// gutenberg.org HTML fetch when the book isn't cached yet. DB-as-
+// cache when the book has been read at least once; falls back to a
+// Gutendex single-book lookup otherwise (and does NOT persist the
+// row — only an actual Read does that, since metadata-only entries
+// without HTML can't be served from the reader cache path later).
+app.get("/api/gutenberg/book-meta/:id", async (req, res) => {
+  const userId = await requireGutenbergAccess(req, res);
+  if (!userId) return;
+  const bookId = parseInt(String(req.params.id ?? ""), 10);
+  if (!Number.isFinite(bookId) || bookId <= 0) {
+    res.status(400).json({ error: "bad_id" });
+    return;
+  }
+  try {
+    // Cache hit from a prior Read — return cached row's metadata fields
+    // (skip the html/plain_text columns so we don't transfer megabytes
+    // for what should be a thin response).
+    const cached = await getPool().query(
+      `SELECT book_id, title, authors, languages, subjects, byte_size, metadata, fetched_at
+         FROM gutenberg_books
+        WHERE book_id = $1`,
+      [bookId],
+    );
+    if (cached.rows.length) {
+      const r = cached.rows[0];
+      // metadata is the raw Gutendex blob captured at first-read time.
+      // Surface bookshelves + formats from it (those aren't in the
+      // first-class columns).
+      const meta = (r.metadata ?? {}) as any;
+      res.setHeader("X-SeaDisco-Cache", "hit");
+      res.json({
+        id: r.book_id,
+        title: r.title,
+        authors: r.authors ?? [],
+        languages: r.languages ?? [],
+        subjects: r.subjects ?? [],
+        bookshelves: Array.isArray(meta.bookshelves) ? meta.bookshelves : [],
+        formats: meta.formats ?? {},
+        downloadCount: Number(meta.download_count) || 0,
+        byteSize: r.byte_size,
+        fetchedAt: r.fetched_at,
+        cached: true,
+      });
+      return;
+    }
+    // Live fetch — gutendex single-book endpoint. Read-only; no DB
+    // write here so we don't half-cache a row that the reader code
+    // path expects to also have html populated.
+    const r = await loggedFetch("gutendex", `https://gutendex.com/books/${bookId}`, { context: "book-meta-live" });
+    if (!r.ok) {
+      res.status(r.status === 404 ? 404 : 502).json({ error: "upstream", status: r.status });
+      return;
+    }
+    const meta = await r.json() as any;
+    res.setHeader("X-SeaDisco-Cache", "miss");
+    res.json({
+      id: Number(meta?.id) || bookId,
+      title: String(meta?.title ?? ""),
+      authors: Array.isArray(meta?.authors) ? meta.authors : [],
+      languages: Array.isArray(meta?.languages) ? meta.languages : [],
+      subjects: Array.isArray(meta?.subjects) ? meta.subjects : [],
+      bookshelves: Array.isArray(meta?.bookshelves) ? meta.bookshelves : [],
+      formats: meta?.formats ?? {},
+      downloadCount: Number(meta?.download_count) || 0,
+      byteSize: null,
+      fetchedAt: null,
+      cached: false,
+    });
+  } catch (e: any) {
+    console.error("[gutenberg/book-meta]", e?.message ?? e);
+    res.status(500).json({ error: "fetch_failed" });
+  }
+});
+
 // GET /api/gutenberg/book/:id
 // Returns metadata + sanitized HTML body. DB-as-cache:
 //   - Row exists with html populated → serve, bump last_accessed_at.
