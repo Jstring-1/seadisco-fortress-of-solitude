@@ -4614,8 +4614,12 @@ app.get("/api/user/gutenberg-saves", async (req, res) => {
   }
 });
 
-// POST /api/user/gutenberg-saves  { id }
-app.post("/api/user/gutenberg-saves", express.json({ limit: "1kb" }), async (req, res) => {
+// POST /api/user/gutenberg-saves  { id, title?, authors?, languages?, subjects? }
+// Optional metadata fields let the client persist a minimal
+// gutenberg_books row so the Library list shows real title / author
+// even if the book has never been Read (the body fetch is what
+// normally populates gutenberg_books).
+app.post("/api/user/gutenberg-saves", express.json({ limit: "16kb" }), async (req, res) => {
   const userId = await requireGutenbergAccess(req, res);
   if (!userId) return;
   const id = parseInt(String(req.body?.id ?? ""), 10);
@@ -4623,7 +4627,30 @@ app.post("/api/user/gutenberg-saves", express.json({ limit: "1kb" }), async (req
     res.status(400).json({ error: "bad_id" });
     return;
   }
+  const title = req.body?.title ? String(req.body.title).slice(0, 500) : null;
+  const authors = Array.isArray(req.body?.authors) ? req.body.authors : null;
+  const languages = Array.isArray(req.body?.languages) ? req.body.languages : null;
+  const subjects = Array.isArray(req.body?.subjects) ? req.body.subjects : null;
   try {
+    // Seed a minimal gutenberg_books row when one doesn't exist —
+    // ON CONFLICT DO NOTHING preserves any already-cached body. If
+    // the user later Reads the book, that path's UPSERT will fill
+    // in html + plain_text on top of these metadata fields.
+    if (title) {
+      await getPool().query(
+        `INSERT INTO gutenberg_books
+           (book_id, title, authors, languages, subjects, byte_size, metadata, fetched_at, last_accessed_at)
+         VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, NULL, '{}'::jsonb, NOW(), NOW())
+         ON CONFLICT (book_id) DO NOTHING`,
+        [
+          id,
+          title,
+          JSON.stringify(authors ?? []),
+          JSON.stringify(languages ?? []),
+          JSON.stringify(subjects ?? []),
+        ],
+      );
+    }
     await getPool().query(
       `INSERT INTO gutenberg_saved (clerk_user_id, book_id) VALUES ($1, $2)
        ON CONFLICT (clerk_user_id, book_id) DO NOTHING`,
