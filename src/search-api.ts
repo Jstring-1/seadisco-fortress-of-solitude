@@ -4684,6 +4684,43 @@ app.delete("/api/user/gutenberg-saves", express.json({ limit: "1kb" }), async (r
   }
 });
 
+// GET /api/user/gutenberg-bookmarks — ALL manual bookmarks for the
+// user across every book, joined with book metadata. Powers the
+// Gutenberg page's Bookmarks tab. Excludes 'auto' resume positions
+// (those are internal — the user didn't explicitly pin them).
+app.get("/api/user/gutenberg-bookmarks", async (req, res) => {
+  const userId = await requireGutenbergAccess(req, res);
+  if (!userId) return;
+  try {
+    const r = await getPool().query(
+      `SELECT bm.id, bm.book_id, bm.position_pct, bm.position_anchor,
+              bm.label, bm.created_at,
+              b.title AS book_title, b.authors AS book_authors
+         FROM gutenberg_bookmarks bm
+         LEFT JOIN gutenberg_books b ON b.book_id = bm.book_id
+        WHERE bm.clerk_user_id = $1 AND bm.bookmark_kind = 'manual'
+        ORDER BY bm.created_at DESC
+        LIMIT 500`,
+      [userId],
+    );
+    res.json({
+      items: r.rows.map(row => ({
+        id: row.id,
+        bookId: row.book_id,
+        bookTitle: row.book_title ?? `Book ${row.book_id}`,
+        bookAuthors: row.book_authors ?? [],
+        positionPct: row.position_pct,
+        positionAnchor: row.position_anchor,
+        label: row.label,
+        createdAt: row.created_at,
+      })),
+    });
+  } catch (e: any) {
+    console.error("[gutenberg-bookmarks list]", e?.message ?? e);
+    res.status(500).json({ error: "fetch_failed" });
+  }
+});
+
 // GET /api/user/gutenberg-bookmarks/:bookId — auto + manual bookmarks
 // for a book. Client renders manual ones in the reader sidebar and
 // uses the auto one to resume scroll position on book reopen.
