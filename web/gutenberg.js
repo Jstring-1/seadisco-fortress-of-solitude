@@ -138,16 +138,19 @@ async function runGutenbergSearch(q, opts) {
 }
 window.runGutenbergSearch = runGutenbergSearch;
 
-// Preset chip click: drop into the topic input, clear the free-text
-// query so we don't accidentally narrow the preset to "books about X
-// matching keyword Y" (usually empty), and fire the search. Server
-// fans out across the preset's constituent subjects and merges.
+// Preset chip click: fill the topic input with the preset name and
+// fire the search. PRESERVES any existing keyword in the q field so
+// e.g. typing "mississippi" + clicking Music filters music-tagged
+// books to ones mentioning Mississippi — not a strict superset of
+// either filter alone. The previous version cleared q for unclear
+// "preserving narrowness" reasons; that just dropped the user's
+// intent on the floor.
 function _gutenbergRunPreset(presetName) {
   const topicInput = document.getElementById("gutenberg-topic");
   const qInput = document.getElementById("gutenberg-q");
   if (topicInput) topicInput.value = presetName;
-  if (qInput) qInput.value = "";
-  runGutenbergSearch("");
+  const q = qInput ? qInput.value : "";
+  runGutenbergSearch(q);
 }
 window._gutenbergRunPreset = _gutenbergRunPreset;
 
