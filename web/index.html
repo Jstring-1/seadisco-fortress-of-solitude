@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260514.1414" />
+  <link rel="stylesheet" href="/style.css?v=20260514.1418" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260514.1414"></script>
+<script defer src="/shared.js?v=20260514.1418"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -866,32 +866,56 @@ e.g.  miles davis | coltrane
           <option value="la">Latin</option>
           <option value="el">Greek</option>
         </select>
-        <input id="gutenberg-topic" type="text" list="gutenberg-topic-list" placeholder="Topic (optional)" title="Search a specific subject. Common subjects in the dropdown; type freely too." autocomplete="off" style="width:11rem">
-        <datalist id="gutenberg-topic-list">
-          <option value="Biography">
-          <option value="History">
-          <option value="Music">
-          <option value="Philosophy">
-          <option value="Science">
-          <option value="Religion">
-          <option value="Art">
-          <option value="Travel">
-          <option value="Poetry">
-          <option value="Drama">
-          <option value="Fiction">
-          <option value="Science fiction">
-          <option value="Mystery">
-          <option value="Adventure">
-          <option value="Mathematics">
-          <option value="Politics">
-          <option value="Civil War">
-          <option value="World War">
-        </datalist>
+        <input id="gutenberg-topic" type="text" placeholder="Topic (optional)" title="Search a specific subject. Type freely, or pick a common subject from the dropdown to the right." autocomplete="off" style="width:9rem">
+        <!-- Subject picker — sibling <select> alongside the free-text
+             input. Picking from it overwrites the input's current
+             value (the datalist version wouldn't surface options
+             once text was present). Resets to placeholder on change
+             so it's always ready for the next pick. -->
+        <select id="gutenberg-topic-picker" onchange="if(this.value){const t=document.getElementById('gutenberg-topic');if(t){t.value=this.value;t.focus();}this.value='';}" title="Pick a common subject" style="max-width:10rem">
+          <option value="">Pick subject…</option>
+          <optgroup label="Non-fiction">
+            <option value="Biography">Biography</option>
+            <option value="History">History</option>
+            <option value="Philosophy">Philosophy</option>
+            <option value="Religion">Religion</option>
+            <option value="Science">Science</option>
+            <option value="Mathematics">Mathematics</option>
+            <option value="Travel">Travel</option>
+            <option value="Politics">Politics</option>
+            <option value="Civil War">Civil War</option>
+            <option value="World War">World War</option>
+          </optgroup>
+          <optgroup label="Arts">
+            <option value="Music">Music</option>
+            <option value="Art">Art</option>
+            <option value="Architecture">Architecture</option>
+            <option value="Performing arts">Performing arts</option>
+          </optgroup>
+          <optgroup label="Fiction">
+            <option value="Fiction">Fiction</option>
+            <option value="Science fiction">Science fiction</option>
+            <option value="Mystery">Mystery</option>
+            <option value="Adventure">Adventure</option>
+            <option value="Poetry">Poetry</option>
+            <option value="Drama">Drama</option>
+            <option value="Fantasy">Fantasy</option>
+            <option value="Horror">Horror</option>
+          </optgroup>
+          <optgroup label="Presets (multi-subject merge)">
+            <option value="non-fiction">Non-fiction (preset)</option>
+            <option value="fiction">Fiction (preset)</option>
+            <option value="music &amp; arts">Music &amp; arts (preset)</option>
+            <option value="science">Science (preset)</option>
+            <option value="history">History (preset)</option>
+            <option value="philosophy">Philosophy (preset)</option>
+          </optgroup>
+        </select>
         <button type="submit" class="loc-submit">Search</button>
       </div>
     </form>
     <div id="gutenberg-results" class="gutenberg-results-list">
-      <div class="loc-empty">Type a title, author, or topic — or click a preset above — to search Project Gutenberg.</div>
+      <div class="loc-empty">Type a title, author, or topic — or pick a subject from the dropdown — to search Project Gutenberg.</div>
     </div>
     <div id="gutenberg-pagination" style="display:flex;justify-content:center;margin-top:0.7rem"></div>
   </div>
@@ -1303,13 +1327,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260514.1414"></script>
-<script defer src="/search.js?v=20260514.1414"></script>
-<script defer src="/collection.js?v=20260514.1414"></script>
+<script defer src="/utils.js?v=20260514.1418"></script>
+<script defer src="/search.js?v=20260514.1418"></script>
+<script defer src="/collection.js?v=20260514.1418"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260514.1414"></script>
-<script defer src="/app.js?v=20260514.1414"></script>
+<script defer src="/modal.js?v=20260514.1418"></script>
+<script defer src="/app.js?v=20260514.1418"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1320,13 +1344,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260514.1414"></script>
-<script defer src="/queue.js?v=20260514.1414"></script>
+<script defer src="/loc.js?v=20260514.1418"></script>
+<script defer src="/queue.js?v=20260514.1418"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260514.1414";
+  window._SD_LAZY_VERSION = "20260514.1418";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1356,8 +1380,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260514.1414"></script>
-<script defer src="/offline.js?v=20260514.1414"></script>
+<script defer src="/idb.js?v=20260514.1418"></script>
+<script defer src="/offline.js?v=20260514.1418"></script>
 
 </body>
 </html>
