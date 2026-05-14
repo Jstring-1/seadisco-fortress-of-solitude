@@ -10344,6 +10344,54 @@ a:focus-visible {
   text-decoration: none;
 }
 .gutenberg-info-blurb-source:hover { color: var(--accent); }
+/* Audio (PG audiobooks) section in the info popup */
+.gutenberg-audio-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin-top: 0.3rem;
+}
+.gutenberg-audio-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+.gutenberg-audio-mime {
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  background: rgba(120, 200, 120, 0.15);
+  color: #8dd58d;
+  padding: 0.1rem 0.5rem;
+  border-radius: 3px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.gutenberg-audio-url {
+  color: var(--muted);
+  font-size: 0.75rem;
+  text-decoration: none;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.gutenberg-audio-url:hover { color: var(--accent); }
+.gutenberg-audio-actions {
+  display: flex;
+  gap: 0.3rem;
+  flex-shrink: 0;
+}
+.gutenberg-audio-note {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-style: italic;
+}
 .gutenberg-info-blurb-low-confidence {
   font-size: 0.72rem;
   color: #d8a04a;
