@@ -78,7 +78,7 @@ async function runGutenbergSearch(q, opts) {
   // empty-everything renders the empty state.
   if (!q && !topic) {
     document.getElementById("gutenberg-results").innerHTML =
-      `<div class="loc-empty">Type a title, author, or topic — or click a preset above — to search Project Gutenberg.</div>`;
+      `<div class="loc-empty">Type a title, author, or topic — or pick a subject from the dropdown — to search Project Gutenberg.</div>`;
     document.getElementById("gutenberg-pagination").innerHTML = "";
     return;
   }
