@@ -92,8 +92,10 @@ async function runGutenbergSearch(q, opts) {
   } else {
     _gutenbergSearchPage += 1;
   }
-  const langSel = document.getElementById("gutenberg-lang");
-  _gutenbergSearchLang = langSel ? langSel.value : "";
+  // Language filter element was removed from the UI — _gutenbergSearchLang
+  // stays as state-only (defaults to "" → any language) in case we want
+  // to bring the picker back later.
+  _gutenbergSearchLang = "";
   try {
     const params = new URLSearchParams();
     if (q) params.set("q", q);
