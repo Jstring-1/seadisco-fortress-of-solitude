@@ -10194,6 +10194,29 @@ a:focus-visible {
   margin-bottom: 0.5rem;
 }
 
+/* Compact Gutenberg search row — keep the Subject input + picker
+   tight against each other and against the Search button. Without
+   this override the global .loc-form-row gap leaves visible gulfs
+   when there are fewer inputs in the row. */
+.gutenberg-form-row {
+  gap: 0.4rem;
+}
+.gutenberg-form-row > #gutenberg-q {
+  flex: 1 1 auto;
+  min-width: 14rem;
+}
+.gutenberg-form-row > #gutenberg-topic {
+  flex: 0 0 auto;
+}
+.gutenberg-form-row > #gutenberg-topic-picker {
+  flex: 0 0 auto;
+}
+.gutenberg-form-row > .loc-submit {
+  /* Sit flush against the picker — the Q input above (flex:1) soaks
+     up the leftover space so nothing pushes the button rightward. */
+  flex: 0 0 auto;
+}
+
 /* Card is not click-as-a-whole anymore — Info button handles that.
    Keep a subtle hover transition for visual coherence with other
    list cards on the site, but no cursor:pointer so users don't
