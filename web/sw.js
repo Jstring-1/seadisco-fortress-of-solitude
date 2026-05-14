@@ -69,6 +69,7 @@ const SHELL_URLS = [
   "/youtube.js",
   "/queue.js",
   "/scanner.js",
+  "/gutenberg.js",
   "/idb.js",
   "/offline.js",
 ];

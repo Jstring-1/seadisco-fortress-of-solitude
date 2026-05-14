@@ -80,13 +80,13 @@ window._ensureAdminFlag = _ensureAdminFlag;
     switchView("account", true);
   } else if (rawView === "info" || rawView === "privacy" || rawView === "terms") {
     switchView(rawView, true);
-  } else if (rawView === "wiki" || rawView === "loc" || rawView === "archive" || rawView === "youtube") {
+  } else if (rawView === "wiki" || rawView === "loc" || rawView === "archive" || rawView === "youtube" || rawView === "gutenberg") {
     // LOC / Wikipedia / Archive: anon-accessible (read + search,
-    // no save). YouTube: still admin/demo gated via the access
-    // helper. Wait for auth so any save-button visibility decisions
+    // no save). YouTube + Gutenberg: still admin/demo gated. Wait
+    // for auth so the gate decision and save-button visibility
     // happen post-Clerk-resolve.
     await authReadyPromise;
-    if (rawView === "youtube") await _ensureAdminFlag();
+    if (rawView === "youtube" || rawView === "gutenberg") await _ensureAdminFlag();
     switchView(rawView, true);
   } else if (rawView === "picks") {
     // Legacy /?v=picks bookmark — Submitted Tracks moved into the
@@ -224,7 +224,7 @@ window.addEventListener("popstate", () => {
     if (sort) { const el = document.getElementById("cw-sort"); if (el) el.value = sort; }
     switchView("records", true); return;
   }
-  if (rawView === "records" || rawView === "info" || rawView === "privacy" || rawView === "terms" || rawView === "wanted" || rawView === "account" || rawView === "loc" || rawView === "wiki") {
+  if (rawView === "records" || rawView === "info" || rawView === "privacy" || rawView === "terms" || rawView === "wanted" || rawView === "account" || rawView === "loc" || rawView === "wiki" || rawView === "archive" || rawView === "youtube" || rawView === "gutenberg") {
     if (rawView === "records") {
       _cwTab = p.get("tab") || "collection";
       const sort = p.get("s") || p.get("sort");

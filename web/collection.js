@@ -280,7 +280,7 @@ function switchView(view, skipPushState = false) {
       const tab = _cwTab || "collection";
       qs.set("v", tab);
       history.pushState({ view, tab }, "", "?" + qs.toString());
-    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive" || view === "youtube") {
+    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive" || view === "youtube" || view === "gutenberg") {
       qs.set("v", view);
       history.pushState({ view }, "", "?" + qs.toString());
     } else {
@@ -290,7 +290,7 @@ function switchView(view, skipPushState = false) {
     }
   }
   if (typeof gtag === "function") {
-    const titles = { info: "Info", privacy: "Privacy Policy", terms: "Terms of Service", records: "My Records", wanted: "Wants", search: "Search", account: "Account", loc: "Library of Congress", wiki: "Wikipedia", archive: "Archive — Live Shows" };
+    const titles = { info: "Info", privacy: "Privacy Policy", terms: "Terms of Service", records: "My Records", wanted: "Wants", search: "Search", account: "Account", loc: "Library of Congress", wiki: "Wikipedia", archive: "Archive — Live Shows", gutenberg: "Project Gutenberg" };
     gtag("event", "page_view", {
       page_location: window.location.href,
       page_path:     window.location.pathname + window.location.search,
@@ -333,6 +333,12 @@ function switchView(view, skipPushState = false) {
     const y2 = document.getElementById("youtube-saved-results");
     if (y1 && y1.children.length) y1.innerHTML = "";
     if (y2 && y2.children.length) y2.innerHTML = "";
+  }
+  if (view !== "gutenberg") {
+    const g1 = document.getElementById("gutenberg-results");
+    const g2 = document.getElementById("gutenberg-saved-results");
+    if (g1 && g1.children.length) g1.innerHTML = "";
+    if (g2 && g2.children.length) g2.innerHTML = "";
   }
 
   // Invite-only splash: only show on the home/search view, never on
@@ -419,6 +425,29 @@ function switchView(view, skipPushState = false) {
     if (typeof initYoutubeView === "function") initYoutubeView();
     else if (typeof window._sdLoadModule === "function") {
       window._sdLoadModule("/youtube.js").then(() => window.initYoutubeView?.()).catch(() => {});
+    }
+  } else if (view === "gutenberg") {
+    // Project Gutenberg reader — admin/demo only initially. Server
+    // double-gates via requireGutenbergAccess so even if a regular
+    // user reaches the route by typing the URL, the API rejects.
+    // Inline gate (not _sdGateAdminView) because the YT-flavoured
+    // gate surfaces a YouTube-quota toast that doesn't fit here.
+    if (!_sdGateSignedInView()) return;
+    if (!(window._isAdmin || window._sdIsDemo)) {
+      if (typeof showToast === "function") {
+        showToast("Project Gutenberg reader is admin-only right now.", "info");
+      }
+      switchView("search", true);
+      return;
+    }
+    const gView = document.getElementById("gutenberg-view");
+    if (gView) gView.style.display = "block";
+    if (mainForm) mainForm.style.display = "none";
+    if (recordsWrap) recordsWrap.style.display = "none";
+    if (wantedWrap) wantedWrap.style.display = "none";
+    if (typeof initGutenbergView === "function") initGutenbergView();
+    else if (typeof window._sdLoadModule === "function") {
+      window._sdLoadModule("/gutenberg.js").then(() => window.initGutenbergView?.()).catch(() => {});
     }
   } else if (view === "wiki") {
     if (wikiView) wikiView.style.display = "block";
