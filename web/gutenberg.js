@@ -138,19 +138,15 @@ async function runGutenbergSearch(q, opts) {
 }
 window.runGutenbergSearch = runGutenbergSearch;
 
-// Preset chip click: fill the topic input with the preset name and
-// fire the search. PRESERVES any existing keyword in the q field so
-// e.g. typing "mississippi" + clicking Music filters music-tagged
-// books to ones mentioning Mississippi — not a strict superset of
-// either filter alone. The previous version cleared q for unclear
-// "preserving narrowness" reasons; that just dropped the user's
-// intent on the floor.
+// Preset chip click: just stash the preset name in the topic input.
+// Doesn't run the search — the user often wants to add / edit the
+// keyword first. They press Enter or click Search when ready. Focus
+// the keyword field so the cursor lands where they're likely to type.
 function _gutenbergRunPreset(presetName) {
   const topicInput = document.getElementById("gutenberg-topic");
   const qInput = document.getElementById("gutenberg-q");
   if (topicInput) topicInput.value = presetName;
-  const q = qInput ? qInput.value : "";
-  runGutenbergSearch(q);
+  if (qInput) qInput.focus();
 }
 window._gutenbergRunPreset = _gutenbergRunPreset;
 
@@ -179,12 +175,11 @@ function _gutenbergCardHtml(b) {
     ? `<img class="gutenberg-cover" src="${escHtml(b.cover)}" alt="" loading="lazy" decoding="async">`
     : `<div class="gutenberg-cover gutenberg-cover-placeholder">📖</div>`;
   const titleSafe = JSON.stringify(b.title || "").replace(/"/g, "&quot;");
-  // Click anywhere on the card (except action buttons) opens the
-  // info popup. Action buttons stopPropagation so clicking Read /
-  // Save / Gutenberg ↗ skips the info popup and goes straight to
-  // their intent.
+  // Card is NOT clickable as a whole — the Info button handles that
+  // explicitly. Avoids accidental popup opens when the user is
+  // selecting text, clicking a subject chip, etc.
   return `
-    <div class="gutenberg-card" data-book-id="${b.id}" onclick="_gutenbergOpenInfoPopup(${b.id})">
+    <div class="gutenberg-card" data-book-id="${b.id}">
       ${cover}
       <div class="gutenberg-card-body">
         <div class="gutenberg-card-title">${escHtml(b.title || `Book ${b.id}`)}</div>
@@ -192,10 +187,10 @@ function _gutenbergCardHtml(b) {
         ${langs ? `<div class="gutenberg-card-langs">${langs}</div>` : ""}
         ${subjects ? `<div class="gutenberg-card-subjects">${subjects}</div>` : ""}
         <div class="gutenberg-card-actions">
-          <button type="button" class="archive-btn archive-btn-suggest" onclick="event.stopPropagation();_gutenbergOpenReader(${b.id}, ${titleSafe})">Read</button>
+          <button type="button" class="archive-btn archive-btn-suggest" onclick="_gutenbergOpenReader(${b.id}, ${titleSafe})">Read</button>
           ${saveBtn}
-          <button type="button" class="archive-btn" onclick="event.stopPropagation();_gutenbergOpenInfoPopup(${b.id})" title="More info">Info</button>
-          <a href="https://www.gutenberg.org/ebooks/${b.id}" target="_blank" rel="noopener" class="archive-btn" style="text-decoration:none" onclick="event.stopPropagation()">Gutenberg ↗</a>
+          <button type="button" class="archive-btn" onclick="_gutenbergOpenInfoPopup(${b.id})" title="More info">Info</button>
+          <a href="https://www.gutenberg.org/ebooks/${b.id}" target="_blank" rel="noopener" class="archive-btn" style="text-decoration:none">Gutenberg ↗</a>
         </div>
       </div>
     </div>`;

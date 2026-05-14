@@ -10225,15 +10225,15 @@ a:focus-visible {
   margin-bottom: 0.5rem;
 }
 
-/* Card click affordance — whole card is clickable now (opens info
-   popup). Slight hover state so users discover it. */
+/* Card is not click-as-a-whole anymore — Info button handles that.
+   Keep a subtle hover transition for visual coherence with other
+   list cards on the site, but no cursor:pointer so users don't
+   mistakenly try to click the body. */
 .gutenberg-card {
-  cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
 }
 .gutenberg-card:hover {
-  background: rgba(255, 255, 255, 0.03);
-  border-color: rgba(255, 200, 60, 0.3);
+  background: rgba(255, 255, 255, 0.02);
 }
 
 /* Info popup body — fills the loc-info-box overlay. */
