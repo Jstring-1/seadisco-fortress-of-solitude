@@ -369,6 +369,13 @@ async function _gutenbergFillInfoPopupExtras(meta) {
           const desc = j.description
             ? `<div class="gutenberg-info-blurb-desc">${escHtml(j.description)}</div>`
             : "";
+          // Wikipedia match is a guess; if author + book-keywords are
+          // both absent from the extract, mark it so the user knows
+          // to double-check (the title may collide with a film, place,
+          // etc. that Wikipedia returned instead).
+          const lowConf = j.lowConfidence
+            ? `<div class="gutenberg-info-blurb-low-confidence" title="The Wikipedia article doesn't mention the author or book-related keywords; may be the wrong topic.">⚠ low-confidence match — verify on Wikipedia</div>`
+            : "";
           blurbPanel.innerHTML = `
             <div class="gutenberg-info-label">About this book</div>
             <div class="gutenberg-info-blurb-body">
@@ -376,6 +383,7 @@ async function _gutenbergFillInfoPopupExtras(meta) {
               <div class="gutenberg-info-blurb-text">
                 ${desc}
                 <p>${escHtml(j.extract)}</p>
+                ${lowConf}
                 <a href="${escHtml(j.sourceUrl)}" target="_blank" rel="noopener" class="gutenberg-info-blurb-source">Wikipedia ↗</a>
               </div>
             </div>`;
