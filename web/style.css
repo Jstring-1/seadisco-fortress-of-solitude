@@ -10212,6 +10212,91 @@ a:focus-visible {
   padding: 0.35rem 0.6rem;
   margin-bottom: 0.5rem;
 }
+
+/* Card click affordance — whole card is clickable now (opens info
+   popup). Slight hover state so users discover it. */
+.gutenberg-card {
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.gutenberg-card:hover {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 200, 60, 0.3);
+}
+
+/* Info popup body — fills the loc-info-box overlay. */
+.gutenberg-info-header { margin-bottom: 0.7rem; }
+.gutenberg-info-title {
+  margin: 0 0 0.2rem;
+  font-size: 1.05rem;
+  color: #f0e9d8;
+  font-weight: 600;
+}
+.gutenberg-info-cached {
+  display: inline-block;
+  margin-left: 0.4em;
+  padding: 0.05em 0.45em;
+  font-size: 0.65rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: rgba(100, 180, 100, 0.15);
+  color: #8dd58d;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+.gutenberg-info-author {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.gutenberg-info-years {
+  color: #777;
+  font-size: 0.78rem;
+}
+.gutenberg-info-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem 1.1rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  margin-bottom: 0.7rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+.gutenberg-info-label {
+  color: #999;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+.gutenberg-info-section { margin-bottom: 0.6rem; }
+.gutenberg-info-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-top: 0.25rem;
+}
+.gutenberg-shelf-chip {
+  font-size: 0.72rem;
+  background: rgba(80, 180, 200, 0.12);
+  border: 1px solid rgba(80, 180, 200, 0.35);
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  color: #6cd2e3;
+}
+.gutenberg-info-formats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+}
+.gutenberg-info-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 1rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--border);
+}
 .gutenberg-card {
   display: grid;
   grid-template-columns: 92px 1fr;
@@ -10383,11 +10468,16 @@ body.gutenberg-reader-open { overflow: hidden; }
 #gutenberg-reader-body {
   overflow-y: auto;
   padding: 1.6rem 2rem;
-  font-size: 17px;
-  line-height: 1.6;
+  /* Slightly smaller default + a more book-y serif stack. Iowan Old
+     Style is iOS Books' reading font; Palatino / Charter are widely
+     available alternatives optimized for body text. Georgia + Times
+     remain as safe fallbacks. */
+  font-size: 15.5px;
+  line-height: 1.65;
   color: #d8d2c4;
   background: #14110d;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "Iowan Old Style", "Palatino Linotype", "Palatino", "Book Antiqua", Charter, "Bitstream Charter", Georgia, "Times New Roman", serif;
+  letter-spacing: 0.005em;
 }
 #gutenberg-reader-body h1,
 #gutenberg-reader-body h2,
@@ -10409,7 +10499,7 @@ body.gutenberg-reader-open { overflow: hidden; }
   }
   #gutenberg-reader-body {
     padding: 1rem 1.1rem;
-    font-size: 16px;
+    font-size: 14.5px;
   }
 }
 
