@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260513.1233" />
+  <link rel="stylesheet" href="/style.css?v=20260514.1303" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260513.1233"></script>
+<script defer src="/shared.js?v=20260514.1303"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -836,6 +836,77 @@ e.g.  miles davis | coltrane
   </div>
 </div>
 
+<!-- Project Gutenberg view (admin-only initially). Free-public-domain
+     book reader, mirrors LOC/Archive pattern: Search tab + Library tab,
+     reader overlay with auto-resume scroll + manual bookmarks. -->
+<div id="gutenberg-view" class="content-narrow" style="display:none">
+  <div class="loc-header">
+    <h2 class="loc-title">Project Gutenberg</h2>
+    <div class="loc-tabs">
+      <button type="button" class="loc-tab loc-tab-search active" onclick="_gutenbergSwitchTab('search')">Search</button>
+      <button type="button" class="loc-tab loc-tab-saved" onclick="_gutenbergSwitchTab('saved')">Library</button>
+    </div>
+  </div>
+
+  <div class="gutenberg-panel-search">
+    <form class="loc-form" onsubmit="event.preventDefault();runGutenbergSearch(document.getElementById('gutenberg-q').value)">
+      <div class="loc-form-row">
+        <input id="gutenberg-q" type="search" placeholder="Search Project Gutenberg (title, author, topic)" autocomplete="off">
+        <select id="gutenberg-lang" title="Language filter (ISO 639-1)">
+          <option value="">Any language</option>
+          <option value="en">English</option>
+          <option value="fr">French</option>
+          <option value="de">German</option>
+          <option value="es">Spanish</option>
+          <option value="it">Italian</option>
+          <option value="pt">Portuguese</option>
+          <option value="ru">Russian</option>
+          <option value="zh">Chinese</option>
+          <option value="ja">Japanese</option>
+          <option value="la">Latin</option>
+          <option value="el">Greek</option>
+        </select>
+        <button type="submit" class="loc-submit">Search</button>
+      </div>
+    </form>
+    <div id="gutenberg-results" class="gutenberg-results-list">
+      <div class="loc-empty">Type a title, author, or topic to search Project Gutenberg.</div>
+    </div>
+    <div id="gutenberg-pagination" style="display:flex;justify-content:center;margin-top:0.7rem"></div>
+  </div>
+
+  <div class="gutenberg-panel-saved" style="display:none">
+    <div class="archive-meta-bar">
+      <span class="archive-meta-count"><span id="gutenberg-saved-count">0</span> saved</span>
+    </div>
+    <div id="gutenberg-saved-results" class="gutenberg-results-list"></div>
+  </div>
+</div>
+
+<!-- Reader overlay — full-viewport reading surface that hosts the
+     book HTML body. Outside-click closes (no confirm; auto-bookmark
+     is flushed on close so nothing is lost). -->
+<div id="gutenberg-reader-overlay" onclick="if(event.target===this)_gutenbergCloseReader()">
+  <div id="gutenberg-reader-box">
+    <div id="gutenberg-reader-head">
+      <h3 id="gutenberg-reader-title">Reading…</h3>
+      <div id="gutenberg-reader-controls">
+        <button type="button" class="archive-btn" onclick="_gutenbergAdjustFontSize(-1)" title="Smaller text">A−</button>
+        <button type="button" class="archive-btn" onclick="_gutenbergAdjustFontSize(1)"  title="Larger text">A+</button>
+        <button type="button" class="archive-btn archive-btn-suggest" onclick="_gutenbergPinHere()" title="Pin a bookmark at the current scroll position">📌 Pin here</button>
+        <button type="button" class="archive-btn" onclick="_gutenbergCloseReader()" title="Close">×</button>
+      </div>
+    </div>
+    <div id="gutenberg-reader-layout">
+      <aside id="gutenberg-reader-sidebar">
+        <div class="gutenberg-reader-sidebar-head">Bookmarks</div>
+        <div id="gutenberg-reader-bookmarks-list"></div>
+      </aside>
+      <div id="gutenberg-reader-body" onscroll="_gutenbergOnBodyScroll()"></div>
+    </div>
+  </div>
+</div>
+
 <div id="account-view" style="display:none">
   <div class="account-box">
 
@@ -1194,13 +1265,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260513.1233"></script>
-<script defer src="/search.js?v=20260513.1233"></script>
-<script defer src="/collection.js?v=20260513.1233"></script>
+<script defer src="/utils.js?v=20260514.1303"></script>
+<script defer src="/search.js?v=20260514.1303"></script>
+<script defer src="/collection.js?v=20260514.1303"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260513.1233"></script>
-<script defer src="/app.js?v=20260513.1233"></script>
+<script defer src="/modal.js?v=20260514.1303"></script>
+<script defer src="/app.js?v=20260514.1303"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1211,13 +1282,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260513.1233"></script>
-<script defer src="/queue.js?v=20260513.1233"></script>
+<script defer src="/loc.js?v=20260514.1303"></script>
+<script defer src="/queue.js?v=20260514.1303"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260513.1233";
+  window._SD_LAZY_VERSION = "20260514.1303";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1228,6 +1299,7 @@ e.g.  miles davis | coltrane
       ric(() => {
         try { window._sdLoadModule?.("/archive.js"); } catch {}
         try { window._sdLoadModule?.("/youtube.js"); } catch {}
+        try { window._sdLoadModule?.("/gutenberg.js"); } catch {}
         try { window._sdLoadModule?.("/inventory-editor.js"); } catch {}
         // account.js + orders.js are view-specific (Account view).
         // Idle-preload after the critical path so a click on Account
@@ -1246,8 +1318,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260513.1233"></script>
-<script defer src="/offline.js?v=20260513.1233"></script>
+<script defer src="/idb.js?v=20260514.1303"></script>
+<script defer src="/offline.js?v=20260514.1303"></script>
 
 </body>
 </html>
