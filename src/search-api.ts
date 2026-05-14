@@ -4221,6 +4221,9 @@ app.get("/api/gutenberg/search", async (req, res) => {
 // common-phrase titles that resolve to a disambig page on first try.
 // 24h in-memory cache keyed on title|author lowercased.
 const _GUTENBERG_BLURB_TTL_MS = 24 * 60 * 60 * 1000;
+// Cache key suffix — bump when we change lookup logic so stale
+// found:false entries from earlier-stricter guards get invalidated.
+const _GUTENBERG_BLURB_CACHE_VER = "v2";
 const _gutenbergBlurbCache = new Map<string, { at: number; body: any }>();
 
 async function _gutenbergFetchWikiSummary(title: string): Promise<any | null> {
@@ -4231,6 +4234,25 @@ async function _gutenbergFetchWikiSummary(title: string): Promise<any | null> {
     const j = await r.json() as any;
     if (!j || j.type === "disambiguation") return null;
     return j;
+  } catch { return null; }
+}
+
+// Last-resort fallback: ask Wikipedia's search API for the best match
+// given title + author. Returns the top candidate title, which we
+// then re-look-up via the summary endpoint. Far more forgiving than
+// fixed-suffix variants — handles odd titles like "The Adventures of
+// Sherlock Holmes (collection)" or "A Christmas Carol, in Prose".
+async function _gutenbergSearchWikiTitle(query: string): Promise<string | null> {
+  const url = `https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=3&srsearch=${encodeURIComponent(query)}`;
+  try {
+    const r = await loggedFetch("wikipedia", url, { context: "gutenberg-blurb-search" });
+    if (!r.ok) return null;
+    const j = await r.json() as any;
+    const hits = j?.query?.search;
+    if (!Array.isArray(hits) || !hits.length) return null;
+    // Take the first hit. The summary endpoint will reject it if it's
+    // a disambiguation page; we'll fall through to "not found" then.
+    return String(hits[0]?.title || "") || null;
   } catch { return null; }
 }
 
@@ -4254,7 +4276,7 @@ app.get("/api/gutenberg/blurb", async (req, res) => {
     .replace(/\s+/g, " ")
     .trim();
   const authorLast = authorRaw.split(/,/)[0].trim().split(/\s+/).pop() || "";
-  const cacheKey = `${cleanTitle.toLowerCase()}|${authorRaw.toLowerCase()}`;
+  const cacheKey = `${_GUTENBERG_BLURB_CACHE_VER}|${cleanTitle.toLowerCase()}|${authorRaw.toLowerCase()}`;
   const cached = _gutenbergBlurbCache.get(cacheKey);
   if (cached && (Date.now() - cached.at) < _GUTENBERG_BLURB_TTL_MS) {
     res.setHeader("X-SeaDisco-Cache", "hit");
@@ -4264,6 +4286,8 @@ app.get("/api/gutenberg/blurb", async (req, res) => {
   // Try the exact title first; if no result or disambiguation page,
   // walk through fallback suffixes that nudge Wikipedia toward the
   // book article rather than a place / film / song with the same name.
+  // Last resort: hit Wikipedia's search API to find the best-matching
+  // article title given "<title> <author>".
   const candidates = [
     cleanTitle,
     `${cleanTitle} (novel)`,
@@ -4278,6 +4302,16 @@ app.get("/api/gutenberg/blurb", async (req, res) => {
     summary = await _gutenbergFetchWikiSummary(cand);
     if (summary) break;
   }
+  // Search fallback — handles titles that don't resolve via direct
+  // page lookup (e.g. "Sense and Sensibility: A Novel" doesn't map
+  // to a redirect, but the search API returns the right article).
+  if (!summary) {
+    const searchQuery = authorLast
+      ? `${cleanTitle} ${authorLast} book`
+      : `${cleanTitle} book`;
+    const foundTitle = await _gutenbergSearchWikiTitle(searchQuery);
+    if (foundTitle) summary = await _gutenbergFetchWikiSummary(foundTitle);
+  }
   if (!summary) {
     const body = { found: false };
     _gutenbergBlurbCache.set(cacheKey, { at: Date.now(), body });
@@ -4285,23 +4319,19 @@ app.get("/api/gutenberg/blurb", async (req, res) => {
     res.json(body);
     return;
   }
-  // Heuristic relevance check: if we have an author, the summary
-  // should mention them (or at least the last name). Lots of book
-  // titles collide with movies / songs / unrelated topics; if the
-  // first-paragraph extract doesn't reference the author, it's
-  // probably the wrong article.
+  // Loose relevance hint (not a hard reject): mark low-confidence
+  // when neither the author last name nor a book-y keyword appears
+  // in the extract. We still surface the blurb — the user can judge.
+  // Hard rejection was too aggressive: lots of valid Wikipedia
+  // articles describe a book's plot without literally saying "book"
+  // or "novel", and Project Gutenberg has many short-summary stubs.
+  let lowConfidence = false;
   if (authorLast && summary?.extract) {
     const ex = String(summary.extract).toLowerCase();
     const lastLc = authorLast.toLowerCase();
-    if (!ex.includes(lastLc) && !ex.includes("book") && !ex.includes("novel")
-        && !ex.includes("play") && !ex.includes("poem") && !ex.includes("treatise")
-        && !ex.includes("memoir") && !ex.includes("essay")) {
-      // Looks off-topic — bail rather than show a misleading blurb.
-      const body = { found: false, rejected: "off-topic" };
-      _gutenbergBlurbCache.set(cacheKey, { at: Date.now(), body });
-      res.setHeader("X-SeaDisco-Cache", "miss");
-      res.json(body);
-      return;
+    const BOOKY_KEYWORDS = ["book", "novel", "novella", "play", "poem", "treatise", "memoir", "essay", "collection", "stories", "verse", "narrative", "diary", "letters", "autobiography", "biography"];
+    if (!ex.includes(lastLc) && !BOOKY_KEYWORDS.some(k => ex.includes(k))) {
+      lowConfidence = true;
     }
   }
   const body = {
@@ -4311,6 +4341,7 @@ app.get("/api/gutenberg/blurb", async (req, res) => {
     thumbnail: summary?.thumbnail?.source ? String(summary.thumbnail.source) : null,
     sourceUrl: String(summary?.content_urls?.desktop?.page ?? `https://en.wikipedia.org/wiki/${encodeURIComponent(summary?.title ?? cleanTitle)}`),
     description: summary?.description ? String(summary.description) : null,
+    lowConfidence,
   };
   _gutenbergBlurbCache.set(cacheKey, { at: Date.now(), body });
   // Cap cache size — crude FIFO drop at 256 entries.
