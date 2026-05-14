@@ -220,6 +220,7 @@ async function _gutenbergOpenInfoPopup(bookId) {
   const cached = _gutenbergInfoCache.get(bookId);
   if (cached) {
     body.innerHTML = _gutenbergInfoPopupHtml(cached);
+    _gutenbergFillInfoPopupExtras(cached).catch(() => {});
     return;
   }
   body.innerHTML = `<div class="loc-empty">Loading book details…</div>`;
@@ -231,12 +232,14 @@ async function _gutenbergOpenInfoPopup(bookId) {
     }
     const meta = await r.json();
     _gutenbergInfoCache.set(bookId, meta);
-    // LRU-ish cap so the map doesn't grow forever.
     if (_gutenbergInfoCache.size > 100) {
       const oldest = _gutenbergInfoCache.keys().next().value;
       if (oldest != null) _gutenbergInfoCache.delete(oldest);
     }
     body.innerHTML = _gutenbergInfoPopupHtml(meta);
+    // Kick the parallel enrichment fetches — they fill in hidden
+    // mount points in the popup HTML once data lands.
+    _gutenbergFillInfoPopupExtras(meta).catch(() => {});
   } catch (e) {
     console.warn("[gutenberg/info-popup]", e);
     body.innerHTML = `<div class="loc-empty">Could not load details.</div>`;
@@ -270,8 +273,6 @@ function _gutenbergInfoPopupHtml(meta) {
   const shelfChips = (Array.isArray(meta.bookshelves) ? meta.bookshelves : []).map(s =>
     `<span class="gutenberg-shelf-chip">${escHtml(s)}</span>`
   ).join("");
-  // Format links — drop image/* (covers) and anything we don't surface.
-  // Show common reader-relevant formats in a friendly order.
   const FORMAT_ORDER = [
     ["text/html",                 "HTML"],
     ["application/epub+zip",      "EPUB"],
@@ -284,8 +285,6 @@ function _gutenbergInfoPopupHtml(meta) {
   const formats = meta.formats ?? {};
   const seenFormatUrls = new Set();
   const formatLinks = FORMAT_ORDER.map(([mime, label]) => {
-    // Match any key starting with this mime (Gutendex sometimes adds
-    // charset suffixes). Pick the first non-zip variant.
     const key = Object.keys(formats).find(k => k.toLowerCase().startsWith(mime.toLowerCase()) && !/\.zip$/i.test(formats[k]));
     if (!key) return "";
     const url = formats[key];
@@ -298,6 +297,29 @@ function _gutenbergInfoPopupHtml(meta) {
   const cachedNote = meta.cached
     ? `<span class="gutenberg-info-cached" title="Body already cached in our DB — instant open">cached</span>`
     : "";
+  // Length stats — only meaningful when cached (we computed them
+  // server-side from plain_text). Format word count with K/M shorthand
+  // for readability ("83K words" beats "82,617 words").
+  const wordCountFmt = (() => {
+    const w = Number(meta.wordCount);
+    if (!w || w <= 0) return null;
+    if (w >= 1_000_000) return `${(w / 1_000_000).toFixed(1)}M`;
+    if (w >= 1_000)     return `${(w / 1_000).toFixed(0)}K`;
+    return String(w);
+  })();
+  const readingMin = Number(meta.readingMinutes) || null;
+  const readingFmt = readingMin
+    ? (readingMin >= 60 ? `${Math.floor(readingMin / 60)}h ${readingMin % 60}m` : `${readingMin} min`)
+    : null;
+  // First paragraph teaser — only present for already-cached books.
+  // Italicized blockquote styling clarifies it's a sample, not editorial.
+  const previewHtml = meta.firstParagraph
+    ? `<div class="gutenberg-info-preview"><span class="gutenberg-info-quote-mark">“</span>${escHtml(meta.firstParagraph)}</div>`
+    : "";
+  // Two async mount points — populated after the popup renders by
+  // _gutenbergFillInfoPopupExtras. One for the user's read state /
+  // bookmarks ("You: last read 23% · 2 bookmarks"), one for the linked
+  // Discogs entities, one for "more by this author".
   return `
     <div class="gutenberg-info-header">
       <h3 class="gutenberg-info-title">${title} ${cachedNote}</h3>
@@ -307,9 +329,15 @@ function _gutenbergInfoPopupHtml(meta) {
       ${langs ? `<div><span class="gutenberg-info-label">Language:</span> ${langs}</div>` : ""}
       ${meta.downloadCount ? `<div><span class="gutenberg-info-label">Downloads:</span> ${Number(meta.downloadCount).toLocaleString()}</div>` : ""}
       ${meta.byteSize ? `<div><span class="gutenberg-info-label">Size:</span> ${(Number(meta.byteSize) / 1024).toFixed(0)} KB</div>` : ""}
+      ${wordCountFmt ? `<div><span class="gutenberg-info-label">Words:</span> ${wordCountFmt}</div>` : ""}
+      ${readingFmt   ? `<div><span class="gutenberg-info-label">Reading time:</span> ${readingFmt}</div>` : ""}
     </div>
+    ${previewHtml}
+    <div id="gutenberg-info-user-state" class="gutenberg-info-section" style="display:none"></div>
     ${shelfChips ? `<div class="gutenberg-info-section"><div class="gutenberg-info-label">Bookshelves</div><div class="gutenberg-info-chips">${shelfChips}</div></div>` : ""}
     ${subjectChips ? `<div class="gutenberg-info-section"><div class="gutenberg-info-label">Subjects</div><div class="gutenberg-info-chips">${subjectChips}</div></div>` : ""}
+    <div id="gutenberg-info-links" class="gutenberg-info-section" style="display:none"></div>
+    <div id="gutenberg-info-more-by" class="gutenberg-info-section" style="display:none"></div>
     ${formatLinks ? `<div class="gutenberg-info-section"><div class="gutenberg-info-label">Available formats</div><div class="gutenberg-info-formats">${formatLinks}</div></div>` : ""}
     <div class="gutenberg-info-actions">
       <button type="button" class="archive-btn archive-btn-suggest" onclick="_gutenbergCloseInfoPopup();_gutenbergOpenReader(${meta.id}, ${JSON.stringify(meta.title || "").replace(/"/g, "&quot;")})">📖 Read</button>
@@ -317,6 +345,94 @@ function _gutenbergInfoPopupHtml(meta) {
       <a href="https://www.gutenberg.org/ebooks/${meta.id}" target="_blank" rel="noopener" class="archive-btn" style="text-decoration:none">Project Gutenberg page ↗</a>
     </div>`;
 }
+
+// Fire after the popup renders: 3 parallel fetches enrich the panel
+// with user-specific state, link-out annotations, and an "also by
+// this author" row. None block the initial render — if a fetch fails
+// or returns empty, its panel just stays hidden.
+async function _gutenbergFillInfoPopupExtras(meta) {
+  if (!meta || !meta.id) return;
+  const bookId = Number(meta.id);
+  // 1. User read state + manual bookmarks count.
+  const userPanel = document.getElementById("gutenberg-info-user-state");
+  if (userPanel && window._clerk?.user) {
+    try {
+      const r = await apiFetch(`/api/user/gutenberg-bookmarks/${bookId}`);
+      if (r.ok) {
+        const j = await r.json();
+        const autoPct = j?.auto?.positionPct;
+        const manualCount = Array.isArray(j?.manual) ? j.manual.length : 0;
+        const bits = [];
+        if (Number.isFinite(autoPct) && autoPct > 0.5) {
+          bits.push(`Last read at <b>${Math.round(autoPct)}%</b>`);
+        }
+        if (manualCount > 0) {
+          bits.push(`${manualCount} bookmark${manualCount === 1 ? "" : "s"}`);
+        }
+        if (bits.length) {
+          userPanel.innerHTML = `<div class="gutenberg-info-label">Your progress</div><div class="gutenberg-info-user-state-line">${bits.join(" · ")}</div>`;
+          userPanel.style.display = "";
+        }
+      }
+    } catch { /* swallow — non-critical */ }
+  }
+  // 2. Linked Discogs entities (annotations curated by admin for this book).
+  const linksPanel = document.getElementById("gutenberg-info-links");
+  if (linksPanel) {
+    try {
+      const r = await apiFetch(`/api/gutenberg/annotations?book_id=${bookId}`);
+      if (r.ok) {
+        const j = await r.json();
+        const items = Array.isArray(j?.items) ? j.items : [];
+        if (items.length) {
+          const chips = items.map(a => {
+            const kind = a.entityType || "artist";
+            const kindBadge = kind.charAt(0).toUpperCase();
+            return `<button type="button" class="gutenberg-info-link-chip" data-kind="${escHtml(kind)}" onclick="_gutenbergOpenInfoLinkChip(${a.id})" title="${escHtml(a.label || a.entityName)} — open in SeaDisco"><span class="gutenberg-annotation-kind" data-kind="${escHtml(kind)}">${kindBadge}</span> ${escHtml(a.entityName)}</button>`;
+          }).join("");
+          linksPanel.innerHTML = `<div class="gutenberg-info-label">🔗 Linked entities (${items.length})</div><div class="gutenberg-info-chips">${chips}</div>`;
+          linksPanel.style.display = "";
+          // Stash for chip click handler — keyed by annotation id.
+          _gutenbergInfoLinkCache = new Map(items.map(a => [a.id, a]));
+        }
+      }
+    } catch { /* swallow */ }
+  }
+  // 3. More by this author — single Gutendex search keyed on the
+  // primary author's name. Limited to 6 results, the current book
+  // filtered out.
+  const moreByPanel = document.getElementById("gutenberg-info-more-by");
+  if (moreByPanel && Array.isArray(meta.authors) && meta.authors[0]?.name) {
+    const primary = meta.authors[0].name;
+    try {
+      const r = await apiFetch(`/api/gutenberg/search?q=${encodeURIComponent(primary)}`);
+      if (r.ok) {
+        const j = await r.json();
+        const items = (Array.isArray(j?.items) ? j.items : [])
+          .filter(b => Number(b.id) !== bookId)
+          .slice(0, 6);
+        if (items.length) {
+          const rows = items.map(b => {
+            const t = JSON.stringify(b.title || "").replace(/"/g, "&quot;");
+            return `<button type="button" class="gutenberg-info-related" onclick="_gutenbergCloseInfoPopup();_gutenbergOpenInfoPopup(${b.id})" title="${escHtml(b.title || "")}">${escHtml(b.title || `Book ${b.id}`)}</button>`;
+          }).join("");
+          moreByPanel.innerHTML = `<div class="gutenberg-info-label">More by ${escHtml(primary)}</div><div class="gutenberg-info-related-list">${rows}</div>`;
+          moreByPanel.style.display = "";
+        }
+      }
+    } catch { /* swallow */ }
+  }
+}
+
+// Cache of annotation rows shown in the info popup so the chip
+// onclick handlers can look them up without re-fetching.
+let _gutenbergInfoLinkCache = new Map();
+function _gutenbergOpenInfoLinkChip(annId) {
+  const a = _gutenbergInfoLinkCache.get(annId);
+  if (!a) return;
+  _gutenbergDispatchEntityOpen(a);
+}
+window._gutenbergOpenInfoLinkChip = _gutenbergOpenInfoLinkChip;
 
 // Save toggle invoked from inside the info popup. Differs from the
 // card-level toggle in that it also patches the popup's own button
