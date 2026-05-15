@@ -14,7 +14,11 @@
 //     manual bookmarks the user can pin from any scroll position.
 
 // ── Module state ────────────────────────────────────────────────────
-let _gutenbergSearchInflight = false;
+// AbortController for the currently in-flight search. New searches
+// abort the previous one rather than queuing — Gutendex can be slow
+// for broad queries, and the old "if inflight, ignore" guard left
+// users staring at stale results with no feedback when they retried.
+let _gutenbergSearchAbort    = null;
 let _gutenbergSearchPage     = 1;
 let _gutenbergSearchQuery    = "";
 let _gutenbergSearchLang     = "";
@@ -208,13 +212,24 @@ async function runGutenbergSearch(q, opts) {
     document.getElementById("gutenberg-pagination").innerHTML = "";
     return;
   }
-  if (_gutenbergSearchInflight) return;
-  _gutenbergSearchInflight = true;
+  // Cancel-and-replace: any new search aborts the previous one. Gutendex
+  // can hang for several seconds on broad substring queries; the old
+  // "if inflight, ignore" guard meant a slow first attempt blocked every
+  // retry with no UI feedback. Now the user can re-search at any time
+  // and the stale request is abandoned.
+  if (_gutenbergSearchAbort) {
+    try { _gutenbergSearchAbort.abort(); } catch {}
+  }
+  const ctrl = new AbortController();
+  _gutenbergSearchAbort = ctrl;
   if (!append) {
     _gutenbergSearchPage = 1;
     _gutenbergSearchQuery = q;
+    // Paint "Searching…" synchronously so the user always sees that
+    // their click registered, even if the network is slow.
     document.getElementById("gutenberg-results").innerHTML =
       `<div class="loc-empty">Searching…</div>`;
+    document.getElementById("gutenberg-pagination").innerHTML = "";
   } else {
     _gutenbergSearchPage += 1;
   }
@@ -228,13 +243,18 @@ async function runGutenbergSearch(q, opts) {
     if (_gutenbergSearchPage > 1) params.set("page", String(_gutenbergSearchPage));
     if (_gutenbergSearchLang) params.set("lang", _gutenbergSearchLang);
     if (topic) params.set("topic", topic);
-    const r = await apiFetch(`/api/gutenberg/search?${params.toString()}`);
+    const r = await apiFetch(`/api/gutenberg/search?${params.toString()}`, { signal: ctrl.signal });
+    // If a newer search aborted us mid-flight, bail silently — the new
+    // search has already replaced the "Searching…" message with its own
+    // state, and we don't want to overwrite it.
+    if (ctrl.signal.aborted) return;
     if (!r.ok) {
       document.getElementById("gutenberg-results").innerHTML =
         `<div class="loc-empty">Search failed (HTTP ${r.status}).</div>`;
       return;
     }
     const j = await r.json();
+    if (ctrl.signal.aborted) return;
     const items = Array.isArray(j?.items) ? j.items : [];
     _gutenbergSearchHasMore = !!j?.hasMore;
     if (!append && !items.length) {
@@ -257,11 +277,16 @@ async function runGutenbergSearch(q, opts) {
     else        target.innerHTML = header + html;
     _gutenbergRenderPagination();
   } catch (e) {
+    // AbortError is expected when a new search supersedes us — don't
+    // touch the DOM in that case (the new search owns it now).
+    if (e && (e.name === "AbortError" || ctrl.signal.aborted)) return;
     console.warn("[gutenberg/search]", e);
     document.getElementById("gutenberg-results").innerHTML =
       `<div class="loc-empty">Search error.</div>`;
   } finally {
-    _gutenbergSearchInflight = false;
+    // Only clear the module-level pointer if we're still the latest
+    // search — a newer one may have already replaced it.
+    if (_gutenbergSearchAbort === ctrl) _gutenbergSearchAbort = null;
   }
 }
 window.runGutenbergSearch = runGutenbergSearch;

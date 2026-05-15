@@ -4089,6 +4089,15 @@ const _GUTENBERG_TOPIC_PRESETS: Record<string, string[]> = {
 // browsing snappy (and saves bandwidth + courtesy).
 const _GUTENBERG_PRESET_TTL_MS = 60 * 60 * 1000;
 const _gutenbergPresetCache = new Map<string, { at: number; body: any }>();
+// Separate, shorter-TTL cache for plain (non-preset) Gutendex queries.
+// Gutendex itself can be slow (1–3 s) for broad substring searches like
+// "war" or "music", and repeating the same query within a session is
+// common — back-button navigation, tab switching, or just refining a
+// query and then bouncing back to the previous one. 10-minute TTL is
+// long enough to feel snappy but short enough that newly-added books
+// show up on the next session. Keyed on q|topic|lang|page.
+const _GUTENBERG_QUERY_TTL_MS = 10 * 60 * 1000;
+const _gutenbergQueryCache = new Map<string, { at: number; body: any }>();
 
 function _gutenbergNormalizeBook(b: any) {
   // The cards render rich now — full subjects/bookshelves/formats so
@@ -4191,6 +4200,17 @@ app.get("/api/gutenberg/search", async (req, res) => {
   }
 
   // ── Single-topic / no-topic path (existing behaviour) ───────────
+  // 10-minute query cache — Gutendex's substring search is slow for
+  // broad terms, so cache identical (q|topic|lang|page) requests in
+  // memory and serve subsequent hits in microseconds. Same FIFO bound
+  // as the preset cache.
+  const queryCacheKey = `q|${q.toLowerCase()}|${topicRaw.toLowerCase()}|${lang}|${page}`;
+  const queryCached = _gutenbergQueryCache.get(queryCacheKey);
+  if (queryCached && (Date.now() - queryCached.at) < _GUTENBERG_QUERY_TTL_MS) {
+    res.setHeader("X-SeaDisco-Cache", "hit");
+    res.json(queryCached.body);
+    return;
+  }
   const params = new URLSearchParams();
   if (q) params.set("search", q);
   if (page > 1) params.set("page", String(page));
@@ -4207,12 +4227,19 @@ app.get("/api/gutenberg/search", async (req, res) => {
     const items = (Array.isArray(j?.results) ? j.results : [])
       .map(_gutenbergNormalizeBook)
       .filter((b: any) => b.id > 0);
-    res.json({
+    const body = {
       items,
       count: Number(j?.count) || items.length,
       page,
       hasMore: !!j?.next,
-    });
+    };
+    _gutenbergQueryCache.set(queryCacheKey, { at: Date.now(), body });
+    if (_gutenbergQueryCache.size > 128) {
+      const oldest = _gutenbergQueryCache.keys().next().value as string | undefined;
+      if (oldest) _gutenbergQueryCache.delete(oldest);
+    }
+    res.setHeader("X-SeaDisco-Cache", "miss");
+    res.json(body);
   } catch (e: any) {
     console.error("[gutenberg/search]", e?.message ?? e);
     res.status(500).json({ error: "fetch_failed" });
