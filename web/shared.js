@@ -566,6 +566,27 @@ function _sdIsSparseCard(card) {
   return sparseTitle && !hasImg && !hasArtist;
 }
 
+// Invalidate enrichment state for a (type, id) so the next debounced
+// pass re-fetches and patches the card. Used by the album popup:
+// opening a card triggers /release/:id or /master/:id, which writes
+// to release_cache server-side. If the grid card was previously
+// enriched-with-nothing (cache was empty at the time), it's now stuck
+// — data-card-enriched="1" blocks re-injection and the row cache has
+// a null sentinel blocking the re-fetch. Drop both, then schedule.
+function _sdInvalidateCardEnrichment(type, id) {
+  if (!type || id == null) return;
+  const key = `${type}:${id}`;
+  try { _sdEnrichedRowCache.delete(key); } catch {}
+  try {
+    const sel = `.card[data-card-id="${CSS.escape(String(id))}"][data-card-type="${CSS.escape(String(type))}"]`;
+    document.querySelectorAll(sel).forEach(card => {
+      card.removeAttribute("data-card-enriched");
+    });
+  } catch {}
+  if (typeof _sdScheduleCardEnrich === "function") _sdScheduleCardEnrich();
+}
+window._sdInvalidateCardEnrichment = _sdInvalidateCardEnrichment;
+
 async function _sdRefreshSparseCard(btn) {
   const card = btn?.closest(".card");
   if (!card) return;
