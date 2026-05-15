@@ -221,6 +221,16 @@ function openModal(event, id, type, discogsUrl) {
     .then(([d, stats]) => {
       document.getElementById("modal-loading").style.display = "none";
       renderAlbumInfo(d, cachedItem, discogsUrl, stats);
+      // Server just persisted release_cache for this id (cache miss
+      // path) OR confirmed it was already cached. Either way, the wide
+      // card on the grid may have been enriched-with-nothing earlier
+      // (release_cache was empty at first-render time). Invalidate so
+      // the next debounced enrichment pass repaints the card with the
+      // freshly-cached tracklist + image strip. Skip when we got the
+      // auth-fail fallback: no fresh data was written.
+      if (!d?._signInForMore && typeof _sdInvalidateCardEnrichment === "function") {
+        try { _sdInvalidateCardEnrichment(type, id); } catch {}
+      }
     })
     .catch(() => {
       document.getElementById("modal-loading").textContent = "Failed to load.";
