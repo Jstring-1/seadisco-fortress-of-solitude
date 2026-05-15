@@ -249,8 +249,18 @@ async function runGutenbergSearch(q, opts) {
     // state, and we don't want to overwrite it.
     if (ctrl.signal.aborted) return;
     if (!r.ok) {
-      document.getElementById("gutenberg-results").innerHTML =
-        `<div class="loc-empty">Search failed (HTTP ${r.status}).</div>`;
+      // 504 = our server timed out waiting on Gutendex. Gutendex is a
+      // free community-hosted service that can be very slow during peak
+      // hours; surface that honestly so the user knows it's upstream,
+      // not us. Suggest a retry — repeats are negative-cached briefly
+      // so a second attempt fails fast if Gutendex is still struggling.
+      if (r.status === 504) {
+        document.getElementById("gutenberg-results").innerHTML =
+          `<div class="loc-empty">Project Gutenberg's search service is slow right now. Try again in a minute, or pick a more specific subject.</div>`;
+      } else {
+        document.getElementById("gutenberg-results").innerHTML =
+          `<div class="loc-empty">Search failed (HTTP ${r.status}).</div>`;
+      }
       return;
     }
     const j = await r.json();

@@ -4146,17 +4146,25 @@ app.get("/api/gutenberg/search", async (req, res) => {
       res.json(cached.body);
       return;
     }
+    const t0 = Date.now();
     try {
+      // Per-request 15-s timeout. Gutendex (community Heroku dyno) can
+      // hang for 30+ s on broad substring searches; bound the wait so a
+      // single slow constituent doesn't drag the whole preset down.
       const fetches = preset.map(t => {
         const p = new URLSearchParams();
         if (q) p.set("search", q);
         if (lang) p.set("languages", lang);
         p.set("topic", t);
-        return loggedFetch("gutendex", `https://gutendex.com/books?${p.toString()}`, { context: `search-preset:${t}` })
+        return loggedFetch("gutendex", `https://gutendex.com/books?${p.toString()}`, {
+          context: `search-preset:${t}`,
+          signal: AbortSignal.timeout(15000),
+        })
           .then(r => r.ok ? r.json() : null)
           .catch(() => null);
       });
       const responses = await Promise.all(fetches) as (any | null)[];
+      console.log(`[gutenberg/search preset] preset=${presetKey} q="${q}" upstream=${Date.now() - t0}ms`);
       // Merge: dedupe by id (first occurrence wins), then sort by
       // download_count desc. Cap at 96 — "top of the pool" across
       // the preset's constituent subjects.
@@ -4217,8 +4225,16 @@ app.get("/api/gutenberg/search", async (req, res) => {
   if (lang) params.set("languages", lang);
   if (topicRaw) params.set("topic", topicRaw);
   const url = `https://gutendex.com/books?${params.toString()}`;
+  const t0 = Date.now();
   try {
-    const r = await loggedFetch("gutendex", url, { context: "search" });
+    // 15-s timeout on single-topic / no-topic searches too. Gutendex
+    // can hang for 30+ s on broad terms — far better to surface a fast
+    // "upstream slow" than a 30 s hang the user can't escape.
+    const r = await loggedFetch("gutendex", url, {
+      context: "search",
+      signal: AbortSignal.timeout(15000),
+    });
+    console.log(`[gutenberg/search] q="${q}" topic="${topicRaw}" page=${page} upstream=${Date.now() - t0}ms status=${r.status}`);
     if (!r.ok) {
       res.status(502).json({ error: "upstream", status: r.status });
       return;
@@ -4241,8 +4257,14 @@ app.get("/api/gutenberg/search", async (req, res) => {
     res.setHeader("X-SeaDisco-Cache", "miss");
     res.json(body);
   } catch (e: any) {
-    console.error("[gutenberg/search]", e?.message ?? e);
-    res.status(500).json({ error: "fetch_failed" });
+    const ms = Date.now() - t0;
+    const isAbort = e?.name === "AbortError" || e?.name === "TimeoutError";
+    console.error(`[gutenberg/search] q="${q}" topic="${topicRaw}" failed after ${ms}ms`, isAbort ? "TIMEOUT" : (e?.message ?? e));
+    // Negative-cache the slow/failed query for 60 s so a retry doesn't
+    // re-pay the wait. Short body so the client can show a useful state.
+    const body = { items: [], count: 0, page, hasMore: false, upstreamSlow: isAbort };
+    _gutenbergQueryCache.set(queryCacheKey, { at: Date.now() - (_GUTENBERG_QUERY_TTL_MS - 60_000), body });
+    res.status(isAbort ? 504 : 500).json({ ...body, error: isAbort ? "upstream_timeout" : "fetch_failed" });
   }
 });
 
