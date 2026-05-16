@@ -1241,9 +1241,12 @@ e.g.  miles davis | coltrane
      .mini-player.engine-yt / .engine-loc swap which engine's expanded
      panel + source-specific buttons (save/info for LOC) are visible. -->
 <div id="mini-player" class="mini-player">
-  <div id="mini-player-bar" class="mini-player-bar">
-    <div id="mini-player-info" class="mini-player-info" onclick="playerInfoClick()">
-      <span id="mini-player-source-icon" class="mini-player-source-icon"></span>
+  <!-- Clicking anywhere on the bar (except a control button) expands /
+       collapses the player — replaces the old dedicated ▲ expand
+       button. playerBarClick guards clicks that land on the controls
+       cluster so prev/play/next/etc. still work normally. -->
+  <div id="mini-player-bar" class="mini-player-bar" onclick="playerBarClick(event)">
+    <div id="mini-player-info" class="mini-player-info">
       <span id="mini-player-title" class="mini-player-title">Not playing</span>
       <span id="mini-player-status" class="mini-player-status"></span>
     </div>
@@ -1264,7 +1267,6 @@ e.g.  miles davis | coltrane
            reflected the cross-source repeat state). Drawer is now the
            single source of truth. -->
       <button id="mini-queue" onclick="queueToggleDrawer()" title="Up next (queue)">☰</button>
-      <button id="mini-expand" onclick="toggleMiniPlayer()" title="Expand player">&#9650;</button>
       <!-- Hide-bar: collapses the player out of view so the bottom of
            open popups (especially master/version lists on mobile) is
            reachable. Playback continues; a small "show player" tab

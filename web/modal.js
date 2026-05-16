@@ -2288,6 +2288,17 @@ function toggleMiniPlayer() {
   if (mp) mp.classList.toggle("expanded");
 }
 
+// Whole-bar click handler. Replaces the old dedicated ▲ expand button:
+// any click on the collapsed bar toggles the expanded panel, EXCEPT
+// clicks that land on a control button (prev/play/next/queue/hide/etc.)
+// — those keep their own behaviour. Reuses playerInfoClick so the LOC
+// engine's "open info popup" affordance is preserved.
+function playerBarClick(event) {
+  if (event && event.target && event.target.closest(".mini-player-controls")) return;
+  playerInfoClick();
+}
+window.playerBarClick = playerBarClick;
+
 // ── Unified player dispatchers ─────────────────────────────────────────
 // The persistent bar hosts both the YouTube iframe engine and the LOC
 // <audio> engine. window._currentEngine ("yt" | "loc" | null) tracks
