@@ -1036,8 +1036,16 @@ async function _bindSortable() {
         // Capture each visible row's CURRENT position (server-side
         // identity) BEFORE we re-stamp locally — this is what the PATCH
         // sends to the server. Match by externalId so dedup'd / fractional
-        // rows still resolve to the right item.
-        const byExt = new Map(_queue.map(it => [String(it.externalId), it]));
+        // rows still resolve to the right item. FIRST occurrence wins so
+        // the map agrees with what the drawer actually rendered
+        // (_renderQueueDrawer dedups keeping the lowest-position copy);
+        // a last-wins map would resolve a dragged row to a hidden dupe
+        // at a different position and corrupt the PATCH.
+        const byExt = new Map();
+        for (const it of _queue) {
+          const k = String(it.externalId);
+          if (!byExt.has(k)) byExt.set(k, it);
+        }
         const orderedItems = newExternalIdsOrder
           .map(ext => byExt.get(String(ext)))
           .filter(Boolean);
@@ -1065,6 +1073,20 @@ async function _bindSortable() {
           if (cur) _queueCurrentPosition = cur.position;
         }
 
+        // Anon path: there is no server queue to PATCH — the reorder
+        // endpoint is sign-in-only (requireUser → 401). Persist the new
+        // order to localStorage and stop here. Without this branch the
+        // PATCH 401'd, the failure handler nulled _queue + reloaded, and
+        // the drag visibly snapped back every time — i.e. "reorder
+        // doesn't work" for every logged-out user. Mirrors the anon
+        // localStorage pattern used by queueAdd / queueRemove / clear.
+        if (!window._clerk?.user) {
+          _saveAnonQueue(_queue);
+          _renderQueueDrawer();
+          _refreshPlayerNavButtons();
+          return;
+        }
+
         // Fire-and-forget PATCH; if it fails we revert via reload.
         apiFetch("/api/user/play-queue/reorder", {
           method: "PATCH",
@@ -1089,7 +1111,12 @@ async function _bindSortable() {
         _refreshPlayerNavButtons();
       },
     });
-  } catch { /* drag is optional — list still works without it */ }
+  } catch (e) {
+    // Drag is optional — the list still works without it — but a silent
+    // catch made "reorder doesn't work" undiagnosable when the cause
+    // was Sortable.js failing to load (CDN blocked / offline). Log it.
+    console.warn("[queue] drag-reorder unavailable (Sortable load/bind failed):", e);
+  }
 }
 
 // ── Public actions ──────────────────────────────────────────────────
