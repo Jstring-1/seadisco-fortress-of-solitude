@@ -2419,6 +2419,21 @@ export async function appendPlayQueue(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // De-dupe: re-adding a track that's already in the queue is a MOVE,
+    // not a stack. Delete any existing rows whose external_id matches an
+    // incoming item BEFORE positioning the new copies. Without this the
+    // server kept both copies; the client render-dedup hid the old one
+    // (lowest position wins) but it stayed live in the queue, so
+    // play/next nav still hit the stale copy — the queue appeared to
+    // "jump back" to where the track already was. The anon localStorage
+    // path already de-dupes this way; this brings the server in line.
+    const incomingExtIds = Array.from(new Set(items.map(it => String(it.externalId))));
+    if (incomingExtIds.length) {
+      await client.query(
+        `DELETE FROM user_play_queue WHERE clerk_user_id = $1 AND external_id = ANY($2::text[])`,
+        [clerkUserId, incomingExtIds]
+      );
+    }
     let startPos: number;
     if (mode === "append") {
       const r = await client.query(
