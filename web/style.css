@@ -9086,6 +9086,68 @@ body.is-offline button.offline-disabled {
   cursor: pointer;
 }
 .wiki-extract a:hover { color: var(--accent2); border-bottom-color: var(--accent2); }
+/* Full articles now come from the Parse API (so list/table articles
+   like "List of folk songs by Roud number" actually render). That
+   payload also carries navboxes, [edit] links, and other chrome the
+   old TextExtracts path never returned — hide the noise. */
+.wiki-extract .mw-editsection,
+.wiki-extract .navbox,
+.wiki-extract .vertical-navbox,
+.wiki-extract .metadata,
+.wiki-extract .noprint,
+.wiki-extract .mw-empty-elt,
+.wiki-extract .mw-jump-link,
+.wiki-extract style { display: none; }
+/* Data tables (wikitable / sortable lists). Wide tables scroll
+   horizontally instead of blowing out the popup width. */
+.wiki-extract table.wikitable,
+.wiki-extract table.sortable {
+  display: block;
+  overflow-x: auto;
+  max-width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 1rem 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.wiki-extract table.wikitable th,
+.wiki-extract table.wikitable td,
+.wiki-extract table.sortable th,
+.wiki-extract table.sortable td {
+  border: 1px solid var(--border);
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+.wiki-extract table.wikitable th,
+.wiki-extract table.sortable th {
+  background: var(--bg-elevated, #1a1712);
+  color: var(--text);
+  position: sticky;
+  top: 0;
+}
+.wiki-extract table.wikitable tr:nth-child(even) td,
+.wiki-extract table.sortable tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.02);
+}
+/* Infobox: keep it readable but constrained — float right on wide
+   popups, full-width on narrow. */
+.wiki-extract table.infobox {
+  border-collapse: collapse;
+  font-size: 0.8rem;
+  margin: 0 0 1rem 1rem;
+  float: right;
+  max-width: 280px;
+}
+.wiki-extract table.infobox th,
+.wiki-extract table.infobox td {
+  border: 1px solid var(--border);
+  padding: 0.3rem 0.45rem;
+  vertical-align: top;
+}
+@media (max-width: 640px) {
+  .wiki-extract table.infobox { float: none; max-width: 100%; margin: 0 0 1rem 0; }
+}
 .wiki-footer { margin-top: 1rem; padding-top: 0.8rem; border-top: 1px solid var(--border); font-size: 0.82rem; }
 
 /* ── Reusable small page indicator — shows which SPA page is active.
