@@ -121,6 +121,24 @@ window._ensureAdminFlag = _ensureAdminFlag;
     // users on a hard refresh saw an empty home page until they
     // clicked the logo (which routes through goHome → switchView).
     switchView("search", true);
+    // Land focus in the main search field so keyboard users can start
+    // typing / Tab into the Artist–Release–Label chain immediately.
+    // Desktop only — `hover: none` screens are touch, where stealing
+    // focus would pop the on-screen keyboard over the home strip.
+    // Deferred a tick so switchView's render settles first.
+    try {
+      if (window.matchMedia && window.matchMedia("(hover: hover)").matches) {
+        setTimeout(() => {
+          const q = document.getElementById("query");
+          // Don't yank focus if a popup/overlay grabbed it, or the
+          // user already clicked into something during the delay.
+          if (q && !document.querySelector(".modal-overlay.open, #modal-overlay.open")
+                && (document.activeElement === document.body || document.activeElement === null)) {
+            q.focus();
+          }
+        }, 80);
+      }
+    } catch {}
   }
 
   // ── Restore stacked popups from URL ────────────────────────────────────
@@ -271,6 +289,41 @@ window.addEventListener("popstate", () => {
     if (e.key === "Enter") doSearch(1);
   });
 });
+
+// ── Tab priority: search box → Artist → Release → Label ──────────────────
+// Pressing Tab in the main query field jumps straight to the Artist
+// filter, skipping the Search button + the controls row in between.
+// Artist / Release / Label are already DOM-adjacent so plain Tab chains
+// through them naturally once focus lands in Artist. Shift+Tab from
+// Artist hops back to the query box so reverse navigation stays
+// symmetric. Gated on the Advanced panel actually being open — when
+// it's collapsed the filters aren't usable, so Tab keeps its normal
+// order (query → Search button → …). Works for both the main Discogs
+// search form and the collection-wide ("cw-") form.
+function _wireSearchTabPriority(queryId, firstFilterId, isOpenFn) {
+  const q = document.getElementById(queryId);
+  const a = document.getElementById(firstFilterId);
+  if (!q || !a) return;
+  q.addEventListener("keydown", e => {
+    if (e.key === "Tab" && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey && isOpenFn()) {
+      e.preventDefault();
+      a.focus();
+    }
+  });
+  a.addEventListener("keydown", e => {
+    if (e.key === "Tab" && e.shiftKey && isOpenFn()) {
+      e.preventDefault();
+      q.focus();
+    }
+  });
+}
+_wireSearchTabPriority("query", "f-artist",
+  () => document.getElementById("advanced-panel")?.dataset.open === "true");
+_wireSearchTabPriority("cw-query", "cw-artist",
+  () => {
+    const p = document.getElementById("cw-advanced-panel");
+    return !!p && p.style.display !== "none";
+  });
 
 // ── Per-field × clear button ────────────────────────────────────────────
 // Wrap each text input in a relative span and append a small × button
