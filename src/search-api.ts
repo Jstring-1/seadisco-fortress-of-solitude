@@ -8210,21 +8210,55 @@ app.get("/api/wikipedia/lookup", async (req, res) => {
     const title = Array.isArray(sdata) && Array.isArray(sdata[1]) && sdata[1][0] ? sdata[1][0] : null;
     if (!title) { res.json({ found: false }); return; }
     const pageUrl = (Array.isArray(sdata[3]) && sdata[3][0]) ? sdata[3][0] : `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`;
-    // Step 2: fetch the article body. The TextExtracts API gives clean
-    // paragraph HTML (no infoboxes/refs/edit-links). exintro=1 → lead only;
-    // omit it to get the full article body. Always pull the thumbnail too.
+
+    if (full) {
+      // Full-article path: TextExtracts (prop=extracts) deliberately
+      // strips tables, lists, and infoboxes — it only returns clean
+      // prose. That breaks list-style articles like "List of folk songs
+      // by Roud number", which are essentially one big sortable
+      // wikitable: the surrounding prose rendered, the table vanished.
+      // Use the Parse API instead, which returns the fully rendered
+      // article HTML (tables included). Pull the thumbnail in parallel
+      // via pageimages so the header image still shows.
+      const parseUrl = `https://en.wikipedia.org/w/api.php?action=parse&format=json&prop=text&redirects=1&disabletoc=1&page=${encodeURIComponent(title)}`;
+      const thumbUrl = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&piprop=thumbnail&pithumbsize=200&redirects=1&titles=${encodeURIComponent(title)}`;
+      const [pr, tr] = await Promise.all([
+        loggedFetch("wikipedia", parseUrl, { context: "wiki parse full", headers: wikiHeaders }),
+        loggedFetch("wikipedia", thumbUrl, { context: "wiki parse thumb", headers: wikiHeaders }).catch(() => null),
+      ]);
+      if (!pr.ok) { console.error("[wikipedia] parse HTTP", pr.status); res.status(502).json({ error: "Wikipedia parse failed", status: pr.status }); return; }
+      const pdata = await pr.json() as any;
+      const rawHtml = pdata?.parse?.text?.["*"] ?? "";
+      // Reuse the shared sanitizer (strips <script>/<style>/inline
+      // handlers/javascript: URLs) and additionally drop <link> tags
+      // (TemplateStyles stylesheet refs that would 404 cross-origin).
+      const html = _gutenbergSanitizeHtml(rawHtml).replace(/<link\b[^>]*>/gi, "");
+      const finalTitle = pdata?.parse?.title ?? title;
+      let thumbnail: string | null = null;
+      try {
+        const tdata = tr && (tr as Response).ok ? await (tr as Response).json() as any : null;
+        const tpages = tdata?.query?.pages ?? {};
+        const tkey = Object.keys(tpages)[0];
+        thumbnail = (tkey ? tpages[tkey]?.thumbnail?.source : null) ?? null;
+      } catch {}
+      res.json({ found: !!html, title: finalTitle, url: pageUrl, html, thumbnail, full: true });
+      return;
+    }
+
+    // Lead-only path (fast): TextExtracts with exintro=1. Used by
+    // artist-bio / inline popups — unchanged, no tables expected there.
     const extractParams = [
       "action=query",
       "format=json",
       "prop=extracts|pageimages",
-      ...(full ? [] : ["exintro=1"]),
+      "exintro=1",
       "piprop=thumbnail",
       "pithumbsize=200",
       "redirects=1",
       `titles=${encodeURIComponent(title)}`,
     ].join("&");
     const extractUrl = `https://en.wikipedia.org/w/api.php?${extractParams}`;
-    const er = await loggedFetch("wikipedia", extractUrl, { context: full ? "wiki extract full" : "wiki extract", headers: wikiHeaders });
+    const er = await loggedFetch("wikipedia", extractUrl, { context: "wiki extract", headers: wikiHeaders });
     if (!er.ok) { console.error("[wikipedia] extract HTTP", er.status); res.status(502).json({ error: "Wikipedia extract failed", status: er.status }); return; }
     const edata = await er.json() as any;
     const pages = edata?.query?.pages ?? {};
