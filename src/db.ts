@@ -2419,6 +2419,15 @@ export async function appendPlayQueue(
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // Serialize all multi-statement queue writes for this user. Both
+    // this and reorderPlayQueue do DELETE-then-INSERT bursts on the
+    // same (clerk_user_id, position) rows; run concurrently they can
+    // deadlock and Postgres aborts one — surfacing to the client as an
+    // intermittent "reorder failed" that snaps back. The advisory lock
+    // (namespaced with a constant so it can't collide with other
+    // advisory locks) makes them queue instead. Auto-released on
+    // COMMIT/ROLLBACK.
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1), 424242)`, [clerkUserId]);
     // De-dupe: re-adding a track that's already in the queue is a MOVE,
     // not a stack. Delete any existing rows whose external_id matches an
     // incoming item BEFORE positioning the new copies. Without this the
@@ -2521,6 +2530,10 @@ export async function reorderPlayQueue(clerkUserId: string, orderedPositions: nu
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // Same per-user serialization as appendPlayQueue (see note there) —
+    // prevents reorder/add deadlocks that bubbled up as a flaky
+    // "reorder failed" + snap-back.
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext($1), 424242)`, [clerkUserId]);
     const r = await client.query(
       `SELECT position, source, external_id, data FROM user_play_queue WHERE clerk_user_id = $1`,
       [clerkUserId]
