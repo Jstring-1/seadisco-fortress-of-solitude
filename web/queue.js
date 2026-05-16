@@ -1087,24 +1087,33 @@ async function _bindSortable() {
           return;
         }
 
-        // Fire-and-forget PATCH; if it fails we revert via reload.
-        apiFetch("/api/user/play-queue/reorder", {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ positions: oldPositions }),
-        }).then(r => {
-          if (!r.ok) {
-            console.warn("[queue] reorder failed:", r.status);
-            if (typeof showToast === "function") showToast("Reorder failed — restored", "error");
-            _queue = null;
-            _renderQueueDrawer();
+        // PATCH with one retry. The server serializes queue writes with
+        // an advisory lock now, but a transient hiccup (cold pool conn,
+        // brief lock wait timing out a fetch, etc.) shouldn't visibly
+        // snap the user's drag back. Retry once after a short delay;
+        // only revert if BOTH attempts fail. _queue stays optimistically
+        // ordered in the meantime so a successful retry needs no repaint.
+        (async () => {
+          const send = () => apiFetch("/api/user/play-queue/reorder", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ positions: oldPositions }),
+          });
+          for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+              const r = await send();
+              if (r.ok) return;                       // success — keep optimistic order
+              console.warn(`[queue] reorder attempt ${attempt} failed:`, r.status);
+            } catch (e) {
+              console.warn(`[queue] reorder attempt ${attempt} threw:`, e);
+            }
+            if (attempt === 1) await new Promise(res => setTimeout(res, 350));
           }
-        }).catch(e => {
-          console.warn("[queue] reorder threw:", e);
+          // Both attempts failed — revert to server truth.
           if (typeof showToast === "function") showToast("Reorder failed — restored", "error");
           _queue = null;
           _renderQueueDrawer();
-        });
+        })();
         // Re-paint with fresh data-position attrs (1..N) so a follow-up
         // drag reads the correct values.
         _renderQueueDrawer();
