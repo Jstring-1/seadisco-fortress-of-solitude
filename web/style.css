@@ -9601,10 +9601,11 @@ body.is-offline button.offline-disabled {
 #album-info .track,
 #version-info .track {
   display: grid;
-  /* Widened from 28px → 56px to host both ▶ and ＋ side-by-side. The
-     ＋ used to live mid-title-row; moving it adjacent to the play
-     button makes "play / queue" feel like a paired affordance. */
-  grid-template-columns: 56px 2.4rem 1fr auto;
+  /* Columns match the DOM order: pos | title | duration | actions.
+     Position + title sit on the left; the ▶ ＋ ♪ action cluster is
+     pinned right. Duration is `auto` so it collapses to nothing when a
+     row has no duration (the action cell then sits flush right). */
+  grid-template-columns: 2.4rem 1fr auto auto;
   align-items: baseline;
   gap: 0.5rem;
   padding: 0.25rem 0;
