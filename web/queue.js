@@ -1823,6 +1823,131 @@ function _playlistClosePicker() {
 }
 window._playlistClosePicker = _playlistClosePicker;
 
+// ── Save a single track to an existing playlist ─────────────────────
+// Wired to the ♪ button on album-popup tracklist rows. Playlists store
+// queue-shaped items, so we reuse the existing endpoints rather than
+// adding a new one: GET the chosen playlist, append this item (dedup
+// by externalId), PUT it back via the owner-only /replace route.
+let _trackPlaylistPickerEl = null;
+let _trackPlaylistPendingItem = null;
+
+function _trackPlaylistItemFromBtn(btn) {
+  const url = btn?.dataset?.ytUrl || "";
+  const videoId = (typeof extractYouTubeId === "function") ? extractYouTubeId(url) : "";
+  if (!videoId) return null;
+  return {
+    source: "yt",
+    externalId: String(videoId),
+    data: {
+      title:       btn.dataset.track  || "",
+      artist:      btn.dataset.artist || "",
+      albumTitle:  btn.dataset.album  || "",
+      ytUrl:       url,
+      releaseType: btn.dataset.releaseType || "",
+      releaseId:   btn.dataset.releaseId   || "",
+    },
+  };
+}
+
+async function _trackPlaylistAdd(btn) {
+  if (!window._clerk?.user) {
+    if (typeof showToast === "function") showToast("Sign in to save to a playlist", "info");
+    return;
+  }
+  const item = _trackPlaylistItemFromBtn(btn);
+  if (!item) {
+    if (typeof showToast === "function") showToast("No playable video for this track", "error");
+    return;
+  }
+  _trackPlaylistPendingItem = item;
+  if (!_trackPlaylistPickerEl) {
+    _trackPlaylistPickerEl = document.createElement("div");
+    _trackPlaylistPickerEl.className = "playlist-picker";
+    _trackPlaylistPickerEl.innerHTML = `
+      <div class="playlist-picker-card">
+        <div class="playlist-picker-head">
+          <span class="playlist-picker-title">Save to playlist</span>
+          <button type="button" class="playlist-picker-close" onclick="_trackPlaylistClosePicker()">×</button>
+        </div>
+        <div class="playlist-picker-body" id="track-playlist-picker-body">Loading…</div>
+      </div>`;
+    _trackPlaylistPickerEl.addEventListener("click", e => {
+      if (e.target === _trackPlaylistPickerEl) _trackPlaylistClosePicker();
+    });
+    document.body.appendChild(_trackPlaylistPickerEl);
+  }
+  _trackPlaylistPickerEl.classList.add("open");
+  if (typeof _sdLockBodyScroll === "function") _sdLockBodyScroll("track-playlist-picker");
+  const body = _trackPlaylistPickerEl.querySelector("#track-playlist-picker-body");
+  body.innerHTML = "Loading…";
+  try {
+    const r = await apiFetch("/api/user/playlists");
+    if (!r.ok) { body.textContent = "Could not load playlists."; return; }
+    const { items } = await r.json();
+    if (!Array.isArray(items) || !items.length) {
+      body.innerHTML = `<div class="playlist-picker-empty">No playlists yet. Save the queue as a playlist first (💾 in the queue drawer), then you can add tracks to it.</div>`;
+      return;
+    }
+    const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+    const titleSafe = esc(item.data.title || "this track");
+    body.innerHTML = `
+      <div class="playlist-picker-subnote">Add <strong>${titleSafe}</strong> to:</div>
+      <ul class="playlist-picker-list">${items.map(p => `
+        <li class="playlist-picker-row" data-id="${p.id}">
+          <span class="playlist-picker-name" title="${esc(p.name)}">${esc(p.name)}</span>
+          <span class="playlist-picker-count">${p.item_count} item${p.item_count === 1 ? "" : "s"}</span>
+          <span class="playlist-picker-actions">
+            <button type="button" class="playlist-picker-load" onclick="_trackPlaylistDoAdd(${p.id})" title="Add to &quot;${esc(p.name)}&quot;">＋ Add</button>
+          </span>
+        </li>`).join("")}</ul>`;
+  } catch (e) {
+    console.warn("[_trackPlaylistAdd]", e);
+    body.textContent = "Could not load playlists.";
+  }
+}
+window._trackPlaylistAdd = _trackPlaylistAdd;
+
+function _trackPlaylistClosePicker() {
+  if (!_trackPlaylistPickerEl) return;
+  _trackPlaylistPickerEl.classList.remove("open");
+  if (typeof _sdUnlockBodyScroll === "function") _sdUnlockBodyScroll("track-playlist-picker");
+  _trackPlaylistPendingItem = null;
+}
+window._trackPlaylistClosePicker = _trackPlaylistClosePicker;
+
+async function _trackPlaylistDoAdd(id) {
+  const item = _trackPlaylistPendingItem;
+  if (!item) { _trackPlaylistClosePicker(); return; }
+  try {
+    const gr = await apiFetch(`/api/playlists/${id}`);
+    if (!gr.ok) { if (typeof showToast === "function") showToast("Playlist not found", "error"); return; }
+    const { playlist } = await gr.json();
+    const existing = Array.isArray(playlist?.items) ? playlist.items : [];
+    // Dedup by externalId — re-adding a track already in the playlist
+    // just moves it to the end (kept once), matching queue behavior.
+    const filtered = existing.filter(it => String(it.externalId) !== String(item.externalId));
+    const combined = [...filtered, item].map(it => ({
+      source: it.source, externalId: it.externalId, data: it.data || {},
+    }));
+    const pr = await apiFetch(`/api/user/playlists/${id}/replace`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: playlist?.name, items: combined }),
+    });
+    if (!pr.ok) {
+      const msg = pr.status === 404 ? "Not your playlist" : `Could not save (HTTP ${pr.status})`;
+      if (typeof showToast === "function") showToast(msg, "error");
+      return;
+    }
+    if (typeof showToast === "function") showToast(`Saved to "${playlist?.name ?? "playlist"}"`);
+    _trackPlaylistClosePicker();
+  } catch (e) {
+    console.warn("[_trackPlaylistDoAdd]", e);
+    if (typeof showToast === "function") showToast("Could not save to playlist", "error");
+  }
+}
+window._trackPlaylistDoAdd = _trackPlaylistDoAdd;
+
 async function _playlistRefreshPicker() {
   if (!_playlistPickerEl) return;
   const body = _playlistPickerEl.querySelector("#playlist-picker-body");
