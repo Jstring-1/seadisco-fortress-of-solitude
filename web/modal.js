@@ -2987,7 +2987,10 @@ function _trackYtApplyToDom(targetId, masterId, releaseId, isMaster) {
       const isFullAlbumRow = String(pos) === "ALBUM";
       const fullAlbumAttr = isFullAlbumRow ? ' data-fullalbum="1"' : "";
       const queueAddHtml = ` <a href="#" class="queue-add-icon"${fullAlbumAttr} data-yt-url="${url}" data-track="${escHtml(trackTitle)}" data-album="${escHtml(albumTitle)}" data-artist="${escHtml(trackArtist)}" data-release-type="${entityType}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackQueueAdd(this);return false" title="${isFullAlbumRow ? "Add full album to play queue" : "Add to play queue"}">＋</a>`;
-      if (playCell) playCell.innerHTML = `${playHtml}${queueAddHtml}`;
+      // ♪ save-to-playlist button — mirror the static render so a
+      // dynamically-injected override row gets it too.
+      const playlistAddHtml = ` <a href="#" class="queue-add-icon track-playlist-add" data-yt-url="${url}" data-track="${escHtml(trackTitle)}" data-album="${escHtml(albumTitle)}" data-artist="${escHtml(trackArtist)}" data-release-type="${entityType}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackPlaylistAdd(this);return false" title="${isFullAlbumRow ? "Save the full album to a playlist" : "Save this track to a playlist"}">♪</a>`;
+      if (playCell) playCell.innerHTML = `${playHtml}${queueAddHtml}${playlistAddHtml}`;
       // Migrate any pre-existing queue-add icon that was historically
       // injected into the title cell back into the play cell — keeps
       // older sessions consistent without leaving a stray ＋ behind.
@@ -3068,8 +3071,12 @@ window._trackYtRefreshHeadingMissingCount = _trackYtRefreshHeadingMissingCount;
 // "()" with no Play-all / Queue-all affordances.
 function _trackYtRefreshHeadingPlayableCount(root) {
   if (!root) return;
-  const heading = root.querySelector(".album-tracklist .tracklist-heading");
-  if (!heading) return;
+  // The playable affordance block ("(N ▶ ＋ 🎵 N missing)") now lives in
+  // the right-aligned .tracklist-header-actions container, not inside
+  // the heading text. Fall back to the heading for any legacy markup.
+  const host = root.querySelector(".album-tracklist .tracklist-header-actions")
+            || root.querySelector(".album-tracklist .tracklist-heading");
+  if (!host) return;
   const rows = root.querySelectorAll(".album-tracklist .track[data-pos]");
   let count = 0;
   let firstUrl = "";
@@ -3080,7 +3087,7 @@ function _trackYtRefreshHeadingPlayableCount(root) {
     count++;
     if (!firstUrl) firstUrl = link.getAttribute("data-video") || "";
   });
-  let span = heading.querySelector(".tracklist-playable");
+  let span = host.querySelector(".tracklist-playable");
   // Preserve any existing 🎵-missing link so we don't have to rebuild
   // its dataset attrs (yt-q etc) — _trackYtRefreshHeadingMissingCount
   // will re-tune its text + visibility on its own pass.
@@ -3099,7 +3106,7 @@ function _trackYtRefreshHeadingPlayableCount(root) {
   if (!span) {
     span = document.createElement("span");
     span.className = "tracklist-playable";
-    heading.appendChild(span);
+    host.appendChild(span);
   }
   span.textContent = "";
   span.append(`(${count}`);
@@ -4354,8 +4361,9 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   const trackHTML = _showTrackHTML ? `
     <div class="album-tracklist">
       <div class="tracklist-header">
-        <div class="tracklist-heading tracklist-toggle" onclick="toggleTracklist(this)" title="Click to collapse/expand tracklist"><span class="tracklist-arrow">${tracklistOpen ? "▼" : "▶"}</span> Tracklist ${playableMeta}</div>
+        <div class="tracklist-heading tracklist-toggle" onclick="toggleTracklist(this)" title="Click to collapse/expand tracklist"><span class="tracklist-arrow">${tracklistOpen ? "▼" : "▶"}</span> Tracklist</div>
         <input type="text" class="tracklist-filter" placeholder="filter tracks…" oninput="filterTracks(this)" />
+        <span class="tracklist-header-actions">${playableMeta}</span>
       </div>
       <div class="tracklist-body"${tracklistOpen ? "" : ' style="display:none"'}>
       ${(() => {
@@ -4378,6 +4386,9 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         const queueAddFA = fullAlbumUrl
           ? ` <a href="#" class="queue-add-icon" data-fullalbum="1" data-yt-url="${escHtml(fullAlbumUrl)}" data-track="Full album" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtistFA)}" data-release-type="${escHtml(entityType)}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackQueueAdd(this);return false" title="Add full album to play queue">＋</a>`
           : "";
+        const playlistAddFA = fullAlbumUrl
+          ? ` <a href="#" class="queue-add-icon track-playlist-add" data-yt-url="${escHtml(fullAlbumUrl)}" data-track="Full album" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtistFA)}" data-release-type="${escHtml(entityType)}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackPlaylistAdd(this);return false" title="Save the full album to a playlist">♪</a>`
+          : "";
         const overrideBadgeFA = fullAlbumUrl
           ? ` <span class="track-yt-override-badge" title="User-suggested full-album video">🎵</span>${
               window._isAdmin
@@ -4392,9 +4403,9 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         // albums where no full-album video has been submitted.
         const hideStyle = !fullAlbumUrl ? ' style="display:none"' : "";
         return `<div class="track track-fullalbum" data-pos="ALBUM"${fullAlbumUrl ? ' data-yt-override="1"' : ""}${hideStyle}>
-          <span class="track-play-cell">${playCellFA}${queueAddFA}</span>
           <span class="track-pos">Full</span>
           <span class="track-title"><span class="track-title-link">Full album as one track</span>${overrideBadgeFA}</span>
+          <span class="track-play-cell">${playCellFA}${queueAddFA}${playlistAddFA}</span>
         </div>`;
       })()}
       ${tracks.map(t => {
@@ -4447,6 +4458,13 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
         const queueAdd = url
           ? ` <a href="#" class="queue-add-icon" data-yt-url="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" data-release-type="${escHtml(entityType || "")}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackQueueAdd(this);return false" title="Add to play queue">＋</a>`
           : "";
+        // ♪ → save this track into an existing playlist. Same size /
+        // style as the ＋ button. Only meaningful when the row has a
+        // playable URL (playlists store queue-shaped items keyed by the
+        // YouTube video id).
+        const playlistAdd = url
+          ? ` <a href="#" class="queue-add-icon track-playlist-add" data-yt-url="${escHtml(url)}" data-track="${escHtml(t.title || "")}" data-album="${escHtml(title)}" data-artist="${escHtml(trackArtist)}" data-release-type="${escHtml(entityType || "")}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="event.preventDefault();_trackPlaylistAdd(this);return false" title="Save this track to a playlist">♪</a>`
+          : "";
         // Crowd-sourced override badge (shown only when this row's URL
         // came from track_youtube_overrides, not Discogs's videos[]).
         // The 🎵 indicates "user-contributed". Admins get a tiny ✕
@@ -4474,11 +4492,13 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
               return `${nameEl}${a.role ? ` <span class="credit-role">(${escHtml(a.role)})</span>` : ""}${credSearchIcon}`;
             }).join('<span class="credit-sep"> · </span>')}</div>`
           : "";
+        // Layout: position + title (+ duration) on the LEFT; all media
+        // actions (▶ ＋ ♪) clustered on the RIGHT.
         return `<div class="track" data-pos="${escHtml(trackPos)}"${overrideRow ? ' data-yt-override="1"' : ""}>
-          <span class="track-play-cell">${playCell}${queueAdd}</span>
           <span class="track-pos">${escHtml(t.position || "")}</span>
           <span class="track-title">${titleLink}${searchIcon}${wikiW}${locL}${ytSearchEnd}${overrideBadge}${suggestBtn}${trackCredits}</span>
           ${t.duration ? `<span class="track-dur">${escHtml(t.duration)}</span>` : ""}
+          <span class="track-play-cell">${playCell}${queueAdd}${playlistAdd}</span>
         </div>`;
       }).join("")}
       </div>

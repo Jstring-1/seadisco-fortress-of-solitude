@@ -7258,6 +7258,14 @@ body.player-open .queue-drawer.open { bottom: 102px; }
   text-align: center;
   color: #777;
 }
+.playlist-picker-subnote {
+  padding: 0.5rem 0.5rem 0.6rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 0.3rem;
+}
+.playlist-picker-subnote strong { color: var(--fg); }
 .playlist-picker-list {
   list-style: none;
   margin: 0;
@@ -9597,11 +9605,23 @@ body.is-offline button.offline-disabled {
 .track-play-cell {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-start;
-  gap: 0.15rem;
-  width: 56px;
-  min-width: 56px;
+  /* Action cluster now lives on the RIGHT of each track row — hug the
+     right edge and never shrink so ▶ ＋ ♪ stay aligned across rows. */
+  justify-content: flex-end;
+  gap: 0.2rem;
+  min-width: 78px;
+  flex-shrink: 0;
   height: 1.2rem;
+  margin-left: 0.4rem;
+}
+/* Right-aligned host for the album-level play-all / queue-all
+   affordances ("(N ▶ ＋ 🎵 N missing)"). Pushed to the far right of the
+   tracklist header so the left side is just "Tracklist" + the filter. */
+.tracklist-header-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 /* When rendered inside .track-play-cell (next to ▶) the queue add
    button drops its left margin so the two icons sit flush. */
