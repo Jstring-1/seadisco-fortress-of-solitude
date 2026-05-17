@@ -4383,10 +4383,11 @@ body.card-mode-wide .card-images-strip {
 }
 .card-tracklist-rows li {
   display: grid;
-  /* Columns: actions | pos | title. Duration column dropped — it was
-     rendering inconsistently across cards and doesn't earn its space
-     at card-tile size. Saved for the album popup. */
-  grid-template-columns: auto 1.5rem 1fr;
+  /* Columns: pos | title | actions — matches the album-popup layout
+     (position + title on the left, media actions clustered on the
+     right). Duration column dropped — it rendered inconsistently
+     across cards and doesn't earn its space at card-tile size. */
+  grid-template-columns: 1.5rem 1fr auto;
   gap: 0.2rem;
   align-items: center;
   padding: 0.12rem 0;
@@ -4405,10 +4406,12 @@ body.card-mode-wide .card-images-strip {
   display: inline-flex;
   gap: 0.25rem;
   align-items: center;
+  justify-content: flex-end;
   font-size: 0.78rem;
 }
 .card-track-play,
-.card-track-queue {
+.card-track-queue,
+.card-track-playlist {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -4428,7 +4431,8 @@ body.card-mode-wide .card-images-strip {
    default font so they read as a tap target without a visible button
    chrome. Override the play-button width/height so the glyph isn't
    clipped at the larger size. */
-.card-track-queue {
+.card-track-queue,
+.card-track-playlist {
   width: auto;
   height: auto;
   background: none !important;
@@ -4437,7 +4441,11 @@ body.card-mode-wide .card-images-strip {
   line-height: 1;
   padding: 0 0.15rem;
 }
-.card-track-queue:hover {
+/* ♪ reads a touch small at the ＋ size — nudge it up so the three
+   actions feel visually balanced. */
+.card-track-playlist { font-size: 1rem; }
+.card-track-queue:hover,
+.card-track-playlist:hover {
   color: var(--accent);
   background: none !important;
 }
@@ -4466,12 +4474,11 @@ body.card-mode-wide .card-images-strip {
   justify-content: space-between;
   gap: 0.4rem;
 }
-/* margin-left:auto pins the label to the right edge regardless of
-   whether the play/queue-all actions are present. justify-content:
-   space-between only spreads when there are 2+ children — when only
-   the label renders (no playable tracks → no actions), it would
-   otherwise collapse to the left. */
-.card-tracklist-head-label { flex: 0 1 auto; margin-left: auto; }
+/* Label sits on the LEFT, play-all / queue-all on the RIGHT — matches
+   the album-popup tracklist header. flex:1 keeps the label hugging
+   the left edge and pushes the actions to the right even when only
+   the label renders (no playable tracks → no actions). */
+.card-tracklist-head-label { flex: 1 1 auto; margin: 0; }
 .card-tracklist-head-actions {
   display: inline-flex;
   gap: 0.3rem;

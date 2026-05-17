@@ -764,30 +764,31 @@ function _sdInjectEnrichmentIntoCards(row) {
           const queueBtn = url
             ? `<span role="button" tabindex="0" class="card-track-queue queue-add-icon" data-yt-url="${escAttr(url)}" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackQueueAdd(this);return false" title="Add to queue">＋</span>`
             : `<span class="card-track-queue card-track-disabled" aria-hidden="true">＋</span>`;
-          // Actions column moved to the LEFT of pos so the play/queue
-          // affordances are the first thing the eye lands on. Grid
-          // template in style.css matches: actions | pos | title | dur.
-          // Track duration was rendering inconsistently across cards
-          // (only present on items whose Discogs metadata included it
-          // and only after enrichment landed) and added little value
-          // at card-tile size. Saved for the album popup, where the
-          // tracklist heading + per-row duration column has space to
-          // render cleanly. The grid-template in style.css still
-          // reserves the column so existing CSS doesn't reflow.
+          // ♪ → save this track to an existing playlist. Mirrors the
+          // album-popup affordance (same _trackPlaylistAdd handler /
+          // data-* contract); disabled placeholder when there's no
+          // playable URL so the action column stays aligned.
+          const playlistBtn = url
+            ? `<span role="button" tabindex="0" class="card-track-playlist track-playlist-add" data-yt-url="${escAttr(url)}" data-track="${escAttr(t.title || "")}" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackPlaylistAdd(this);return false" title="Save this track to a playlist">♪</span>`
+            : `<span class="card-track-playlist card-track-disabled" aria-hidden="true">♪</span>`;
+          // Match the album-popup layout: position + title on the LEFT,
+          // the media action cluster (▶ ＋ ♪) on the RIGHT. Grid
+          // template in style.css matches: pos | title | actions.
           return `<li>
-            <span class="card-track-actions">${playBtn}${queueBtn}</span>
             <span class="card-track-pos">${escText(t.position || "")}</span>
             <span class="card-track-title">${titleHtml}</span>
+            <span class="card-track-actions">${playBtn}${queueBtn}${playlistBtn}</span>
           </li>`;
         };
         const fullAlbumRow = fullAlbumUrl
           ? `<li class="card-track-fullalbum">
+              <span class="card-track-pos">★</span>
+              <span class="card-track-title">Full album as one track</span>
               <span class="card-track-actions">
                 <span role="button" tabindex="0" class="card-track-play card-track-play-active track-link" data-video="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();openVideo(event,'${escAttr(fullAlbumUrl).replace(/'/g, "\\'")}')" title="Play full album">▶</span>
                 <span role="button" tabindex="0" class="card-track-queue queue-add-icon" data-fullalbum="1" data-yt-url="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackQueueAdd(this);return false" title="Queue full album">＋</span>
+                <span role="button" tabindex="0" class="card-track-playlist track-playlist-add" data-yt-url="${escAttr(fullAlbumUrl)}" data-track="Full album" data-album="${escAttr(cardTitle)}" data-artist="${escAttr(cardArtist)}" data-release-type="${escAttr(releaseType)}" data-release-id="${escAttr(releaseId)}" onclick="event.preventDefault();event.stopPropagation();_trackPlaylistAdd(this);return false" title="Save the full album to a playlist">♪</span>
               </span>
-              <span class="card-track-pos">★</span>
-              <span class="card-track-title">Full album as one track</span>
             </li>`
           : "";
         // "Play all tracks" / "Queue all tracks" — only meaningful if
@@ -811,7 +812,7 @@ function _sdInjectEnrichmentIntoCards(row) {
         // renders so the user knows how many tracks the album has.
         const headLabel = `<span class="card-tracklist-head-label" title="${playableCount} of ${tracks.length} tracks have a YouTube match">(${playableCount}/${tracks.length}) track${tracks.length === 1 ? "" : "s"}${fullAlbumUrl ? " · full album" : ""}</span>`;
         const tlHtml = `<div class="card-tracklist">
-          <div class="card-tracklist-head">${headActions}${headLabel}</div>
+          <div class="card-tracklist-head">${headLabel}${headActions}</div>
           <ol class="card-tracklist-rows">${fullAlbumRow}${tracks.map((t, i) => trackRow(t, i)).join("")}</ol>
         </div>`;
         body.insertAdjacentHTML("beforeend", tlHtml);
