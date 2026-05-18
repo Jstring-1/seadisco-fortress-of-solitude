@@ -1228,8 +1228,9 @@ async function loadAdminOverview() {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
     el.innerHTML = [
-      _kpiCard("Total users", d.totalUsers ?? "–", "with a Discogs connection"),
-      _kpiCard("New (7d)", d.newUsers7d ?? "–", d.sinceLabel7d || "", "Users whose account was created in the last 7 days"),
+      _kpiCard("Clerk users", d.clerkUsers ?? "–", "total signed-up accounts", "All Clerk accounts, including users who never connected Discogs"),
+      _kpiCard("Discogs-connected", d.totalUsers ?? "–", "have linked Discogs", "Users with a Discogs OAuth connection (a row in user_tokens)"),
+      _kpiCard("New (7d)", d.newUsers7d ?? "–", d.sinceLabel7d || "", "Discogs-connected users created in the last 7 days"),
       _kpiCard("New (30d)", d.newUsers30d ?? "–", "", "Users created in the last 30 days"),
       _kpiCard("DAU", d.dau ?? "–", "active 24h"),
       _kpiCard("WAU", d.wau ?? "–", "active 7d"),
@@ -1250,8 +1251,9 @@ async function loadAdminUserStats() {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
     el.innerHTML = [
-      _kpiCard("Total users", d.totalUsers ?? "–", "current"),
-      _kpiCard("New users", d.newUsers7d ?? 0, d.sinceLabel7d || "since 7d ago", "New since the last 7 days"),
+      _kpiCard("Clerk users", d.clerkUsers ?? "–", "signed-up accounts", "All Clerk accounts, including users who never connected Discogs"),
+      _kpiCard("Discogs-connected", d.totalUsers ?? "–", "linked Discogs", "Users with a Discogs OAuth connection"),
+      _kpiCard("New users", d.newUsers7d ?? 0, d.sinceLabel7d || "since 7d ago", "New Discogs-connected users in the last 7 days"),
       _kpiCard("New (30d)", d.newUsers30d ?? 0, ""),
       _kpiCard("Active 24h", d.dau ?? "–", ""),
       _kpiCard("Active 7d", d.wau ?? "–", ""),
