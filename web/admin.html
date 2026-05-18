@@ -2685,6 +2685,18 @@ function _adminSortTh(label, key, state, fn, extraStyle) {
   const arrow = active ? (state.dir === "desc" ? "▼" : "▲") : "";
   return `<th class="admin-sort-th${active ? " is-active" : ""}" style="padding:0.3rem 0.5rem;${extraStyle || ""}" onclick="${fn}('${key}')">${label}<span class="admin-sort-arrow">${arrow}</span></th>`;
 }
+// Clickable album cell — opens the shared in-page album modal
+// (modal.js is loaded on /admin). Falls back to a dash when there's
+// no release context (e.g. an unavailable Discogs-native video with
+// no crowd-submitted override to map it back to an album).
+function _adminAlbumLink(type, id, label) {
+  if (!id || !type) return '<span style="color:var(--muted)">—</span>';
+  const t = String(type), i = String(id);
+  const lbl = label || `${t}/${i}`;
+  const url = `https://www.discogs.com/${t}/${i}`;
+  return `<a href="#" onclick="event.preventDefault();event.stopPropagation();openModal(event,'${i}','${t}','${url}')" title="Open album popup" style="color:#7eb8da;text-decoration:none">${escHtml(lbl)} ↗</a>`;
+}
+
 const _adminSubSortState  = { key: "submitted_at",  dir: "desc" };
 const _adminUnavSortState = { key: "report_count",  dir: "desc" };
 function _adminSubSort(key)  { _adminToggleSort(_adminSubSortState, key);  _renderAdminSubmissionsTable(); }
@@ -2764,7 +2776,7 @@ function _renderAdminSubmissionsTable() {
       <th></th>
     </tr></thead>`;
   const body = sorted.map(o => {
-    const albumLink = `<a href="/?op=${encodeURIComponent(o.release_type + ':' + o.release_id)}" target="_blank" rel="noopener" style="color:#7eb8da;text-decoration:none">${o.release_type}/${escHtml(String(o.release_id))}</a>`;
+    const albumLink = _adminAlbumLink(o.release_type, o.release_id);
     const ytLink = `<a href="https://www.youtube.com/watch?v=${encodeURIComponent(o.video_id)}" target="_blank" rel="noopener" style="color:#7eb8da;text-decoration:none">${escHtml(trim(o.video_title || o.video_id, 40))}</a>`;
     return `<tr style="border-top:1px solid var(--border);font-size:0.78rem">
       <td style="padding:0.35rem 0.5rem;color:var(--muted);white-space:nowrap">${escHtml(fmtDate(o.submitted_at))}</td>
@@ -2815,6 +2827,7 @@ function _renderAdminUnavailableTable() {
         const hay = [
           o.video_id, o.status, String(o.report_count),
           o.sample_user_id, String(o.sample_error_code ?? ""),
+          o.release_id, o.release_type, o.track_title,
         ].filter(Boolean).join(" ").toLowerCase();
         return hay.includes(filter);
       })
@@ -2844,6 +2857,7 @@ function _renderAdminUnavailableTable() {
     <tr>
       ${_adminSortTh("Status", "status", U, "_adminUnavSort")}
       ${_adminSortTh("Video", "video_id", U, "_adminUnavSort")}
+      ${_adminSortTh("Album", "release_id", U, "_adminUnavSort")}
       ${_adminSortTh("Reports", "report_count", U, "_adminUnavSort", "text-align:right")}
       ${_adminSortTh("First", "first_reported_at", U, "_adminUnavSort")}
       ${_adminSortTh("Last", "last_reported_at", U, "_adminUnavSort")}
@@ -2853,10 +2867,13 @@ function _renderAdminUnavailableTable() {
     </tr></thead>`;
   const body = sorted.map(o => {
     const ytLink = `<a href="https://www.youtube.com/watch?v=${encodeURIComponent(o.video_id)}" target="_blank" rel="noopener" style="color:#7eb8da;text-decoration:none;font-family:monospace">${escHtml(o.video_id)}</a>`;
+    const albumCell = _adminAlbumLink(o.release_type, o.release_id,
+      o.release_id ? `${o.release_type}/${o.release_id}` : "");
     const statusColor = o.status === "unavailable" ? "var(--danger)" : "var(--accent)";
     return `<tr style="border-top:1px solid var(--border);font-size:0.78rem">
       <td style="padding:0.35rem 0.5rem;font-weight:600;color:${statusColor};text-transform:uppercase;font-size:0.7rem;letter-spacing:0.04em">${escHtml(o.status)}</td>
       <td style="padding:0.35rem 0.5rem">${ytLink}</td>
+      <td style="padding:0.35rem 0.5rem"${o.track_title ? ` title="${escHtml(o.track_title)}${o.track_position ? ' · ' + escHtml(o.track_position) : ''}"` : ""}>${albumCell}</td>
       <td style="padding:0.35rem 0.5rem;text-align:right;font-weight:600">${o.report_count}</td>
       <td style="padding:0.35rem 0.5rem;color:var(--muted);white-space:nowrap">${escHtml(fmtDate(o.first_reported_at))}</td>
       <td style="padding:0.35rem 0.5rem;color:var(--muted);white-space:nowrap">${escHtml(fmtDate(o.last_reported_at))}</td>
