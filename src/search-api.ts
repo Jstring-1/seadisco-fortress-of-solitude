@@ -9265,6 +9265,24 @@ app.get("/api/admin/overview", async (req, res) => {
     const o = await getAdminOverview();
     const since = new Date(Date.now() - 7 * 86400000);
     o.sinceLabel7d = `since ${since.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+    // Clerk account count (signed-up users, incl. those who never
+    // connected Discogs). user_tokens only has a row once a user
+    // connects Discogs, so totalUsers = Discogs-connected; this is the
+    // broader signup figure. Best-effort — null if Clerk unreachable.
+    o.clerkUsers = null;
+    const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
+    if (clerkSecret) {
+      try {
+        const cr = await fetch("https://api.clerk.com/v1/users/count", {
+          headers: { Authorization: `Bearer ${clerkSecret}` },
+        });
+        if (cr.ok) {
+          const cj = await cr.json() as any;
+          const n = Number(cj?.total_count);
+          if (Number.isFinite(n)) o.clerkUsers = n;
+        }
+      } catch { /* leave null */ }
+    }
     res.json(o);
   } catch (e: any) {
     res.status(500).json({ error: String(e?.message ?? e) });
