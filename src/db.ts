@@ -5249,11 +5249,20 @@ export async function getUnavailableYoutubeVideoIds(): Promise<Set<string>> {
 export async function listYoutubeVideoUnavailable(limit = 500): Promise<any[]> {
   try {
     const r = await getPool().query(
-      `SELECT video_id, status, report_count,
-              first_reported_at, last_reported_at,
-              sample_user_id, sample_error_code
-         FROM youtube_video_unavailable
-        ORDER BY last_reported_at DESC
+      `SELECT u.video_id, u.status, u.report_count,
+              u.first_reported_at, u.last_reported_at,
+              u.sample_user_id, u.sample_error_code,
+              ov.release_type, ov.release_id,
+              ov.track_title, ov.track_position
+         FROM youtube_video_unavailable u
+         LEFT JOIN LATERAL (
+           SELECT release_type, release_id, track_title, track_position
+             FROM track_youtube_overrides o
+            WHERE o.video_id = u.video_id
+            ORDER BY o.submitted_at DESC
+            LIMIT 1
+         ) ov ON true
+        ORDER BY u.last_reported_at DESC
         LIMIT $1`,
       [Math.max(1, Math.min(2000, limit))]
     );
