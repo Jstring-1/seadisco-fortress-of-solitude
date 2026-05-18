@@ -7410,6 +7410,40 @@ body.player-open .queue-drawer.open { bottom: 102px; }
 .playlist-picker-load {
   color: #fff !important;
 }
+.playlist-save-newrow {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  padding: 0.55rem 0.5rem 0.7rem;
+  border-bottom: 1px solid var(--border);
+}
+.playlist-save-input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 0.4rem 0.5rem;
+  border-radius: 3px;
+  font-size: 0.82rem;
+}
+.playlist-save-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.playlist-save-newrow .playlist-picker-load {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  padding: 0.4rem 0.6rem;
+  border-radius: 3px;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+.playlist-save-newrow .playlist-picker-load:hover {
+  border-color: var(--accent);
+}
 /* Repeat button: three distinct visuals so each state reads at a
    glance. Off uses a muted gray + linear arrow; all uses the accent
    color (blue in the default theme); one uses a warm yellow + a tiny

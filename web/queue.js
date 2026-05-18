@@ -1750,6 +1750,13 @@ function _playlistRequireAuth() {
   return false;
 }
 
+// Save-as modal. Instead of a blind text prompt, show the user's
+// existing playlists so they can overwrite one with a single click
+// (no need to remember/retype the exact name) — plus a name field
+// for saving a brand-new playlist.
+let _playlistSavePickerEl = null;
+let _playlistSaveExisting = [];
+
 async function _playlistSavePrompt() {
   if (!_playlistRequireAuth()) return;
   await _queueLoad(false);
@@ -1762,47 +1769,120 @@ async function _playlistSavePrompt() {
   const head = _queue[0]?.data?.title || "Playlist";
   const more = _queue.length > 1 ? ` +${_queue.length - 1} more` : "";
   const def = `${head}${more}`.slice(0, 80);
-  const name = window.prompt("Name this playlist:", def);
-  if (name == null) return;                     // cancelled
-  const trimmed = name.trim();
+
+  if (!_playlistSavePickerEl) {
+    _playlistSavePickerEl = document.createElement("div");
+    _playlistSavePickerEl.className = "playlist-picker";
+    _playlistSavePickerEl.innerHTML = `
+      <div class="playlist-picker-card">
+        <div class="playlist-picker-head">
+          <span class="playlist-picker-title">Save playlist</span>
+          <button type="button" class="playlist-picker-close" onclick="_playlistSaveClosePicker()">×</button>
+        </div>
+        <div class="playlist-picker-body" id="playlist-save-picker-body">Loading…</div>
+      </div>`;
+    _playlistSavePickerEl.addEventListener("click", e => {
+      if (e.target === _playlistSavePickerEl) _playlistSaveClosePicker();
+    });
+    document.body.appendChild(_playlistSavePickerEl);
+  }
+  _playlistSavePickerEl.classList.add("open");
+  if (typeof _sdLockBodyScroll === "function") _sdLockBodyScroll("playlist-save-picker");
+  const body = _playlistSavePickerEl.querySelector("#playlist-save-picker-body");
+  body.innerHTML = "Loading…";
+
+  _playlistSaveExisting = [];
+  try {
+    const listR = await apiFetch("/api/user/playlists");
+    if (listR.ok) {
+      const j = await listR.json();
+      _playlistSaveExisting = Array.isArray(j.items) ? j.items : [];
+    }
+  } catch { /* treat as none */ }
+
+  const esc = (s) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
+  const n = _queue.length;
+  const list = _playlistSaveExisting.length
+    ? `<div class="playlist-picker-subnote">Or overwrite an existing playlist (keeps its share link):</div>
+       <ul class="playlist-picker-list">${_playlistSaveExisting.map(p => `
+         <li class="playlist-picker-row" data-id="${p.id}">
+           <span class="playlist-picker-name" title="${esc(p.name)}">${esc(p.name)}</span>
+           <span class="playlist-picker-count">${p.item_count} item${p.item_count === 1 ? "" : "s"}</span>
+           <span class="playlist-picker-actions">
+             <button type="button" class="playlist-picker-load" data-id="${p.id}" data-name="${esc(p.name)}" onclick="_playlistSaveOverwrite(this)" title="Overwrite &quot;${esc(p.name)}&quot; with the current queue">Overwrite</button>
+           </span>
+         </li>`).join("")}</ul>`
+    : `<div class="playlist-picker-empty">No saved playlists yet.</div>`;
+
+  body.innerHTML = `
+    <div class="playlist-picker-subnote">Save the current queue (${n} track${n === 1 ? "" : "s"}) as a new playlist:</div>
+    <div class="playlist-save-newrow">
+      <input type="text" id="playlist-save-name" class="playlist-save-input" maxlength="80" value="${esc(def)}" placeholder="Playlist name" />
+      <button type="button" class="playlist-picker-load" onclick="_playlistSaveNew()">Save new</button>
+    </div>
+    ${list}`;
+  const input = body.querySelector("#playlist-save-name");
+  if (input) {
+    setTimeout(() => { try { input.focus(); input.select(); } catch {} }, 30);
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter") { e.preventDefault(); _playlistSaveNew(); }
+    });
+  }
+}
+window._playlistSavePrompt = _playlistSavePrompt;
+
+function _playlistSaveClosePicker() {
+  if (!_playlistSavePickerEl) return;
+  _playlistSavePickerEl.classList.remove("open");
+  if (typeof _sdUnlockBodyScroll === "function") _sdUnlockBodyScroll("playlist-save-picker");
+}
+window._playlistSaveClosePicker = _playlistSaveClosePicker;
+
+// "Save new": read the name field. If the typed name collides (case-
+// insensitively) with an existing playlist, offer to overwrite that
+// one instead of silently creating a duplicate.
+function _playlistSaveNew() {
+  const input = _playlistSavePickerEl?.querySelector("#playlist-save-name");
+  const name = String(input?.value || "").trim();
+  if (!name) {
+    if (typeof showToast === "function") showToast("Enter a playlist name", "error");
+    return;
+  }
+  const norm = name.toLowerCase();
+  const match = _playlistSaveExisting.find(p => String(p.name || "").toLowerCase() === norm);
+  if (match && !window.confirm(`A playlist named "${name}" already exists.\n\nOK = overwrite it (keeps the same share link)\nCancel = save a new copy alongside`)) {
+    _playlistSaveCommit(name, null);
+    return;
+  }
+  _playlistSaveCommit(name, match ? match.id : null);
+}
+window._playlistSaveNew = _playlistSaveNew;
+
+function _playlistSaveOverwrite(btn) {
+  const id = btn?.dataset?.id;
+  const name = btn?.dataset?.name || "playlist";
+  if (id == null) return;
+  if (!window.confirm(`Overwrite "${name}" with the current queue (${_queue.length} track${_queue.length === 1 ? "" : "s"})?`)) return;
+  _playlistSaveCommit(name, id);
+}
+window._playlistSaveOverwrite = _playlistSaveOverwrite;
+
+async function _playlistSaveCommit(name, overwriteId) {
+  const trimmed = String(name || "").trim();
   if (!trimmed) return;
   try {
     const items = _queue.map(it => ({
       source: it.source, externalId: it.externalId, data: it.data || {},
     }));
-    // Check for an existing playlist with the same name (case-
-    // insensitive). If one exists, ask whether to overwrite it or
-    // save a copy as a new entry. Overwrite keeps the same id +
-    // share-URL; "Save copy" creates a fresh playlist alongside.
-    let existingId = null;
-    try {
-      const listR = await apiFetch("/api/user/playlists");
-      if (listR.ok) {
-        const { items: existing = [] } = await listR.json();
-        const norm = trimmed.toLowerCase();
-        const match = existing.find(p => String(p.name || "").toLowerCase() === norm);
-        if (match) existingId = match.id;
-      }
-    } catch { /* fall through — treat as no match */ }
-
     let r, savedId, savedAsOverwrite = false;
-    if (existingId != null) {
-      const overwrite = window.confirm(`A playlist named "${trimmed}" already exists.\n\nOK = overwrite it (keeps the same share link)\nCancel = save a new copy alongside`);
-      if (overwrite) {
-        r = await apiFetch(`/api/user/playlists/${existingId}/replace`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: trimmed, items }),
-        });
-        savedId = existingId;
-        savedAsOverwrite = true;
-      } else {
-        r = await apiFetch("/api/user/playlists", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: trimmed, items }),
-        });
-      }
+    if (overwriteId != null) {
+      r = await apiFetch(`/api/user/playlists/${overwriteId}/replace`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed, items }),
+      });
+      savedId = overwriteId;
+      savedAsOverwrite = true;
     } else {
       r = await apiFetch("/api/user/playlists", {
         method: "POST",
@@ -1819,6 +1899,7 @@ async function _playlistSavePrompt() {
     }
     const j = await r.json();
     const id = savedId ?? j.id;
+    _playlistSaveClosePicker();
     if (typeof showToast === "function") {
       const verb = savedAsOverwrite ? "Overwrote" : "Saved as";
       showToast(`${verb} "${trimmed}" — click 📂 to load it later`);
@@ -1828,11 +1909,11 @@ async function _playlistSavePrompt() {
     const url = `${location.origin}/?pl=${id}`;
     try { await navigator.clipboard?.writeText(url); } catch {}
   } catch (e) {
-    console.warn("[_playlistSavePrompt] failed", e);
+    console.warn("[_playlistSaveCommit] failed", e);
     if (typeof showToast === "function") showToast("Save failed", "error");
   }
 }
-window._playlistSavePrompt = _playlistSavePrompt;
+window._playlistSaveCommit = _playlistSaveCommit;
 
 let _playlistPickerEl = null;
 
