@@ -874,6 +874,21 @@ function queueToggleDrawer() {
   }
 }
 
+// Ensure the queue drawer is OPEN (idempotent — never toggles closed).
+// Used when an action should surface the queue, e.g. loading a
+// playlist. Unlike queueToggleDrawer this does NOT null _queue: the
+// caller (playlist load) has already populated it and a refetch would
+// race the just-written rows.
+function _queueOpenDrawer() {
+  const wrap = _ensureQueueDrawer();
+  if (!wrap.classList.contains("open")) {
+    wrap.classList.add("open");
+    _ensureSortable().catch(() => {}); // lazy-load drag library
+  }
+  _renderQueueDrawer();
+}
+window._queueOpenDrawer = _queueOpenDrawer;
+
 async function _renderQueueDrawer() {
   const wrap = _ensureQueueDrawer();
   const listEl = wrap.querySelector("#queue-drawer-list");
@@ -1300,7 +1315,9 @@ async function queueClear() {
     if (typeof playerClose === "function") {
       try { playerClose(); } catch {}
     }
-    if (_queueDrawerEl) _queueDrawerEl.classList.remove("open");
+    // Keep the drawer open — clearing is a "start fresh" gesture, not
+    // a "I'm done with the queue" one. The empty-state placeholder
+    // tells the user it worked and stays put for the next add / load.
     _renderQueueDrawer();
     return;
   }
@@ -1323,9 +1340,9 @@ async function queueClear() {
     if (typeof playerClose === "function") {
       try { playerClose(); } catch {}
     }
-    // Collapse the drawer — there's nothing left to manage and the
-    // empty-state placeholder isn't useful enough to keep it open.
-    if (_queueDrawerEl) _queueDrawerEl.classList.remove("open");
+    // Keep the drawer open — clearing is a "start fresh" gesture. The
+    // empty-state placeholder confirms it worked and stays available
+    // for the next add / playlist load.
     _renderQueueDrawer();
   } catch {
     if (typeof showToast === "function") showToast("Could not clear queue", "error");
@@ -2027,6 +2044,9 @@ async function _playlistLoad(id) {
       source: it.source, externalId: it.externalId, data: it.data || {},
     })), { mode: "append" });
     _playlistClosePicker();
+    // Surface the queue so the user sees what they just loaded and can
+    // play / reorder it immediately.
+    _queueOpenDrawer();
     if (typeof showToast === "function") showToast(`Loaded "${playlist.name}"`);
   } catch (e) {
     console.warn("[_playlistLoad]", e);
