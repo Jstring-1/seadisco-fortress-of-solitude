@@ -114,6 +114,15 @@
         <div id="admin-sync-status-list" style="font-size:0.83rem;color:var(--muted)">Loading...</div>
       </div>
 
+      <!-- System bar — top of the System tab. Hosts the Active APIs
+           popup launcher (was buried in the Database header). -->
+      <div class="admin-tab-panel admin-grp-system" id="panel-system-bar" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.6rem">
+          <h2 style="margin:0">System</h2>
+          <button class="admin-btn" onclick="adminOpenApis()" title="Active external APIs — health, latency, error rates, LOC proxy + rate-limit headroom">Active APIs ↗</button>
+        </div>
+      </div>
+
       <!-- API Request Log (System group — below Database) -->
       <div class="admin-tab-panel admin-grp-system" id="panel-api-log" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
@@ -144,7 +153,6 @@
           <h2 style="margin:0">Database</h2>
           <button class="admin-refresh-btn" id="db-stats-refresh-btn" onclick="loadDbStats(this)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
           <span id="db-stats-refresh-status" class="admin-refresh-status"></span>
-          <button class="admin-btn" onclick="adminOpenApis()" title="Active external APIs — health, latency, error rates, LOC proxy + rate-limit headroom" style="margin-left:auto">Active APIs ↗</button>
         </div>
         <div id="db-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
         <!-- Flat all-tables view (toggle to expand). The grouped view
@@ -486,7 +494,7 @@ const _adminGroups = {
     load: () => { loadAdminSubmissions(); loadAdminUnavailable(); },
   },
   'system': {
-    panels: ['panel-db-stats', 'panel-api-log'],
+    panels: ['panel-system-bar', 'panel-db-stats', 'panel-api-log'],
     load: () => { loadDbStats(); loadApiLog(); },
   },
   'blues-db': {
