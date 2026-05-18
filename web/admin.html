@@ -84,6 +84,16 @@
         <div id="collection-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
       </div>
 
+      <!-- ── Media player & usage (Overview group) ─────────────────── -->
+      <div class="admin-tab-panel admin-grp-overview" id="panel-media-stats" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
+          <h2 style="margin:0">Media &amp; usage</h2>
+          <button class="admin-refresh-btn" id="media-stats-refresh-btn" onclick="_adminClickRefresh(this, loadAdminMediaStats)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <span id="media-stats-refresh-status" class="admin-refresh-status"></span>
+        </div>
+        <div id="admin-media-stats" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
+      </div>
+
       <!-- ── User stats box (Users group) ──────────────────────────── -->
       <div class="admin-tab-panel admin-grp-users" id="panel-user-stats" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
@@ -464,8 +474,8 @@ async function _adminWithRefresh(btn, statusEl, work) {
 // only the grouping/orchestration changed.
 const _adminGroups = {
   'overview': {
-    panels: ['panel-overview-kpis', 'panel-collection-stats'],
-    load: () => { loadAdminOverview(); loadCollectionStats(); },
+    panels: ['panel-overview-kpis', 'panel-collection-stats', 'panel-media-stats'],
+    load: () => { loadAdminOverview(); loadCollectionStats(); loadAdminMediaStats(); },
   },
   'users': {
     panels: ['panel-user-stats', 'panel-sync-status', 'panel-behavior', 'panel-suggestions'],
@@ -1197,6 +1207,20 @@ async function loadApiHealth() {
       }
       html += `</ul>`;
     }
+    // Rate-limit headroom
+    if (hr?.limiters || hr?.discogs) {
+      html += `<h3 style="margin:1rem 0 0.4rem;font-size:0.85rem;color:var(--fg)">Rate-limit headroom</h3><ul class="admin-job-list">`;
+      const loc = hr?.limiters?.loc;
+      if (loc) {
+        html += `<li><strong>LOC limiter</strong>: ${esc(loc.inWindow)}/${esc(loc.max)} used in window · queued ${esc(loc.queued)}/${esc(loc.maxQueueDepth)}</li>`;
+      }
+      if (hr?.discogs) {
+        const d = hr.discogs;
+        const lowCls = d.headroom <= 5 ? ' style="color:#e0564f"' : d.headroom <= 15 ? ' style="color:#e6c14b"' : '';
+        html += `<li><strong>Discogs</strong> (approx., ${esc(d.ceilingPerMin)}/min cap): ${esc(d.lastMinute)} reqs last 60s · <span${lowCls}>~${esc(d.headroom)} headroom</span> · ${esc(d.last24h)} in 24h</li>`;
+      }
+      html += `</ul>`;
+    }
     // LOC proxy (was its own tab)
     if (lr && typeof lr === "object") {
       const s = lr.stats || lr;
@@ -1259,6 +1283,43 @@ async function loadAdminUserStats() {
       _kpiCard("Active 7d", d.wau ?? "–", ""),
       _kpiCard("Active 30d", d.mau ?? "–", ""),
     ].join("");
+  } catch (e) {
+    el.innerHTML = `<p style="color:#e88">Failed: ${String(e?.message || e)}</p>`;
+  }
+}
+
+// ── Media player & usage ──────────────────────────────────────────────
+async function loadAdminMediaStats() {
+  const el = document.getElementById("admin-media-stats");
+  if (!el) return;
+  try {
+    const r = await apiFetch("/api/admin/media-stats");
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    const esc = s => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    const srcLabel = s => ({ yt: "YouTube", loc: "Library of Congress", archive: "Archive.org" }[s] || s);
+    let html = `<div class="admin-kpi-grid">` + [
+      _kpiCard("Plays 24h", d.plays24h ?? 0, `${d.plays7d ?? 0} · 7d`),
+      _kpiCard("Plays 30d", d.plays30d ?? 0, `${d.listeners30d ?? 0} listeners`),
+      _kpiCard("Playlists", d.totalPlaylists ?? 0, `${d.usersWithPlaylists ?? 0} users · avg ${d.avgPlaylistLen ?? 0} tracks`),
+      _kpiCard("Live queues", d.usersWithQueue ?? 0, `${d.queueRows ?? 0} queued rows`),
+    ].join("") + `</div>`;
+    const bs = Array.isArray(d.bySource7d) ? d.bySource7d : [];
+    if (bs.length) {
+      html += `<h3 style="margin:0.8rem 0 0.3rem;font-size:0.82rem;color:var(--fg)">Plays by source (7d)</h3>
+        <ul class="admin-job-list">${bs.map(x => `<li>${esc(srcLabel(x.source))}: <strong>${esc(x.n)}</strong></li>`).join("")}</ul>`;
+    }
+    const tt = Array.isArray(d.topTitles30d) ? d.topTitles30d : [];
+    if (tt.length) {
+      html += `<h3 style="margin:0.8rem 0 0.3rem;font-size:0.82rem;color:var(--fg)">Most played (30d)</h3>
+        <ol class="admin-job-list" style="padding-left:1.4rem">${tt.map(x => `<li>${esc(x.title)} <span style="color:var(--muted)">(${esc(srcLabel(x.source))}) · ${esc(x.n)}×</span></li>`).join("")}</ol>`;
+    }
+    const fu = Array.isArray(d.feature7d) ? d.feature7d : [];
+    if (fu.length) {
+      html += `<h3 style="margin:0.8rem 0 0.3rem;font-size:0.82rem;color:var(--fg)">Feature activity (7d, upstream calls)</h3>
+        <ul class="admin-job-list">${fu.map(x => `<li>${esc(x.service)}: <strong>${esc(x.requests)}</strong></li>`).join("")}</ul>`;
+    }
+    el.innerHTML = html;
   } catch (e) {
     el.innerHTML = `<p style="color:#e88">Failed: ${String(e?.message || e)}</p>`;
   }

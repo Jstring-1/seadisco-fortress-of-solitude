@@ -4075,6 +4075,73 @@ export async function getAdminOverview(): Promise<any> {
   };
 }
 
+// Media-player + playlist/queue usage for the admin dashboard.
+// All from existing tables: user_play_events (plays), user_playlists /
+// user_playlist_items (saved playlists), user_play_queue (live queues).
+export async function getMediaStats(): Promise<any> {
+  const pool = getPool();
+  const [agg, bySource, topTitles, playlists, queue] = await Promise.all([
+    pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 day')::int   AS plays_24h,
+        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days')::int  AS plays_7d,
+        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days')::int AS plays_30d,
+        COUNT(DISTINCT clerk_user_id) FILTER (WHERE created_at > NOW() - INTERVAL '30 days')::int AS listeners_30d
+      FROM user_play_events`),
+    pool.query(`
+      SELECT source, COUNT(*)::int AS n
+      FROM user_play_events
+      WHERE created_at > NOW() - INTERVAL '7 days'
+      GROUP BY source ORDER BY n DESC`),
+    pool.query(`
+      SELECT COALESCE(NULLIF(title,''), '(untitled)') AS title, source, COUNT(*)::int AS n
+      FROM user_play_events
+      WHERE created_at > NOW() - INTERVAL '30 days'
+      GROUP BY 1, 2 ORDER BY n DESC LIMIT 10`),
+    pool.query(`
+      SELECT
+        (SELECT COUNT(*)::int FROM user_playlists) AS total_playlists,
+        (SELECT COUNT(*)::int FROM user_playlist_items) AS total_items,
+        (SELECT COUNT(DISTINCT clerk_user_id)::int FROM user_playlists) AS users_with_playlists`),
+    pool.query(`
+      SELECT
+        (SELECT COUNT(*)::int FROM user_play_queue) AS queue_rows,
+        (SELECT COUNT(DISTINCT clerk_user_id)::int FROM user_play_queue) AS users_with_queue`),
+  ]);
+  const a = agg.rows[0] || {};
+  const pl = playlists.rows[0] || {};
+  const q = queue.rows[0] || {};
+  const totalPlaylists = pl.total_playlists ?? 0;
+  return {
+    plays24h: a.plays_24h ?? 0,
+    plays7d: a.plays_7d ?? 0,
+    plays30d: a.plays_30d ?? 0,
+    listeners30d: a.listeners_30d ?? 0,
+    bySource7d: bySource.rows,                       // [{source,n}]
+    topTitles30d: topTitles.rows,                    // [{title,source,n}]
+    totalPlaylists,
+    totalPlaylistItems: pl.total_items ?? 0,
+    avgPlaylistLen: totalPlaylists ? Math.round(((pl.total_items ?? 0) / totalPlaylists) * 10) / 10 : 0,
+    usersWithPlaylists: pl.users_with_playlists ?? 0,
+    queueRows: q.queue_rows ?? 0,
+    usersWithQueue: q.users_with_queue ?? 0,
+  };
+}
+
+// Discogs request volume in rolling windows — a headroom proxy. There
+// is no instrumented Discogs limiter (calls are paced ad-hoc and rely
+// on Discogs's own 60/min OAuth ceiling), so we approximate pressure
+// from api_request_log.
+export async function getDiscogsRateWindow(): Promise<{ lastMinute: number; last24h: number }> {
+  const r = await getPool().query(`
+    SELECT
+      COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '60 seconds')::int AS last_minute,
+      COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 day')::int      AS last_24h
+    FROM api_request_log WHERE service = 'discogs'`);
+  const x = r.rows[0] || {};
+  return { lastMinute: x.last_minute ?? 0, last24h: x.last_24h ?? 0 };
+}
+
 // ── Table row counts (admin dashboard) ───────────────────────────────────
 export async function getTableRowCounts(): Promise<Array<{ table: string; rows: number }>> {
   const tables = [
