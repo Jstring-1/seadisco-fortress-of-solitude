@@ -594,16 +594,17 @@ function switchView(view, skipPushState = false) {
   // whenever the current view is one of those four; mark the
   // active tab; otherwise hide the strip. YouTube tab is only
   // visible to YT-access users (admin / YT_OPEN_TO_USERS demo).
-  const _extrasViews = ["loc", "wiki", "archive", "youtube"];
+  const _extrasViews = ["loc", "wiki", "archive", "youtube", "gutenberg"];
   const _extrasTabs = document.getElementById("extras-tabs");
   if (_extrasTabs) {
     if (_extrasViews.includes(view)) {
       _extrasTabs.style.display = "";
       const tabs = {
-        loc:     document.getElementById("extras-tab-loc"),
-        wiki:    document.getElementById("extras-tab-wiki"),
-        archive: document.getElementById("extras-tab-archive"),
-        youtube: document.getElementById("extras-tab-youtube"),
+        loc:       document.getElementById("extras-tab-loc"),
+        wiki:      document.getElementById("extras-tab-wiki"),
+        archive:   document.getElementById("extras-tab-archive"),
+        youtube:   document.getElementById("extras-tab-youtube"),
+        gutenberg: document.getElementById("extras-tab-gutenberg"),
       };
       for (const [k, el] of Object.entries(tabs)) {
         if (el) el.classList.toggle("rr-tab-active", k === view);
@@ -622,12 +623,21 @@ function switchView(view, skipPushState = false) {
         if (tabs.youtube) tabs.youtube.style.display = ytAccess ? "" : "none";
         if (ytSep)        ytSep.style.display       = ytAccess ? "" : "none";
       };
+      // Gutenberg tab: admin + demo allowlist (server gate is the
+      // source of truth). Same lazy-flag race as YouTube above.
+      const _syncGb = () => {
+        const gbAccess = !!(window._isAdmin || window._sdIsDemo);
+        const gbSep = document.getElementById("extras-tab-gutenberg-sep");
+        if (tabs.gutenberg) tabs.gutenberg.style.display = gbAccess ? "" : "none";
+        if (gbSep)          gbSep.style.display          = gbAccess ? "" : "none";
+      };
       _syncYt();
+      _syncGb();
       if (typeof window._isAdmin !== "boolean" && typeof window._ensureAdminFlag === "function") {
         // Fire the admin probe and re-sync once it resolves so the
-        // YouTube tab pops in for admin/demo without requiring a
-        // page reload.
-        window._ensureAdminFlag().then(() => _syncYt()).catch(() => {});
+        // YouTube / Gutenberg tabs pop in for admin/demo without
+        // requiring a page reload.
+        window._ensureAdminFlag().then(() => { _syncYt(); _syncGb(); }).catch(() => {});
       }
     } else {
       _extrasTabs.style.display = "none";
