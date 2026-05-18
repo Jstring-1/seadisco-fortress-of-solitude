@@ -5762,6 +5762,31 @@ body.card-mode-wide .card-tracklist {
 .admin-job-list { margin: 0.2rem 0 0; padding-left: 1.1rem; font-size: 0.78rem; color: var(--muted); line-height: 1.6; }
 .admin-job-list strong { color: var(--fg); }
 
+/* Short, scrollable data grid (Submitted Tracks / Unavailable Videos)
+   so the user can see what's below it. Header sticks while scrolling
+   and its cells are click-sortable. */
+.admin-grid-scroll {
+  max-height: 320px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.admin-grid-scroll thead th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 1;
+}
+.admin-sort-th {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition: color 0.12s;
+}
+.admin-sort-th:hover { color: var(--fg); }
+.admin-sort-th.is-active { color: var(--fg); }
+.admin-sort-arrow { font-size: 0.72em; margin-left: 0.2rem; }
+
 /* ── Load More ── */
 .load-more-wrap {
   text-align: center;

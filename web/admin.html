@@ -2653,6 +2653,43 @@ async function bluesDbDeleteFromEditor() {
 
 // toggleMobileNav — now in shared.js
 
+// ── Shared: click-sortable admin grids ────────────────────────────────
+// Generic client-side sort. colTypes maps a key → "num" | "date";
+// anything else is a case-insensitive string compare.
+function _adminSortApply(rows, state, colTypes) {
+  if (!state || !state.key) return rows;
+  const t = (colTypes || {})[state.key] || "str";
+  const dir = state.dir === "desc" ? -1 : 1;
+  const val = (o) => {
+    let v = o[state.key];
+    if (t === "num")  { v = Number(v); return Number.isFinite(v) ? v : -Infinity; }
+    if (t === "date") { const d = Date.parse(v); return Number.isFinite(d) ? d : -Infinity; }
+    return String(v ?? "").toLowerCase();
+  };
+  return rows.slice().sort((a, b) => {
+    const av = val(a), bv = val(b);
+    if (av < bv) return -1 * dir;
+    if (av > bv) return  1 * dir;
+    return 0;
+  });
+}
+function _adminToggleSort(state, key) {
+  if (state.key === key) state.dir = state.dir === "asc" ? "desc" : "asc";
+  else { state.key = key; state.dir = "asc"; }
+}
+// Build a clickable sort header cell.
+function _adminSortTh(label, key, state, fn, extraStyle) {
+  const active = state.key === key;
+  const arrow = active ? (state.dir === "desc" ? "▼" : "▲") : "";
+  return `<th class="admin-sort-th${active ? " is-active" : ""}" style="padding:0.3rem 0.5rem;${extraStyle || ""}" onclick="${fn}('${key}')">${label}<span class="admin-sort-arrow">${arrow}</span></th>`;
+}
+const _adminSubSortState  = { key: "submitted_at",  dir: "desc" };
+const _adminUnavSortState = { key: "report_count",  dir: "desc" };
+function _adminSubSort(key)  { _adminToggleSort(_adminSubSortState, key);  _renderAdminSubmissionsTable(); }
+function _adminUnavSort(key) { _adminToggleSort(_adminUnavSortState, key); _renderAdminUnavailableTable(); }
+window._adminSubSort  = _adminSubSort;
+window._adminUnavSort = _adminUnavSort;
+
 // ── Admin: Submitted Tracks (track YT overrides) ──────────────────────
 // Cache the raw submission rows so the filter input can re-render
 // without a server round-trip.
@@ -2709,18 +2746,22 @@ function _renderAdminSubmissionsTable() {
   }
   const fmtDate = (d) => d ? new Date(d).toLocaleString() : "—";
   const trim = (s, n) => { s = String(s || ""); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
+  const sorted = _adminSortApply(filtered, _adminSubSortState, {
+    submitted_at: "date", release_id: "num",
+  });
+  const S = _adminSubSortState;
   const head = `<thead style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted);text-align:left">
     <tr>
-      <th style="padding:0.3rem 0.5rem">When</th>
-      <th style="padding:0.3rem 0.5rem">Scope</th>
-      <th style="padding:0.3rem 0.5rem">Album</th>
-      <th style="padding:0.3rem 0.5rem">Pos</th>
-      <th style="padding:0.3rem 0.5rem">Track</th>
-      <th style="padding:0.3rem 0.5rem">Video</th>
-      <th style="padding:0.3rem 0.5rem">By</th>
+      ${_adminSortTh("When", "submitted_at", S, "_adminSubSort")}
+      ${_adminSortTh("Scope", "release_type", S, "_adminSubSort")}
+      ${_adminSortTh("Album", "release_id", S, "_adminSubSort")}
+      ${_adminSortTh("Pos", "track_position", S, "_adminSubSort")}
+      ${_adminSortTh("Track", "track_title", S, "_adminSubSort")}
+      ${_adminSortTh("Video", "video_title", S, "_adminSubSort")}
+      ${_adminSortTh("By", "submitted_by", S, "_adminSubSort")}
       <th></th>
     </tr></thead>`;
-  const body = filtered.map(o => {
+  const body = sorted.map(o => {
     const albumLink = `<a href="/?op=${encodeURIComponent(o.release_type + ':' + o.release_id)}" target="_blank" rel="noopener" style="color:#7eb8da;text-decoration:none">${o.release_type}/${escHtml(String(o.release_id))}</a>`;
     const ytLink = `<a href="https://www.youtube.com/watch?v=${encodeURIComponent(o.video_id)}" target="_blank" rel="noopener" style="color:#7eb8da;text-decoration:none">${escHtml(trim(o.video_title || o.video_id, 40))}</a>`;
     return `<tr style="border-top:1px solid var(--border);font-size:0.78rem">
@@ -2734,7 +2775,7 @@ function _renderAdminSubmissionsTable() {
       <td style="padding:0.35rem 0.5rem"><button class="admin-btn admin-btn-danger" onclick="adminDeleteSubmission(this,'${escHtml(o.release_id)}','${escHtml(o.release_type)}','${escHtml(o.track_position).replace(/'/g, "\\'")}')">Delete</button></td>
     </tr>`;
   }).join("");
-  el.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">${head}<tbody>${body}</tbody></table></div>`;
+  el.innerHTML = `<div class="admin-grid-scroll"><table style="width:100%;border-collapse:collapse">${head}<tbody>${body}</tbody></table></div>`;
 }
 
 function _filterAdminSubmissions(_input) {
@@ -2793,18 +2834,22 @@ function _renderAdminUnavailableTable() {
   }
   const fmtDate = (d) => d ? new Date(d).toLocaleString() : "—";
   const trim = (s, n) => { s = String(s || ""); return s.length > n ? s.slice(0, n - 1) + "…" : s; };
+  const sorted = _adminSortApply(filtered, _adminUnavSortState, {
+    report_count: "num", first_reported_at: "date", last_reported_at: "date", sample_error_code: "num",
+  });
+  const U = _adminUnavSortState;
   const head = `<thead style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;color:var(--muted);text-align:left">
     <tr>
-      <th style="padding:0.3rem 0.5rem">Status</th>
-      <th style="padding:0.3rem 0.5rem">Video</th>
-      <th style="padding:0.3rem 0.5rem;text-align:right">Reports</th>
-      <th style="padding:0.3rem 0.5rem">First</th>
-      <th style="padding:0.3rem 0.5rem">Last</th>
-      <th style="padding:0.3rem 0.5rem">Code</th>
-      <th style="padding:0.3rem 0.5rem">Reporter</th>
+      ${_adminSortTh("Status", "status", U, "_adminUnavSort")}
+      ${_adminSortTh("Video", "video_id", U, "_adminUnavSort")}
+      ${_adminSortTh("Reports", "report_count", U, "_adminUnavSort", "text-align:right")}
+      ${_adminSortTh("First", "first_reported_at", U, "_adminUnavSort")}
+      ${_adminSortTh("Last", "last_reported_at", U, "_adminUnavSort")}
+      ${_adminSortTh("Code", "sample_error_code", U, "_adminUnavSort")}
+      ${_adminSortTh("Reporter", "sample_user_id", U, "_adminUnavSort")}
       <th></th>
     </tr></thead>`;
-  const body = filtered.map(o => {
+  const body = sorted.map(o => {
     const ytLink = `<a href="https://www.youtube.com/watch?v=${encodeURIComponent(o.video_id)}" target="_blank" rel="noopener" style="color:#7eb8da;text-decoration:none;font-family:monospace">${escHtml(o.video_id)}</a>`;
     const statusColor = o.status === "unavailable" ? "var(--danger)" : "var(--accent)";
     return `<tr style="border-top:1px solid var(--border);font-size:0.78rem">
@@ -2818,7 +2863,7 @@ function _renderAdminUnavailableTable() {
       <td style="padding:0.35rem 0.5rem"><button class="admin-btn" onclick="adminClearUnavailable(this,'${escHtml(o.video_id)}')" title="Clear this entry — videoId starts fresh from count 1 next time it's reported">Clear</button></td>
     </tr>`;
   }).join("");
-  el.innerHTML = `<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">${head}<tbody>${body}</tbody></table></div>`;
+  el.innerHTML = `<div class="admin-grid-scroll"><table style="width:100%;border-collapse:collapse">${head}<tbody>${body}</tbody></table></div>`;
 }
 
 function _filterAdminUnavailable(_input) {
