@@ -267,6 +267,7 @@ function switchView(view, skipPushState = false) {
   const archiveView = document.getElementById("archive-view");
   const accountView = document.getElementById("account-view");
   const youtubeView = document.getElementById("youtube-view");
+  const gutenbergView = document.getElementById("gutenberg-view");
   if (!skipPushState) {
     // Preserve existing query params across view switches — only `v` is
     // rewritten. Drop view-specific transient state (`tab` from LOC /
@@ -306,6 +307,7 @@ function switchView(view, skipPushState = false) {
   if (archiveView) archiveView.style.display = "none";
   if (accountView) accountView.style.display = "none";
   if (youtubeView) youtubeView.style.display = "none";
+  if (gutenbergView) gutenbergView.style.display = "none";
 
   // Memory hygiene: empty the heaviest result grids belonging to
   // views we're not currently showing. Decoded image bitmaps inside
