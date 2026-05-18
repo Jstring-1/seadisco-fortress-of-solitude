@@ -4142,6 +4142,27 @@ export async function getDiscogsRateWindow(): Promise<{ lastMinute: number; last
   return { lastMinute: x.last_minute ?? 0, last24h: x.last_24h ?? 0 };
 }
 
+// Durable background-job "last activity" timestamps. In-memory job
+// state resets on every process restart (Railway redeploys often), so
+// the admin panel was reporting "not run yet" for jobs that had in
+// fact run. These derive last-run from persisted side-effects:
+//   - daily suggestions  → newest user_personal_suggestions.generated_at
+//   - cache-warm worker   → newest still-unviewed release_cache row
+//     (warm-only rows are written with seen_at NULL until a human opens
+//      the modal), which tracks recent warm activity.
+export async function getJobHealth(): Promise<{ suggestionsLastAt: string | null; cacheWarmLastAt: string | null }> {
+  const pool = getPool();
+  const [s, c] = await Promise.all([
+    pool.query(`SELECT MAX(generated_at) AS t FROM user_personal_suggestions`),
+    pool.query(`SELECT MAX(cached_at) AS t FROM release_cache WHERE seen_at IS NULL`),
+  ]);
+  const iso = (v: any) => v ? new Date(v).toISOString() : null;
+  return {
+    suggestionsLastAt: iso(s.rows[0]?.t),
+    cacheWarmLastAt: iso(c.rows[0]?.t),
+  };
+}
+
 // ── Table row counts (admin dashboard) ───────────────────────────────────
 export async function getTableRowCounts(): Promise<Array<{ table: string; rows: number }>> {
   const tables = [
