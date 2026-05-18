@@ -652,6 +652,12 @@ app.get("/index.html", (_req, res, next) => { if (!_sendHtml(res, "index.html"))
 // SPA (see account.js). Redirect old bookmarks to the SPA account view.
 app.get("/account.html", (_req, res) => { res.redirect(301, "/?v=account"); });
 app.get("/admin.html", (_req, res, next) => { if (!_sendHtml(res, "admin.html")) next(); });
+// Extensionless /admin — express.static's `extensions:["html"]` would
+// otherwise serve admin.html RAW (bypassing _sendHtml), so the
+// SD_THEME_INJECT placeholder never gets replaced and the page falls
+// back to the default warm palette instead of the locked site theme.
+// Route it through _sendHtml like the other HTML entry points.
+app.get("/admin", (_req, res, next) => { if (!_sendHtml(res, "admin.html")) next(); });
 
 // Cache headers for static assets (versioned files get long cache, HTML short)
 app.use(express.static(path.join(__dirname, "../web"), {
