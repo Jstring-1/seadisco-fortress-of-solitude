@@ -132,12 +132,12 @@
         </div>
         <div id="api-stats-summary" style="font-size:0.8rem;color:var(--muted);margin-bottom:0.5rem"></div>
         <div style="margin-bottom:0.5rem;display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center">
-          <select id="api-log-filter" onchange="loadApiLog()" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:#1a1510;color:var(--text);border:1px solid var(--border);border-radius:4px">
+          <select id="api-log-filter" onchange="loadApiLog()" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
             <option value="">All Services</option>
             <option value="discogs">Discogs</option>
             <option value="anthropic">Anthropic</option>
           </select>
-          <select id="api-log-hours" onchange="loadApiLog()" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:#1a1510;color:var(--text);border:1px solid var(--border);border-radius:4px">
+          <select id="api-log-hours" onchange="loadApiLog()" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
             <option value="24">Last 24 hours</option>
             <option value="168">Last 7 days</option>
           </select>
@@ -365,7 +365,7 @@
       <span style="font-weight:600;color:var(--fg)">Active APIs</span>
       <button class="admin-refresh-btn" id="api-health-refresh-btn" onclick="_adminClickRefresh(this, loadApiHealth)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
       <span id="api-health-refresh-status" class="admin-refresh-status"></span>
-      <select id="api-health-hours" onchange="loadApiHealth()" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:#1a1510;color:var(--text);border:1px solid var(--border);border-radius:4px">
+      <select id="api-health-hours" onchange="loadApiHealth()" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:4px">
         <option value="24">Last 24 hours</option>
         <option value="168">Last 7 days</option>
       </select>
@@ -377,21 +377,21 @@
 
 <!-- User items popup -->
 <div id="admin-items-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;align-items:center;justify-content:center" onclick="if(event.target===this)closeAdminItems()">
-  <div style="background:#141210;border:1px solid #2e2518;border-radius:10px;width:90%;max-width:620px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
-    <div style="padding:0.8rem 1rem;border-bottom:1px solid #2e2518;display:flex;justify-content:space-between;align-items:center">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;width:90%;max-width:620px;max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="padding:0.8rem 1rem;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
       <div>
         <span id="admin-items-title" style="font-weight:600;color:var(--fg)"></span>
         <span id="admin-items-count" style="font-size:0.75rem;color:var(--muted);margin-left:0.5rem"></span>
       </div>
       <div style="display:flex;align-items:center;gap:0.5rem">
-        <button onclick="adminItemsTab('collection')" id="admin-items-tab-col" style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:12px;border:1px solid #444;background:#2a2a2a;color:var(--fg);cursor:pointer">Collection</button>
-        <button onclick="adminItemsTab('wantlist')" id="admin-items-tab-want" style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:12px;border:1px solid #333;background:transparent;color:var(--muted);cursor:pointer">Wantlist</button>
-        <button onclick="adminItemsTab('favorites')" id="admin-items-tab-fav" style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:12px;border:1px solid #333;background:transparent;color:var(--muted);cursor:pointer">Favorites</button>
+        <button onclick="adminItemsTab('collection')" id="admin-items-tab-col" style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,0.08);color:var(--fg);cursor:pointer">Collection</button>
+        <button onclick="adminItemsTab('wantlist')" id="admin-items-tab-want" style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer">Wantlist</button>
+        <button onclick="adminItemsTab('favorites')" id="admin-items-tab-fav" style="font-size:0.72rem;padding:0.15rem 0.5rem;border-radius:12px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer">Favorites</button>
         <button onclick="closeAdminItems()" style="background:none;border:none;color:#666;cursor:pointer;font-size:1.2rem;padding:0 0.3rem">&times;</button>
       </div>
     </div>
     <div id="admin-items-list" style="flex:1;overflow-y:auto;padding:0.5rem 0.75rem"></div>
-    <div id="admin-items-pag" style="padding:0.5rem 1rem;border-top:1px solid #2e2518;text-align:center;font-size:0.75rem;display:none"></div>
+    <div id="admin-items-pag" style="padding:0.5rem 1rem;border-top:1px solid var(--border);text-align:center;font-size:0.75rem;display:none"></div>
   </div>
 </div>
 
@@ -610,7 +610,7 @@ async function loadAdminSyncStatus() {
       const syncBtn = isSyncing ? '' : `<button onclick="adminSyncUser('${u.username}')" class="admin-btn" style="font-size:0.72rem;padding:0.15rem 0.5rem">Sync</button>`;
       const badges = [];
       if (u.hasOAuth) badges.push('<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:3px;background:#1a3a5c;color:#7eb8da;font-weight:600;margin-left:0.4rem" title="OAuth connected">OAuth</span>');
-      if (!badges.length) badges.push('<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:3px;background:#2a2a2a;color:#666;font-weight:600;margin-left:0.4rem">\u2014</span>');
+      if (!badges.length) badges.push('<span style="font-size:0.65rem;padding:0.1rem 0.35rem;border-radius:3px;background:rgba(255,255,255,0.08);color:#666;font-weight:600;margin-left:0.4rem">\u2014</span>');
       const authBadge = badges.join('');
       const lastActiveStr = u.lastActiveAt ? fmtRelativeTime(u.lastActiveAt) : "\u2014";
       const lastActiveColor = u.online ? "#4caf50" : "#777";
@@ -958,7 +958,7 @@ async function loadLocStats() {
 
     el.innerHTML = `
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:0.8rem;margin-bottom:1rem">
-        <div style="background:#1a1510;border:1px solid #2e2518;border-radius:6px;padding:0.6rem 0.8rem">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.6rem 0.8rem">
           <div style="font-size:0.68rem;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.3rem">Cache</div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Hit rate</span><strong style="color:var(--fg)">${s.hitRatePct}%</strong></div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Hits</span><strong style="color:#6b8f71">${s.cacheHits.toLocaleString()}</strong></div>
@@ -966,21 +966,21 @@ async function loadLocStats() {
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Entries</span><strong style="color:var(--fg)">${s.cacheEntries} / ${s.cacheMax}</strong></div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">TTL</span><strong style="color:var(--fg)">${fmtDur(s.cacheTtlMs)}</strong></div>
         </div>
-        <div style="background:#1a1510;border:1px solid #2e2518;border-radius:6px;padding:0.6rem 0.8rem">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.6rem 0.8rem">
           <div style="font-size:0.68rem;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.3rem">Rate Limiter</div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">In window</span><strong style="color:${windowColor}">${rl.inWindow ?? 0} / ${rl.max ?? 0}</strong></div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Queue depth</span><strong style="color:${queueColor}">${queueDepth} / ${rl.maxQueueDepth ?? 0}</strong></div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Window</span><strong style="color:var(--fg)">${fmtDur(rl.windowMs)}</strong></div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">503s fired</span><strong style="color:${rlColor}">${s.rateLimitHits.toLocaleString()}</strong></div>
         </div>
-        <div style="background:#1a1510;border:1px solid #2e2518;border-radius:6px;padding:0.6rem 0.8rem">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.6rem 0.8rem">
           <div style="font-size:0.68rem;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.3rem">Traffic</div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Last 10 min</span><strong style="color:var(--fg)">${s.requestsLast10m.toLocaleString()}</strong></div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Last hour</span><strong style="color:var(--fg)">${s.requestsLastHour.toLocaleString()}</strong></div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Last 24h</span><strong style="color:var(--fg)">${s.requestsLastDay.toLocaleString()}</strong></div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Last request</span><strong style="color:var(--fg);font-size:0.72rem">${fmtTime(s.lastRequestAt)}</strong></div>
         </div>
-        <div style="background:#1a1510;border:1px solid #2e2518;border-radius:6px;padding:0.6rem 0.8rem">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:0.6rem 0.8rem">
           <div style="font-size:0.68rem;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.3rem">Failures</div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Total</span><strong style="color:${failureColor}">${s.failures.toLocaleString()}</strong></div>
           <div style="display:flex;justify-content:space-between;font-size:0.8rem"><span style="color:#888">Last failure</span><strong style="color:var(--fg);font-size:0.72rem">${fmtTime(s.lastFailureAt)}</strong></div>
@@ -988,7 +988,7 @@ async function loadLocStats() {
         </div>
       </div>
       <div style="display:flex;gap:0.5rem;align-items:center">
-        <button onclick="clearLocCache()" style="background:#2a1f18;border:1px solid #6b4a18;color:#e8a84a;font-size:0.78rem;padding:0.4rem 0.9rem;border-radius:5px;cursor:pointer">Clear response cache</button>
+        <button onclick="clearLocCache()" style="background:var(--surface);border:1px solid #6b4a18;color:#e8a84a;font-size:0.78rem;padding:0.4rem 0.9rem;border-radius:5px;cursor:pointer">Clear response cache</button>
         <span style="font-size:0.72rem;color:#666">Evicts all ${s.cacheEntries} cached search responses. Next searches re-hit loc.gov.</span>
       </div>
     `;
@@ -1112,7 +1112,7 @@ function renderFeedback(items) {
   if (!items.length) { el.textContent = "No feedback yet."; return; }
   el.innerHTML = items.map(({ id, user_email, message, created_at }) => {
     const date = new Date(created_at).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
-    return `<div id="fb-${id}" style="padding:0.6rem 0;border-bottom:1px solid #222">
+    return `<div id="fb-${id}" style="padding:0.6rem 0;border-bottom:1px solid var(--border)">
       <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:0.25rem">
         <span style="color:#aaa;font-size:0.8rem">${user_email || "unknown"}</span>
         <div style="display:flex;gap:0.75rem;align-items:center">
@@ -1450,7 +1450,7 @@ function updateAdminItemsTabs() {
   for (const [key, btn] of Object.entries(tabs)) {
     if (!btn) continue;
     if (key === _adminItemsTab) {
-      btn.style.background = "#2a2a2a"; btn.style.color = "var(--fg)"; btn.style.borderColor = "#444";
+      btn.style.background = "rgba(255,255,255,0.08)"; btn.style.color = "var(--fg)"; btn.style.borderColor = "#444";
     } else {
       btn.style.background = "transparent"; btn.style.color = "var(--muted)"; btn.style.borderColor = "#333";
     }
@@ -2471,8 +2471,8 @@ async function bluesDbRunDiscogsPicker() {
     const esc = (s) => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
     results.innerHTML = `<ul style="list-style:none;margin:0;padding:0">${items.map(it => {
       const thumbHtml = it.thumb
-        ? `<img src="${esc(it.thumb)}" alt="" loading="lazy" decoding="async" style="width:48px;height:48px;object-fit:cover;border-radius:3px;flex-shrink:0;background:#222" />`
-        : `<span style="width:48px;height:48px;border-radius:3px;background:#222;flex-shrink:0;display:inline-block"></span>`;
+        ? `<img src="${esc(it.thumb)}" alt="" loading="lazy" decoding="async" style="width:48px;height:48px;object-fit:cover;border-radius:3px;flex-shrink:0;background:var(--border)" />`
+        : `<span style="width:48px;height:48px;border-radius:3px;background:var(--border);flex-shrink:0;display:inline-block"></span>`;
       const discogsLink = it.uri
         ? `https://www.discogs.com${it.uri}`
         : `https://www.discogs.com/artist/${it.id}`;
@@ -3118,9 +3118,9 @@ window.adminOpenDbTablePopup = adminOpenDbTablePopup;
 .admin-btn {
   font-size: 0.78rem;
   padding: 0.3rem 0.9rem;
-  background: #2a2a2a;
+  background: rgba(255,255,255,0.08);
   color: var(--fg);
-  border: 1px solid #444;
+  border: 1px solid var(--border);
   border-radius: 5px;
   cursor: pointer;
   font-weight: 600;
@@ -3224,7 +3224,7 @@ window.adminOpenDbTablePopup = adminOpenDbTablePopup;
   border-bottom: 1px solid #3a3020;
   position: sticky;
   top: 0;
-  background: #1a1510;
+  background: var(--surface);
 }
 .api-log-table tbody tr { border-bottom: 1px solid #2a2015; }
 .api-log-table tbody tr:hover { background: rgba(255,255,255,0.02); }
