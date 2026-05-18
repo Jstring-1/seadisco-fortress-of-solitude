@@ -322,11 +322,32 @@ async function queueAddAlbum(btn) {
 // Returns the next queue item and removes it from the local cache; the
 // server still has it (we don't delete on play, only on user-remove or
 // clear). Use `peek` if you need the next without consuming.
+// The single ordered, de-duplicated view of the queue — IDENTICAL to
+// what the drawer renders. The server can carry more than one row per
+// externalId (legacy rows from before the server-side dedupe landed, or
+// a brief optimistic-insert overlap). The drawer hides all but the
+// lowest-position copy; playback navigation must walk the SAME list or
+// it advances through hidden duplicates and the queue "doesn't play in
+// the order shown". Order follows _queue (server position ASC).
+function _queueVisibleList() {
+  if (!Array.isArray(_queue)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const it of _queue) {
+    const key = String(it.externalId ?? "");
+    if (key && seen.has(key)) continue;
+    if (key) seen.add(key);
+    out.push(it);
+  }
+  return out;
+}
+window._queueVisibleList = _queueVisibleList;
+
 async function _queueShiftNext() {
   await _queueLoad();
   if (!_queue?.length) return null;
-  // The "next" item is whatever has the lowest position (head of queue).
-  return _queue[0] ?? null;
+  // Head of the de-duplicated queue (matches the drawer's first row).
+  return _queueVisibleList()[0] ?? null;
 }
 
 // Mark an item as played and remove from server queue. Called when a
@@ -377,11 +398,21 @@ async function _queuePlayNext() {
   // fallback findIndex returns -1 and the `currentIdx < 0 ? _queue[0]`
   // path replays the head — which is exactly the just-finished track
   // — instead of advancing.
+  // Walk the de-duplicated visible list so "next" matches the drawer's
+  // visible order exactly (raw _queue may interleave hidden dupes).
+  const vis = _queueVisibleList();
+  if (!vis.length) {
+    _queueCurrentPosition = null;
+    _queuePlayingExternalId = null;
+    _refreshPlayerNavButtons();
+    if (_queueDrawerEl?.classList.contains("open")) _renderQueueDrawer();
+    return false;
+  }
   let currentIdx = _queueCurrentPosition != null
-    ? _queue.findIndex(it => it.position === _queueCurrentPosition)
+    ? vis.findIndex(it => it.position === _queueCurrentPosition)
     : -1;
   if (currentIdx < 0 && _queuePlayingExternalId != null) {
-    currentIdx = _queue.findIndex(it => String(it.externalId) === String(_queuePlayingExternalId));
+    currentIdx = vis.findIndex(it => String(it.externalId) === String(_queuePlayingExternalId));
   }
   // If we still can't locate the current track, the player isn't on a
   // queued row (e.g. user clicked ▶ on a card that bypassed the queue,
@@ -390,16 +421,16 @@ async function _queuePlayNext() {
   // "hasQueue" check halted playback — leaving the player stopped with
   // a full queue sitting there. Now: start the queue from the head so
   // auto-advance always carries forward when there's something to play.
-  let next = currentIdx >= 0 && currentIdx + 1 < _queue.length
-    ? _queue[currentIdx + 1]
+  let next = currentIdx >= 0 && currentIdx + 1 < vis.length
+    ? vis[currentIdx + 1]
     : null;
-  if (!next && currentIdx < 0 && _queue.length) {
+  if (!next && currentIdx < 0 && vis.length) {
     console.debug("[_queuePlayNext] current track not in queue — starting from head");
-    next = _queue[0];
+    next = vis[0];
   }
   // Repeat-all: wrap to the first item.
-  if (!next && _queueRepeat === "all" && _queue.length) {
-    next = _queue[0];
+  if (!next && _queueRepeat === "all" && vis.length) {
+    next = vis[0];
   }
   if (!next) {
     // End of queue, no repeat: clear playing mark but keep items.
@@ -873,19 +904,12 @@ async function _renderQueueDrawer() {
     return;
   }
   // Render-time dedup: server can have multiple rows for the same
-  // externalId (e.g., a re-played track inserted before the prior
-  // DELETE landed). Show only the lowest-position copy in the drawer
-  // so the user sees a single row per track, but keep _queue itself
-  // un-deduped so queueRemove can sweep every server-side dupe in
-  // one click.
-  const seen = new Set();
-  const visible = [];
-  for (const it of _queue) {
-    const key = String(it.externalId ?? "");
-    if (key && seen.has(key)) continue;
-    if (key) seen.add(key);
-    visible.push(it);
-  }
+  // externalId (legacy rows from before the server-side dedupe, or a
+  // brief optimistic-insert overlap). Show only the lowest-position
+  // copy. Shared with playback navigation via _queueVisibleList() so
+  // the drawer and what actually plays can never drift apart. _queue
+  // itself stays un-deduped so queueRemove can sweep every dupe.
+  const visible = _queueVisibleList();
   if (countEl) countEl.textContent = `${visible.length} item${visible.length === 1 ? "" : "s"}`;
   listEl.innerHTML = visible.map(it => {
     const safeTitle  = escHtml(it.data?.title || "Untitled");
@@ -1343,9 +1367,14 @@ async function queuePlayHead() {
     if (typeof showToast === "function") showToast("Queue is empty", "error");
     return false;
   }
+  const vis = _queueVisibleList();
+  if (!vis.length) {
+    if (typeof showToast === "function") showToast("Queue is empty", "error");
+    return false;
+  }
   const target = _queueCurrentPosition != null
-    ? (_queue.find(it => it.position === _queueCurrentPosition) ?? _queue[0])
-    : _queue[0];
+    ? (vis.find(it => it.position === _queueCurrentPosition) ?? vis[0])
+    : vis[0];
   return _queuePlayItem(target);
 }
 
