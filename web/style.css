@@ -5705,7 +5705,10 @@ body.card-mode-wide .card-tracklist {
    admin dashboard is data-dense, so widen it and kill the big top gap
    between the site header and the content box. */
 .admin-box {
-  max-width: 1600px;
+  /* Reverted to the standard content width — the 1600px version
+     didn't earn its keep. Keep the tighter top margin (header-gap
+     fix) and admin padding. */
+  max-width: 1100px;
   margin: 0.5rem auto 1.5rem;
   padding: 1rem 1.5rem 1.5rem;
 }
