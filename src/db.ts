@@ -4096,8 +4096,9 @@ export async function getAdminOverview(): Promise<any> {
 // Media-player + playlist/queue usage for the admin dashboard.
 // All from existing tables: user_play_events (plays), user_playlists /
 // user_playlist_items (saved playlists), user_play_queue (live queues).
-export async function getMediaStats(): Promise<any> {
+export async function getMediaStats(topLimit = 10): Promise<any> {
   const pool = getPool();
+  const lim = Math.max(1, Math.min(100, Math.floor(topLimit) || 10));
   const [agg, bySource, topTitles, playlists, queue] = await Promise.all([
     pool.query(`
       SELECT
@@ -4112,10 +4113,12 @@ export async function getMediaStats(): Promise<any> {
       WHERE created_at > NOW() - INTERVAL '7 days'
       GROUP BY source ORDER BY n DESC`),
     pool.query(`
-      SELECT COALESCE(NULLIF(title,''), '(untitled)') AS title, source, COUNT(*)::int AS n
+      SELECT COALESCE(NULLIF(title,''), '(untitled)') AS title, source,
+             MAX(external_id) AS external_id, COUNT(*)::int AS n
       FROM user_play_events
       WHERE created_at > NOW() - INTERVAL '30 days'
-      GROUP BY 1, 2 ORDER BY n DESC LIMIT 10`),
+        AND NOT (source = 'yt' AND NULLIF(title,'') IS NULL)
+      GROUP BY 1, 2 ORDER BY n DESC LIMIT ${lim}`),
     pool.query(`
       SELECT
         (SELECT COUNT(*)::int FROM user_playlists) AS total_playlists,

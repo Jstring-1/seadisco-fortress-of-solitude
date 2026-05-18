@@ -593,6 +593,12 @@ async function openYoutubePopup(query) {
   if (!overlay) return;
   overlay.classList.add("open");
   if (typeof _sdLockBodyScroll === "function") _sdLockBodyScroll("yt-popup");
+  // Editable copy of the exact query that was run — user can tweak &
+  // re-search in-place via _youtubeRerunSearch().
+  const searchRow = document.getElementById("youtube-popup-search-row");
+  const searchInput = document.getElementById("youtube-popup-search-input");
+  if (searchRow) searchRow.style.display = "";
+  if (searchInput) searchInput.value = q;
   // Album mode: show "Find missing tracks for ALBUM" + clear any
   // prior staged-assignments map. Per-track mode keeps the original
   // YouTube · "query" title.
@@ -898,6 +904,17 @@ async function _youtubePastePresubmit(btn) {
   }
 }
 window._youtubePastePresubmit = _youtubePastePresubmit;
+
+// Re-run the popup search with the (possibly edited) query in the
+// in-popup search field. Preserves album-submission context since
+// window._sdSuggestAlbumContext is untouched.
+function _youtubeRerunSearch() {
+  const input = document.getElementById("youtube-popup-search-input");
+  const q = String(input && input.value || "").trim();
+  if (!q || q === _ytPopupQuery) return;
+  openYoutubePopup(q);
+}
+window._youtubeRerunSearch = _youtubeRerunSearch;
 
 function closeYoutubePopup() {
   const overlay = document.getElementById("youtube-popup-overlay");

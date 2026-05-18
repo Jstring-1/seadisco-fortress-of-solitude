@@ -1158,6 +1158,13 @@ e.g.  miles davis | coltrane
     <div class="youtube-popup-head">
       <h3 id="youtube-popup-title" style="margin:0;font-size:1rem">YouTube</h3>
     </div>
+    <!-- Editable copy of the exact YouTube query that was run. Lets the
+         user tweak it and re-search without leaving the popup. -->
+    <div id="youtube-popup-search-row" class="youtube-popup-paste-row" style="display:none;margin:0.4rem 0">
+      <input id="youtube-popup-search-input" type="text" placeholder="YouTube search…" autocomplete="off"
+             onkeydown="if(event.key==='Enter'){event.preventDefault();_youtubeRerunSearch()}" />
+      <button type="button" class="archive-btn archive-btn-suggest" onclick="_youtubeRerunSearch()">Search</button>
+    </div>
     <!-- Album-mode context strip: cover thumb + artist + year + label
          so the user knows which album they're submitting for without
          having to close the popup to peek at the album modal beneath.
