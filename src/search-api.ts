@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
+import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 
 
@@ -3534,12 +3534,19 @@ const _ARCHIVE_CACHE_SCHEMA = 8;
 async function _refreshArchiveCache(collectionId: string, cacheKey: number): Promise<{ count: number }> {
   console.log(`[archive] refreshing collection "${collectionId}" cache…`);
   const t0 = Date.now();
-  const items = await _fetchArchiveCollection(collectionId);
-  const payload = { items, fetchedAt: new Date().toISOString(), schemaV: _ARCHIVE_CACHE_SCHEMA };
-  await cacheRelease(cacheKey, "master-versions", payload);
-  const ms = Date.now() - t0;
-  console.log(`[archive] refresh complete: ${items.length} items in ${ms}ms`);
-  return { count: items.length };
+  const _jr = await startJobRun("archive-refresh").catch(() => null);
+  try {
+    const items = await _fetchArchiveCollection(collectionId);
+    const payload = { items, fetchedAt: new Date().toISOString(), schemaV: _ARCHIVE_CACHE_SCHEMA };
+    await cacheRelease(cacheKey, "master-versions", payload);
+    const ms = Date.now() - t0;
+    console.log(`[archive] refresh complete: ${items.length} items in ${ms}ms`);
+    await finishJobRun(_jr, { status: "ok", items: items.length, detail: `${collectionId} · ${ms}ms` });
+    return { count: items.length };
+  } catch (err: any) {
+    await finishJobRun(_jr, { status: "error", errors: 1, detail: String(err?.message ?? err) });
+    throw err;
+  }
 }
 
 // Boot the weekly refresh schedule. Runs once at startup if the cache
@@ -6767,12 +6774,18 @@ async function _runPersonalSuggestionsForUser(userId: string): Promise<{ saved: 
 // Discogs traffic. Users without OAuth or with empty taste profiles
 // are skipped quickly.
 async function _runPersonalSuggestionsForAllUsers() {
+  const _jr = await startJobRun("daily-suggestions").catch(() => null);
+  let total = 0;
+  let skipped = 0;
+  let userCount = 0;
   try {
     const users = await getAllUsersForSync();
-    if (!users.length) return;
+    userCount = users.length;
+    if (!users.length) {
+      await finishJobRun(_jr, { status: "ok", items: 0, detail: "no users" });
+      return;
+    }
     console.log(`[suggestions] hourly run starting for ${users.length} users`);
-    let total = 0;
-    let skipped = 0;
     for (const u of users) {
       const userId = u.clerkUserId;
       const result = await _runPersonalSuggestionsForUser(userId).catch(e => {
@@ -6784,8 +6797,10 @@ async function _runPersonalSuggestionsForAllUsers() {
       await sleep(2000);
     }
     console.log(`[suggestions] hourly run complete; saved ${total} items, ${skipped} users skipped`);
+    await finishJobRun(_jr, { status: "ok", items: total, detail: `${userCount} users, ${skipped} skipped` });
   } catch (e: any) {
     console.error("[suggestions] scheduler failed:", e?.message ?? e);
+    await finishJobRun(_jr, { status: "error", items: total, errors: 1, detail: String(e?.message ?? e) });
   }
 }
 
@@ -6903,6 +6918,7 @@ async function _runSuggestionsCacheWarm(opts?: { ignoreWindow?: boolean }): Prom
   _suggCacheWarmState.errors  = 0;
   _suggCacheWarmState.lastError = null;
   let totalDrained = 0;
+  const _jr = await startJobRun("cache-warm").catch(() => null);
   try {
     // Drain the queue in batches. The queue can grow mid-pass (the
     // suggestions generator might add to it during early-morning
@@ -6942,9 +6958,21 @@ async function _runSuggestionsCacheWarm(opts?: { ignoreWindow?: boolean }): Prom
       }
     }
     console.log(`[cache-warm] done; fetched ${_suggCacheWarmState.fetched}, errors ${_suggCacheWarmState.errors}, drained ${totalDrained}`);
+    await finishJobRun(_jr, {
+      status: "ok",
+      items: _suggCacheWarmState.fetched,
+      errors: _suggCacheWarmState.errors,
+      detail: `drained ${totalDrained}, ${_suggCacheWarmState.skipped} skipped${_suggCacheWarmState.lastError ? `; last err: ${_suggCacheWarmState.lastError}` : ""}`,
+    });
   } catch (err: any) {
     _suggCacheWarmState.lastError = err?.message ?? String(err);
     console.error("[cache-warm] worker crashed:", err);
+    await finishJobRun(_jr, {
+      status: "error",
+      items: _suggCacheWarmState.fetched,
+      errors: _suggCacheWarmState.errors + 1,
+      detail: String(err?.message ?? err),
+    });
   } finally {
     _suggCacheWarmState.running = false;
     _suggCacheWarmState.endedAt = new Date().toISOString();
@@ -9251,28 +9279,43 @@ app.get("/api/admin/api-health", async (req, res) => {
       if (h < 48) return `${h}h ago`;
       return `${Math.round(h / 24)}d ago`;
     };
+    // Exact job-run history (job_runs table) is the source of truth;
+    // fall back to the durable proxy / in-memory state only for jobs
+    // that haven't recorded a run yet (e.g. right after this deploy).
+    const lastRuns = await getJobLastRuns().catch(() => []);
+    const byJob = new Map(lastRuns.map((r: any) => [r.job_name, r]));
+    const fmtRun = (r: any) => {
+      const when = r.ended_at || r.started_at;
+      const rel = ago(when);
+      const abs = new Date(when).toLocaleString();
+      if (r.status === "running") return `running now (started ${ago(r.started_at)})`;
+      const tag = r.status === "error" ? "FAILED" : "ok";
+      const bits = [`${tag} ${rel} (${abs})`];
+      if (r.items)  bits.push(`${r.items} items`);
+      if (r.errors) bits.push(`${r.errors} errors`);
+      if (r.detail) bits.push(String(r.detail));
+      return bits.join(" · ");
+    };
     const jobs: Record<string, string> = {};
-    try {
+    {
+      const r = byJob.get("cache-warm");
       const cw = _suggCacheWarmState;
-      if (cw?.running) {
-        jobs["Cache-warm worker"] = `running now — ${cw.fetched} fetched, ${cw.errors} errors`;
-      } else if (durable.cacheWarmLastAt) {
-        jobs["Cache-warm worker"] = `last warmed a row ${ago(durable.cacheWarmLastAt)} (${new Date(durable.cacheWarmLastAt).toLocaleString()})`;
-      } else if (cw?.endedAt) {
-        jobs["Cache-warm worker"] = `ran this process — ${cw.fetched} fetched`;
-      } else {
-        jobs["Cache-warm worker"] = "no warmed rows on record";
-      }
-    } catch {}
-    try {
-      if (durable.suggestionsLastAt) {
-        jobs["Daily suggestions"] = `last generated ${ago(durable.suggestionsLastAt)} (${new Date(durable.suggestionsLastAt).toLocaleString()})`;
-      } else if (_suggGenLastRunDate) {
-        jobs["Daily suggestions"] = `ran ${_suggGenLastRunDate} (this process)`;
-      } else {
-        jobs["Daily suggestions"] = "no generated suggestions on record";
-      }
-    } catch {}
+      if (cw?.running) jobs["Cache-warm worker"] = `running now — ${cw.fetched} fetched, ${cw.errors} errors`;
+      else if (r) jobs["Cache-warm worker"] = fmtRun(r);
+      else if (durable.cacheWarmLastAt) jobs["Cache-warm worker"] = `~last warmed a row ${ago(durable.cacheWarmLastAt)} (no run logged yet)`;
+      else jobs["Cache-warm worker"] = "no run on record";
+    }
+    {
+      const r = byJob.get("daily-suggestions");
+      if (r) jobs["Daily suggestions"] = fmtRun(r);
+      else if (durable.suggestionsLastAt) jobs["Daily suggestions"] = `~last generated ${ago(durable.suggestionsLastAt)} (no run logged yet)`;
+      else if (_suggGenLastRunDate) jobs["Daily suggestions"] = `ran ${_suggGenLastRunDate} (this process)`;
+      else jobs["Daily suggestions"] = "no run on record";
+    }
+    {
+      const r = byJob.get("archive-refresh");
+      jobs["Archive refresh"] = r ? fmtRun(r) : "no run on record";
+    }
     // Rate-limit headroom. LOC has a real instrumented window limiter;
     // Discogs has none (ad-hoc pacing under its own 60/min OAuth cap),
     // so we report an approximate request count for the last minute.
@@ -9284,6 +9327,20 @@ app.get("/api/admin/api-health", async (req, res) => {
       discogs = { ...dw, ceilingPerMin: 60, headroom: Math.max(0, 60 - dw.lastMinute) };
     } catch {}
     res.json({ hours, services, jobs, limiters, discogs });
+  } catch (e: any) {
+    res.status(500).json({ error: String(e?.message ?? e) });
+  }
+});
+
+// GET /api/admin/job-runs?job=<name>&limit=N — recent run history for
+// one background job (audit drill-down from the Active APIs popup).
+app.get("/api/admin/job-runs", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  const job = String(req.query.job ?? "").trim();
+  if (!job) { res.status(400).json({ error: "job required" }); return; }
+  const limit = parseInt(String(req.query.limit ?? "25"), 10) || 25;
+  try {
+    res.json({ job, runs: await getRecentJobRuns(job, limit) });
   } catch (e: any) {
     res.status(500).json({ error: String(e?.message ?? e) });
   }

@@ -1164,6 +1164,40 @@ function adminCloseApis() {
   const ov = document.getElementById("admin-apis-overlay");
   if (ov) ov.style.display = "none";
 }
+// Toggle + lazy-load a job's recent run history (job_runs audit).
+async function _adminToggleJobHistory(jobKey, linkEl) {
+  const box = linkEl?.parentElement?.querySelector(`.admin-job-hist[data-job="${jobKey}"]`);
+  if (!box) return;
+  if (box.style.display !== "none") { box.style.display = "none"; return; }
+  box.style.display = "";
+  if (box.dataset.loaded === "1") return;
+  box.textContent = "Loading…";
+  try {
+    const r = await apiFetch(`/api/admin/job-runs?job=${encodeURIComponent(jobKey)}&limit=15`);
+    if (!r.ok) { box.textContent = "Could not load history."; return; }
+    const { runs } = await r.json();
+    if (!Array.isArray(runs) || !runs.length) { box.textContent = "No runs recorded yet."; return; }
+    const esc = s => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    box.innerHTML = `<ul style="list-style:none;margin:0;padding:0;font-size:0.74rem;color:var(--muted)">` +
+      runs.map(x => {
+        const when = x.ended_at || x.started_at;
+        const col = x.status === "error" ? "#e0564f" : x.status === "running" ? "#e6c14b" : "#6ddf70";
+        const dur = (x.started_at && x.ended_at)
+          ? ` · ${Math.max(0, Math.round((Date.parse(x.ended_at) - Date.parse(x.started_at)) / 1000))}s` : "";
+        return `<li style="padding:0.12rem 0;border-bottom:1px solid var(--border)">
+          <span style="color:${col};font-weight:600;text-transform:uppercase;font-size:0.68rem">${esc(x.status)}</span>
+          ${esc(new Date(when).toLocaleString())}${dur}
+          ${x.items ? ` · ${esc(x.items)} items` : ""}${x.errors ? ` · ${esc(x.errors)} err` : ""}
+          ${x.detail ? `<br><span style="opacity:0.8">${esc(x.detail)}</span>` : ""}
+        </li>`;
+      }).join("") + `</ul>`;
+    box.dataset.loaded = "1";
+  } catch (e) {
+    box.textContent = "Could not load history: " + (e?.message || e);
+  }
+}
+window._adminToggleJobHistory = _adminToggleJobHistory;
+
 async function loadApiHealth() {
   const el = document.getElementById("admin-api-health");
   if (!el) return;
@@ -1199,11 +1233,16 @@ async function loadApiHealth() {
     } else {
       html += `<p style="color:var(--muted)">No API activity in this window.</p>`;
     }
-    // Background-job health
+    // Background-job health (label → job_runs key for the history link)
+    const _jobKey = { "Cache-warm worker": "cache-warm", "Daily suggestions": "daily-suggestions", "Archive refresh": "archive-refresh" };
     if (hr?.jobs) {
       html += `<h3 style="margin:1rem 0 0.4rem;font-size:0.85rem;color:var(--fg)">Background jobs</h3><ul class="admin-job-list">`;
       for (const [k, j] of Object.entries(hr.jobs)) {
-        html += `<li><strong>${esc(k)}</strong>: ${esc(j)}</li>`;
+        const key = _jobKey[k];
+        const histLink = key
+          ? ` <a href="#" onclick="event.preventDefault();_adminToggleJobHistory('${key}',this)" style="font-size:0.72rem;color:#7eb8da;text-decoration:none">history</a><div class="admin-job-hist" data-job="${key}" style="display:none;margin:0.3rem 0 0.4rem 0.6rem"></div>`
+          : "";
+        html += `<li><strong>${esc(k)}</strong>: ${esc(j)}${histLink}</li>`;
       }
       html += `</ul>`;
     }

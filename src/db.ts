@@ -703,6 +703,24 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS cache_fetch_queue_drain_idx ON cache_fetch_queue (priority DESC, requested_at ASC)`);
 
+  // ── Background-job run history (admin audit) ─────────────────────────
+  // Durable, exact record of every scheduled-job invocation. In-memory
+  // counters reset on redeploy; this survives so the admin panel can
+  // show real last-run time + outcome.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS job_runs (
+      id          SERIAL      PRIMARY KEY,
+      job_name    TEXT        NOT NULL,
+      status      TEXT        NOT NULL DEFAULT 'running',  -- 'running' | 'ok' | 'error'
+      started_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      ended_at    TIMESTAMPTZ,
+      items       INTEGER     NOT NULL DEFAULT 0,
+      errors      INTEGER     NOT NULL DEFAULT 0,
+      detail      TEXT
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS job_runs_name_time_idx ON job_runs (job_name, started_at DESC)`);
+
   // ── Behavior events (admin "behavior stats" panel) ───────────────────
   // Two narrow append-only tables. Album-click counts already live in
   // user_recent_views and favorite counts in user_favorites, so we
@@ -4161,6 +4179,74 @@ export async function getJobHealth(): Promise<{ suggestionsLastAt: string | null
     suggestionsLastAt: iso(s.rows[0]?.t),
     cacheWarmLastAt: iso(c.rows[0]?.t),
   };
+}
+
+// ── Background-job run tracking ──────────────────────────────────────
+// Wrap a scheduled job: startJobRun() at the top, finishJobRun() in a
+// finally. Best-effort — a logging failure must never break the job,
+// so callers should .catch() these.
+export async function startJobRun(jobName: string): Promise<number | null> {
+  try {
+    const r = await getPool().query(
+      `INSERT INTO job_runs (job_name, status) VALUES ($1, 'running') RETURNING id`,
+      [jobName]
+    );
+    return r.rows[0]?.id ?? null;
+  } catch { return null; }
+}
+export async function finishJobRun(
+  id: number | null,
+  opts: { status: "ok" | "error"; items?: number; errors?: number; detail?: string }
+): Promise<void> {
+  if (id == null) return;
+  try {
+    await getPool().query(
+      `UPDATE job_runs
+          SET status = $2, ended_at = NOW(),
+              items = $3, errors = $4, detail = $5
+        WHERE id = $1`,
+      [id, opts.status, opts.items ?? 0, opts.errors ?? 0,
+       (opts.detail ?? "").slice(0, 500) || null]
+    );
+    // Keep the table bounded: retain the most recent 100 runs per job.
+    await getPool().query(
+      `DELETE FROM job_runs jr
+        WHERE jr.job_name = (SELECT job_name FROM job_runs WHERE id = $1)
+          AND jr.id NOT IN (
+            SELECT id FROM job_runs
+             WHERE job_name = (SELECT job_name FROM job_runs WHERE id = $1)
+             ORDER BY started_at DESC LIMIT 100
+          )`,
+      [id]
+    );
+  } catch { /* best-effort */ }
+}
+// Latest run per job (for the admin Active-APIs popup).
+export async function getJobLastRuns(): Promise<Array<{
+  job_name: string; status: string; started_at: string;
+  ended_at: string | null; items: number; errors: number; detail: string | null;
+}>> {
+  try {
+    const r = await getPool().query(`
+      SELECT DISTINCT ON (job_name)
+             job_name, status, started_at, ended_at, items, errors, detail
+        FROM job_runs
+       ORDER BY job_name, started_at DESC
+    `);
+    return r.rows;
+  } catch { return []; }
+}
+// Full recent history for one job (audit drill-down).
+export async function getRecentJobRuns(jobName: string, limit = 25): Promise<any[]> {
+  try {
+    const r = await getPool().query(
+      `SELECT id, job_name, status, started_at, ended_at, items, errors, detail
+         FROM job_runs WHERE job_name = $1
+        ORDER BY started_at DESC LIMIT $2`,
+      [jobName, Math.max(1, Math.min(200, limit))]
+    );
+    return r.rows;
+  } catch { return []; }
 }
 
 // ── Table row counts (admin dashboard) ───────────────────────────────────
