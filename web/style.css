@@ -5700,6 +5700,68 @@ body.card-mode-wide .card-tracklist {
 .admin-refresh-status.is-success { color: #6ddf70; font-style: normal; }
 .admin-refresh-status.is-error   { color: var(--danger); font-style: normal; }
 
+/* ── Admin dashboard layout ──────────────────────────────────────────
+   The shared .account-box is sized for the narrow account page; the
+   admin dashboard is data-dense, so widen it and kill the big top gap
+   between the site header and the content box. */
+.admin-box {
+  max-width: 1600px;
+  margin: 0.5rem auto 1.5rem;
+  padding: 1rem 1.5rem 1.5rem;
+}
+@media (max-width: 700px) {
+  .admin-box { padding: 0.7rem; margin: 0.3rem auto 1rem; }
+}
+/* Separator between site-action buttons and the open-a-thing buttons
+   (View / Feedback) in the Actions row. */
+.admin-action-sep {
+  width: 1px;
+  align-self: stretch;
+  min-height: 1.6rem;
+  background: var(--border);
+  margin: 0 0.2rem;
+}
+/* Unread-feedback dot on the ✉ Feedback button. */
+.admin-mail-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #e0564f;
+  margin-left: 0.35rem;
+  vertical-align: middle;
+}
+/* KPI grid — Overview + Users summary boxes. */
+.admin-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+.admin-kpi {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 0.7rem;
+}
+.admin-kpi-val   { font-size: 1.35rem; font-weight: 700; color: var(--fg); line-height: 1.1; }
+.admin-kpi-label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-top: 0.2rem; }
+.admin-kpi-sub   { font-size: 0.7rem; color: var(--muted); margin-top: 0.15rem; opacity: 0.85; }
+/* Active-APIs popup table. */
+.admin-api-tbl { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.admin-api-tbl th, .admin-api-tbl td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.3rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+.admin-api-tbl th { color: var(--muted); font-weight: 600; text-transform: uppercase; font-size: 0.68rem; letter-spacing: 0.04em; }
+.admin-api-ok   { color: #6ddf70; }
+.admin-api-warn { color: #e6c14b; }
+.admin-api-bad  { color: #e0564f; }
+.admin-job-list { margin: 0.2rem 0 0; padding-left: 1.1rem; font-size: 0.78rem; color: var(--muted); line-height: 1.6; }
+.admin-job-list strong { color: var(--fg); }
+
 /* ── Load More ── */
 .load-more-wrap {
   text-align: center;

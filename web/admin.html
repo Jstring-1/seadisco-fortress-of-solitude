@@ -21,8 +21,7 @@
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
-  <div class="account-box">
-    <h2>Admin Dashboard</h2>
+  <div class="account-box admin-box">
 
     <div id="loading-section">
       <p style="color:var(--muted)">Checking access...</p>
@@ -46,34 +45,37 @@
           <button onclick="adminWarmFavoritesCache(this)" id="admin-warm-fav-btn" class="admin-btn" title="Pre-fetch full release/master detail (tracklist, credits) for every item in your favorites so anon visitors see complete album popups">Warm favorites cache</button>
           <button onclick="toggleApiKill()" id="admin-api-kill-btn" class="admin-btn admin-btn-danger">Kill All</button>
           <button onclick="adminRevokeSessions()" id="admin-revoke-btn" class="admin-btn admin-btn-danger">Logout All</button>
+          <!-- View / Feedback split off behind a separator — these are
+               "open a thing" controls, not destructive site actions. -->
+          <span class="admin-action-sep" aria-hidden="true"></span>
+          <button onclick="adminToggleViewAsUser()" id="admin-view-btn" class="admin-btn" title="Preview the main site as a regular user (hides admin-only affordances). Click again to restore.">View as user</button>
+          <button onclick="adminOpenFeedback()" id="admin-feedback-btn" class="admin-btn" title="Feedback inbox">✉ Feedback<span id="admin-feedback-dot" class="admin-mail-dot" style="display:none"></span></button>
         </div>
         <div id="admin-archive-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.35rem"></div>
         <div id="admin-action-status" style="font-size:0.78rem;color:var(--muted);margin-top:0.35rem"></div>
       </div>
 
-      <!-- Feedback Inbox -->
-      <div class="admin-section admin-section-b">
-        <h2 style="margin-bottom:0.5rem">Feedback Inbox</h2>
-        <div id="feedback-list" style="font-size:0.85rem;color:var(--muted)">Loading...</div>
-      </div>
-
-      <!-- Section nav tabs -->
+      <!-- Section nav tabs (consolidated 11 → 5) -->
       <div class="admin-tab-bar">
-        <button class="admin-tab active" onclick="switchAdminTab('collection-stats')">Collection Stats</button>
-        <button class="admin-tab" onclick="switchAdminTab('sync-status')">User Sync</button>
-        <button class="admin-tab" onclick="switchAdminTab('api-log')">API Log</button>
-        <button class="admin-tab" onclick="switchAdminTab('db-stats')">Database</button>
-        <button class="admin-tab" onclick="switchAdminTab('loc-stats')">LOC</button>
+        <button class="admin-tab active" onclick="switchAdminTab('overview')">Overview</button>
+        <button class="admin-tab" onclick="switchAdminTab('users')">Users</button>
+        <button class="admin-tab" onclick="switchAdminTab('content')">Content</button>
+        <button class="admin-tab" onclick="switchAdminTab('system')">System</button>
         <button class="admin-tab" onclick="switchAdminTab('blues-db')">Blues DB</button>
-        <button class="admin-tab" onclick="switchAdminTab('submissions')">Submissions</button>
-        <button class="admin-tab" onclick="switchAdminTab('suggestions')">Suggestions</button>
-        <button class="admin-tab" onclick="switchAdminTab('behavior')">Behavior</button>
-        <button class="admin-tab" onclick="switchAdminTab('unavailable')">Unavailable</button>
-        <button class="admin-tab" onclick="switchAdminTab('theme')">View</button>
       </div>
 
-      <!-- Collection Stats -->
-      <div class="admin-tab-panel" id="panel-collection-stats">
+      <!-- ── Overview KPI box (Overview group) ─────────────────────── -->
+      <div class="admin-tab-panel admin-grp-overview" id="panel-overview-kpis">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
+          <h2 style="margin:0">Overview</h2>
+          <button class="admin-refresh-btn" id="overview-kpis-refresh-btn" onclick="_adminClickRefresh(this, loadAdminOverview)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <span id="overview-kpis-refresh-status" class="admin-refresh-status"></span>
+        </div>
+        <div id="admin-overview-kpis" class="admin-kpi-grid">Loading…</div>
+      </div>
+
+      <!-- Collection Stats (Overview group) -->
+      <div class="admin-tab-panel admin-grp-overview" id="panel-collection-stats" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
           <h2 style="margin:0">Collection Stats</h2>
           <button class="admin-refresh-btn" id="collection-stats-refresh-btn" onclick="_adminClickRefresh(this, loadCollectionStats)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
@@ -82,8 +84,18 @@
         <div id="collection-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
       </div>
 
-      <!-- User Sync Status -->
-      <div class="admin-tab-panel" id="panel-sync-status" style="display:none">
+      <!-- ── User stats box (Users group) ──────────────────────────── -->
+      <div class="admin-tab-panel admin-grp-users" id="panel-user-stats" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
+          <h2 style="margin:0">Users</h2>
+          <button class="admin-refresh-btn" id="user-stats-refresh-btn" onclick="_adminClickRefresh(this, loadAdminUserStats)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <span id="user-stats-refresh-status" class="admin-refresh-status"></span>
+        </div>
+        <div id="admin-user-stats" class="admin-kpi-grid">Loading…</div>
+      </div>
+
+      <!-- User Sync Status (Users group) -->
+      <div class="admin-tab-panel admin-grp-users" id="panel-sync-status" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
           <h2 style="margin:0">User Sync Status</h2>
           <button class="admin-refresh-btn" id="sync-status-refresh-btn" onclick="_adminClickRefresh(this, loadAdminSyncStatus)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
@@ -92,8 +104,8 @@
         <div id="admin-sync-status-list" style="font-size:0.83rem;color:var(--muted)">Loading...</div>
       </div>
 
-      <!-- API Request Log -->
-      <div class="admin-tab-panel" id="panel-api-log" style="display:none">
+      <!-- API Request Log (System group — below Database) -->
+      <div class="admin-tab-panel admin-grp-system" id="panel-api-log" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
           <h2 style="margin:0">API Request Log <span id="api-log-range-label" style="font-size:0.75rem;color:var(--muted);font-weight:400">(24h)</span></h2>
           <button class="admin-refresh-btn" id="api-log-refresh-btn" onclick="_adminClickRefresh(this, loadApiLog)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
@@ -116,12 +128,13 @@
         <div id="api-log-list" style="font-size:0.82rem;color:var(--muted);max-height:500px;overflow-y:auto"></div>
       </div>
 
-      <!-- Database Stats -->
-      <div class="admin-tab-panel" id="panel-db-stats" style="display:none">
-        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
+      <!-- Database Stats (System group — top) -->
+      <div class="admin-tab-panel admin-grp-system" id="panel-db-stats" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
           <h2 style="margin:0">Database</h2>
           <button class="admin-refresh-btn" id="db-stats-refresh-btn" onclick="loadDbStats(this)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
           <span id="db-stats-refresh-status" class="admin-refresh-status"></span>
+          <button class="admin-btn" onclick="adminOpenApis()" title="Active external APIs — health, latency, error rates, LOC proxy + rate-limit headroom" style="margin-left:auto">Active APIs ↗</button>
         </div>
         <div id="db-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
         <!-- Flat all-tables view (toggle to expand). The grouped view
@@ -133,18 +146,11 @@
         </details>
       </div>
 
-      <!-- LOC Stats -->
-      <div class="admin-tab-panel" id="panel-loc-stats" style="display:none">
-        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
-          <h2 style="margin:0">Library of Congress proxy</h2>
-          <button class="admin-refresh-btn" id="loc-stats-refresh-btn" onclick="_adminClickRefresh(this, loadLocStats)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
-          <span id="loc-stats-refresh-status" class="admin-refresh-status"></span>
-        </div>
-        <div id="loc-stats-body" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
-      </div>
+      <!-- LOC proxy stats relocated into the "Active APIs" popup
+           (System tab → Active APIs ↗). The standalone tab is gone. -->
 
-      <!-- Blues DB (pre-1930 artists, admin-only) -->
-      <div class="admin-tab-panel" id="panel-blues-db" style="display:none">
+      <!-- Blues DB (pre-1930 artists, admin-only) — own tab -->
+      <div class="admin-tab-panel admin-grp-blues-db" id="panel-blues-db" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
           <h2 style="margin:0">Pre-1930 Blues Artists</h2>
           <button class="admin-refresh-btn" id="blues-db-refresh-btn" onclick="_adminClickRefresh(this, bluesDbLoadList)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
@@ -254,8 +260,8 @@
         </div>
       </div>
 
-      <!-- Submitted Tracks (crowd-sourced YT overrides) -->
-      <div class="admin-tab-panel" id="panel-submissions" style="display:none">
+      <!-- Submitted Tracks (Content group) -->
+      <div class="admin-tab-panel admin-grp-content" id="panel-submissions" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
           <h2 style="margin:0">Submitted Tracks</h2>
           <button class="admin-refresh-btn" id="submissions-refresh-btn" onclick="_adminClickRefresh(this, loadAdminSubmissions)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
@@ -266,8 +272,8 @@
         <div id="submissions-list" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
       </div>
 
-      <!-- Personal suggestions stats + manual triggers -->
-      <div class="admin-tab-panel" id="panel-suggestions" style="display:none">
+      <!-- Personal suggestions stats + manual triggers (Users group) -->
+      <div class="admin-tab-panel admin-grp-users" id="panel-suggestions" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
           <h2 style="margin:0">Suggestions</h2>
           <button class="admin-refresh-btn" id="suggestions-refresh-btn" onclick="_adminClickRefresh(this, loadAdminSuggestions)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
@@ -280,8 +286,8 @@
         <div id="suggestions-list" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
       </div>
 
-      <!-- Per-user behavior stats -->
-      <div class="admin-tab-panel" id="panel-behavior" style="display:none">
+      <!-- Per-user behavior stats (Users group) -->
+      <div class="admin-tab-panel admin-grp-users" id="panel-behavior" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
           <h2 style="margin:0">User Behavior</h2>
           <button class="admin-refresh-btn" id="behavior-refresh-btn" onclick="_adminClickRefresh(this, loadAdminBehavior)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
@@ -299,8 +305,8 @@
         <div id="behavior-list" style="font-size:0.78rem;color:var(--muted)">Loading…</div>
       </div>
 
-      <!-- Unavailable YouTube videos (auto-flagged via IFrame Player onError) -->
-      <div class="admin-tab-panel" id="panel-unavailable" style="display:none">
+      <!-- Unavailable YouTube videos (Content group) -->
+      <div class="admin-tab-panel admin-grp-content" id="panel-unavailable" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
           <h2 style="margin:0">Unavailable Videos</h2>
           <button class="admin-refresh-btn" id="unavailable-refresh-btn" onclick="_adminClickRefresh(this, loadAdminUnavailable)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
@@ -312,32 +318,44 @@
         <div id="unavailable-list" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
       </div>
 
-      <!-- View-as-user (theme picker removed — site theme is locked to
-           Noir White site-wide). The view-as-user toggle remains here so
-           the admin can preview the site without admin affordances. -->
-      <div class="admin-tab-panel" id="panel-theme" style="display:none">
-        <h2 style="margin:0 0 0.5rem">View</h2>
-        <p style="font-size:0.82rem;color:var(--muted);margin:0 0 1rem">
-          Site theme is locked to <strong>Noir White</strong> (black · white · mono).
-        </p>
-        <!-- View-as-user toggle: hides every admin-only affordance on
-             the main site (W icons, LOC track icons, blues + adders,
-             admin-only nav surfaces) so the admin can preview the site
-             as a regular user sees it. The footer Admin link stays
-             visible and a small fixed chip in the corner of the main
-             site offers a one-click restore. -->
-        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:1.2rem;padding:0.6rem 0.8rem;background:var(--surface);border:1px solid var(--border);border-radius:6px">
-          <label style="display:flex;align-items:center;gap:0.5rem;font-size:0.82rem;color:var(--text);cursor:pointer;font-weight:600">
-            <input type="checkbox" id="admin-as-user-toggle" onchange="toggleAdminAsUser(this)">
-            View main site as a regular user
-          </label>
-          <span style="font-size:0.72rem;color:var(--muted)">Hides admin-only icons + tabs everywhere except <code>/admin</code>.</span>
-        </div>
-      </div>
+      <!-- "View as user" is now a single button under Actions
+           (adminToggleViewAsUser); the standalone View tab is gone. -->
 
     </div>
   </div>
 </main>
+
+<!-- Feedback inbox popup (was an inline section; now opened from the
+     ✉ Feedback button in Actions, with an unread dot). -->
+<div id="admin-feedback-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;align-items:flex-start;justify-content:center;padding:3rem 1rem;overflow:auto" onclick="if(event.target===this)adminCloseFeedback()">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;width:min(680px,100%);max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:0.6rem;padding:0.8rem 1rem;border-bottom:1px solid var(--border)">
+      <span style="font-weight:600;color:var(--fg)">Feedback Inbox</span>
+      <span id="admin-feedback-count" style="font-size:0.75rem;color:var(--muted)"></span>
+      <button class="admin-btn" onclick="adminCloseFeedback()" style="margin-left:auto;font-size:1.1rem;padding:0 0.6rem">×</button>
+    </div>
+    <div id="feedback-list" style="font-size:0.85rem;color:var(--muted);overflow-y:auto;padding:0.6rem 1rem 1rem">Loading...</div>
+  </div>
+</div>
+
+<!-- Active APIs popup — external-service health (success %, latency
+     p50/p95, errors, last error) + LOC proxy / rate-limit headroom.
+     Folds in what used to be the standalone LOC tab. -->
+<div id="admin-apis-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;align-items:flex-start;justify-content:center;padding:3rem 1rem;overflow:auto" onclick="if(event.target===this)adminCloseApis()">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;width:min(860px,100%);max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:0.6rem;padding:0.8rem 1rem;border-bottom:1px solid var(--border)">
+      <span style="font-weight:600;color:var(--fg)">Active APIs</span>
+      <button class="admin-refresh-btn" id="api-health-refresh-btn" onclick="_adminClickRefresh(this, loadApiHealth)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+      <span id="api-health-refresh-status" class="admin-refresh-status"></span>
+      <select id="api-health-hours" onchange="loadApiHealth()" style="font-size:0.75rem;padding:0.2rem 0.4rem;background:#1a1510;color:var(--text);border:1px solid var(--border);border-radius:4px">
+        <option value="24">Last 24 hours</option>
+        <option value="168">Last 7 days</option>
+      </select>
+      <button class="admin-btn" onclick="adminCloseApis()" style="margin-left:auto;font-size:1.1rem;padding:0 0.6rem">×</button>
+    </div>
+    <div id="admin-api-health" style="font-size:0.82rem;color:var(--muted);overflow-y:auto;padding:0.8rem 1rem 1rem">Loading…</div>
+  </div>
+</div>
 
 <!-- User items popup -->
 <div id="admin-items-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;align-items:center;justify-content:center" onclick="if(event.target===this)closeAdminItems()">
@@ -440,54 +458,65 @@ async function _adminWithRefresh(btn, statusEl, work) {
   }
 }
 
-const _adminTabLoaders = {
-  'collection-stats': () => loadCollectionStats(),
-  'sync-status': () => loadAdminSyncStatus(),
-  'api-log': () => loadApiLog(),
-  'db-stats': () => loadDbStats(),
-  'loc-stats': () => loadLocStats(),
-  'blues-db': () => bluesDbInit(),
-  'submissions': () => loadAdminSubmissions(),
-  'suggestions': () => loadAdminSuggestions(),
-  'behavior': () => loadAdminBehavior(),
-  'unavailable': () => loadAdminUnavailable(),
-  'theme': () => initThemePicker(),
+// Consolidated 5-group model. Each group maps to one or more existing
+// panels (stacked = the "sub-sections" the user sees) and the loaders
+// that hydrate them. Existing per-panel loaders are reused verbatim;
+// only the grouping/orchestration changed.
+const _adminGroups = {
+  'overview': {
+    panels: ['panel-overview-kpis', 'panel-collection-stats'],
+    load: () => { loadAdminOverview(); loadCollectionStats(); },
+  },
+  'users': {
+    panels: ['panel-user-stats', 'panel-sync-status', 'panel-behavior', 'panel-suggestions'],
+    load: () => { loadAdminUserStats(); loadAdminSyncStatus(); loadAdminBehavior(); loadAdminSuggestions(); },
+  },
+  'content': {
+    panels: ['panel-submissions', 'panel-unavailable'],
+    load: () => { loadAdminSubmissions(); loadAdminUnavailable(); },
+  },
+  'system': {
+    panels: ['panel-db-stats', 'panel-api-log'],
+    load: () => { loadDbStats(); loadApiLog(); },
+  },
+  'blues-db': {
+    panels: ['panel-blues-db'],
+    load: () => bluesDbInit(),
+  },
 };
 
-// ── View-as-user toggle ───────────────────────────────────────────────
-// Theme picker removed; site theme is locked to Noir White (server-side
-// in src/search-api.ts). The View tab in admin keeps just this
-// admin-only toggle.
-function toggleAdminAsUser(checkbox) {
+// "View as user" — flips the localStorage flag the main site reads to
+// hide admin-only affordances, then reloads. Single button under
+// Actions now (was its own tab). Toggles both ways.
+function adminToggleViewAsUser() {
   try {
-    if (checkbox.checked) localStorage.setItem("sd-admin-as-user", "1");
-    else localStorage.removeItem("sd-admin-as-user");
+    const on = localStorage.getItem("sd-admin-as-user") === "1";
+    if (on) localStorage.removeItem("sd-admin-as-user");
+    else localStorage.setItem("sd-admin-as-user", "1");
   } catch {}
-  // Reload /admin so the change takes effect — main site picks it up
-  // on its next load too.
   location.reload();
 }
-
-// Site theme is locked to noir-white. The View tab now only carries
-// the View-as-user toggle; this function survives just to restore
-// that checkbox's state when the View panel mounts.
-function initThemePicker() {
-  const asUserCb = document.getElementById("admin-as-user-toggle");
-  if (asUserCb) asUserCb.checked = localStorage.getItem("sd-admin-as-user") === "1";
+// Reflect current state on the button label.
+function _adminSyncViewBtn() {
+  const b = document.getElementById("admin-view-btn");
+  if (!b) return;
+  const on = localStorage.getItem("sd-admin-as-user") === "1";
+  b.textContent = on ? "Viewing as user ✓" : "View as user";
+  b.classList.toggle("admin-btn-extras", on);
 }
 const _adminTabLoaded = {};
 
-function switchAdminTab(tabId) {
+function switchAdminTab(group) {
+  const g = _adminGroups[group];
+  if (!g) return;
   document.querySelectorAll('.admin-tab-panel').forEach(p => p.style.display = 'none');
-  document.querySelectorAll('.admin-tab').forEach(b => b.classList.remove('active'));
-  const panel = document.getElementById('panel-' + tabId);
-  if (panel) panel.style.display = '';
-  const tabs = document.querySelectorAll('.admin-tab');
-  tabs.forEach(b => { if (b.getAttribute('onclick')?.includes(tabId)) b.classList.add('active'); });
-  // Lazy-load data on first visit
-  if (!_adminTabLoaded[tabId] && _adminTabLoaders[tabId]) {
-    _adminTabLoaded[tabId] = true;
-    _adminTabLoaders[tabId]();
+  g.panels.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = ''; });
+  document.querySelectorAll('.admin-tab').forEach(b => {
+    b.classList.toggle('active', (b.getAttribute('onclick') || '').includes("'" + group + "'"));
+  });
+  if (!_adminTabLoaded[group]) {
+    _adminTabLoaded[group] = true;
+    try { g.load(); } catch (e) { console.warn('[admin] group load failed', group, e); }
   }
 }
 
@@ -508,9 +537,10 @@ async function verifyAdmin(c) {
     document.getElementById("admin-content").style.display = "block";
 
     renderFeedback(items);
-    // Load the default visible tab (collection stats)
-    _adminTabLoaded['collection-stats'] = true;
-    loadCollectionStats();
+    _adminUpdateFeedbackDot(Array.isArray(items) ? items.length : 0);
+    _adminSyncViewBtn();
+    // Default group is Overview.
+    switchAdminTab('overview');
     checkKillStatus();
   } catch { showDenied(); }
 }
@@ -1079,7 +1109,157 @@ function renderFeedback(items) {
 
 async function deleteFeedbackItem(id) {
   const r = await apiFetch(`/api/admin/feedback/${id}`, { method: "DELETE" });
-  if (r.ok) document.getElementById(`fb-${id}`)?.remove();
+  if (r.ok) {
+    document.getElementById(`fb-${id}`)?.remove();
+    const n = document.querySelectorAll('#feedback-list [id^="fb-"]').length;
+    _adminUpdateFeedbackDot(n);
+    const cEl = document.getElementById("admin-feedback-count");
+    if (cEl) cEl.textContent = n ? `${n} message${n === 1 ? "" : "s"}` : "";
+  }
+}
+
+// ── Feedback popup + unread dot ───────────────────────────────────────
+// "Unread" = feedback count exceeds the last count the admin saw
+// (persisted in localStorage). Opening the popup marks the current
+// count as seen and clears the dot.
+function _adminUpdateFeedbackDot(count) {
+  const dot = document.getElementById("admin-feedback-dot");
+  if (!dot) return;
+  let seen = 0;
+  try { seen = parseInt(localStorage.getItem("sd-admin-fb-seen") || "0", 10) || 0; } catch {}
+  dot.style.display = (count > seen) ? "" : "none";
+  const cEl = document.getElementById("admin-feedback-count");
+  if (cEl) cEl.textContent = count ? `${count} message${count === 1 ? "" : "s"}` : "";
+}
+function adminOpenFeedback() {
+  const ov = document.getElementById("admin-feedback-overlay");
+  if (ov) ov.style.display = "flex";
+  const n = document.querySelectorAll('#feedback-list [id^="fb-"]').length;
+  try { localStorage.setItem("sd-admin-fb-seen", String(n)); } catch {}
+  const dot = document.getElementById("admin-feedback-dot");
+  if (dot) dot.style.display = "none";
+}
+function adminCloseFeedback() {
+  const ov = document.getElementById("admin-feedback-overlay");
+  if (ov) ov.style.display = "none";
+}
+
+// ── Active APIs popup (folds in the old LOC tab) ──────────────────────
+function adminOpenApis() {
+  const ov = document.getElementById("admin-apis-overlay");
+  if (ov) ov.style.display = "flex";
+  if (!adminOpenApis._loaded) { adminOpenApis._loaded = true; loadApiHealth(); }
+}
+function adminCloseApis() {
+  const ov = document.getElementById("admin-apis-overlay");
+  if (ov) ov.style.display = "none";
+}
+async function loadApiHealth() {
+  const el = document.getElementById("admin-api-health");
+  if (!el) return;
+  const hours = document.getElementById("api-health-hours")?.value || "24";
+  el.innerHTML = "Loading…";
+  try {
+    const [hr, lr] = await Promise.all([
+      apiFetch(`/api/admin/api-health?hours=${hours}`).then(r => r.ok ? r.json() : null).catch(() => null),
+      apiFetch(`/api/admin/loc-stats`).then(r => r.ok ? r.json() : null).catch(() => null),
+    ]);
+    const esc = s => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
+    let html = "";
+    const svcs = Array.isArray(hr?.services) ? hr.services : [];
+    if (svcs.length) {
+      html += `<table class="admin-api-tbl"><thead><tr>
+        <th>Service</th><th>Reqs</th><th>OK %</th><th>p50</th><th>p95</th><th>Errors</th><th>Last error</th></tr></thead><tbody>`;
+      html += svcs.map(s => {
+        const okPct = s.total ? Math.round((s.successes / s.total) * 100) : 0;
+        const okCls = okPct >= 99 ? "ok" : okPct >= 90 ? "warn" : "bad";
+        const lastErr = s.last_error
+          ? `<span title="${esc(s.last_error_at || "")}">${esc(String(s.last_error).slice(0, 80))}</span>`
+          : "<span style='color:var(--muted)'>—</span>";
+        return `<tr>
+          <td>${esc(s.service)}</td>
+          <td>${s.total}</td>
+          <td class="admin-api-${okCls}">${okPct}%</td>
+          <td>${s.p50_ms ?? "–"}ms</td>
+          <td>${s.p95_ms ?? "–"}ms</td>
+          <td>${s.failures || 0}</td>
+          <td>${lastErr}</td></tr>`;
+      }).join("");
+      html += `</tbody></table>`;
+    } else {
+      html += `<p style="color:var(--muted)">No API activity in this window.</p>`;
+    }
+    // Background-job health
+    if (hr?.jobs) {
+      html += `<h3 style="margin:1rem 0 0.4rem;font-size:0.85rem;color:var(--fg)">Background jobs</h3><ul class="admin-job-list">`;
+      for (const [k, j] of Object.entries(hr.jobs)) {
+        html += `<li><strong>${esc(k)}</strong>: ${esc(j)}</li>`;
+      }
+      html += `</ul>`;
+    }
+    // LOC proxy (was its own tab)
+    if (lr && typeof lr === "object") {
+      const s = lr.stats || lr;
+      html += `<h3 style="margin:1rem 0 0.4rem;font-size:0.85rem;color:var(--fg)">Library of Congress proxy</h3>
+        <ul class="admin-job-list">
+          <li>Cache: ${esc(s.cacheHits ?? "?")} hits / ${esc(s.cacheMisses ?? "?")} misses</li>
+          <li>Failures: ${esc(s.failures ?? "?")} · rate-limit hits: ${esc(s.rateLimitHits ?? "?")}</li>
+          ${s.lastFailureMsg ? `<li>Last failure: ${esc(s.lastFailureMsg)}</li>` : ""}
+        </ul>`;
+    }
+    el.innerHTML = html;
+  } catch (e) {
+    el.innerHTML = `<p style="color:#e88">Failed to load API health: ${String(e?.message || e)}</p>`;
+  }
+}
+
+// ── Overview KPIs + per-user stats box ────────────────────────────────
+function _kpiCard(label, value, sub, title) {
+  const t = title ? ` title="${String(title).replace(/"/g, "&quot;")}"` : "";
+  return `<div class="admin-kpi"${t}><div class="admin-kpi-val">${value}</div>
+    <div class="admin-kpi-label">${label}</div>
+    ${sub ? `<div class="admin-kpi-sub">${sub}</div>` : ""}</div>`;
+}
+async function loadAdminOverview() {
+  const el = document.getElementById("admin-overview-kpis");
+  if (!el) return;
+  try {
+    const r = await apiFetch("/api/admin/overview");
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    el.innerHTML = [
+      _kpiCard("Total users", d.totalUsers ?? "–", "with a Discogs connection"),
+      _kpiCard("New (7d)", d.newUsers7d ?? "–", d.sinceLabel7d || "", "Users whose account was created in the last 7 days"),
+      _kpiCard("New (30d)", d.newUsers30d ?? "–", "", "Users created in the last 30 days"),
+      _kpiCard("DAU", d.dau ?? "–", "active 24h"),
+      _kpiCard("WAU", d.wau ?? "–", "active 7d"),
+      _kpiCard("MAU", d.mau ?? "–", "active 30d"),
+      _kpiCard("Plays 24h", d.plays24h ?? "–", `${d.plays7d ?? "–"} in 7d`),
+      _kpiCard("Searches 24h", d.searches24h ?? "–", `${d.searches7d ?? "–"} in 7d`),
+      _kpiCard("Album opens 24h", d.albumOpens24h ?? "–", `${d.albumOpens7d ?? "–"} in 7d`),
+    ].join("");
+  } catch (e) {
+    el.innerHTML = `<p style="color:#e88">Failed: ${String(e?.message || e)}</p>`;
+  }
+}
+async function loadAdminUserStats() {
+  const el = document.getElementById("admin-user-stats");
+  if (!el) return;
+  try {
+    const r = await apiFetch("/api/admin/overview");
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    el.innerHTML = [
+      _kpiCard("Total users", d.totalUsers ?? "–", "current"),
+      _kpiCard("New users", d.newUsers7d ?? 0, d.sinceLabel7d || "since 7d ago", "New since the last 7 days"),
+      _kpiCard("New (30d)", d.newUsers30d ?? 0, ""),
+      _kpiCard("Active 24h", d.dau ?? "–", ""),
+      _kpiCard("Active 7d", d.wau ?? "–", ""),
+      _kpiCard("Active 30d", d.mau ?? "–", ""),
+    ].join("");
+  } catch (e) {
+    el.innerHTML = `<p style="color:#e88">Failed: ${String(e?.message || e)}</p>`;
+  }
 }
 
 // ── Collection Stats ──────────────────────────────────────────────────

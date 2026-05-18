@@ -4017,6 +4017,64 @@ export async function getApiRequestStats(hours: number = 24): Promise<any[]> {
   return r.rows;
 }
 
+// Per-service API health for the admin "Active APIs" popup: volume,
+// success rate, p50/p95 latency, error count, and the most recent
+// error message + time — all within the requested window.
+export async function getApiHealth(hours: number = 24): Promise<any[]> {
+  const r = await getPool().query(`
+    SELECT e1.service,
+           COUNT(*)::int AS total,
+           COUNT(*) FILTER (WHERE e1.success)::int      AS successes,
+           COUNT(*) FILTER (WHERE NOT e1.success)::int  AS failures,
+           PERCENTILE_CONT(0.5)  WITHIN GROUP (ORDER BY e1.duration_ms)::int AS p50_ms,
+           PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY e1.duration_ms)::int AS p95_ms,
+           (SELECT e2.error_message FROM api_request_log e2
+             WHERE e2.service = e1.service AND NOT e2.success
+               AND e2.created_at > NOW() - INTERVAL '1 hour' * $1
+             ORDER BY e2.created_at DESC LIMIT 1) AS last_error,
+           (SELECT e3.created_at FROM api_request_log e3
+             WHERE e3.service = e1.service AND NOT e3.success
+               AND e3.created_at > NOW() - INTERVAL '1 hour' * $1
+             ORDER BY e3.created_at DESC LIMIT 1) AS last_error_at
+      FROM api_request_log e1
+     WHERE e1.created_at > NOW() - INTERVAL '1 hour' * $1
+     GROUP BY e1.service
+     ORDER BY total DESC
+  `, [hours]);
+  return r.rows;
+}
+
+// Site-wide KPI bundle for the admin Overview + Users summary boxes.
+// One round-trip; all counts derive from existing tables (user_tokens
+// for accounts/activity, the event tables for plays/searches/opens).
+export async function getAdminOverview(): Promise<any> {
+  const r = await getPool().query(`
+    SELECT
+      (SELECT COUNT(*)::int FROM user_tokens) AS total_users,
+      (SELECT COUNT(*)::int FROM user_tokens WHERE created_at > NOW() - INTERVAL '7 days')  AS new_users_7d,
+      (SELECT COUNT(*)::int FROM user_tokens WHERE created_at > NOW() - INTERVAL '30 days') AS new_users_30d,
+      (SELECT COUNT(*)::int FROM user_tokens WHERE last_active_at > NOW() - INTERVAL '1 day')   AS dau,
+      (SELECT COUNT(*)::int FROM user_tokens WHERE last_active_at > NOW() - INTERVAL '7 days')  AS wau,
+      (SELECT COUNT(*)::int FROM user_tokens WHERE last_active_at > NOW() - INTERVAL '30 days') AS mau,
+      (SELECT COUNT(*)::int FROM user_play_events   WHERE created_at > NOW() - INTERVAL '1 day')  AS plays_24h,
+      (SELECT COUNT(*)::int FROM user_play_events   WHERE created_at > NOW() - INTERVAL '7 days') AS plays_7d,
+      (SELECT COUNT(*)::int FROM user_search_events WHERE created_at > NOW() - INTERVAL '1 day')  AS searches_24h,
+      (SELECT COUNT(*)::int FROM user_search_events WHERE created_at > NOW() - INTERVAL '7 days') AS searches_7d,
+      (SELECT COUNT(*)::int FROM user_recent_views  WHERE opened_at > NOW() - INTERVAL '1 day')  AS album_opens_24h,
+      (SELECT COUNT(*)::int FROM user_recent_views  WHERE opened_at > NOW() - INTERVAL '7 days') AS album_opens_7d
+  `);
+  const x = r.rows[0] || {};
+  return {
+    totalUsers: x.total_users ?? 0,
+    newUsers7d: x.new_users_7d ?? 0,
+    newUsers30d: x.new_users_30d ?? 0,
+    dau: x.dau ?? 0, wau: x.wau ?? 0, mau: x.mau ?? 0,
+    plays24h: x.plays_24h ?? 0, plays7d: x.plays_7d ?? 0,
+    searches24h: x.searches_24h ?? 0, searches7d: x.searches_7d ?? 0,
+    albumOpens24h: x.album_opens_24h ?? 0, albumOpens7d: x.album_opens_7d ?? 0,
+  };
+}
+
 // ── Table row counts (admin dashboard) ───────────────────────────────────
 export async function getTableRowCounts(): Promise<Array<{ table: string; rows: number }>> {
   const tables = [
