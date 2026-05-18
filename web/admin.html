@@ -117,6 +117,21 @@
         </div>
       </div>
 
+      <!-- Database Stats (System group — above the API request log) -->
+      <div class="admin-tab-panel admin-grp-system" id="panel-db-stats" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
+          <h2 style="margin:0">Database</h2>
+          <button class="admin-refresh-btn" id="db-stats-refresh-btn" onclick="loadDbStats(this)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <span id="db-stats-refresh-status" class="admin-refresh-status"></span>
+        </div>
+        <div id="db-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
+        <!-- Flat all-tables view — always expanded (no collapse). The
+             grouped view above is curated for readability; this is the
+             raw "everything we have" listing. -->
+        <div style="margin-top:1rem;color:var(--muted);font-size:0.82rem;font-weight:600">All tables (flat list)</div>
+        <div id="db-stats-flat" style="margin-top:0.6rem;font-size:0.78rem;color:var(--muted)"></div>
+      </div>
+
       <!-- API Request Log (System group — below Database) -->
       <div class="admin-tab-panel admin-grp-system" id="panel-api-log" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem">
@@ -139,23 +154,6 @@
           <label style="font-size:0.75rem;color:var(--muted);margin-left:0.3rem"><input type="checkbox" id="api-log-scheduled-only" onchange="loadApiLog()"> Scheduled only</label>
         </div>
         <div id="api-log-list" style="font-size:0.82rem;color:var(--muted);max-height:500px;overflow-y:auto"></div>
-      </div>
-
-      <!-- Database Stats (System group — top) -->
-      <div class="admin-tab-panel admin-grp-system" id="panel-db-stats" style="display:none">
-        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
-          <h2 style="margin:0">Database</h2>
-          <button class="admin-refresh-btn" id="db-stats-refresh-btn" onclick="loadDbStats(this)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
-          <span id="db-stats-refresh-status" class="admin-refresh-status"></span>
-        </div>
-        <div id="db-stats" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
-        <!-- Flat all-tables view (toggle to expand). The grouped view
-             above is curated for readability; this is the raw
-             "everything we have" listing. -->
-        <details style="margin-top:1rem">
-          <summary style="cursor:pointer;color:var(--muted);font-size:0.82rem;font-weight:600">All tables (flat list)</summary>
-          <div id="db-stats-flat" style="margin-top:0.6rem;font-size:0.78rem;color:var(--muted)"></div>
-        </details>
       </div>
 
       <!-- LOC proxy stats relocated into the "Active APIs" popup
