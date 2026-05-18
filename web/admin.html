@@ -1328,15 +1328,24 @@ async function loadAdminUserStats() {
 }
 
 // ── Media player & usage ──────────────────────────────────────────────
+var _adminTopPlayedLimit = 10;
+function _adminSetTopPlayed(n) { _adminTopPlayedLimit = n; loadAdminMediaStats(); }
 async function loadAdminMediaStats() {
   const el = document.getElementById("admin-media-stats");
   if (!el) return;
   try {
-    const r = await apiFetch("/api/admin/media-stats");
+    const r = await apiFetch(`/api/admin/media-stats?topLimit=${_adminTopPlayedLimit}`);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
     const esc = s => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;");
     const srcLabel = s => ({ yt: "YouTube", loc: "Library of Congress", archive: "Archive.org" }[s] || s);
+    const trackUrl = (src, id) => {
+      if (!id) return "";
+      if (src === "yt") return `https://www.youtube.com/watch?v=${encodeURIComponent(id)}`;
+      if (src === "archive") return `https://archive.org/details/${encodeURIComponent(id)}`;
+      if (src === "loc") return `https://www.loc.gov/item/${encodeURIComponent(id)}/`;
+      return "";
+    };
     let html = `<div class="admin-kpi-grid">` + [
       _kpiCard("Plays 24h", d.plays24h ?? 0, `${d.plays7d ?? 0} · 7d`),
       _kpiCard("Plays 30d", d.plays30d ?? 0, `${d.listeners30d ?? 0} listeners`),
@@ -1350,8 +1359,15 @@ async function loadAdminMediaStats() {
     }
     const tt = Array.isArray(d.topTitles30d) ? d.topTitles30d : [];
     if (tt.length) {
-      html += `<h3 style="margin:0.8rem 0 0.3rem;font-size:0.82rem;color:var(--fg)">Most played (30d)</h3>
-        <ol class="admin-job-list" style="padding-left:1.4rem">${tt.map(x => `<li>${esc(x.title)} <span style="color:var(--muted)">(${esc(srcLabel(x.source))}) · ${esc(x.n)}×</span></li>`).join("")}</ol>`;
+      const expand = _adminTopPlayedLimit <= 10
+        ? `<a href="#" onclick="_adminSetTopPlayed(100);return false" style="color:var(--accent);font-size:0.74rem;margin-left:0.5rem">show top 100</a>`
+        : `<a href="#" onclick="_adminSetTopPlayed(10);return false" style="color:var(--accent);font-size:0.74rem;margin-left:0.5rem">show top 10</a>`;
+      html += `<h3 style="margin:0.8rem 0 0.3rem;font-size:0.82rem;color:var(--fg)">Most played (30d)${expand}</h3>
+        <ol class="admin-job-list" style="padding-left:1.4rem">${tt.map(x => {
+          const u = trackUrl(x.source, x.external_id);
+          const t = u ? `<a href="${u}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none">${esc(x.title)}</a>` : esc(x.title);
+          return `<li>${t} <span style="color:var(--muted)">(${esc(srcLabel(x.source))}) · ${esc(x.n)}×</span></li>`;
+        }).join("")}</ol>`;
     }
     const fu = Array.isArray(d.feature7d) ? d.feature7d : [];
     if (fu.length) {

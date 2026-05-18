@@ -9388,8 +9388,9 @@ app.get("/api/admin/overview", async (req, res) => {
 app.get("/api/admin/media-stats", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   try {
+    const topLimit = Math.max(1, Math.min(100, parseInt(String(req.query.topLimit || "10"), 10) || 10));
     const [m, svc] = await Promise.all([
-      getMediaStats(),
+      getMediaStats(topLimit),
       getApiRequestStats(168).catch(() => []),
     ]);
     // Feature usage proxy: upstream calls per service over 7d. These
