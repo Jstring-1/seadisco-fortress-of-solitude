@@ -2737,6 +2737,8 @@ function saveSearchHistory(context) {
     _shAdd("youtube-view-q",   document.getElementById("youtube-view-q")?.value);
   } else if (context === "wikipedia") {
     _shAdd("wiki-view-q",      document.getElementById("wiki-view-q")?.value);
+  } else if (context === "gutenberg") {
+    _shAdd("gutenberg-q",      document.getElementById("gutenberg-q")?.value);
   }
 }
 
@@ -2811,6 +2813,8 @@ const _shFieldIds = new Set([
   "loc-partof", "loc-start-date", "loc-end-date",
   // YouTube view + Wikipedia view (single q each)
   "youtube-view-q", "wiki-view-q",
+  // Project Gutenberg search
+  "gutenberg-q",
 ]);
 
 function _shInit() {

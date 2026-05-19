@@ -3281,7 +3281,13 @@ button.wiki-link-btn:active {
      forces height: var(--input-h) (~32px) and a matching line-height,
      otherwise font + padding shrinks here are steamrolled. */
   font-size: 0.7rem;
-  height: auto !important;
+  /* Pin BOTH the search input and the selects to one explicit height
+     + border-box so a <input type=search> and a <select> sitting
+     side by side in the home strip line up pixel-for-pixel (their
+     native intrinsic heights differ otherwise, even with matching
+     padding/line-height). */
+  box-sizing: border-box;
+  height: 1.7rem !important;
   /* The global `select` rule sets min-height: var(--input-h) (~32px),
      which kept the dropdowns tall even after height/padding shrunk.
      Reset min-height so the select collapses to its content height
@@ -3302,6 +3308,20 @@ button.wiki-link-btn:active {
 .sd-filter-input { width: 7.5rem; }
 .sd-filter-input:focus,
 .sd-filter-select:focus { border-color: var(--accent); }
+/* The global ×-clear wrapper (.input-clear-wrap) is display:inline-block
+   width:100% and forces its child input to width:100% — which made the
+   home-strip filter balloon and stop matching the Genre/Sort selects
+   sitting next to it. Re-pin the wrapped filter to the same fixed
+   width + border-box height as the selects so the three controls line
+   up pixel-for-pixel. */
+.rr-controls .input-clear-wrap {
+  width: auto;
+  flex: 0 0 auto;
+}
+.rr-controls .input-clear-wrap > .sd-filter-input {
+  width: 7.5rem;
+  padding-right: 1.5rem;
+}
 .sd-filter-input::placeholder { color: #555; }
 /* Native <select> renders its dropdown panel with OS / browser
    defaults — without these, the open option list is white-on-white
