@@ -806,6 +806,154 @@ function _gutenbergCloseReader() {
 }
 window._gutenbergCloseReader = _gutenbergCloseReader;
 
+// ── Highlight-to-search popup ───────────────────────────────────────
+// Select text inside the reader body → a small popup offers to run
+// that text as a search on Discogs / your Collection / Wikipedia /
+// LOC / Archive. Discogs/Collection/LOC/Archive navigate to that
+// view (the reader closes); Wikipedia opens its overlay popup so you
+// can keep your place in the book.
+let _gbSelMenuEl = null;
+let _gbSelText = "";
+
+function _gbSelMenu() {
+  if (_gbSelMenuEl) return _gbSelMenuEl;
+  const el = document.createElement("div");
+  el.id = "gutenberg-sel-menu";
+  el.style.display = "none";
+  const targets = [
+    ["Discogs",    "discogs"],
+    ["Collection", "collection"],
+    ["Wikipedia",  "wikipedia"],
+    ["LOC",        "loc"],
+    ["Archive",    "archive"],
+  ];
+  el.innerHTML =
+    `<span class="gb-sel-menu-label">Search:</span>` +
+    targets.map(([label, key]) =>
+      `<button type="button" class="gb-sel-menu-btn" data-gb-target="${key}">${label}</button>`
+    ).join("");
+  el.addEventListener("mousedown", (e) => {
+    // Keep the selection alive until the click resolves.
+    e.preventDefault();
+  });
+  el.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-gb-target]");
+    if (!btn) return;
+    e.preventDefault();
+    const text = _gbSelText;
+    _gbHideSelMenu();
+    if (text) _gbRunSelectionSearch(btn.dataset.gbTarget, text);
+  });
+  document.body.appendChild(el);
+  _gbSelMenuEl = el;
+  return el;
+}
+
+function _gbHideSelMenu() {
+  if (_gbSelMenuEl) _gbSelMenuEl.style.display = "none";
+}
+window._gbHideSelMenu = _gbHideSelMenu;
+
+function _gbWaitFor(getter, cb, tries = 60) {
+  const el = getter();
+  if (el) { cb(el); return; }
+  if (tries <= 0) return;
+  setTimeout(() => _gbWaitFor(getter, cb, tries - 1), 50);
+}
+
+function _gbRunSelectionSearch(target, rawText) {
+  // Cap length — a search box doesn't want a whole paragraph.
+  const text = String(rawText || "").replace(/\s+/g, " ").trim().slice(0, 120);
+  if (!text) return;
+  // Reader overlay (z-index 260) sits above the wiki popup (200), so
+  // the reader must close for any of these to be visible.
+  if (typeof _gutenbergCloseReader === "function") _gutenbergCloseReader();
+  if (target === "wikipedia") {
+    if (typeof openWikiPopup === "function") openWikiPopup(text);
+    return;
+  }
+  if (target === "discogs") {
+    if (typeof switchView === "function") switchView("search");
+    _gbWaitFor(() => document.getElementById("query"), (q) => {
+      q.value = text;
+      if (typeof doSearch === "function") doSearch(1);
+    });
+  } else if (target === "collection") {
+    if (typeof switchView === "function") switchView("records");
+    _gbWaitFor(() => document.getElementById("cw-query"), (q) => {
+      q.value = text;
+      if (typeof doCwSearch === "function") doCwSearch(1);
+    });
+  } else if (target === "loc") {
+    if (typeof switchView === "function") switchView("loc");
+    _gbWaitFor(() => document.getElementById("loc-q"), (q) => {
+      q.value = text;
+      if (typeof window._locRunSearchFromForm === "function") {
+        window._locRunSearchFromForm({ resetPage: true });
+      } else {
+        document.getElementById("loc-search-form")?.requestSubmit?.();
+      }
+    });
+  } else if (target === "archive") {
+    if (typeof switchView === "function") switchView("archive");
+    _gbWaitFor(() => document.getElementById("archive-q"), (q) => {
+      q.value = text;
+      const form = document.querySelector(".archive-panel-search .archive-search-form");
+      if (form && typeof window._archiveOnSearchSubmit === "function") {
+        window._archiveOnSearchSubmit(form);
+      }
+    });
+  }
+}
+
+function _gbShowSelMenuFromSelection() {
+  const overlay = document.getElementById("gutenberg-reader-overlay");
+  if (!overlay || !overlay.classList.contains("open")) return;
+  const body = document.getElementById("gutenberg-reader-body");
+  if (!body) return;
+  const sel = window.getSelection && window.getSelection();
+  if (!sel || sel.isCollapsed || sel.rangeCount === 0) { _gbHideSelMenu(); return; }
+  const text = String(sel.toString() || "").trim();
+  if (text.length < 2) { _gbHideSelMenu(); return; }
+  // Selection must be anchored inside the reader body.
+  const anchor = sel.anchorNode;
+  if (!anchor || !body.contains(anchor.nodeType === 1 ? anchor : anchor.parentNode)) {
+    _gbHideSelMenu();
+    return;
+  }
+  _gbSelText = text;
+  const rect = sel.getRangeAt(0).getBoundingClientRect();
+  const menu = _gbSelMenu();
+  menu.style.display = "flex";
+  // Measure then clamp into the viewport.
+  const mw = menu.offsetWidth || 320;
+  const mh = menu.offsetHeight || 36;
+  let left = rect.left + rect.width / 2 - mw / 2;
+  left = Math.max(8, Math.min(left, window.innerWidth - mw - 8));
+  let top = rect.top - mh - 8;
+  if (top < 8) top = rect.bottom + 8;   // flip below if no room above
+  menu.style.left = `${Math.round(left)}px`;
+  menu.style.top = `${Math.round(top)}px`;
+}
+
+document.addEventListener("mouseup", (e) => {
+  if (_gbSelMenuEl && _gbSelMenuEl.contains(e.target)) return;
+  setTimeout(_gbShowSelMenuFromSelection, 0);
+});
+// Touch / keyboard selection.
+document.addEventListener("selectionchange", () => {
+  const overlay = document.getElementById("gutenberg-reader-overlay");
+  if (!overlay || !overlay.classList.contains("open")) return;
+  const sel = window.getSelection && window.getSelection();
+  if (!sel || sel.isCollapsed) _gbHideSelMenu();
+});
+// Dismiss on scroll inside the book or a click that isn't a new
+// selection.
+document.addEventListener("scroll", _gbHideSelMenu, true);
+document.addEventListener("mousedown", (e) => {
+  if (_gbSelMenuEl && !_gbSelMenuEl.contains(e.target)) _gbHideSelMenu();
+});
+
 // ── Bookmark sidebar rendering ──────────────────────────────────────
 function _gutenbergRenderBookmarkList() {
   const list = document.getElementById("gutenberg-reader-bookmarks-list");
