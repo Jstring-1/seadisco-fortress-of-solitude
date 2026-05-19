@@ -863,6 +863,23 @@ function _renderArchiveList() {
           if (catEl) catEl.value = params.cat || "music";
           const sortEl = document.getElementById("archive-sort-select");
           if (sortEl) sortEl.value = params.sort || "popularity";
+          // Only auto-run the search when the saved search carries a
+          // real constraint. A saved search with no freeform field
+          // and no explicit non-default category would otherwise
+          // submit with category falling back to "music" — which the
+          // submit path treats as a narrowing filter and dumps the
+          // entire archive.org music corpus (~3M results). In that
+          // case just populate the fields and let the user refine.
+          const _cat = params.cat || "";
+          const hasConstraint = !!(params.q || params.creator || params.subject ||
+            params.collection || params.yearFrom || params.yearTo ||
+            (_cat && _cat !== "music"));
+          if (!hasConstraint) {
+            if (typeof showToast === "function") {
+              showToast("That saved search has no query — add a term, then Search", "info");
+            }
+            return;
+          }
           // Submit the form so state + URL update through the same
           // path the user-driven submit uses.
           const form = document.querySelector(".archive-panel-search .archive-search-form");
