@@ -19,6 +19,7 @@ let _queueLoading = false;
 let _queueDrawerEl = null;
 let _sortableLoaded = null; // Promise once we begin lazy-loading Sortable.js
 let _drawerSortable = null; // Sortable instance currently bound
+let _sortableBinding = false; // re-entrancy guard: a bind is mid-await
 
 // Pending-delete tracking: set of "position" + "externalId" entries the
 // user removed locally that haven't been confirmed gone server-side
@@ -1029,15 +1030,27 @@ function _ensureSortable() {
 async function _bindSortable() {
   const listEl = _queueDrawerEl?.querySelector("#queue-drawer-list");
   if (!listEl) { console.warn("[queue] _bindSortable: no #queue-drawer-list element — drag not bound"); return; }
-  if (_drawerSortable) { try { _drawerSortable.destroy(); } catch {} _drawerSortable = null; }
+  // The #queue-drawer-list container is created once and never
+  // replaced — _renderQueueDrawer only swaps its innerHTML — and
+  // Sortable tracks dynamic children on its own. So we bind EXACTLY
+  // ONCE. Re-binding on every render (the queue re-renders on every
+  // auto-advance while songs play) used to destroy + await + recreate;
+  // two renders interleaving across that await left two live Sortable
+  // instances on the same container, each with its own document-level
+  // forceFallback mouse listeners — they fought and drag silently died
+  // after a long playing session ("won't lift at all", fixed by reload).
+  if (_drawerSortable && _drawerSortable.el === listEl) return;
+  if (_sortableBinding) return; // a concurrent bind is already in flight
+  _sortableBinding = true;
   try {
     const Sortable = await _ensureSortable();
     if (!Sortable) { console.warn("[queue] _bindSortable: Sortable unavailable after load"); return; }
-    // The list innerHTML may have been replaced by a concurrent
-    // _renderQueueDrawer while we were awaiting the CDN load; re-resolve
-    // the live element so Sortable binds to the rows actually on screen.
+    // Re-check after the await — another _bindSortable call (or this
+    // one re-entered) may have bound while the CDN promise settled.
+    if (_drawerSortable && _drawerSortable.el === listEl) return;
+    if (_drawerSortable) { try { _drawerSortable.destroy(); } catch {} _drawerSortable = null; }
     const liveList = _queueDrawerEl?.querySelector("#queue-drawer-list") || listEl;
-    console.debug("[queue] _bindSortable: binding Sortable", { rows: liveList.querySelectorAll(".queue-row").length });
+    console.debug("[queue] _bindSortable: binding Sortable (once)", { rows: liveList.querySelectorAll(".queue-row").length });
     _drawerSortable = Sortable.create(liveList, {
       onChoose: (e) => console.debug("[queue] drag: row chosen", e.oldIndex),
       onStart:  (e) => console.debug("[queue] drag: start", e.oldIndex),
@@ -1171,6 +1184,8 @@ async function _bindSortable() {
     // catch made "reorder doesn't work" undiagnosable when the cause
     // was Sortable.js failing to load (CDN blocked / offline). Log it.
     console.warn("[queue] drag-reorder unavailable (Sortable load/bind failed):", e);
+  } finally {
+    _sortableBinding = false;
   }
 }
 
