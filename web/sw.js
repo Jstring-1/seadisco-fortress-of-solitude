@@ -36,7 +36,7 @@
 // shot. v3 = count-based image cache (byte-based trim was broken for
 // opaque cross-origin responses; blob.size returned 0 so trim never
 // fired and the IMG cache grew to ~60GB in extreme cases).
-const SW_VERSION = "v3-20260518.2052";
+const SW_VERSION = "v3-20260518.2053";
 const SHELL_CACHE = `sd-shell-${SW_VERSION}`;
 const API_CACHE   = `sd-api-${SW_VERSION}`;
 const IMG_CACHE   = `sd-img-${SW_VERSION}`;

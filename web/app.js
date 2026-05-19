@@ -435,15 +435,46 @@ function _attachClearButtonsGlobally(root) {
   }
 }
 
+// ── Password-manager suppression ─────────────────────────────────────
+// 1Password / LastPass / Bitwarden / Dashlane heuristically flag plain
+// text inputs as username fields and pop an autofill prompt over our
+// search boxes. Tag every text-like input with the per-vendor "ignore"
+// hints so they leave search alone — EXCEPT inside the Clerk auth UI
+// or the Account view, where real credential autofill should still
+// work. Opt a field back in with data-pw-allow on it or any ancestor.
+const _PW_SKIP_SEL =
+  ".cl-rootBox, .cl-component, .cl-card, .cl-modalContent, " +
+  ".cl-userButtonPopover, #account-view, [data-pw-allow]";
+function _pwIgnoreOneInput(input) {
+  if (!input || input.dataset.pwTagged === "1") return;
+  // Never touch real credential fields — those SHOULD offer autofill.
+  if (input.type === "password" || input.type === "email") return;
+  if (input.closest(_PW_SKIP_SEL)) return;
+  input.dataset.pwTagged = "1";
+  input.setAttribute("data-1p-ignore", "");      // 1Password
+  input.setAttribute("data-lpignore", "true");   // LastPass
+  input.setAttribute("data-bwignore", "true");   // Bitwarden
+  input.setAttribute("data-form-type", "other"); // Dashlane / 1Password hint
+  if (!input.getAttribute("autocomplete")) input.setAttribute("autocomplete", "off");
+}
+function _pwIgnoreGlobally(root) {
+  const scope = root || document;
+  if (!scope.querySelectorAll) return;
+  const sel = 'input[type="text"], input[type="search"], input[type="url"], input[type="tel"], input:not([type])';
+  scope.querySelectorAll(sel).forEach(_pwIgnoreOneInput);
+  if (scope.matches && scope.matches(sel)) _pwIgnoreOneInput(scope);
+}
+
 // Initial sweep, then observe the DOM for inputs that get rendered
 // later (LOC form, account dashboard, modal popups, etc.).
 _attachClearButtonsGlobally(document);
+_pwIgnoreGlobally(document);
 const _clearFieldObserver = new MutationObserver((mutations) => {
   for (const m of mutations) {
     for (const node of m.addedNodes) {
       if (!node || node.nodeType !== 1) continue;
-      if (node.tagName === "INPUT") _attachClearToOneInput(node);
-      else if (node.querySelectorAll) _attachClearButtonsGlobally(node);
+      if (node.tagName === "INPUT") { _attachClearToOneInput(node); _pwIgnoreOneInput(node); }
+      else if (node.querySelectorAll) { _attachClearButtonsGlobally(node); _pwIgnoreGlobally(node); }
     }
   }
 });
