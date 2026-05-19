@@ -21,7 +21,7 @@ html { overflow-x: hidden; }
   background: none;
   border: none;
   color: var(--muted);
-  font-size: 1.05rem;
+  font-size: 1.4rem;
   line-height: 1;
   padding: 0.05rem 0.35rem;
   cursor: pointer;
@@ -3516,9 +3516,9 @@ button.wiki-link-btn:active {
 /* Clear-filters × — matches the in-field × clear glyph used on the
    other forms (.input-clear-btn): muted, round hover, no label. */
 .rr-filter-clear {
-  font-size: 1.05rem;
+  font-size: 1.5rem;
   line-height: 1;
-  padding: 0.1rem 0.4rem;
+  padding: 0.1rem 0.45rem;
   border-radius: 3px;
 }
 .rr-filter-clear:hover { background: var(--border); color: var(--text); }
@@ -3532,9 +3532,9 @@ button.wiki-link-btn:active {
   border: none;
   color: var(--muted);
   cursor: pointer;
-  font-size: 1.1rem;
+  font-size: 1.5rem;
   line-height: 1;
-  padding: 0.1rem 0.45rem;
+  padding: 0.1rem 0.5rem;
   border-radius: 3px;
   transition: color 0.15s, background 0.15s;
 }
