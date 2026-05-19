@@ -6950,6 +6950,14 @@ a.profile-stat-link:hover {
   font-size: 0.85rem;
 }
 .loc-form-row input:focus { outline: none; border-color: var(--accent); }
+/* The global ×-clear wrapper (.input-clear-wrap, display:inline-block
+   width:100%) becomes the flex child once it wraps a discovery search
+   input, so it no longer inherits `.loc-form-row input { flex:1 }` and
+   the layout breaks (Search button shoved off, input mis-sized). Hand
+   the flex/width back to the wrapper so the discovery search forms get
+   the same clean ×-clear treatment as the main search form. */
+.loc-form-row .input-clear-wrap { flex: 1; min-width: 0; }
+.loc-form-grid label .input-clear-wrap { width: 100%; }
 .loc-submit {
   background: var(--accent);
   border: 1px solid var(--accent);

@@ -277,47 +277,64 @@ window.addEventListener("popstate", () => {
 });
 
 // ── Tab order: all text fields first, then controls/buttons/search ───────
-// The advanced filter inputs live AFTER the controls row + Search
-// button in the DOM, so natural Tab order interleaves text fields with
-// dropdowns/buttons. Wire an explicit chain so Tab walks every text
-// field in order (query → Artist → Release → Label → Year → Country),
-// then exits to the Search button — after which natural order carries
-// on through the dropdowns/buttons. Shift+Tab reverses it. Gated on
-// the Advanced panel being open (when collapsed only #query is a text
-// field, and query → Search is already the natural order).
-function _wireTextFieldChain(ids, isOpenFn, exitId) {
-  const els = ids.map(id => document.getElementById(id)).filter(Boolean);
-  if (els.length < 2) return;
-  els.forEach((el, i) => {
-    el.addEventListener("keydown", e => {
-      if (e.key !== "Tab" || e.ctrlKey || e.altKey || e.metaKey) return;
-      if (!isOpenFn()) return;
-      if (!e.shiftKey) {
-        const next = els[i + 1];
-        if (next) { e.preventDefault(); next.focus(); }
-        else if (exitId) {
-          const ex = document.getElementById(exitId);
-          if (ex) { e.preventDefault(); ex.focus(); }
-        }
-      } else {
-        const prev = els[i - 1];
-        if (prev) { e.preventDefault(); prev.focus(); }
-      }
-    });
-  });
-}
-_wireTextFieldChain(
-  ["query", "f-artist", "f-release", "f-label", "f-year", "f-country"],
-  () => document.getElementById("advanced-panel")?.dataset.open === "true",
-  "search-btn",
-);
-_wireTextFieldChain(
-  ["cw-query", "cw-artist", "cw-release", "cw-label", "cw-year", "cw-notes"],
-  () => {
-    const p = document.getElementById("cw-advanced-panel");
-    return !!p && p.style.display !== "none";
+// Several search forms (main Discogs, LOC, Archive) place their extra
+// text inputs AFTER the controls row + Search button in the DOM, so
+// natural Tab order interleaves text fields with dropdowns/buttons.
+// One delegated keydown handler walks every text field of the active
+// form in order, then exits to that form's Search button — after which
+// natural order carries on through the dropdowns/buttons. Shift+Tab
+// reverses it. Delegation (not per-element listeners) so it survives
+// the LOC/Archive forms being re-rendered via innerHTML.
+const _SD_TAB_CHAINS = [
+  {
+    ids: ["query", "f-artist", "f-release", "f-label", "f-year", "f-country"],
+    isOpen: () => document.getElementById("advanced-panel")?.dataset.open === "true",
+    exit: "search-btn",
   },
-);
+  {
+    ids: ["cw-query", "cw-artist", "cw-release", "cw-label", "cw-year", "cw-notes"],
+    isOpen: () => {
+      const p = document.getElementById("cw-advanced-panel");
+      return !!p && p.style.display !== "none";
+    },
+  },
+  {
+    // LOC: grid is always visible (no collapsible panel).
+    ids: ["loc-q", "loc-contributor", "loc-subject", "loc-location",
+          "loc-language", "loc-partof", "loc-start-date", "loc-end-date"],
+    isOpen: () => true,
+    exit: "loc-submit-btn",
+  },
+  {
+    // Archive: grid is always visible.
+    ids: ["archive-q", "archive-creator", "archive-subject",
+          "archive-collection", "archive-year-from", "archive-year-to"],
+    isOpen: () => true,
+    exit: "archive-submit-btn",
+  },
+];
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Tab" || e.ctrlKey || e.altKey || e.metaKey) return;
+  const id = e.target && e.target.id;
+  if (!id) return;
+  for (const ch of _SD_TAB_CHAINS) {
+    const i = ch.ids.indexOf(id);
+    if (i === -1) continue;
+    if (ch.isOpen && !ch.isOpen()) return;   // fall back to native order
+    if (!e.shiftKey) {
+      const nextId = ch.ids[i + 1];
+      const target = nextId
+        ? document.getElementById(nextId)
+        : (ch.exit ? document.getElementById(ch.exit) : null);
+      if (target) { e.preventDefault(); target.focus(); }
+    } else {
+      const prevId = ch.ids[i - 1];
+      const target = prevId ? document.getElementById(prevId) : null;
+      if (target) { e.preventDefault(); target.focus(); }
+    }
+    return;
+  }
+});
 
 // ── Per-field × clear button ────────────────────────────────────────────
 // Wrap each text input in a relative span and append a small × button

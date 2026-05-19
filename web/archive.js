@@ -738,7 +738,7 @@ function _renderArchiveList() {
       <form class="loc-form archive-search-form" onsubmit="event.preventDefault();_archiveOnSearchSubmit(this)">
         <div class="loc-form-row">
           <input type="search" id="archive-q" name="q" placeholder="Search audio on archive.org" autocomplete="off" value="${searchQ}" />
-          <button type="submit" class="loc-submit">Search</button>
+          <button type="submit" class="loc-submit" id="archive-submit-btn">Search</button>
         </div>
         <div class="loc-form-grid">
           <label><span>Creator</span><input type="text" id="archive-creator" placeholder="e.g. Grateful Dead" value="${escHtml(_archiveSearchCreator)}" /></label>
