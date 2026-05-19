@@ -2997,6 +2997,19 @@ function _trackYtApplyToDom(targetId, masterId, releaseId, isMaster) {
       const stale = titleCell.querySelector(`.queue-add-icon[data-yt-url="${url}"]`);
       if (stale) stale.remove();
       row.dataset.ytOverride = "1";
+    } else if (!ov && row.dataset.ytOverride === "1") {
+      // The override was deleted (admin ✕). Revert the row we
+      // injected: clear the override-driven play affordances and the
+      // marker so the track immediately returns to its "no playable
+      // source" state — otherwise the stale ▶ ＋ ♪ for the removed
+      // video linger until a full page reload, and the track still
+      // looks playable / can't be re-suggested cleanly.
+      if (playCell) playCell.innerHTML = "";
+      delete row.dataset.ytOverride;
+      // The Full Album pseudo-row is hidden by default when no
+      // override exists — re-hide it now that the override is gone
+      // (mirrors the reveal logic above).
+      if (row.classList.contains("track-fullalbum")) row.style.display = "none";
     }
     // Now decorate the row's title with the badge / admin delete /
     // suggest button based on current state.
