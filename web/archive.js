@@ -1110,14 +1110,8 @@ function _archiveSwitchTab(tab, { pushUrl = true } = {}) {
   if (_archiveTab === "saved" && _archiveSavedItems == null) {
     _archiveLoadSaved();
   }
-  if (_archiveTab === "search") {
-    // Focus the input on tab activation so the user can start typing
-    // immediately. Skip if there's already a query loaded — they may
-    // be reviewing results.
-    if (!_archiveSearchQuery) {
-      setTimeout(() => document.getElementById("archive-q")?.focus(), 0);
-    }
-  }
+  // No autofocus on tab activation — focusing the field on load pops
+  // the recent-search history dropdown every time. User Tabs in.
   // Reflect in URL so each tab is shareable. Search tab also persists
   // its q param.
   if (pushUrl && typeof history?.pushState === "function") {
