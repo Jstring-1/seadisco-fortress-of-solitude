@@ -7057,8 +7057,26 @@ app.post("/api/user/events/play", express.json({ limit: "4kb" }), async (req, re
   const externalId = String(body.externalId ?? "").slice(0, 100);
   const title = body.title ? String(body.title).slice(0, 200) : undefined;
   if (!externalId) { res.status(400).json({ error: "externalId required" }); return; }
+  // Optional Discogs identity so the play can feed taste suggestions.
+  // releaseType/releaseId let the suggestions job resolve genre/style/
+  // year from release_cache; meta is a client snapshot used directly
+  // when present (counts even before the release is cached).
+  const releaseType = body.releaseType === "release" || body.releaseType === "master"
+    ? body.releaseType : null;
+  const releaseId = Number.isFinite(Number(body.releaseId)) && Number(body.releaseId) > 0
+    ? Number(body.releaseId) : null;
+  const masterId = Number.isFinite(Number(body.masterId)) && Number(body.masterId) > 0
+    ? Number(body.masterId) : null;
+  const m = body.meta && typeof body.meta === "object" ? body.meta : null;
+  const meta = m ? {
+    genres: Array.isArray(m.genres) ? m.genres : [],
+    styles: Array.isArray(m.styles) ? m.styles : [],
+    year:   Number.isFinite(Number(m.year)) ? Number(m.year) : null,
+  } : null;
   // Fire-and-forget so the player doesn't block on logging.
-  logUserPlay(userId, source, externalId, title).catch(() => {});
+  logUserPlay(userId, source, externalId, title, {
+    releaseType, releaseId, masterId, meta,
+  }).catch(() => {});
   res.json({ ok: true, logged: true });
 });
 

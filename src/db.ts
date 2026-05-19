@@ -746,6 +746,18 @@ export async function initDb() {
     )
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS user_play_events_user_time_idx ON user_play_events (clerk_user_id, created_at DESC)`);
+  // Discogs identity for play-derived taste suggestions. Nullable +
+  // additive: LOC/Archive plays (and legacy rows) leave these NULL and
+  // simply don't feed Discogs taste tuples. release_id/master_id let
+  // the suggestions job resolve genre/style/year via release_cache;
+  // play_meta is an optional client-sent snapshot ({genres,styles,year})
+  // used directly when present so a play counts even before the release
+  // is cached.
+  await getPool().query(`ALTER TABLE user_play_events ADD COLUMN IF NOT EXISTS release_type TEXT`);
+  await getPool().query(`ALTER TABLE user_play_events ADD COLUMN IF NOT EXISTS release_id   INTEGER`);
+  await getPool().query(`ALTER TABLE user_play_events ADD COLUMN IF NOT EXISTS master_id    INTEGER`);
+  await getPool().query(`ALTER TABLE user_play_events ADD COLUMN IF NOT EXISTS play_meta    JSONB`);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS user_play_events_taste_idx ON user_play_events (clerk_user_id, created_at DESC) WHERE release_id IS NOT NULL`);
 
   // ── Phase 4: Price intelligence tables ──────────────────────────────────
   await getPool().query(`
@@ -4773,19 +4785,19 @@ export async function getAiExclusionTitles(
 // ── Personal suggestions: taste profile + library dedup + persistence ──
 //
 // Taste tuples power the per-user background suggestions job. We
-// expand the user's favorites + collection + wantlist by
-// (genre, style, year) and rank by a WEIGHTED frequency: favorites
-// count 3x, collection 1x, wantlist 1x. Collections accumulate noise
-// (gifts, completionism, flips, dupes) so they're a weak taste proxy;
-// what the user explicitly favorited is a much stronger signal and is
-// boosted accordingly. The job then queries Discogs for masters
-// matching each tuple. Wide net by design — the top tuples cover a
-// few different bands of the user's taste rather than just their #1.
+// expand the user's favorites + plays + collection + wantlist by
+// (genre, style, year) and rank by a WEIGHTED frequency:
+//   favorites 3x · plays 2x · collection 1x · wantlist 1x
+// Collections accumulate noise (gifts, completionism, flips, dupes) so
+// they're a weak taste proxy; an explicit favorite is the strongest
+// signal, and what the user actually listens to (plays, recency-
+// windowed + master/day-deduped) sits just under it. The job then
+// queries Discogs for masters matching each tuple. Wide net by design.
 //
-// Note: play history (user_play_events) is intentionally NOT folded in
-// here — those rows carry only a source + external_id (yt/loc/archive)
-// with no Discogs genre/style/year, so they can't form taste tuples
-// without separate instrumentation.
+// Play rows carry only source + external_id, so genre/style/year come
+// from either the client-sent snapshot (play_meta) or, failing that,
+// a release_cache lookup keyed by the logged Discogs release/master id.
+// LOC/Archive plays have no Discogs id → release_id NULL → excluded.
 
 export async function getUserTasteTuples(
   clerkUserId: string,
@@ -4793,8 +4805,32 @@ export async function getUserTasteTuples(
 ): Promise<Array<{ genre: string; style: string; year: number; n: number }>> {
   try {
     const r = await getPool().query(
-      `WITH src AS (
+      `WITH plays AS (
+         -- Play-derived taste: one row per (master/release, day) in the
+         -- last 90 days so a track on repeat can't dominate. Metadata is
+         -- the client snapshot when present, else resolved from
+         -- release_cache via the logged Discogs id + type.
+         SELECT DISTINCT ON (mkey, d) data
+           FROM (
+             SELECT
+               COALESCE(NULLIF(pe.master_id, 0), pe.release_id) AS mkey,
+               (pe.created_at)::date                            AS d,
+               COALESCE(pe.play_meta, rc.data)                  AS data
+             FROM user_play_events pe
+             LEFT JOIN release_cache rc
+               ON rc.discogs_id = pe.release_id
+              AND rc.type       = COALESCE(pe.release_type, 'release')
+             WHERE pe.clerk_user_id = $1
+               AND pe.release_id IS NOT NULL
+               AND pe.created_at > NOW() - INTERVAL '90 days'
+           ) q
+          WHERE q.data IS NOT NULL
+          ORDER BY mkey, d
+       ),
+       src AS (
          SELECT data, 3 AS w FROM user_favorites  WHERE clerk_user_id = $1
+         UNION ALL
+         SELECT data, 2 AS w FROM plays
          UNION ALL
          SELECT data, 1 AS w FROM user_collection WHERE clerk_user_id = $1
          UNION ALL
@@ -5148,12 +5184,45 @@ export async function logUserPlay(
   source: "yt" | "loc" | "archive",
   externalId: string,
   title?: string,
+  ident?: {
+    releaseType?: "release" | "master" | null;
+    releaseId?: number | null;
+    masterId?: number | null;
+    // Optional client snapshot. Stored verbatim and read by the taste
+    // query when present; only genres/styles/year are actually used.
+    meta?: { genres?: string[]; styles?: string[]; year?: number | null } | null;
+  },
 ): Promise<void> {
   if (!clerkUserId || !externalId) return;
+  const relType = ident?.releaseType === "release" || ident?.releaseType === "master"
+    ? ident.releaseType : null;
+  const relId  = Number.isFinite(ident?.releaseId as number) && (ident!.releaseId as number) > 0
+    ? Math.trunc(ident!.releaseId as number) : null;
+  const masId  = Number.isFinite(ident?.masterId as number) && (ident!.masterId as number) > 0
+    ? Math.trunc(ident!.masterId as number) : null;
+  // Keep only the three fields the taste expansion needs; drop anything
+  // else the client may have sent so the JSONB stays small.
+  let meta: { genres: string[]; styles: string[]; year: number | null } | null = null;
+  if (ident?.meta && typeof ident.meta === "object") {
+    const g = Array.isArray(ident.meta.genres) ? ident.meta.genres.slice(0, 12).map(String) : [];
+    const s = Array.isArray(ident.meta.styles) ? ident.meta.styles.slice(0, 24).map(String) : [];
+    const y = Number.isFinite(ident.meta.year as number) ? Number(ident.meta.year) : null;
+    if (g.length || s.length || y) meta = { genres: g, styles: s, year: y };
+  }
   await getPool().query(
-    `INSERT INTO user_play_events (clerk_user_id, source, external_id, title)
-     VALUES ($1, $2, $3, $4)`,
-    [clerkUserId, source, String(externalId).slice(0, 100), (title || "").slice(0, 200) || null],
+    `INSERT INTO user_play_events
+       (clerk_user_id, source, external_id, title, release_type, release_id, master_id, play_meta)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    [
+      clerkUserId,
+      source,
+      String(externalId).slice(0, 100),
+      (title || "").slice(0, 200) || null,
+      relType,
+      relId,
+      masId,
+      meta ? JSON.stringify(meta) : null,
+    ],
   );
 }
 

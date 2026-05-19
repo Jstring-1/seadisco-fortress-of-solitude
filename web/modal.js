@@ -2059,12 +2059,39 @@ function _createYTPlayer(id) {
           try {
             const playMeta = (window._videoQueueMeta ?? [])[window._videoQueueIndex ?? 0];
             if (typeof apiFetch === "function") {
+              // Attach Discogs identity + an optional taste snapshot so
+              // this play can feed the suggestions taste model. Release
+              // ctx rides on playMeta (set at queue-add); masterId +
+              // genre/style/year are read from the open album popup root
+              // when present. Absent fields → server resolves via
+              // release_cache from releaseType/releaseId.
+              const _pmRid  = Number(playMeta?.releaseId) || 0;
+              const _pmType = playMeta?.releaseType === "master" ? "master"
+                            : playMeta?.releaseType === "release" ? "release" : null;
+              const _pop = document.getElementById("album-info") || document.getElementById("version-info");
+              const _popMatches = _pop && String(_pop.dataset.releaseId || "") === String(_pmRid || "");
+              let _meta = null, _masterId = 0;
+              if (_popMatches) {
+                _masterId = Number(_pop.dataset.masterId) || 0;
+                try {
+                  const g = JSON.parse(_pop.dataset.sdGenres || "[]");
+                  const s = JSON.parse(_pop.dataset.sdStyles || "[]");
+                  const y = Number(_pop.dataset.sdYear) || null;
+                  if ((Array.isArray(g) && g.length) || (Array.isArray(s) && s.length) || y) {
+                    _meta = { genres: g, styles: s, year: y };
+                  }
+                } catch {}
+              }
               apiFetch("/api/user/events/play", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                   source: "yt", externalId: id,
                   title: playMeta?.track || "",
+                  ...(_pmType ? { releaseType: _pmType } : {}),
+                  ...(_pmRid  ? { releaseId: _pmRid }   : {}),
+                  ...(_masterId ? { masterId: _masterId } : {}),
+                  ...(_meta ? { meta: _meta } : {}),
                 }),
               }).catch(() => {});
             }
@@ -4608,6 +4635,14 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   el.dataset.releaseId = String(releaseId || "");
   el.dataset.masterId  = String(d.master_id || (isMaster ? releaseId : "") || "");
   el.dataset.entityType = isMaster ? "master" : "release";
+  // Stash genre/style/year too so a play started from this popup can
+  // attach a taste snapshot to the play-event log (server falls back
+  // to release_cache resolution when this is absent).
+  try {
+    el.dataset.sdGenres = JSON.stringify((d.genres ?? []).slice(0, 12));
+    el.dataset.sdStyles = JSON.stringify((d.styles ?? []).slice(0, 24));
+    el.dataset.sdYear   = String(d.year || "");
+  } catch {}
   // "Mentioned in books" panel — fires once per popup render. Routes
   // through the master entity when this is a master popup, the
   // release when it's a release popup. Server returns [] for the
