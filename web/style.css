@@ -8293,16 +8293,20 @@ body.is-offline button.offline-disabled {
 .hide-owned-btn.active::after { opacity: 1; }
 .hide-owned-btn.active .hide-owned-glyph { filter: grayscale(0); }
 
-/* Bookmark / saved-search dropdown is appended to the END of
-   .search-row by buildSavedSearchUI; pin it to the LEFT via flex
-   order so the visual order is [🔖] [input] [Search] [▦] [⇄] [✕]
-   without having to rewire the JS append site. */
-.search-row > .saved-search-wrap { order: -1; }
+/* Bookmark / saved-search dropdown is appended to the END of the
+   form's top row by buildSavedSearchUI; pin it to the LEFT via flex
+   order so the visual order is [🔖] [input] [Search] … on EVERY form
+   that has it — main + collection (.search-row) and every discovery
+   page (.loc-form-row: LOC / Archive / Wikipedia / YouTube /
+   Gutenberg) — without rewiring the JS append site. */
+.search-row > .saved-search-wrap,
+.loc-form-row > .saved-search-wrap { order: -1; }
 /* When pinned to the left of the row, anchor the dropdown to the
    LEFT edge of its toggle (instead of the default right-edge anchor)
    so it extends rightward INTO the row instead of running off the
    page to the left of the viewport. */
-.search-row > .saved-search-wrap > .saved-search-dropdown { left: 0; right: auto; }
+.search-row > .saved-search-wrap > .saved-search-dropdown,
+.loc-form-row > .saved-search-wrap > .saved-search-dropdown { left: 0; right: auto; }
 
 /* "Hard to Find" search-mode badge — decorates result cards whose
    master/release has no embedded YouTube videos, signaling a place
