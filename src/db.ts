@@ -4773,11 +4773,19 @@ export async function getAiExclusionTitles(
 // ── Personal suggestions: taste profile + library dedup + persistence ──
 //
 // Taste tuples power the per-user background suggestions job. We
-// expand the user's collection + wantlist by (genre, style, year)
-// and rank by frequency: the top tuples are what the user listens to
-// the most. The job then queries Discogs for masters matching each
-// tuple. Wide net by design — top 9 covers a few different bands
-// of the user's taste rather than just their #1 obsession.
+// expand the user's favorites + collection + wantlist by
+// (genre, style, year) and rank by a WEIGHTED frequency: favorites
+// count 3x, collection 1x, wantlist 1x. Collections accumulate noise
+// (gifts, completionism, flips, dupes) so they're a weak taste proxy;
+// what the user explicitly favorited is a much stronger signal and is
+// boosted accordingly. The job then queries Discogs for masters
+// matching each tuple. Wide net by design — the top tuples cover a
+// few different bands of the user's taste rather than just their #1.
+//
+// Note: play history (user_play_events) is intentionally NOT folded in
+// here — those rows carry only a source + external_id (yt/loc/archive)
+// with no Discogs genre/style/year, so they can't form taste tuples
+// without separate instrumentation.
 
 export async function getUserTasteTuples(
   clerkUserId: string,
@@ -4786,21 +4794,24 @@ export async function getUserTasteTuples(
   try {
     const r = await getPool().query(
       `WITH src AS (
-         SELECT data FROM user_collection WHERE clerk_user_id = $1
+         SELECT data, 3 AS w FROM user_favorites  WHERE clerk_user_id = $1
          UNION ALL
-         SELECT data FROM user_wantlist  WHERE clerk_user_id = $1
+         SELECT data, 1 AS w FROM user_collection WHERE clerk_user_id = $1
+         UNION ALL
+         SELECT data, 1 AS w FROM user_wantlist   WHERE clerk_user_id = $1
        ),
        expanded AS (
          SELECT
            g.value AS genre,
            s.value AS style,
-           NULLIF(src.data->>'year','')::int AS year
+           NULLIF(src.data->>'year','')::int AS year,
+           src.w   AS w
          FROM src,
               jsonb_array_elements_text(src.data->'genres') AS g(value),
               jsonb_array_elements_text(src.data->'styles') AS s(value)
        ),
        counts AS (
-         SELECT genre, style, year, COUNT(*)::int AS n
+         SELECT genre, style, year, SUM(w)::int AS n
          FROM expanded
          WHERE year IS NOT NULL AND year > 1900 AND year < 2030
          GROUP BY genre, style, year

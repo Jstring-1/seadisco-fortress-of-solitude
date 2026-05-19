@@ -6629,7 +6629,7 @@ async function _runPersonalSuggestionsForUser(userId: string): Promise<{ saved: 
   // out of fresh suggestions. 30 tuples × master+release search × per-
   // page 25/15 yields ~1200 raw rows pre-dedupe; cap saved at 1000
   // after sorting.
-  const tuples = await getUserTasteTuples(userId, 30);
+  let tuples = await getUserTasteTuples(userId, 30);
   if (!tuples.length) return { saved: 0, reason: "no-taste" };
 
   // (Admin pre-1970 year cap removed: it collapsed the feed to 1960s
@@ -6638,6 +6638,25 @@ async function _runPersonalSuggestionsForUser(userId: string): Promise<{ saved: 
   // the >1970 cut discarded the well-curated modern reissues of that
   // same 1920s–40s material. No year filter now; era is driven purely
   // by the user's taste tuples.)
+
+  // Admin-only genre allowlist: restrict the feed to blues / jazz /
+  // folk for now (no rock, reggae, funk/soul, etc). Discogs bundles
+  // folk into the "Folk, World, & Country" genre, so a substring
+  // match on "folk" also admits that combined bucket (world/country
+  // ride along — unavoidable given Discogs's taxonomy). Applied to
+  // the taste tuples so excluded genres don't burn Discogs search
+  // calls, then again per-result as defense in depth. Intentional
+  // hard restriction — NO fallback to unfiltered if it empties.
+  const _isAdmin = userId === ADMIN_CLERK_ID;
+  const ADMIN_GENRE_ALLOW = ["blues", "jazz", "folk"];
+  const _adminGenreOK = (g: any): boolean =>
+    typeof g === "string" && ADMIN_GENRE_ALLOW.some(a => g.toLowerCase().includes(a));
+  if (_isAdmin) {
+    const before = tuples.length;
+    tuples = tuples.filter(t => _adminGenreOK(t.genre));
+    if (!tuples.length) return { saved: 0, reason: "admin-genre-filter-empty" };
+    console.log(`[suggestions] admin genre allowlist (blues/jazz/folk): ${before} → ${tuples.length} tuples`);
+  }
 
   const ownedMasters     = await getUserLibraryMasterIds(userId);
   const dismissed        = await getDismissedSuggestionKeys(userId);
@@ -6661,6 +6680,14 @@ async function _runPersonalSuggestionsForUser(userId: string): Promise<{ saved: 
     if (!Number.isFinite(id) || id <= 0) return;
     const type: "master" | "release" = row.type === "master" ? "master" : row.type === "release" ? "release" : "release";
     if (type !== row.type) return;
+    // Admin genre allowlist, defense in depth: a tuple's genre passed
+    // the allowlist but Discogs's genre-scoped search can still return
+    // rows tagged with other genres. Drop any result that carries no
+    // allowed (blues/jazz/folk) genre.
+    if (_isAdmin) {
+      const genres: any[] = Array.isArray(row.genre) ? row.genre : [];
+      if (!genres.some(_adminGenreOK)) return;
+    }
     // Dedup: skip if user owns the underlying master, or if dismissed.
     const masterIdRaw = Number(row.master_id);
     if (Number.isFinite(masterIdRaw) && masterIdRaw > 0 && ownedMasters.has(masterIdRaw)) return;
