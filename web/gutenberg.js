@@ -222,6 +222,11 @@ async function runGutenbergSearch(q, opts) {
   if (!append) {
     _gutenbergSearchPage = 1;
     _gutenbergSearchQuery = q;
+    // Feed the unified focus-dropdown history (× delete) like every
+    // other discovery search input.
+    if (typeof saveSearchHistory === "function") {
+      try { saveSearchHistory("gutenberg"); } catch {}
+    }
     // Paint "Searching…" synchronously so the user always sees that
     // their click registered, even if the network is slow.
     document.getElementById("gutenberg-results").innerHTML =
