@@ -94,9 +94,9 @@ function initGutenbergView() {
       }
     }
   }
-  // Focus the input on (re-)entry so the user can start typing
-  // immediately. Mirrors LOC / Wiki behaviour.
-  setTimeout(() => document.getElementById("gutenberg-q")?.focus(), 50);
+  // No autofocus on entry — see app.js: focusing the field on load
+  // pops the recent-search history dropdown every time. The user
+  // Tabs in (query field is the first Tab stop).
 }
 window.initGutenbergView = initGutenbergView;
 

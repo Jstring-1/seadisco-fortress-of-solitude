@@ -456,7 +456,7 @@ function switchView(view, skipPushState = false) {
     if (mainForm) mainForm.style.display = "none";
     if (recordsWrap) recordsWrap.style.display = "none";
     if (wantedWrap) wantedWrap.style.display = "none";
-    setTimeout(() => document.getElementById("wiki-view-q")?.focus(), 50);
+    // No autofocus on load (would auto-open the history dropdown).
     // Hydrate the recent-searches datalist so the native autocomplete
     // dropdown is ready the moment the user focuses the input.
     if (typeof _renderWikiRecentDatalist === "function") {

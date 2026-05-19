@@ -36,7 +36,7 @@ async function initYoutubeView() {
     const qInput = document.getElementById("youtube-view-q");
     if (qInput) {
       qInput.value = initialQuery;
-      setTimeout(() => qInput.focus(), 50);
+      // No autofocus on load (would auto-open the history dropdown).
     }
     if (initialQuery) runYoutubeSearch(initialQuery);
   }
