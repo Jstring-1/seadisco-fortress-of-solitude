@@ -3522,6 +3522,23 @@ button.wiki-link-btn:active {
   border-radius: 3px;
 }
 .rr-filter-clear:hover { background: var(--border); color: var(--text); }
+/* Per-form clear × — pinned to the far right of each search form's
+   top row. Two-stage clear (text first, then filters). */
+.form-clear-x {
+  margin-left: auto;
+  flex-shrink: 0;
+  align-self: center;
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0.1rem 0.45rem;
+  border-radius: 3px;
+  transition: color 0.15s, background 0.15s;
+}
+.form-clear-x:hover { color: var(--text); background: var(--border); }
 
 .credits-header {
   display: flex;
