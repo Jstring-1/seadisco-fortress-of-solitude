@@ -480,6 +480,117 @@ const _clearFieldObserver = new MutationObserver((mutations) => {
 });
 _clearFieldObserver.observe(document.body, { childList: true, subtree: true });
 
+// ── Per-form clear × ────────────────────────────────────────────────────
+// Every search form gets a small × pinned far-right on its top row.
+// Two-stage, driven by form state: first click clears the text inputs;
+// click again (text already empty) resets the rest — selects, toggle
+// buttons, result-type — to their defaults. Never clears results and
+// never auto-searches (no change events dispatched), so the current
+// result grid stays until the user runs the next search.
+const _SD_FORM_CLEARS = {
+  main: {
+    anchor: "query",
+    text: ["query", "f-artist", "f-release", "f-label", "f-year", "f-country"],
+    selects: { "f-format": "", "f-genre": "", "f-style": "", "f-sort": "" },
+    radios: { "result-type": "" },
+    toggles: ["hide-owned", "f-hard2find", "f-genre-strict"],
+  },
+  cw: {
+    anchor: "cw-query",
+    text: ["cw-query", "cw-artist", "cw-release", "cw-label", "cw-year", "cw-notes"],
+    selects: {}, firstOptSelects: ["cw-sort"],
+    toggles: ["cw-genre-strict"],
+  },
+  loc: {
+    anchor: "loc-q",
+    text: ["loc-q", "loc-contributor", "loc-subject", "loc-location",
+           "loc-language", "loc-partof", "loc-start-date", "loc-end-date"],
+    selects: { "loc-sort": "relevance", "loc-perpage": "100" },
+    checks: { "loc-playable": true },
+  },
+  archive: {
+    anchor: "archive-q",
+    text: ["archive-q", "archive-creator", "archive-subject",
+           "archive-collection", "archive-year-from", "archive-year-to"],
+    selects: { "archive-category": "music", "archive-sort-select": "popularity" },
+  },
+  wiki:      { anchor: "wiki-view-q",    text: ["wiki-view-q"] },
+  youtube:   { anchor: "youtube-view-q", text: ["youtube-view-q"] },
+  gutenberg: {
+    anchor: "gutenberg-q",
+    text: ["gutenberg-q"],
+    selects: { "gutenberg-topic-picker": "" },
+    hidden: ["gutenberg-topic"],
+  },
+};
+function _sdFormClear(key) {
+  const cfg = _SD_FORM_CLEARS[key];
+  if (!cfg) return;
+  const texts = (cfg.text || []).map(id => document.getElementById(id)).filter(Boolean);
+  const hasText = texts.some(t => String(t.value || "").trim() !== "");
+  if (hasText) {
+    // Stage 1 — clear text inputs only.
+    texts.forEach(t => {
+      t.value = "";
+      t.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    return;
+  }
+  // Stage 2 — reset everything else to defaults (no change events →
+  // listeners that auto-search stay quiet, results are preserved).
+  Object.entries(cfg.selects || {}).forEach(([id, v]) => {
+    const el = document.getElementById(id); if (el) el.value = v;
+  });
+  (cfg.firstOptSelects || []).forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.options.length) el.selectedIndex = 0;
+  });
+  Object.entries(cfg.checks || {}).forEach(([id, v]) => {
+    const el = document.getElementById(id); if (el) el.checked = !!v;
+  });
+  Object.entries(cfg.radios || {}).forEach(([name, v]) => {
+    const r = document.querySelector(`input[name="${name}"][value="${v}"]`);
+    if (r) r.checked = true;
+  });
+  (cfg.toggles || []).forEach(id => {
+    const b = document.getElementById(id);
+    if (b) { b.setAttribute("aria-pressed", "false"); b.classList.remove("active"); }
+  });
+  (cfg.hidden || []).forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = "";
+  });
+}
+window._sdFormClear = _sdFormClear;
+function _sdInstallFormClears() {
+  for (const [key, cfg] of Object.entries(_SD_FORM_CLEARS)) {
+    const anchor = document.getElementById(cfg.anchor);
+    if (!anchor) continue;
+    const row = anchor.closest(".search-row, .loc-form-row, .gutenberg-form-row");
+    if (!row || row.querySelector(":scope > .form-clear-x")) continue;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "form-clear-x";
+    btn.tabIndex = -1;
+    btn.title = "Clear this form — text first, click again to reset filters";
+    btn.setAttribute("aria-label", "Clear this form");
+    btn.textContent = "×";
+    btn.addEventListener("click", (e) => { e.preventDefault(); _sdFormClear(key); });
+    row.appendChild(btn);
+  }
+}
+_sdInstallFormClears();
+// LOC/Archive forms render via innerHTML after first paint — re-install
+// when the DOM changes. rAF-debounced so frequent unrelated mutations
+// (mini-player, result grids) don't thrash; idempotent via :scope check.
+let _sdFormClearRaf = 0;
+new MutationObserver(() => {
+  if (_sdFormClearRaf) return;
+  _sdFormClearRaf = requestAnimationFrame(() => {
+    _sdFormClearRaf = 0;
+    _sdInstallFormClears();
+  });
+}).observe(document.body, { childList: true, subtree: true });
+
 // ── Grey out advanced toggle when AI mode selected ───────────────────────
 document.querySelectorAll('input[name="result-type"]').forEach(radio => {
   radio.addEventListener("change", () => {
