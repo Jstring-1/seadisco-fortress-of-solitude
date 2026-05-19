@@ -485,13 +485,13 @@ function buildSavedSearchUI(view, getParamsFn, applyFn, containerEl) {
   wrap.className = "saved-search-wrap";
   wrap.id = `saved-search-${view}`;
   wrap.innerHTML = `
-    <button class="saved-search-toggle" id="ss-toggle-${view}" onclick="toggleSavedDropdown('${view}')" title="Saved searches">
+    <button type="button" class="saved-search-toggle" id="ss-toggle-${view}" onclick="toggleSavedDropdown('${view}')" title="Saved searches">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
     </button>
     <div class="saved-search-dropdown" id="ss-dropdown-${view}" style="display:none">
       <div class="ss-header">
         <span style="font-weight:600;font-size:0.72rem;color:#aaa">Saved Searches</span>
-        <button class="ss-save-btn" id="ss-save-${view}" onclick="saveCurrentSearch('${view}')" title="Save current search">+ Save</button>
+        <button type="button" class="ss-save-btn" id="ss-save-${view}" onclick="saveCurrentSearch('${view}')" title="Save current search">+ Save</button>
       </div>
       <div class="ss-list" id="ss-list-${view}"></div>
     </div>`;
@@ -599,8 +599,8 @@ function renderSavedList(view, searches, extraSearches, crossView) {
     if (hasCross) html += `<div class="ss-section-label">${ownLabel}</div>`;
     html += searches.map(s =>
       `<div class="ss-item" id="ss-item-${s.id}">
-        <button class="ss-item-btn" onclick="applySavedSearch('${escHtml(view)}',${s.id})" title="${escHtml(JSON.stringify(s.params))}">${escHtml(s.label)}</button>
-        <button class="ss-item-del" onclick="deleteSavedSearchItem(event,'${escHtml(view)}',${s.id})" title="Remove">&times;</button>
+        <button type="button" class="ss-item-btn" onclick="applySavedSearch('${escHtml(view)}',${s.id})" title="${escHtml(JSON.stringify(s.params))}">${escHtml(s.label)}</button>
+        <button type="button" class="ss-item-del" onclick="deleteSavedSearchItem(event,'${escHtml(view)}',${s.id})" title="Remove">&times;</button>
       </div>`
     ).join("");
   }
@@ -608,7 +608,7 @@ function renderSavedList(view, searches, extraSearches, crossView) {
     html += `<div class="ss-section-label">${crossLabel}</div>`;
     html += extraSearches.map(s =>
       `<div class="ss-item" id="ss-item-${s.id}">
-        <button class="ss-item-btn" onclick="applySavedSearch('${escHtml(view)}',${s.id},'${escHtml(crossView)}')" title="${escHtml(JSON.stringify(s.params))}">${escHtml(s.label)}</button>
+        <button type="button" class="ss-item-btn" onclick="applySavedSearch('${escHtml(view)}',${s.id},'${escHtml(crossView)}')" title="${escHtml(JSON.stringify(s.params))}">${escHtml(s.label)}</button>
       </div>`
     ).join("");
   }
