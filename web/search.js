@@ -1071,7 +1071,23 @@ function _sdSwitchHomeStripTab(mode) {
     _sdSyncHomeStripTabsVisual();
     return;
   }
+  // Stash the leaving tab's filter text, then restore the arriving
+  // tab's so each tab's filter (+ its × clear) is independent.
+  const _filterEl = document.getElementById("random-records-filter");
+  const _prevMode = _sdHomeStripModeNow();
+  if (_filterEl) window._sdHomeStripFilterByMode[_prevMode] = _filterEl.value || "";
   window._sdHomeStripMode = m;
+  const _restored = window._sdHomeStripFilterByMode[m] || "";
+  if (_filterEl) {
+    _filterEl.value = _restored;
+    // Keep the × clear's visibility (.has-text on the wrapper) in sync
+    // with the restored value — set directly rather than dispatching
+    // `input` (which would render the OLD tab's data before the new
+    // tab loads below).
+    const _w = _filterEl.closest(".input-clear-wrap");
+    if (_w) _w.classList.toggle("has-text", !!_restored);
+  }
+  window._sdHomeStripFilter = _restored.trim().toLowerCase();
   _sdSyncHomeStripTabsVisual();
   _sdReflectHomeStripModeInUrl(m);
   // Rebuild sort dropdown options for the new tab BEFORE the fetch
@@ -1097,11 +1113,20 @@ function _sdReflectHomeStripModeInUrl(mode) {
   } catch {}
 }
 
+// Per-tab filter text. The home strip is one physical input reused
+// across Recent / Suggestions / Submitted / Feed, but each tab keeps
+// its own filter (and its own × clear) so typing/clearing on one tab
+// never bleeds into another. Mirrors the per-tab genre/sort behavior.
+window._sdHomeStripFilterByMode = window._sdHomeStripFilterByMode || {};
+function _sdHomeStripModeNow() { return window._sdHomeStripMode || "recent"; }
+
 // Filter input on the strip — applies to whatever's currently
 // displayed (recent / suggestions / submitted tracks). Pure
 // client-side: re-renders from _randomAll without re-fetching.
 function _sdHomeStripFilterChanged(input) {
-  window._sdHomeStripFilter = String(input?.value || "").trim().toLowerCase();
+  const raw = String(input?.value || "");
+  window._sdHomeStripFilterByMode[_sdHomeStripModeNow()] = raw;
+  window._sdHomeStripFilter = raw.trim().toLowerCase();
   // Reset paging so the filter applies from the top.
   _randomShown = 0;
   const grid = document.getElementById("random-records-grid");
