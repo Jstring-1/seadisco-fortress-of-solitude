@@ -1028,12 +1028,19 @@ function _ensureSortable() {
 
 async function _bindSortable() {
   const listEl = _queueDrawerEl?.querySelector("#queue-drawer-list");
-  if (!listEl) return;
+  if (!listEl) { console.warn("[queue] _bindSortable: no #queue-drawer-list element — drag not bound"); return; }
   if (_drawerSortable) { try { _drawerSortable.destroy(); } catch {} _drawerSortable = null; }
   try {
     const Sortable = await _ensureSortable();
-    if (!Sortable) return;
-    _drawerSortable = Sortable.create(listEl, {
+    if (!Sortable) { console.warn("[queue] _bindSortable: Sortable unavailable after load"); return; }
+    // The list innerHTML may have been replaced by a concurrent
+    // _renderQueueDrawer while we were awaiting the CDN load; re-resolve
+    // the live element so Sortable binds to the rows actually on screen.
+    const liveList = _queueDrawerEl?.querySelector("#queue-drawer-list") || listEl;
+    console.debug("[queue] _bindSortable: binding Sortable", { rows: liveList.querySelectorAll(".queue-row").length });
+    _drawerSortable = Sortable.create(liveList, {
+      onChoose: (e) => console.debug("[queue] drag: row chosen", e.oldIndex),
+      onStart:  (e) => console.debug("[queue] drag: start", e.oldIndex),
       // Drag from anywhere on the row EXCEPT the buttons (play row,
       // remove ×). Earlier the only handle was the tiny ⋮⋮ icon,
       // which made grabbing rows on phones almost impossible.
