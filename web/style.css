@@ -10946,6 +10946,42 @@ a:focus-visible {
 }
 #gutenberg-reader-overlay.open { display: block; }
 body.gutenberg-reader-open { overflow: hidden; }
+/* Highlight-to-search popup — floats above the reader (z 260). */
+#gutenberg-sel-menu {
+  position: fixed;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.45rem;
+  background: var(--surface-raised, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+  font-size: 0.78rem;
+}
+#gutenberg-sel-menu .gb-sel-menu-label {
+  color: var(--muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding-right: 0.1rem;
+}
+#gutenberg-sel-menu .gb-sel-menu-btn {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  cursor: pointer;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.76rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+#gutenberg-sel-menu .gb-sel-menu-btn:hover {
+  border-color: var(--accent);
+  color: var(--text);
+}
 #gutenberg-reader-box {
   background: var(--surface);
   border: 1px solid var(--border);
