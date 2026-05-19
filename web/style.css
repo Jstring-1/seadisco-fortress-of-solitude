@@ -10982,6 +10982,31 @@ body.gutenberg-reader-open { overflow: hidden; }
   border-color: var(--accent);
   color: var(--text);
 }
+/* "Resume reading" pill — shown when the reader is hidden (not
+   closed) after a highlight-to-search. Floats above everything so
+   it's reachable from any view / popup. */
+#gutenberg-resume-btn {
+  position: fixed;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
+  z-index: 320;
+  max-width: min(90vw, 460px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--accent);
+  color: var(--surface-sunken, #14110d);
+  border: 1px solid var(--accent);
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.82rem;
+  padding: 0.55rem 1rem;
+  border-radius: 999px;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.55);
+}
+#gutenberg-resume-btn:hover { background: var(--accent2, var(--accent)); }
 #gutenberg-reader-box {
   background: var(--surface);
   border: 1px solid var(--border);

@@ -803,8 +803,58 @@ function _gutenbergCloseReader() {
   _gutenbergResetFind();
   const findInput = document.getElementById("gutenberg-reader-find");
   if (findInput) findInput.value = "";
+  _gbHideResumeBtn();
 }
 window._gutenbergCloseReader = _gutenbergCloseReader;
+
+// Hide the reader WITHOUT tearing it down — body content, scroll
+// position, bookmarks and find state all stay in memory so the user
+// can pop back exactly where they were. Used when a highlight-to-
+// search sends them off to another view.
+function _gutenbergHideReader() {
+  const overlay = document.getElementById("gutenberg-reader-overlay");
+  if (!overlay || !overlay.classList.contains("open")) return;
+  if (_gutenbergReaderBookId) _gutenbergSaveAutoBookmark(false);
+  overlay.classList.remove("open");
+  document.body.classList.remove("gutenberg-reader-open");
+  if (_gutenbergReaderBookId) _gbShowResumeBtn();
+}
+window._gutenbergHideReader = _gutenbergHideReader;
+
+// Re-show the hidden reader. No reload — scrollTop is retained on the
+// body element even while display:none, so the user lands back on the
+// exact line they left.
+function _gutenbergShowReader() {
+  const overlay = document.getElementById("gutenberg-reader-overlay");
+  if (!overlay || !_gutenbergReaderBookId) return;
+  overlay.classList.add("open");
+  document.body.classList.add("gutenberg-reader-open");
+  _gbHideResumeBtn();
+}
+window._gutenbergShowReader = _gutenbergShowReader;
+
+let _gbResumeBtnEl = null;
+function _gbResumeBtn() {
+  if (_gbResumeBtnEl) return _gbResumeBtnEl;
+  const b = document.createElement("button");
+  b.type = "button";
+  b.id = "gutenberg-resume-btn";
+  b.style.display = "none";
+  b.title = "Return to where you were reading";
+  b.addEventListener("click", (e) => { e.preventDefault(); _gutenbergShowReader(); });
+  document.body.appendChild(b);
+  _gbResumeBtnEl = b;
+  return b;
+}
+function _gbShowResumeBtn() {
+  const b = _gbResumeBtn();
+  const t = (_gutenbergReaderTitle || "your book").slice(0, 40);
+  b.textContent = `📖 Resume reading — ${t}`;
+  b.style.display = "";
+}
+function _gbHideResumeBtn() {
+  if (_gbResumeBtnEl) _gbResumeBtnEl.style.display = "none";
+}
 
 // ── Highlight-to-search popup ───────────────────────────────────────
 // Select text inside the reader body → a small popup offers to run
@@ -865,9 +915,11 @@ function _gbRunSelectionSearch(target, rawText) {
   // Cap length — a search box doesn't want a whole paragraph.
   const text = String(rawText || "").replace(/\s+/g, " ").trim().slice(0, 120);
   if (!text) return;
-  // Reader overlay (z-index 260) sits above the wiki popup (200), so
-  // the reader must close for any of these to be visible.
-  if (typeof _gutenbergCloseReader === "function") _gutenbergCloseReader();
+  // Reader overlay (z-index 260) sits above the wiki popup (200) and
+  // the other views, so it must step aside — but only HIDE it (state
+  // + scroll preserved) and surface a "Resume reading" button so the
+  // user never loses their place.
+  if (typeof _gutenbergHideReader === "function") _gutenbergHideReader();
   if (target === "wikipedia") {
     if (typeof openWikiPopup === "function") openWikiPopup(text);
     return;
