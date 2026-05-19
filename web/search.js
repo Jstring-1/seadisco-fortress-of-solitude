@@ -1986,6 +1986,51 @@ function _sdHomeStripGenreChanged(sel) {
 }
 window._sdHomeStripGenreChanged = _sdHomeStripGenreChanged;
 
+// Clear-filters × on the home strip. Resets THIS tab's filter text,
+// genre (+ strict) and sort back to that tab's defaults, then re-
+// renders from _randomAll (no re-fetch). Per-tab: other tabs keep
+// their own filter/genre/sort. Does NOT touch recent history.
+function _sdHomeStripClearFilters() {
+  const mode = window._sdHomeStripMode || "recent";
+  // Filter text
+  const fEl = document.getElementById("random-records-filter");
+  if (fEl) {
+    fEl.value = "";
+    const w = fEl.closest(".input-clear-wrap");
+    if (w) w.classList.remove("has-text");
+  }
+  window._sdHomeStripFilterByMode = window._sdHomeStripFilterByMode || {};
+  window._sdHomeStripFilterByMode[mode] = "";
+  window._sdHomeStripFilter = "";
+  // Genre + strict
+  window._sdHomeStripGenre = window._sdHomeStripGenre || {};
+  window._sdHomeStripGenre[mode] = "";
+  try { localStorage.setItem(_sdHomeStripGenreSavedKey(mode), ""); } catch {}
+  const gEl = document.getElementById("random-records-genre");
+  if (gEl) gEl.value = "";
+  const strictBtn = document.getElementById("random-records-genre-strict");
+  if (strictBtn) {
+    strictBtn.setAttribute("aria-pressed", "false");
+    strictBtn.classList.remove("active");
+  }
+  // Sort → this tab's default (first entry in its list)
+  try {
+    const opts = (typeof _HOME_STRIP_SORTS !== "undefined" && _HOME_STRIP_SORTS[mode]) || null;
+    const def = opts && opts[0] && opts[0][0];
+    localStorage.removeItem("sd_strip_sort:" + mode);
+    if (typeof _sdRebuildHomeStripSort === "function") _sdRebuildHomeStripSort();
+    const sEl = document.getElementById("favorites-sort");
+    if (sEl && def) sEl.value = def;
+  } catch {}
+  // Re-render the visible slice from the top with the reset state.
+  _randomShown = 0;
+  const grid = document.getElementById("random-records-grid");
+  if (grid) grid.innerHTML = "";
+  if (typeof _applyFavoritesSort === "function") _applyFavoritesSort();
+  if (typeof _sdRenderRandomSlice === "function") _sdRenderRandomSlice();
+}
+window._sdHomeStripClearFilters = _sdHomeStripClearFilters;
+
 // ── Recent front-page strip ─────────────────────────────────────────────
 //
 // The #random-records section shows the user's browsing history as a
@@ -2255,8 +2300,11 @@ async function loadRandomRecords(more) {
     // only (wipes local history; meaningless against a server feed).
     const allLabels = document.querySelectorAll('#random-records-controls .sd-filter-label');
     allLabels.forEach(l => { l.style.display = ""; });
+    // The clear-filters × is available on every tab (it resets this
+    // tab's filter/genre/sort) — no per-tab hide, so it never flashes
+    // in/out on load or tab switch.
     const clearBtn = document.getElementById("recent-clear-btn");
-    if (clearBtn) clearBtn.style.display = isSuggested ? "none" : "";
+    if (clearBtn) clearBtn.style.display = "";
     // Rebuild sort + genre to match the just-loaded data. Sort options
     // are tab-specific; genre options are derived from this dataset.
     if (typeof _sdRebuildHomeStripSort === "function") _sdRebuildHomeStripSort();

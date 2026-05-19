@@ -3513,6 +3513,15 @@ button.wiki-link-btn:active {
   transition: color 0.15s;
 }
 .rr-clear-btn:hover { color: var(--text); }
+/* Clear-filters × — matches the in-field × clear glyph used on the
+   other forms (.input-clear-btn): muted, round hover, no label. */
+.rr-filter-clear {
+  font-size: 1.05rem;
+  line-height: 1;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+}
+.rr-filter-clear:hover { background: var(--border); color: var(--text); }
 
 .credits-header {
   display: flex;
