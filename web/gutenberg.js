@@ -105,17 +105,14 @@ function _gutenbergSwitchTab(tab) {
   const view = document.getElementById("gutenberg-view");
   if (!view) return;
   view.querySelectorAll(".loc-tab").forEach(b => {
-    const tabKey = b.classList.contains("loc-tab-search")    ? "search"
-                 : b.classList.contains("loc-tab-saved")     ? "saved"
-                 : b.classList.contains("loc-tab-bookmarks") ? "bookmarks"
+    const tabKey = b.classList.contains("loc-tab-search") ? "search"
+                 : b.classList.contains("loc-tab-saved")  ? "saved"
                  : "";
     b.classList.toggle("active", tabKey === tab);
   });
-  document.querySelector(".gutenberg-panel-search").style.display    = tab === "search"    ? "block" : "none";
-  document.querySelector(".gutenberg-panel-saved").style.display     = tab === "saved"     ? "block" : "none";
-  document.querySelector(".gutenberg-panel-bookmarks").style.display = tab === "bookmarks" ? "block" : "none";
-  if (tab === "saved")     _gutenbergRenderSaved();
-  if (tab === "bookmarks") _gutenbergLoadAndRenderBookmarks();
+  document.querySelector(".gutenberg-panel-search").style.display = tab === "search" ? "block" : "none";
+  document.querySelector(".gutenberg-panel-saved").style.display  = tab === "saved"  ? "block" : "none";
+  if (tab === "saved") _gutenbergRenderSaved();
 }
 window._gutenbergSwitchTab = _gutenbergSwitchTab;
 
