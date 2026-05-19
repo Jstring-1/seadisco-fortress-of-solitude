@@ -406,6 +406,91 @@ async function signOut() {
   location.replace("/");
 }
 
+// Wipe every client-side trace on THIS device: localStorage,
+// sessionStorage, cookies, Cache Storage, IndexedDB, and the service
+// worker registration. Server-side account data is untouched (use
+// "Delete account" for that). Best-effort — each step is guarded so a
+// failure in one doesn't abort the rest.
+async function _clearBrowsingData() {
+  // 1. Storage
+  try { localStorage.clear(); } catch {}
+  try { sessionStorage.clear(); } catch {}
+  // 2. Cookies — only non-HttpOnly cookies are reachable from JS.
+  //    Expire each for the current path and a few domain scopes so
+  //    host-only and dotted-domain cookies both go.
+  try {
+    const host = location.hostname;
+    const domains = ["", host, "." + host];
+    // also try the registrable parent (e.g. .seadisco.com)
+    const parts = host.split(".");
+    if (parts.length > 2) domains.push("." + parts.slice(-2).join("."));
+    document.cookie.split(";").forEach(c => {
+      const name = c.split("=")[0].trim();
+      if (!name) return;
+      domains.forEach(d => {
+        document.cookie =
+          `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/` +
+          (d ? `;domain=${d}` : "");
+      });
+    });
+  } catch {}
+  // 3. Cache Storage (incl. the SW shell/img/api caches).
+  try {
+    if (window.caches && caches.keys) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+  } catch {}
+  // 4. IndexedDB — our "seadisco" DB plus anything else enumerable.
+  try {
+    const drop = (n) => new Promise(res => {
+      try {
+        const r = indexedDB.deleteDatabase(n);
+        r.onsuccess = r.onerror = r.onblocked = () => res();
+      } catch { res(); }
+    });
+    await drop("seadisco");
+    if (indexedDB.databases) {
+      const dbs = await indexedDB.databases().catch(() => []);
+      await Promise.all((dbs || []).map(d => d && d.name ? drop(d.name) : null));
+    }
+  } catch {}
+  // 5. Service worker — unregister so no cached shell survives.
+  try {
+    if (navigator.serviceWorker?.getRegistrations) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister().catch(() => {})));
+    }
+  } catch {}
+}
+
+async function clearBrowsingData() {
+  if (!confirm(
+    "Clear all browsing data on this device?\n\n" +
+    "Wipes local cache, cookies, saved searches, recent history, " +
+    "offline library and UI settings. Your account and server-side " +
+    "data are NOT affected. You'll likely need to sign in again."
+  )) return;
+  await _clearBrowsingData();
+  location.replace("/");
+}
+
+async function clearDataAndSignOut() {
+  if (!confirm(
+    "Sign out and clear all browsing data on this device?\n\n" +
+    "Ends your session, then wipes local cache, cookies, saved " +
+    "searches, recent history, offline library and UI settings. " +
+    "Your account and server-side data are NOT affected."
+  )) return;
+  // Revoke the Clerk session first (needs its cookies/storage), then
+  // nuke everything else and reload fresh.
+  try { await window._clerk?.signOut(); } catch {}
+  _cachedToken = null;
+  _cachedTokenAt = 0;
+  await _clearBrowsingData();
+  location.replace("/");
+}
+
 async function deleteAccount() {
   if (!confirm("Permanently delete your account and all saved data? This cannot be undone.")) return;
   try {
