@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
+import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 
 
@@ -5099,6 +5099,182 @@ app.get("/api/gutenberg/mentions", async (req, res) => {
   } catch (e: any) {
     console.error("[gutenberg/mentions]", e?.message ?? e);
     res.status(500).json({ error: "fetch_failed" });
+  }
+});
+
+// ── Chronicling America (LOC historic newspapers) ───────────────────────
+//
+// Endpoints proxy the public chroniclingamerica.loc.gov JSON API for
+// search and serve per-user saves. Admin/demo-gated initially (same
+// pattern as Gutenberg) so we can shake it out before opening up.
+// No API key required upstream; we still cache results in-memory with
+// a long TTL since the corpus is historical and rarely changes.
+
+async function requireChronAmAccess(req: express.Request, res: express.Response): Promise<string | null> {
+  const userId = await getClerkUserId(req);
+  if (!userId) {
+    res.status(401).json({ error: "auth_required" });
+    return null;
+  }
+  if (userId !== ADMIN_CLERK_ID && !isDemoUser(userId)) {
+    res.status(403).json({ error: "forbidden" });
+    return null;
+  }
+  return userId;
+}
+
+// Small in-memory LRU for search responses. The corpus is historical
+// so a 24h TTL is plenty; the cache absorbs repeat queries (history
+// dropdown / "Run again" / re-paint after save) cheaply.
+const _chronamSearchCache = new Map<string, { at: number; body: any }>();
+const _CHRONAM_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const _CHRONAM_CACHE_MAX = 200;
+
+function _chronamCacheGet(key: string): any | null {
+  const e = _chronamSearchCache.get(key);
+  if (!e) return null;
+  if (Date.now() - e.at > _CHRONAM_CACHE_TTL_MS) { _chronamSearchCache.delete(key); return null; }
+  // Move-to-end for LRU.
+  _chronamSearchCache.delete(key);
+  _chronamSearchCache.set(key, e);
+  return e.body;
+}
+function _chronamCachePut(key: string, body: any): void {
+  _chronamSearchCache.set(key, { at: Date.now(), body });
+  while (_chronamSearchCache.size > _CHRONAM_CACHE_MAX) {
+    const oldest = _chronamSearchCache.keys().next().value;
+    if (!oldest) break;
+    _chronamSearchCache.delete(oldest);
+  }
+}
+
+// GET /api/chronam/search?q=&page=1[&date1=YYYY][&date2=YYYY][&state=]
+// Proxies https://chroniclingamerica.loc.gov/search/pages/results/?format=json&proxtext=...
+app.get("/api/chronam/search", async (req, res) => {
+  const userId = await requireChronAmAccess(req, res);
+  if (!userId) return;
+  const q = String(req.query.q ?? "").trim().slice(0, 200);
+  if (!q) { res.status(400).json({ error: "q required" }); return; }
+  const page = Math.max(1, Math.min(100, parseInt(String(req.query.page ?? "1"), 10) || 1));
+  const date1 = /^\d{4}$/.test(String(req.query.date1 ?? "")) ? String(req.query.date1) : "";
+  const date2 = /^\d{4}$/.test(String(req.query.date2 ?? "")) ? String(req.query.date2) : "";
+  const state = String(req.query.state ?? "").trim().slice(0, 64);
+
+  const key = `q=${q}|p=${page}|d1=${date1}|d2=${date2}|s=${state}`;
+  const cached = _chronamCacheGet(key);
+  if (cached) { res.json(cached); return; }
+
+  const u = new URL("https://chroniclingamerica.loc.gov/search/pages/results/");
+  u.searchParams.set("format", "json");
+  u.searchParams.set("proxtext", q);
+  u.searchParams.set("page", String(page));
+  if (date1 && date2) {
+    u.searchParams.set("dateFilterType", "yearRange");
+    u.searchParams.set("date1", date1);
+    u.searchParams.set("date2", date2);
+  }
+  if (state) u.searchParams.set("state", state);
+
+  try {
+    const upstream = await fetch(u.toString(), {
+      headers: { "User-Agent": "SeaDisco/1.0 (research; contact via seadisco.com)" },
+    });
+    if (!upstream.ok) {
+      res.status(upstream.status >= 500 ? 502 : upstream.status).json({ error: "upstream_failed" });
+      return;
+    }
+    const j: any = await upstream.json();
+    // Trim to what the client renders so we don't bloat the cache.
+    const items = Array.isArray(j.items) ? j.items.map((it: any) => ({
+      id:        String(it.id ?? ""),
+      lccn:      String(it.lccn ?? ""),
+      date:      String(it.date ?? ""),
+      sequence:  it.sequence ?? null,
+      title:     String(it.title ?? ""),                       // newspaper title
+      title_normal: String(it.title_normal ?? ""),
+      city:      Array.isArray(it.city) ? it.city.join(", ") : String(it.city ?? ""),
+      state:     Array.isArray(it.state) ? it.state.join(", ") : String(it.state ?? ""),
+      ocr_eng:   String(it.ocr_eng ?? "").slice(0, 1200),       // snippet, capped
+      url:       String(it.url ?? ""),                          // JSON URL
+      page_url:  it.id ? `https://chroniclingamerica.loc.gov${it.id}` : "",
+      // IIIF thumb: prefer the page's `id`-derived thumbnail URL.
+      thumb_url: it.id ? `https://chroniclingamerica.loc.gov${it.id}thumbnail.jpg` : "",
+    })) : [];
+    const body = {
+      items,
+      totalItems:    Number(j.totalItems) || items.length,
+      page:          Number(j.startIndex ? Math.floor(j.startIndex / Math.max(1, j.itemsPerPage)) + 1 : page),
+      itemsPerPage:  Number(j.itemsPerPage) || items.length,
+      query: q,
+    };
+    _chronamCachePut(key, body);
+    res.json(body);
+  } catch (e: any) {
+    console.error("[chronam/search]", e?.message ?? e);
+    res.status(502).json({ error: "fetch_failed" });
+  }
+});
+
+// GET /api/chronam/saves  → user's saved newspaper pages
+app.get("/api/chronam/saves", async (req, res) => {
+  const userId = await requireChronAmAccess(req, res);
+  if (!userId) return;
+  try {
+    const limit = Math.max(1, Math.min(1000, parseInt(String(req.query.limit ?? "500"), 10) || 500));
+    const items = await getChronAmSaves(userId, limit);
+    res.json({ items });
+  } catch (e: any) {
+    console.error("[chronam/saves]", e?.message ?? e);
+    res.status(500).json({ error: "fetch_failed" });
+  }
+});
+
+// GET /api/chronam/saves/ids  → bare list of saved ids (for star state)
+app.get("/api/chronam/saves/ids", async (req, res) => {
+  const userId = await requireChronAmAccess(req, res);
+  if (!userId) return;
+  try {
+    const ids = await getChronAmSaveIds(userId);
+    res.json({ ids });
+  } catch (e: any) {
+    console.error("[chronam/saves/ids]", e?.message ?? e);
+    res.status(500).json({ error: "fetch_failed" });
+  }
+});
+
+// POST /api/chronam/save  body: { id, paperTitle?, issueDate?, snippet?, thumbnail?, data? }
+app.post("/api/chronam/save", express.json({ limit: "32kb" }), async (req, res) => {
+  const userId = await requireChronAmAccess(req, res);
+  if (!userId) return;
+  const b = req.body ?? {};
+  const id = typeof b.id === "string" ? b.id.slice(0, 200) : "";
+  if (!id) { res.status(400).json({ error: "id required" }); return; }
+  const paperTitle = typeof b.paperTitle === "string" ? b.paperTitle.slice(0, 256) : null;
+  const issueDate  = typeof b.issueDate  === "string" ? b.issueDate.slice(0, 32)   : null;
+  const snippet    = typeof b.snippet    === "string" ? b.snippet.slice(0, 2000)   : null;
+  const thumbnail  = typeof b.thumbnail  === "string" ? b.thumbnail.slice(0, 512)  : null;
+  const data       = b.data && typeof b.data === "object" ? b.data : {};
+  try {
+    await saveChronAmItem(userId, id, paperTitle, issueDate, snippet, thumbnail, data);
+    res.json({ ok: true });
+  } catch (e: any) {
+    console.error("[chronam/save]", e?.message ?? e);
+    res.status(500).json({ error: "save_failed" });
+  }
+});
+
+// DELETE /api/chronam/save?id=...
+app.delete("/api/chronam/save", async (req, res) => {
+  const userId = await requireChronAmAccess(req, res);
+  if (!userId) return;
+  const id = String(req.query.id ?? "").slice(0, 200);
+  if (!id) { res.status(400).json({ error: "id required" }); return; }
+  try {
+    await deleteChronAmSave(userId, id);
+    res.json({ ok: true });
+  } catch (e: any) {
+    console.error("[chronam/save DELETE]", e?.message ?? e);
+    res.status(500).json({ error: "delete_failed" });
   }
 });
 

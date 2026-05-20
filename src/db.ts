@@ -540,6 +540,25 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS user_wiki_saves_user_time_idx ON user_wiki_saves (clerk_user_id, saved_at DESC)`);
 
+  // ── Chronicling America (historic newspapers) saves ───────────────────
+  // chronam_id is the canonical relative path returned by the API:
+  // "/lccn/<lccn>/<date>/ed-X/seq-N/". Stable + unique per page; pairs
+  // with a fixed URL prefix on render.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_chronam_saves (
+      clerk_user_id TEXT        NOT NULL,
+      chronam_id    TEXT        NOT NULL,
+      paper_title   TEXT,
+      issue_date    TEXT,
+      snippet       TEXT,
+      thumbnail     TEXT,
+      data          JSONB       NOT NULL,
+      saved_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (clerk_user_id, chronam_id)
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS user_chronam_saves_user_time_idx ON user_chronam_saves (clerk_user_id, saved_at DESC)`);
+
   // ── User play queue (cross-source: LOC + YouTube) ───────────────────────
   // Items are ordered by `position` (1-indexed). Source is "loc" or "yt"
   // and `data` JSONB carries everything needed to play without a Discogs
@@ -2405,6 +2424,83 @@ export async function getWikiSaveIds(clerkUserId: string): Promise<string[]> {
     [clerkUserId]
   );
   return r.rows.map(row => row.wiki_title);
+}
+
+// ── Chronicling America (historic newspapers) saves ─────────────────────
+// Mirrors the wiki saves API. chronam_id is the canonical relative path
+// returned by the LOC API ("/lccn/<lccn>/<date>/ed-X/seq-N/"). Cap per
+// user matches wiki/loc/archive saves at 1000.
+const CHRONAM_SAVES_MAX_PER_USER = 1000;
+
+export async function saveChronAmItem(
+  clerkUserId: string,
+  chronamId: string,
+  paperTitle: string | null,
+  issueDate: string | null,
+  snippet: string | null,
+  thumbnail: string | null,
+  data: object
+): Promise<void> {
+  const pool = getPool();
+  await pool.query(
+    `INSERT INTO user_chronam_saves (clerk_user_id, chronam_id, paper_title, issue_date, snippet, thumbnail, data, saved_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+     ON CONFLICT (clerk_user_id, chronam_id)
+     DO UPDATE SET paper_title = EXCLUDED.paper_title, issue_date = EXCLUDED.issue_date,
+                   snippet = EXCLUDED.snippet, thumbnail = EXCLUDED.thumbnail,
+                   data = EXCLUDED.data, saved_at = NOW()`,
+    [clerkUserId, chronamId, paperTitle, issueDate, snippet, thumbnail, JSON.stringify(data)]
+  );
+  await pool.query(
+    `DELETE FROM user_chronam_saves
+      WHERE clerk_user_id = $1
+        AND chronam_id NOT IN (
+          SELECT chronam_id FROM user_chronam_saves
+           WHERE clerk_user_id = $1
+           ORDER BY saved_at DESC
+           LIMIT ${CHRONAM_SAVES_MAX_PER_USER}
+        )`,
+    [clerkUserId]
+  );
+}
+
+export async function getChronAmSaves(
+  clerkUserId: string,
+  limit: number = 500,
+): Promise<Array<{ id: string; paperTitle: string | null; issueDate: string | null; snippet: string | null; thumbnail: string | null; data: any; savedAt: string }>> {
+  const capped = Math.min(Math.max(1, limit), 1000);
+  const r = await getPool().query(
+    `SELECT chronam_id, paper_title, issue_date, snippet, thumbnail, data, saved_at
+       FROM user_chronam_saves
+      WHERE clerk_user_id = $1
+      ORDER BY saved_at DESC
+      LIMIT $2`,
+    [clerkUserId, capped]
+  );
+  return r.rows.map(row => ({
+    id: row.chronam_id,
+    paperTitle: row.paper_title,
+    issueDate: row.issue_date,
+    snippet: row.snippet,
+    thumbnail: row.thumbnail,
+    data: row.data ?? {},
+    savedAt: row.saved_at,
+  }));
+}
+
+export async function deleteChronAmSave(clerkUserId: string, chronamId: string): Promise<void> {
+  await getPool().query(
+    `DELETE FROM user_chronam_saves WHERE clerk_user_id = $1 AND chronam_id = $2`,
+    [clerkUserId, chronamId]
+  );
+}
+
+export async function getChronAmSaveIds(clerkUserId: string): Promise<string[]> {
+  const r = await getPool().query(
+    `SELECT chronam_id FROM user_chronam_saves WHERE clerk_user_id = $1`,
+    [clerkUserId]
+  );
+  return r.rows.map(row => row.chronam_id);
 }
 
 // ── Play queue (cross-source: LOC + YouTube) ─────────────────────────
