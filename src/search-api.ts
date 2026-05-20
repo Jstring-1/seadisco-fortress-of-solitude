@@ -5159,8 +5159,18 @@ app.get("/api/chronam/search", async (req, res) => {
   const date1 = /^\d{4}$/.test(String(req.query.date1 ?? "")) ? String(req.query.date1) : "";
   const date2 = /^\d{4}$/.test(String(req.query.date2 ?? "")) ? String(req.query.date2) : "";
   const state = String(req.query.state ?? "").trim().slice(0, 64);
+  // Sort: relevance (default), oldest, newest, title. Map to loc.gov's
+  // `sb` parameter — invalid values fall back to relevance.
+  const sortRaw = String(req.query.sort ?? "").trim();
+  const sortMap: Record<string, string> = {
+    relevance: "",
+    oldest: "date",
+    newest: "date_desc",
+    title:  "title_s",
+  };
+  const sb = Object.prototype.hasOwnProperty.call(sortMap, sortRaw) ? sortMap[sortRaw] : "";
 
-  const key = `q=${q}|p=${page}|d1=${date1}|d2=${date2}|s=${state}`;
+  const key = `q=${q}|p=${page}|d1=${date1}|d2=${date2}|s=${state}|sb=${sb}`;
   const cached = _chronamCacheGet(key);
   if (cached) { res.json(cached); return; }
 
@@ -5177,6 +5187,7 @@ app.get("/api/chronam/search", async (req, res) => {
   u.searchParams.set("c",  "20");
   if (date1 && date2) u.searchParams.set("dates", `${date1}/${date2}`);
   if (state) u.searchParams.set("location_state", state);
+  if (sb) u.searchParams.set("sb", sb);
 
   try {
     const upstream = await fetch(u.toString(), {

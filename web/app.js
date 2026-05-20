@@ -561,6 +561,11 @@ const _SD_FORM_CLEARS = {
     selects: { "gutenberg-topic-picker": "" },
     hidden: ["gutenberg-topic"],
   },
+  chronam: {
+    anchor: "chronam-q",
+    text: ["chronam-q", "chronam-date1", "chronam-date2"],
+    selects: { "chronam-sort": "relevance" },
+  },
 };
 function _sdFormClear(key) {
   const cfg = _SD_FORM_CLEARS[key];

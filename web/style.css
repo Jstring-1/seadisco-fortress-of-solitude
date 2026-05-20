@@ -11296,3 +11296,110 @@ body.gutenberg-reader-open { overflow: hidden; }
   margin-top: 0.2rem;
   line-height: 1.4;
 }
+
+/* ── Chronicling America (Historic Newspapers) cards ─────────────────── */
+.chronam-results-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  margin-top: 0.6rem;
+}
+.chronam-card {
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 0.8rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.6rem;
+}
+.chronam-thumb-wrap {
+  width: 96px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+.chronam-thumb {
+  width: 96px;
+  max-height: 140px;
+  object-fit: cover;
+  background: #1a1a1a;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.chronam-thumb-empty {
+  width: 96px;
+  height: 132px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2.1rem;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+}
+.chronam-thumb-broken {
+  display: none;
+}
+.chronam-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+.chronam-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+.chronam-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+.chronam-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #eee;
+  line-height: 1.25;
+  text-decoration: none;
+}
+.chronam-title:hover { text-decoration: underline; }
+.chronam-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+.chronam-snippet {
+  font-size: 0.85rem;
+  color: var(--text);
+  line-height: 1.45;
+  margin-top: 0.15rem;
+}
+.chronam-host {
+  font-size: 0.72rem;
+  color: var(--muted);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  opacity: 0.75;
+}
+.chronam-open-link {
+  font-size: 0.74rem;
+  color: var(--accent);
+  text-decoration: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 0.18rem 0.45rem;
+  white-space: nowrap;
+}
+.chronam-open-link:hover {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.04);
+}
+.chronam-save-btn.is-saved {
+  color: var(--accent-hi);
+}
