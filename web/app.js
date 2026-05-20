@@ -442,9 +442,14 @@ function _attachClearButtonsGlobally(root) {
 // hints so they leave search alone — EXCEPT inside the Clerk auth UI
 // or the Account view, where real credential autofill should still
 // work. Opt a field back in with data-pw-allow on it or any ancestor.
+// Catch ALL Clerk-mounted elements via the cl-* class prefix, not just
+// a handful of named components — Clerk renders many internal classes
+// (cl-formField, cl-formFieldInput, cl-internal-*, etc.) and listing
+// them individually means new components silently get the ignore tag
+// and break password-manager autofill. The attribute-substring match
+// `[class*="cl-"]` admits every Clerk subtree generically.
 const _PW_SKIP_SEL =
-  ".cl-rootBox, .cl-component, .cl-card, .cl-modalContent, " +
-  ".cl-userButtonPopover, #account-view, [data-pw-allow]";
+  '[class*="cl-"], #account-view, [data-pw-allow]';
 function _pwIgnoreOneInput(input) {
   if (!input || input.dataset.pwTagged === "1") return;
   // Never touch real credential fields — those SHOULD offer autofill.
@@ -464,6 +469,26 @@ function _pwIgnoreGlobally(root) {
   scope.querySelectorAll(sel).forEach(_pwIgnoreOneInput);
   if (scope.matches && scope.matches(sel)) _pwIgnoreOneInput(scope);
 }
+// Rescue: when new DOM appears (e.g. Clerk's sign-in modal mounting),
+// any previously-tagged input that is NOW inside a Clerk/account/allow
+// scope has its ignore hints stripped so password managers can offer
+// autofill on it. Without this a fast-mounted Clerk modal whose input
+// existed pre-portal could keep its stale ignore tags.
+function _pwRescueWithin(root) {
+  const scope = root || document;
+  if (!scope.querySelectorAll) return;
+  scope.querySelectorAll('input[data-pw-tagged="1"]').forEach((input) => {
+    if (!input.closest(_PW_SKIP_SEL)) return;
+    input.removeAttribute("data-1p-ignore");
+    input.removeAttribute("data-lpignore");
+    input.removeAttribute("data-bwignore");
+    input.removeAttribute("data-form-type");
+    // Drop our `autocomplete="off"` so Clerk's own autocomplete hints
+    // (username / current-password / one-time-code) take effect.
+    if (input.getAttribute("autocomplete") === "off") input.removeAttribute("autocomplete");
+    delete input.dataset.pwTagged;
+  });
+}
 
 // Initial sweep, then observe the DOM for inputs that get rendered
 // later (LOC form, account dashboard, modal popups, etc.).
@@ -473,8 +498,22 @@ const _clearFieldObserver = new MutationObserver((mutations) => {
   for (const m of mutations) {
     for (const node of m.addedNodes) {
       if (!node || node.nodeType !== 1) continue;
-      if (node.tagName === "INPUT") { _attachClearToOneInput(node); _pwIgnoreOneInput(node); }
-      else if (node.querySelectorAll) { _attachClearButtonsGlobally(node); _pwIgnoreGlobally(node); }
+      if (node.tagName === "INPUT") {
+        _attachClearToOneInput(node);
+        _pwIgnoreOneInput(node);
+        // If the input mounted inside Clerk/account, ensure no stale
+        // ignore hints linger from a pre-mount pass.
+        if (node.closest(_PW_SKIP_SEL)) _pwRescueWithin(node.parentNode || document);
+      }
+      else if (node.querySelectorAll) {
+        _attachClearButtonsGlobally(node);
+        _pwIgnoreGlobally(node);
+        // The added subtree may have wrapped previously-tagged inputs
+        // (e.g. Clerk modal portal attaching) — strip their ignore
+        // hints so password managers can autofill the credential
+        // fields inside.
+        _pwRescueWithin(node);
+      }
     }
   }
 });
