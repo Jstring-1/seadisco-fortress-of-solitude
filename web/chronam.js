@@ -12,6 +12,10 @@ let _chronamLastQuery = "";
 let _chronamLastPage  = 1;
 let _chronamLastDate1 = "";
 let _chronamLastDate2 = "";
+// Map from chronam_id → full item so the popup can render rich detail
+// from a card click without re-fetching. Populated as results render
+// (search + saved tabs) and read by openChronAmPopup.
+const _chronamItemsById = new Map();
 
 function initChronAmView() {
   const view = document.getElementById("chronam-view");
@@ -124,6 +128,11 @@ async function runChronAmSearch(q, opts) {
       return;
     }
 
+    // Populate the popup lookup before rendering so click handlers can
+    // resolve the id back to a full item.
+    for (const it of items) {
+      if (it?.id) _chronamItemsById.set(it.id, it);
+    }
     const html = items.map(it => _chronamCardHtml(it)).join("");
     if (append) {
       // Drop pagination placeholder if any, then append.
@@ -172,12 +181,16 @@ function _chronamCardHtml(it) {
   const viewBtn = it.page_url
     ? `<a href="${escHtml(it.page_url)}" target="_blank" rel="noopener noreferrer" class="chronam-open-link" title="Open original page on LOC.gov">View ↗</a>`
     : "";
+  // Card title + thumb open the in-app popup (full page image + meta);
+  // the "View ↗" pill still routes to LoC.gov for the original.
   return `
     <div class="chronam-card" data-chronam-id="${escHtml(it.id || "")}">
-      <div class="chronam-thumb-wrap">${thumb}</div>
+      <div class="chronam-thumb-wrap" onclick="openChronAmPopup(${idAttr})" style="cursor:pointer" title="Open page">
+        ${thumb}
+      </div>
       <div class="chronam-card-body">
         <div class="chronam-card-head">
-          <a href="${escHtml(it.page_url)}" target="_blank" rel="noopener noreferrer" class="chronam-title">${escHtml(it.title || "(untitled)")}</a>
+          <a href="#" onclick="event.preventDefault();openChronAmPopup(${idAttr})" class="chronam-title">${escHtml(it.title || "(untitled)")}</a>
           <div class="chronam-card-actions">
             ${viewBtn}
             <button type="button" class="archive-btn chronam-save-btn${saved ? " is-saved" : ""}"
@@ -194,6 +207,59 @@ function _chronamCardHtml(it) {
       </div>
     </div>`;
 }
+
+// ── In-app page popup ───────────────────────────────────────────────
+function openChronAmPopup(id) {
+  const it = _chronamItemsById.get(id);
+  if (!it) return;
+  const overlay = document.getElementById("chronam-popup-overlay");
+  const content = document.getElementById("chronam-popup-content");
+  if (!overlay || !content) return;
+
+  const place = [it.city, it.state].filter(Boolean).join(" · ");
+  const idAttr = JSON.stringify(it.id || "").replace(/"/g, "&quot;");
+  const saved  = _chronamSavedIds?.has(it.id);
+  const star   = saved ? "★" : "☆";
+  const starTitle = saved ? "Remove from Saved" : "Save this page";
+
+  // Prefer the largest available IIIF image; fall back to thumb.
+  const imgSrc = it.thumb_url || "";
+
+  content.innerHTML = `
+    <div class="chronam-popup-head">
+      <div class="chronam-popup-head-text">
+        <h2 class="chronam-popup-title">${escHtml(it.title || "(untitled)")}</h2>
+        <div class="chronam-popup-meta">
+          ${it.date ? `<span>${escHtml(it.date)}</span>` : ""}
+          ${place ? `<span>${escHtml(place)}</span>` : ""}
+          ${it.sequence ? `<span>Page ${escHtml(String(it.sequence))}</span>` : ""}
+        </div>
+      </div>
+      <div class="chronam-popup-actions">
+        ${it.page_url ? `<a href="${escHtml(it.page_url)}" target="_blank" rel="noopener noreferrer" class="chronam-open-link">View on LOC ↗</a>` : ""}
+        <button type="button" class="archive-btn chronam-save-btn${saved ? " is-saved" : ""}"
+                onclick="_chronamToggleSave(this, ${idAttr})" title="${starTitle}">${star}</button>
+        <button type="button" class="archive-btn" onclick="closeChronAmPopup()" title="Close">✕</button>
+      </div>
+    </div>
+    <div class="chronam-popup-image-wrap">
+      ${imgSrc
+        ? `<img class="chronam-popup-image" src="${escHtml(imgSrc)}" alt="Newspaper page scan" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'chronam-popup-image-fail',textContent:'Image unavailable. Use \\'View on LOC\\' to see the page.'}))">`
+        : `<div class="chronam-popup-image-fail">No image available. Use "View on LOC" to see the page.</div>`}
+    </div>
+    ${it.ocr_eng ? `<div class="chronam-popup-snippet"><strong>OCR snippet</strong><br>${escHtml(it.ocr_eng)}</div>` : ""}
+  `;
+  overlay.classList.add("open");
+  if (typeof _sdLockBodyScroll === "function") _sdLockBodyScroll("chronam-popup");
+}
+window.openChronAmPopup = openChronAmPopup;
+
+function closeChronAmPopup() {
+  const overlay = document.getElementById("chronam-popup-overlay");
+  if (overlay) overlay.classList.remove("open");
+  if (typeof _sdUnlockBodyScroll === "function") _sdUnlockBodyScroll("chronam-popup");
+}
+window.closeChronAmPopup = closeChronAmPopup;
 
 // ── Save toggle ─────────────────────────────────────────────────────
 async function _chronamLoadSavedIds() {
@@ -290,7 +356,7 @@ async function _chronamRenderSaved() {
     items.forEach(i => _chronamSavedIds.add(i.id));
     // Reshape saved items to look like search items so the same card
     // template can render both.
-    target.innerHTML = items.map(s => _chronamCardHtml({
+    const reshaped = items.map(s => ({
       id: s.id,
       title: s.paperTitle || "",
       date:  s.issueDate || "",
@@ -298,9 +364,13 @@ async function _chronamRenderSaved() {
       state: "",
       sequence: null,
       ocr_eng: s.snippet || "",
-      page_url: s.data?.page_url || `https://chroniclingamerica.loc.gov${s.id}`,
+      page_url: s.data?.page_url || `https://www.loc.gov${s.id}`,
       thumb_url: s.thumbnail || "",
-    })).join("");
+    }));
+    for (const it of reshaped) {
+      if (it.id) _chronamItemsById.set(it.id, it);
+    }
+    target.innerHTML = reshaped.map(_chronamCardHtml).join("");
   } catch (e) {
     console.warn("[chronam/saved]", e);
     target.innerHTML = `<div class="loc-empty">Could not load saved pages.</div>`;
