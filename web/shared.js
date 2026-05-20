@@ -1162,6 +1162,32 @@ function _seaDiscoBuildClerkAppearance() {
   const muted   = css("--muted",   "#a89880");
   const accent  = css("--accent",  "#ff6b35");
   const border  = css("--border",  "#2e2518");
+  // Contrast-aware primary-button text. Hardcoding #fff broke on
+  // noir-white (--accent is #ffffff → white text on white button).
+  // Pick near-black on light accents, white on dark.
+  const _pickContrast = (raw) => {
+    if (!raw || typeof raw !== "string") return "#fff";
+    const s = raw.trim();
+    let r = 0, g = 0, b = 0;
+    let m = s.match(/^#([0-9a-f]{6})$/i);
+    if (m) {
+      r = parseInt(m[1].slice(0,2), 16);
+      g = parseInt(m[1].slice(2,4), 16);
+      b = parseInt(m[1].slice(4,6), 16);
+    } else if ((m = s.match(/^#([0-9a-f]{3})$/i))) {
+      r = parseInt(m[1][0] + m[1][0], 16);
+      g = parseInt(m[1][1] + m[1][1], 16);
+      b = parseInt(m[1][2] + m[1][2], 16);
+    } else if ((m = s.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i))) {
+      r = +m[1]; g = +m[2]; b = +m[3];
+    } else {
+      return "#fff";
+    }
+    // Relative luminance (sRGB). >0.6 → light accent → dark text.
+    const lum = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    return lum > 0.6 ? "#0a0a0a" : "#fff";
+  };
+  const accentText = _pickContrast(accent);
   // Card border uses a fixed mid-grey rather than --border because
   // some themes set --border close to --bg, which makes the modal
   // blend into the page. A subtle but visible grey edge separates
@@ -1175,6 +1201,7 @@ function _seaDiscoBuildClerkAppearance() {
       colorText:            text,
       colorTextSecondary:   muted,
       colorPrimary:         accent,
+      colorPrimaryForeground: accentText,
       colorDanger:          "#e05050",
       colorNeutral:         muted,
       borderRadius:         "6px",
@@ -1188,10 +1215,12 @@ function _seaDiscoBuildClerkAppearance() {
       formFieldInput:   `background:${surface}; border:1px solid ${border}; color:${text};`,
       footerActionLink: `color:${accent};`,
       socialButtonsBlockButton: `background:${surface}; border:1px solid ${border}; color:${text};`,
-      // Primary "Continue" / "Sign in" button — fixed white text on
-      // accent background. The previous `color:${bg}` was blending
-      // in on themes where --bg was close to --accent in luminance.
-      formButtonPrimary: `background:${accent}; color:#fff; border:none; font-weight:600;`,
+      // Primary "Continue" / "Sign in" button — text color picked from
+      // accent luminance so it stays legible whether the accent is dark
+      // (orange / teal → white text) or light (noir-white's white
+      // accent → near-black text). Previously hardcoded #fff, which
+      // disappeared on noir-white (white-on-white).
+      formButtonPrimary: `background:${accent}; color:${accentText}; border:none; font-weight:600;`,
       // Clerk's footer "Secured by" is hidden via .cl-footer in style.css.
     },
   };
@@ -1409,7 +1438,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260520.0845";
+  const SITE_VERSION = "build 20260520.0924";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
