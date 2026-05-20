@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260520.1255" />
+  <link rel="stylesheet" href="/style.css?v=20260520.1259" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260520.1255"></script>
+<script defer src="/shared.js?v=20260520.1259"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -953,8 +953,23 @@ e.g.  miles davis | coltrane
           <option value="title">Paper title (A–Z)</option>
         </select>
         <button type="submit" class="loc-submit">Search</button>
+        <button type="button" class="chronam-help-btn" onclick="_chronamToggleHelp()" title="Search tips & operators" aria-label="Search tips">?</button>
       </div>
     </form>
+    <div id="chronam-help-panel" class="chronam-help-panel" style="display:none">
+      <div class="chronam-help-section"><strong>Search operators</strong>
+        <ul>
+          <li><code>"exact phrase"</code> — quotes match the phrase verbatim. <em>"bessie smith"</em></li>
+          <li><code>AND / OR / NOT</code> (UPPERCASE) — combine terms. <em>bessie AND smith NOT coleman</em></li>
+          <li><code>( … )</code> — group expressions. <em>(bessie OR ma) AND (smith OR rainey)</em></li>
+          <li><code>*</code> / <code>?</code> — wildcards. <em>bess*</em> matches Bessie, Bessy, Bess.</li>
+          <li><code>title:</code> — limit to the newspaper title. <em>title:"chicago defender"</em></li>
+        </ul>
+      </div>
+      <div class="chronam-help-section"><strong>OCR caveat</strong>
+        <p>These are scans of 1920s newsprint passed through OCR. Spelling errors and broken typesetting are common — start loose, then tighten with quotes/AND once you see what's hitting.</p>
+      </div>
+    </div>
     <div id="chronam-results" class="chronam-results-list">
       <div class="loc-empty">Type a name, place, or phrase to search historic American newspapers (1777–1963).</div>
     </div>
@@ -1380,13 +1395,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260520.1255"></script>
-<script defer src="/search.js?v=20260520.1255"></script>
-<script defer src="/collection.js?v=20260520.1255"></script>
+<script defer src="/utils.js?v=20260520.1259"></script>
+<script defer src="/search.js?v=20260520.1259"></script>
+<script defer src="/collection.js?v=20260520.1259"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260520.1255"></script>
-<script defer src="/app.js?v=20260520.1255"></script>
+<script defer src="/modal.js?v=20260520.1259"></script>
+<script defer src="/app.js?v=20260520.1259"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1397,13 +1412,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260520.1255"></script>
-<script defer src="/queue.js?v=20260520.1255"></script>
+<script defer src="/loc.js?v=20260520.1259"></script>
+<script defer src="/queue.js?v=20260520.1259"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260520.1255";
+  window._SD_LAZY_VERSION = "20260520.1259";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1433,8 +1448,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260520.1255"></script>
-<script defer src="/offline.js?v=20260520.1255"></script>
+<script defer src="/idb.js?v=20260520.1259"></script>
+<script defer src="/offline.js?v=20260520.1259"></script>
 
 </body>
 </html>
