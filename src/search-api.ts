@@ -6621,10 +6621,23 @@ app.post("/api/user/personal-suggestions/dismiss", express.json({ limit: "1kb" }
 // distributed across users rather than concentrated on admin's. Skips
 // users without OAuth (they can connect Discogs to receive
 // suggestions). Each pass overwrites the user's saved batch.
+interface PersonalSuggestionsDetails {
+  tuples: number;
+  tuplesAfterAdminFilter: number;
+  rawResults: number;
+  candidatesAfterDedup: number;
+  excludedOwned: number;
+  excludedDismissed: number;
+  excludedRecentlyClicked: number;
+  excludedAdminGenre: number;
+  itemsToMerge: number;
+  totalSavedAfter: number;
+}
+
 async function _runPersonalSuggestionsForUser(
   userId: string,
   opts?: { force?: boolean },
-): Promise<{ saved: number; reason?: string }> {
+): Promise<{ saved: number; reason?: string; details?: PersonalSuggestionsDetails }> {
   const dc = await getDiscogsClientForUser(userId);
   if (!dc) return { saved: 0, reason: "no-oauth" };
 
@@ -6672,7 +6685,21 @@ async function _runPersonalSuggestionsForUser(
   // out of fresh suggestions. 30 tuples × master+release search × per-
   // page 25/15 yields ~1200 raw rows pre-dedupe; cap saved at 1000
   // after sorting.
+  // Diagnostic counters surfaced via the details field on the
+  // admin manual trigger — the scheduler ignores them.
+  const counts = {
+    tuples: 0,
+    tuplesAfterAdminFilter: 0,
+    rawResults: 0,
+    excludedOwned: 0,
+    excludedDismissed: 0,
+    excludedRecentlyClicked: 0,
+    excludedAdminGenre: 0,
+  };
+
   let tuples = await getUserTasteTuples(userId, 30);
+  counts.tuples = tuples.length;
+  counts.tuplesAfterAdminFilter = tuples.length;
   if (!tuples.length) {
     // Persist sig so an idle user with no taste data doesn't get
     // re-checked every 6 hours; we'll only run again once their
@@ -6703,6 +6730,7 @@ async function _runPersonalSuggestionsForUser(
   if (_isAdmin) {
     const before = tuples.length;
     tuples = tuples.filter(t => _adminGenreOK(t.genre));
+    counts.tuplesAfterAdminFilter = tuples.length;
     if (!tuples.length) {
       if (sig) setUserPrefs(userId, { _suggRunSig: sig, _suggRunAt: Date.now() }).catch(() => {});
       return { saved: 0, reason: "admin-genre-filter-empty" };
@@ -6738,14 +6766,14 @@ async function _runPersonalSuggestionsForUser(
     // allowed (blues/jazz/folk) genre.
     if (_isAdmin) {
       const genres: any[] = Array.isArray(row.genre) ? row.genre : [];
-      if (!genres.some(_adminGenreOK)) return;
+      if (!genres.some(_adminGenreOK)) { counts.excludedAdminGenre++; return; }
     }
     // Dedup: skip if user owns the underlying master, or if dismissed.
     const masterIdRaw = Number(row.master_id);
-    if (Number.isFinite(masterIdRaw) && masterIdRaw > 0 && ownedMasters.has(masterIdRaw)) return;
-    if (type === "master" && ownedMasters.has(id)) return;
-    if (dismissed.has(`${type}:${id}`)) return;
-    if (recentlyClicked.has(`${type}:${id}`)) return;
+    if (Number.isFinite(masterIdRaw) && masterIdRaw > 0 && ownedMasters.has(masterIdRaw)) { counts.excludedOwned++; return; }
+    if (type === "master" && ownedMasters.has(id)) { counts.excludedOwned++; return; }
+    if (dismissed.has(`${type}:${id}`)) { counts.excludedDismissed++; return; }
+    if (recentlyClicked.has(`${type}:${id}`)) { counts.excludedRecentlyClicked++; return; }
     // For release-type: also skip if its master is already a candidate
     // — the master version wins and we don't want a duplicate card.
     if (type === "release" && Number.isFinite(masterIdRaw) && masterIdRaw > 0
@@ -6793,6 +6821,7 @@ async function _runPersonalSuggestionsForUser(
           perPage: searchType === "master" ? 25 : 15,
         }) as any;
         const results = Array.isArray(r?.results) ? r.results : [];
+        counts.rawResults += results.length;
         for (let i = 0; i < results.length; i++) {
           ingest(results[i], t, i);
         }
@@ -6848,7 +6877,32 @@ async function _runPersonalSuggestionsForUser(
   if (sig) {
     setUserPrefs(userId, { _suggRunSig: sig, _suggRunAt: Date.now() }).catch(() => {});
   }
-  return { saved: added.length };
+  // Total currently saved (post-merge) — surfaces in the admin
+  // manual-trigger response so "saved 0" can be read in context
+  // ("added 0 new; 336 total" vs "added 0; 336 total" wasn't broken).
+  let totalSavedAfter = 0;
+  try {
+    const r = await getPool().query(
+      `SELECT COUNT(*)::int AS n FROM user_personal_suggestions WHERE clerk_user_id = $1`,
+      [userId],
+    );
+    totalSavedAfter = Number(r.rows[0]?.n) || 0;
+  } catch {}
+  return {
+    saved: added.length,
+    details: {
+      tuples: counts.tuples,
+      tuplesAfterAdminFilter: counts.tuplesAfterAdminFilter,
+      rawResults: counts.rawResults,
+      candidatesAfterDedup: candidates.size,
+      excludedOwned: counts.excludedOwned,
+      excludedDismissed: counts.excludedDismissed,
+      excludedRecentlyClicked: counts.excludedRecentlyClicked,
+      excludedAdminGenre: counts.excludedAdminGenre,
+      itemsToMerge: items.length,
+      totalSavedAfter,
+    },
+  };
 }
 
 // Scheduler: walk every signed-up user, run the generator
