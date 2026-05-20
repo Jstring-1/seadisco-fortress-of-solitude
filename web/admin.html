@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260520.1047" />
+  <link rel="stylesheet" href="/style.css?v=20260520.1114" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260520.1047"></script>
-<script defer src="/shared.js?v=20260520.1047"></script>
+<script defer src="/utils.js?v=20260520.1114"></script>
+<script defer src="/shared.js?v=20260520.1114"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -410,7 +410,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260520.1047"></script>
+<script defer src="/modal.js?v=20260520.1114"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -3119,13 +3119,18 @@ async function adminSuggestionsRunSelf() {
   // Poll every 3s for up to 5 minutes. The run is recorded server-side
   // regardless; if the poll times out the suggestions table still
   // updates and the last result can be re-fetched.
-  const POLL_MS = 3000, TIMEOUT_MS = 5 * 60 * 1000;
+  const BASE_POLL_MS = 5000, BACKOFF_POLL_MS = 15000, TIMEOUT_MS = 5 * 60 * 1000;
   const t0 = Date.now();
   let dots = 0;
+  let nextWait = BASE_POLL_MS;
   try {
     while (Date.now() - t0 < TIMEOUT_MS) {
-      await new Promise(res => setTimeout(res, POLL_MS));
+      await new Promise(res => setTimeout(res, nextWait));
+      nextWait = BASE_POLL_MS;
       const sr = await apiFetch("/api/admin/run-suggestions-for-self/status");
+      // Back off on 429 — admin dashboard's other polls share the cap.
+      if (sr.status === 429) { nextWait = BACKOFF_POLL_MS; continue; }
+      // Transient blip (network, Clerk token refresh) — just retry.
       if (!sr.ok) continue;
       const sj = await sr.json();
       const f = sj.last;
