@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
+import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 
 
@@ -6621,16 +6621,42 @@ app.post("/api/user/personal-suggestions/dismiss", express.json({ limit: "1kb" }
 // distributed across users rather than concentrated on admin's. Skips
 // users without OAuth (they can connect Discogs to receive
 // suggestions). Each pass overwrites the user's saved batch.
-async function _runPersonalSuggestionsForUser(userId: string): Promise<{ saved: number; reason?: string }> {
+async function _runPersonalSuggestionsForUser(
+  userId: string,
+  opts?: { force?: boolean },
+): Promise<{ saved: number; reason?: string }> {
   const dc = await getDiscogsClientForUser(userId);
   if (!dc) return { saved: 0, reason: "no-oauth" };
+
+  // Signal-change early-exit: if the user's taste sources (plays,
+  // favorites, collection, wantlist) haven't changed since the last
+  // successful run AND that run was recent enough, skip — there's
+  // nothing new for the search to discover. A weekly "force re-run"
+  // floor catches edge cases like release_cache backfills that would
+  // resolve previously-unresolvable play rows. opts.force bypasses
+  // (used by the admin manual trigger).
+  const SUGG_REFRESH_FLOOR_MS = 7 * 24 * 60 * 60 * 1000;
+  const sig = await getUserTasteSignature(userId);
+  const prefs = await getUserPrefs(userId).catch(() => ({} as any));
+  if (!opts?.force && sig && prefs?._suggRunSig === sig) {
+    const lastAt = Number(prefs?._suggRunAt) || 0;
+    if (lastAt && Date.now() - lastAt < SUGG_REFRESH_FLOOR_MS) {
+      return { saved: 0, reason: "no-signal-change" };
+    }
+  }
 
   // Wider taste sampling so a user dismissing aggressively doesn't run
   // out of fresh suggestions. 30 tuples × master+release search × per-
   // page 25/15 yields ~1200 raw rows pre-dedupe; cap saved at 1000
   // after sorting.
   let tuples = await getUserTasteTuples(userId, 30);
-  if (!tuples.length) return { saved: 0, reason: "no-taste" };
+  if (!tuples.length) {
+    // Persist sig so an idle user with no taste data doesn't get
+    // re-checked every 6 hours; we'll only run again once their
+    // signature changes (or the weekly floor lapses).
+    if (sig) setUserPrefs(userId, { _suggRunSig: sig, _suggRunAt: Date.now() }).catch(() => {});
+    return { saved: 0, reason: "no-taste" };
+  }
 
   // (Admin pre-1970 year cap removed: it collapsed the feed to 1960s
   // vinyl reissues — collection year metadata is the pressing year, so
@@ -6654,7 +6680,10 @@ async function _runPersonalSuggestionsForUser(userId: string): Promise<{ saved: 
   if (_isAdmin) {
     const before = tuples.length;
     tuples = tuples.filter(t => _adminGenreOK(t.genre));
-    if (!tuples.length) return { saved: 0, reason: "admin-genre-filter-empty" };
+    if (!tuples.length) {
+      if (sig) setUserPrefs(userId, { _suggRunSig: sig, _suggRunAt: Date.now() }).catch(() => {});
+      return { saved: 0, reason: "admin-genre-filter-empty" };
+    }
     console.log(`[suggestions] admin genre allowlist (blues/jazz/folk): ${before} → ${tuples.length} tuples`);
   }
 
@@ -6755,7 +6784,10 @@ async function _runPersonalSuggestionsForUser(userId: string): Promise<{ saved: 
   const items = Array.from(candidates.values())
     .sort((a, b) => b.score - a.score)
     .slice(0, 1000);
-  if (!items.length) return { saved: 0, reason: "no-candidates" };
+  if (!items.length) {
+    if (sig) setUserPrefs(userId, { _suggRunSig: sig, _suggRunAt: Date.now() }).catch(() => {});
+    return { saved: 0, reason: "no-candidates" };
+  }
   // Merge instead of replace — keep stable rows, only add genuinely
   // new finds. excludeKeys folds dismissals + recent clicks together
   // so existing rows for those keys also get suppressed.
@@ -6785,10 +6817,18 @@ async function _runPersonalSuggestionsForUser(userId: string): Promise<{ saved: 
       console.warn(`[suggestions] enqueue cache-warm failed for ${userId}:`, e?.message ?? e);
     }
   }
+  // Record this run's signature + timestamp so the next tick can
+  // early-exit if nothing relevant has changed. Stored even when
+  // `added` is empty — the search still ran, just yielded no new
+  // candidates, and we don't want to re-spend Discogs budget on the
+  // next tick over the same idle inputs.
+  if (sig) {
+    setUserPrefs(userId, { _suggRunSig: sig, _suggRunAt: Date.now() }).catch(() => {});
+  }
   return { saved: added.length };
 }
 
-// Hourly scheduler: walk every signed-up user, run the generator
+// Scheduler: walk every signed-up user, run the generator
 // sequentially with a small delay between users so we don't spike
 // Discogs traffic. Users without OAuth or with empty taste profiles
 // are skipped quickly.
@@ -6823,19 +6863,21 @@ async function _runPersonalSuggestionsForAllUsers() {
   }
 }
 
-// Daily scheduler — fires once per day at 02:xx Pacific (just before
-// the cache-warm window opens at 03:00 PT, so the warm worker has
-// fresh suggestion deltas to drain). Was hourly, which burned ~2 min
-// of Discogs API budget per user every hour even though taste
-// tuples barely change. Daily is plenty for personal suggestions
-// since the user's library doesn't shift much in 24 hours.
+// Scheduler — fires every 6 hours at 02:xx / 08:xx / 14:xx / 20:xx
+// Pacific (the 02:xx slot still lands just before the 03:00 PT cache-
+// warm window so the overnight warm has fresh deltas to drain). Was
+// daily; bumped to 4×/day because the taste model now folds in plays
+// and favorites, which shift intra-day. The per-user signal-change
+// early-exit (see _runPersonalSuggestionsForUser) keeps the cost
+// proportional to actual user activity — inactive users skip in
+// milliseconds, so 4×/day is cheaper in aggregate than blind daily
+// was for active accounts.
 //
-// Implemented as a 15-min tick that asks "is it 02:xx PT AND have
-// we run today already?" — same pattern as the cache-warm window
-// check, just narrower (one hour instead of four).
-const _SUGG_GEN_TZ      = "America/Los_Angeles";
-const _SUGG_GEN_HOUR    = 2;
-let _suggGenLastRunDate: string | null = null;  // YYYY-MM-DD in PT
+// Implemented as a 15-min tick that asks "are we in a firing hour AND
+// have we run for this date+hour already?".
+const _SUGG_GEN_TZ       = "America/Los_Angeles";
+const _SUGG_GEN_HOURS    = new Set<number>([2, 8, 14, 20]);
+let _suggGenLastRunKey: string | null = null;  // YYYY-MM-DD-HH in PT
 
 function _ptDateStr(): string {
   return new Date().toLocaleDateString("en-CA", { timeZone: _SUGG_GEN_TZ });
@@ -6850,18 +6892,19 @@ function _ptHour(): number {
 }
 
 function _maybeStartDailySuggestionsRun() {
-  const today = _ptDateStr();
-  if (_suggGenLastRunDate === today) return;       // already ran today
-  if (_ptHour() !== _SUGG_GEN_HOUR) return;        // not the firing hour
-  _suggGenLastRunDate = today;
+  const hr = _ptHour();
+  if (!_SUGG_GEN_HOURS.has(hr)) return;                 // not a firing hour
+  const key = `${_ptDateStr()}-${String(hr).padStart(2, "0")}`;
+  if (_suggGenLastRunKey === key) return;               // already ran this slot
+  _suggGenLastRunKey = key;
   _runPersonalSuggestionsForAllUsers().catch(() => {});
 }
 
 if (process.env.APP_DB_URL) {
-  // First check 60s after startup (handles boot during the firing hour).
+  // First check 60s after startup (handles boot during a firing hour).
   setTimeout(() => { _maybeStartDailySuggestionsRun(); }, 60_000);
   // Subsequent checks every 15 min — narrow enough that we never
-  // miss the firing hour, broad enough to cost nothing.
+  // miss a firing hour, broad enough to cost nothing.
   setInterval(() => { _maybeStartDailySuggestionsRun(); }, 15 * 60 * 1000);
 }
 
@@ -7158,7 +7201,9 @@ app.post("/api/admin/run-suggestions-for-self", express.json({ limit: "1kb" }), 
   const userId = await requireAdmin(req, res);
   if (!userId) return;
   try {
-    const result = await _runPersonalSuggestionsForUser(userId);
+    // Admin manual trigger bypasses the signal-change early-exit so
+    // tuning runs always execute even when nothing's changed.
+    const result = await _runPersonalSuggestionsForUser(userId, { force: true });
     res.json({ ok: true, ...result });
   } catch (e: any) {
     res.status(500).json({ error: String(e?.message ?? e) });
@@ -9346,7 +9391,7 @@ app.get("/api/admin/api-health", async (req, res) => {
       const r = byJob.get("daily-suggestions");
       if (r) jobs["Daily suggestions"] = fmtRun(r);
       else if (durable.suggestionsLastAt) jobs["Daily suggestions"] = `~last generated ${ago(durable.suggestionsLastAt)} (no run logged yet)`;
-      else if (_suggGenLastRunDate) jobs["Daily suggestions"] = `ran ${_suggGenLastRunDate} (this process)`;
+      else if (_suggGenLastRunKey) jobs["Daily suggestions"] = `ran ${_suggGenLastRunKey} (this process)`;
       else jobs["Daily suggestions"] = "no run on record";
     }
     {
