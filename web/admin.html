@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260520.1114" />
+  <link rel="stylesheet" href="/style.css?v=20260520.1158" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260520.1114"></script>
-<script defer src="/shared.js?v=20260520.1114"></script>
+<script defer src="/utils.js?v=20260520.1158"></script>
+<script defer src="/shared.js?v=20260520.1158"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -410,7 +410,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260520.1114"></script>
+<script defer src="/modal.js?v=20260520.1158"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -559,19 +559,35 @@ async function verifyAdmin(c) {
 
 // ── User Sync Status ──────────────────────────────────────────────────
 let _adminSyncPoll = null;
-
 let _syncStatusLoaded = false; // true after first successful load
+// Auto-stop the poll after consecutive failures so a transient Clerk
+// token blip (or full-on session expiry) doesn't spam the network tab
+// with 401s for minutes. Manual refresh / view re-entry resets the
+// counter and revives polling.
+let _syncStatusConsecFail = 0;
 
 async function loadAdminSyncStatus() {
   const el = document.getElementById("admin-sync-status-list");
   try {
     const r = await apiFetch("/api/admin/sync-status");
     if (!r.ok) {
-      // On polling refresh, silently skip failed fetches — keep existing data visible
+      _syncStatusConsecFail++;
+      // 401 = no valid Clerk session right now. Stop polling
+      // immediately; user can re-trigger via the refresh button or by
+      // navigating back into the admin view.
+      if (r.status === 401 || _syncStatusConsecFail >= 3) {
+        if (_adminSyncPoll) { clearInterval(_adminSyncPoll); _adminSyncPoll = null; }
+        if (!_syncStatusLoaded && el) el.textContent = r.status === 401
+          ? "Sign-in expired — refresh the page."
+          : "Could not load sync status.";
+        return;
+      }
+      // Other transient errors: keep existing data visible, skip this tick.
       if (_syncStatusLoaded) return;
       el.textContent = "Could not load sync status.";
       return;
     }
+    _syncStatusConsecFail = 0;
     const { users } = await r.json();
     _syncStatusLoaded = true;
     if (!users?.length) { el.textContent = "No users have connected Discogs."; return; }
