@@ -5,6 +5,16 @@ function showSignInWidget(c) {
   document.getElementById("loading-section").style.display = "none";
   document.getElementById("signed-out-section").style.display = "block";
   const mount = document.getElementById("clerk-sign-in");
+  // Idempotent re-mount: switchView('account') re-runs initAccountView
+  // on every navigation, so without an unmount first, Clerk would
+  // stack a fresh sign-in widget under the existing one (user sees
+  // the "Enter your password" form twice). Unmount + innerHTML clear
+  // guarantees exactly one live widget in the container.
+  try {
+    if (typeof c.unmountSignIn === "function") c.unmountSignIn(mount);
+    if (typeof c.unmountSignUp === "function") c.unmountSignUp(mount);
+  } catch {}
+  if (mount) mount.innerHTML = "";
   // Public mode — mountSignIn shows the sign-in form with a built-in
   // "Sign up" link for new visitors (Clerk handles the toggle).
   const opts = {
