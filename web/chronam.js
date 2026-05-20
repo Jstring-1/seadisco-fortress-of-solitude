@@ -306,6 +306,19 @@ function closeChronAmPopup() {
 }
 window.closeChronAmPopup = closeChronAmPopup;
 
+// ── Search-tips help panel ──────────────────────────────────────────
+// Toggles a small reference panel under the form. Hover/title gives a
+// quick taste; clicking expands the full operator list + OCR caveat.
+function _chronamToggleHelp() {
+  const panel = document.getElementById("chronam-help-panel");
+  const btn   = document.querySelector(".chronam-help-btn");
+  if (!panel) return;
+  const open = panel.style.display !== "none";
+  panel.style.display = open ? "none" : "block";
+  if (btn) btn.setAttribute("aria-expanded", open ? "false" : "true");
+}
+window._chronamToggleHelp = _chronamToggleHelp;
+
 // ── Save toggle ─────────────────────────────────────────────────────
 async function _chronamLoadSavedIds() {
   try {
