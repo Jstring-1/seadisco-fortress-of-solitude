@@ -97,6 +97,7 @@ async function runChronAmSearch(q, opts) {
     try { saveSearchHistory("chronam"); } catch {}
   }
 
+  const sort = document.getElementById("chronam-sort")?.value || "relevance";
   const page = append ? _chronamLastPage + 1 : 1;
   if (!append) target.innerHTML = `<div class="loc-empty">Searching Chronicling America…</div>`;
 
@@ -104,6 +105,7 @@ async function runChronAmSearch(q, opts) {
     const params = new URLSearchParams({ q: query, page: String(page) });
     if (/^\d{4}$/.test(date1)) params.set("date1", date1);
     if (/^\d{4}$/.test(date2)) params.set("date2", date2);
+    if (sort && sort !== "relevance") params.set("sort", sort);
     const r = await apiFetch(`/api/chronam/search?${params.toString()}`);
     if (!r.ok) {
       target.innerHTML = `<div class="loc-empty">Search failed (HTTP ${r.status}).</div>`;
@@ -159,25 +161,36 @@ function _chronamCardHtml(it) {
   const place = [it.city, it.state].filter(Boolean).join(" · ");
   const snippet = (it.ocr_eng || "")
     .replace(/\s+/g, " ")
-    .slice(0, 500);
+    .slice(0, 360);
   const thumb = it.thumb_url
-    ? `<img class="chronam-thumb" src="${escHtml(it.thumb_url)}" alt="" loading="lazy" onerror="this.style.display='none'">`
+    ? `<img class="chronam-thumb" src="${escHtml(it.thumb_url)}" alt="" loading="lazy" onerror="this.classList.add('chronam-thumb-broken');this.onerror=null">`
     : `<div class="chronam-thumb chronam-thumb-empty">📰</div>`;
+  // Display the page URL host below the title so users have a visible
+  // indicator that the link goes off-site (and which site).
+  let hostLabel = "";
+  try { hostLabel = new URL(it.page_url).host.replace(/^www\./, ""); } catch {}
+  const viewBtn = it.page_url
+    ? `<a href="${escHtml(it.page_url)}" target="_blank" rel="noopener noreferrer" class="chronam-open-link" title="Open original page on LOC.gov">View ↗</a>`
+    : "";
   return `
     <div class="chronam-card" data-chronam-id="${escHtml(it.id || "")}">
       <div class="chronam-thumb-wrap">${thumb}</div>
       <div class="chronam-card-body">
         <div class="chronam-card-head">
-          <a href="${escHtml(it.page_url)}" target="_blank" rel="noopener" class="chronam-title">${escHtml(it.title || "(untitled)")}</a>
-          <button type="button" class="archive-btn chronam-save-btn${saved ? " is-saved" : ""}"
-                  onclick="_chronamToggleSave(this, ${idAttr})" title="${starTitle}">${star}</button>
+          <a href="${escHtml(it.page_url)}" target="_blank" rel="noopener noreferrer" class="chronam-title">${escHtml(it.title || "(untitled)")}</a>
+          <div class="chronam-card-actions">
+            ${viewBtn}
+            <button type="button" class="archive-btn chronam-save-btn${saved ? " is-saved" : ""}"
+                    onclick="_chronamToggleSave(this, ${idAttr})" title="${starTitle}">${star}</button>
+          </div>
         </div>
         <div class="chronam-meta">
-          <span class="chronam-date">${escHtml(it.date || "")}</span>
+          ${it.date ? `<span class="chronam-date">${escHtml(it.date)}</span>` : ""}
           ${place ? `<span class="chronam-place">${escHtml(place)}</span>` : ""}
           ${it.sequence ? `<span class="chronam-seq">Page ${escHtml(String(it.sequence))}</span>` : ""}
+          ${hostLabel ? `<span class="chronam-host" title="${escHtml(it.page_url)}">${escHtml(hostLabel)}</span>` : ""}
         </div>
-        ${snippet ? `<div class="chronam-snippet">${escHtml(snippet)}${(it.ocr_eng || "").length > 500 ? "…" : ""}</div>` : ""}
+        ${snippet ? `<div class="chronam-snippet">${escHtml(snippet)}${(it.ocr_eng || "").length > 360 ? "…" : ""}</div>` : ""}
       </div>
     </div>`;
 }
