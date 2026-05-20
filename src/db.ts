@@ -4799,6 +4799,57 @@ export async function getAiExclusionTitles(
 // a release_cache lookup keyed by the logged Discogs release/master id.
 // LOC/Archive plays have no Discogs id → release_id NULL → excluded.
 
+// Engagement check for the suggestions job — answers "is it worth
+// spending Discogs API budget on this user's feed?". Returns the
+// signals needed for the scheduler to skip:
+//   - hibernated:        user_tokens.hibernated_at IS NOT NULL
+//                        (6mo inactive, already flagged)
+//   - hasSuggestions:    user has any rows in user_personal_suggestions
+//   - oldestSuggDays:    age in days of the user's oldest current
+//                        suggestion (proxies "how long has the feed
+//                        existed for them"); 0 if none.
+//   - recentClicks:      count of the user's saved suggestions opened
+//                        in user_recent_views in the last 30 days.
+//                        Zero ⇒ they don't engage with the feed.
+// One round-trip, all-in-one query.
+export async function getUserSuggestionEngagement(clerkUserId: string): Promise<{
+  hibernated: boolean;
+  hasSuggestions: boolean;
+  oldestSuggDays: number;
+  recentClicks: number;
+}> {
+  try {
+    const r = await getPool().query(
+      `SELECT
+         (SELECT hibernated_at IS NOT NULL FROM user_tokens WHERE clerk_user_id = $1) AS hibernated,
+         (SELECT COUNT(*)::int FROM user_personal_suggestions WHERE clerk_user_id = $1) AS sugg_count,
+         COALESCE(
+           EXTRACT(EPOCH FROM (NOW() - (SELECT MIN(generated_at) FROM user_personal_suggestions WHERE clerk_user_id = $1))) / 86400.0,
+           0
+         )::float AS oldest_sugg_days,
+         (
+           SELECT COUNT(*)::int FROM user_personal_suggestions ps
+            JOIN user_recent_views rv
+              ON rv.clerk_user_id = ps.clerk_user_id
+             AND rv.discogs_id    = ps.discogs_id
+             AND rv.entity_type   = ps.entity_type
+            WHERE ps.clerk_user_id = $1
+              AND rv.opened_at > NOW() - INTERVAL '30 days'
+         ) AS recent_clicks`,
+      [clerkUserId],
+    );
+    const row = r.rows[0] || {};
+    return {
+      hibernated:     !!row.hibernated,
+      hasSuggestions: Number(row.sugg_count) > 0,
+      oldestSuggDays: Number(row.oldest_sugg_days) || 0,
+      recentClicks:   Number(row.recent_clicks)    || 0,
+    };
+  } catch {
+    return { hibernated: false, hasSuggestions: false, oldestSuggDays: 0, recentClicks: 0 };
+  }
+}
+
 // Cheap fingerprint of a user's taste-source state. The suggestions
 // job compares the current signature to the one stored from its last
 // successful run; if nothing has changed (no new plays, no new
