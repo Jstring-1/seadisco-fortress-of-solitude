@@ -103,7 +103,20 @@ async function runChronAmSearch(q, opts) {
 
   const sort = document.getElementById("chronam-sort")?.value || "relevance";
   const page = append ? _chronamLastPage + 1 : 1;
-  if (!append) target.innerHTML = `<div class="loc-empty">Searching Chronicling America…</div>`;
+
+  // Elapsed-time loading state — loc.gov search can take 10-20s on a
+  // cache miss, so a static spinner feels hung. Update an elapsed
+  // counter once per second until the response lands.
+  let loadingTimer = null;
+  if (!append) {
+    const start = Date.now();
+    const draw = () => {
+      const s = Math.round((Date.now() - start) / 1000);
+      target.innerHTML = `<div class="loc-empty">Searching loc.gov for "${escHtml(query)}"… <span style="color:var(--muted);font-size:0.85rem">${s}s elapsed · loc.gov can take 10–20s on first hit</span></div>`;
+    };
+    draw();
+    loadingTimer = setInterval(draw, 1000);
+  }
 
   try {
     const params = new URLSearchParams({ q: query, page: String(page) });
@@ -141,12 +154,44 @@ async function runChronAmSearch(q, opts) {
       target.innerHTML = html;
     }
     _chronamRenderPagination(j);
+    // Background prefetch of the next page on a fresh search, only if
+    // more results exist. Fire-and-forget — populates the server's
+    // memory + DB cache so "Load more" returns instantly. Skip if this
+    // call WAS the prefetch (recursion guard via opts.prefetchOnly).
+    if (!append && !opts?.prefetchOnly) {
+      const total = Number(j.totalItems) || 0;
+      const per   = Number(j.itemsPerPage) || items.length;
+      if (total > page * per) {
+        setTimeout(() => {
+          // Reuse runChronAmSearch's plumbing to issue an identical
+          // request for page+1 with no UI side effects. The dedicated
+          // prefetch path bypasses the loading-state draw + result
+          // render entirely.
+          _chronamPrefetchPage(query, page + 1, date1, date2, sort);
+        }, 200);
+      }
+    }
   } catch (e) {
     console.warn("[chronam/search]", e);
     target.innerHTML = `<div class="loc-empty">Search failed.</div>`;
+  } finally {
+    if (loadingTimer) clearInterval(loadingTimer);
   }
 }
 window.runChronAmSearch = runChronAmSearch;
+
+// Fire a silent background search just to warm the server cache.
+// No UI render, no error surfacing — if it fails the user pays the
+// upstream cost when they actually click "Load more".
+async function _chronamPrefetchPage(query, page, date1, date2, sort) {
+  try {
+    const params = new URLSearchParams({ q: query, page: String(page) });
+    if (/^\d{4}$/.test(date1)) params.set("date1", date1);
+    if (/^\d{4}$/.test(date2)) params.set("date2", date2);
+    if (sort && sort !== "relevance") params.set("sort", sort);
+    await apiFetch(`/api/chronam/search?${params.toString()}`);
+  } catch { /* silent */ }
+}
 
 function _chronamRenderPagination(j) {
   const el = document.getElementById("chronam-pagination");

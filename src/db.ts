@@ -559,6 +559,19 @@ export async function initDb() {
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS user_chronam_saves_user_time_idx ON user_chronam_saves (clerk_user_id, saved_at DESC)`);
 
+  // Persistent search cache for Chronicling America. loc.gov's search
+  // API is slow (10–20s common) — a shared DB cache means the first
+  // user's wait warms it for everyone, and the cache survives Railway
+  // restarts (vs the in-memory LRU which doesn't).
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS chronam_search_cache (
+      cache_key TEXT        PRIMARY KEY,
+      data      JSONB       NOT NULL,
+      cached_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS chronam_search_cache_at_idx ON chronam_search_cache (cached_at)`);
+
   // ── User play queue (cross-source: LOC + YouTube) ───────────────────────
   // Items are ordered by `position` (1-indexed). Source is "loc" or "yt"
   // and `data` JSONB carries everything needed to play without a Discogs
@@ -2501,6 +2514,36 @@ export async function getChronAmSaveIds(clerkUserId: string): Promise<string[]> 
     [clerkUserId]
   );
   return r.rows.map(row => row.chronam_id);
+}
+
+// Persistent search cache. Historic newspaper data effectively never
+// changes, so a 30-day TTL is conservative — older rows are simply
+// treated as expired and a fresh upstream call refreshes them.
+const CHRONAM_SEARCH_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+export async function getChronAmSearchCache(cacheKey: string): Promise<any | null> {
+  try {
+    const r = await getPool().query(
+      `SELECT data, cached_at FROM chronam_search_cache WHERE cache_key = $1`,
+      [cacheKey],
+    );
+    if (!r.rows.length) return null;
+    const at = new Date(r.rows[0].cached_at).getTime();
+    if (Date.now() - at > CHRONAM_SEARCH_CACHE_TTL_MS) return null;
+    return r.rows[0].data;
+  } catch { return null; }
+}
+
+export async function setChronAmSearchCache(cacheKey: string, data: any): Promise<void> {
+  try {
+    await getPool().query(
+      `INSERT INTO chronam_search_cache (cache_key, data, cached_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (cache_key)
+       DO UPDATE SET data = EXCLUDED.data, cached_at = NOW()`,
+      [cacheKey, JSON.stringify(data)],
+    );
+  } catch { /* best-effort cache write */ }
 }
 
 // ── Play queue (cross-source: LOC + YouTube) ─────────────────────────
