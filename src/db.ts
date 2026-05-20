@@ -4799,6 +4799,26 @@ export async function getAiExclusionTitles(
 // a release_cache lookup keyed by the logged Discogs release/master id.
 // LOC/Archive plays have no Discogs id → release_id NULL → excluded.
 
+// Cheap fingerprint of a user's taste-source state. The suggestions
+// job compares the current signature to the one stored from its last
+// successful run; if nothing has changed (no new plays, no new
+// favorites, no collection/wantlist deltas), the run early-exits. Lets
+// us run frequently without burning Discogs API budget on idle users.
+export async function getUserTasteSignature(clerkUserId: string): Promise<string> {
+  try {
+    const r = await getPool().query(
+      `SELECT
+         COALESCE(EXTRACT(EPOCH FROM (SELECT MAX(created_at) FROM user_play_events WHERE clerk_user_id = $1))::bigint, 0) AS p,
+         COALESCE(EXTRACT(EPOCH FROM (SELECT MAX(created_at) FROM user_favorites   WHERE clerk_user_id = $1))::bigint, 0) AS f,
+         (SELECT COUNT(*)::int FROM user_collection WHERE clerk_user_id = $1) AS c,
+         (SELECT COUNT(*)::int FROM user_wantlist   WHERE clerk_user_id = $1) AS w`,
+      [clerkUserId],
+    );
+    const row = r.rows[0] || {};
+    return `${row.p ?? 0}|${row.f ?? 0}|${row.c ?? 0}|${row.w ?? 0}`;
+  } catch { return ""; }
+}
+
 export async function getUserTasteTuples(
   clerkUserId: string,
   limit = 9
