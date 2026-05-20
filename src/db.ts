@@ -5105,13 +5105,27 @@ export async function dismissPersonalSuggestion(
 }
 
 // Returns set of "type:id" strings the user has banished so the
-// generator can skip them in O(1).
-export async function getDismissedSuggestionKeys(clerkUserId: string): Promise<Set<string>> {
+// generator can skip them in O(1). `withinDays` constrains to recent
+// dismissals only — caller passes e.g. 90 to let older dismissals
+// expire so the pool can thaw over time. Default unbounded preserves
+// existing behaviour for any other caller.
+export async function getDismissedSuggestionKeys(
+  clerkUserId: string,
+  withinDays?: number,
+): Promise<Set<string>> {
   const out = new Set<string>();
   try {
+    const params: any[] = [clerkUserId];
+    let where = "clerk_user_id = $1";
+    if (Number.isFinite(withinDays as number) && (withinDays as number) > 0) {
+      const d = Math.max(1, Math.min(3650, Math.trunc(withinDays as number)));
+      // Inline the integer (already clamped) — Postgres can't bind
+      // intervals through parameters cleanly.
+      where += ` AND dismissed_at > NOW() - INTERVAL '${d} days'`;
+    }
     const r = await getPool().query(
-      `SELECT discogs_id, entity_type FROM user_suggestion_dismissals WHERE clerk_user_id = $1`,
-      [clerkUserId]
+      `SELECT discogs_id, entity_type FROM user_suggestion_dismissals WHERE ${where}`,
+      params,
     );
     for (const row of r.rows) out.add(`${row.entity_type}:${row.discogs_id}`);
   } catch { /* best effort */ }

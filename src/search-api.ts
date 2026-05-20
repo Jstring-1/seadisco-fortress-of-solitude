@@ -6739,7 +6739,13 @@ async function _runPersonalSuggestionsForUser(
   }
 
   const ownedMasters     = await getUserLibraryMasterIds(userId);
-  const dismissed        = await getDismissedSuggestionKeys(userId);
+  // 90-day TTL on dismissals so the pool can thaw over time —
+  // previously dismissed items become eligible to re-surface after
+  // three months. Without this, every dismissal permanently shrinks
+  // the candidate space, and an aggressive dismisser collapses to
+  // zero growth.
+  const DISMISSAL_TTL_DAYS = 90;
+  const dismissed        = await getDismissedSuggestionKeys(userId, DISMISSAL_TTL_DAYS);
   // Recently-clicked suggestions act as a soft-suppress: the user
   // already looked at these, so don't re-surface them for a while.
   // 30-day window — long enough to keep the feed feeling fresh, short
@@ -6807,26 +6813,51 @@ async function _runPersonalSuggestionsForUser(
     });
   };
 
+  // Admin search broadening (compounding levers — combined effect lifts
+  // recall sharply for the narrow blues/jazz/folk allowlist):
+  //   1. format=Vinyl dropped → CDs, digital, 78s, box-set reissues
+  //      surface (essential for pre-war material which lives mostly on
+  //      later non-vinyl reissues).
+  //   2. year is a range t.year-5 to t.year+5 instead of exact match
+  //      → reissues with drifted year metadata are caught.
+  //   3. A third "genre+year only" pass per tuple (no style) widens
+  //      recall when Discogs files an album under a sibling style.
+  // Non-admin users keep the narrower, cheaper original behaviour.
+  const YEAR_BAND = 5;
+  type SearchPass = { type: "master" | "release"; useStyle: boolean; perPage: number };
+  const adminPasses: SearchPass[] = [
+    { type: "master",  useStyle: true,  perPage: 25 },
+    { type: "release", useStyle: true,  perPage: 15 },
+    { type: "master",  useStyle: false, perPage: 25 },   // genre+year-only
+    { type: "release", useStyle: false, perPage: 15 },
+  ];
+  const defaultPasses: SearchPass[] = [
+    { type: "master",  useStyle: true,  perPage: 25 },
+    { type: "release", useStyle: true,  perPage: 15 },
+  ];
+  const passes = _isAdmin ? adminPasses : defaultPasses;
   for (const t of tuples) {
-    // Run master + release searches per tuple. Master scoring is
-    // weighted slightly higher so it floats up when both exist.
-    for (const searchType of ["master", "release"] as const) {
+    const yearParam = _isAdmin
+      ? `${Math.max(1900, t.year - YEAR_BAND)}-${Math.min(2030, t.year + YEAR_BAND)}`
+      : String(t.year);
+    for (const pass of passes) {
       try {
-        const r = await dc.search("", {
-          type: searchType,
+        const params: any = {
+          type: pass.type,
           genre: t.genre,
-          style: t.style,
-          year: String(t.year),
-          format: "Vinyl",
-          perPage: searchType === "master" ? 25 : 15,
-        }) as any;
+          year: yearParam,
+          perPage: pass.perPage,
+        };
+        if (pass.useStyle) params.style = t.style;
+        if (!_isAdmin) params.format = "Vinyl";
+        const r = await dc.search("", params) as any;
         const results = Array.isArray(r?.results) ? r.results : [];
         counts.rawResults += results.length;
         for (let i = 0; i < results.length; i++) {
           ingest(results[i], t, i);
         }
       } catch (e: any) {
-        console.warn(`[suggestions] ${searchType} search failed for ${userId} ${t.genre}/${t.style}/${t.year}:`, e?.message ?? e);
+        console.warn(`[suggestions] ${pass.type}${pass.useStyle ? "" : "/nostyle"} search failed for ${userId} ${t.genre}/${t.style}/${yearParam}:`, e?.message ?? e);
       }
       // Pace per request to respect Discogs's ~60/min OAuth limit.
       await sleep(1100);
