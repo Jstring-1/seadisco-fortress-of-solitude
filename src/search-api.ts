@@ -7304,18 +7304,60 @@ app.post("/api/admin/run-suggestions", express.json({ limit: "1kb" }), async (re
   res.json({ ok: true, message: "Suggestions run kicked off in the background." });
 });
 
-// Admin manual trigger for a single user — for fast iteration.
+// Admin manual trigger for a single user — fire-and-forget so a
+// proxy timeout (Railway/CF edge ~100s) doesn't reset the connection
+// mid-run. The broadened admin search (4 passes × ~28 tuples × 1.1s
+// pacing) takes 2+ minutes, well past any sane HTTP wait. Client
+// kicks the job and polls GET .../status for the result.
+const _lastSuggRunResult = new Map<string, {
+  finishedAt: number;
+  saved: number;
+  reason?: string;
+  details?: PersonalSuggestionsDetails;
+  error?: string;
+}>();
+const _runningSuggestionsFor = new Set<string>();
+
 app.post("/api/admin/run-suggestions-for-self", express.json({ limit: "1kb" }), async (req, res) => {
   const userId = await requireAdmin(req, res);
   if (!userId) return;
-  try {
-    // Admin manual trigger bypasses the signal-change early-exit so
-    // tuning runs always execute even when nothing's changed.
-    const result = await _runPersonalSuggestionsForUser(userId, { force: true });
-    res.json({ ok: true, ...result });
-  } catch (e: any) {
-    res.status(500).json({ error: String(e?.message ?? e) });
+  if (_runningSuggestionsFor.has(userId)) {
+    res.json({ ok: true, status: "already-running" });
+    return;
   }
+  _runningSuggestionsFor.add(userId);
+  const startedAt = Date.now();
+  // Detach: the actual work runs after we've already responded.
+  // force:true bypasses the signal-change early-exit so tuning runs
+  // always execute even when nothing's changed.
+  (async () => {
+    try {
+      const result = await _runPersonalSuggestionsForUser(userId, { force: true });
+      _lastSuggRunResult.set(userId, { finishedAt: Date.now(), ...result });
+    } catch (e: any) {
+      _lastSuggRunResult.set(userId, {
+        finishedAt: Date.now(),
+        saved: 0,
+        error: String(e?.message ?? e),
+      });
+    } finally {
+      _runningSuggestionsFor.delete(userId);
+    }
+  })();
+  res.json({ ok: true, status: "started", startedAt });
+});
+
+// Status poll for the fire-and-forget admin trigger. Returns whether a
+// run is in flight and the most recently completed result for this
+// admin user (the client compares last.finishedAt against the start
+// time it received from POST to know when its run is done).
+app.get("/api/admin/run-suggestions-for-self/status", async (req, res) => {
+  const userId = await requireAdmin(req, res);
+  if (!userId) return;
+  res.json({
+    running: _runningSuggestionsFor.has(userId),
+    last:    _lastSuggRunResult.get(userId) || null,
+  });
 });
 
 // GET /api/site-theme — public read of the current global theme (used
