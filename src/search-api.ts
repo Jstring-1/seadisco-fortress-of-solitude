@@ -5620,6 +5620,12 @@ function _clientIp(req: express.Request): string {
   return (xff || (req.ip ?? "unknown")).replace(/^::ffff:/, "").trim();
 }
 app.use("/api/admin", (req, res, next) => {
+  // The status-poll endpoint for the fire-and-forget suggestions run
+  // is hit every few seconds while a 2-minute run is in flight. It
+  // does no real work (in-memory Map read) and is admin-only via
+  // requireAdmin downstream, so bypass the per-IP limit here — the
+  // previous 30/min cap would 429 the poll mid-run.
+  if (req.path === "/run-suggestions-for-self/status") return next();
   const ip = _clientIp(req);
   const now = Date.now();
   const entry = adminRateCounts.get(ip);
@@ -5627,7 +5633,10 @@ app.use("/api/admin", (req, res, next) => {
     adminRateCounts.set(ip, { count: 1, resetAt: now + 60_000 });
     return next();
   }
-  if (entry.count >= 30) { res.status(429).json({ error: "Rate limited" }); return; }
+  // 120/min: the admin dashboard polls several stats endpoints on a
+  // refresh cycle (overview / job-health / suggestions-stats / etc.),
+  // and a single human session can legitimately reach the old 30/min.
+  if (entry.count >= 120) { res.status(429).json({ error: "Rate limited" }); return; }
   entry.count++;
   next();
 });
