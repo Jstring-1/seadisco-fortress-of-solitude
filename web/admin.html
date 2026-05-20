@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260520.1009" />
+  <link rel="stylesheet" href="/style.css?v=20260520.1047" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260520.1009"></script>
-<script defer src="/shared.js?v=20260520.1009"></script>
+<script defer src="/utils.js?v=20260520.1047"></script>
+<script defer src="/shared.js?v=20260520.1047"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -410,7 +410,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260520.1009"></script>
+<script defer src="/modal.js?v=20260520.1047"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -3077,32 +3077,68 @@ async function loadAdminBehavior() {
 }
 window.loadAdminBehavior = loadAdminBehavior;
 
+function _adminSuggRenderLine(f) {
+  // Shared formatter for the diagnostic counters line.
+  if (f?.error) return "Failed: " + f.error;
+  const d = f?.details;
+  let line = `Saved ${f?.saved ?? 0} new${f?.reason ? ` (${f.reason})` : ""}.`;
+  if (d) {
+    line += ` tuples ${d.tuples}→${d.tuplesAfterAdminFilter} · raw ${d.rawResults}`
+          + ` · candidates ${d.candidatesAfterDedup} · merge ${d.itemsToMerge}`
+          + ` · excl owned ${d.excludedOwned}/dismissed ${d.excludedDismissed}/recent ${d.excludedRecentlyClicked}/genre ${d.excludedAdminGenre}`
+          + ` · total ${d.totalSavedAfter}`;
+  }
+  return line;
+}
+
 async function adminSuggestionsRunSelf() {
   const status = document.getElementById("suggestions-action-status");
   const btn = document.getElementById("suggestions-run-self-btn");
   if (btn) btn.disabled = true;
-  if (status) status.textContent = "Running for admin…";
+  if (status) status.textContent = "Starting…";
+  // Fire-and-forget: the server kicks the job into the background and
+  // returns immediately so a Railway/CF edge timeout (~100s) can't
+  // reset the connection during the ~2-minute admin search. Poll the
+  // status endpoint until the result lands (or we time out locally).
+  let startedAt = Date.now();
   try {
     const r = await apiFetch("/api/admin/run-suggestions-for-self", { method: "POST" });
     if (!r.ok) throw new Error(`failed (${r.status})`);
     const j = await r.json();
-    // Surface the diagnostic counters from the server so "Saved 0" can
-    // be read in context — tells us whether the run was healthy
-    // (lots of results, all already in the saved set → 0 new) vs
-    // starved (tiny tuple set after admin allowlist, narrow searches).
-    const d = j.details;
-    let line = `Saved ${j.saved} new${j.reason ? ` (${j.reason})` : ""}.`;
-    if (d) {
-      line += ` tuples ${d.tuples}→${d.tuplesAfterAdminFilter} · raw ${d.rawResults}`
-            + ` · candidates ${d.candidatesAfterDedup} · merge ${d.itemsToMerge}`
-            + ` · excl owned ${d.excludedOwned}/dismissed ${d.excludedDismissed}/recent ${d.excludedRecentlyClicked}/genre ${d.excludedAdminGenre}`
-            + ` · total ${d.totalSavedAfter}`;
+    if (j.status === "already-running") {
+      if (status) status.textContent = "Already running — polling for result…";
+    } else {
+      startedAt = Number(j.startedAt) || startedAt;
+      if (status) status.textContent = "Running in background — polling for result…";
     }
-    if (status) status.textContent = line;
-    console.log("[adminSuggestionsRunSelf]", j);
-    loadAdminSuggestions();
   } catch (e) {
-    if (status) status.textContent = "Failed: " + (e?.message || e);
+    if (status) status.textContent = "Failed to start: " + (e?.message || e);
+    if (btn) btn.disabled = false;
+    return;
+  }
+  // Poll every 3s for up to 5 minutes. The run is recorded server-side
+  // regardless; if the poll times out the suggestions table still
+  // updates and the last result can be re-fetched.
+  const POLL_MS = 3000, TIMEOUT_MS = 5 * 60 * 1000;
+  const t0 = Date.now();
+  let dots = 0;
+  try {
+    while (Date.now() - t0 < TIMEOUT_MS) {
+      await new Promise(res => setTimeout(res, POLL_MS));
+      const sr = await apiFetch("/api/admin/run-suggestions-for-self/status");
+      if (!sr.ok) continue;
+      const sj = await sr.json();
+      const f = sj.last;
+      // "Done" = a result exists AND it was recorded after we started.
+      if (f && f.finishedAt >= startedAt) {
+        if (status) status.textContent = _adminSuggRenderLine(f);
+        console.log("[adminSuggestionsRunSelf]", f);
+        loadAdminSuggestions();
+        return;
+      }
+      if (status) status.textContent = "Running" + ".".repeat((dots++ % 3) + 1);
+    }
+    if (status) status.textContent = "Timed out polling — job may still be running. Refresh the suggestions table in a minute.";
   } finally {
     if (btn) btn.disabled = false;
   }
