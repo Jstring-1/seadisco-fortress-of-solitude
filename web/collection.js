@@ -268,6 +268,7 @@ function switchView(view, skipPushState = false) {
   const accountView = document.getElementById("account-view");
   const youtubeView = document.getElementById("youtube-view");
   const gutenbergView = document.getElementById("gutenberg-view");
+  const chronamView   = document.getElementById("chronam-view");
   if (!skipPushState) {
     // Preserve existing query params across view switches — only `v` is
     // rewritten. Drop view-specific transient state (`tab` from LOC /
@@ -308,6 +309,7 @@ function switchView(view, skipPushState = false) {
   if (accountView) accountView.style.display = "none";
   if (youtubeView) youtubeView.style.display = "none";
   if (gutenbergView) gutenbergView.style.display = "none";
+  if (chronamView) chronamView.style.display = "none";
 
   // Memory hygiene: empty the heaviest result grids belonging to
   // views we're not currently showing. Decoded image bitmaps inside
@@ -450,6 +452,27 @@ function switchView(view, skipPushState = false) {
     if (typeof initGutenbergView === "function") initGutenbergView();
     else if (typeof window._sdLoadModule === "function") {
       window._sdLoadModule("/gutenberg.js").then(() => window.initGutenbergView?.()).catch(() => {});
+    }
+  } else if (view === "chronam") {
+    // Chronicling America (LOC historic newspapers) — admin/demo only
+    // initially, mirroring Gutenberg's gating. Server double-gates via
+    // requireChronAmAccess.
+    if (!_sdGateSignedInView()) return;
+    if (!(window._isAdmin || window._sdIsDemo)) {
+      if (typeof showToast === "function") {
+        showToast("Historic Newspapers is admin-only right now.", "info");
+      }
+      switchView("search", true);
+      return;
+    }
+    const cView = document.getElementById("chronam-view");
+    if (cView) cView.style.display = "block";
+    if (mainForm) mainForm.style.display = "none";
+    if (recordsWrap) recordsWrap.style.display = "none";
+    if (wantedWrap) wantedWrap.style.display = "none";
+    if (typeof initChronAmView === "function") initChronAmView();
+    else if (typeof window._sdLoadModule === "function") {
+      window._sdLoadModule("/chronam.js").then(() => window.initChronAmView?.()).catch(() => {});
     }
   } else if (view === "wiki") {
     if (wikiView) wikiView.style.display = "block";
@@ -596,7 +619,7 @@ function switchView(view, skipPushState = false) {
   // whenever the current view is one of those four; mark the
   // active tab; otherwise hide the strip. YouTube tab is only
   // visible to YT-access users (admin / YT_OPEN_TO_USERS demo).
-  const _extrasViews = ["loc", "wiki", "archive", "youtube", "gutenberg"];
+  const _extrasViews = ["loc", "wiki", "archive", "youtube", "gutenberg", "chronam"];
   const _extrasTabs = document.getElementById("extras-tabs");
   if (_extrasTabs) {
     if (_extrasViews.includes(view)) {
@@ -607,6 +630,7 @@ function switchView(view, skipPushState = false) {
         archive:   document.getElementById("extras-tab-archive"),
         youtube:   document.getElementById("extras-tab-youtube"),
         gutenberg: document.getElementById("extras-tab-gutenberg"),
+        chronam:   document.getElementById("extras-tab-chronam"),
       };
       for (const [k, el] of Object.entries(tabs)) {
         if (el) el.classList.toggle("rr-tab-active", k === view);
@@ -633,13 +657,21 @@ function switchView(view, skipPushState = false) {
         if (tabs.gutenberg) tabs.gutenberg.style.display = gbAccess ? "" : "none";
         if (gbSep)          gbSep.style.display          = gbAccess ? "" : "none";
       };
+      // Chronicling America: same admin/demo gating as Gutenberg.
+      const _syncChronam = () => {
+        const caAccess = !!(window._isAdmin || window._sdIsDemo);
+        const caSep = document.getElementById("extras-tab-chronam-sep");
+        if (tabs.chronam) tabs.chronam.style.display = caAccess ? "" : "none";
+        if (caSep)        caSep.style.display        = caAccess ? "" : "none";
+      };
       _syncYt();
       _syncGb();
+      _syncChronam();
       if (typeof window._isAdmin !== "boolean" && typeof window._ensureAdminFlag === "function") {
         // Fire the admin probe and re-sync once it resolves so the
-        // YouTube / Gutenberg tabs pop in for admin/demo without
-        // requiring a page reload.
-        window._ensureAdminFlag().then(() => { _syncYt(); _syncGb(); }).catch(() => {});
+        // YouTube / Gutenberg / Chronicling America tabs pop in for
+        // admin/demo without requiring a page reload.
+        window._ensureAdminFlag().then(() => { _syncYt(); _syncGb(); _syncChronam(); }).catch(() => {});
       }
     } else {
       _extrasTabs.style.display = "none";
