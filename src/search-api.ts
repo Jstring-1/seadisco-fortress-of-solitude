@@ -5164,16 +5164,19 @@ app.get("/api/chronam/search", async (req, res) => {
   const cached = _chronamCacheGet(key);
   if (cached) { res.json(cached); return; }
 
-  const u = new URL("https://chroniclingamerica.loc.gov/search/pages/results/");
-  u.searchParams.set("format", "json");
-  u.searchParams.set("proxtext", q);
-  u.searchParams.set("page", String(page));
-  if (date1 && date2) {
-    u.searchParams.set("dateFilterType", "yearRange");
-    u.searchParams.set("date1", date1);
-    u.searchParams.set("date2", date2);
-  }
-  if (state) u.searchParams.set("state", state);
+  // LoC migrated the Chronicling America API surface onto loc.gov;
+  // the old chroniclingamerica.loc.gov/search/pages/results/?format=json
+  // returns 404 for many queries now. The new endpoint is the loc.gov
+  // search API constrained to the Chronicling America "partof" facet,
+  // which returns the same per-page records in JSON.
+  const u = new URL("https://www.loc.gov/search/");
+  u.searchParams.set("fa", "partof:chronicling america");
+  u.searchParams.set("fo", "json");
+  u.searchParams.set("q",  q);
+  u.searchParams.set("sp", String(page));
+  u.searchParams.set("c",  "20");
+  if (date1 && date2) u.searchParams.set("dates", `${date1}/${date2}`);
+  if (state) u.searchParams.set("location_state", state);
 
   try {
     const upstream = await fetch(u.toString(), {
@@ -5184,27 +5187,44 @@ app.get("/api/chronam/search", async (req, res) => {
       return;
     }
     const j: any = await upstream.json();
-    // Trim to what the client renders so we don't bloat the cache.
-    const items = Array.isArray(j.items) ? j.items.map((it: any) => ({
-      id:        String(it.id ?? ""),
-      lccn:      String(it.lccn ?? ""),
-      date:      String(it.date ?? ""),
-      sequence:  it.sequence ?? null,
-      title:     String(it.title ?? ""),                       // newspaper title
-      title_normal: String(it.title_normal ?? ""),
-      city:      Array.isArray(it.city) ? it.city.join(", ") : String(it.city ?? ""),
-      state:     Array.isArray(it.state) ? it.state.join(", ") : String(it.state ?? ""),
-      ocr_eng:   String(it.ocr_eng ?? "").slice(0, 1200),       // snippet, capped
-      url:       String(it.url ?? ""),                          // JSON URL
-      page_url:  it.id ? `https://chroniclingamerica.loc.gov${it.id}` : "",
-      // IIIF thumb: prefer the page's `id`-derived thumbnail URL.
-      thumb_url: it.id ? `https://chroniclingamerica.loc.gov${it.id}thumbnail.jpg` : "",
-    })) : [];
+    const rows: any[] = Array.isArray(j.results) ? j.results : [];
+    // Extract sequence ("seq-N") and a stable canonical id ("/lccn/.../seq-N/")
+    // from the LoC URL so saves keep working across the API migration.
+    const items = rows.map((it: any) => {
+      const url = String(it.id ?? it.url ?? "");
+      const seqMatch = url.match(/seq-(\d+)/);
+      const sequence = seqMatch ? Number(seqMatch[1]) : null;
+      const pathMatch = url.match(/\/(?:resource|lccn)(\/lccn\/[^?#]+)/) || url.match(/(\/lccn\/[^?#]+)/);
+      const canonical = pathMatch ? pathMatch[1] : url;
+      // location_str arrays often look like ["new orleans, louisiana"].
+      const loc = Array.isArray(it.location_str) && it.location_str[0]
+        ? String(it.location_str[0])
+        : "";
+      const [cityRaw, stateRaw] = loc.split(",").map(s => (s || "").trim());
+      const desc = Array.isArray(it.description) ? String(it.description[0] ?? "") : String(it.description ?? "");
+      return {
+        id:        canonical,                                      // stable key for saves
+        lccn:      "",
+        date:      String(it.date ?? ""),
+        sequence,
+        title:     Array.isArray(it.partof_title) && it.partof_title[0]
+                     ? String(it.partof_title[0])
+                     : String(it.title ?? ""),
+        city:      cityRaw  || "",
+        state:     stateRaw || "",
+        ocr_eng:   desc.slice(0, 1200),
+        page_url:  url,                                            // loc.gov resource page
+        thumb_url: Array.isArray(it.image_url) && it.image_url[0]
+                     ? String(it.image_url[0])
+                     : "",
+      };
+    });
+    const pg = j.pagination || {};
     const body = {
       items,
-      totalItems:    Number(j.totalItems) || items.length,
-      page:          Number(j.startIndex ? Math.floor(j.startIndex / Math.max(1, j.itemsPerPage)) + 1 : page),
-      itemsPerPage:  Number(j.itemsPerPage) || items.length,
+      totalItems:   Number(pg.of ?? rows.length) || rows.length,
+      page:         Number(pg.current ?? page)  || page,
+      itemsPerPage: Number(pg.perpage ?? rows.length) || rows.length,
       query: q,
     };
     _chronamCachePut(key, body);
