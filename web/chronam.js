@@ -267,7 +267,8 @@ function openChronAmPopup(id) {
   const star   = saved ? "★" : "☆";
   const starTitle = saved ? "Remove from Saved" : "Save this page";
 
-  // Prefer the largest available IIIF image; fall back to thumb.
+  // Default render uses the thumb URL (already in result payload).
+  // Click-to-enlarge swaps in a higher-res IIIF variant when possible.
   const imgSrc = it.thumb_url || "";
 
   content.innerHTML = `
@@ -289,7 +290,14 @@ function openChronAmPopup(id) {
     </div>
     <div class="chronam-popup-image-wrap">
       ${imgSrc
-        ? `<img class="chronam-popup-image" src="${escHtml(imgSrc)}" alt="Newspaper page scan" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'chronam-popup-image-fail',textContent:'Image unavailable. Use \\'View on LOC\\' to see the page.'}))">`
+        ? `<img class="chronam-popup-image"
+                src="${escHtml(imgSrc)}"
+                data-orig-src="${escHtml(imgSrc)}"
+                data-hires-src="${escHtml(_chronamUpscaleIiif(imgSrc))}"
+                alt="Newspaper page scan — click to enlarge"
+                title="Click to enlarge"
+                onclick="_chronamToggleImageZoom(this)"
+                onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'chronam-popup-image-fail',textContent:'Image unavailable. Use \\'View on LOC\\' to see the page.'}))">`
         : `<div class="chronam-popup-image-fail">No image available. Use "View on LOC" to see the page.</div>`}
     </div>
     ${it.ocr_eng ? `<div class="chronam-popup-snippet"><strong>OCR snippet</strong><br>${escHtml(it.ocr_eng)}</div>` : ""}
@@ -298,6 +306,53 @@ function openChronAmPopup(id) {
   if (typeof _sdLockBodyScroll === "function") _sdLockBodyScroll("chronam-popup");
 }
 window.openChronAmPopup = openChronAmPopup;
+
+// LOC's IIIF image URLs encode size as one of:
+//   .../full/pct:NN/0/default.jpg     (percentage)
+//   .../full/!W,H/0/default.jpg       (max-fit)
+//   .../full/W,/0/default.jpg         (width-pinned)
+// Bump to pct:100 (full resolution) for zoom mode. If the URL doesn't
+// match any known IIIF pattern, return it unchanged — the click-to-
+// enlarge still works as a CSS cap-removal even without a hi-res swap.
+function _chronamUpscaleIiif(url) {
+  if (!url || typeof url !== "string" || !url.includes("/iiif/")) return url;
+  // pct:XX or pct:XX.YY
+  let out = url.replace(/\/full\/pct:[\d.]+\//, "/full/pct:100/");
+  if (out !== url) return out;
+  // !W,H — drop the size constraint
+  out = url.replace(/\/full\/!\d+,\d+\//, "/full/full/");
+  if (out !== url) return out;
+  // W, or ,H — drop to full
+  out = url.replace(/\/full\/\d+,(\d+)?\//, "/full/full/");
+  return out;
+}
+
+// Toggle: thumbnail size (fits in popup) ⇄ high-res, no cap, scrollable.
+// First zoom swaps src to the hi-res IIIF URL if we derived one; the
+// fallback is a CSS-only un-cap of the existing src.
+function _chronamToggleImageZoom(img) {
+  if (!img) return;
+  const zoomed = img.classList.toggle("is-zoomed");
+  if (zoomed) {
+    const hires = img.dataset.hiresSrc;
+    if (hires && hires !== img.src) {
+      // Swap to hi-res — onerror reverts to the thumb so a broken IIIF
+      // request doesn't leave a blank pane.
+      const fallback = img.dataset.origSrc || img.src;
+      img.onerror = () => { img.onerror = null; img.src = fallback; };
+      img.src = hires;
+    }
+    img.title = "Click to shrink";
+  } else {
+    const orig = img.dataset.origSrc;
+    if (orig && orig !== img.src) {
+      img.onerror = null;
+      img.src = orig;
+    }
+    img.title = "Click to enlarge";
+  }
+}
+window._chronamToggleImageZoom = _chronamToggleImageZoom;
 
 function closeChronAmPopup() {
   const overlay = document.getElementById("chronam-popup-overlay");
