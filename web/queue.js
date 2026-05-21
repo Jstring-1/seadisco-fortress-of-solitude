@@ -412,8 +412,35 @@ async function _queuePlayNext() {
   let currentIdx = _queueCurrentPosition != null
     ? vis.findIndex(it => it.position === _queueCurrentPosition)
     : -1;
+  let matchedViaExtFallback = false;
   if (currentIdx < 0 && _queuePlayingExternalId != null) {
     currentIdx = vis.findIndex(it => String(it.externalId) === String(_queuePlayingExternalId));
+    if (currentIdx >= 0) matchedViaExtFallback = true;
+  }
+  // Defensive: when the externalId fallback resolves to a vis row whose
+  // position is LOWER than our known _queueCurrentPosition, the playing
+  // track is actually a higher-position duplicate that _queueVisibleList
+  // collapsed (it keeps the lowest-position copy per externalId). Using
+  // that low currentIdx for "next" would jump to vis[1] (the second
+  // track in the drawer) from any track mid-queue. Recompute "next" as
+  // the first visible row past the real current position instead.
+  let next = null;
+  if (matchedViaExtFallback
+      && currentIdx >= 0
+      && Number.isFinite(_queueCurrentPosition)
+      && Number.isFinite(vis[currentIdx].position)
+      && vis[currentIdx].position < _queueCurrentPosition) {
+    const afterIdx = vis.findIndex(it =>
+      Number.isFinite(it.position) && it.position > _queueCurrentPosition);
+    if (afterIdx >= 0) {
+      console.debug("[_queuePlayNext] dedupe-hidden current; advancing past pos", _queueCurrentPosition);
+      next = vis[afterIdx];
+    }
+    // Treat this case as "located" for the no-match-from-head guard
+    // below so we don't fall through to vis[0] (head replay).
+    if (!next) currentIdx = vis.length; // == end of queue
+  } else if (currentIdx >= 0 && currentIdx + 1 < vis.length) {
+    next = vis[currentIdx + 1];
   }
   // If we still can't locate the current track, the player isn't on a
   // queued row (e.g. user clicked ▶ on a card that bypassed the queue,
@@ -422,9 +449,6 @@ async function _queuePlayNext() {
   // "hasQueue" check halted playback — leaving the player stopped with
   // a full queue sitting there. Now: start the queue from the head so
   // auto-advance always carries forward when there's something to play.
-  let next = currentIdx >= 0 && currentIdx + 1 < vis.length
-    ? vis[currentIdx + 1]
-    : null;
   if (!next && currentIdx < 0 && vis.length) {
     console.debug("[_queuePlayNext] current track not in queue — starting from head");
     next = vis[0];
