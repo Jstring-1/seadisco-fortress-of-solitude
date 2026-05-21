@@ -10156,6 +10156,17 @@ a:focus-visible {
   margin-top: 0.3rem;
   min-height: 1em;
 }
+/* Daily-quota indicator — small status line under the search row.
+   .yt-quota-low (added once searchesLeft <= 5) tints it amber so the
+   user gets a heads-up before the cap actually trips. */
+.youtube-popup-quota {
+  font-size: 0.72rem;
+  color: var(--muted);
+  margin: 0.15rem 0 0.35rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+}
+.youtube-popup-quota.yt-quota-low { color: #f0c95c; }
 
 /* ── YouTube view list ────────────────────────────────────────────────
    Each result is a flex row: thumbnail · title/channel/desc · actions.

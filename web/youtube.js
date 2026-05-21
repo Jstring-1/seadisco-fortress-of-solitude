@@ -582,6 +582,99 @@ let _ytPopupQuery = "";
 // carry a subset.
 let _ytPopupItems = [];
 
+// ── Daily-quota indicator ───────────────────────────────────────────
+// Server returns { searchesLeft, resetAtIso, perCallUnits, project,
+// user }. We display "≈ N searches left · resets in HH:MM:SS",
+// refreshed by setInterval. The counter is ticked down optimistically
+// after each successful search so the user gets immediate feedback
+// without re-fetching. Re-synced on every popup open + every search.
+let _ytQuotaState = null; // { searchesLeft, resetAtMs, perCallUnits }
+let _ytQuotaTimer = null;
+
+function _ytQuotaEl() {
+  return document.getElementById("youtube-popup-quota");
+}
+
+function _ytQuotaFormatCountdown(ms) {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  if (h > 0) return `${h}h ${String(m).padStart(2, "0")}m`;
+  if (m > 0) return `${m}m ${String(s).padStart(2, "0")}s`;
+  return `${s}s`;
+}
+
+function _ytQuotaRender() {
+  const el = _ytQuotaEl();
+  if (!el) return;
+  if (!_ytQuotaState) {
+    el.style.display = "none";
+    el.textContent = "";
+    return;
+  }
+  const { searchesLeft, resetAtMs } = _ytQuotaState;
+  const remaining = Math.max(0, resetAtMs - Date.now());
+  const countdown = _ytQuotaFormatCountdown(remaining);
+  const lowCls = searchesLeft <= 5 ? " yt-quota-low" : "";
+  // "≈" because the counter is best-effort (cache hits don't burn
+  // quota, so the actual budget often goes further than the display).
+  el.className = `youtube-popup-quota${lowCls}`;
+  el.style.display = "";
+  el.textContent = `≈ ${searchesLeft} search${searchesLeft === 1 ? "" : "es"} left · resets in ${countdown}`;
+}
+
+function _ytQuotaStartTicker() {
+  if (_ytQuotaTimer) return;
+  // 1s tick keeps the seconds field smooth without busy-looping.
+  _ytQuotaTimer = setInterval(_ytQuotaRender, 1000);
+}
+
+function _ytQuotaStopTicker() {
+  if (_ytQuotaTimer) {
+    clearInterval(_ytQuotaTimer);
+    _ytQuotaTimer = null;
+  }
+}
+
+async function _ytQuotaFetch() {
+  try {
+    const r = await apiFetch("/api/youtube/quota", { cache: "no-store" });
+    if (!r.ok) {
+      // 403 = caller doesn't have YT access (anon / non-allowlisted
+      // signed-in user). Just hide the indicator silently — they
+      // wouldn't be firing searches anyway.
+      _ytQuotaState = null;
+      _ytQuotaRender();
+      _ytQuotaStopTicker();
+      return;
+    }
+    const j = await r.json();
+    const resetAtMs = j?.resetAtIso ? Date.parse(j.resetAtIso) : null;
+    if (!Number.isFinite(resetAtMs)) return;
+    _ytQuotaState = {
+      searchesLeft: Number(j?.searchesLeft) || 0,
+      resetAtMs,
+      perCallUnits: Number(j?.perCallUnits) || 100,
+    };
+    _ytQuotaRender();
+    _ytQuotaStartTicker();
+  } catch (e) {
+    console.debug("[yt-quota] fetch failed:", e);
+  }
+}
+
+// Decrement the local counter after a search.list call lands. The
+// server-side counters are authoritative (and _ytQuotaFetch resyncs
+// them periodically) — this just gives the user immediate feedback
+// without waiting for a roundtrip. cacheHit=true means the result
+// came back from cache so no quota was actually spent.
+function _ytQuotaBumpLocal(cacheHit) {
+  if (cacheHit || !_ytQuotaState) return;
+  _ytQuotaState.searchesLeft = Math.max(0, _ytQuotaState.searchesLeft - 1);
+  _ytQuotaRender();
+}
+
 // opts.autoSearch === false → open the popup with the search field
 // populated but DON'T fire the search.list call. The user can edit
 // the query and click Search (or press Enter), OR jump straight to
@@ -600,6 +693,12 @@ async function openYoutubePopup(query, opts) {
   if (!overlay) return;
   overlay.classList.add("open");
   if (typeof _sdLockBodyScroll === "function") _sdLockBodyScroll("yt-popup");
+  // Kick a quota fetch the moment the popup opens. Non-blocking — the
+  // indicator paints in once the response lands. _ytQuotaState may
+  // still hold values from a recent open; render those immediately
+  // so we don't show a blank line during the fetch.
+  if (_ytQuotaState) { _ytQuotaRender(); _ytQuotaStartTicker(); }
+  _ytQuotaFetch();
   // Editable copy of the exact query that was run — user can tweak &
   // re-search in-place via _youtubeRerunSearch().
   const searchRow = document.getElementById("youtube-popup-search-row");
@@ -728,6 +827,10 @@ async function openYoutubePopup(query, opts) {
         if (statusEl) {
           statusEl.innerHTML = `<span style="color:#f0c95c">${escHtml(msg)}</span> <a href="${escHtml(ytExtUrl)}" target="_blank" rel="noopener" title="${escHtml(hoverTitle)}" style="color:var(--accent);text-decoration:underline">Search YouTube ↗</a>${albumCtx ? ' — copy any URL into the form above to stage it.' : ''}`;
         }
+        // Hard-zero the local counter and re-sync from server so the
+        // indicator shows "0 left · resets in …" instead of last-known.
+        if (_ytQuotaState) { _ytQuotaState.searchesLeft = 0; _ytQuotaRender(); }
+        _ytQuotaFetch();
       } else if (statusEl) {
         statusEl.textContent = `Search failed (${r.status}).`;
       }
@@ -741,6 +844,15 @@ async function openYoutubePopup(query, opts) {
     _ytPopupItems = items;
     if (statusEl) statusEl.textContent = items.length ? `${items.length} result${items.length === 1 ? "" : "s"}` : "No results.";
     if (resultsEl) resultsEl.innerHTML = items.map(it => _youtubeRowHtml(it)).join("");
+    // Quota bookkeeping. The server sets X-SeaDisco-Cache to "hit-mem"
+    // / "hit-db" when no quota was burned; anything else (or absent)
+    // means the search.list call actually went to Google. _ytQuotaFetch
+    // re-syncs from the server so even if our local guess is off the
+    // counter snaps back to the truth on the next popup open.
+    const cacheHdr = r.headers.get("X-SeaDisco-Cache") || "";
+    const cacheHit = cacheHdr.startsWith("hit-");
+    _ytQuotaBumpLocal(cacheHit);
+    if (!cacheHit) _ytQuotaFetch();
     // Album mode: append the sticky status footer + submit button.
     if (albumCtx) _albumRenderFooter();
   } catch (e) {
@@ -955,6 +1067,12 @@ function closeYoutubePopup() {
   const overlay = document.getElementById("youtube-popup-overlay");
   if (overlay) overlay.classList.remove("open");
   if (typeof _sdUnlockBodyScroll === "function") _sdUnlockBodyScroll("yt-popup");
+  // Stop the quota countdown ticker. State is kept around so the
+  // next popup open paints in the last-known values instantly while
+  // _ytQuotaFetch races to refresh.
+  _ytQuotaStopTicker();
+  const qEl = _ytQuotaEl();
+  if (qEl) qEl.style.display = "none";
   // Drop any pending track-suggest context so the next popup open
   // doesn't accidentally show ✓ Suggest buttons.
   window._sdSuggestForTrack = null;

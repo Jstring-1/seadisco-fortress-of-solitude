@@ -1030,6 +1030,52 @@ app.get("/api/admin/youtube-quota", async (req, res) => {
   });
 });
 
+// GET /api/youtube/quota — non-admin variant of the admin quota
+// endpoint. Returns the caller's own counter alongside the project
+// soft cap so the YouTube popup can render a "X searches left,
+// resets in Y" indicator. Same access gate as the search endpoint
+// (admin / demo / YT_OPEN_TO_USERS) — these are the only users who
+// would burn quota anyway.
+app.get("/api/youtube/quota", async (req, res) => {
+  const userId = await requireYtAccess(req, res);
+  if (!userId) return;
+  _ytQuotaMaybeReset();
+  // Per-user counter, but DON'T bump it (this is a read-only probe).
+  // Mirrors the bookkeeping in _ytUserCheckAndBump but skips the
+  // increment + the cap check.
+  let userEntry = _ytPerUserCounts.get(userId);
+  const nowMs = Date.now();
+  if (userEntry && nowMs >= userEntry.resetAt) {
+    _ytPerUserCounts.delete(userId);
+    userEntry = undefined;
+  }
+  const userUsed  = userEntry ? userEntry.count : 0;
+  const userLimit = _YT_PER_USER_DAILY_LIMIT;
+  // Searches left under each cap, then take the tighter one. Project
+  // cap counts in units (100/search); user cap counts in calls.
+  const projectSearchesLeft = Math.max(0, Math.floor((_YT_DAILY_SOFT_CAP_UNITS - _ytQuotaUnitsToday) / 100));
+  const userSearchesLeft    = Math.max(0, userLimit - userUsed);
+  const searchesLeft        = Math.min(projectSearchesLeft, userSearchesLeft);
+  // Reset is whichever the user actually cares about. Both wrap at
+  // UTC midnight in practice, so they coincide.
+  const resetAt = userEntry ? userEntry.resetAt : _ytQuotaResetAt;
+  res.json({
+    searchesLeft,
+    perCallUnits: 100,
+    project: {
+      usedToday: _ytQuotaUnitsToday,
+      cap: _YT_DAILY_SOFT_CAP_UNITS,
+      searchesLeft: projectSearchesLeft,
+    },
+    user: {
+      used: userUsed,
+      limit: userLimit,
+      searchesLeft: userSearchesLeft,
+    },
+    resetAtIso: new Date(resetAt).toISOString(),
+  });
+});
+
 // DELETE /api/admin/youtube-unavailable/:videoId — admin clears a
 // single entry (e.g. when a video came back online or was a false
 // positive). Removes the row entirely so a fresh report starts from
