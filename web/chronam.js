@@ -311,6 +311,9 @@ function openChronAmPopup(id) {
   // Reset zoom state for each new popup.
   _chronamZoomIdx = _CHRONAM_ZOOM_FIT_IDX;
   _chronamApplyZoom();
+  // Wire grab-and-drag panning on the scroll wrap. Idempotent: the
+  // helper bails if the listeners are already bound to this element.
+  _chronamBindPan();
 }
 window.openChronAmPopup = openChronAmPopup;
 
@@ -372,6 +375,87 @@ function _chronamApplyZoom() {
   }
   // When the image overflows the wrap, allow scrolling inside it.
   if (wrap) wrap.style.overflow = factor > 1 ? "auto" : "";
+  // Grab cursor only when there's something to pan. Avoid stomping on
+  // the active-drag "grabbing" cursor — _chronamBindPan toggles that
+  // class while a drag is in progress.
+  if (wrap && !wrap.classList.contains("is-panning")) {
+    wrap.style.cursor = factor > 1 ? "grab" : "";
+  }
+  if (img) {
+    // Prevent the browser's native image drag (ghost image) from
+    // stealing the gesture when the user grabs the picture itself.
+    img.draggable = false;
+    img.style.userSelect = "none";
+  }
+}
+
+// ── Drag-to-pan ─────────────────────────────────────────────────────
+// Click-and-drag inside the scroll wrap pans the zoomed image — same
+// pattern as Google Maps. Listeners are bound once per popup open;
+// _chronamBindPan is idempotent via the data flag on the wrap.
+function _chronamBindPan() {
+  const wrap = document.getElementById("chronam-popup-image-wrap");
+  if (!wrap || wrap.dataset.panBound === "1") return;
+  wrap.dataset.panBound = "1";
+  let dragging = false;
+  let startX = 0, startY = 0, startScrollL = 0, startScrollT = 0;
+  let movedPx = 0;
+
+  const onDown = (ev) => {
+    // Only the primary mouse button / single-touch should pan.
+    if (ev.button != null && ev.button !== 0) return;
+    // Don't hijack clicks on the controls or zoom buttons that live
+    // outside the wrap — those won't reach here anyway, but guard
+    // against any future overlay children.
+    if (ev.target.closest(".chronam-zoom-controls, .chronam-popup-actions")) return;
+    // Only pan when there's actually overflow to scroll.
+    const hasOverflow = wrap.scrollWidth > wrap.clientWidth || wrap.scrollHeight > wrap.clientHeight;
+    if (!hasOverflow) return;
+    dragging = true;
+    movedPx = 0;
+    const pt = ev.touches ? ev.touches[0] : ev;
+    startX = pt.clientX; startY = pt.clientY;
+    startScrollL = wrap.scrollLeft; startScrollT = wrap.scrollTop;
+    wrap.classList.add("is-panning");
+    wrap.style.cursor = "grabbing";
+    if (ev.cancelable) ev.preventDefault();
+  };
+  const onMove = (ev) => {
+    if (!dragging) return;
+    const pt = ev.touches ? ev.touches[0] : ev;
+    const dx = pt.clientX - startX;
+    const dy = pt.clientY - startY;
+    movedPx = Math.max(movedPx, Math.abs(dx) + Math.abs(dy));
+    wrap.scrollLeft = startScrollL - dx;
+    wrap.scrollTop  = startScrollT - dy;
+    if (ev.cancelable) ev.preventDefault();
+  };
+  const onUp = () => {
+    if (!dragging) return;
+    dragging = false;
+    wrap.classList.remove("is-panning");
+    // Restore the grab cursor if still zoomed; _chronamApplyZoom owns
+    // the no-zoom path.
+    const factor = _CHRONAM_ZOOM_STEPS[_chronamZoomIdx] || 1;
+    wrap.style.cursor = factor > 1 ? "grab" : "";
+    // If the user actually dragged, swallow the click that follows so
+    // it doesn't bubble to anything underneath (e.g. close overlay).
+    if (movedPx > 4) {
+      const swallow = (e) => { e.stopPropagation(); e.preventDefault(); };
+      window.addEventListener("click", swallow, { capture: true, once: true });
+    }
+  };
+
+  wrap.addEventListener("mousedown", onDown);
+  window.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onUp);
+  // Basic touch support for tablets — uses passive:false so we can
+  // call preventDefault to stop the page from rubber-banding while
+  // the user is panning the newspaper.
+  wrap.addEventListener("touchstart", onDown, { passive: false });
+  window.addEventListener("touchmove", onMove, { passive: false });
+  window.addEventListener("touchend", onUp);
+  window.addEventListener("touchcancel", onUp);
 }
 
 function _chronamZoom(dir) {
