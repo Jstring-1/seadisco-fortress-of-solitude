@@ -282,21 +282,25 @@ function openChronAmPopup(id) {
         </div>
       </div>
       <div class="chronam-popup-actions">
+        ${imgSrc ? `
+        <div class="chronam-zoom-controls" role="group" aria-label="Zoom">
+          <button type="button" class="chronam-zoom-btn" onclick="_chronamZoom(-1)" title="Zoom out">−</button>
+          <button type="button" class="chronam-zoom-level" onclick="_chronamZoom(0)" title="Reset zoom to fit"><span id="chronam-zoom-pct">100%</span></button>
+          <button type="button" class="chronam-zoom-btn" onclick="_chronamZoom(1)"  title="Zoom in">+</button>
+        </div>` : ""}
         ${it.page_url ? `<a href="${escHtml(it.page_url)}" target="_blank" rel="noopener noreferrer" class="chronam-open-link">View on LOC ↗</a>` : ""}
         <button type="button" class="archive-btn chronam-save-btn${saved ? " is-saved" : ""}"
                 onclick="_chronamToggleSave(this, ${idAttr})" title="${starTitle}">${star}</button>
         <button type="button" class="archive-btn" onclick="closeChronAmPopup()" title="Close">✕</button>
       </div>
     </div>
-    <div class="chronam-popup-image-wrap">
+    <div class="chronam-popup-image-wrap" id="chronam-popup-image-wrap">
       ${imgSrc
-        ? `<img class="chronam-popup-image"
+        ? `<img class="chronam-popup-image" id="chronam-popup-image"
                 src="${escHtml(imgSrc)}"
                 data-orig-src="${escHtml(imgSrc)}"
                 data-hires-src="${escHtml(_chronamUpscaleIiif(imgSrc))}"
-                alt="Newspaper page scan — click to enlarge"
-                title="Click to enlarge"
-                onclick="_chronamToggleImageZoom(this)"
+                alt="Newspaper page scan"
                 onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'chronam-popup-image-fail',textContent:'Image unavailable. Use \\'View on LOC\\' to see the page.'}))">`
         : `<div class="chronam-popup-image-fail">No image available. Use "View on LOC" to see the page.</div>`}
     </div>
@@ -304,6 +308,9 @@ function openChronAmPopup(id) {
   `;
   overlay.classList.add("open");
   if (typeof _sdLockBodyScroll === "function") _sdLockBodyScroll("chronam-popup");
+  // Reset zoom state for each new popup.
+  _chronamZoomIdx = _CHRONAM_ZOOM_FIT_IDX;
+  _chronamApplyZoom();
 }
 window.openChronAmPopup = openChronAmPopup;
 
@@ -327,32 +334,56 @@ function _chronamUpscaleIiif(url) {
   return out;
 }
 
-// Toggle: thumbnail size (fits in popup) ⇄ high-res, no cap, scrollable.
-// First zoom swaps src to the hi-res IIIF URL if we derived one; the
-// fallback is a CSS-only un-cap of the existing src.
-function _chronamToggleImageZoom(img) {
+// Incremental zoom: each step bumps the image's effective size.
+// Implemented as a multiplier on max-height (vh) so the popup-image-wrap
+// stays the scroll container — natural and consistent on any screen
+// size. Hi-res IIIF swap kicks in once we step above 1x to avoid a
+// blurry upscale of the thumbnail.
+const _CHRONAM_ZOOM_STEPS = [0.6, 0.8, 1.0, 1.25, 1.5, 2.0, 2.5, 3.0, 4.0];
+const _CHRONAM_ZOOM_FIT_IDX = 2; // index of 1.0
+let _chronamZoomIdx = _CHRONAM_ZOOM_FIT_IDX;
+
+function _chronamApplyZoom() {
+  const img  = document.getElementById("chronam-popup-image");
+  const wrap = document.getElementById("chronam-popup-image-wrap");
+  const lbl  = document.getElementById("chronam-zoom-pct");
   if (!img) return;
-  const zoomed = img.classList.toggle("is-zoomed");
-  if (zoomed) {
+  const factor = _CHRONAM_ZOOM_STEPS[_chronamZoomIdx] || 1;
+  // 80vh is the original CSS cap (see .chronam-popup-image). Scale
+  // from that as the 1x baseline so "100%" matches the unzoomed render.
+  img.style.maxHeight = `${80 * factor}vh`;
+  img.style.maxWidth  = factor > 1 ? "none" : "100%";
+  if (lbl) lbl.textContent = `${Math.round(factor * 100)}%`;
+  // Zoomed beyond 1x → request the hi-res IIIF variant if available.
+  // Zoomed at or below 1x → revert to thumb (lighter, faster).
+  if (factor > 1.0) {
     const hires = img.dataset.hiresSrc;
-    if (hires && hires !== img.src) {
-      // Swap to hi-res — onerror reverts to the thumb so a broken IIIF
-      // request doesn't leave a blank pane.
+    if (hires && img.src !== hires) {
       const fallback = img.dataset.origSrc || img.src;
       img.onerror = () => { img.onerror = null; img.src = fallback; };
       img.src = hires;
     }
-    img.title = "Click to shrink";
   } else {
     const orig = img.dataset.origSrc;
-    if (orig && orig !== img.src) {
+    if (orig && img.src !== orig) {
       img.onerror = null;
       img.src = orig;
     }
-    img.title = "Click to enlarge";
   }
+  // When the image overflows the wrap, allow scrolling inside it.
+  if (wrap) wrap.style.overflow = factor > 1 ? "auto" : "";
 }
-window._chronamToggleImageZoom = _chronamToggleImageZoom;
+
+function _chronamZoom(dir) {
+  if (dir === 0) {
+    // Reset to fit (1.0).
+    _chronamZoomIdx = _CHRONAM_ZOOM_FIT_IDX;
+  } else {
+    _chronamZoomIdx = Math.max(0, Math.min(_CHRONAM_ZOOM_STEPS.length - 1, _chronamZoomIdx + (dir > 0 ? 1 : -1)));
+  }
+  _chronamApplyZoom();
+}
+window._chronamZoom = _chronamZoom;
 
 function closeChronAmPopup() {
   const overlay = document.getElementById("chronam-popup-overlay");
