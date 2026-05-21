@@ -282,7 +282,7 @@ function switchView(view, skipPushState = false) {
       const tab = _cwTab || "collection";
       qs.set("v", tab);
       history.pushState({ view, tab }, "", "?" + qs.toString());
-    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive" || view === "youtube" || view === "gutenberg") {
+    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive" || view === "youtube" || view === "gutenberg" || view === "chronam") {
       qs.set("v", view);
       history.pushState({ view }, "", "?" + qs.toString());
     } else {

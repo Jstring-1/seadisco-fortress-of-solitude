@@ -11475,6 +11475,12 @@ body.gutenberg-reader-open { overflow: hidden; }
    _chronamApplyZoom). Cap the wrap so it scrolls inside the popup
    rather than blowing the box height out. */
 .chronam-popup-image-wrap { max-height: 85vh; }
+/* Active grab-and-drag pan — JS toggles is-panning while a drag is in
+   progress and sets cursor: grab on the wrap when zoomed enough to
+   scroll. Disabling text/image selection here keeps the gesture clean
+   so the browser doesn't fight us with native image-drag ghosts. */
+.chronam-popup-image-wrap.is-panning { cursor: grabbing; user-select: none; }
+.chronam-popup-image-wrap.is-panning img { pointer-events: none; }
 
 /* Zoom control cluster (− 100% +) — lives in the popup head actions. */
 .chronam-zoom-controls {

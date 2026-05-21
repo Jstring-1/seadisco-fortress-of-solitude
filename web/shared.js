@@ -1402,7 +1402,7 @@ function renderSharedHeader(opts) {
   // you're on one. data-view is set to "discover" so syncDiscoverTabActive
   // (defined below) can flip the active class when any of the four
   // sub-views is active.
-  const _DISCOVER_VIEWS = new Set(["loc", "wiki", "archive", "youtube", "gutenberg"]);
+  const _DISCOVER_VIEWS = new Set(["loc", "wiki", "archive", "youtube", "gutenberg", "chronam"]);
   const discoverTab = (label, iconKey) => {
     const isActive = _DISCOVER_VIEWS.has(active);
     const activeCls = isActive ? ' active' : '';
@@ -1438,7 +1438,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260520.1718";
+  const SITE_VERSION = "build 20260520.2031";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -1639,6 +1639,7 @@ function renderSharedFooter(opts) {
         ${link("Archive",   "archive")}
         <a id="footer-youtube-link" href="${_seaDiscoBuildViewHref("youtube")}" data-sd-view="youtube" title="${escHtml(HINTS.youtube)}" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('youtube');return false"` : ""}>YouTube</a>
         <a id="footer-gutenberg-link" href="${_seaDiscoBuildViewHref("gutenberg")}" data-sd-view="gutenberg" title="Project Gutenberg — free public-domain books" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('gutenberg');return false"` : ""}>Gutenberg</a>
+        <a id="footer-chronam-link" href="${_seaDiscoBuildViewHref("chronam")}" data-sd-view="chronam" title="Chronicling America — historic American newspapers (LOC, 1777–1963)" style="display:none"${isSPA ? ` onclick="event.preventDefault();switchView('chronam');return false"` : ""}>Newspapers</a>
       </div>
       <div class="footer-col">
         ${isSPA
@@ -1789,6 +1790,13 @@ function renderSharedFooter(opts) {
       if (window._isAdmin || window._sdIsDemo) {
         const gbA = document.getElementById("footer-gutenberg-link");
         if (gbA) gbA.style.display = "";
+      }
+      // Chronicling America (historic newspapers) — admin/demo only,
+      // matching the in-view gate in collection.js and the server-side
+      // requireChronAmAccess middleware.
+      if (window._isAdmin || window._sdIsDemo) {
+        const caA = document.getElementById("footer-chronam-link");
+        if (caA) caA.style.display = "";
       }
       if (window._isAdmin) {
         // Pre-load the discogs_ids AND names already in the
