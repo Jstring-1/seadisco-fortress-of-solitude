@@ -11469,6 +11469,22 @@ body.gutenberg-reader-open { overflow: hidden; }
   max-height: 80vh;
   height: auto;
   display: inline-block;
+  cursor: zoom-in;
+  transition: max-height 0.15s ease;
+}
+.chronam-popup-image.is-zoomed {
+  /* Remove the fit-cap so the natural-size scan is shown; the popup
+     box itself becomes the scroll container. Loaded src is swapped to
+     a higher-res IIIF variant by _chronamToggleImageZoom when one
+     can be derived. */
+  max-height: none;
+  max-width: none;
+  cursor: zoom-out;
+}
+/* When zoomed, let the popup box scroll instead of clipping. */
+.chronam-popup-image-wrap:has(.chronam-popup-image.is-zoomed) {
+  overflow: auto;
+  max-height: 85vh;
 }
 .chronam-popup-image-fail {
   padding: 2.5rem 1rem;
