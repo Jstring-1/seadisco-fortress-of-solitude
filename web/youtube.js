@@ -582,10 +582,17 @@ let _ytPopupQuery = "";
 // carry a subset.
 let _ytPopupItems = [];
 
-async function openYoutubePopup(query) {
+// opts.autoSearch === false → open the popup with the search field
+// populated but DON'T fire the search.list call. The user can edit
+// the query and click Search (or press Enter), OR jump straight to
+// the paste-URL form for manual submissions. Used by the album-page
+// 🎵 Suggest links so admins don't burn quota every time they're
+// looking up a track they intend to add by URL anyway.
+async function openYoutubePopup(query, opts) {
   const q = String(query ?? "").trim();
   if (!q) return;
   _ytPopupQuery = q;
+  const autoSearch = opts?.autoSearch !== false;
   const overlay = document.getElementById("youtube-popup-overlay");
   const titleEl = document.getElementById("youtube-popup-title");
   const statusEl = document.getElementById("youtube-popup-status");
@@ -644,6 +651,30 @@ async function openYoutubePopup(query) {
   _youtubeRenderPasteForm();
   // Sync ★ state once per session.
   if (_ytSavedIds == null) _youtubeLoadSavedIds();
+
+  // ── Caller opted out of auto-search ────────────────────────────────
+  // The album-page entry points (per-track + album-level Suggest) pass
+  // autoSearch:false so admins can land in the popup, eyeball the
+  // pre-filled query, optionally tweak it, and decide whether to fire
+  // the 100-unit search.list or skip straight to pasting a known URL.
+  // Quota stays untouched until they explicitly click Search.
+  if (!autoSearch) {
+    if (statusEl) {
+      const ytExtUrl = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+      statusEl.innerHTML = `<span style="color:var(--muted)">Edit the query above and press Search to look on YouTube, or paste a known URL below.</span> <a href="${escHtml(ytExtUrl)}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:underline" title="Open this search on youtube.com">Search YouTube ↗</a>`;
+    }
+    // Focus the search field so the user can edit immediately. Select
+    // the contents so a fresh keystroke replaces the prefill in one go.
+    if (searchInput) {
+      try {
+        searchInput.focus();
+        searchInput.select?.();
+      } catch {}
+    }
+    // Album-mode staging footer still renders so paste-URL stages work.
+    if (albumCtx) _albumRenderFooter();
+    return;
+  }
 
   // ── Auto-search gated to admin / demo while quota request pending ──
   // The 100-unit search.list call only fires for users on the YT-
@@ -911,7 +942,11 @@ window._youtubePastePresubmit = _youtubePastePresubmit;
 function _youtubeRerunSearch() {
   const input = document.getElementById("youtube-popup-search-input");
   const q = String(input && input.value || "").trim();
-  if (!q || q === _ytPopupQuery) return;
+  if (!q) return;
+  // No same-query short-circuit: the popup may have been opened with
+  // autoSearch:false (album-page Suggest links), in which case the
+  // user clicking Search with the prefilled query is the FIRST real
+  // search — bailing on q === _ytPopupQuery would silently no-op.
   openYoutubePopup(q);
 }
 window._youtubeRerunSearch = _youtubeRerunSearch;

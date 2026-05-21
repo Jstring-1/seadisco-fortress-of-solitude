@@ -3262,11 +3262,16 @@ function _trackYtOpenSuggest(el) {
   };
   const q = [trackArtist ? `"${trackArtist}"` : "", trackTitle ? `"${trackTitle}"` : "", trackAlbum]
     .filter(Boolean).join(" ");
+  // autoSearch:false — open the popup with the query prefilled but
+  // don't burn 100 quota units. The admin can press Search to fire
+  // the real lookup or jump straight to the paste-URL form for
+  // manual submissions they already have a link for.
+  const ytOpts = { autoSearch: false };
   if (typeof window.openYoutubePopup === "function") {
-    window.openYoutubePopup(q);
+    window.openYoutubePopup(q, ytOpts);
   } else if (typeof window._sdLoadModule === "function") {
     window._sdLoadModule("/youtube.js").then(() => {
-      window.openYoutubePopup?.(q);
+      window.openYoutubePopup?.(q, ytOpts);
     });
   }
 }
@@ -3399,11 +3404,15 @@ async function _trackYtOpenAlbumSuggest(el) {
     _albumTitleHasLive ? "" : "-live",
     "-karaoke",
   ].filter(Boolean).join(" ");
+  // autoSearch:false — same rationale as _trackYtOpenSuggest. Admin
+  // can press Search to fire the album-wide lookup or stage tracks
+  // directly via paste-URL without spending quota first.
+  const ytOpts = { autoSearch: false };
   if (typeof window.openYoutubePopup === "function") {
-    window.openYoutubePopup(q);
+    window.openYoutubePopup(q, ytOpts);
   } else if (typeof window._sdLoadModule === "function") {
     window._sdLoadModule("/youtube.js").then(() => {
-      window.openYoutubePopup?.(q);
+      window.openYoutubePopup?.(q, ytOpts);
     });
   }
 }
