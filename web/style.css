@@ -11469,22 +11469,44 @@ body.gutenberg-reader-open { overflow: hidden; }
   max-height: 80vh;
   height: auto;
   display: inline-block;
-  cursor: zoom-in;
   transition: max-height 0.15s ease;
 }
-.chronam-popup-image.is-zoomed {
-  /* Remove the fit-cap so the natural-size scan is shown; the popup
-     box itself becomes the scroll container. Loaded src is swapped to
-     a higher-res IIIF variant by _chronamToggleImageZoom when one
-     can be derived. */
-  max-height: none;
-  max-width: none;
-  cursor: zoom-out;
+/* When zoomed past 1x JS adds overflow:auto on the wrap (see
+   _chronamApplyZoom). Cap the wrap so it scrolls inside the popup
+   rather than blowing the box height out. */
+.chronam-popup-image-wrap { max-height: 85vh; }
+
+/* Zoom control cluster (− 100% +) — lives in the popup head actions. */
+.chronam-zoom-controls {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
 }
-/* When zoomed, let the popup box scroll instead of clipping. */
-.chronam-popup-image-wrap:has(.chronam-popup-image.is-zoomed) {
-  overflow: auto;
-  max-height: 85vh;
+.chronam-zoom-btn,
+.chronam-zoom-level {
+  background: var(--surface);
+  color: var(--text);
+  border: none;
+  font: inherit;
+  font-size: 0.85rem;
+  padding: 0.25rem 0.55rem;
+  cursor: pointer;
+  line-height: 1;
+}
+.chronam-zoom-btn { font-weight: 700; font-size: 1rem; min-width: 1.9rem; }
+.chronam-zoom-level {
+  min-width: 3.2rem;
+  text-align: center;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  font-variant-numeric: tabular-nums;
+}
+.chronam-zoom-btn:hover,
+.chronam-zoom-level:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--accent);
 }
 .chronam-popup-image-fail {
   padding: 2.5rem 1rem;
