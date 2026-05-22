@@ -1612,10 +1612,16 @@ function _queueRefreshIdleBar() {
   const head = _queue[0];
   const titleEl = document.getElementById("mini-player-title");
   if (titleEl) {
-    const t = escHtml(head.data?.title || "Queued");
-    const a = head.data?.artist ? ` · ${escHtml(head.data.artist)}` : "";
+    const headTitle  = head.data?.title  || "Queued";
+    const headArtist = head.data?.artist || "";
+    // Reuse the same renderer the active engines use so all three
+    // states (YT, LOC, idle-queue) emit clickable Song / Artist
+    // search links with consistent markup.
+    const base = (typeof _renderNowPlayingTitle === "function")
+      ? _renderNowPlayingTitle({ track: headTitle, artist: headArtist, fallback: "Queued" })
+      : `<span class="vt-track">${escHtml(headTitle)}</span>${headArtist ? ` · ${escHtml(headArtist)}` : ""}`;
     const more = _queue.length > 1 ? ` <span class="mini-idle-count">(+${_queue.length - 1} queued)</span>` : "";
-    titleEl.innerHTML = `${t}${a}${more}`;
+    titleEl.innerHTML = `${base}${more}`;
   }
   const sourceEl = document.getElementById("mini-player-source-icon");
   if (sourceEl) sourceEl.textContent = head.source === "loc" ? "♪" : "▶";

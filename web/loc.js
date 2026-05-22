@@ -1580,7 +1580,18 @@ async function _locPlay(item) {
   }
 
   _locNowPlaying = item;
-  if (titleEl) titleEl.textContent = item.title || "Playing…";
+  if (titleEl) {
+    // Use the shared title renderer so the LOC track title becomes a
+    // clickable search link just like the YT engine's title does.
+    if (typeof window._renderNowPlayingTitle === "function") {
+      titleEl.innerHTML = window._renderNowPlayingTitle({
+        track:    item.title || "",
+        fallback: "Playing…",
+      });
+    } else {
+      titleEl.textContent = item.title || "Playing…";
+    }
+  }
   bar.classList.add("open");
   if (typeof _setPlayerEngine === "function") _setPlayerEngine("loc");
   document.body.classList.add("player-open");
