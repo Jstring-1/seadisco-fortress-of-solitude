@@ -7403,6 +7403,33 @@ body.player-open .queue-drawer.open { bottom: 102px; }
   letter-spacing: 0.04em;
   text-transform: uppercase;
 }
+/* Loaded-playlist banner — sits above the head buttons row so the
+   user can see which saved playlist's items are currently queued.
+   Hidden by default; queue.js toggles via _syncLoadedPlaylistLabel. */
+.queue-drawer-playlist {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.7rem;
+  background: #141416;
+  border-bottom: 1px solid #2a2a2a;
+  font-size: 0.78rem;
+  color: var(--accent);
+  min-width: 0;
+}
+.queue-drawer-playlist-prefix {
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  opacity: 0.85;
+}
+.queue-drawer-playlist-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  flex: 1;
+}
 .queue-drawer-count {
   font-size: 0.7rem;
   color: #888;

@@ -862,6 +862,14 @@ function _renderRepeatBtn() {
   }
 }
 
+// In-memory label for the currently-loaded playlist. Set by
+// _playlistLoad on a successful load, cleared by queueClear and by
+// loading another playlist over it. Not persisted: a page reload
+// drops the label even though the (signed-in) server-stored queue
+// survives — the association between queue and source playlist
+// isn't tracked server-side.
+let _loadedPlaylistName = null;
+
 // ── Drawer UI ───────────────────────────────────────────────────────
 function _ensureQueueDrawer() {
   if (_queueDrawerEl) return _queueDrawerEl;
@@ -869,6 +877,10 @@ function _ensureQueueDrawer() {
   wrap.id = "queue-drawer";
   wrap.className = "queue-drawer";
   wrap.innerHTML = `
+    <div class="queue-drawer-playlist" id="queue-drawer-playlist" style="display:none">
+      <span class="queue-drawer-playlist-prefix">📂</span>
+      <span class="queue-drawer-playlist-name" id="queue-drawer-playlist-name"></span>
+    </div>
     <div class="queue-drawer-head">
       <span class="queue-drawer-count" id="queue-drawer-count"></span>
       <button type="button" class="queue-drawer-repeat repeat-off" onclick="_queueCycleRepeat()" title="Repeat: off (click to cycle)">→</button>
@@ -884,8 +896,30 @@ function _ensureQueueDrawer() {
   _queueDrawerEl = wrap;
   _renderRepeatBtn();
   _renderConsumeBtn();
+  _syncLoadedPlaylistLabel();
   return wrap;
 }
+
+// Update the playlist-name row visibility + text based on
+// _loadedPlaylistName and the current queue. Hidden when no
+// playlist has been loaded OR when the queue is empty (the label
+// is meaningless without items, and the empty-state placeholder
+// covers that case already).
+function _syncLoadedPlaylistLabel() {
+  const row  = document.getElementById("queue-drawer-playlist");
+  const name = document.getElementById("queue-drawer-playlist-name");
+  if (!row || !name) return;
+  const hasItems = Array.isArray(_queue) && _queue.length > 0;
+  if (_loadedPlaylistName && hasItems) {
+    name.textContent = _loadedPlaylistName;
+    row.style.display = "";
+    row.title = `Loaded playlist: ${_loadedPlaylistName}`;
+  } else {
+    row.style.display = "none";
+    name.textContent = "";
+  }
+}
+window._syncLoadedPlaylistLabel = _syncLoadedPlaylistLabel;
 
 function queueToggleDrawer() {
   const wrap = _ensureQueueDrawer();
@@ -940,8 +974,15 @@ async function _renderQueueDrawer() {
   if (!_queue?.length) {
     if (countEl) countEl.textContent = "";
     listEl.innerHTML = `<div class="queue-empty">Queue empty. Click ➕ on tracks, LOC items, or archive items to add them.</div>`;
+    // Empty queue → drop the loaded-playlist label (label is only
+    // meaningful while items are present).
+    _syncLoadedPlaylistLabel();
     return;
   }
+  // Keep the loaded-playlist banner visible/up-to-date on every render
+  // pass; _syncLoadedPlaylistLabel hides itself when conditions aren't
+  // met so it's safe to call unconditionally.
+  _syncLoadedPlaylistLabel();
   // Render-time dedup: server can have multiple rows for the same
   // externalId (legacy rows from before the server-side dedupe, or a
   // brief optimistic-insert overlap). Show only the lowest-position
@@ -1351,6 +1392,10 @@ async function queueClear() {
   if (count > 0 && !confirm(`Clear all ${count} queued track${count === 1 ? "" : "s"}? This stops playback and can't be undone.`)) {
     return;
   }
+  // Drop the loaded-playlist label — once the queue is wiped the
+  // label no longer represents what's in front of the user. Reset
+  // before the render path so _syncLoadedPlaylistLabel sees null.
+  _loadedPlaylistName = null;
   // Anon path: clear localStorage, stop playback, drop the drawer.
   if (!window._clerk?.user) {
     _queue = [];
@@ -2175,6 +2220,10 @@ async function _playlistLoad(id) {
     await queueAdd(playlist.items.map(it => ({
       source: it.source, externalId: it.externalId, data: it.data || {},
     })), { mode: "append" });
+    // Stash the loaded name AFTER the clear above (which wipes it)
+    // so the drawer's playlist-row paints in on the next sync.
+    _loadedPlaylistName = playlist.name || null;
+    _syncLoadedPlaylistLabel();
     _playlistClosePicker();
     // Surface the queue so the user sees what they just loaded and can
     // play / reorder it immediately.
