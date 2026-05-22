@@ -627,9 +627,14 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
         ? "Older or independent pressings often aren't barcoded in Discogs. Try a text search by artist + album."
         : "Try a different search term or broaden your filters";
       document.getElementById("results").innerHTML = renderEmptyState("🔍", emptyTitle, emptySub);
+      // The empty-state card below already says "No results found" —
+      // surfacing the same info in the AI-summary slot above the form
+      // duplicates the message. Clear the slot so only the card is
+      // visible. (Leaving the rest of the info block intact so the
+      // "Returned :: 0 results" line — when present — still shows.)
       const noResAi = document.getElementById("search-ai-summary");
-      noResAi.innerHTML = "<i>Couldn't find any results at Discogs.</i>";
-      noResAi.title = "Couldn't find any results at Discogs.";
+      noResAi.innerHTML = "";
+      noResAi.title = "";
       document.getElementById("search-info-block").style.display = "";
       const ws = document.getElementById("random-records"); if (ws) ws.style.display = "none";
       return;
