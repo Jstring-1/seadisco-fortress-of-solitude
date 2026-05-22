@@ -870,7 +870,6 @@ function _ensureQueueDrawer() {
   wrap.className = "queue-drawer";
   wrap.innerHTML = `
     <div class="queue-drawer-head">
-      <span class="queue-drawer-title">Up Next</span>
       <span class="queue-drawer-count" id="queue-drawer-count"></span>
       <button type="button" class="queue-drawer-repeat repeat-off" onclick="_queueCycleRepeat()" title="Repeat: off (click to cycle)">→</button>
       <button type="button" class="queue-drawer-consume" onclick="_queueToggleConsume()" title="Consume on play: OFF (click to enable)">✂</button>
