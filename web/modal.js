@@ -2106,7 +2106,10 @@ function _createYTPlayer(id) {
               const vd = ytPlayer.getVideoData?.();
               if (vd?.title) {
                 const titleEl = document.getElementById("mini-player-title");
-                if (titleEl) titleEl.innerHTML = `<span class="vt-track">${escHtml(vd.title)}</span>`;
+                if (titleEl) titleEl.innerHTML = _renderNowPlayingTitle({
+                  track:  vd.title,
+                  artist: vd.author || "",
+                });
                 if (!msTitle) msTitle = vd.title;
                 if (!msArtist) msArtist = vd.author || "";
               }
@@ -2255,11 +2258,11 @@ function updateVideoNavButtons() {
   if (titleEl) {
     const meta = (window._videoQueueMeta ?? [])[idx];
     if (meta && (meta.track || meta.album || meta.artist)) {
-      const parts = [];
-      if (meta.track)  parts.push(`<span class="vt-track">${escHtml(meta.track)}</span>`);
-      if (meta.album)  parts.push(`<span>${escHtml(meta.album)}</span>`);
-      if (meta.artist) parts.push(`<span>${escHtml(meta.artist)}</span>`);
-      titleEl.innerHTML = parts.join(`<span class="vt-sep">·</span>`);
+      titleEl.innerHTML = _renderNowPlayingTitle({
+        track:  meta.track,
+        album:  meta.album,
+        artist: meta.artist,
+      });
     } else {
       // No per-album meta. Three fallbacks, best → worst:
       //   1. YT's getVideoData (canonical, but can be empty mid-load)
@@ -2270,26 +2273,28 @@ function updateVideoNavButtons() {
       //      better than leaving stale idle-bar text behind
       //      (e.g. "Track <ytid> (+8 queued)" from a previous
       //      anon-session state that has since been replaced).
-      let resolved = "";
+      let resolvedTrack = "";
+      let resolvedArtist = "";
       try {
         const vd = ytPlayer?.getVideoData?.();
-        if (vd?.title) resolved = vd.title;
+        if (vd?.title) resolvedTrack = vd.title;
       } catch {}
-      if (!resolved) {
+      if (!resolvedTrack) {
         try {
           const xq = Array.isArray(window._queue) ? window._queue : [];
           const playingId = window._queuePlayingExternalId;
           const row = playingId ? xq.find(it => String(it.externalId) === String(playingId)) : null;
           if (row?.data?.title) {
-            const t = row.data.title;
-            const a = row.data.artist;
-            resolved = a ? `${t} · ${a}` : t;
+            resolvedTrack  = row.data.title;
+            resolvedArtist = row.data.artist || "";
           }
         } catch {}
       }
-      titleEl.innerHTML = resolved
-        ? `<span class="vt-track">${escHtml(resolved)}</span>`
-        : `<span class="vt-track">Playing</span>`;
+      titleEl.innerHTML = _renderNowPlayingTitle({
+        track:    resolvedTrack,
+        artist:   resolvedArtist,
+        fallback: "Playing",
+      });
     }
   }
   // Show/hide album + share buttons. Engine-aware: YT needs a release
@@ -2312,19 +2317,76 @@ function updateVideoNavButtons() {
 
 function toggleMiniPlayer() {
   const mp = document.getElementById("mini-player");
-  if (mp) mp.classList.toggle("expanded");
+  if (!mp) return;
+  mp.classList.toggle("expanded");
+  // Mirror the expanded state onto the centered toggle button so
+  // screen readers / hover titles describe the next action rather
+  // than the current one. CSS rotates the glyph via .expanded.
+  const tog = document.getElementById("mini-player-expand-toggle");
+  if (tog) {
+    const open = mp.classList.contains("expanded");
+    tog.setAttribute("aria-expanded", open ? "true" : "false");
+    tog.title = open ? "Collapse player" : "Expand player";
+    tog.setAttribute("aria-label", tog.title);
+  }
 }
 
-// Whole-bar click handler. Replaces the old dedicated ▲ expand button:
-// any click on the collapsed bar toggles the expanded panel, EXCEPT
-// clicks that land on a control button (prev/play/next/queue/hide/etc.)
-// — those keep their own behaviour. Reuses playerInfoClick so the LOC
-// engine's "open info popup" affordance is preserved.
+// Legacy whole-bar click handler. The bar no longer wires this up —
+// expand is driven by a dedicated centered button (#mini-player-expand-
+// toggle) so the queue drawer doesn't end up over the toggle target.
+// Kept around in case anything else dispatches the old API.
 function playerBarClick(event) {
   if (event && event.target && event.target.closest(".mini-player-controls")) return;
   playerInfoClick();
 }
 window.playerBarClick = playerBarClick;
+
+// ── Now-playing title renderer ─────────────────────────────────────
+// Builds the title HTML for the mini-player bar with each part
+// (track / album / artist) wrapped as a clickable search link. Click
+// drops the user on the SeaDisco search view with the right field
+// populated. Used by both engines (YT meta path + LOC plain-title
+// path) and the queue's idle-bar render so all three stay in sync.
+//
+// Parts:
+//   track  → free-text query in #query
+//   album  → free-text query in #query (we don't reliably know the
+//            release ID for an arbitrary now-playing item; the disc
+//            icon already covers exact-match navigation)
+//   artist → #f-artist (advanced panel)
+function _renderNowPlayingTitle(parts) {
+  const out = [];
+  const link = (scope, label, extraCls) => {
+    const cls = ["vt-link", extraCls].filter(Boolean).join(" ");
+    const lbl = String(label || "").trim();
+    if (!lbl) return "";
+    // data-np-scope / data-np-label drive _npTitleClick. role="button"
+    // + tabindex make the spans keyboard-accessible.
+    return `<span class="${cls}" role="button" tabindex="0" data-np-scope="${escHtml(scope)}" data-np-label="${escHtml(lbl)}" onclick="event.stopPropagation();_npTitleClick(this);return false" title="Search SeaDisco for ${escHtml(lbl)}">${escHtml(lbl)}</span>`;
+  };
+  if (parts?.track)  out.push(link("track",   parts.track,  "vt-track"));
+  if (parts?.album)  out.push(link("release", parts.album,  "vt-album"));
+  if (parts?.artist) out.push(link("artist",  parts.artist, "vt-artist"));
+  if (!out.length) {
+    return `<span class="vt-track">${escHtml(parts?.fallback || "Playing")}</span>`;
+  }
+  return out.join(`<span class="vt-sep">·</span>`);
+}
+window._renderNowPlayingTitle = _renderNowPlayingTitle;
+
+// Dispatcher for clicks on a now-playing title part. Routes to the
+// shared lookup-popup helper which already knows how to populate
+// the search form and run the query for each scope.
+function _npTitleClick(el) {
+  if (!el) return;
+  const scope = el.dataset?.npScope || "track";
+  const label = el.dataset?.npLabel || "";
+  if (!label) return;
+  if (typeof _lookupSearchSeaDisco === "function") {
+    _lookupSearchSeaDisco(scope, label);
+  }
+}
+window._npTitleClick = _npTitleClick;
 
 // ── Unified player dispatchers ─────────────────────────────────────────
 // The persistent bar hosts both the YouTube iframe engine and the LOC

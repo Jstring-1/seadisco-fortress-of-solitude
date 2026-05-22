@@ -235,6 +235,19 @@ html { overflow-x: hidden; }
     justify-content: center;
   }
   .mini-player-controls button { padding: 0.4rem 0.55rem; font-size: 1rem; min-width: 40px; min-height: 40px; }
+  /* On mobile the bar wraps into multiple rows; absolute-centering the
+     expand toggle would overlap them. Flow it as a normal flex item
+     between info and controls so it sits as its own row. The rotation
+     animation no longer needs the translate offset since position is
+     static here. */
+  .mini-player-expand-toggle {
+    position: static;
+    transform: none;
+    margin: 0.05rem auto;
+    padding: 0.25rem 0.9rem;
+    font-size: 0.78rem;
+  }
+  .mini-player.expanded .mini-player-expand-toggle { transform: rotate(180deg); }
   .mini-player #video-nav button { padding: 0.45rem 0.8rem; min-height: 40px; font-size: 0.9rem; }
 
   /* Account page — tighter padding */
@@ -2510,10 +2523,42 @@ body.sd-anon .card-badge.badge-inventory {
 .mini-player-bar {
   display: flex;
   align-items: center;
-  padding: 0.28rem 0.6rem 0.32rem;
+  /* Tightened vertical padding so the title sits closer to the
+     progress bar above — gains a couple of vertical pixels on
+     mobile and trims wasted whitespace on desktop. */
+  padding: 0.14rem 0.6rem 0.18rem;
   gap: 0.4rem;
-  min-height: 38px;
+  min-height: 34px;
+  /* position:relative so the centered expand toggle can absolute-
+     position inside the bar without escaping it. */
+  position: relative;
+}
+/* Centered expand toggle. Sits exactly in the middle of the bar so
+   the queue drawer (which slides over the right-edge controls) can
+   never cover it. ▲ rotates 180° when the player is expanded. */
+.mini-player-expand-toggle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #ccc;
+  padding: 0.15rem 0.6rem;
+  border-radius: 4px;
   cursor: pointer;
+  font-size: 0.7rem;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  transition: transform 0.18s ease, background 0.12s ease, color 0.12s ease;
+  z-index: 2;
+}
+.mini-player-expand-toggle:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.mini-player.expanded .mini-player-expand-toggle {
+  transform: translate(-50%, -50%) rotate(180deg);
 }
 /* Click/drag-to-seek progress strip below the bar. Slim by default, grows
    on hover so the click target is reasonable on desktop. The knob is
@@ -2524,7 +2569,10 @@ body.sd-anon .card-badge.badge-inventory {
   height: 4px;
   background: rgba(255, 255, 255, 0.08);
   cursor: pointer;
-  margin: 0 0.6rem 0.3rem;
+  /* Wider bottom margin gives the bar more breathing room below the
+     hit-target — the strip is only 4px tall and easy to miss when
+     pressed against the bar's bottom edge. */
+  margin: 0 0.6rem 0.7rem;
   border-radius: 2px;
   transition: height 0.12s ease;
   user-select: none;
@@ -2576,7 +2624,6 @@ body.sd-anon .card-badge.badge-inventory {
 .mini-player-info {
   flex: 1;
   min-width: 0;
-  cursor: pointer;
   display: flex;
   align-items: center;
   gap: 0;
@@ -2593,6 +2640,21 @@ body.sd-anon .card-badge.badge-inventory {
 }
 .mini-player-title .vt-track { font-weight: 600; color: #fff; }
 .mini-player-title .vt-sep   { color: #555; margin: 0 0.25em; }
+/* Clickable now-playing parts (song / album / artist) → drops the
+   user on the search view with the right field populated. Hover
+   underlines + accents to telegraph the affordance. */
+.mini-player-title .vt-link {
+  cursor: pointer;
+  text-decoration: none;
+}
+.mini-player-title .vt-link:hover,
+.mini-player-title .vt-link:focus {
+  text-decoration: underline;
+  color: var(--accent);
+  outline: none;
+}
+.mini-player-title .vt-link.vt-track:hover,
+.mini-player-title .vt-link.vt-track:focus { color: var(--accent); }
 
 .mini-player-status {
   font-size: 0.68rem;
