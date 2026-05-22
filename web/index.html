@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260520.2143" />
+  <link rel="stylesheet" href="/style.css?v=20260521.2033" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260520.2143"></script>
+<script defer src="/shared.js?v=20260521.2033"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -1319,15 +1319,21 @@ e.g.  miles davis | coltrane
      .mini-player.engine-yt / .engine-loc swap which engine's expanded
      panel + source-specific buttons (save/info for LOC) are visible. -->
 <div id="mini-player" class="mini-player">
-  <!-- Clicking anywhere on the bar (except a control button) expands /
-       collapses the player — replaces the old dedicated ▲ expand
-       button. playerBarClick guards clicks that land on the controls
-       cluster so prev/play/next/etc. still work normally. -->
-  <div id="mini-player-bar" class="mini-player-bar" onclick="playerBarClick(event)">
+  <!-- Expand/collapse is driven by the centered toggle button below.
+       The whole-bar click target was dropped because the queue drawer
+       slides over the right-edge controls cluster, and any tap-anywhere
+       handler made it hard to know where you'd land. The dedicated
+       button sits absolute-centered so the drawer can never cover it. -->
+  <div id="mini-player-bar" class="mini-player-bar">
     <div id="mini-player-info" class="mini-player-info">
       <span id="mini-player-title" class="mini-player-title">Not playing</span>
       <span id="mini-player-status" class="mini-player-status"></span>
     </div>
+    <button id="mini-player-expand-toggle" class="mini-player-expand-toggle"
+            type="button"
+            onclick="event.stopPropagation();toggleMiniPlayer()"
+            title="Expand player" aria-label="Expand player"
+            aria-expanded="false">&#9650;</button>
     <div class="mini-player-controls">
       <button id="mini-share" class="mini-needs-release" onclick="sharePlayerUrl()" title="Copy share link" style="font-size:0.8rem">🔗</button>
       <button id="mini-album" class="mini-needs-release" onclick="openPlayerRelease(this)" title="Open this album" style="font-size:0.8rem">💿</button>
@@ -1399,13 +1405,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260520.2143"></script>
-<script defer src="/search.js?v=20260520.2143"></script>
-<script defer src="/collection.js?v=20260520.2143"></script>
+<script defer src="/utils.js?v=20260521.2033"></script>
+<script defer src="/search.js?v=20260521.2033"></script>
+<script defer src="/collection.js?v=20260521.2033"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260520.2143"></script>
-<script defer src="/app.js?v=20260520.2143"></script>
+<script defer src="/modal.js?v=20260521.2033"></script>
+<script defer src="/app.js?v=20260521.2033"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1416,13 +1422,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260520.2143"></script>
-<script defer src="/queue.js?v=20260520.2143"></script>
+<script defer src="/loc.js?v=20260521.2033"></script>
+<script defer src="/queue.js?v=20260521.2033"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260520.2143";
+  window._SD_LAZY_VERSION = "20260521.2033";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1452,8 +1458,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260520.2143"></script>
-<script defer src="/offline.js?v=20260520.2143"></script>
+<script defer src="/idb.js?v=20260521.2033"></script>
+<script defer src="/offline.js?v=20260521.2033"></script>
 
 </body>
 </html>
