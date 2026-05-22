@@ -237,17 +237,17 @@ html { overflow-x: hidden; }
   .mini-player-controls button { padding: 0.4rem 0.55rem; font-size: 1rem; min-width: 40px; min-height: 40px; }
   /* On mobile the bar wraps into multiple rows; absolute-centering the
      expand toggle would overlap them. Flow it as a normal flex item
-     between info and controls so it sits as its own row. The rotation
-     animation no longer needs the translate offset since position is
-     static here. */
+     between info and controls so it sits as its own row. Same 5x-wide
+     arrow look as desktop; rotation no longer needs the translate
+     offset since position is static here. */
   .mini-player-expand-toggle {
     position: static;
-    transform: none;
-    margin: 0.05rem auto;
-    padding: 0.25rem 0.9rem;
+    transform: scaleX(5);
+    margin: 0.15rem auto;
+    padding: 0.25rem 0.4rem;
     font-size: 0.78rem;
   }
-  .mini-player.expanded .mini-player-expand-toggle { transform: rotate(180deg); }
+  .mini-player.expanded .mini-player-expand-toggle { transform: scaleX(5) rotate(180deg); }
   .mini-player #video-nav button { padding: 0.45rem 0.8rem; min-height: 40px; font-size: 0.9rem; }
 
   /* Account page — tighter padding */
@@ -2533,32 +2533,34 @@ body.sd-anon .card-badge.badge-inventory {
      position inside the bar without escaping it. */
   position: relative;
 }
-/* Centered expand toggle. Sits exactly in the middle of the bar so
-   the queue drawer (which slides over the right-edge controls) can
-   never cover it. ▲ rotates 180° when the player is expanded. */
+/* Centered expand toggle. No button box — just a wide ▲ glyph
+   stretched 5x horizontally so it reads as a flat directional
+   arrow. Sits exactly in the middle of the bar so the queue drawer
+   can never cover it. Rotates 180° when the player is expanded. */
 .mini-player-expand-toggle {
   position: absolute;
   left: 50%;
   top: 50%;
-  transform: translate(-50%, -50%);
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: #ccc;
-  padding: 0.15rem 0.6rem;
-  border-radius: 4px;
+  transform: translate(-50%, -50%) scaleX(5);
+  transform-origin: center;
+  background: none;
+  border: none;
+  color: #888;
+  padding: 0.25rem 0.4rem;
   cursor: pointer;
   font-size: 0.7rem;
   line-height: 1;
-  letter-spacing: 0.02em;
-  transition: transform 0.18s ease, background 0.12s ease, color 0.12s ease;
+  letter-spacing: 0;
+  transition: transform 0.2s ease, color 0.12s ease;
   z-index: 2;
 }
-.mini-player-expand-toggle:hover {
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+.mini-player-expand-toggle:hover,
+.mini-player-expand-toggle:focus-visible {
+  color: var(--accent);
+  outline: none;
 }
 .mini-player.expanded .mini-player-expand-toggle {
-  transform: translate(-50%, -50%) rotate(180deg);
+  transform: translate(-50%, -50%) scaleX(5) rotate(180deg);
 }
 /* Click/drag-to-seek progress strip below the bar. Slim by default, grows
    on hover so the click target is reasonable on desktop. The knob is
