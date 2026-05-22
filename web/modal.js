@@ -2105,13 +2105,14 @@ function _createYTPlayer(id) {
             try {
               const vd = ytPlayer.getVideoData?.();
               if (vd?.title) {
+                const ytAuthorClean = _normalizeYtArtist(vd.author || "");
                 const titleEl = document.getElementById("mini-player-title");
                 if (titleEl) titleEl.innerHTML = _renderNowPlayingTitle({
                   track:  vd.title,
-                  artist: vd.author || "",
+                  artist: ytAuthorClean,
                 });
                 if (!msTitle) msTitle = vd.title;
-                if (!msArtist) msArtist = vd.author || "";
+                if (!msArtist) msArtist = ytAuthorClean;
               }
             } catch {}
           }
@@ -2354,6 +2355,17 @@ window.playerBarClick = playerBarClick;
 //            release ID for an arbitrary now-playing item; the disc
 //            icon already covers exact-match navigation)
 //   artist → #f-artist (advanced panel)
+
+// YouTube's auto-generated artist channels are named "Artist - Topic"
+// (or sometimes with an en-dash / middle-dot). Strip that suffix so
+// our now-playing line doesn't surface the bookkeeping name and so
+// clicking the artist link actually searches for the artist instead
+// of nothing.
+function _normalizeYtArtist(s) {
+  return String(s || "").replace(/\s*[-–—·•]\s*Topic\s*$/i, "").trim();
+}
+window._normalizeYtArtist = _normalizeYtArtist;
+
 function _renderNowPlayingTitle(parts) {
   const out = [];
   const link = (scope, label, extraCls) => {
@@ -2364,9 +2376,14 @@ function _renderNowPlayingTitle(parts) {
     // + tabindex make the spans keyboard-accessible.
     return `<span class="${cls}" role="button" tabindex="0" data-np-scope="${escHtml(scope)}" data-np-label="${escHtml(lbl)}" onclick="event.stopPropagation();_npTitleClick(this);return false" title="Search SeaDisco for ${escHtml(lbl)}">${escHtml(lbl)}</span>`;
   };
+  // Belt-and-suspenders: even when an upstream caller already cleaned
+  // the artist, run it through _normalizeYtArtist again so any path
+  // that forgot (queue meta restored from a pre-fix session, etc.)
+  // doesn't leak "- Topic" into the bar.
+  const cleanArtist = _normalizeYtArtist(parts?.artist || "");
   if (parts?.track)  out.push(link("track",   parts.track,  "vt-track"));
   if (parts?.album)  out.push(link("release", parts.album,  "vt-album"));
-  if (parts?.artist) out.push(link("artist",  parts.artist, "vt-artist"));
+  if (cleanArtist)   out.push(link("artist",  cleanArtist,  "vt-artist"));
   if (!out.length) {
     return `<span class="vt-track">${escHtml(parts?.fallback || "Playing")}</span>`;
   }
