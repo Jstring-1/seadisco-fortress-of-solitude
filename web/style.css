@@ -239,15 +239,16 @@ html { overflow-x: hidden; }
      expand toggle would overlap them. Flow it as a normal flex item
      between info and controls so it sits as its own row. Same 5x-wide
      arrow look as desktop; rotation no longer needs the translate
-     offset since position is static here. */
-  .mini-player-expand-toggle {
+     offset since position is static here. ID selector to keep
+     specificity above the sitewide button:hover bg rule. */
+  #mini-player-expand-toggle {
     position: static;
     transform: scaleX(5);
     margin: 0.15rem auto;
     padding: 0.25rem 0.4rem;
     font-size: 0.78rem;
   }
-  .mini-player.expanded .mini-player-expand-toggle { transform: scaleX(5) rotate(180deg); }
+  .mini-player.expanded #mini-player-expand-toggle { transform: scaleX(5) rotate(180deg); }
   .mini-player #video-nav button { padding: 0.45rem 0.8rem; min-height: 40px; font-size: 0.9rem; }
 
   /* Account page — tighter padding */
@@ -2537,22 +2538,26 @@ body.sd-anon .card-badge.badge-inventory {
    stretched 5x horizontally so it reads as a flat directional
    arrow. Sits exactly in the middle of the bar so the queue drawer
    can never cover it. Rotates 180° when the player is expanded.
-   The sitewide button hover rule (button:hover { background:
-   var(--accent2); }) would otherwise paint a bg behind it and make
-   it look like a button again, so the hover/focus states below
-   override with background:none. */
-.mini-player-expand-toggle,
-.mini-player-expand-toggle:hover,
-.mini-player-expand-toggle:focus,
-.mini-player-expand-toggle:focus-visible,
-.mini-player-expand-toggle:active {
+
+   IMPORTANT — selector specificity:
+   the sitewide rule `button:hover:not(.nav-tab-top) { background:
+   var(--accent2); }` scores (0,2,1) because :not(.nav-tab-top)
+   counts as a class. A plain `.mini-player-expand-toggle:hover`
+   (0,2,0) loses to it and the chip keeps repainting on hover.
+   Using the ID selector below brings us to (1,1,0), which wins
+   regardless of stylesheet order. */
+#mini-player-expand-toggle,
+#mini-player-expand-toggle:hover,
+#mini-player-expand-toggle:focus,
+#mini-player-expand-toggle:focus-visible,
+#mini-player-expand-toggle:active {
   background: none;
   border: none;
   box-shadow: none;
   height: auto;
   outline: none;
 }
-.mini-player-expand-toggle {
+#mini-player-expand-toggle {
   position: absolute;
   left: 50%;
   top: 50%;
@@ -2568,11 +2573,11 @@ body.sd-anon .card-badge.badge-inventory {
   z-index: 2;
 }
 /* Hover/focus → the arrow itself brightens (no background swap). */
-.mini-player-expand-toggle:hover,
-.mini-player-expand-toggle:focus-visible {
+#mini-player-expand-toggle:hover,
+#mini-player-expand-toggle:focus-visible {
   color: var(--accent);
 }
-.mini-player.expanded .mini-player-expand-toggle {
+.mini-player.expanded #mini-player-expand-toggle {
   transform: translate(-50%, -50%) scaleX(5) rotate(180deg);
 }
 /* Click/drag-to-seek progress strip below the bar. Slim by default, grows
