@@ -2536,15 +2536,28 @@ body.sd-anon .card-badge.badge-inventory {
 /* Centered expand toggle. No button box — just a wide ▲ glyph
    stretched 5x horizontally so it reads as a flat directional
    arrow. Sits exactly in the middle of the bar so the queue drawer
-   can never cover it. Rotates 180° when the player is expanded. */
+   can never cover it. Rotates 180° when the player is expanded.
+   The sitewide button hover rule (button:hover { background:
+   var(--accent2); }) would otherwise paint a bg behind it and make
+   it look like a button again, so the hover/focus states below
+   override with background:none. */
+.mini-player-expand-toggle,
+.mini-player-expand-toggle:hover,
+.mini-player-expand-toggle:focus,
+.mini-player-expand-toggle:focus-visible,
+.mini-player-expand-toggle:active {
+  background: none;
+  border: none;
+  box-shadow: none;
+  height: auto;
+  outline: none;
+}
 .mini-player-expand-toggle {
   position: absolute;
   left: 50%;
   top: 50%;
   transform: translate(-50%, -50%) scaleX(5);
   transform-origin: center;
-  background: none;
-  border: none;
   color: #888;
   padding: 0.25rem 0.4rem;
   cursor: pointer;
@@ -2554,10 +2567,10 @@ body.sd-anon .card-badge.badge-inventory {
   transition: transform 0.2s ease, color 0.12s ease;
   z-index: 2;
 }
+/* Hover/focus → the arrow itself brightens (no background swap). */
 .mini-player-expand-toggle:hover,
 .mini-player-expand-toggle:focus-visible {
   color: var(--accent);
-  outline: none;
 }
 .mini-player.expanded .mini-player-expand-toggle {
   transform: translate(-50%, -50%) scaleX(5) rotate(180deg);
