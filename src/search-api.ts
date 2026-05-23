@@ -9007,9 +9007,43 @@ app.get("/search", async (req, res) => {
       if (r.pagination) r.pagination.items = r.results.length;
     }
     res.json(results);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Discogs API error" });
+  } catch (err: any) {
+    // DiscogsClient.get throws "Discogs API error <STATUS>: <BODY>"
+    // when the upstream returns non-200. Parse that out so we can
+    // forward an accurate status to the client instead of always
+    // masking as 500 — the client can then distinguish auth (401)
+    // / rate-limit (429) / upstream outage (5xx) and show targeted
+    // messages instead of a generic "Search failed".
+    const msg = String(err?.message ?? err ?? "");
+    const m = /Discogs API error (\d+):\s*([\s\S]*)$/.exec(msg);
+    const upstreamStatus = m ? Number(m[1]) : 0;
+    const upstreamBody   = m ? m[2].slice(0, 500) : "";
+    console.error("[/search] discogs error", { upstreamStatus, upstreamBody, msg });
+    if (upstreamStatus === 401 || upstreamStatus === 403) {
+      res.status(401).json({
+        error: "discogs_auth",
+        message: "Your Discogs connection looks invalid or expired. Reconnect it in Account settings.",
+      });
+      return;
+    }
+    if (upstreamStatus === 429) {
+      res.status(429).json({
+        error: "discogs_rate_limited",
+        message: "Discogs is rate-limiting our requests. Please retry in a minute.",
+      });
+      return;
+    }
+    if (upstreamStatus >= 500 && upstreamStatus <= 599) {
+      res.status(502).json({
+        error: "discogs_upstream",
+        message: `Discogs API returned ${upstreamStatus}. This is usually transient — retry in a moment.`,
+      });
+      return;
+    }
+    res.status(500).json({
+      error: "Discogs API error",
+      message: upstreamStatus ? `Discogs returned ${upstreamStatus}.` : "Search failed unexpectedly.",
+    });
   }
 });
 
