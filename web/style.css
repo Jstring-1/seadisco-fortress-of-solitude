@@ -4282,26 +4282,23 @@ body.card-mode-wide .card-grid {
   grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
 }
 body.card-mode-wide .card {
-  /* Override the aspect-ratio from the compact card style — wide
-     cards should size to their content (the body / tracklist), not
-     stay square.
-
-     display: block + position: relative is the key change here. We
-     used to be flex-row, which meant the card's height = max of
-     children, so a tall image-stack inside the cover panel pushed
-     the card taller than the tracklist. By taking the cover panel
-     OUT of normal flow (position: absolute below) the body alone
-     drives the card height — the cover panel and image stack just
-     fill whatever vertical space the body claims, and the card's
-     overflow:hidden clips anything past the body bottom.
-
-     height: 100% + align-self: stretch keeps every card in a grid
-     row at the tallest body's height (no background showing
-     between unequal-content cards). */
+  /* Wide card layout: CSS grid with three regions.
+       "thumb meta"
+       "tracklist tracklist"
+     The thumb sits top-left at 40% column width, the metadata
+     (artist/title/year/label) sits to its right, and the tracklist
+     spans the full card width as its own row beneath them. This
+     replaces the previous absolute-positioned thumb-wrap approach,
+     which kept the tracklist inside .card-body and squeezed it into
+     the right column only. */
   aspect-ratio: auto;
   height: 100%;
   align-self: stretch;
-  display: block;
+  display: grid;
+  grid-template-columns: 40% 1fr;
+  grid-template-areas:
+    "thumb meta"
+    "tracklist tracklist";
   position: relative;
 }
 /* Same row-equalization at the grid level — explicit so it doesn't
@@ -4310,26 +4307,22 @@ body.card-mode-wide .card-grid {
   align-items: stretch;
 }
 body.card-mode-wide .card-thumb-wrap {
-  /* Pinned to the card's left edge and stretched top→bottom. With
-     absolute positioning the wrap doesn't contribute to the card's
-     intrinsic height — its height matches whatever the body claims.
-     overflow:hidden then clips the image stack at the bottom of the
-     body, exactly what the user wants ("cut the extra photos
-     wherever that line might be"). */
-  position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
-  width: 40%;
+  /* Live in the grid's "thumb" cell. Drop the prior absolute
+     positioning — the grid track sizes us. column-flex so the small
+     thumb-picker strip flows under the main cover. */
+  grid-area: thumb;
+  position: static;
+  width: auto;
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  align-self: start;
 }
 body.card-mode-wide .card-body {
-  /* Leave room for the absolutely-positioned cover panel on the
-     left. margin-left (vs padding-left) so the body's own padding
-     stays as authored. */
-  margin-left: 40%;
+  /* Drop the old margin-left: 40% hack — the grid handles column
+     placement now. */
+  grid-area: meta;
+  margin-left: 0;
   padding: 0.6rem 0.7rem;
   min-width: 0;
 }
@@ -4439,8 +4432,14 @@ body.card-mode-wide .card-artist {
   flex-direction: column;
   gap: 0;
 }
+/* Image stack (the column of full-size extra photos below the main
+   cover) is hidden in BOTH card modes now. The earlier wide-mode
+   layout used these to fill the cover panel's empty space, but the
+   tracklist is now a full-width row beneath the thumb so the panel
+   is sized to its content and the extra photos were redundant noise.
+   The small thumb-picker strip (.card-images-strip) still renders. */
 body.card-mode-wide .card-images-stack {
-  display: flex;
+  display: none;
 }
 .card-images-stack-img {
   width: 100%;
@@ -4453,16 +4452,16 @@ body.card-mode-wide .card-images-stack {
 .card-images-stack-img:hover {
   opacity: 0.92;
 }
+/* Secondary thumb-wrap rule — kept for the column-flex direction
+   override but now align-self:start so the wrap sizes to its
+   content (cover + strip) instead of stretching to fill the grid
+   row. The full-width tracklist below sets the row beneath, so we
+   don't want the cover panel pulling itself taller than its content. */
 body.card-mode-wide .card-thumb-wrap {
   display: flex;
   flex-direction: column;
   aspect-ratio: auto;
-  /* Stretch the cover panel to fill the full card height even though
-     the card uses align-items:flex-start (which keeps the main image
-     from growing and cropping). overflow:hidden then clips the
-     full-size image stack at the card bottom — the user sees as many
-     extra images as the body's height allows, no more. */
-  align-self: stretch;
+  align-self: start;
   overflow: hidden;
 }
 /* Main image stays at its intrinsic computed size — square based on
@@ -4710,6 +4709,19 @@ body.card-mode-wide .card .card-body { cursor: default; }
 body.card-mode-wide .card .card-thumb-wrap > img:first-of-type { cursor: pointer; }
 body.card-mode-wide .card-tracklist {
   display: block;
+  /* Anchored to the full-width row in the card grid below the
+     thumb+meta pair. padding here (not on the inner rows) so the
+     dashed top-border stretches the full card width edge-to-edge. */
+  grid-area: tracklist;
+  margin-top: 0;
+  padding: 0.55rem 0.75rem 0.65rem;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+}
+/* Inner max-height on the rows now uses more of the card width, so
+   even long box-set tracklists stay readable without forcing the
+   user into the tiny scroll area the old layout had. */
+body.card-mode-wide .card-tracklist .card-tracklist-rows {
+  max-height: 16rem;
 }
 /* On narrow screens, wide cards drop to single column instead of
    trying to squeeze the cover + metadata into ~150px each. */
