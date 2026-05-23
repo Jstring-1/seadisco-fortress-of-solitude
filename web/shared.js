@@ -745,7 +745,13 @@ function _sdInjectEnrichmentIntoCards(row) {
     }
     if (tracks.length || fullAlbumUrl) {
       const body = card.querySelector(".card-body");
-      if (body && !body.querySelector(".card-tracklist")) {
+      // Tracklist used to be inserted INSIDE .card-body (which has
+      // margin-left:40% in wide mode), so it lived in the right-hand
+      // metadata column next to the cover. Now inserted at the card
+      // root so wide mode can grid-area it into a full-width row
+      // beneath the thumb+meta pair. Compact mode hides it via CSS,
+      // so the relocation has no visual effect there.
+      if (body && !card.querySelector(".card-tracklist")) {
         // data-* attrs match the modal's track-link / queue-add-icon
         // contract so openVideo and _trackQueueAdd consume them as-is.
         // Title is wrapped in entityLookupLinkHtml so clicking it opens
@@ -815,7 +821,7 @@ function _sdInjectEnrichmentIntoCards(row) {
           <div class="card-tracklist-head">${headLabel}${headActions}</div>
           <ol class="card-tracklist-rows">${fullAlbumRow}${tracks.map((t, i) => trackRow(t, i)).join("")}</ol>
         </div>`;
-        body.insertAdjacentHTML("beforeend", tlHtml);
+        card.insertAdjacentHTML("beforeend", tlHtml);
       }
     }
   });
@@ -1438,7 +1444,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260523.1200";
+  const SITE_VERSION = "build 20260523.1600";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
