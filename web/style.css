@@ -4299,6 +4299,13 @@ body.card-mode-wide .card {
   grid-template-areas:
     "thumb meta"
     "tracklist tracklist";
+  /* Anchor the two grid rows to the top of the card. Without this,
+     grid's default align-content stretches the rows to fill the
+     card height (which is normalized to the tallest card in the
+     row), shoving the tracklist row down with a big empty gap
+     between it and the thumb+meta pair. Empty space now lands at
+     the bottom of the card instead, where it belongs. */
+  align-content: start;
   position: relative;
 }
 /* Same row-equalization at the grid level — explicit so it doesn't
