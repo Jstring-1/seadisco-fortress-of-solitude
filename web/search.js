@@ -446,7 +446,7 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
       bioFetch ?? Promise.resolve(null),
     ]);
     bioFetch = bioRes ? { json: () => bioRes.json() } : null;
-    if (res.status === 401 || res.status === 429) {
+    if (res.status === 401 || res.status === 429 || res.status === 502) {
       const errData = await res.json().catch(() => ({}));
       // auth_required = anon user (no Clerk session)
       // no_token      = signed-in but Discogs OAuth not connected
@@ -459,12 +459,46 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
           `<div class="empty-state-subtitle"><a href="/?v=account" onclick="switchView('account');return false;" style="color:var(--accent)">Create a free account</a> to search the full Discogs catalog. The track will keep playing.</div></div>`;
         return;
       }
+      // discogs_auth = signed in + token on file, but Discogs upstream
+      // rejected it (revoked, expired, or our OAuth secret rotated).
+      // Steer the user to Account so they can reconnect.
+      if (errData.error === "discogs_auth") {
+        setStatus("");
+        document.getElementById("results").innerHTML =
+          `<div class="empty-state"><div class="empty-state-icon">🔌</div>` +
+          `<div class="empty-state-title">Discogs connection expired</div>` +
+          `<div class="empty-state-subtitle">${escHtml(errData.message || "Reconnect your Discogs account.")} <a href="/?v=account" onclick="switchView('account');return false;" style="color:var(--accent)">Open Account settings</a></div></div>`;
+        showToast("Reconnect Discogs to keep searching", "error", 6000);
+        return;
+      }
       if (errData.error === "rate_limited") {
         setStatus("");
         document.getElementById("results").innerHTML =
           `<div class="empty-state"><div class="empty-state-icon">🔑</div>` +
           `<div class="empty-state-title">Sign in to search</div>` +
           `<div class="empty-state-subtitle"><a href="/?v=account" onclick="switchView('account');return false;" style="color:var(--accent)">Sign in</a> and connect your Discogs account to continue.</div></div>`;
+        return;
+      }
+      // discogs_rate_limited = our OAuth account is being throttled
+      // by Discogs. Different from rate_limited (which is OUR per-user
+      // throttle). Surface a wait-and-retry message.
+      if (errData.error === "discogs_rate_limited") {
+        setStatus("");
+        document.getElementById("results").innerHTML =
+          `<div class="empty-state"><div class="empty-state-icon">⏳</div>` +
+          `<div class="empty-state-title">Discogs is rate-limiting us</div>` +
+          `<div class="empty-state-subtitle">${escHtml(errData.message || "Please retry in a minute.")}</div></div>`;
+        showToast("Discogs rate-limited — retry shortly", "info", 5000);
+        return;
+      }
+      // discogs_upstream = Discogs returned 5xx. Almost always transient.
+      if (errData.error === "discogs_upstream") {
+        setStatus("");
+        document.getElementById("results").innerHTML =
+          `<div class="empty-state"><div class="empty-state-icon">🛠️</div>` +
+          `<div class="empty-state-title">Discogs is having trouble</div>` +
+          `<div class="empty-state-subtitle">${escHtml(errData.message || "Retry in a moment.")}</div></div>`;
+        showToast("Discogs upstream error — retrying may help", "error", 5000);
         return;
       }
     }
