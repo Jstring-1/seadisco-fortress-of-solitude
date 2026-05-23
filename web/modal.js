@@ -1800,23 +1800,52 @@ function loadYTVideo(id) {
     if (_ytHasPlayed) return;              // it actually started
     // Distinguish "actually unavailable" from "autoplay-blocked /
     // still buffering". YT.PlayerState:
-    //   -1 unstarted, 5 cued — autoplay-blocked, user must tap ▶
+    //   -1 unstarted, 5 cued — could be autoplay-blocked OR a silent
+    //                          embed-restricted load that never fired
+    //                          onError. Disambiguated below.
     //    3 buffering           — slow network, give it more time
     //    1 playing             — defensive, _ytHasPlayed should already be true
-    // None of these mean the video is dead; only ended-without-
-    // played (handled elsewhere) and onError errors mean that.
     let state = -1;
     try { state = ytPlayer?.getPlayerState?.() ?? -1; } catch {}
-    if (state === 5 || state === -1) {
-      updatePlayerStatus("paused");
-      if (typeof showToast === "function") {
-        showToast("Tap ▶ to start playback", "info", 4000);
-      }
-      return;
-    }
     if (state === 3 || state === 1) {
       // Still loading — leave the row alone and let the YT
       // onStateChange / onError pipeline catch a real failure.
+      return;
+    }
+    if (state === 5 || state === -1) {
+      // Try one playVideo() recovery — Chrome usually allows
+      // programmatic playback after the first user-initiated play
+      // in the same tab, so a chained auto-advance whose original
+      // gesture went stale typically just needs a nudge. Then
+      // re-check 1.5s later: if it's playing/buffering we're done,
+      // if it's still cued (state 5) the embed has data but is
+      // genuinely waiting for a user tap → surface the toast;
+      // if it's still unstarted (-1) the iframe never loaded the
+      // metadata at all, which on a chained auto-advance almost
+      // always means the next video is also dead (embed-restricted
+      // / region-blocked silent failure where YT swallows onError).
+      // Treat that as unavailable and prune.
+      console.debug("[loadYTVideo watchdog] state stalled — attempting playVideo() recovery", { id, state });
+      try { ytPlayer?.playVideo?.(); } catch {}
+      setTimeout(() => {
+        if (vtoken !== _ytVideoToken) return;
+        if (_ytHasPlayed) return;
+        let state2 = -1;
+        try { state2 = ytPlayer?.getPlayerState?.() ?? -1; } catch {}
+        if (state2 === 1 || state2 === 3) return; // recovery worked
+        if (state2 === 5) {
+          updatePlayerStatus("paused");
+          if (typeof showToast === "function") {
+            showToast("Tap ▶ to start playback", "info", 4000);
+          }
+          return;
+        }
+        // state2 === -1 (or anything else): the video never loaded.
+        // Prune + auto-advance so the next track gets a try.
+        console.debug("[loadYTVideo watchdog] post-recovery still unstarted — pruning", { id });
+        updatePlayerStatus("unavailable");
+        _ytPruneUnavailable(id, /*advance=*/true);
+      }, 1500);
       return;
     }
     updatePlayerStatus("unavailable");
