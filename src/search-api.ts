@@ -7280,20 +7280,17 @@ async function _runPersonalSuggestionsForAllUsers() {
   }
 }
 
-// Scheduler — fires every 6 hours at 02:xx / 08:xx / 14:xx / 20:xx
-// Pacific (the 02:xx slot still lands just before the 03:00 PT cache-
-// warm window so the overnight warm has fresh deltas to drain). Was
-// daily; bumped to 4×/day because the taste model now folds in plays
-// and favorites, which shift intra-day. The per-user signal-change
-// early-exit (see _runPersonalSuggestionsForUser) keeps the cost
-// proportional to actual user activity — inactive users skip in
-// milliseconds, so 4×/day is cheaper in aggregate than blind daily
-// was for active accounts.
+// Scheduler — fires once daily at 04:xx Pacific. The 6h cadence
+// (02/08/14/20 PT) added incremental Discogs load that, combined
+// with the other 6h syncs, pushed us into 429 territory; reverting
+// to a single overnight run trims that load. 04:xx PT keeps it
+// after the 03:00 PT cache-warm window (so the warmer's results
+// are available) and well clear of US peak hours.
 //
 // Implemented as a 15-min tick that asks "are we in a firing hour AND
 // have we run for this date+hour already?".
 const _SUGG_GEN_TZ       = "America/Los_Angeles";
-const _SUGG_GEN_HOURS    = new Set<number>([2, 8, 14, 20]);
+const _SUGG_GEN_HOURS    = new Set<number>([4]);
 let _suggGenLastRunKey: string | null = null;  // YYYY-MM-DD-HH in PT
 
 function _ptDateStr(): string {
