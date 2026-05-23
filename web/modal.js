@@ -3596,7 +3596,13 @@ window._trackYtAdminDelete = _trackYtAdminDelete;
 // play first. Existing queue continues after.
 async function playAlbumAndQueue(triggerEl, _firstUrl) {
   const scope = triggerEl?.closest("#album-info, #version-info, .tracklist") || document;
-  const rows  = scope.querySelectorAll(".queue-add-icon[data-yt-url]");
+  // Exclude the Full Album pseudo-row's queue-add icon — it represents
+  // "the entire album as one video" and shouldn't get bulk-played
+  // alongside the per-track videos (mirrors queueAddAlbum). Otherwise
+  // we'd play the whole album once via the full-album video, then
+  // play every track again. The user can still hit ＋ on that
+  // specific row to queue the full-album rip on its own.
+  const rows  = scope.querySelectorAll(".queue-add-icon[data-yt-url]:not([data-fullalbum])");
   const items = [];
   rows.forEach(el => {
     const url = el.dataset.ytUrl || "";
