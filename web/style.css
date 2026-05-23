@@ -4298,13 +4298,15 @@ body.card-mode-wide .card {
   grid-template-columns: 40% 1fr;
   grid-template-areas:
     "thumb meta"
-    "tracklist tracklist";
-  /* Anchor the two grid rows to the top of the card. Without this,
-     grid's default align-content stretches the rows to fill the
-     card height (which is normalized to the tallest card in the
-     row), shoving the tracklist row down with a big empty gap
-     between it and the thumb+meta pair. Empty space now lands at
-     the bottom of the card instead, where it belongs. */
+    "thumb tracklist";
+  /* Thumb spans both rows on the left; meta + tracklist stack in the
+     right column. We tried a full-width tracklist underneath
+     ("tracklist tracklist") earlier, but when the meta column ran
+     taller than the thumb (lots of metadata — label, format, genre,
+     color, year), the tracklist got shoved below the meta with an
+     empty gap under the thumb-picker. Right-column-only tracklist
+     sits flush against the bottom of the meta block regardless of
+     thumb height. */
   align-content: start;
   position: relative;
 }
@@ -4716,13 +4718,15 @@ body.card-mode-wide .card .card-body { cursor: default; }
 body.card-mode-wide .card .card-thumb-wrap > img:first-of-type { cursor: pointer; }
 body.card-mode-wide .card-tracklist {
   display: block;
-  /* Anchored to the full-width row in the card grid below the
-     thumb+meta pair. padding here (not on the inner rows) so the
-     dashed top-border stretches the full card width edge-to-edge. */
+  /* Right-column-only row beneath .card-body. No dashed top border
+     and minimal top padding — the tracklist sits flush against the
+     meta block above it so cards with a tall meta column (lots of
+     label/format/genre lines) don't open a visual gap on the left
+     side under the thumb-picker. */
   grid-area: tracklist;
   margin-top: 0;
-  padding: 0.55rem 0.75rem 0.65rem;
-  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+  padding: 0 0.7rem 0.5rem;
+  border-top: none;
 }
 /* Inner max-height on the rows now uses more of the card width, so
    even long box-set tracklists stay readable without forcing the
