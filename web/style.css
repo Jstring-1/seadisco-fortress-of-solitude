@@ -4297,12 +4297,12 @@ body.card-mode-wide .card {
   display: grid;
   grid-template-columns: 40% 1fr;
   grid-template-areas:
-    "thumb     meta"
-    "tracklist meta";
-  /* Left column: thumb on top, tracklist directly below it. Right
-     column: meta spans both rows. The tracklist sits flush against
-     the bottom of the thumb-picker strip — no dashed divider, no
-     empty cell between them. */
+    "thumb meta"
+    "tracklist tracklist";
+  /* Tracklist spans the full card width as its own row beneath the
+     thumb+meta pair. align-content:start anchors both rows to the
+     top so any leftover height (from row-equalization across the
+     grid row of cards) sits at the bottom of the card. */
   align-content: start;
   position: relative;
 }
@@ -4714,11 +4714,11 @@ body.card-mode-wide .card .card-body { cursor: default; }
 body.card-mode-wide .card .card-thumb-wrap > img:first-of-type { cursor: pointer; }
 body.card-mode-wide .card-tracklist {
   display: block;
-  /* Left-column row directly under the thumb. Flush against the
-     thumb-picker strip — no margin, no dashed top border. */
+  /* Full-width row beneath the thumb+meta pair. No dashed top border,
+     no top padding — flush against whichever column is taller. */
   grid-area: tracklist;
   margin-top: 0;
-  padding: 0 0.4rem 0.5rem;
+  padding: 0 0.7rem 0.5rem;
   border-top: none;
 }
 /* Inner max-height on the rows now uses more of the card width, so
