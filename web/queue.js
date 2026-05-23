@@ -862,13 +862,25 @@ function _renderRepeatBtn() {
   }
 }
 
-// In-memory label for the currently-loaded playlist. Set by
-// _playlistLoad on a successful load, cleared by queueClear and by
-// loading another playlist over it. Not persisted: a page reload
-// drops the label even though the (signed-in) server-stored queue
-// survives — the association between queue and source playlist
-// isn't tracked server-side.
-let _loadedPlaylistName = null;
+// Label for the currently-loaded playlist. Set by _playlistLoad on
+// a successful load, cleared by queueClear and by loading another
+// playlist over it. Persisted to localStorage so a page reload (which
+// rehydrates the server-stored queue) also restores the banner —
+// otherwise the queue came back but the label vanished. We don't
+// track playlist→queue linkage server-side, so this is best-effort:
+// the label survives reloads but doesn't auto-clear if the user
+// happens to delete/replace every item individually (queueClear is
+// the explicit "I'm done with this playlist" gesture).
+const _LOADED_PLAYLIST_LS_KEY = "sd-loaded-playlist-name";
+let _loadedPlaylistName = (() => {
+  try { return localStorage.getItem(_LOADED_PLAYLIST_LS_KEY) || null; } catch { return null; }
+})();
+function _persistLoadedPlaylistName(name) {
+  try {
+    if (name) localStorage.setItem(_LOADED_PLAYLIST_LS_KEY, name);
+    else localStorage.removeItem(_LOADED_PLAYLIST_LS_KEY);
+  } catch { /* private mode / quota — best-effort */ }
+}
 
 // ── Drawer UI ───────────────────────────────────────────────────────
 function _ensureQueueDrawer() {
@@ -1394,8 +1406,10 @@ async function queueClear() {
   }
   // Drop the loaded-playlist label — once the queue is wiped the
   // label no longer represents what's in front of the user. Reset
-  // before the render path so _syncLoadedPlaylistLabel sees null.
+  // before the render path so _syncLoadedPlaylistLabel sees null,
+  // and clear the localStorage copy so a reload doesn't resurrect it.
   _loadedPlaylistName = null;
+  _persistLoadedPlaylistName(null);
   // Anon path: clear localStorage, stop playback, drop the drawer.
   if (!window._clerk?.user) {
     _queue = [];
@@ -2223,6 +2237,7 @@ async function _playlistLoad(id) {
     // Stash the loaded name AFTER the clear above (which wipes it)
     // so the drawer's playlist-row paints in on the next sync.
     _loadedPlaylistName = playlist.name || null;
+    _persistLoadedPlaylistName(_loadedPlaylistName);
     _syncLoadedPlaylistLabel();
     _playlistClosePicker();
     // Surface the queue so the user sees what they just loaded and can
