@@ -737,7 +737,18 @@ async function openYoutubePopup(query, opts) {
         ctxSub.textContent = subParts.join(" · ");
       }
     }
-    window._sdSuggestStaged = {}; // { trackPosition → { videoId, videoTitle, trackTitle } }
+    // Preserve any tracks the user already staged when they re-search
+    // within the popup. Wiping on every openYoutubePopup() call meant
+    // tweaking the query to look for one more missing track threw away
+    // every previous staged assignment. Now we only reset when the
+    // album itself changed (different release ID) — _sdSuggestStagedForReleaseId
+    // tags which album the current staged map belongs to. closeYoutubePopup
+    // still clears it on confirmed close, so a fresh open starts empty.
+    const stagedReleaseKey = `${albumCtx.releaseType || ""}:${albumCtx.releaseId || ""}`;
+    if (!window._sdSuggestStaged || window._sdSuggestStagedForReleaseId !== stagedReleaseKey) {
+      window._sdSuggestStaged = {}; // { trackPosition → { videoId, videoTitle, trackTitle } }
+      window._sdSuggestStagedForReleaseId = stagedReleaseKey;
+    }
   } else {
     if (titleEl) titleEl.textContent = `YouTube · "${q}"`;
     if (ctxStrip) ctxStrip.style.display = "none";
@@ -1078,6 +1089,7 @@ function closeYoutubePopup() {
   window._sdSuggestForTrack = null;
   window._sdSuggestAlbumContext = null;
   window._sdSuggestStaged = null;
+  window._sdSuggestStagedForReleaseId = null;
   window._sdSuggestSelectSnapshot = null;
   _ytPopupItems = [];
   // Remove album footer if present.
