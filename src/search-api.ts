@@ -1359,8 +1359,24 @@ setInterval(() => { pruneOAuthRequestTokens().catch(() => {}); }, 10 * 60 * 1000
 let _syncAbort = false;
 const SYNC_STALL_TIMEOUT = 5 * 60 * 1000; // 5 minutes with no progress = stalled
 
+// Per-user concurrency guards. Three independent code paths can
+// trigger a sync for the same user (the user-initiated /sync endpoint,
+// the admin "Run for me" button, and the scheduled cron). Without a
+// mutex, two of them launching within seconds of each other run two
+// full collection+wantlist+extras pipelines side by side, doubling
+// every request to Discogs and tripping the 60/min rate-limit
+// almost immediately. The Set guards below cause the second starter
+// to log + bail rather than race the first.
+const _syncRunningFor   = new Set<string>();
+const _extrasRunningFor = new Set<string>();
+
 // Background sync worker — runs detached from the HTTP request
 async function runBackgroundSync(userId: string, client: DiscogsClient, username: string, syncCollection: boolean, syncWantlist: boolean) {
+  if (_syncRunningFor.has(userId)) {
+    console.log(`Sync ${username}: skipped — another sync is already in flight for this user`);
+    return;
+  }
+  _syncRunningFor.add(userId);
   console.log(`Sync ${username}: starting full sync (collection=${syncCollection}, wantlist=${syncWantlist})`);
   // Build headers per-request via the client (handles both PAT and OAuth signing)
   const getHeaders = (url: string) => client.buildHeaders("GET", url);
@@ -1552,6 +1568,7 @@ async function runBackgroundSync(userId: string, client: DiscogsClient, username
   } finally {
     _syncDone = true;
     clearInterval(stallGuard);
+    _syncRunningFor.delete(userId);
   }
 }
 
@@ -10157,6 +10174,16 @@ function startDailySyncSchedule() {
 
 // ── Inventory / Lists / Orders sync (5 AM Pacific daily) ──────────────────
 async function syncUserExtras(userId: string, username: string, client: DiscogsClient): Promise<{ inventory: number; lists: number; orders: number }> {
+  // Per-user mutex — see _syncRunningFor for rationale. Without this,
+  // the scheduled extras sync racing the runBackgroundSync tail-call
+  // racing the admin "Run for me" button hammers the same paginated
+  // inventory/lists URLs with parallel pacing loops and burns through
+  // the 60/min Discogs cap in under a minute.
+  if (_extrasRunningFor.has(userId)) {
+    console.log(`[extras] ${username}: skipped — another extras sync is already in flight`);
+    return { inventory: 0, lists: 0, orders: 0 };
+  }
+  _extrasRunningFor.add(userId);
   const getHeaders = (url: string) => client.buildHeaders("GET", url);
 
   // Simple fetch with retry for extras sync
@@ -10299,6 +10326,7 @@ async function syncUserExtras(userId: string, username: string, client: DiscogsC
     console.error(`[extras] ${username} orders error:`, err);
   }
 
+  _extrasRunningFor.delete(userId);
   return { inventory, lists, orders };
 }
 
