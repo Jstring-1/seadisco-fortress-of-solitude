@@ -12,12 +12,16 @@ export function getPool() {
   if (!pool) {
     const connStr = process.env.APP_DB_URL;
     if (!connStr) throw new Error("APP_DB_URL not set");
-    // Explicit pool sizing. Defaults (max:10, no idleTimeoutMillis)
-    // were fine at small scale but caused queue buildup during
-    // sync bursts (every signed-in user can hit /api/user/* in
-    // parallel for collection / wantlist / inventory / lists).
-    // Overridable via env so we can tune without a redeploy.
-    const max = Number(process.env.APP_DB_POOL_MAX ?? 20);
+    // Explicit pool sizing. max bumped down to 10 (from 20) because
+    // Railway's Postgres connection cap is shared with sync workers,
+    // admin tooling, the Railway dashboard, etc. — and a crash-loop
+    // can pile up enough sockets in TIME_WAIT to push us past the
+    // cap (Postgres SQLSTATE 53300 "sorry, too many clients already"
+    // at boot, exactly what we just hit). 10 leaves plenty of
+    // headroom even with multiple instances temporarily overlapping.
+    // Overridable via env so we can raise it after upgrading the DB
+    // tier or lower it further on smaller plans.
+    const max = Number(process.env.APP_DB_POOL_MAX ?? 10);
     const min = Number(process.env.APP_DB_POOL_MIN ?? 2);
     const idle = Number(process.env.APP_DB_POOL_IDLE_MS ?? 30000);
     // 5s was too aggressive on Railway — when its Postgres is under
@@ -26,6 +30,15 @@ export function getPool() {
     // window so transient slowness doesn't surface as a flood of
     // user-visible 500s.
     const connTimeout = Number(process.env.APP_DB_POOL_CONN_MS ?? 15000);
+    // statement_timeout enforced at connection startup via the libpq
+    // `options` parameter. Previously set via pool.on("connect")
+    // running an async SET — that race-conditioned with the pool
+    // handing the client to a caller (triggering the
+    // "client.query() ... already executing a query" deprecation
+    // warning) and didn't guarantee the timeout was in place before
+    // the first user query ran. Setting it through `options` applies
+    // before the client is exposed.
+    const stmtTimeoutMs = Number(process.env.APP_DB_STATEMENT_TIMEOUT_MS ?? 30000);
     pool = new Pool({
       connectionString: connStr,
       ssl: process.env.DB_CA_CERT
@@ -35,26 +48,12 @@ export function getPool() {
       min,
       idleTimeoutMillis: idle,
       connectionTimeoutMillis: connTimeout,
+      options: `-c statement_timeout=${stmtTimeoutMs}`,
     });
     pool.on("error", (err) => {
       // Idle-client errors aren't fatal — log so we notice if Railway
       // is killing connections in the background.
       console.warn("[db pool] idle client error:", err?.message ?? err);
-    });
-    // Per-connection setup: enforce a statement timeout so a single
-    // slow query can't pin a pool connection forever. Without this,
-    // a long-running sync query + admin polling pile up until the
-    // pool is exhausted and every new request hangs waiting for a
-    // free connection (the symptom we hit: admin panels stuck on
-    // "Loading…" forever instead of failing fast with 500). 30s is
-    // very generous for any normal query; the sync writes are
-    // chunked and each individual statement is well under that.
-    // Overridable via env in case a heavier query needs more.
-    const stmtTimeoutMs = Number(process.env.APP_DB_STATEMENT_TIMEOUT_MS ?? 30000);
-    pool.on("connect", (client) => {
-      client.query(`SET statement_timeout = ${stmtTimeoutMs}`).catch((e) => {
-        console.warn("[db pool] could not set statement_timeout:", e?.message ?? e);
-      });
     });
   }
   return pool;
