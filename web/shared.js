@@ -951,7 +951,16 @@ async function apiFetch(url, options = {}) {
     const t = await getSessionToken();
     if (t) headers["Authorization"] = `Bearer ${t}`;
   } catch { /* not signed in */ }
-  const res = await fetch(url, { ...options, headers });
+  // Default to a 45 s timeout so a hung server doesn't leave UI panels
+  // stuck on "Loading…" forever. Callers can override with their own
+  // signal (e.g. sync endpoints that need longer) or pass options.timeoutMs.
+  // Skip when the caller already set its own signal — don't double-wire.
+  let combinedSignal = options.signal;
+  if (!combinedSignal && typeof AbortSignal !== "undefined" && AbortSignal.timeout) {
+    const ms = Number(options.timeoutMs) || 45000;
+    combinedSignal = AbortSignal.timeout(ms);
+  }
+  const res = await fetch(url, { ...options, headers, signal: combinedSignal });
   // On 401, force-refresh the token once and retry
   if (res.status === 401 && window._clerk?.session) {
     try {
@@ -959,7 +968,7 @@ async function apiFetch(url, options = {}) {
       const t2 = await getSessionToken();
       if (t2) {
         headers["Authorization"] = `Bearer ${t2}`;
-        return fetch(url, { ...options, headers });
+        return fetch(url, { ...options, headers, signal: combinedSignal });
       }
     } catch { /* give up */ }
   }
@@ -1444,7 +1453,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260525.1214";
+  const SITE_VERSION = "build 20260525.1217";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
