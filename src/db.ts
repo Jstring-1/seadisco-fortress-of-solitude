@@ -41,6 +41,21 @@ export function getPool() {
       // is killing connections in the background.
       console.warn("[db pool] idle client error:", err?.message ?? err);
     });
+    // Per-connection setup: enforce a statement timeout so a single
+    // slow query can't pin a pool connection forever. Without this,
+    // a long-running sync query + admin polling pile up until the
+    // pool is exhausted and every new request hangs waiting for a
+    // free connection (the symptom we hit: admin panels stuck on
+    // "Loading…" forever instead of failing fast with 500). 30s is
+    // very generous for any normal query; the sync writes are
+    // chunked and each individual statement is well under that.
+    // Overridable via env in case a heavier query needs more.
+    const stmtTimeoutMs = Number(process.env.APP_DB_STATEMENT_TIMEOUT_MS ?? 30000);
+    pool.on("connect", (client) => {
+      client.query(`SET statement_timeout = ${stmtTimeoutMs}`).catch((e) => {
+        console.warn("[db pool] could not set statement_timeout:", e?.message ?? e);
+      });
+    });
   }
   return pool;
 }
