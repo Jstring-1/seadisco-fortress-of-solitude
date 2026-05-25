@@ -7685,8 +7685,17 @@ app.post("/api/admin/site-theme", express.json({ limit: "1kb" }), async (req, re
 // GET /api/admin/feedback — inbox, only for admin user
 app.get("/api/admin/feedback", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
-  const items = await getFeedback();
-  res.json({ items });
+  try {
+    const items = await getFeedback();
+    res.json({ items });
+  } catch (err) {
+    // DB timeout / pool error must not propagate — admin page polls
+    // this endpoint and an unhandled rejection here will exit the
+    // whole process on Node 22+. Log + 500 so the admin sees a real
+    // error and the server keeps running.
+    console.error("[admin/feedback]", err);
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 // DELETE /api/admin/feedback/:id — delete a feedback item, admin only
@@ -7699,7 +7708,17 @@ app.delete("/api/admin/feedback/:id", async (req, res) => {
 // GET /api/admin/sync-status — per-user sync status, admin only
 app.get("/api/admin/sync-status", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
-  const [users, favCounts] = await Promise.all([getAllUsersSyncStatus(), getAllFavoriteCounts()]);
+  // DB calls wrapped — the admin page polls this on a tight loop, so
+  // an unhandled rejection here (pg pool connect timeout, etc.) will
+  // exit the whole Node process on 22+. Surface as 500 instead.
+  let users, favCounts;
+  try {
+    [users, favCounts] = await Promise.all([getAllUsersSyncStatus(), getAllFavoriteCounts()]);
+  } catch (err) {
+    console.error("[admin/sync-status DB]", err);
+    res.status(500).json({ error: String(err) });
+    return;
+  }
 
   // Check Clerk sessions for accurate last-activity timestamps
   const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
@@ -10351,6 +10370,22 @@ function startExtrasSyncSchedule() {
   }
   schedule();
 }
+
+// Process-level safety net. Node 22 exits on unhandled promise
+// rejection by default, which means ONE missing try/catch around a
+// pg-pool call during a transient DB connect-timeout takes the whole
+// server down. The admin page polls /sync-status and /feedback on a
+// loop, so a Railway Postgres hiccup turns into a tight crash-loop.
+// Log + swallow at the process level so individual endpoint bugs
+// don't cascade. Endpoints should still wrap their own awaits in
+// try/catch to surface clean 500s to callers — this is defense in
+// depth, not a substitute.
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason);
+});
+process.on("uncaughtException", (err) => {
+  console.error("[uncaughtException]", err);
+});
 
 app.listen(PORT, "0.0.0.0", async () => {
   console.log(`Discogs search API listening on port ${PORT}`);

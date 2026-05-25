@@ -20,7 +20,12 @@ export function getPool() {
     const max = Number(process.env.APP_DB_POOL_MAX ?? 20);
     const min = Number(process.env.APP_DB_POOL_MIN ?? 2);
     const idle = Number(process.env.APP_DB_POOL_IDLE_MS ?? 30000);
-    const connTimeout = Number(process.env.APP_DB_POOL_CONN_MS ?? 5000);
+    // 5s was too aggressive on Railway — when its Postgres is under
+    // load or recovering from a restart, the first connect can take
+    // 8–12s before the pool warms up. 15s gives a more forgiving
+    // window so transient slowness doesn't surface as a flood of
+    // user-visible 500s.
+    const connTimeout = Number(process.env.APP_DB_POOL_CONN_MS ?? 15000);
     pool = new Pool({
       connectionString: connStr,
       ssl: process.env.DB_CA_CERT
