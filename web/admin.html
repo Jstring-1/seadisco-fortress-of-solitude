@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260525.1208" />
+  <link rel="stylesheet" href="/style.css?v=20260525.1213" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260525.1208"></script>
-<script defer src="/shared.js?v=20260525.1208"></script>
+<script defer src="/utils.js?v=20260525.1213"></script>
+<script defer src="/shared.js?v=20260525.1213"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -410,7 +410,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260525.1208"></script>
+<script defer src="/modal.js?v=20260525.1213"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -539,8 +539,21 @@ async function verifyAdmin(c) {
   clerk = c;
   try {
     const r = await apiFetch("/api/admin/feedback", { signal: AbortSignal.timeout(10000) });
-    if (!r.ok) { showDenied(); return; }
-    const { items } = await r.json();
+    // Only deny on a real auth failure. A 500 here usually means the
+    // DB is temporarily unreachable — the admin IS authorized, the
+    // backend just can't talk to Postgres right now. Showing the
+    // denied screen for that wasted the admin's time; better to
+    // surface the actual error and still let them into the admin
+    // content so they can read other panels / hit the kill switch /
+    // etc.
+    if (r.status === 401 || r.status === 403) { showDenied(); return; }
+
+    let items = [];
+    if (r.ok) {
+      try { items = (await r.json()).items ?? []; } catch {}
+    } else {
+      console.warn("[verifyAdmin] feedback fetch failed:", r.status);
+    }
 
     document.getElementById("loading-section").style.display = "none";
     document.getElementById("denied-section").style.display = "none";
@@ -552,7 +565,19 @@ async function verifyAdmin(c) {
     // Default group is Overview.
     switchAdminTab('overview');
     checkKillStatus();
-  } catch { showDenied(); }
+  } catch (e) {
+    // Network / timeout / abort. Distinguish from real auth denial:
+    // if the user has a Clerk session, they're at least signed in —
+    // showing the admin frame with an inline error is more useful
+    // than the denied screen.
+    console.warn("[verifyAdmin] threw:", e);
+    if (clerk?.user) {
+      document.getElementById("loading-section").innerHTML =
+        `<p style="color:#e88;padding:1rem">Couldn't reach the admin API. Check your connection and refresh.</p>`;
+    } else {
+      showDenied();
+    }
+  }
 }
 
 
