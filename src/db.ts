@@ -169,6 +169,14 @@ export async function initDb() {
   } catch (e) {
     // Constraint may already exist — ignore
   }
+  // instance_id used to be INTEGER (int4, max 2,147,483,647). Discogs'
+  // monotonically-increasing collection-instance IDs crossed that
+  // boundary in May 2026 — first symptom was "value … is out of range
+  // for type integer" on sync for users with newly-added items.
+  // ALTER to BIGINT (int8) so the column can hold all current and
+  // future IDs. Idempotent: ALTER TYPE is a no-op when the column is
+  // already bigint.
+  await getPool().query(`ALTER TABLE user_collection ALTER COLUMN instance_id TYPE BIGINT`);
   await getPool().query(`
     CREATE TABLE IF NOT EXISTS user_wantlist (
       id                 SERIAL PRIMARY KEY,
@@ -1958,8 +1966,11 @@ export async function pruneWantlistItems(clerkUserId: string, keepIds: number[])
 /** Remove local collection items (by instance_id) that no longer exist in Discogs after a full sync */
 export async function pruneCollectionItems(clerkUserId: string, keepInstanceIds: number[]): Promise<number> {
   if (!keepInstanceIds.length) return 0;
+  // Cast to bigint[] — instance_id is bigint as of the May 2026
+  // migration above (Discogs IDs crossed int4 max). An int[] cast
+  // would re-overflow here even with the column widened.
   const r = await getPool().query(
-    `DELETE FROM user_collection WHERE clerk_user_id = $1 AND instance_id IS NOT NULL AND instance_id != ALL($2::int[]) RETURNING 1`,
+    `DELETE FROM user_collection WHERE clerk_user_id = $1 AND instance_id IS NOT NULL AND instance_id != ALL($2::bigint[]) RETURNING 1`,
     [clerkUserId, keepInstanceIds]
   );
   return r.rowCount ?? 0;
