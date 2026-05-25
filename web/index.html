@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260523.1611" />
+  <link rel="stylesheet" href="/style.css?v=20260525.1154" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260523.1611"></script>
+<script defer src="/shared.js?v=20260525.1154"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -649,7 +649,7 @@ e.g.  miles davis | coltrane
 
 <div id="privacy-view" class="content-narrow" style="display:none">
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">Privacy Policy</h2>
-  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: April 27, 2026</p>
+  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: May 25, 2026</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">What We Collect</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">When you create an account, we store your email address (provided by our authentication provider, Clerk) and, if you connect your Discogs account, the OAuth access credentials returned by Discogs.</p>
@@ -667,7 +667,8 @@ e.g.  miles davis | coltrane
     <li><strong style="color:#ccc">Discogs</strong> — music database searches, collection syncing, and collection actions, using your OAuth authorization</li>
     <li><strong style="color:#ccc">Clerk</strong> — authentication and account management</li>
     <li><strong style="color:#ccc">Anthropic (Claude)</strong> — AI-powered search recommendations and genre descriptions. Your search query text is sent to Anthropic's API when using AI features. AI responses can be wrong, incomplete, or hallucinatory — verify anything important. Don't include personal or sensitive information in AI search queries.</li>
-    <li><strong style="color:#ccc">Google Analytics</strong> — usage statistics including search terms to help us improve the site</li>
+    <li><strong style="color:#ccc">YouTube API Services</strong> — SeaDisco uses the YouTube API Services (operated by Google) to search YouTube, fetch video metadata (title, channel, duration, thumbnails), and embed playback. When you play, search, or submit YouTube videos from SeaDisco, your interactions are subject to the <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener" style="color:#5a9aaa">YouTube Terms of Service</a> and the <a href="http://www.google.com/policies/privacy" target="_blank" rel="noopener" style="color:#5a9aaa">Google Privacy Policy</a>. You can revoke the YouTube API Services' access to your data at any time via the <a href="https://security.google.com/settings/security/permissions" target="_blank" rel="noopener" style="color:#5a9aaa">Google security settings page</a>.</li>
+    <li><strong style="color:#ccc">Google Analytics</strong> — usage statistics including search terms to help us improve the site. Subject to the <a href="http://www.google.com/policies/privacy" target="_blank" rel="noopener" style="color:#5a9aaa">Google Privacy Policy</a>.</li>
   </ul>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">OAuth Authorization</h3>
@@ -697,10 +698,11 @@ e.g.  miles davis | coltrane
 
 <div id="terms-view" class="content-narrow" style="display:none">
   <h2 style="margin-top:0;font-size:1.1rem;color:#e2e2e2">Terms of Service</h2>
-  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: April 27, 2026</p>
+  <p style="font-size:0.78rem;color:#666;margin-bottom:1.2rem">Last updated: May 25, 2026</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">Acceptance</h3>
-  <p style="font-size:0.84rem;color:#aaa;margin:0">By using SeaDisco, you agree to these terms. If you don't agree, please don't use the site.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0 0 0.6rem">By using SeaDisco, you agree to these terms. If you don't agree, please don't use the site.</p>
+  <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco integrates the YouTube API Services for video search, playback, and metadata. By using SeaDisco you also agree to be bound by the <a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener" style="color:#5a9aaa">YouTube Terms of Service</a>.</p>
 
   <h3 style="font-size:0.85rem;color:#e8a020;margin:1.4rem 0 0.5rem">What SeaDisco Is</h3>
   <p style="font-size:0.84rem;color:#aaa;margin:0">SeaDisco is a music discovery tool that searches the Discogs database (including Masters+ mode for finding orphan releases), provides AI-powered recommendations (via Anthropic's Claude), and helps you browse and manage your vinyl collection, wantlist, favorites, lists, marketplace inventory, and seller orders. It is a personal project provided as-is.</p>
@@ -1405,13 +1407,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260523.1611"></script>
-<script defer src="/search.js?v=20260523.1611"></script>
-<script defer src="/collection.js?v=20260523.1611"></script>
+<script defer src="/utils.js?v=20260525.1154"></script>
+<script defer src="/search.js?v=20260525.1154"></script>
+<script defer src="/collection.js?v=20260525.1154"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260523.1611"></script>
-<script defer src="/app.js?v=20260523.1611"></script>
+<script defer src="/modal.js?v=20260525.1154"></script>
+<script defer src="/app.js?v=20260525.1154"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1422,13 +1424,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260523.1611"></script>
-<script defer src="/queue.js?v=20260523.1611"></script>
+<script defer src="/loc.js?v=20260525.1154"></script>
+<script defer src="/queue.js?v=20260525.1154"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260523.1611";
+  window._SD_LAZY_VERSION = "20260525.1154";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1458,8 +1460,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260523.1611"></script>
-<script defer src="/offline.js?v=20260523.1611"></script>
+<script defer src="/idb.js?v=20260525.1154"></script>
+<script defer src="/offline.js?v=20260525.1154"></script>
 
 </body>
 </html>
