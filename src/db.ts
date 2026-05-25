@@ -1799,9 +1799,15 @@ export async function upsertCollectionItems(
     instanceArr.push(key);
     notesArr.push(item.notes ? JSON.stringify(item.notes) : null);
   }
+  // instance_id is BIGINT (Discogs IDs crossed int4 in May 2026) — the
+  // unnest cast for column 7 must be bigint[], otherwise Postgres
+  // narrows each element to int4 BEFORE the column accepts it and
+  // throws "value … is out of range for type integer". release_id /
+  // folder_id / rating stay int — release IDs are ~30M and folder /
+  // rating values are tiny.
   await getPool().query(
     `INSERT INTO user_collection (clerk_user_id, discogs_release_id, data, added_at, synced_at, folder_id, rating, instance_id, notes)
-     SELECT $1, unnest($2::int[]), unnest($3::jsonb[]), unnest($4::timestamptz[]), NOW(), unnest($5::int[]), unnest($6::int[]), unnest($7::int[]), unnest($8::jsonb[])
+     SELECT $1, unnest($2::int[]), unnest($3::jsonb[]), unnest($4::timestamptz[]), NOW(), unnest($5::int[]), unnest($6::int[]), unnest($7::bigint[]), unnest($8::jsonb[])
      ON CONFLICT (clerk_user_id, instance_id)
      DO UPDATE SET data = EXCLUDED.data, added_at = EXCLUDED.added_at, synced_at = NOW(),
                    folder_id = EXCLUDED.folder_id, rating = EXCLUDED.rating,
