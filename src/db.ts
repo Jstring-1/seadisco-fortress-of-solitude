@@ -2570,6 +2570,23 @@ export async function getChronAmSearchCache(cacheKey: string): Promise<any | nul
   } catch { return null; }
 }
 
+// Stale fallback — returns ANY cached row for a key regardless of TTL.
+// Used by the chronam search endpoint when the loc.gov upstream times
+// out or errors: serving slightly-old historic-newspaper results is
+// way better than returning a 504 to the user. Returns { data, cachedAt }
+// so the endpoint can surface "served stale, last refreshed N ago".
+export async function getChronAmSearchCacheStale(cacheKey: string):
+  Promise<{ data: any; cachedAt: Date } | null> {
+  try {
+    const r = await getPool().query(
+      `SELECT data, cached_at FROM chronam_search_cache WHERE cache_key = $1`,
+      [cacheKey],
+    );
+    if (!r.rows.length) return null;
+    return { data: r.rows[0].data, cachedAt: new Date(r.rows[0].cached_at) };
+  } catch { return null; }
+}
+
 export async function setChronAmSearchCache(cacheKey: string, data: any): Promise<void> {
   try {
     await getPool().query(
