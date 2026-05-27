@@ -8828,6 +8828,87 @@ async function _lyricsFetchJson(url: string): Promise<any> {
   }
 }
 
+// Walk `Category:Lyrics by Artist`, enumerate every artist subcat
+// (each named like `Category:Alfred Karnes Lyrics`), then enumerate
+// the page members of each. Returns a Map<pageTitle, artistName>
+// where artistName is derived from the subcat title by stripping
+// the leading "Category:" and trailing " Lyrics". Much cleaner than
+// regex-mining wikitext bodies because the wiki itself maintains
+// this mapping for the entire corpus.
+//
+// Returns a Map (first-encountered wins for pages that show up in
+// multiple artist subcats — duets, covers, etc.).
+async function _lyricsCollectArtistMappingFromWiki(): Promise<{ map: Map<string, string>; subcats: number; pages: number }> {
+  const ROOT = "Category:Lyrics by Artist";
+  const map = new Map<string, string>();
+  // Phase 1: enumerate every artist subcategory under the root.
+  const artistCats: string[] = [];
+  {
+    let cmcontinue = "";
+    do {
+      const params = new URLSearchParams({
+        action: "query",
+        list: "categorymembers",
+        cmtitle: ROOT,
+        cmlimit: "500",
+        cmtype: "subcat",
+        format: "json",
+      });
+      if (cmcontinue) params.set("cmcontinue", cmcontinue);
+      _lyricsScrapeState.message = `Listing artist categories (${artistCats.length} so far)…`;
+      const j = await _lyricsFetchJson(`${_LYRICS_API}?${params.toString()}`).catch((e) => {
+        console.warn("[lyrics] artist-cats fetch failed:", e?.message ?? e);
+        return null;
+      });
+      await new Promise(r => setTimeout(r, _LYRICS_DISCOVERY_THROTTLE_MS));
+      const members = j?.query?.categorymembers ?? [];
+      for (const m of members) {
+        const t = String(m?.title || "");
+        if (t.startsWith("Category:") && /\sLyrics$/.test(t)) artistCats.push(t);
+      }
+      cmcontinue = j?.continue?.cmcontinue ?? "";
+      if (!_lyricsScrapeState.running) break;
+    } while (cmcontinue);
+  }
+  // Phase 2: for each artist subcat, enumerate its page members and
+  // map every title to the derived artist name.
+  let i = 0;
+  let totalPages = 0;
+  for (const cat of artistCats) {
+    if (!_lyricsScrapeState.running) break;
+    i++;
+    const artistName = cat.replace(/^Category:/, "").replace(/\s+Lyrics$/, "").trim();
+    if (!artistName) continue;
+    let cmcontinue = "";
+    do {
+      const params = new URLSearchParams({
+        action: "query",
+        list: "categorymembers",
+        cmtitle: cat,
+        cmlimit: "500",
+        cmtype: "page",
+        format: "json",
+      });
+      if (cmcontinue) params.set("cmcontinue", cmcontinue);
+      _lyricsScrapeState.message = `Mapping artists (${i}/${artistCats.length}: ${artistName} — ${totalPages} pages tagged)`;
+      const j = await _lyricsFetchJson(`${_LYRICS_API}?${params.toString()}`).catch((e) => {
+        console.warn("[lyrics] artist-cat fetch failed:", cat, e?.message ?? e);
+        return null;
+      });
+      await new Promise(r => setTimeout(r, _LYRICS_DISCOVERY_THROTTLE_MS));
+      const members = j?.query?.categorymembers ?? [];
+      for (const m of members) {
+        const t = String(m?.title || "");
+        if (!t) continue;
+        if (!map.has(t)) { map.set(t, artistName); totalPages++; }
+      }
+      cmcontinue = j?.continue?.cmcontinue ?? "";
+      if (!_lyricsScrapeState.running) break;
+    } while (cmcontinue);
+  }
+  return { map, subcats: artistCats.length, pages: totalPages };
+}
+
 async function _lyricsCollectPagesUnderCategory(rootCategory: string): Promise<string[]> {
   // BFS through subcategories. Each category page is fetched via
   // list=categorymembers with cmtype=page|subcat. Page titles get
@@ -9098,6 +9179,102 @@ app.post("/api/admin/lyrics/reextract", async (req, res) => {
     console.error("[lyrics reextract]", err);
     res.status(500).json({ error: String(err) });
   }
+});
+
+// POST /api/admin/lyrics/sync-artists-from-wiki — walk
+// Category:Lyrics by Artist on weeniecampbell.com, derive each
+// page's artist from the subcategory it sits in, and update the
+// `artist` column on matching blues_lyrics rows. Much more
+// reliable than the body-text regex extractor — the wiki itself
+// maintains this mapping, so there's no guessing.
+//
+// Optional ?force=1 — by default we only fill rows whose `artist`
+// is NULL (so manually-set values aren't clobbered); force=1
+// overwrites everything.
+async function _lyricsSyncArtistsRun(force: boolean): Promise<void> {
+  if (_lyricsScrapeState.running) return;
+  _lyricsScrapeState = {
+    running: true,
+    phase: "discovering",
+    startedAt: Date.now(),
+    finishedAt: null,
+    pagesDiscovered: 0,
+    pagesScraped: 0,
+    pagesSkipped: 0,
+    pagesFailed: 0,
+    currentTitle: "",
+    message: "Walking Category:Lyrics by Artist…",
+    error: null,
+  };
+  try {
+    const { map, subcats, pages } = await _lyricsCollectArtistMappingFromWiki();
+    _lyricsScrapeState.phase = "fetching";
+    _lyricsScrapeState.pagesDiscovered = pages;
+    _lyricsScrapeState.message = `Built mapping: ${pages} pages across ${subcats} artists. Updating DB…`;
+    console.log(`[lyrics] artist-sync: built mapping ${pages} pages / ${subcats} artists`);
+    // Batched UPDATEs — keyed on page_title. PostgreSQL doesn't
+    // accept arbitrary parameter explosion, so we chunk to 200 at
+    // a time. Conditional on artist IS NULL unless force=true.
+    const items = Array.from(map.entries());
+    let updated = 0;
+    let alreadySet = 0;
+    let missing = 0;
+    const CHUNK = 200;
+    for (let i = 0; i < items.length; i += CHUNK) {
+      if (!_lyricsScrapeState.running) { console.log("[lyrics] artist-sync: stop requested"); break; }
+      const slice = items.slice(i, i + CHUNK);
+      // We do this row-by-row to handle the "only-if-NULL" condition
+      // cleanly; a bulk VALUES table-join could be done but adds
+      // complexity for marginal speed (the slow part is the wiki
+      // walk, not the DB writes).
+      for (const [title, artistName] of slice) {
+        const where = force
+          ? `WHERE page_title = $2`
+          : `WHERE page_title = $2 AND (artist IS NULL OR TRIM(artist) = '')`;
+        const r = await getPool().query(
+          `UPDATE blues_lyrics SET artist = $1 ${where} RETURNING id, artist`,
+          [artistName, title],
+        );
+        if (r.rowCount && r.rowCount > 0) updated++;
+        else {
+          // Find out why: title not in DB → missing; otherwise already set.
+          const probe = await getPool().query(
+            `SELECT artist FROM blues_lyrics WHERE page_title = $1`,
+            [title],
+          );
+          if (!probe.rows.length) missing++;
+          else alreadySet++;
+        }
+      }
+      _lyricsScrapeState.pagesScraped = updated;
+      _lyricsScrapeState.pagesSkipped = alreadySet;
+      _lyricsScrapeState.pagesFailed = missing;
+      _lyricsScrapeState.message = `Updating DB: ${updated} updated · ${alreadySet} already set · ${missing} not in DB · ${Math.round((i + slice.length) / items.length * 100)}%`;
+    }
+    _lyricsScrapeState.phase = "done";
+    _lyricsScrapeState.message = `Done. ${updated} artist fields updated, ${alreadySet} left alone (already set), ${missing} mapped titles not in blues_lyrics.`;
+    console.log(`[lyrics] artist-sync: ${updated} updated, ${alreadySet} already set, ${missing} missing`);
+  } catch (e: any) {
+    _lyricsScrapeState.phase = "error";
+    _lyricsScrapeState.error = e?.message ?? String(e);
+    _lyricsScrapeState.message = `Failed: ${_lyricsScrapeState.error}`;
+    console.error("[lyrics] artist-sync run failed:", e);
+  } finally {
+    _lyricsScrapeState.running = false;
+    _lyricsScrapeState.finishedAt = Date.now();
+    _lyricsScrapeState.currentTitle = "";
+  }
+}
+
+app.post("/api/admin/lyrics/sync-artists-from-wiki", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  if (_lyricsScrapeState.running) {
+    res.status(409).json({ error: "already_running", state: _lyricsScrapeState });
+    return;
+  }
+  const force = String(req.query.force ?? "") === "1";
+  _lyricsSyncArtistsRun(force).catch((e) => console.error("[lyrics] artist-sync background threw:", e));
+  res.json({ ok: true, started: true, force });
 });
 
 // GET /api/admin/lyrics/:id — full lyric record
