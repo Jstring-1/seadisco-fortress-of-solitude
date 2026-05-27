@@ -3973,10 +3973,13 @@ export async function pruneAllStaleData(): Promise<{
   const wl = await getPool().query(
     `DELETE FROM user_wantlist WHERE synced_at < ${interval30d}`
   );
-  // User collection folders older than 30 days
-  const fld = await getPool().query(
-    `DELETE FROM user_collection_folders WHERE synced_at < ${interval30d}`
-  );
+  // user_collection_folders has no synced_at column (and was never going
+  // to — folders are user-scoped metadata, lifecycle tied to the user).
+  // The old query here was erroring daily in the Postgres logs. Folder
+  // rows are tiny and already removed via the user-deletion cascade, so
+  // dropping the prune step entirely. fld stays at 0 so the return-shape
+  // is unchanged.
+  const fld = { rowCount: 0 } as { rowCount: number };
   // User inventory older than 30 days
   const inv = await getPool().query(
     `DELETE FROM user_inventory WHERE synced_at < ${interval30d}`
