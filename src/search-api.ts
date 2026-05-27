@@ -8649,11 +8649,13 @@ const _LYRICS_API       = `${_LYRICS_WIKI_BASE}/api.php`;
 // 1.2 s/req — we're not bypassing anything, just clearing the bot
 // challenge.
 const _LYRICS_UA        = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
-const _LYRICS_THROTTLE_MS = 1200;
+const _LYRICS_THROTTLE_MS = 1200;          // page-content fetches (heavier)
+const _LYRICS_DISCOVERY_THROTTLE_MS = 400; // category-member lookups (light)
 const _LYRICS_HARD_CAP    = 5000; // safety cap (4006 known)
 
 type LyricsScrapeState = {
   running: boolean;
+  phase: "idle" | "discovering" | "fetching" | "done" | "error";
   startedAt: number;
   finishedAt: number | null;
   pagesDiscovered: number;
@@ -8666,6 +8668,7 @@ type LyricsScrapeState = {
 };
 let _lyricsScrapeState: LyricsScrapeState = {
   running: false,
+  phase: "idle",
   startedAt: 0,
   finishedAt: null,
   pagesDiscovered: 0,
@@ -8815,12 +8818,16 @@ async function _lyricsCollectPagesUnderCategory(rootCategory: string): Promise<s
         format: "json",
       });
       if (cmcontinue) params.set("cmcontinue", cmcontinue);
-      _lyricsScrapeState.message = `Walking ${cat} (${pages.length} pages discovered)`;
+      _lyricsScrapeState.message = `Walking ${cat} (${pages.length} pages discovered, ${queue.length} categories queued)`;
       const j = await _lyricsFetchJson(`${_LYRICS_API}?${params.toString()}`).catch((e) => {
         console.warn("[lyrics] category fetch failed:", cat, e?.message ?? e);
         return null;
       });
-      await new Promise(r => setTimeout(r, _LYRICS_THROTTLE_MS));
+      // Discovery uses the lighter throttle — category-member queries are
+      // ~ms-cheap on the wiki side and 4000+ subcategories at 1.2 s each
+      // would mean ~5+ minutes JUST to enumerate page titles before any
+      // fetch happens.
+      await new Promise(r => setTimeout(r, _LYRICS_DISCOVERY_THROTTLE_MS));
       const members = j?.query?.categorymembers ?? [];
       for (const m of members) {
         const ns = Number(m?.ns);
@@ -8867,6 +8874,7 @@ async function _lyricsScrapeRun(): Promise<void> {
   if (_lyricsScrapeState.running) return;
   _lyricsScrapeState = {
     running: true,
+    phase: "discovering",
     startedAt: Date.now(),
     finishedAt: null,
     pagesDiscovered: 0,
@@ -8880,8 +8888,10 @@ async function _lyricsScrapeRun(): Promise<void> {
   try {
     const already = await getLyricTitlesAlreadyScraped("weeniecampbell.com");
     const pages = await _lyricsCollectPagesUnderCategory("Category:Lyrics");
+    _lyricsScrapeState.phase = "fetching";
     _lyricsScrapeState.pagesDiscovered = pages.length;
     _lyricsScrapeState.message = `Discovered ${pages.length} pages — fetching…`;
+    console.log(`[lyrics] discovery done in ${Math.round((Date.now() - _lyricsScrapeState.startedAt) / 1000)}s: ${pages.length} pages`);
     console.log(`[lyrics] entering scrape loop: ${pages.length} pages, ${already.size} already stored`);
     for (let i = 0; i < pages.length; i++) {
       // Honor the /scrape/stop request — running flag is the signal.
@@ -8927,8 +8937,10 @@ async function _lyricsScrapeRun(): Promise<void> {
       _lyricsScrapeState.message = `Scraped ${_lyricsScrapeState.pagesScraped} / ${_lyricsScrapeState.pagesDiscovered}`;
       await new Promise(r => setTimeout(r, _LYRICS_THROTTLE_MS));
     }
+    _lyricsScrapeState.phase = "done";
     _lyricsScrapeState.message = `Done. ${_lyricsScrapeState.pagesScraped} scraped, ${_lyricsScrapeState.pagesSkipped} skipped (already had), ${_lyricsScrapeState.pagesFailed} failed.`;
   } catch (e: any) {
+    _lyricsScrapeState.phase = "error";
     _lyricsScrapeState.error = e?.message ?? String(e);
     _lyricsScrapeState.message = `Failed: ${_lyricsScrapeState.error}`;
     console.error("[lyrics] scrape run failed:", e);
