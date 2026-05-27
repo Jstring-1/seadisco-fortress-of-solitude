@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260527.0843" />
+  <link rel="stylesheet" href="/style.css?v=20260527.0846" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260527.0843"></script>
-<script defer src="/shared.js?v=20260527.0843"></script>
+<script defer src="/utils.js?v=20260527.0846"></script>
+<script defer src="/shared.js?v=20260527.0846"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -56,6 +56,7 @@
         <button class="admin-tab" onclick="switchAdminTab('content')">Content</button>
         <button class="admin-tab" onclick="switchAdminTab('system')">System</button>
         <button class="admin-tab" onclick="switchAdminTab('blues-db')">Blues DB</button>
+        <button class="admin-tab" onclick="switchAdminTab('lyrics')">Lyrics</button>
       </div>
 
       <!-- ── Overview KPI box (Overview group) ─────────────────────── -->
@@ -269,25 +270,26 @@
           </div>
         </div>
 
-        <!-- ── Lyrics archive (scraped from weeniecampbell.com) ────────── -->
-        <div style="margin-top:2rem;padding-top:1rem;border-top:1px solid var(--border)">
-          <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
-            <h2 style="margin:0">Lyrics archive</h2>
-            <button class="admin-refresh-btn" id="lyrics-refresh-btn" onclick="_adminClickRefresh(this, lyricsLoadList)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
-            <span id="lyrics-refresh-status" class="admin-refresh-status"></span>
-            <button class="admin-btn" id="lyrics-scrape-btn" onclick="lyricsStartScrape()" title="Walk Category:Lyrics on weeniecampbell.com and store every page. ~80 min at 1.2 s/page. Resumable: re-running skips titles already stored.">Scrape weeniecampbell.com</button>
-            <span id="lyrics-scrape-status" style="font-size:0.78rem;color:var(--muted)"></span>
-            <span id="lyrics-stats" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
-          </div>
-          <div style="display:flex;gap:0.5rem;margin-bottom:0.6rem;align-items:center;flex-wrap:wrap">
-            <input id="lyrics-search" type="search" placeholder="Search title / artist / lyrics body" style="flex:1;min-width:200px;padding:0.45rem 0.7rem;font-size:0.88rem" oninput="lyricsDebouncedSearch()" />
-            <select id="lyrics-tuning" class="sd-filter-select" onchange="lyricsLoadList()" style="font-size:0.85rem">
-              <option value="">All tunings</option>
-            </select>
-          </div>
-          <div id="lyrics-list" style="font-size:0.82rem;color:var(--muted)">Click <em>Scrape</em> above, or load if you've already scraped.</div>
-          <div id="lyrics-pager" style="margin-top:0.6rem;display:flex;gap:0.4rem;align-items:center;font-size:0.78rem"></div>
+      </div>
+
+      <!-- ── Lyrics archive (own tab) — scraped from weeniecampbell.com ── -->
+      <div class="admin-tab-panel admin-grp-lyrics" id="panel-lyrics" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
+          <h2 style="margin:0">Lyrics archive</h2>
+          <button class="admin-refresh-btn" id="lyrics-refresh-btn" onclick="_adminClickRefresh(this, lyricsLoadList)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <span id="lyrics-refresh-status" class="admin-refresh-status"></span>
+          <button class="admin-btn" id="lyrics-scrape-btn" onclick="lyricsStartScrape()" title="Walk Category:Lyrics on weeniecampbell.com and store every page. ~80 min at 1.2 s/page. Resumable: re-running skips titles already stored.">Scrape weeniecampbell.com</button>
+          <span id="lyrics-scrape-status" style="font-size:0.78rem;color:var(--muted)"></span>
+          <span id="lyrics-stats" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
         </div>
+        <div style="display:flex;gap:0.5rem;margin-bottom:0.6rem;align-items:center;flex-wrap:wrap">
+          <input id="lyrics-search" type="search" placeholder="Search title / artist / lyrics body" style="flex:1;min-width:200px;padding:0.45rem 0.7rem;font-size:0.88rem" oninput="lyricsDebouncedSearch()" />
+          <select id="lyrics-tuning" class="sd-filter-select" onchange="lyricsLoadList()" style="font-size:0.85rem">
+            <option value="">All tunings</option>
+          </select>
+        </div>
+        <div id="lyrics-list" style="font-size:0.82rem;color:var(--muted)">Click <em>Scrape</em> above, or load if you've already scraped.</div>
+        <div id="lyrics-pager" style="margin-top:0.6rem;display:flex;gap:0.4rem;align-items:center;font-size:0.78rem"></div>
 
         <!-- Lyric viewer popup -->
         <div id="lyrics-viewer-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.78);z-index:300;align-items:flex-start;justify-content:center;padding:2rem 1rem;overflow:auto" onclick="if(event.target===this)lyricsCloseViewer()">
@@ -444,7 +446,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260527.0843"></script>
+<script defer src="/modal.js?v=20260527.0846"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -525,7 +527,11 @@ const _adminGroups = {
   },
   'blues-db': {
     panels: ['panel-blues-db'],
-    load: () => { bluesDbInit(); lyricsInit(); },
+    load: () => bluesDbInit(),
+  },
+  'lyrics': {
+    panels: ['panel-lyrics'],
+    load: () => lyricsInit(),
   },
 };
 
