@@ -6077,3 +6077,111 @@ export async function getLyricCount(): Promise<number> {
   return r.rows[0]?.n ?? 0;
 }
 
+
+
+// ── Blues archive (unified artist + lyrics + releases view) ──────────
+// Powers the admin Discovery sub-view that combines blues_artists,
+// blues_lyrics, and the JSONB releases array into a single per-artist
+// page. Matching of lyrics → artist is case-insensitive on name.
+
+// Walks distinct lyrics.artist values, finds those that don't already
+// exist as a blues_artists.name (case-insensitive), and inserts each
+// as a minimal new row (name only). Returns { added, total, existing }
+// so the UI can report what happened.
+export async function importLyricsArtistsToBluesDb(): Promise<{ added: number; total: number; existing: number }> {
+  // Distinct non-null lyric-artist names. Trim + dedupe in JS so we
+  // can match against the (lowercased) existing set in one pass.
+  const rawNamesR = await getPool().query(
+    `SELECT DISTINCT TRIM(artist) AS artist
+       FROM blues_lyrics
+      WHERE artist IS NOT NULL AND TRIM(artist) <> ''`,
+  );
+  const candidates = (rawNamesR.rows as Array<{ artist: string }>)
+    .map(r => r.artist.replace(/\s+/g, " ").trim())
+    .filter(s => s.length >= 2 && s.length <= 200);
+  const existingR = await getPool().query(`SELECT LOWER(name) AS lname FROM blues_artists`);
+  const existing = new Set((existingR.rows as Array<{ lname: string }>).map(r => r.lname));
+  let added = 0;
+  let already = 0;
+  for (const name of candidates) {
+    const key = name.toLowerCase();
+    if (existing.has(key)) { already++; continue; }
+    try {
+      await getPool().query(
+        `INSERT INTO blues_artists (name, enrichment_status)
+         VALUES ($1, $2::jsonb)`,
+        [name, JSON.stringify({ source: "lyrics_import" })],
+      );
+      existing.add(key); // guard against duplicate-spelled lyrics rows
+      added++;
+    } catch (e: any) {
+      // Unique-key collisions on Wikidata-QID etc. shouldn't happen for
+      // a name-only row, but if anything goes wrong, log + continue.
+      console.warn("[blues-archive] insert failed for", name, e?.message ?? e);
+    }
+  }
+  return { added, total: candidates.length, existing: already };
+}
+
+// Paginated artist list with aggregated counts. Joins lyrics on
+// case-insensitive name match (no alias support yet — keeps the SQL
+// fast; we can add aliases JSONB matching later). Releases come from
+// the existing discogs_releases JSONB column.
+export async function listBluesArchive(opts: { search?: string; limit?: number; offset?: number } = {}):
+  Promise<{ rows: Array<any>; total: number }> {
+  const params: any[] = [];
+  const where: string[] = [];
+  if (opts.search) {
+    params.push(`%${opts.search}%`);
+    where.push(`(a.name ILIKE $${params.length})`);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const limit = Math.max(1, Math.min(500, opts.limit ?? 100));
+  const offset = Math.max(0, opts.offset ?? 0);
+  const totalR = await getPool().query(
+    `SELECT COUNT(*)::int AS n FROM blues_artists a ${whereSql}`,
+    params,
+  );
+  const total = totalR.rows[0]?.n ?? 0;
+  params.push(limit, offset);
+  const r = await getPool().query(
+    `SELECT a.id,
+            a.name,
+            a.birth_date,
+            a.death_date,
+            a.photo_url,
+            a.discogs_id,
+            COALESCE(jsonb_array_length(a.discogs_releases), 0) AS releases_count,
+            (SELECT COUNT(*)::int FROM blues_lyrics l WHERE LOWER(TRIM(l.artist)) = LOWER(a.name)) AS lyrics_count
+       FROM blues_artists a
+       ${whereSql}
+       ORDER BY a.name ASC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params,
+  );
+  return { rows: r.rows, total };
+}
+
+// Full artist record + matched lyrics + releases sorted oldest→newest.
+export async function getBluesArchiveArtist(id: number): Promise<any | null> {
+  const ar = await getPool().query(`SELECT * FROM blues_artists WHERE id = $1`, [id]);
+  if (!ar.rows.length) return null;
+  const a = ar.rows[0];
+  const lr = await getPool().query(
+    `SELECT id, page_title, page_url, tuning, scraped_at,
+            substring(plaintext, 1, 240) AS snippet
+       FROM blues_lyrics
+      WHERE LOWER(TRIM(artist)) = LOWER($1)
+      ORDER BY page_title ASC`,
+    [a.name],
+  );
+  // Sort the JSONB releases array oldest→newest (NULL years last).
+  const releases = Array.isArray(a.discogs_releases) ? a.discogs_releases.slice() : [];
+  releases.sort((x: any, y: any) => {
+    const xy = Number(x?.year) || 9999;
+    const yy = Number(y?.year) || 9999;
+    if (xy !== yy) return xy - yy;
+    return String(x?.title ?? "").localeCompare(String(y?.title ?? ""));
+  });
+  return { ...a, lyrics: lr.rows, releases };
+}

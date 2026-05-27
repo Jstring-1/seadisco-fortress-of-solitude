@@ -269,6 +269,7 @@ function switchView(view, skipPushState = false) {
   const youtubeView = document.getElementById("youtube-view");
   const gutenbergView = document.getElementById("gutenberg-view");
   const chronamView   = document.getElementById("chronam-view");
+  const bluesArchiveView = document.getElementById("blues-archive-view");
   if (!skipPushState) {
     // Preserve existing query params across view switches — only `v` is
     // rewritten. Drop view-specific transient state (`tab` from LOC /
@@ -282,7 +283,7 @@ function switchView(view, skipPushState = false) {
       const tab = _cwTab || "collection";
       qs.set("v", tab);
       history.pushState({ view, tab }, "", "?" + qs.toString());
-    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive" || view === "youtube" || view === "gutenberg" || view === "chronam") {
+    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive" || view === "youtube" || view === "gutenberg" || view === "chronam" || view === "blues-archive") {
       qs.set("v", view);
       history.pushState({ view }, "", "?" + qs.toString());
     } else {
@@ -310,6 +311,7 @@ function switchView(view, skipPushState = false) {
   if (youtubeView) youtubeView.style.display = "none";
   if (gutenbergView) gutenbergView.style.display = "none";
   if (chronamView) chronamView.style.display = "none";
+  if (bluesArchiveView) bluesArchiveView.style.display = "none";
 
   // Memory hygiene: empty the heaviest result grids belonging to
   // views we're not currently showing. Decoded image bitmaps inside
@@ -474,6 +476,26 @@ function switchView(view, skipPushState = false) {
     else if (typeof window._sdLoadModule === "function") {
       window._sdLoadModule("/chronam.js").then(() => window.initChronAmView?.()).catch(() => {});
     }
+  } else if (view === "blues-archive") {
+    // Admin-only — unified artists + lyrics + releases. Server gates
+    // every endpoint via requireAdmin; client gate matches so a non-
+    // admin URL-typing user gets a clean message instead of a 403.
+    if (!_sdGateSignedInView()) return;
+    if (!window._isAdmin) {
+      if (typeof showToast === "function") {
+        showToast("Blues Archive is admin-only.", "info");
+      }
+      switchView("search", true);
+      return;
+    }
+    if (bluesArchiveView) bluesArchiveView.style.display = "block";
+    if (mainForm) mainForm.style.display = "none";
+    if (recordsWrap) recordsWrap.style.display = "none";
+    if (wantedWrap) wantedWrap.style.display = "none";
+    if (typeof initBluesArchiveView === "function") initBluesArchiveView();
+    else if (typeof window._sdLoadModule === "function") {
+      window._sdLoadModule("/blues-archive.js").then(() => window.initBluesArchiveView?.()).catch(() => {});
+    }
   } else if (view === "wiki") {
     if (wikiView) wikiView.style.display = "block";
     if (mainForm) mainForm.style.display = "none";
@@ -619,7 +641,7 @@ function switchView(view, skipPushState = false) {
   // whenever the current view is one of those four; mark the
   // active tab; otherwise hide the strip. YouTube tab is only
   // visible to YT-access users (admin / YT_OPEN_TO_USERS demo).
-  const _extrasViews = ["loc", "wiki", "archive", "youtube", "gutenberg", "chronam"];
+  const _extrasViews = ["loc", "wiki", "archive", "youtube", "gutenberg", "chronam", "blues-archive"];
   const _extrasTabs = document.getElementById("extras-tabs");
   if (_extrasTabs) {
     if (_extrasViews.includes(view)) {
@@ -631,6 +653,7 @@ function switchView(view, skipPushState = false) {
         youtube:   document.getElementById("extras-tab-youtube"),
         gutenberg: document.getElementById("extras-tab-gutenberg"),
         chronam:   document.getElementById("extras-tab-chronam"),
+        "blues-archive": document.getElementById("extras-tab-blues-archive"),
       };
       for (const [k, el] of Object.entries(tabs)) {
         if (el) el.classList.toggle("rr-tab-active", k === view);
@@ -664,14 +687,23 @@ function switchView(view, skipPushState = false) {
         if (tabs.chronam) tabs.chronam.style.display = caAccess ? "" : "none";
         if (caSep)        caSep.style.display        = caAccess ? "" : "none";
       };
+      // Blues Archive: admin-only.
+      const _syncBluesArchive = () => {
+        const baAccess = !!window._isAdmin;
+        const baSep = document.getElementById("extras-tab-blues-archive-sep");
+        const baTab = tabs["blues-archive"];
+        if (baTab) baTab.style.display = baAccess ? "" : "none";
+        if (baSep) baSep.style.display = baAccess ? "" : "none";
+      };
       _syncYt();
       _syncGb();
       _syncChronam();
+      _syncBluesArchive();
       if (typeof window._isAdmin !== "boolean" && typeof window._ensureAdminFlag === "function") {
         // Fire the admin probe and re-sync once it resolves so the
-        // YouTube / Gutenberg / Chronicling America tabs pop in for
-        // admin/demo without requiring a page reload.
-        window._ensureAdminFlag().then(() => { _syncYt(); _syncGb(); _syncChronam(); }).catch(() => {});
+        // YouTube / Gutenberg / Chronicling America / Blues Archive
+        // tabs pop in for admin/demo without requiring a page reload.
+        window._ensureAdminFlag().then(() => { _syncYt(); _syncGb(); _syncChronam(); _syncBluesArchive(); }).catch(() => {});
       }
     } else {
       _extrasTabs.style.display = "none";
