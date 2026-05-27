@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
+import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 
 
@@ -8630,6 +8630,341 @@ app.post("/api/admin/blues/enrich-yt/:id", async (req, res) => {
     console.error("[blues enrich-yt]", err);
     res.status(500).json({ error: err?.message ?? String(err) });
   }
+});
+
+// ── Lyrics scraper (weeniecampbell.com wiki, admin-only) ─────────────
+// Walks the MediaWiki API at weeniecampbell.com/wiki, starting from
+// Category:Lyrics and recursing into every subcategory. For each lyric
+// page we fetch the wikitext, derive a plaintext rendering, and
+// regex out the tuning if mentioned. Throttled at 1.2 s/req to stay
+// polite. Resumable: every successful page is written to blues_lyrics
+// immediately and on a restart we skip already-stored titles.
+
+const _LYRICS_WIKI_BASE = "https://www.weeniecampbell.com/wiki";
+const _LYRICS_API       = `${_LYRICS_WIKI_BASE}/api.php`;
+const _LYRICS_UA        = "SeaDisco-Lyrics-Archiver/1.0 (private research use)";
+const _LYRICS_THROTTLE_MS = 1200;
+const _LYRICS_HARD_CAP    = 5000; // safety cap (4006 known)
+
+type LyricsScrapeState = {
+  running: boolean;
+  startedAt: number;
+  finishedAt: number | null;
+  pagesDiscovered: number;
+  pagesScraped: number;
+  pagesSkipped: number;
+  pagesFailed: number;
+  currentTitle: string;
+  message: string;
+  error: string | null;
+};
+let _lyricsScrapeState: LyricsScrapeState = {
+  running: false,
+  startedAt: 0,
+  finishedAt: null,
+  pagesDiscovered: 0,
+  pagesScraped: 0,
+  pagesSkipped: 0,
+  pagesFailed: 0,
+  currentTitle: "",
+  message: "Idle",
+  error: null,
+};
+
+function _lyricsExtractTuning(text: string): string | null {
+  if (!text) return null;
+  // Common tuning conventions on the wiki:
+  //   "Tuning: Open D"   "Tuning - Spanish"   "Open G tuning"
+  //   "Played in DADGAD" "Drop D tuning"
+  const patterns: RegExp[] = [
+    /\btuning\s*[:\-=]\s*([A-Za-z][A-Za-z0-9 #\-/]{1,30})/i,
+    /\b(open\s+[A-G](?:\s*minor)?)\s+tuning\b/i,
+    /\b(drop\s+[A-G])\s+tuning\b/i,
+    /\b(DADGAD|DGDGBD|DADF#AD|EBEG#BE|CGCGCE|DADFAD)\b/i,
+    /\bin\s+(spanish|vestapol|sebastopol|cross[\- ]?note)\s+tuning\b/i,
+    /\b(spanish|vestapol|sebastopol)\s+tuning\b/i,
+  ];
+  for (const re of patterns) {
+    const m = text.match(re);
+    if (m && m[1]) {
+      const raw = m[1].trim();
+      // Canonicalize a few aliases
+      const canonical: Record<string, string> = {
+        "spanish":     "Open G (Spanish)",
+        "vestapol":    "Open D (Vestapol)",
+        "sebastopol":  "Open D (Vestapol)",
+        "cross note":  "Cross Note",
+        "cross-note":  "Cross Note",
+        "crossnote":   "Cross Note",
+      };
+      const key = raw.toLowerCase();
+      if (canonical[key]) return canonical[key];
+      // Title-case "open d" / "drop d" / etc.
+      return raw.replace(/\b\w/g, c => c.toUpperCase());
+    }
+  }
+  return null;
+}
+
+function _lyricsExtractArtist(wikitext: string, title: string): string | null {
+  if (!wikitext) return null;
+  // Common patterns on the wiki:
+  //   "Performed by [[Robert Johnson]]"
+  //   "Artist: Skip James"
+  //   "By [[Big Bill Broonzy]]"
+  const patterns: RegExp[] = [
+    /artist\s*[:\-=]\s*([^\n\r|<{]{2,80})/i,
+    /performed\s+by\s+\[\[([^\]|]{2,80})/i,
+    /performed\s+by\s+([^\n\r|<{]{2,80})/i,
+    /written\s+by\s+\[\[([^\]|]{2,80})/i,
+    /\bby\s+\[\[([^\]|]{2,80})\]\]/i,
+  ];
+  for (const re of patterns) {
+    const m = wikitext.match(re);
+    if (m && m[1]) {
+      const a = m[1].trim().replace(/[\s_]+/g, " ").slice(0, 200);
+      if (a.length >= 2) return a;
+    }
+  }
+  // Fallback: page-title parens like "Sweet Home Chicago (Robert Johnson)"
+  const tm = title.match(/^(.*?)\s*\(([^)]{2,80})\)\s*$/);
+  if (tm && tm[2]) return tm[2].trim();
+  return null;
+}
+
+function _lyricsWikitextToPlain(wt: string): string {
+  if (!wt) return "";
+  let s = wt;
+  // Strip <ref>…</ref>, HTML comments, basic tags
+  s = s.replace(/<ref[^>]*>[\s\S]*?<\/ref>/gi, "");
+  s = s.replace(/<ref[^/]*\/>/gi, "");
+  s = s.replace(/<!--[\s\S]*?-->/g, "");
+  s = s.replace(/<\/?[a-z][^>]*>/gi, "");
+  // [[Link|alias]] -> alias ; [[Link]] -> Link
+  s = s.replace(/\[\[([^|\]]+)\|([^\]]+)\]\]/g, "$2");
+  s = s.replace(/\[\[([^\]]+)\]\]/g, "$1");
+  // [url label] -> label ; bare [url]
+  s = s.replace(/\[https?:\/\/\S+\s+([^\]]+)\]/g, "$1");
+  s = s.replace(/\[https?:\/\/\S+\]/g, "");
+  // Templates: strip {{...}} (greedy through balanced braces is overkill;
+  // a non-nested pass handles the common cases)
+  for (let i = 0; i < 3; i++) s = s.replace(/\{\{[^{}]*\}\}/g, "");
+  // Bold/italics/headings
+  s = s.replace(/'''([^']+)'''/g, "$1");
+  s = s.replace(/''([^']+)''/g, "$1");
+  s = s.replace(/^=+\s*(.*?)\s*=+$/gm, "$1");
+  // Collapse multi-blank-lines
+  s = s.replace(/\n{3,}/g, "\n\n");
+  return s.trim();
+}
+
+async function _lyricsFetchJson(url: string): Promise<any> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 25_000);
+  try {
+    const r = await fetch(url, {
+      headers: { "User-Agent": _LYRICS_UA, "Accept": "application/json" },
+      signal: controller.signal,
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    return await r.json();
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function _lyricsCollectPagesUnderCategory(rootCategory: string): Promise<string[]> {
+  // BFS through subcategories. Each category page is fetched via
+  // list=categorymembers with cmtype=page|subcat. Page titles get
+  // accumulated; subcat titles get enqueued for further descent.
+  const seenCats = new Set<string>();
+  const queue: string[] = [rootCategory];
+  const pages: string[] = [];
+  const seenPages = new Set<string>();
+  while (queue.length) {
+    if (pages.length >= _LYRICS_HARD_CAP) break;
+    const cat = queue.shift()!;
+    if (seenCats.has(cat)) continue;
+    seenCats.add(cat);
+    let cmcontinue = "";
+    do {
+      const params = new URLSearchParams({
+        action: "query",
+        list: "categorymembers",
+        cmtitle: cat,
+        cmlimit: "500",
+        cmtype: "page|subcat",
+        format: "json",
+      });
+      if (cmcontinue) params.set("cmcontinue", cmcontinue);
+      _lyricsScrapeState.message = `Walking ${cat} (${pages.length} pages discovered)`;
+      const j = await _lyricsFetchJson(`${_LYRICS_API}?${params.toString()}`).catch((e) => {
+        console.warn("[lyrics] category fetch failed:", cat, e?.message ?? e);
+        return null;
+      });
+      await new Promise(r => setTimeout(r, _LYRICS_THROTTLE_MS));
+      const members = j?.query?.categorymembers ?? [];
+      for (const m of members) {
+        const ns = Number(m?.ns);
+        const t  = String(m?.title || "");
+        if (!t) continue;
+        if (ns === 14) {                       // subcategory
+          if (!seenCats.has(t)) queue.push(t);
+        } else if (ns === 0) {                 // article
+          if (!seenPages.has(t)) {
+            seenPages.add(t);
+            pages.push(t);
+            _lyricsScrapeState.pagesDiscovered = pages.length;
+            if (pages.length >= _LYRICS_HARD_CAP) break;
+          }
+        }
+      }
+      cmcontinue = j?.continue?.cmcontinue ?? "";
+    } while (cmcontinue);
+  }
+  return pages;
+}
+
+async function _lyricsFetchPage(title: string): Promise<{ wikitext: string; url: string } | null> {
+  // revisions API: prop=revisions&rvprop=content returns the latest
+  // wikitext. Faster + lower bandwidth than action=parse.
+  const params = new URLSearchParams({
+    action: "query",
+    prop: "revisions",
+    rvprop: "content",
+    rvslots: "main",
+    titles: title,
+    format: "json",
+    formatversion: "2",
+  });
+  const j = await _lyricsFetchJson(`${_LYRICS_API}?${params.toString()}`).catch(() => null);
+  const page = j?.query?.pages?.[0];
+  if (!page || page.missing) return null;
+  const wikitext = page?.revisions?.[0]?.slots?.main?.content ?? "";
+  const url = `${_LYRICS_WIKI_BASE}/index.php?title=${encodeURIComponent(title.replace(/ /g, "_"))}`;
+  return { wikitext, url };
+}
+
+async function _lyricsScrapeRun(): Promise<void> {
+  if (_lyricsScrapeState.running) return;
+  _lyricsScrapeState = {
+    running: true,
+    startedAt: Date.now(),
+    finishedAt: null,
+    pagesDiscovered: 0,
+    pagesScraped: 0,
+    pagesSkipped: 0,
+    pagesFailed: 0,
+    currentTitle: "",
+    message: "Collecting page list…",
+    error: null,
+  };
+  try {
+    const already = await getLyricTitlesAlreadyScraped("weeniecampbell.com");
+    const pages = await _lyricsCollectPagesUnderCategory("Category:Lyrics");
+    _lyricsScrapeState.pagesDiscovered = pages.length;
+    _lyricsScrapeState.message = `Discovered ${pages.length} pages — fetching…`;
+    for (const title of pages) {
+      if (already.has(title)) {
+        _lyricsScrapeState.pagesSkipped++;
+        continue;
+      }
+      _lyricsScrapeState.currentTitle = title;
+      try {
+        const fetched = await _lyricsFetchPage(title);
+        if (!fetched) { _lyricsScrapeState.pagesFailed++; }
+        else {
+          const wikitext  = fetched.wikitext;
+          const plaintext = _lyricsWikitextToPlain(wikitext);
+          const tuning    = _lyricsExtractTuning(wikitext) || _lyricsExtractTuning(plaintext);
+          const artist    = _lyricsExtractArtist(wikitext, title);
+          await upsertLyric({
+            pageTitle: title,
+            pageUrl: fetched.url,
+            artist,
+            tuning,
+            wikitext,
+            plaintext,
+            sourceHost: "weeniecampbell.com",
+          });
+          _lyricsScrapeState.pagesScraped++;
+        }
+      } catch (e: any) {
+        _lyricsScrapeState.pagesFailed++;
+        console.warn("[lyrics] page fetch failed:", title, e?.message ?? e);
+      }
+      _lyricsScrapeState.message = `Scraped ${_lyricsScrapeState.pagesScraped} / ${_lyricsScrapeState.pagesDiscovered}`;
+      await new Promise(r => setTimeout(r, _LYRICS_THROTTLE_MS));
+    }
+    _lyricsScrapeState.message = `Done. ${_lyricsScrapeState.pagesScraped} scraped, ${_lyricsScrapeState.pagesSkipped} skipped (already had), ${_lyricsScrapeState.pagesFailed} failed.`;
+  } catch (e: any) {
+    _lyricsScrapeState.error = e?.message ?? String(e);
+    _lyricsScrapeState.message = `Failed: ${_lyricsScrapeState.error}`;
+    console.error("[lyrics] scrape run failed:", e);
+  } finally {
+    _lyricsScrapeState.running = false;
+    _lyricsScrapeState.finishedAt = Date.now();
+    _lyricsScrapeState.currentTitle = "";
+  }
+}
+
+// POST /api/admin/lyrics/scrape — fire-and-forget background scrape
+app.post("/api/admin/lyrics/scrape", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  if (_lyricsScrapeState.running) {
+    res.status(409).json({ error: "already_running", state: _lyricsScrapeState });
+    return;
+  }
+  _lyricsScrapeRun().catch((e) => console.error("[lyrics] background run threw:", e));
+  res.json({ ok: true, started: true });
+});
+
+// GET /api/admin/lyrics/scrape/status — poll progress
+app.get("/api/admin/lyrics/scrape/status", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const count = await getLyricCount();
+    res.json({ ...(_lyricsScrapeState), totalStored: count });
+  } catch (err) {
+    console.error("[lyrics status]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// GET /api/admin/lyrics?q=&tuning=&artist=&limit=&offset=
+app.get("/api/admin/lyrics", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const q       = String(req.query.q ?? "").trim().slice(0, 200);
+    const tuning  = String(req.query.tuning ?? "").trim().slice(0, 80);
+    const artist  = String(req.query.artist ?? "").trim().slice(0, 200);
+    const limit   = Math.max(1, Math.min(500, parseInt(String(req.query.limit ?? "100"), 10) || 100));
+    const offset  = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
+    const result  = await listLyrics({ search: q || undefined, tuning: tuning || undefined, artist: artist || undefined, limit, offset });
+    res.json(result);
+  } catch (err) {
+    console.error("[lyrics list]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// GET /api/admin/lyrics/tunings — distinct tunings + counts
+app.get("/api/admin/lyrics/tunings", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try { res.json({ tunings: await getLyricTunings() }); }
+  catch (err) { console.error("[lyrics tunings]", err); res.status(500).json({ error: String(err) }); }
+});
+
+// GET /api/admin/lyrics/:id — full lyric record
+app.get("/api/admin/lyrics/:id", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) { res.status(400).json({ error: "bad_id" }); return; }
+    const row = await getLyricById(id);
+    if (!row) { res.status(404).json({ error: "not_found" }); return; }
+    res.json(row);
+  } catch (err) { console.error("[lyrics get]", err); res.status(500).json({ error: String(err) }); }
 });
 
 // POST /api/ai-search — Claude music recommendations

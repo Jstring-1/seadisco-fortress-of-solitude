@@ -931,6 +931,28 @@ export async function initDb() {
     ALTER TABLE blues_artists
     ADD COLUMN IF NOT EXISTS external_urls JSONB DEFAULT '[]'::jsonb
   `);
+
+  // ── Blues lyrics (scraped from weeniecampbell.com wiki, admin-only) ───
+  // Source: weeniecampbell.com/wiki, Category:Lyrics (and subcategories).
+  // page_title is the canonical wiki page title (unique per source host).
+  // tuning extracted from page body via regex (Open D, Spanish, etc.)
+  // so we can filter by it in the admin view.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS blues_lyrics (
+      id          SERIAL PRIMARY KEY,
+      source_host TEXT        NOT NULL DEFAULT 'weeniecampbell.com',
+      page_title  TEXT        NOT NULL,
+      page_url    TEXT        NOT NULL,
+      artist      TEXT,
+      tuning      TEXT,
+      wikitext    TEXT,
+      plaintext   TEXT,
+      scraped_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(source_host, page_title)
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS blues_lyrics_tuning_idx ON blues_lyrics (tuning)`);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS blues_lyrics_artist_idx ON blues_lyrics (artist)`);
 }
 
 // ── Blues DB helpers (admin-only) ──────────────────────────────────────
@@ -5932,3 +5954,104 @@ export async function listAllTrackYtOverrides(limit = 500): Promise<TrackYtOverr
     return r.rows as TrackYtOverride[];
   } catch { return []; }
 }
+
+
+// ── Lyrics helpers (scraped from weeniecampbell.com) ─────────────────
+// upsertLyric is keyed on (source_host, page_title) so a re-scrape
+// updates existing rows instead of duplicating.
+export async function upsertLyric(record: {
+  pageTitle: string;
+  pageUrl: string;
+  artist?: string | null;
+  tuning?: string | null;
+  wikitext?: string | null;
+  plaintext?: string | null;
+  sourceHost?: string;
+}): Promise<void> {
+  const host = record.sourceHost || "weeniecampbell.com";
+  await getPool().query(
+    `INSERT INTO blues_lyrics (source_host, page_title, page_url, artist, tuning, wikitext, plaintext, scraped_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+     ON CONFLICT (source_host, page_title)
+     DO UPDATE SET page_url = EXCLUDED.page_url,
+                   artist = EXCLUDED.artist,
+                   tuning = EXCLUDED.tuning,
+                   wikitext = EXCLUDED.wikitext,
+                   plaintext = EXCLUDED.plaintext,
+                   scraped_at = NOW()`,
+    [host, record.pageTitle, record.pageUrl, record.artist ?? null, record.tuning ?? null, record.wikitext ?? null, record.plaintext ?? null],
+  );
+}
+
+// Set of (source_host, page_title) keys we've already scraped — so a
+// resumed scrape skips them. Returns lowercased titles in a Set for
+// fast probing.
+export async function getLyricTitlesAlreadyScraped(sourceHost = "weeniecampbell.com"): Promise<Set<string>> {
+  try {
+    const r = await getPool().query(
+      `SELECT page_title FROM blues_lyrics WHERE source_host = $1`,
+      [sourceHost],
+    );
+    return new Set(r.rows.map((row: any) => String(row.page_title)));
+  } catch { return new Set(); }
+}
+
+export async function getLyricById(id: number): Promise<any | null> {
+  const r = await getPool().query(`SELECT * FROM blues_lyrics WHERE id = $1`, [id]);
+  return r.rows[0] || null;
+}
+
+export async function listLyrics(opts: {
+  search?: string;
+  tuning?: string;
+  artist?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<{ rows: any[]; total: number }> {
+  const where: string[] = [];
+  const params: any[] = [];
+  if (opts.search) {
+    params.push(`%${opts.search}%`);
+    where.push(`(page_title ILIKE $${params.length} OR artist ILIKE $${params.length} OR plaintext ILIKE $${params.length})`);
+  }
+  if (opts.tuning) {
+    params.push(opts.tuning);
+    where.push(`tuning = $${params.length}`);
+  }
+  if (opts.artist) {
+    params.push(opts.artist);
+    where.push(`artist = $${params.length}`);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const limit = Math.max(1, Math.min(500, opts.limit ?? 100));
+  const offset = Math.max(0, opts.offset ?? 0);
+  const totalRow = await getPool().query(`SELECT COUNT(*)::int AS n FROM blues_lyrics ${whereSql}`, params);
+  const total = totalRow.rows[0]?.n ?? 0;
+  params.push(limit, offset);
+  const rowsRes = await getPool().query(
+    `SELECT id, page_title, page_url, artist, tuning, scraped_at,
+            substring(plaintext, 1, 240) AS snippet
+       FROM blues_lyrics ${whereSql}
+       ORDER BY page_title ASC
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params,
+  );
+  return { rows: rowsRes.rows, total };
+}
+
+export async function getLyricTunings(): Promise<Array<{ tuning: string; n: number }>> {
+  const r = await getPool().query(
+    `SELECT tuning, COUNT(*)::int AS n
+       FROM blues_lyrics
+      WHERE tuning IS NOT NULL AND tuning <> ''
+      GROUP BY tuning
+      ORDER BY n DESC, tuning ASC`,
+  );
+  return r.rows;
+}
+
+export async function getLyricCount(): Promise<number> {
+  const r = await getPool().query(`SELECT COUNT(*)::int AS n FROM blues_lyrics`);
+  return r.rows[0]?.n ?? 0;
+}
+
