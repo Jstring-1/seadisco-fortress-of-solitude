@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260527.1148" />
+  <link rel="stylesheet" href="/style.css?v=20260527.1159" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260527.1148"></script>
-<script defer src="/shared.js?v=20260527.1148"></script>
+<script defer src="/utils.js?v=20260527.1159"></script>
+<script defer src="/shared.js?v=20260527.1159"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -449,7 +449,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260527.1148"></script>
+<script defer src="/modal.js?v=20260527.1159"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -3513,7 +3513,20 @@ window.lyricsStopScrape = lyricsStopScrape;
 async function lyricsStartScrape() {
   const btn = document.getElementById("lyrics-scrape-btn");
   const statusEl = document.getElementById("lyrics-scrape-status");
-  if (!confirm("Start the lyrics scrape? Walks ~4006 pages at 1.2 s each — about 80 minutes. You can leave the page; it runs server-side. Resumable.")) return;
+  // If lyrics are already in the DB, scraping is rarely what the user
+  // wants — Sync artists / Re-extract cover the usual follow-up needs
+  // without re-fetching every page. Confirm with the actual count so
+  // the user can be sure they meant it.
+  let storedCount = 0;
+  try {
+    const r = await apiFetch("/api/admin/lyrics/scrape/status");
+    if (r.ok) storedCount = Number((await r.json()).totalStored) || 0;
+  } catch {}
+  const baseMsg = "Start the lyrics scrape? Walks ~4006 pages at 1.2 s each — about 80 minutes. You can leave the page; it runs server-side. Resumable.";
+  const prompt = storedCount > 0
+    ? `You already have ${storedCount.toLocaleString()} lyrics stored. A fresh scrape isn't usually needed once the corpus is in — Sync artists / Re-extract handle the common follow-ups. Run a full scrape anyway?\n\n${baseMsg}`
+    : baseMsg;
+  if (!confirm(prompt)) return;
   btn.disabled = true;
   statusEl.textContent = "Starting…";
   try {
@@ -3557,14 +3570,18 @@ async function lyricsPollScrapeOnce() {
       btn.disabled = true;
       if (stopBtn) stopBtn.style.display = "";
       const phase = s.phase || "running";
+      // Label the job kind so artist-sync runs aren't mistaken for a
+      // new scrape — they share progress state but mean different
+      // things (sync is DB-only after the wiki walk; scrape fetches
+      // page content from the wiki).
+      const jobLabel = s.jobKind === "artist-sync" ? "Artist sync"
+                     : s.jobKind === "scrape"      ? "Lyric scrape"
+                     :                               "Running";
       if (phase === "discovering") {
-        // Discovery walks the category tree — pagesScraped/Failed aren't
-        // meaningful yet. Surface the message verbatim so the user can
-        // see what subcategory we're on + how many pages found so far.
-        statusEl.innerHTML = `<span style="color:var(--accent)">Discovering…</span> ${escHtml(s.message || "").slice(0, 140)}`;
+        statusEl.innerHTML = `<span style="color:var(--accent)">${escHtml(jobLabel)} ·</span> ${escHtml(s.message || "").slice(0, 140)}`;
       } else {
         const pct = s.pagesDiscovered ? Math.round((s.pagesScraped + s.pagesSkipped) / s.pagesDiscovered * 100) : 0;
-        statusEl.innerHTML = `<span style="color:var(--accent)">Fetching…</span> ${s.pagesScraped}/${s.pagesDiscovered} (${pct}%) · skipped ${s.pagesSkipped} · failed ${s.pagesFailed}${s.currentTitle ? ` · <em style="color:var(--muted)">${escHtml(s.currentTitle).slice(0, 60)}</em>` : ""}`;
+        statusEl.innerHTML = `<span style="color:var(--accent)">${escHtml(jobLabel)} ·</span> ${s.pagesScraped}/${s.pagesDiscovered} (${pct}%) · skipped ${s.pagesSkipped} · failed ${s.pagesFailed}${s.currentTitle ? ` · <em style="color:var(--muted)">${escHtml(s.currentTitle).slice(0, 60)}</em>` : ""}`;
       }
     } else {
       btn.disabled = false;
