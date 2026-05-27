@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260527.1226" />
+  <link rel="stylesheet" href="/style.css?v=20260527.1342" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260527.1226"></script>
-<script defer src="/shared.js?v=20260527.1226"></script>
+<script defer src="/utils.js?v=20260527.1342"></script>
+<script defer src="/shared.js?v=20260527.1342"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -449,7 +449,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260527.1226"></script>
+<script defer src="/modal.js?v=20260527.1342"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1873,6 +1873,7 @@ function bluesDbRenderList() {
         <a href="#" class="blues-row-name" data-hover-type="name" data-row-id="${r.id}" onclick="event.preventDefault();bluesDbOpenEditor(${r.id})">${esc(r.name)}</a>
         <a href="${esc(searchHref)}" target="_blank" rel="noopener" title="Search SeaDisco" class="blues-row-icon blues-row-search">⌕</a>
         <a href="${esc(wikiHref)}" target="_blank" rel="noopener" title="Wikipedia popup" class="blues-row-icon blues-row-wiki">W</a>
+        <a href="#" class="blues-row-icon" title="Merge this artist into another (moves lyrics + releases, deletes this row)" onclick="event.preventDefault();bluesDbMergePicker(${r.id}, '${esc(r.name).replace(/'/g, "&#39;")}')">⇄</a>
       </td>
       <td style="text-align:right" class="blues-hover-cell" data-hover-type="first-rel" data-row-id="${r.id}">${r.earliest_release_year ?? ""}</td>
       <td>${esc(styles)}</td>
@@ -2775,6 +2776,106 @@ async function bluesDbSaveEditor() {
     bluesDbRenderList();
   } catch (e) { alert("Save failed: " + e); }
 }
+
+// ── Merge picker (admin Blues DB) ───────────────────────────────────
+// Lightweight overlay — same flow as the Discovery-side merge picker
+// but inline in admin.html so admin tooling doesn't depend on
+// blues-archive.js. Reuses the POST /api/blues-archive/merge endpoint.
+let _bluesMergeSearchTimer = null;
+function bluesDbMergePicker(fromId, fromName) {
+  let overlay = document.getElementById("blues-db-merge-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "blues-db-merge-overlay";
+    Object.assign(overlay.style, {
+      position: "fixed", inset: "0", background: "rgba(0,0,0,0.78)",
+      zIndex: "310", display: "flex", alignItems: "flex-start",
+      justifyContent: "center", padding: "2rem 1rem", overflow: "auto",
+    });
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+  const safeFrom = String(fromName).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(600px,100%)">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:0.6rem;margin-bottom:0.6rem">
+        <h3 style="margin:0">Merge <em>${safeFrom}</em> into…</h3>
+        <button class="admin-btn" onclick="document.getElementById('blues-db-merge-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
+      </div>
+      <p style="font-size:0.78rem;color:var(--muted);margin:0 0 0.6rem">
+        Lyrics keyed to <em>${safeFrom}</em> are reassigned to the target.
+        Release JSONB arrays are concatenated (deduped by id+type).
+        This row is then deleted. Runs as a single transaction.
+      </p>
+      <input id="blues-merge-search" type="search" placeholder="Type to filter artists…" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem;margin-bottom:0.5rem" oninput="bluesDbMergePickerSearch(${fromId})">
+      <div id="blues-merge-results" style="max-height:40vh;overflow:auto;border:1px solid var(--border);border-radius:4px;padding:0.4rem 0.6rem;font-size:0.84rem"></div>
+      <div id="blues-merge-status" style="font-size:0.76rem;color:var(--muted);margin-top:0.5rem;min-height:1em"></div>
+    </div>
+  `;
+  setTimeout(() => document.getElementById("blues-merge-search")?.focus(), 50);
+  _bluesDbMergePickerLoad(fromId);
+}
+window.bluesDbMergePicker = bluesDbMergePicker;
+
+function bluesDbMergePickerSearch(fromId) {
+  if (_bluesMergeSearchTimer) clearTimeout(_bluesMergeSearchTimer);
+  _bluesMergeSearchTimer = setTimeout(() => _bluesDbMergePickerLoad(fromId), 240);
+}
+window.bluesDbMergePickerSearch = bluesDbMergePickerSearch;
+
+async function _bluesDbMergePickerLoad(fromId) {
+  const q = (document.getElementById("blues-merge-search")?.value || "").trim();
+  const el = document.getElementById("blues-merge-results");
+  if (!el) return;
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  params.set("limit", "40");
+  el.textContent = "Loading…";
+  try {
+    const r = await apiFetch(`/api/blues-archive/artists?${params}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const { rows = [] } = await r.json();
+    const choices = rows.filter(row => row.id !== fromId);
+    if (!choices.length) {
+      el.innerHTML = `<div style="color:var(--muted);padding:0.4rem 0">No matches.</div>`;
+      return;
+    }
+    const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g, "&#39;");
+    el.innerHTML = choices.map(row => `
+      <div onclick="_bluesDbConfirmMerge(${fromId}, ${row.id}, '${esc(row.name || "")}')" style="cursor:pointer;padding:0.3rem 0;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;justify-content:space-between;gap:0.6rem">
+        <span style="font-weight:600;color:var(--text)">${esc(row.name || "")}</span>
+        <span style="color:var(--muted);font-size:0.76rem">${row.lyrics_count || 0}L · ${row.releases_count || 0}R</span>
+      </div>`).join("");
+  } catch (e) {
+    el.innerHTML = `<div style="color:#e88">Failed: ${e?.message || e}</div>`;
+  }
+}
+
+async function _bluesDbConfirmMerge(fromId, intoId, intoName) {
+  if (!confirm(`Merge into "${intoName}"? Lyrics get reassigned; releases get concatenated; the source row is deleted. Cannot be undone from the UI.`)) return;
+  const statusEl = document.getElementById("blues-merge-status");
+  if (statusEl) statusEl.textContent = "Merging…";
+  try {
+    const r = await apiFetch("/api/blues-archive/merge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fromId, intoId }),
+    });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
+    }
+    const j = await r.json();
+    document.getElementById("blues-db-merge-overlay")?.remove();
+    bluesDbLoadList();
+    bluesDbLoadStats();
+    alert(`Merged. ${j.lyricsReassigned} lyrics reassigned, ${j.releasesAdded} releases added.`);
+  } catch (e) {
+    if (statusEl) statusEl.textContent = `Merge failed: ${e?.message || e}`;
+  }
+}
+window._bluesDbConfirmMerge = _bluesDbConfirmMerge;
+
 async function bluesDbDeleteFromEditor() {
   const id = _bluesDbState.editingId;
   if (!id) return;
