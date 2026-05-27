@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260526.1148" />
+  <link rel="stylesheet" href="/style.css?v=20260527.0838" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260526.1148"></script>
-<script defer src="/shared.js?v=20260526.1148"></script>
+<script defer src="/utils.js?v=20260527.0838"></script>
+<script defer src="/shared.js?v=20260527.0838"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -268,6 +268,40 @@
             <div id="blues-discogs-picker-results" style="overflow-y:auto;padding:0.5rem 0.8rem 0.8rem;flex:1;font-size:0.82rem;color:var(--muted)"></div>
           </div>
         </div>
+
+        <!-- ── Lyrics archive (scraped from weeniecampbell.com) ────────── -->
+        <div style="margin-top:2rem;padding-top:1rem;border-top:1px solid var(--border)">
+          <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
+            <h2 style="margin:0">Lyrics archive</h2>
+            <button class="admin-refresh-btn" id="lyrics-refresh-btn" onclick="_adminClickRefresh(this, lyricsLoadList)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+            <span id="lyrics-refresh-status" class="admin-refresh-status"></span>
+            <button class="admin-btn" id="lyrics-scrape-btn" onclick="lyricsStartScrape()" title="Walk Category:Lyrics on weeniecampbell.com and store every page. ~80 min at 1.2 s/page. Resumable: re-running skips titles already stored.">Scrape weeniecampbell.com</button>
+            <span id="lyrics-scrape-status" style="font-size:0.78rem;color:var(--muted)"></span>
+            <span id="lyrics-stats" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
+          </div>
+          <div style="display:flex;gap:0.5rem;margin-bottom:0.6rem;align-items:center;flex-wrap:wrap">
+            <input id="lyrics-search" type="search" placeholder="Search title / artist / lyrics body" style="flex:1;min-width:200px;padding:0.45rem 0.7rem;font-size:0.88rem" oninput="lyricsDebouncedSearch()" />
+            <select id="lyrics-tuning" class="sd-filter-select" onchange="lyricsLoadList()" style="font-size:0.85rem">
+              <option value="">All tunings</option>
+            </select>
+          </div>
+          <div id="lyrics-list" style="font-size:0.82rem;color:var(--muted)">Click <em>Scrape</em> above, or load if you've already scraped.</div>
+          <div id="lyrics-pager" style="margin-top:0.6rem;display:flex;gap:0.4rem;align-items:center;font-size:0.78rem"></div>
+        </div>
+
+        <!-- Lyric viewer popup -->
+        <div id="lyrics-viewer-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.78);z-index:300;align-items:flex-start;justify-content:center;padding:2rem 1rem;overflow:auto" onclick="if(event.target===this)lyricsCloseViewer()">
+          <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(820px,100%)">
+            <div style="display:flex;justify-content:space-between;align-items:start;gap:0.6rem;margin-bottom:0.6rem">
+              <div style="min-width:0">
+                <h3 id="lyrics-viewer-title" style="margin:0 0 0.25rem"></h3>
+                <div id="lyrics-viewer-meta" style="font-size:0.78rem;color:var(--muted)"></div>
+              </div>
+              <button class="admin-btn" onclick="lyricsCloseViewer()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
+            </div>
+            <pre id="lyrics-viewer-body" style="white-space:pre-wrap;font-family:inherit;font-size:0.88rem;line-height:1.5;color:var(--text);max-height:60vh;overflow:auto;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:4px;padding:0.8rem 1rem;margin:0"></pre>
+          </div>
+        </div>
       </div>
 
       <!-- Submitted Tracks (Content group) -->
@@ -410,7 +444,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260526.1148"></script>
+<script defer src="/modal.js?v=20260527.0838"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -491,7 +525,7 @@ const _adminGroups = {
   },
   'blues-db': {
     panels: ['panel-blues-db'],
-    load: () => bluesDbInit(),
+    load: () => { bluesDbInit(); lyricsInit(); },
   },
 };
 
@@ -3271,6 +3305,203 @@ async function adminOpenDbTablePopup(tableName) {
   }
 }
 window.adminOpenDbTablePopup = adminOpenDbTablePopup;
+
+// ── Lyrics archive (weeniecampbell.com scrape) ─────────────────────
+let _lyricsPage = 0;
+let _lyricsLimit = 100;
+let _lyricsTotal = 0;
+let _lyricsSearchTimer = null;
+let _lyricsScrapePoll = null;
+
+function lyricsInit() {
+  lyricsLoadTunings();
+  lyricsLoadList();
+  // If a scrape is already running on the server (e.g. user reloaded
+  // the admin page mid-run), poll status so the UI re-attaches.
+  lyricsPollScrapeOnce();
+}
+window.lyricsInit = lyricsInit;
+
+async function lyricsLoadTunings() {
+  try {
+    const r = await apiFetch("/api/admin/lyrics/tunings");
+    if (!r.ok) return;
+    const { tunings = [] } = await r.json();
+    const sel = document.getElementById("lyrics-tuning");
+    if (!sel) return;
+    const current = sel.value;
+    sel.innerHTML = `<option value="">All tunings</option>` + tunings.map(t =>
+      `<option value="${escHtml(t.tuning)}">${escHtml(t.tuning)} (${t.n})</option>`
+    ).join("");
+    if (current) sel.value = current;
+  } catch {}
+}
+
+function lyricsDebouncedSearch() {
+  if (_lyricsSearchTimer) clearTimeout(_lyricsSearchTimer);
+  _lyricsSearchTimer = setTimeout(() => { _lyricsPage = 0; lyricsLoadList(); }, 280);
+}
+window.lyricsDebouncedSearch = lyricsDebouncedSearch;
+
+async function lyricsLoadList() {
+  const list = document.getElementById("lyrics-list");
+  if (!list) return;
+  const q = (document.getElementById("lyrics-search")?.value || "").trim();
+  const tuning = document.getElementById("lyrics-tuning")?.value || "";
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (tuning) params.set("tuning", tuning);
+  params.set("limit", String(_lyricsLimit));
+  params.set("offset", String(_lyricsPage * _lyricsLimit));
+  list.textContent = "Loading…";
+  try {
+    const r = await apiFetch(`/api/admin/lyrics?${params}`);
+    if (!r.ok) { list.innerHTML = `<p style="color:#e88">Failed: HTTP ${r.status}</p>`; return; }
+    const { rows = [], total = 0 } = await r.json();
+    _lyricsTotal = total;
+    document.getElementById("lyrics-stats").textContent = total
+      ? `${total.toLocaleString()} lyric${total === 1 ? "" : "s"} stored`
+      : "No lyrics stored yet.";
+    if (!rows.length) {
+      list.innerHTML = `<p style="color:var(--muted);padding:0.5rem 0">No matches.</p>`;
+    } else {
+      list.innerHTML = `<table class="api-log-table" style="font-size:0.82rem;width:100%">
+        <thead><tr>
+          <th>Title</th><th>Artist</th><th>Tuning</th><th>Snippet</th><th></th>
+        </tr></thead>
+        <tbody>${rows.map(row => `
+          <tr style="cursor:pointer" onclick="lyricsOpenViewer(${row.id})">
+            <td style="white-space:nowrap;color:var(--text);font-weight:600">${escHtml(row.page_title || "")}</td>
+            <td style="white-space:nowrap">${escHtml(row.artist || "—")}</td>
+            <td style="white-space:nowrap;color:var(--accent)">${escHtml(row.tuning || "")}</td>
+            <td style="font-size:0.75rem;color:#888">${escHtml((row.snippet || "").replace(/\s+/g, " ").slice(0, 120))}…</td>
+            <td><a href="${escHtml(row.page_url || "")}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--accent);text-decoration:none;font-size:0.74rem">wiki ↗</a></td>
+          </tr>`).join("")}
+        </tbody></table>`;
+    }
+    lyricsRenderPager();
+  } catch (e) {
+    list.innerHTML = `<p style="color:#e88">Failed: ${escHtml(String(e?.message || e))}</p>`;
+  }
+}
+window.lyricsLoadList = lyricsLoadList;
+
+function lyricsRenderPager() {
+  const el = document.getElementById("lyrics-pager");
+  if (!el) return;
+  const pageCount = Math.max(1, Math.ceil(_lyricsTotal / _lyricsLimit));
+  const cur = _lyricsPage + 1;
+  if (pageCount <= 1) { el.innerHTML = ""; return; }
+  el.innerHTML = `
+    <button class="admin-btn" ${cur <= 1 ? "disabled" : ""} onclick="lyricsGoToPage(${_lyricsPage - 1})">‹ Prev</button>
+    <span style="color:var(--muted)">Page ${cur} / ${pageCount}</span>
+    <button class="admin-btn" ${cur >= pageCount ? "disabled" : ""} onclick="lyricsGoToPage(${_lyricsPage + 1})">Next ›</button>
+  `;
+}
+
+function lyricsGoToPage(p) {
+  _lyricsPage = Math.max(0, p);
+  lyricsLoadList();
+}
+window.lyricsGoToPage = lyricsGoToPage;
+
+async function lyricsOpenViewer(id) {
+  const overlay = document.getElementById("lyrics-viewer-overlay");
+  const titleEl = document.getElementById("lyrics-viewer-title");
+  const metaEl  = document.getElementById("lyrics-viewer-meta");
+  const bodyEl  = document.getElementById("lyrics-viewer-body");
+  if (!overlay) return;
+  overlay.style.display = "flex";
+  titleEl.textContent = "Loading…";
+  metaEl.textContent = "";
+  bodyEl.textContent = "";
+  try {
+    const r = await apiFetch(`/api/admin/lyrics/${id}`);
+    if (!r.ok) { bodyEl.textContent = `Failed: HTTP ${r.status}`; return; }
+    const row = await r.json();
+    titleEl.textContent = row.page_title || "(untitled)";
+    const meta = [
+      row.artist ? `Artist: ${row.artist}` : "",
+      row.tuning ? `Tuning: ${row.tuning}` : "",
+      row.scraped_at ? `Scraped ${new Date(row.scraped_at).toLocaleString()}` : "",
+    ].filter(Boolean).join(" · ");
+    metaEl.innerHTML = `${escHtml(meta)} · <a href="${escHtml(row.page_url || "")}" target="_blank" rel="noopener" style="color:var(--accent)">View on wiki ↗</a>`;
+    bodyEl.textContent = row.plaintext || "(no plaintext)";
+  } catch (e) {
+    bodyEl.textContent = `Failed: ${e?.message || e}`;
+  }
+}
+window.lyricsOpenViewer = lyricsOpenViewer;
+
+function lyricsCloseViewer() {
+  const overlay = document.getElementById("lyrics-viewer-overlay");
+  if (overlay) overlay.style.display = "none";
+}
+window.lyricsCloseViewer = lyricsCloseViewer;
+
+async function lyricsStartScrape() {
+  const btn = document.getElementById("lyrics-scrape-btn");
+  const statusEl = document.getElementById("lyrics-scrape-status");
+  if (!confirm("Start the lyrics scrape? Walks ~4006 pages at 1.2 s each — about 80 minutes. You can leave the page; it runs server-side. Resumable.")) return;
+  btn.disabled = true;
+  statusEl.textContent = "Starting…";
+  try {
+    const r = await apiFetch("/api/admin/lyrics/scrape", { method: "POST" });
+    if (r.status === 409) {
+      statusEl.textContent = "Already running — attaching to status…";
+    } else if (!r.ok) {
+      statusEl.textContent = `Failed: HTTP ${r.status}`;
+      btn.disabled = false;
+      return;
+    }
+    lyricsStartPolling();
+  } catch (e) {
+    statusEl.textContent = `Failed: ${e?.message || e}`;
+    btn.disabled = false;
+  }
+}
+window.lyricsStartScrape = lyricsStartScrape;
+
+function lyricsStartPolling() {
+  if (_lyricsScrapePoll) clearInterval(_lyricsScrapePoll);
+  // Slow poll — scrape is long-running, no need to hammer.
+  _lyricsScrapePoll = setInterval(lyricsPollScrapeOnce, 5000);
+  lyricsPollScrapeOnce();
+}
+
+async function lyricsPollScrapeOnce() {
+  const statusEl = document.getElementById("lyrics-scrape-status");
+  const btn = document.getElementById("lyrics-scrape-btn");
+  if (!statusEl) return;
+  try {
+    const r = await apiFetch("/api/admin/lyrics/scrape/status");
+    if (!r.ok) return;
+    const s = await r.json();
+    const stats = document.getElementById("lyrics-stats");
+    if (stats && typeof s.totalStored === "number") {
+      stats.textContent = `${s.totalStored.toLocaleString()} lyric${s.totalStored === 1 ? "" : "s"} stored`;
+    }
+    if (s.running) {
+      btn.disabled = true;
+      const pct = s.pagesDiscovered ? Math.round((s.pagesScraped + s.pagesSkipped) / s.pagesDiscovered * 100) : 0;
+      statusEl.innerHTML = `<span style="color:var(--accent)">Running…</span> ${s.pagesScraped}/${s.pagesDiscovered} (${pct}%) · skipped ${s.pagesSkipped} · failed ${s.pagesFailed}${s.currentTitle ? ` · <em style="color:var(--muted)">${escHtml(s.currentTitle).slice(0, 60)}</em>` : ""}`;
+    } else {
+      btn.disabled = false;
+      if (s.finishedAt && s.startedAt) {
+        const mins = Math.round((s.finishedAt - s.startedAt) / 60000);
+        statusEl.innerHTML = `<span style="color:#4caf50">${escHtml(s.message)}</span> · ${mins} min`;
+      } else {
+        statusEl.textContent = s.message || "";
+      }
+      if (_lyricsScrapePoll) { clearInterval(_lyricsScrapePoll); _lyricsScrapePoll = null; }
+      // Refresh list + tunings if a scrape just finished
+      if (s.pagesScraped > 0 && s.finishedAt) {
+        lyricsLoadTunings();
+        lyricsLoadList();
+      }
+    }
+  } catch {}
+}
 </script>
 
 <style>
