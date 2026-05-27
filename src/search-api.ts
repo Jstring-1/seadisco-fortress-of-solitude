@@ -8765,14 +8765,26 @@ function _lyricsWikitextToPlain(wt: string): string {
 }
 
 async function _lyricsFetchJson(url: string): Promise<any> {
+  // Per-fetch cap dropped from 25 s → 12 s so a stuck request can't
+  // halt the loop for long. Cloudflare normally responds in <1 s when
+  // it's going to respond at all; if a request takes 12 s it's
+  // either being challenged or blackholed and we should move on.
+  // Referer added because Cloudflare's bot protection sometimes
+  // requires one to match the User-Agent's "real browser" story.
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 25_000);
+  const timeoutId = setTimeout(() => controller.abort(), 12_000);
+  const t0 = Date.now();
   try {
     const r = await fetch(url, {
-      headers: { "User-Agent": _LYRICS_UA, "Accept": "application/json" },
+      headers: {
+        "User-Agent": _LYRICS_UA,
+        "Accept": "application/json",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Referer": `${_LYRICS_WIKI_BASE}/index.php?title=Special:Search`,
+      },
       signal: controller.signal,
     });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status} in ${Date.now() - t0}ms`);
     return await r.json();
   } finally {
     clearTimeout(timeoutId);
@@ -8870,16 +8882,26 @@ async function _lyricsScrapeRun(): Promise<void> {
     const pages = await _lyricsCollectPagesUnderCategory("Category:Lyrics");
     _lyricsScrapeState.pagesDiscovered = pages.length;
     _lyricsScrapeState.message = `Discovered ${pages.length} pages — fetching…`;
-    for (const title of pages) {
+    console.log(`[lyrics] entering scrape loop: ${pages.length} pages, ${already.size} already stored`);
+    for (let i = 0; i < pages.length; i++) {
+      // Honor the /scrape/stop request — running flag is the signal.
+      if (!_lyricsScrapeState.running) {
+        console.log(`[lyrics] stop requested at ${i}/${pages.length}`);
+        break;
+      }
+      const title = pages[i];
       if (already.has(title)) {
         _lyricsScrapeState.pagesSkipped++;
         continue;
       }
       _lyricsScrapeState.currentTitle = title;
+      const iterT0 = Date.now();
       try {
         const fetched = await _lyricsFetchPage(title);
-        if (!fetched) { _lyricsScrapeState.pagesFailed++; }
-        else {
+        if (!fetched) {
+          _lyricsScrapeState.pagesFailed++;
+          console.warn(`[lyrics] ${i + 1}/${pages.length} fetch returned null: ${title} (${Date.now() - iterT0}ms)`);
+        } else {
           const wikitext  = fetched.wikitext;
           const plaintext = _lyricsWikitextToPlain(wikitext);
           const tuning    = _lyricsExtractTuning(wikitext) || _lyricsExtractTuning(plaintext);
@@ -8894,10 +8916,13 @@ async function _lyricsScrapeRun(): Promise<void> {
             sourceHost: "weeniecampbell.com",
           });
           _lyricsScrapeState.pagesScraped++;
+          if (i < 5 || i % 50 === 0) {
+            console.log(`[lyrics] ${i + 1}/${pages.length} scraped: ${title} (artist=${artist ?? "-"}, tuning=${tuning ?? "-"}, ${Date.now() - iterT0}ms)`);
+          }
         }
       } catch (e: any) {
         _lyricsScrapeState.pagesFailed++;
-        console.warn("[lyrics] page fetch failed:", title, e?.message ?? e);
+        console.warn(`[lyrics] ${i + 1}/${pages.length} threw: ${title}`, e?.message ?? e);
       }
       _lyricsScrapeState.message = `Scraped ${_lyricsScrapeState.pagesScraped} / ${_lyricsScrapeState.pagesDiscovered}`;
       await new Promise(r => setTimeout(r, _LYRICS_THROTTLE_MS));
@@ -8923,6 +8948,18 @@ app.post("/api/admin/lyrics/scrape", async (req, res) => {
   }
   _lyricsScrapeRun().catch((e) => console.error("[lyrics] background run threw:", e));
   res.json({ ok: true, started: true });
+});
+
+// POST /api/admin/lyrics/scrape/stop — request the running scrape to bail
+// (sets running=false; loop checks it on next iteration). Useful when a
+// run looks stuck or we want to retry with different code without
+// waiting / restarting Railway.
+app.post("/api/admin/lyrics/scrape/stop", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  if (!_lyricsScrapeState.running) { res.json({ ok: true, wasRunning: false }); return; }
+  _lyricsScrapeState.running = false;
+  _lyricsScrapeState.message = "Stopping… (current page will finish)";
+  res.json({ ok: true, wasRunning: true });
 });
 
 // GET /api/admin/lyrics/scrape/status — poll progress
