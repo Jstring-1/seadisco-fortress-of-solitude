@@ -128,12 +128,13 @@ function _baRenderArtistDetail(a) {
   const releases = Array.isArray(a.releases) ? a.releases : [];
   const lyricsHtml = lyrics.length
     ? `<table class="api-log-table" style="font-size:0.84rem;width:100%">
-        <thead><tr><th>Title</th><th>Tuning</th><th>Snippet</th></tr></thead>
+        <thead><tr><th>Title</th><th>Tuning</th><th>Snippet</th><th style="width:1%"></th></tr></thead>
         <tbody>${lyrics.map(l => `
-          <tr style="cursor:pointer" onclick="_baOpenLyric(${l.id})">
-            <td style="font-weight:600;color:var(--text);white-space:nowrap">${escHtml(l.page_title || "")}</td>
-            <td style="white-space:nowrap;color:var(--accent)">${escHtml(l.tuning || "")}</td>
-            <td style="font-size:0.76rem;color:#888">${escHtml((l.snippet || "").replace(/\s+/g, " ").slice(0, 140))}…</td>
+          <tr data-lyric-row="${l.id}">
+            <td style="font-weight:600;color:var(--text);white-space:nowrap;cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml(l.page_title || "")}</td>
+            <td style="white-space:nowrap;color:var(--accent);cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml(l.tuning || "")}</td>
+            <td style="font-size:0.76rem;color:#888;cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml((l.snippet || "").replace(/\s+/g, " ").slice(0, 140))}…</td>
+            <td style="text-align:right"><a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenLyricEditor(${l.id})" style="color:var(--muted);text-decoration:none;font-size:0.78rem" title="Edit tuning / artist on this lyric">✎</a></td>
           </tr>`).join("")}</tbody>
       </table>`
     : `<p style="color:var(--muted);font-style:italic;padding:0.4rem 0">No lyrics matched this artist's name. (Try Import from lyrics on the list page if you've just scraped.)</p>`;
@@ -158,6 +159,9 @@ function _baRenderArtistDetail(a) {
       <button class="archive-btn" onclick="_baBackToList()">‹ Back to list</button>
       <h2 style="margin:0;font-size:1.1rem">${escHtml(a.name || "")}</h2>
       <span style="color:var(--muted);font-size:0.82rem">${escHtml(dates)}</span>
+      <span style="margin-left:auto;display:inline-flex;gap:0.4rem">
+        <button class="archive-btn" onclick="_baOpenMergePicker(${a.id}, ${JSON.stringify(a.name || "").replace(/"/g, "&quot;")})" title="Merge this artist into another. Lyrics get reassigned by name; release JSONB arrays are concatenated (deduped); this row is then deleted.">Merge into…</button>
+      </span>
     </div>
     <div style="display:flex;gap:1rem;margin-bottom:1.2rem;align-items:flex-start;flex-wrap:wrap">
       ${photo}
@@ -231,6 +235,186 @@ function _baOpenRelease(id, type, discogsUrl) {
   }
 }
 window._baOpenRelease = _baOpenRelease;
+
+// ── Lyric editor (per-row pencil) ────────────────────────────────────
+// Small overlay form for fixing tuning / artist on a single lyric.
+// Tuning input is a datalist populated from /api/admin/lyrics/tunings
+// so existing values auto-complete and stay consistent; the user can
+// type a new value too.
+async function _baOpenLyricEditor(id) {
+  let row;
+  try {
+    const r = await apiFetch(`/api/admin/lyrics/${id}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    row = await r.json();
+  } catch (e) {
+    alert(`Couldn't load lyric: ${e?.message || e}`);
+    return;
+  }
+  // Pull existing tunings for the datalist
+  let tunings = [];
+  try {
+    const r = await apiFetch("/api/admin/lyrics/tunings");
+    if (r.ok) tunings = (await r.json()).tunings ?? [];
+  } catch {}
+  const opts = tunings
+    .filter(t => t.tuning && t.tuning !== "(unspecified)")
+    .map(t => `<option value="${escHtml(t.tuning)}">`)
+    .join("");
+  let overlay = document.getElementById("ba-lyric-edit-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "ba-lyric-edit-overlay";
+    Object.assign(overlay.style, {
+      position: "fixed", inset: "0", background: "rgba(0,0,0,0.78)",
+      zIndex: "310", display: "flex", alignItems: "flex-start",
+      justifyContent: "center", padding: "2rem 1rem", overflow: "auto",
+    });
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(560px,100%)">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:0.6rem;margin-bottom:0.6rem">
+        <div style="min-width:0">
+          <h3 style="margin:0 0 0.25rem">${escHtml(row.page_title || "")}</h3>
+          <div style="font-size:0.76rem;color:var(--muted)"><a href="${escHtml(row.page_url || "")}" target="_blank" rel="noopener" style="color:var(--accent)">View on wiki ↗</a></div>
+        </div>
+        <button class="archive-btn" onclick="document.getElementById('ba-lyric-edit-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
+      </div>
+      <datalist id="ba-tuning-options">${opts}</datalist>
+      <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)">Artist</label>
+      <input id="ba-edit-artist" type="text" value="${escHtml(row.artist || "")}" placeholder="(leave blank to clear)" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem">
+      <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)">Tuning</label>
+      <input id="ba-edit-tuning" type="text" value="${escHtml(row.tuning || "")}" list="ba-tuning-options" placeholder="(leave blank to clear)" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem">
+      <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem">
+        <button class="archive-btn" onclick="document.getElementById('ba-lyric-edit-overlay')?.remove()">Cancel</button>
+        <button class="archive-btn archive-btn-suggest" onclick="_baSaveLyricEdit(${id})">Save</button>
+      </div>
+      <div id="ba-edit-status" style="font-size:0.76rem;color:var(--muted);margin-top:0.5rem;min-height:1em"></div>
+    </div>
+  `;
+}
+window._baOpenLyricEditor = _baOpenLyricEditor;
+
+async function _baSaveLyricEdit(id) {
+  const statusEl = document.getElementById("ba-edit-status");
+  const artist = document.getElementById("ba-edit-artist")?.value ?? "";
+  const tuning = document.getElementById("ba-edit-tuning")?.value ?? "";
+  if (statusEl) statusEl.textContent = "Saving…";
+  try {
+    const r = await apiFetch(`/api/admin/lyrics/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ artist, tuning }),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    document.getElementById("ba-lyric-edit-overlay")?.remove();
+    // Refresh the artist detail so the row repaints with new values.
+    if (_baCurrentArtistId != null) _baOpenArtist(_baCurrentArtistId);
+  } catch (e) {
+    if (statusEl) statusEl.textContent = `Save failed: ${e?.message || e}`;
+  }
+}
+window._baSaveLyricEdit = _baSaveLyricEdit;
+
+// ── Merge picker ─────────────────────────────────────────────────────
+// Two-step flow: type to filter the artist list, click the target,
+// then confirm. Server transaction reassigns lyrics + appends releases
+// + deletes the source row.
+async function _baOpenMergePicker(fromId, fromName) {
+  let overlay = document.getElementById("ba-merge-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "ba-merge-overlay";
+    Object.assign(overlay.style, {
+      position: "fixed", inset: "0", background: "rgba(0,0,0,0.78)",
+      zIndex: "310", display: "flex", alignItems: "flex-start",
+      justifyContent: "center", padding: "2rem 1rem", overflow: "auto",
+    });
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(600px,100%)">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:0.6rem;margin-bottom:0.6rem">
+        <h3 style="margin:0">Merge <em>${escHtml(fromName)}</em> into…</h3>
+        <button class="archive-btn" onclick="document.getElementById('ba-merge-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
+      </div>
+      <p style="font-size:0.78rem;color:var(--muted);margin:0 0 0.6rem">
+        Lyrics keyed to <em>${escHtml(fromName)}</em> will be reassigned to the target.
+        Release JSONB arrays will be concatenated (deduped by id+type).
+        The source row will be deleted. This action runs as a single transaction.
+      </p>
+      <input id="ba-merge-search" type="search" placeholder="Type to filter artists…" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem;margin-bottom:0.5rem" oninput="_baMergePickerSearch(${fromId})">
+      <div id="ba-merge-results" style="max-height:40vh;overflow:auto;border:1px solid var(--border);border-radius:4px;padding:0.4rem 0.6rem;font-size:0.84rem"></div>
+      <div id="ba-merge-status" style="font-size:0.76rem;color:var(--muted);margin-top:0.5rem;min-height:1em"></div>
+    </div>
+  `;
+  // Auto-focus the filter input
+  setTimeout(() => document.getElementById("ba-merge-search")?.focus(), 50);
+  _baMergePickerSearch(fromId);
+}
+window._baOpenMergePicker = _baOpenMergePicker;
+
+let _baMergePickerTimer = null;
+function _baMergePickerSearch(fromId) {
+  if (_baMergePickerTimer) clearTimeout(_baMergePickerTimer);
+  _baMergePickerTimer = setTimeout(() => _baMergePickerLoad(fromId), 240);
+}
+window._baMergePickerSearch = _baMergePickerSearch;
+
+async function _baMergePickerLoad(fromId) {
+  const q = (document.getElementById("ba-merge-search")?.value || "").trim();
+  const resultsEl = document.getElementById("ba-merge-results");
+  if (!resultsEl) return;
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  params.set("limit", "40");
+  resultsEl.textContent = "Loading…";
+  try {
+    const r = await apiFetch(`/api/blues-archive/artists?${params}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const { rows = [] } = await r.json();
+    const choices = rows.filter(row => row.id !== fromId);
+    if (!choices.length) {
+      resultsEl.innerHTML = `<p style="color:var(--muted);padding:0.4rem 0">No matches.</p>`;
+      return;
+    }
+    resultsEl.innerHTML = choices.map(row => `
+      <div onclick="_baConfirmMerge(${fromId}, ${row.id}, ${JSON.stringify(row.name || "").replace(/"/g, "&quot;")})" style="cursor:pointer;padding:0.3rem 0;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;justify-content:space-between;gap:0.6rem">
+        <span style="font-weight:600;color:var(--text)">${escHtml(row.name || "")}</span>
+        <span style="color:var(--muted);font-size:0.76rem">${row.lyrics_count || 0}L · ${row.releases_count || 0}R</span>
+      </div>`).join("");
+  } catch (e) {
+    resultsEl.innerHTML = `<p style="color:#e88">Failed: ${escHtml(String(e?.message || e))}</p>`;
+  }
+}
+
+async function _baConfirmMerge(fromId, intoId, intoName) {
+  if (!confirm(`Merge into "${intoName}"? Lyrics get reassigned; releases get concatenated; the source row is then deleted. This cannot be undone from the UI.`)) return;
+  const statusEl = document.getElementById("ba-merge-status");
+  if (statusEl) statusEl.textContent = "Merging…";
+  try {
+    const r = await apiFetch("/api/blues-archive/merge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fromId, intoId }),
+    });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
+    }
+    const j = await r.json();
+    document.getElementById("ba-merge-overlay")?.remove();
+    // Navigate to the target so the user sees the merged result.
+    _baOpenArtist(intoId);
+    setTimeout(() => alert(`Merged. ${j.lyricsReassigned} lyrics reassigned, ${j.releasesAdded} releases added.`), 100);
+  } catch (e) {
+    if (statusEl) statusEl.textContent = `Merge failed: ${e?.message || e}`;
+  }
+}
+window._baConfirmMerge = _baConfirmMerge;
 
 // Admin button — import distinct lyrics-artist names that aren't yet
 // in blues_artists. Idempotent (server checks LOWER(name) uniqueness).
