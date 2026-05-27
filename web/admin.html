@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260527.1342" />
+  <link rel="stylesheet" href="/style.css?v=20260527.1349" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260527.1342"></script>
-<script defer src="/shared.js?v=20260527.1342"></script>
+<script defer src="/utils.js?v=20260527.1349"></script>
+<script defer src="/shared.js?v=20260527.1349"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -180,7 +180,7 @@
           <span id="blues-stats" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
         </div>
         <div style="display:flex;gap:0.5rem;margin-bottom:0.6rem;align-items:center;flex-wrap:wrap">
-          <input id="blues-search" type="search" placeholder="Search name / birthplace / hometown" style="flex:1;min-width:200px;padding:0.45rem 0.7rem;font-size:0.88rem" oninput="bluesDbDebouncedSearch()" />
+          <input id="blues-search" type="search" placeholder="Search name / birthplace / hometown / Discogs ID" style="flex:1;min-width:200px;padding:0.45rem 0.7rem;font-size:0.88rem" oninput="bluesDbDebouncedSearch()" />
           <!-- Quick-filter: rows missing a photo_url. Drives client-side
                filtering against the cached _bluesDbState.rows array, so
                toggling it is instant — no server round-trip. -->
@@ -449,7 +449,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260527.1342"></script>
+<script defer src="/modal.js?v=20260527.1349"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1819,10 +1819,19 @@ function _bluesDbSortRows(rows) {
 function _bluesDbFilterRows(rows) {
   const q = (_bluesDbState.search || "").toLowerCase();
   const noThumb = !!document.getElementById("blues-filter-nothumb")?.checked;
+  // Pure-digit queries get an additional exact-id match path so the
+  // admin can search "12345" and find rows by discogs_id regardless
+  // of where it appears in the rendered list. Substring match too,
+  // so partial pastes still work.
+  const isAllDigits = /^\d+$/.test(q);
   return rows.filter(r => {
     if (noThumb && r.photo_url) return false;
     if (!q) return true;
-    const hay = `${r.name || ""}\n${r.hometown || ""}\n${r.birthplace || ""}\n${(Array.isArray(r.styles) ? r.styles.join(" ") : "")}`.toLowerCase();
+    if (isAllDigits && r.discogs_id != null) {
+      if (String(r.discogs_id) === q) return true;
+      if (String(r.discogs_id).includes(q)) return true;
+    }
+    const hay = `${r.name || ""}\n${r.hometown || ""}\n${r.birthplace || ""}\n${(Array.isArray(r.styles) ? r.styles.join(" ") : "")}\n${r.discogs_id ?? ""}`.toLowerCase();
     return hay.includes(q);
   });
 }
