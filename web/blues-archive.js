@@ -252,3 +252,28 @@ async function bluesArchiveImport() {
   }
 }
 window.bluesArchiveImport = bluesArchiveImport;
+
+// Admin button — remove blues_artists rows that were created by the
+// lyric-import job AND have no other data (no Discogs ID, no Wikidata
+// QID, no bio, etc.). Safety net for when the artist extractor pulled
+// trash before the validator was tightened. Manually-edited rows are
+// preserved server-side.
+async function bluesArchivePurgeImports() {
+  const btn = document.getElementById("blues-archive-purge-btn");
+  const statusEl = document.getElementById("blues-archive-import-status");
+  if (!confirm("Remove all unenriched lyric-import rows from the Blues DB? Rows with any manually-added data (Discogs ID, bio, dates, etc.) are kept.")) return;
+  if (btn) btn.disabled = true;
+  if (statusEl) statusEl.textContent = "Purging…";
+  try {
+    const r = await apiFetch("/api/blues-archive/purge-lyric-imports", { method: "POST", timeoutMs: 60000 });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const j = await r.json();
+    if (statusEl) statusEl.innerHTML = `<span style="color:#4caf50">Purged</span> ${j.removed.toLocaleString()} row${j.removed === 1 ? "" : "s"}`;
+    _baLoadList();
+  } catch (e) {
+    if (statusEl) statusEl.textContent = `Purge failed: ${e?.message || e}`;
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+window.bluesArchivePurgeImports = bluesArchivePurgeImports;

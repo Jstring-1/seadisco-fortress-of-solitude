@@ -8727,6 +8727,23 @@ function _lyricsExtractTuning(text: string): string | null {
   return null;
 }
 
+// Reject things that clearly aren't artist names — catalog numbers
+// ("14065-1"), version annotations ("1934 version", "alternate take"),
+// labels alone, leading-quote fragments ('"A" version'), pure
+// numerics, etc. Used by all artist-extraction paths below so the
+// trash never reaches the DB in the first place.
+function _lyricsLooksLikeArtist(s: string): boolean {
+  const t = String(s || "").trim();
+  if (t.length < 3 || t.length > 80) return false;
+  if (!/[a-zA-Z]/.test(t)) return false;                           // must have at least one letter
+  if (/^[\d\-_\s.]+$/.test(t)) return false;                       // pure catalog-ish (14065-1, 21629)
+  if (/^\d{4}\b/.test(t)) return false;                            // leading year
+  if (/^["'']/.test(t)) return false;                              // starts with a quote (title fragment)
+  if (/\b(version|take|alternate|matrix|master\s*\d|copy|reissue|unissued|untitled|instrumental)\b/i.test(t)) return false;
+  if (/^(intro|verse|chorus|bridge|outro|solo)\b/i.test(t)) return false;
+  return true;
+}
+
 function _lyricsExtractArtist(wikitext: string, title: string): string | null {
   if (!wikitext) return null;
   // Common patterns on the wiki:
@@ -8744,12 +8761,17 @@ function _lyricsExtractArtist(wikitext: string, title: string): string | null {
     const m = wikitext.match(re);
     if (m && m[1]) {
       const a = m[1].trim().replace(/[\s_]+/g, " ").slice(0, 200);
-      if (a.length >= 2) return a;
+      if (_lyricsLooksLikeArtist(a)) return a;
     }
   }
   // Fallback: page-title parens like "Sweet Home Chicago (Robert Johnson)"
+  // The validator filters out "(1934 version)", "(alternate take)", etc.
+  // — that path was the main source of the post-import trash.
   const tm = title.match(/^(.*?)\s*\(([^)]{2,80})\)\s*$/);
-  if (tm && tm[2]) return tm[2].trim();
+  if (tm && tm[2]) {
+    const candidate = tm[2].trim();
+    if (_lyricsLooksLikeArtist(candidate)) return candidate;
+  }
   return null;
 }
 
@@ -9106,6 +9128,41 @@ app.post("/api/blues-archive/import-from-lyrics", async (req, res) => {
     res.json({ ok: true, ...r });
   } catch (err) {
     console.error("[blues-archive import]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// POST /api/blues-archive/purge-lyric-imports — removes blues_artists
+// rows that were inserted by the lyrics-import job AND have no other
+// data attached (no Discogs / Wikidata / MusicBrainz IDs, no releases,
+// no bio, no dates). Safety net for when the lyric-artist extractor
+// pulled in trash (catalog numbers, "1934 version", labels, etc.)
+// before the validator was tightened. Manually-edited rows are
+// preserved — the WHERE clause requires every meaningful field to
+// still be NULL/empty.
+app.post("/api/blues-archive/purge-lyric-imports", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const r = await getPool().query(`
+      DELETE FROM blues_artists
+       WHERE enrichment_status @> '{"source":"lyrics_import"}'::jsonb
+         AND discogs_id        IS NULL
+         AND wikidata_qid      IS NULL
+         AND musicbrainz_mbid  IS NULL
+         AND birth_date        IS NULL
+         AND death_date        IS NULL
+         AND (profile          IS NULL OR profile        = '')
+         AND (birth_place      IS NULL OR birth_place    = '')
+         AND (hometown_region  IS NULL OR hometown_region = '')
+         AND (photo_url        IS NULL OR photo_url      = '')
+         AND (discogs_releases IS NULL OR jsonb_array_length(discogs_releases) = 0)
+      RETURNING id, name
+    `);
+    const removed = r.rowCount ?? 0;
+    console.log(`[blues-archive] purge-lyric-imports: removed=${removed}`);
+    res.json({ ok: true, removed, names: (r.rows ?? []).slice(0, 50).map((row: any) => row.name) });
+  } catch (err) {
+    console.error("[blues-archive purge]", err);
     res.status(500).json({ error: String(err) });
   }
 });
