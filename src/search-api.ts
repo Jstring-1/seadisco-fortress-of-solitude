@@ -8655,6 +8655,11 @@ const _LYRICS_HARD_CAP    = 5000; // safety cap (4006 known)
 
 type LyricsScrapeState = {
   running: boolean;
+  // What kind of job is using this shared state, so the UI can label
+  // it clearly. "scrape" = full wiki walk + page-content fetch.
+  // "artist-sync" = walk Category:Lyrics by Artist + DB updates only,
+  // no page-content fetch.
+  jobKind: "idle" | "scrape" | "artist-sync";
   phase: "idle" | "discovering" | "fetching" | "done" | "error";
   startedAt: number;
   finishedAt: number | null;
@@ -8668,6 +8673,7 @@ type LyricsScrapeState = {
 };
 let _lyricsScrapeState: LyricsScrapeState = {
   running: false,
+  jobKind: "idle",
   phase: "idle",
   startedAt: 0,
   finishedAt: null,
@@ -8999,6 +9005,7 @@ async function _lyricsScrapeRun(): Promise<void> {
   if (_lyricsScrapeState.running) return;
   _lyricsScrapeState = {
     running: true,
+    jobKind: "scrape",
     phase: "discovering",
     startedAt: Date.now(),
     finishedAt: null,
@@ -9195,6 +9202,7 @@ async function _lyricsSyncArtistsRun(force: boolean): Promise<void> {
   if (_lyricsScrapeState.running) return;
   _lyricsScrapeState = {
     running: true,
+    jobKind: "artist-sync",
     phase: "discovering",
     startedAt: Date.now(),
     finishedAt: null,
