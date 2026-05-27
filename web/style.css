@@ -3576,6 +3576,41 @@ button.wiki-link-btn:active {
   margin-left: auto !important;
   margin-right: auto !important;
 }
+/* Mobile: switch the Discovery sub-nav from flex-wrap (which on a
+   narrow viewport stacks the tabs into 2-3 cramped rows) to a
+   single horizontally-scrollable strip. The user can swipe sideways
+   to reach every tab without losing the visual "this is one
+   nav row" reading. iOS gets -webkit-overflow-scrolling for
+   momentum; thin scrollbars elsewhere. */
+@media (max-width: 700px) {
+  .extras-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+  }
+  .extras-tabs .rr-title-wrap {
+    flex-wrap: nowrap;
+    white-space: nowrap;
+    /* Let the inner wrap be wider than its parent — that's what
+       gives us horizontal scroll. min-width: max-content keeps the
+       tabs at their natural sum-of-widths, so each tab stays one
+       readable token without truncation. */
+    min-width: max-content;
+  }
+  .extras-tabs .rr-tab,
+  .extras-tabs .rr-tab-sep {
+    flex-shrink: 0;
+  }
+  /* Slim Webkit scrollbar so the strip doesn't look bulky on iOS
+     when momentum scrolling reveals the track. */
+  .extras-tabs::-webkit-scrollbar { height: 3px; }
+  .extras-tabs::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 2px;
+  }
+}
 .rr-controls {
   display: flex;
   align-items: center;
