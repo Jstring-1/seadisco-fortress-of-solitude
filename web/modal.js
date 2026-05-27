@@ -1733,6 +1733,19 @@ function setVideoUrl(id) {
 let _ytLoadTimer = null;
 let _ytHasPlayed = false;  // true once the current video reaches "playing" state
 let _ytVideoToken = 0;     // increments per video load — guards against stale per-video callbacks
+// Whether the user has interacted with the page yet this session.
+// Used by the YT watchdog to distinguish "autoplay blocked because no
+// gesture" (don't prune — show Tap ▶) from "video genuinely dead"
+// (silent embed failure — prune + advance). Without this flag a page
+// reload with ?vd= in the URL would prune the just-restored track
+// because the browser blocked the automatic playVideo call.
+let _userHasGesturedPage = false;
+if (typeof document !== "undefined") {
+  const _markGesture = () => { _userHasGesturedPage = true; };
+  document.addEventListener("pointerdown", _markGesture, { once: true, capture: true });
+  document.addEventListener("keydown",     _markGesture, { once: true, capture: true });
+  document.addEventListener("touchstart",  _markGesture, { once: true, capture: true, passive: true });
+}
 let _ytPlayCount = 0;      // total loadVideoById calls — rotate the player every N to release Chromium decode buffers
 // Force a fresh YT.Player every N loads. The YouTube IFrame API leaks
 // decode buffers across loadVideoById calls — a long auto-advance
@@ -1840,9 +1853,23 @@ function loadYTVideo(id) {
           }
           return;
         }
-        // state2 === -1 (or anything else): the video never loaded.
-        // Prune + auto-advance so the next track gets a try.
-        console.debug("[loadYTVideo watchdog] post-recovery still unstarted — pruning", { id });
+        // state2 === -1 — never loaded. Two reasons:
+        //  A) Browser blocked autoplay because no user gesture has
+        //     occurred yet (page just loaded with ?vd= restoring a
+        //     track). The video is FINE — it just can't play
+        //     without a tap. Show the "Tap ▶" toast.
+        //  B) Embed is silently broken (rare). With a gesture
+        //     already on record this path means the video is dead;
+        //     prune + advance like we did before.
+        if (!_userHasGesturedPage) {
+          console.debug("[loadYTVideo watchdog] state -1 with no user gesture yet — treating as autoplay-blocked, not pruning", { id });
+          updatePlayerStatus("paused");
+          if (typeof showToast === "function") {
+            showToast("Tap ▶ to resume playback", "info", 4000);
+          }
+          return;
+        }
+        console.debug("[loadYTVideo watchdog] post-recovery still unstarted (gesture already happened) — pruning", { id });
         updatePlayerStatus("unavailable");
         _ytPruneUnavailable(id, /*advance=*/true);
       }, 1500);
