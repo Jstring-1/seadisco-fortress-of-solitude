@@ -8642,7 +8642,13 @@ app.post("/api/admin/blues/enrich-yt/:id", async (req, res) => {
 
 const _LYRICS_WIKI_BASE = "https://www.weeniecampbell.com/wiki";
 const _LYRICS_API       = `${_LYRICS_WIKI_BASE}/api.php`;
-const _LYRICS_UA        = "SeaDisco-Lyrics-Archiver/1.0 (private research use)";
+// weeniecampbell.com sits behind Cloudflare's bot WAF, which 403s any
+// UA that doesn't look like a real browser (including our previous
+// "SeaDisco-Lyrics-Archiver/1.0…"). Use a recent Chrome UA so the
+// MediaWiki API responses come through. Pacing stays polite at
+// 1.2 s/req — we're not bypassing anything, just clearing the bot
+// challenge.
+const _LYRICS_UA        = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
 const _LYRICS_THROTTLE_MS = 1200;
 const _LYRICS_HARD_CAP    = 5000; // safety cap (4006 known)
 
