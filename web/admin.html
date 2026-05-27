@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260527.0847" />
+  <link rel="stylesheet" href="/style.css?v=20260527.0856" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260527.0847"></script>
-<script defer src="/shared.js?v=20260527.0847"></script>
+<script defer src="/utils.js?v=20260527.0856"></script>
+<script defer src="/shared.js?v=20260527.0856"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -279,6 +279,7 @@
           <button class="admin-refresh-btn" id="lyrics-refresh-btn" onclick="_adminClickRefresh(this, lyricsLoadList)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
           <span id="lyrics-refresh-status" class="admin-refresh-status"></span>
           <button class="admin-btn" id="lyrics-scrape-btn" onclick="lyricsStartScrape()" title="Walk Category:Lyrics on weeniecampbell.com and store every page. ~80 min at 1.2 s/page. Resumable: re-running skips titles already stored.">Scrape weeniecampbell.com</button>
+          <button class="admin-btn admin-btn-danger" id="lyrics-stop-btn" onclick="lyricsStopScrape()" title="Stop a running scrape after the current page finishes" style="display:none">Stop</button>
           <span id="lyrics-scrape-status" style="font-size:0.78rem;color:var(--muted)"></span>
           <span id="lyrics-stats" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
         </div>
@@ -446,7 +447,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260527.0847"></script>
+<script defer src="/modal.js?v=20260527.0856"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -3445,6 +3446,18 @@ function lyricsCloseViewer() {
 }
 window.lyricsCloseViewer = lyricsCloseViewer;
 
+async function lyricsStopScrape() {
+  const statusEl = document.getElementById("lyrics-scrape-status");
+  if (!confirm("Stop the lyrics scrape after the current page?")) return;
+  try {
+    await apiFetch("/api/admin/lyrics/scrape/stop", { method: "POST" });
+    if (statusEl) statusEl.textContent = "Stop requested — finishing current page…";
+  } catch (e) {
+    if (statusEl) statusEl.textContent = `Stop failed: ${e?.message || e}`;
+  }
+}
+window.lyricsStopScrape = lyricsStopScrape;
+
 async function lyricsStartScrape() {
   const btn = document.getElementById("lyrics-scrape-btn");
   const statusEl = document.getElementById("lyrics-scrape-status");
@@ -3487,12 +3500,15 @@ async function lyricsPollScrapeOnce() {
     if (stats && typeof s.totalStored === "number") {
       stats.textContent = `${s.totalStored.toLocaleString()} lyric${s.totalStored === 1 ? "" : "s"} stored`;
     }
+    const stopBtn = document.getElementById("lyrics-stop-btn");
     if (s.running) {
       btn.disabled = true;
+      if (stopBtn) stopBtn.style.display = "";
       const pct = s.pagesDiscovered ? Math.round((s.pagesScraped + s.pagesSkipped) / s.pagesDiscovered * 100) : 0;
       statusEl.innerHTML = `<span style="color:var(--accent)">Running…</span> ${s.pagesScraped}/${s.pagesDiscovered} (${pct}%) · skipped ${s.pagesSkipped} · failed ${s.pagesFailed}${s.currentTitle ? ` · <em style="color:var(--muted)">${escHtml(s.currentTitle).slice(0, 60)}</em>` : ""}`;
     } else {
       btn.disabled = false;
+      if (stopBtn) stopBtn.style.display = "none";
       if (s.finishedAt && s.startedAt) {
         const mins = Math.round((s.finishedAt - s.startedAt) / 60000);
         statusEl.innerHTML = `<span style="color:#4caf50">${escHtml(s.message)}</span> · ${mins} min`;
