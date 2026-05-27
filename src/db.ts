@@ -6185,3 +6185,100 @@ export async function getBluesArchiveArtist(id: number): Promise<any | null> {
   });
   return { ...a, lyrics: lr.rows, releases };
 }
+
+
+// Patch a single blues_lyrics row's tuning + artist fields. Both are
+// optional — only the keys you pass get updated. Returns the row
+// after the write so the client can repaint without a second fetch.
+export async function updateLyricFields(id: number, patch: { tuning?: string | null; artist?: string | null }): Promise<any | null> {
+  const sets: string[] = [];
+  const params: any[] = [];
+  if ("tuning" in patch) {
+    params.push(patch.tuning === "" ? null : patch.tuning ?? null);
+    sets.push(`tuning = $${params.length}`);
+  }
+  if ("artist" in patch) {
+    params.push(patch.artist === "" ? null : patch.artist ?? null);
+    sets.push(`artist = $${params.length}`);
+  }
+  if (!sets.length) return await getLyricById(id);
+  params.push(id);
+  await getPool().query(
+    `UPDATE blues_lyrics SET ${sets.join(", ")} WHERE id = $${params.length}`,
+    params,
+  );
+  return await getLyricById(id);
+}
+
+// Merge two blues_artists rows. `intoId` is the survivor; `fromId`
+// gets deleted after its data is migrated:
+//   - lyrics whose artist matched the source row by name are
+//     reassigned to the target row's name (case-insensitive match)
+//   - discogs_releases JSONB arrays are concatenated (deduped by
+//     id + type so a manually-curated target doesn't grow stale
+//     duplicates)
+//   - other blues_artists columns are left as the target's — if
+//     the target lacks data the source had, the admin can re-run
+//     "Get all info from Discogs" afterward to re-enrich
+// Wrapped in a transaction so a mid-merge crash doesn't leave the
+// DB in a half-merged state.
+export async function mergeBluesArtists(fromId: number, intoId: number): Promise<{
+  ok: boolean;
+  fromName: string;
+  intoName: string;
+  lyricsReassigned: number;
+  releasesAdded: number;
+}> {
+  if (fromId === intoId) throw new Error("source and target are the same row");
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const fr = await client.query(`SELECT id, name, discogs_releases FROM blues_artists WHERE id = $1 FOR UPDATE`, [fromId]);
+    const tr = await client.query(`SELECT id, name, discogs_releases FROM blues_artists WHERE id = $1 FOR UPDATE`, [intoId]);
+    if (!fr.rows.length || !tr.rows.length) {
+      await client.query("ROLLBACK");
+      throw new Error("one of the artists doesn't exist");
+    }
+    const from = fr.rows[0];
+    const into = tr.rows[0];
+    // Reassign lyrics that were keyed off the source's name.
+    const lr = await client.query(
+      `UPDATE blues_lyrics SET artist = $1 WHERE LOWER(TRIM(artist)) = LOWER($2)`,
+      [into.name, from.name],
+    );
+    const lyricsReassigned = lr.rowCount ?? 0;
+    // Merge discogs_releases JSONB. Dedupe by id+type.
+    const fromRels = Array.isArray(from.discogs_releases) ? from.discogs_releases : [];
+    const intoRels = Array.isArray(into.discogs_releases) ? into.discogs_releases : [];
+    const seen = new Set(intoRels.map((r: any) => `${r?.type ?? "release"}:${r?.id}`));
+    let releasesAdded = 0;
+    for (const r of fromRels) {
+      const key = `${r?.type ?? "release"}:${r?.id}`;
+      if (seen.has(key)) continue;
+      intoRels.push(r);
+      seen.add(key);
+      releasesAdded++;
+    }
+    if (releasesAdded) {
+      await client.query(
+        `UPDATE blues_artists SET discogs_releases = $1::jsonb WHERE id = $2`,
+        [JSON.stringify(intoRels), intoId],
+      );
+    }
+    // Drop the source row.
+    await client.query(`DELETE FROM blues_artists WHERE id = $1`, [fromId]);
+    await client.query("COMMIT");
+    return {
+      ok: true,
+      fromName: from.name,
+      intoName: into.name,
+      lyricsReassigned,
+      releasesAdded,
+    };
+  } catch (e) {
+    try { await client.query("ROLLBACK"); } catch {}
+    throw e;
+  } finally {
+    client.release();
+  }
+}
