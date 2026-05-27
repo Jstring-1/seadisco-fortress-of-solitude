@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260527.1159" />
+  <link rel="stylesheet" href="/style.css?v=20260527.1215" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260527.1159"></script>
-<script defer src="/shared.js?v=20260527.1159"></script>
+<script defer src="/utils.js?v=20260527.1215"></script>
+<script defer src="/shared.js?v=20260527.1215"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -449,7 +449,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260527.1159"></script>
+<script defer src="/modal.js?v=20260527.1215"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -3352,6 +3352,45 @@ function lyricsDebouncedSearch() {
 }
 window.lyricsDebouncedSearch = lyricsDebouncedSearch;
 
+// Cached rows of the current page + a sort state — sort runs
+// client-side over the visible page (server still owns pagination).
+let _lyricsRowsCache = [];
+const _lyricsSortState = { key: "page_title", dir: "asc" };
+const _LYRICS_SORT_TYPES = { page_title: "str", artist: "str", tuning: "str", snippet: "str", scraped_at: "date" };
+function _lyricsSort(key) {
+  _adminToggleSort(_lyricsSortState, key);
+  _lyricsRenderTable();
+}
+window._lyricsSort = _lyricsSort;
+
+function _lyricsRenderTable() {
+  const list = document.getElementById("lyrics-list");
+  if (!list) return;
+  const rows = _adminSortApply(_lyricsRowsCache, _lyricsSortState, _LYRICS_SORT_TYPES);
+  if (!rows.length) {
+    list.innerHTML = `<p style="color:var(--muted);padding:0.5rem 0">No matches.</p>`;
+    return;
+  }
+  const S = _lyricsSortState;
+  list.innerHTML = `<table class="api-log-table" style="font-size:0.82rem;width:100%">
+    <thead><tr>
+      ${_adminSortTh("Title",   "page_title", S, "_lyricsSort")}
+      ${_adminSortTh("Artist",  "artist",     S, "_lyricsSort")}
+      ${_adminSortTh("Tuning",  "tuning",     S, "_lyricsSort")}
+      ${_adminSortTh("Snippet", "snippet",    S, "_lyricsSort")}
+      <th></th>
+    </tr></thead>
+    <tbody>${rows.map(row => `
+      <tr style="cursor:pointer" onclick="lyricsOpenViewer(${row.id})">
+        <td style="white-space:nowrap;color:var(--text);font-weight:600">${escHtml(row.page_title || "")}</td>
+        <td style="white-space:nowrap">${escHtml(row.artist || "—")}</td>
+        <td style="white-space:nowrap;color:var(--accent)">${escHtml(row.tuning || "")}</td>
+        <td style="font-size:0.75rem;color:#888">${escHtml((row.snippet || "").replace(/\s+/g, " ").slice(0, 120))}…</td>
+        <td><a href="${escHtml(row.page_url || "")}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--accent);text-decoration:none;font-size:0.74rem">wiki ↗</a></td>
+      </tr>`).join("")}
+    </tbody></table>`;
+}
+
 async function lyricsLoadList() {
   const list = document.getElementById("lyrics-list");
   if (!list) return;
@@ -3368,26 +3407,11 @@ async function lyricsLoadList() {
     if (!r.ok) { list.innerHTML = `<p style="color:#e88">Failed: HTTP ${r.status}</p>`; return; }
     const { rows = [], total = 0 } = await r.json();
     _lyricsTotal = total;
+    _lyricsRowsCache = rows;
     document.getElementById("lyrics-stats").textContent = total
       ? `${total.toLocaleString()} lyric${total === 1 ? "" : "s"} stored`
       : "No lyrics stored yet.";
-    if (!rows.length) {
-      list.innerHTML = `<p style="color:var(--muted);padding:0.5rem 0">No matches.</p>`;
-    } else {
-      list.innerHTML = `<table class="api-log-table" style="font-size:0.82rem;width:100%">
-        <thead><tr>
-          <th>Title</th><th>Artist</th><th>Tuning</th><th>Snippet</th><th></th>
-        </tr></thead>
-        <tbody>${rows.map(row => `
-          <tr style="cursor:pointer" onclick="lyricsOpenViewer(${row.id})">
-            <td style="white-space:nowrap;color:var(--text);font-weight:600">${escHtml(row.page_title || "")}</td>
-            <td style="white-space:nowrap">${escHtml(row.artist || "—")}</td>
-            <td style="white-space:nowrap;color:var(--accent)">${escHtml(row.tuning || "")}</td>
-            <td style="font-size:0.75rem;color:#888">${escHtml((row.snippet || "").replace(/\s+/g, " ").slice(0, 120))}…</td>
-            <td><a href="${escHtml(row.page_url || "")}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--accent);text-decoration:none;font-size:0.74rem">wiki ↗</a></td>
-          </tr>`).join("")}
-        </tbody></table>`;
-    }
+    _lyricsRenderTable();
     lyricsRenderPager();
   } catch (e) {
     list.innerHTML = `<p style="color:#e88">Failed: ${escHtml(String(e?.message || e))}</p>`;
