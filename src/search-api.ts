@@ -8803,12 +8803,22 @@ async function _lyricsCollectPagesUnderCategory(rootCategory: string): Promise<s
   const pages: string[] = [];
   const seenPages = new Set<string>();
   while (queue.length) {
+    // Honor the /scrape/stop request — the running flag is the kill
+    // signal for both phases. Without this, stop wouldn't actually
+    // take effect until discovery walked every remaining subcategory
+    // (minutes), and the UI kept overwriting the "Stopping…" message
+    // with "Walking Category:X" every 0.4 s.
+    if (!_lyricsScrapeState.running) {
+      console.log("[lyrics] stop requested during discovery");
+      break;
+    }
     if (pages.length >= _LYRICS_HARD_CAP) break;
     const cat = queue.shift()!;
     if (seenCats.has(cat)) continue;
     seenCats.add(cat);
     let cmcontinue = "";
     do {
+      if (!_lyricsScrapeState.running) break;
       const params = new URLSearchParams({
         action: "query",
         list: "categorymembers",
@@ -8888,6 +8898,16 @@ async function _lyricsScrapeRun(): Promise<void> {
   try {
     const already = await getLyricTitlesAlreadyScraped("weeniecampbell.com");
     const pages = await _lyricsCollectPagesUnderCategory("Category:Lyrics");
+    // Stop request during discovery — don't drop into the fetch loop
+    // (which would re-enter for whatever partial page list we have).
+    // The finally block resets everything cleanly.
+    if (!_lyricsScrapeState.running) {
+      _lyricsScrapeState.phase = "done";
+      _lyricsScrapeState.pagesDiscovered = pages.length;
+      _lyricsScrapeState.message = `Stopped during discovery. ${pages.length} pages had been queued.`;
+      console.log(`[lyrics] stopped during discovery after ${pages.length} pages queued`);
+      return;
+    }
     _lyricsScrapeState.phase = "fetching";
     _lyricsScrapeState.pagesDiscovered = pages.length;
     _lyricsScrapeState.message = `Discovered ${pages.length} pages — fetching…`;
