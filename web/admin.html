@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260527.0902" />
+  <link rel="stylesheet" href="/style.css?v=20260527.0914" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260527.0902"></script>
-<script defer src="/shared.js?v=20260527.0902"></script>
+<script defer src="/utils.js?v=20260527.0914"></script>
+<script defer src="/shared.js?v=20260527.0914"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -447,7 +447,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260527.0902"></script>
+<script defer src="/modal.js?v=20260527.0914"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -3504,8 +3504,16 @@ async function lyricsPollScrapeOnce() {
     if (s.running) {
       btn.disabled = true;
       if (stopBtn) stopBtn.style.display = "";
-      const pct = s.pagesDiscovered ? Math.round((s.pagesScraped + s.pagesSkipped) / s.pagesDiscovered * 100) : 0;
-      statusEl.innerHTML = `<span style="color:var(--accent)">Running…</span> ${s.pagesScraped}/${s.pagesDiscovered} (${pct}%) · skipped ${s.pagesSkipped} · failed ${s.pagesFailed}${s.currentTitle ? ` · <em style="color:var(--muted)">${escHtml(s.currentTitle).slice(0, 60)}</em>` : ""}`;
+      const phase = s.phase || "running";
+      if (phase === "discovering") {
+        // Discovery walks the category tree — pagesScraped/Failed aren't
+        // meaningful yet. Surface the message verbatim so the user can
+        // see what subcategory we're on + how many pages found so far.
+        statusEl.innerHTML = `<span style="color:var(--accent)">Discovering…</span> ${escHtml(s.message || "").slice(0, 140)}`;
+      } else {
+        const pct = s.pagesDiscovered ? Math.round((s.pagesScraped + s.pagesSkipped) / s.pagesDiscovered * 100) : 0;
+        statusEl.innerHTML = `<span style="color:var(--accent)">Fetching…</span> ${s.pagesScraped}/${s.pagesDiscovered} (${pct}%) · skipped ${s.pagesSkipped} · failed ${s.pagesFailed}${s.currentTitle ? ` · <em style="color:var(--muted)">${escHtml(s.currentTitle).slice(0, 60)}</em>` : ""}`;
+      }
     } else {
       btn.disabled = false;
       if (stopBtn) stopBtn.style.display = "none";
