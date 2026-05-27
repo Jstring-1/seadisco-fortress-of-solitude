@@ -6088,7 +6088,9 @@ export async function getLyricCount(): Promise<number> {
 // exist as a blues_artists.name (case-insensitive), and inserts each
 // as a minimal new row (name only). Returns { added, total, existing }
 // so the UI can report what happened.
-export async function importLyricsArtistsToBluesDb(): Promise<{ added: number; total: number; existing: number }> {
+export async function importLyricsArtistsToBluesDb(
+  validate?: (name: string) => boolean,
+): Promise<{ added: number; total: number; existing: number; rejected: number }> {
   // Distinct non-null lyric-artist names. Trim + dedupe in JS so we
   // can match against the (lowercased) existing set in one pass.
   const rawNamesR = await getPool().query(
@@ -6096,31 +6098,48 @@ export async function importLyricsArtistsToBluesDb(): Promise<{ added: number; t
        FROM blues_lyrics
       WHERE artist IS NOT NULL AND TRIM(artist) <> ''`,
   );
-  const candidates = (rawNamesR.rows as Array<{ artist: string }>)
+  const rawCandidates = (rawNamesR.rows as Array<{ artist: string }>)
     .map(r => r.artist.replace(/\s+/g, " ").trim())
     .filter(s => s.length >= 2 && s.length <= 200);
+  // Validator pass — applied at IMPORT time as well as extraction so
+  // stale bad values left in blues_lyrics.artist (from old scrapes
+  // before the validator was added) don't leak into blues_artists.
+  // Without this, "1934 version" / "alternate take" / catalog
+  // numbers etc. would still get imported as artists.
+  const candidates: string[] = [];
+  let rejected = 0;
+  for (const c of rawCandidates) {
+    if (validate && !validate(c)) { rejected++; continue; }
+    candidates.push(c);
+  }
   const existingR = await getPool().query(`SELECT LOWER(name) AS lname FROM blues_artists`);
   const existing = new Set((existingR.rows as Array<{ lname: string }>).map(r => r.lname));
-  let added = 0;
+  // De-dupe locally + filter against the existing set so the bulk
+  // INSERT below only carries names that genuinely need adding.
+  const toAdd: string[] = [];
+  const localSeen = new Set<string>();
   let already = 0;
   for (const name of candidates) {
     const key = name.toLowerCase();
     if (existing.has(key)) { already++; continue; }
-    try {
-      await getPool().query(
-        `INSERT INTO blues_artists (name, enrichment_status)
-         VALUES ($1, $2::jsonb)`,
-        [name, JSON.stringify({ source: "lyrics_import" })],
-      );
-      existing.add(key); // guard against duplicate-spelled lyrics rows
-      added++;
-    } catch (e: any) {
-      // Unique-key collisions on Wikidata-QID etc. shouldn't happen for
-      // a name-only row, but if anything goes wrong, log + continue.
-      console.warn("[blues-archive] insert failed for", name, e?.message ?? e);
-    }
+    if (localSeen.has(key)) continue;
+    localSeen.add(key);
+    toAdd.push(name);
   }
-  return { added, total: candidates.length, existing: already };
+  // Bulk INSERT via unnest — one round-trip regardless of size.
+  // Previous version did one INSERT per name which 60s-timed-out
+  // once the candidate set got into the low thousands.
+  let added = 0;
+  if (toAdd.length) {
+    const r = await getPool().query(
+      `INSERT INTO blues_artists (name, enrichment_status)
+       SELECT n, '{"source":"lyrics_import"}'::jsonb FROM unnest($1::text[]) AS n
+       RETURNING id`,
+      [toAdd],
+    );
+    added = r.rowCount ?? 0;
+  }
+  return { added, total: rawCandidates.length, existing: already, rejected };
 }
 
 // Paginated artist list with aggregated counts. Joins lyrics on

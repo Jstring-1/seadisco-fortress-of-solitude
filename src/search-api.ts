@@ -9328,8 +9328,11 @@ app.patch("/api/admin/lyrics/:id", express.json({ limit: "4kb" }), async (req, r
 app.post("/api/blues-archive/import-from-lyrics", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   try {
-    const r = await importLyricsArtistsToBluesDb();
-    console.log(`[blues-archive] import: added=${r.added}, existing=${r.existing}, total=${r.total}`);
+    // Pass the same artist-name validator the scrape uses so stale
+    // bad values left in blues_lyrics.artist (from before the
+    // validator was added) don't leak through into blues_artists.
+    const r = await importLyricsArtistsToBluesDb(_lyricsLooksLikeArtist);
+    console.log(`[blues-archive] import: added=${r.added}, existing=${r.existing}, rejected=${r.rejected}, total=${r.total}`);
     res.json({ ok: true, ...r });
   } catch (err) {
     console.error("[blues-archive import]", err);

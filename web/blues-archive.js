@@ -511,7 +511,7 @@ async function bluesArchiveImport() {
     const r = await apiFetch("/api/blues-archive/import-from-lyrics", { method: "POST", timeoutMs: 60000 });
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const j = await r.json();
-    if (statusEl) statusEl.innerHTML = `<span style="color:#4caf50">Imported</span> ${j.added} new of ${j.total} distinct (${j.existing} already in DB)`;
+    if (statusEl) statusEl.innerHTML = `<span style="color:#4caf50">Imported</span> ${j.added} new of ${j.total} distinct · ${j.existing} already in DB · ${j.rejected || 0} rejected by validator`;
     _baLoadList();
   } catch (e) {
     if (statusEl) statusEl.textContent = `Import failed: ${e?.message || e}`;
