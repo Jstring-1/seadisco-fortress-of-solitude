@@ -9320,6 +9320,9 @@ app.post("/api/blues-archive/import-from-lyrics", async (req, res) => {
 app.post("/api/blues-archive/purge-lyric-imports", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   try {
+    // Column is `notes` on this schema, not `profile` — earlier query
+    // referenced a non-existent column and 500'd. All other fields
+    // checked here exist on blues_artists.
     const r = await getPool().query(`
       DELETE FROM blues_artists
        WHERE enrichment_status @> '{"source":"lyrics_import"}'::jsonb
@@ -9328,7 +9331,7 @@ app.post("/api/blues-archive/purge-lyric-imports", async (req, res) => {
          AND musicbrainz_mbid  IS NULL
          AND birth_date        IS NULL
          AND death_date        IS NULL
-         AND (profile          IS NULL OR profile        = '')
+         AND (notes            IS NULL OR notes          = '')
          AND (birth_place      IS NULL OR birth_place    = '')
          AND (hometown_region  IS NULL OR hometown_region = '')
          AND (photo_url        IS NULL OR photo_url      = '')
