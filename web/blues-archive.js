@@ -10,6 +10,49 @@ let _baTotal = 0;
 let _baSearchTimer = null;
 let _baCurrentArtistId = null;
 
+// Cache + sort state. The list page sorts the visible page client-side
+// (server still owns pagination); the detail page sorts whichever
+// inner table the user clicks (full lists).
+let _baListRowsCache = [];
+const _baListSort = { key: "name", dir: "asc" };
+const _BA_LIST_TYPES = { name: "str", birth_date: "date", death_date: "date", lyrics_count: "num", releases_count: "num" };
+
+let _baDetailArtist = null;
+const _baLyricsSort = { key: "page_title", dir: "asc" };
+const _BA_LYRICS_TYPES = { page_title: "str", tuning: "str", snippet: "str", scraped_at: "date" };
+const _baReleasesSort = { key: "year", dir: "asc" };
+const _BA_RELEASES_TYPES = { year: "num", title: "str", label: "str", type: "str" };
+
+// Tiny self-contained sort helpers — admin.html's _adminSort* lives
+// in admin.html only; blues-archive.js loads on the main site so
+// duplicating these few lines keeps the module standalone.
+function _baSortApply(rows, state, types) {
+  if (!state || !state.key) return rows;
+  const t = (types || {})[state.key] || "str";
+  const dir = state.dir === "desc" ? -1 : 1;
+  const val = (o) => {
+    let v = o?.[state.key];
+    if (t === "num")  { v = Number(v); return Number.isFinite(v) ? v : -Infinity; }
+    if (t === "date") { const d = Date.parse(v); return Number.isFinite(d) ? d : -Infinity; }
+    return String(v ?? "").toLowerCase();
+  };
+  return rows.slice().sort((a, b) => {
+    const av = val(a), bv = val(b);
+    if (av < bv) return -1 * dir;
+    if (av > bv) return  1 * dir;
+    return 0;
+  });
+}
+function _baToggleSort(state, key) {
+  if (state.key === key) state.dir = state.dir === "asc" ? "desc" : "asc";
+  else { state.key = key; state.dir = "asc"; }
+}
+function _baSortTh(label, key, state, fn, extraStyle) {
+  const active = state.key === key;
+  const arrow = active ? (state.dir === "desc" ? "▼" : "▲") : "";
+  return `<th class="admin-sort-th${active ? " is-active" : ""}" style="padding:0.3rem 0.5rem;cursor:pointer;user-select:none;${extraStyle || ""}" onclick="${fn}('${key}')">${label}<span class="admin-sort-arrow" style="margin-left:0.3rem">${arrow}</span></th>`;
+}
+
 function initBluesArchiveView() {
   // First entry — paint the list view, hide any leftover detail panel.
   const detail = document.getElementById("blues-archive-detail");
@@ -42,33 +85,47 @@ async function _baLoadList() {
     const { rows = [], total = 0 } = await r.json();
     _baTotal = total;
     if (countEl) countEl.textContent = total ? `${total.toLocaleString()} artist${total === 1 ? "" : "s"}` : "No artists yet.";
-    if (!rows.length) {
-      rowsEl.innerHTML = `<p style="color:var(--muted);padding:0.5rem 0">No matches.</p>`;
-      _baRenderPager();
-      return;
-    }
-    rowsEl.innerHTML = `
-      <table class="api-log-table" style="font-size:0.86rem;width:100%">
-        <thead><tr>
-          <th>Name</th>
-          <th>Dates</th>
-          <th style="text-align:right">Lyrics</th>
-          <th style="text-align:right">Releases</th>
-        </tr></thead>
-        <tbody>${rows.map(row => {
-          const dates = [row.birth_date, row.death_date].filter(Boolean).join(" – ") || "—";
-          return `<tr style="cursor:pointer" onclick="_baOpenArtist(${row.id})">
-            <td style="font-weight:600;color:var(--text)">${escHtml(row.name || "")}</td>
-            <td style="color:var(--muted);font-size:0.78rem">${escHtml(dates)}</td>
-            <td style="text-align:right;color:${row.lyrics_count ? "var(--accent)" : "var(--muted)"}">${row.lyrics_count || ""}</td>
-            <td style="text-align:right;color:${row.releases_count ? "var(--accent)" : "var(--muted)"}">${row.releases_count || ""}</td>
-          </tr>`;
-        }).join("")}</tbody>
-      </table>`;
+    _baListRowsCache = rows;
+    _baRenderListTable();
     _baRenderPager();
   } catch (e) {
     rowsEl.innerHTML = `<p style="color:#e88">Failed: ${escHtml(String(e?.message || e))}</p>`;
   }
+}
+
+function _baSortList(key) {
+  _baToggleSort(_baListSort, key);
+  _baRenderListTable();
+}
+window._baSortList = _baSortList;
+
+function _baRenderListTable() {
+  const rowsEl = document.getElementById("blues-archive-rows");
+  if (!rowsEl) return;
+  const rows = _baSortApply(_baListRowsCache, _baListSort, _BA_LIST_TYPES);
+  if (!rows.length) {
+    rowsEl.innerHTML = `<p style="color:var(--muted);padding:0.5rem 0">No matches.</p>`;
+    return;
+  }
+  const S = _baListSort;
+  rowsEl.innerHTML = `
+    <table class="api-log-table" style="font-size:0.86rem;width:100%">
+      <thead><tr>
+        ${_baSortTh("Name",     "name",          S, "_baSortList")}
+        ${_baSortTh("Dates",    "birth_date",    S, "_baSortList")}
+        ${_baSortTh("Lyrics",   "lyrics_count",  S, "_baSortList", "text-align:right")}
+        ${_baSortTh("Releases", "releases_count",S, "_baSortList", "text-align:right")}
+      </tr></thead>
+      <tbody>${rows.map(row => {
+        const dates = [row.birth_date, row.death_date].filter(Boolean).join(" – ") || "—";
+        return `<tr style="cursor:pointer" onclick="_baOpenArtist(${row.id})">
+          <td style="font-weight:600;color:var(--text)">${escHtml(row.name || "")}</td>
+          <td style="color:var(--muted);font-size:0.78rem">${escHtml(dates)}</td>
+          <td style="text-align:right;color:${row.lyrics_count ? "var(--accent)" : "var(--muted)"}">${row.lyrics_count || ""}</td>
+          <td style="text-align:right;color:${row.releases_count ? "var(--accent)" : "var(--muted)"}">${row.releases_count || ""}</td>
+        </tr>`;
+      }).join("")}</tbody>
+    </table>`;
 }
 
 function _baRenderPager() {
@@ -109,7 +166,20 @@ async function _baOpenArtist(id) {
 }
 window._baOpenArtist = _baOpenArtist;
 
+function _baSortLyrics(key) {
+  _baToggleSort(_baLyricsSort, key);
+  if (_baDetailArtist) _baRenderArtistDetail(_baDetailArtist);
+}
+window._baSortLyrics = _baSortLyrics;
+
+function _baSortReleases(key) {
+  _baToggleSort(_baReleasesSort, key);
+  if (_baDetailArtist) _baRenderArtistDetail(_baDetailArtist);
+}
+window._baSortReleases = _baSortReleases;
+
 function _baRenderArtistDetail(a) {
+  _baDetailArtist = a;
   const detail = document.getElementById("blues-archive-detail");
   if (!detail) return;
   const dates = [a.birth_date, a.death_date].filter(Boolean).join(" – ");
@@ -124,11 +194,19 @@ function _baRenderArtistDetail(a) {
     a.hometown_region ? `From: ${escHtml(a.hometown_region)}` : "",
     a.first_recording_year ? `First recording: ${a.first_recording_year}` : "",
   ].filter(Boolean).join(" · ");
-  const lyrics = Array.isArray(a.lyrics) ? a.lyrics : [];
-  const releases = Array.isArray(a.releases) ? a.releases : [];
-  const lyricsHtml = lyrics.length
+  const lyricsRaw = Array.isArray(a.lyrics) ? a.lyrics : [];
+  const releasesRaw = Array.isArray(a.releases) ? a.releases : [];
+  const lyrics   = _baSortApply(lyricsRaw,   _baLyricsSort,   _BA_LYRICS_TYPES);
+  const releases = _baSortApply(releasesRaw, _baReleasesSort, _BA_RELEASES_TYPES);
+  const LS = _baLyricsSort, RS = _baReleasesSort;
+  const lyricsHtml = lyricsRaw.length
     ? `<table class="api-log-table" style="font-size:0.84rem;width:100%">
-        <thead><tr><th>Title</th><th>Tuning</th><th>Snippet</th><th style="width:1%"></th></tr></thead>
+        <thead><tr>
+          ${_baSortTh("Title",   "page_title", LS, "_baSortLyrics")}
+          ${_baSortTh("Tuning",  "tuning",     LS, "_baSortLyrics")}
+          ${_baSortTh("Snippet", "snippet",    LS, "_baSortLyrics")}
+          <th style="width:1%"></th>
+        </tr></thead>
         <tbody>${lyrics.map(l => `
           <tr data-lyric-row="${l.id}">
             <td style="font-weight:600;color:var(--text);white-space:nowrap;cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml(l.page_title || "")}</td>
@@ -138,9 +216,14 @@ function _baRenderArtistDetail(a) {
           </tr>`).join("")}</tbody>
       </table>`
     : `<p style="color:var(--muted);font-style:italic;padding:0.4rem 0">No lyrics matched this artist's name. (Try Import from lyrics on the list page if you've just scraped.)</p>`;
-  const releasesHtml = releases.length
+  const releasesHtml = releasesRaw.length
     ? `<table class="api-log-table" style="font-size:0.84rem;width:100%">
-        <thead><tr><th>Year</th><th>Title</th><th>Label</th><th>Type</th></tr></thead>
+        <thead><tr>
+          ${_baSortTh("Year",  "year",  RS, "_baSortReleases")}
+          ${_baSortTh("Title", "title", RS, "_baSortReleases")}
+          ${_baSortTh("Label", "label", RS, "_baSortReleases")}
+          ${_baSortTh("Type",  "type",  RS, "_baSortReleases")}
+        </tr></thead>
         <tbody>${releases.map(rel => {
           const type = String(rel.type || "release");
           const url  = `https://www.discogs.com/${type === "master" ? "master" : "release"}/${rel.id}`;
