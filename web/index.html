@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260527.1220" />
+  <link rel="stylesheet" href="/style.css?v=20260527.1226" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260527.1220"></script>
+<script defer src="/shared.js?v=20260527.1226"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -990,6 +990,32 @@ e.g.  miles davis | coltrane
   </div>
 </div>
 
+<!-- ── Blues Archive view (admin-only) ────────────────────────────────
+     Unified artist browser combining blues_artists rows, scraped lyrics
+     matched by artist name, and the Discogs releases JSONB sorted
+     oldest→newest. JS lives in /blues-archive.js, lazy-loaded by
+     switchView('blues-archive'). Placed alongside the other view
+     containers (loc-view, gutenberg-view, chronam-view) before the
+     footer — when it was below the footer the footer rendered above
+     the archive content. -->
+<div id="blues-archive-view" class="content-narrow" style="display:none">
+  <div class="blues-archive-list">
+    <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.8rem;flex-wrap:wrap">
+      <h2 style="margin:0;font-size:1.05rem">Blues Archive</h2>
+      <button type="button" id="blues-archive-import-btn" class="archive-btn" onclick="bluesArchiveImport()" title="Walk lyrics.artist and insert any name not already in the Blues DB. Idempotent — re-runs are safe.">Import from lyrics</button>
+      <button type="button" id="blues-archive-purge-btn" class="archive-btn" onclick="bluesArchivePurgeImports()" title="Remove blues_artists rows created by the lyrics-import job that have no other data attached (no Discogs ID, no Wikidata, no bio, etc.). Use to clean up trash extracted before the artist validator was tightened.">Purge lyric-import junk</button>
+      <span id="blues-archive-import-status" style="font-size:0.78rem;color:var(--muted)"></span>
+      <span id="blues-archive-count" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
+    </div>
+    <input id="blues-archive-search" type="search" placeholder="Search artists by name" style="width:100%;padding:0.5rem 0.7rem;font-size:0.9rem;margin-bottom:0.6rem" oninput="_bluesArchiveDebouncedSearch()">
+    <div id="blues-archive-rows" style="font-size:0.86rem;color:var(--muted)">Loading…</div>
+    <div id="blues-archive-pager" style="margin-top:0.6rem;display:flex;gap:0.4rem;align-items:center;font-size:0.78rem"></div>
+  </div>
+  <!-- Detail panel — populated when an artist row is clicked.
+       blues-archive.js toggles between list + detail. -->
+  <div id="blues-archive-detail" style="display:none"></div>
+</div>
+
 <!-- Reader overlay — full-viewport reading surface that hosts the
      book HTML body. Outside-click closes (no confirm; auto-bookmark
      is flushed on close so nothing is lost). -->
@@ -1197,29 +1223,6 @@ e.g.  miles davis | coltrane
     <div class="popup-close-zone" onclick="closeChronAmPopup()" title="Click to close"></div>
     <div id="chronam-popup-content"></div>
   </div>
-</div>
-
-<!-- ── Blues Archive view (admin-only) ────────────────────────────────
-     Unified artist browser combining blues_artists rows, scraped lyrics
-     matched by artist name, and the Discogs releases JSONB sorted
-     oldest→newest. JS lives in /blues-archive.js, lazy-loaded by
-     switchView('blues-archive'). -->
-<div id="blues-archive-view" class="content-narrow" style="display:none">
-  <div class="blues-archive-list">
-    <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.8rem;flex-wrap:wrap">
-      <h2 style="margin:0;font-size:1.05rem">Blues Archive</h2>
-      <button type="button" id="blues-archive-import-btn" class="archive-btn" onclick="bluesArchiveImport()" title="Walk lyrics.artist and insert any name not already in the Blues DB. Idempotent — re-runs are safe.">Import from lyrics</button>
-      <button type="button" id="blues-archive-purge-btn" class="archive-btn" onclick="bluesArchivePurgeImports()" title="Remove blues_artists rows created by the lyrics-import job that have no other data attached (no Discogs ID, no Wikidata, no bio, etc.). Use to clean up trash extracted before the artist validator was tightened.">Purge lyric-import junk</button>
-      <span id="blues-archive-import-status" style="font-size:0.78rem;color:var(--muted)"></span>
-      <span id="blues-archive-count" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
-    </div>
-    <input id="blues-archive-search" type="search" placeholder="Search artists by name" style="width:100%;padding:0.5rem 0.7rem;font-size:0.9rem;margin-bottom:0.6rem" oninput="_bluesArchiveDebouncedSearch()">
-    <div id="blues-archive-rows" style="font-size:0.86rem;color:var(--muted)">Loading…</div>
-    <div id="blues-archive-pager" style="margin-top:0.6rem;display:flex;gap:0.4rem;align-items:center;font-size:0.78rem"></div>
-  </div>
-  <!-- Detail panel — populated when an artist row is clicked.
-       blues-archive.js toggles .open between list + detail. -->
-  <div id="blues-archive-detail" style="display:none"></div>
 </div>
 
 <!-- Library of Congress search popup — opens on top of album /
@@ -1434,13 +1437,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260527.1220"></script>
-<script defer src="/search.js?v=20260527.1220"></script>
-<script defer src="/collection.js?v=20260527.1220"></script>
+<script defer src="/utils.js?v=20260527.1226"></script>
+<script defer src="/search.js?v=20260527.1226"></script>
+<script defer src="/collection.js?v=20260527.1226"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260527.1220"></script>
-<script defer src="/app.js?v=20260527.1220"></script>
+<script defer src="/modal.js?v=20260527.1226"></script>
+<script defer src="/app.js?v=20260527.1226"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1451,13 +1454,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260527.1220"></script>
-<script defer src="/queue.js?v=20260527.1220"></script>
+<script defer src="/loc.js?v=20260527.1226"></script>
+<script defer src="/queue.js?v=20260527.1226"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260527.1220";
+  window._SD_LAZY_VERSION = "20260527.1226";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1487,8 +1490,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260527.1220"></script>
-<script defer src="/offline.js?v=20260527.1220"></script>
+<script defer src="/idb.js?v=20260527.1226"></script>
+<script defer src="/offline.js?v=20260527.1226"></script>
 
 </body>
 </html>
