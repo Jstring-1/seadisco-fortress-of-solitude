@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260527.1138" />
+  <link rel="stylesheet" href="/style.css?v=20260527.1141" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260527.1138"></script>
-<script defer src="/shared.js?v=20260527.1138"></script>
+<script defer src="/utils.js?v=20260527.1141"></script>
+<script defer src="/shared.js?v=20260527.1141"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -281,6 +281,7 @@
           <button class="admin-btn" id="lyrics-scrape-btn" onclick="lyricsStartScrape()" title="Walk Category:Lyrics on weeniecampbell.com and store every page. ~80 min at 1.2 s/page. Resumable: re-running skips titles already stored.">Scrape weeniecampbell.com</button>
           <button class="admin-btn admin-btn-danger" id="lyrics-stop-btn" onclick="lyricsStopScrape()" title="Stop a running scrape after the current page finishes" style="display:none">Stop</button>
           <button class="admin-btn" id="lyrics-reextract-btn" onclick="lyricsReextract()" title="Re-run the tuning + artist extractors against every already-stored row. No HTTP requests — just re-parses the wikitext already in the DB. Use after the extractor regex is updated.">Re-extract</button>
+          <button class="admin-btn" id="lyrics-sync-artists-btn" onclick="lyricsSyncArtists(event)" title="Walk Category:Lyrics by Artist on weeniecampbell.com — the wiki itself maps each page to an artist via subcategories. Use this instead of the regex extractor; it's authoritative. By default only fills rows with no artist yet; hold Shift while clicking to overwrite all.">Sync artists from wiki</button>
           <span id="lyrics-scrape-status" style="font-size:0.78rem;color:var(--muted)"></span>
           <span id="lyrics-stats" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
         </div>
@@ -448,7 +449,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260527.1138"></script>
+<script defer src="/modal.js?v=20260527.1141"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -3467,6 +3468,35 @@ async function lyricsReextract() {
   }
 }
 window.lyricsReextract = lyricsReextract;
+
+async function lyricsSyncArtists(ev) {
+  const force = !!(ev && ev.shiftKey);
+  const btn = document.getElementById("lyrics-sync-artists-btn");
+  const statusEl = document.getElementById("lyrics-scrape-status");
+  const prompt = force
+    ? "Force-overwrite every lyric's artist using the wiki's Category:Lyrics by Artist mapping?\n\n(Shift was held — this will replace artist values you may have manually set.)"
+    : "Walk Category:Lyrics by Artist on weeniecampbell.com and fill the artist field on rows that don't have one yet?\n\nManually-set artist values are preserved unless you re-run with Shift held.";
+  if (!confirm(prompt)) return;
+  btn.disabled = true;
+  if (statusEl) statusEl.textContent = "Starting…";
+  try {
+    const r = await apiFetch(`/api/admin/lyrics/sync-artists-from-wiki${force ? "?force=1" : ""}`, { method: "POST" });
+    if (r.status === 409) {
+      if (statusEl) statusEl.textContent = "Another scrape/sync is running — attaching to status…";
+    } else if (!r.ok) {
+      if (statusEl) statusEl.textContent = `Failed: HTTP ${r.status}`;
+      btn.disabled = false;
+      return;
+    }
+    // Reuses the same scrape-status poll/UI as the main scrape job —
+    // they share _lyricsScrapeState on the server.
+    lyricsStartPolling();
+  } catch (e) {
+    if (statusEl) statusEl.textContent = `Failed: ${e?.message || e}`;
+    btn.disabled = false;
+  }
+}
+window.lyricsSyncArtists = lyricsSyncArtists;
 
 async function lyricsStopScrape() {
   const statusEl = document.getElementById("lyrics-scrape-status");
