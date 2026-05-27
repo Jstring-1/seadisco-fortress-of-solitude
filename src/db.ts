@@ -6018,8 +6018,17 @@ export async function listLyrics(opts: {
     where.push(`(page_title ILIKE $${params.length} OR artist ILIKE $${params.length} OR plaintext ILIKE $${params.length})`);
   }
   if (opts.tuning) {
-    params.push(opts.tuning);
-    where.push(`tuning = $${params.length}`);
+    // Special sentinel: "(unspecified)" filters rows where no tuning
+    // was extracted from the page body. On a blues-lyrics wiki, an
+    // unmentioned tuning effectively means standard, so this is the
+    // catch-all for "standard tuning" pages that don't say so
+    // explicitly.
+    if (opts.tuning === "(unspecified)") {
+      where.push(`tuning IS NULL`);
+    } else {
+      params.push(opts.tuning);
+      where.push(`tuning = $${params.length}`);
+    }
   }
   if (opts.artist) {
     params.push(opts.artist);
@@ -6050,7 +6059,17 @@ export async function getLyricTunings(): Promise<Array<{ tuning: string; n: numb
       GROUP BY tuning
       ORDER BY n DESC, tuning ASC`,
   );
-  return r.rows;
+  // Append a virtual (unspecified) entry counting rows where no
+  // tuning was extracted — almost all of these are standard tuning
+  // on a blues-lyrics wiki, so the dropdown surfaces it as a usable
+  // filter. Pinned to the bottom of the list regardless of count.
+  const nullR = await getPool().query(
+    `SELECT COUNT(*)::int AS n FROM blues_lyrics WHERE tuning IS NULL OR tuning = ''`,
+  );
+  const nullCount = nullR.rows[0]?.n ?? 0;
+  const rows = r.rows as Array<{ tuning: string; n: number }>;
+  if (nullCount > 0) rows.push({ tuning: "(unspecified)", n: nullCount });
+  return rows;
 }
 
 export async function getLyricCount(): Promise<number> {

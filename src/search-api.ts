@@ -8684,21 +8684,33 @@ function _lyricsExtractTuning(text: string): string | null {
   if (!text) return null;
   // Common tuning conventions on the wiki:
   //   "Tuning: Open D"   "Tuning - Spanish"   "Open G tuning"
-  //   "Played in DADGAD" "Drop D tuning"
+  //   "Played in DADGAD" "Drop D tuning"   "Standard tuning"
+  //   "in standard tuning"   "EADGBE"
   const patterns: RegExp[] = [
-    /\btuning\s*[:\-=]\s*([A-Za-z][A-Za-z0-9 #\-/]{1,30})/i,
-    /\b(open\s+[A-G](?:\s*minor)?)\s+tuning\b/i,
+    // Explicit "standard" / "regular" mentions → canonicalized later.
+    /\b(standard|regular)\s+tuning\b/i,
+    /\btuning\s*[:\-=]\s*(standard|regular)\b/i,
+    /\b(EADGBE)\b/,
+    // Open / Drop with letter + optional minor / 7
+    /\b(open\s+[A-G](?:\s*(?:minor|m|7))?)\s+tuning\b/i,
     /\b(drop\s+[A-G])\s+tuning\b/i,
-    /\b(DADGAD|DGDGBD|DADF#AD|EBEG#BE|CGCGCE|DADFAD)\b/i,
+    // Bare alt-tuning shorthand (no surrounding "tuning" word).
+    /\b(DADGAD|DGDGBD|DADF#AD|EBEG#BE|CGCGCE|DADFAD|DADGBE|DGDGAD)\b/,
+    // Named tunings, with or without trailing "tuning"
     /\bin\s+(spanish|vestapol|sebastopol|cross[\- ]?note)\s+tuning\b/i,
     /\b(spanish|vestapol|sebastopol)\s+tuning\b/i,
+    // Generic fallback — "Tuning: X" where X is any word
+    /\btuning\s*[:\-=]\s*([A-Za-z][A-Za-z0-9 #\-/]{1,30})/i,
   ];
   for (const re of patterns) {
     const m = text.match(re);
     if (m && m[1]) {
       const raw = m[1].trim();
-      // Canonicalize a few aliases
+      // Canonicalize aliases
       const canonical: Record<string, string> = {
+        "standard":    "Standard",
+        "regular":     "Standard",
+        "eadgbe":      "Standard",
         "spanish":     "Open G (Spanish)",
         "vestapol":    "Open D (Vestapol)",
         "sebastopol":  "Open D (Vestapol)",
@@ -9028,6 +9040,42 @@ app.get("/api/admin/lyrics/tunings", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   try { res.json({ tunings: await getLyricTunings() }); }
   catch (err) { console.error("[lyrics tunings]", err); res.status(500).json({ error: String(err) }); }
+});
+
+// POST /api/admin/lyrics/reextract — re-runs the tuning + artist
+// extractors against every stored row's wikitext and writes updated
+// values. Useful after extending the regex patterns without re-scraping.
+// No HTTP requests, just DB iteration, so it's fast (~seconds).
+app.post("/api/admin/lyrics/reextract", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const rows = (await getPool().query(
+      `SELECT id, page_title, wikitext, plaintext, tuning, artist FROM blues_lyrics`,
+    )).rows as Array<{ id: number; page_title: string; wikitext: string; plaintext: string; tuning: string | null; artist: string | null }>;
+    let updated = 0;
+    let tuningChanged = 0;
+    let artistChanged = 0;
+    for (const row of rows) {
+      const wt = row.wikitext || "";
+      const pt = row.plaintext || "";
+      const newTuning = _lyricsExtractTuning(wt) || _lyricsExtractTuning(pt);
+      const newArtist = _lyricsExtractArtist(wt, row.page_title);
+      if (newTuning !== row.tuning || newArtist !== row.artist) {
+        await getPool().query(
+          `UPDATE blues_lyrics SET tuning = $1, artist = $2 WHERE id = $3`,
+          [newTuning, newArtist, row.id],
+        );
+        updated++;
+        if (newTuning !== row.tuning) tuningChanged++;
+        if (newArtist !== row.artist) artistChanged++;
+      }
+    }
+    console.log(`[lyrics] re-extract: ${updated} rows updated (${tuningChanged} tuning, ${artistChanged} artist) of ${rows.length} total`);
+    res.json({ ok: true, total: rows.length, updated, tuningChanged, artistChanged });
+  } catch (err) {
+    console.error("[lyrics reextract]", err);
+    res.status(500).json({ error: String(err) });
+  }
 });
 
 // GET /api/admin/lyrics/:id — full lyric record
