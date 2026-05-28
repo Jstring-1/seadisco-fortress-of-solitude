@@ -6209,7 +6209,7 @@ export async function getBluesArchiveArtist(id: number): Promise<any | null> {
 // Patch a single blues_lyrics row's tuning + artist fields. Both are
 // optional — only the keys you pass get updated. Returns the row
 // after the write so the client can repaint without a second fetch.
-export async function updateLyricFields(id: number, patch: { tuning?: string | null; artist?: string | null }): Promise<any | null> {
+export async function updateLyricFields(id: number, patch: { tuning?: string | null; artist?: string | null; page_title?: string }): Promise<any | null> {
   const sets: string[] = [];
   const params: any[] = [];
   if ("tuning" in patch) {
@@ -6219,6 +6219,10 @@ export async function updateLyricFields(id: number, patch: { tuning?: string | n
   if ("artist" in patch) {
     params.push(patch.artist === "" ? null : patch.artist ?? null);
     sets.push(`artist = $${params.length}`);
+  }
+  if ("page_title" in patch && typeof patch.page_title === "string" && patch.page_title) {
+    params.push(patch.page_title);
+    sets.push(`page_title = $${params.length}`);
   }
   if (!sets.length) return await getLyricById(id);
   params.push(id);

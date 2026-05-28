@@ -9297,21 +9297,37 @@ app.get("/api/admin/lyrics/:id", async (req, res) => {
   } catch (err) { console.error("[lyrics get]", err); res.status(500).json({ error: String(err) }); }
 });
 
-// PATCH /api/admin/lyrics/:id  body { tuning?, artist? }
+// PATCH /api/admin/lyrics/:id  body { tuning?, artist?, page_title? }
 // Only the keys present in the body get updated. Empty-string values
-// are coerced to NULL so the dropdown's "(unspecified)" round-trips.
+// for tuning / artist are coerced to NULL so the dropdown's
+// "(unspecified)" round-trips. page_title cannot be cleared — an
+// empty title would orphan the row from its source-host UNIQUE
+// constraint — so blank/whitespace titles are rejected with 400.
 app.patch("/api/admin/lyrics/:id", express.json({ limit: "4kb" }), async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   try {
     const id = parseInt(req.params.id, 10);
     if (!Number.isFinite(id)) { res.status(400).json({ error: "bad_id" }); return; }
-    const patch: { tuning?: string | null; artist?: string | null } = {};
+    const patch: { tuning?: string | null; artist?: string | null; page_title?: string } = {};
     if ("tuning" in (req.body ?? {})) patch.tuning = typeof req.body.tuning === "string" ? req.body.tuning.trim().slice(0, 80) : null;
     if ("artist" in (req.body ?? {})) patch.artist = typeof req.body.artist === "string" ? req.body.artist.trim().slice(0, 200) : null;
+    if ("page_title" in (req.body ?? {})) {
+      const t = typeof req.body.page_title === "string" ? req.body.page_title.trim().slice(0, 240) : "";
+      if (!t) { res.status(400).json({ error: "empty_title" }); return; }
+      patch.page_title = t;
+    }
     const row = await updateLyricFields(id, patch);
     if (!row) { res.status(404).json({ error: "not_found" }); return; }
     res.json(row);
-  } catch (err) {
+  } catch (err: any) {
+    // 23505 = unique_violation — another row already owns this title
+    // on the same source_host. Surface 409 so the client can show a
+    // helpful message rather than a generic 500.
+    if (err?.code === "23505") {
+      console.warn("[lyrics patch] title collision:", err?.detail || err?.message);
+      res.status(409).json({ error: "title_taken", detail: String(err?.detail || err?.message || "") });
+      return;
+    }
     console.error("[lyrics patch]", err);
     res.status(500).json({ error: String(err) });
   }
