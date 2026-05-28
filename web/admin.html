@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260528.0936" />
+  <link rel="stylesheet" href="/style.css?v=20260528.0939" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260528.0936"></script>
-<script defer src="/shared.js?v=20260528.0936"></script>
+<script defer src="/utils.js?v=20260528.0939"></script>
+<script defer src="/shared.js?v=20260528.0939"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -55,8 +55,11 @@
         <button class="admin-tab" onclick="switchAdminTab('users')">Users</button>
         <button class="admin-tab" onclick="switchAdminTab('content')">Content</button>
         <button class="admin-tab" onclick="switchAdminTab('system')">System</button>
-        <button class="admin-tab" onclick="switchAdminTab('blues-db')">Blues DB</button>
-        <button class="admin-tab" onclick="switchAdminTab('lyrics')">Lyrics</button>
+        <!-- Blues DB + Lyrics tabs removed — both now live in the
+             Discovery Blues Archive view (/?v=blues-archive). The
+             editor + bulk actions + scrape controls are accessible
+             there with the same /blues-admin.js code path. -->
+        <a href="/?v=blues-archive" class="admin-tab" style="text-decoration:none" title="The Blues DB + Lyrics admin sections moved to the main site's Discovery view.">Blues Archive ↗</a>
       </div>
 
       <!-- ── Overview KPI box (Overview group) ─────────────────────── -->
@@ -160,155 +163,12 @@
       <!-- LOC proxy stats relocated into the "Active APIs" popup
            (System tab → Active APIs ↗). The standalone tab is gone. -->
 
-      <!-- Blues DB (pre-1930 artists, admin-only) — own tab -->
-      <div class="admin-tab-panel admin-grp-blues-db" id="panel-blues-db" style="display:none">
-        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
-          <h2 style="margin:0">Pre-1930 Blues Artists</h2>
-          <button class="admin-refresh-btn" id="blues-db-refresh-btn" onclick="_adminClickRefresh(this, bluesDbLoadList)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
-          <span id="blues-db-refresh-status" class="admin-refresh-status"></span>
-          <!-- Seed-from-Discogs button removed: artists are now added one-at-a-time
-               via the "+" icon next to artist names in album/credit popups
-               (admin-only, hidden for artists already in the DB). -->
-          <!-- One-stop "give me everything Discogs has" — pulls the
-               full /artists/:id record for every row with a Discogs ID
-               (profile/bio, realname, aliases, name variations, members,
-               groups, first image, external URLs). -->
-          <button class="admin-btn" onclick="bluesDbEnrichDiscogsFull(null)" id="blues-enrich-discogs-full-btn" title="Pull the full Discogs artist record (bio, aliases, realname, name variations, members, groups, photo, URLs) for every row that has a Discogs ID. ~3-5 min at 1 req/sec. Idempotent.">Get all info from Discogs</button>
-          <button class="admin-btn" onclick="bluesDbOpenEditor(null)" title="Add a new artist row manually">+ Add artist</button>
-          <button class="admin-btn" onclick="bluesDbExportCsv()" id="blues-export-btn" title="Download every row as a CSV (UTF-8 with BOM, opens cleanly in Excel/Sheets).">Export CSV</button>
-          <button class="admin-btn admin-btn-danger" onclick="bluesDbDeleteAll()" id="blues-delete-all-btn" title="Wipe every row in the blues_artists table. Two-step confirm. Use to clear a noisy seed before re-running.">Delete all</button>
-          <span id="blues-stats" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
-        </div>
-        <div style="display:flex;gap:0.5rem;margin-bottom:0.6rem;align-items:center;flex-wrap:wrap">
-          <input id="blues-search" type="search" placeholder="Search name / birthplace / hometown / Discogs ID" style="flex:1;min-width:200px;padding:0.45rem 0.7rem;font-size:0.88rem" oninput="bluesDbDebouncedSearch()" />
-          <!-- Quick-filter: rows missing a photo_url. Drives client-side
-               filtering against the cached _bluesDbState.rows array, so
-               toggling it is instant — no server round-trip. -->
-          <label style="display:inline-flex;align-items:center;gap:0.35rem;font-size:0.78rem;color:var(--muted);white-space:nowrap;cursor:pointer">
-            <input id="blues-filter-nothumb" type="checkbox" onchange="bluesDbRenderList()" />
-            <span>No thumbnail only</span>
-          </label>
-        </div>
-        <div id="blues-list" style="font-size:0.82rem;color:var(--muted)">Loading…</div>
-        <div id="blues-pager" style="margin-top:0.6rem;display:flex;gap:0.4rem;align-items:center;font-size:0.78rem"></div>
-
-        <!-- Editor dialog -->
-        <div id="blues-editor-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.78);z-index:300;align-items:flex-start;justify-content:center;padding:2rem 1rem;overflow:auto" onclick="if(event.target===this)bluesDbCloseEditor()">
-          <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(900px,100%)">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.7rem">
-              <h3 id="blues-editor-title" style="margin:0">Edit artist</h3>
-              <button class="admin-btn" onclick="bluesDbCloseEditor()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
-            </div>
-            <!-- External search/deep-link bar — populated by
-                 _bluesDbUpdateEditorLinks() from the current name +
-                 any IDs already on the row. Shortcut for chasing
-                 down missing fields without copy-pasting names. -->
-            <div id="blues-editor-extlinks" style="display:none;gap:0.6rem;flex-wrap:wrap;font-size:0.78rem;margin-bottom:0.7rem;padding:0.4rem 0.6rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:6px">
-              <span style="color:var(--muted)">Lookup:</span>
-              <a id="blues-editor-link-discogs" href="#" target="_blank" rel="noopener">Discogs ↗</a>
-              <a id="blues-editor-link-wikipedia" href="#" target="_blank" rel="noopener">Wikipedia ↗</a>
-              <a id="blues-editor-link-musicbrainz" href="#" target="_blank" rel="noopener">MusicBrainz ↗</a>
-              <a id="blues-editor-link-wikidata" href="#" target="_blank" rel="noopener">Wikidata ↗</a>
-            </div>
-            <form id="blues-editor-form" onsubmit="event.preventDefault();bluesDbSaveEditor()" oninput="_bluesDbUpdateEditorLinks()" style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem 1rem">
-              <label style="grid-column:1/-1">Name <input name="name" required style="width:100%"></label>
-              <label>Wikidata QID <input name="wikidata_qid" placeholder="Q123456"></label>
-              <label>MusicBrainz MBID <input name="musicbrainz_mbid" placeholder="uuid"></label>
-              <label>Discogs ID <input name="discogs_id" type="number"></label>
-              <label>Wikipedia suffix <input name="wikipedia_suffix" placeholder="/wiki/Charley_Patton"></label>
-              <label>Birth date <input name="birth_date" placeholder="YYYY-MM-DD"></label>
-              <label>Death date <input name="death_date" placeholder="YYYY-MM-DD"></label>
-              <label>Birth place <input name="birth_place"></label>
-              <label>Death place <input name="death_place"></label>
-              <label>Death cause <input name="death_cause"></label>
-              <label>Hometown / region <input name="hometown_region"></label>
-              <label>1st recording year <input name="first_recording_year" type="number"></label>
-              <label>1st recording title <input name="first_recording_title"></label>
-              <!-- Last-recording fields removed: Discogs returns
-                   posthumous reissues + compilation appearances, which
-                   made the field misleading more often than not. -->
-
-              <label style="grid-column:1/-1">Aliases (comma-sep) <input name="aliases"></label>
-              <label style="grid-column:1/-1">Styles (comma-sep) <input name="styles"></label>
-              <label style="grid-column:1/-1">Instruments (comma-sep) <input name="instruments"></label>
-              <label style="grid-column:1/-1">Associated labels (comma-sep) <input name="associated_labels"></label>
-              <label style="grid-column:1/-1">Songs authored (comma-sep) <input name="songs_authored"></label>
-              <label style="grid-column:1/-1">Collaborators (comma-sep) <input name="collaborators"></label>
-              <label style="grid-column:1/-1">YouTube URLs (comma-sep) <input name="youtube_urls"></label>
-              <label style="grid-column:1/-1">Discogs masters/releases (JSON array — populated by "Seed from Discogs", edit cautiously) <textarea name="discogs_releases" rows="4" style="width:100%;font-family:monospace;font-size:0.78rem"></textarea></label>
-              <label style="grid-column:1/-1">Photo URL <input name="photo_url"></label>
-              <label style="grid-column:1/-1">Notes <textarea name="notes" rows="4" style="width:100%"></textarea></label>
-              <div style="grid-column:1/-1;display:flex;gap:0.5rem;justify-content:flex-end;margin-top:0.5rem;flex-wrap:wrap">
-                <button type="button" class="admin-btn admin-btn-danger" id="blues-editor-delete" onclick="bluesDbDeleteFromEditor()" style="margin-right:auto;display:none">Delete</button>
-                <button type="button" class="admin-btn" id="blues-editor-mb" onclick="bluesDbEnrichEditorRow()" title="Pull first/last recording year + title from MusicBrainz for THIS artist (uses the MBID in the field above)" style="display:none">Enrich from MB</button>
-                <button type="button" class="admin-btn" id="blues-editor-wiki" onclick="bluesDbEnrichEditorWiki()" title="Pull the Wikipedia lead paragraph into the notes field (uses wikipedia_suffix). Force-overwrites existing notes." style="display:none">Wiki notes</button>
-                <button type="button" class="admin-btn" id="blues-editor-discogs" onclick="bluesDbOpenDiscogsPicker()" title="Search Discogs by name and let YOU pick the right match (vs. silently taking the top result)" style="display:none">Pick Discogs match</button>
-                <button type="button" class="admin-btn" id="blues-editor-yt" onclick="bluesDbEnrichEditorYt()" title="Search YouTube for the artist + first known recording, append top 3 video URLs (~100 quota units)" style="display:none">Find YouTube</button>
-                <button type="button" class="admin-btn" onclick="bluesDbCloseEditor()">Cancel</button>
-                <button type="submit" class="admin-btn admin-btn-extras">Save</button>
-              </div>
-            </form>
-          </div>
-        </div>
-
-        <!-- Discogs candidate picker — opened from the editor's "Pick
-             Discogs match" button. Lists top Discogs artists matching
-             the row's name so the admin can choose explicitly (instead
-             of letting the server silently grab the top search hit). -->
-        <div id="blues-discogs-picker" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.78);z-index:310;align-items:flex-start;justify-content:center;padding:2rem 1rem;overflow:auto" onclick="if(event.target===this)bluesDbCloseDiscogsPicker()">
-          <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;width:min(640px,90vw);max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
-            <div style="display:flex;align-items:center;gap:0.6rem;padding:0.6rem 0.8rem;border-bottom:1px solid var(--border)">
-              <span style="font-weight:600;font-size:0.9rem;color:#ddd">Pick a Discogs match</span>
-              <span id="blues-discogs-picker-status" style="font-size:0.72rem;color:var(--muted);flex:1"></span>
-              <button type="button" class="admin-btn" onclick="bluesDbCloseDiscogsPicker()">Close</button>
-            </div>
-            <div style="display:flex;gap:0.5rem;padding:0.5rem 0.8rem;border-bottom:1px solid var(--border)">
-              <input id="blues-discogs-picker-q" type="search" placeholder="Search Discogs for…" style="flex:1;padding:0.4rem 0.6rem;font-size:0.85rem" onkeydown="if(event.key==='Enter')bluesDbRunDiscogsPicker()" />
-              <button type="button" class="admin-btn" onclick="bluesDbRunDiscogsPicker()">Search</button>
-            </div>
-            <div id="blues-discogs-picker-results" style="overflow-y:auto;padding:0.5rem 0.8rem 0.8rem;flex:1;font-size:0.82rem;color:var(--muted)"></div>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- ── Lyrics archive (own tab) — scraped from weeniecampbell.com ── -->
-      <div class="admin-tab-panel admin-grp-lyrics" id="panel-lyrics" style="display:none">
-        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
-          <h2 style="margin:0">Lyrics archive</h2>
-          <button class="admin-refresh-btn" id="lyrics-refresh-btn" onclick="_adminClickRefresh(this, lyricsLoadList)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
-          <span id="lyrics-refresh-status" class="admin-refresh-status"></span>
-          <button class="admin-btn" id="lyrics-scrape-btn" onclick="lyricsStartScrape()" title="Walk Category:Lyrics on weeniecampbell.com and store every page. ~80 min at 1.2 s/page. Resumable: re-running skips titles already stored.">Scrape weeniecampbell.com</button>
-          <button class="admin-btn admin-btn-danger" id="lyrics-stop-btn" onclick="lyricsStopScrape()" title="Stop a running scrape after the current page finishes" style="display:none">Stop</button>
-          <button class="admin-btn" id="lyrics-reextract-btn" onclick="lyricsReextract()" title="Re-run the tuning + artist extractors against every already-stored row. No HTTP requests — just re-parses the wikitext already in the DB. Use after the extractor regex is updated.">Re-extract</button>
-          <button class="admin-btn" id="lyrics-sync-artists-btn" onclick="lyricsSyncArtists(event)" title="Walk Category:Lyrics by Artist on weeniecampbell.com — the wiki itself maps each page to an artist via subcategories. Use this instead of the regex extractor; it's authoritative. By default only fills rows with no artist yet; hold Shift while clicking to overwrite all.">Sync artists from wiki</button>
-          <span id="lyrics-scrape-status" style="font-size:0.78rem;color:var(--muted)"></span>
-          <span id="lyrics-stats" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
-        </div>
-        <div style="display:flex;gap:0.5rem;margin-bottom:0.6rem;align-items:center;flex-wrap:wrap">
-          <input id="lyrics-search" type="search" placeholder="Search title / artist / lyrics body" style="flex:1;min-width:200px;padding:0.45rem 0.7rem;font-size:0.88rem" oninput="lyricsDebouncedSearch()" />
-          <select id="lyrics-tuning" class="sd-filter-select" onchange="lyricsLoadList()" style="font-size:0.85rem">
-            <option value="">All tunings</option>
-          </select>
-        </div>
-        <div id="lyrics-list" style="font-size:0.82rem;color:var(--muted)">Click <em>Scrape</em> above, or load if you've already scraped.</div>
-        <div id="lyrics-pager" style="margin-top:0.6rem;display:flex;gap:0.4rem;align-items:center;font-size:0.78rem"></div>
-
-        <!-- Lyric viewer popup -->
-        <div id="lyrics-viewer-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.78);z-index:300;align-items:flex-start;justify-content:center;padding:2rem 1rem;overflow:auto" onclick="if(event.target===this)lyricsCloseViewer()">
-          <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(820px,100%)">
-            <div style="display:flex;justify-content:space-between;align-items:start;gap:0.6rem;margin-bottom:0.6rem">
-              <div style="min-width:0">
-                <h3 id="lyrics-viewer-title" style="margin:0 0 0.25rem"></h3>
-                <div id="lyrics-viewer-meta" style="font-size:0.78rem;color:var(--muted)"></div>
-              </div>
-              <button class="admin-btn" onclick="lyricsCloseViewer()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
-            </div>
-            <pre id="lyrics-viewer-body" style="white-space:pre-wrap;font-family:inherit;font-size:0.88rem;line-height:1.5;color:var(--text);max-height:60vh;overflow:auto;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:4px;padding:0.8rem 1rem;margin:0"></pre>
-          </div>
-        </div>
-      </div>
-
+      <!-- Blues DB + Lyrics admin panels REMOVED — both moved to the
+           Discovery Blues Archive view (/?v=blues-archive). All
+           CRUD, bulk enrichment, scrape controls, and editor live
+           there now, sharing the same /blues-admin.js code path.
+           Editor overlay markup + Discogs picker also relocated to
+           index.html so the lazy-loaded module finds its DOM. -->
       <!-- Submitted Tracks (Content group) -->
       <div class="admin-tab-panel admin-grp-content" id="panel-submissions" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
@@ -449,8 +309,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260528.0936"></script>
-<script defer src="/blues-admin.js?v=20260528.0936"></script>
+<script defer src="/modal.js?v=20260528.0939"></script>
+<script defer src="/blues-admin.js?v=20260528.0939"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -529,14 +389,10 @@ const _adminGroups = {
     panels: ['panel-system-bar', 'panel-db-stats', 'panel-api-log'],
     load: () => { loadDbStats(); loadApiLog(); },
   },
-  'blues-db': {
-    panels: ['panel-blues-db'],
-    load: () => bluesDbInit(),
-  },
-  'lyrics': {
-    panels: ['panel-lyrics'],
-    load: () => lyricsInit(),
-  },
+  // 'blues-db' + 'lyrics' tabs removed; their content lives in the
+  // Discovery Blues Archive view (/?v=blues-archive). The runtime
+  // entries are gone too, so a stale URL hash like /admin#blues-db
+  // just falls through to Overview.
 };
 
 // "View as user" — flips the localStorage flag the main site reads to
