@@ -663,6 +663,10 @@ export interface GenericEnrichProgress {
   enriched: number;
   skipped: number;
   errors: number;
+  /** Sample of the most recent error entries so callers can show
+   *  WHICH artists are failing WHILE the job is still running.
+   *  Capped to the last 50 so we don't blow up status payloads. */
+  recentErrors?: Array<{ id: number; name?: string; discogs_id?: number | null; message: string }>;
   currentName?: string;
 }
 
@@ -684,7 +688,17 @@ export async function enrichBluesFromWikipedia(opts: {
   const total = opts.idFilter ? 1 : (opts.limit ?? totalRowsRes.total);
   const reportProgress = (currentName?: string) => {
     if (!opts.onProgress) return;
-    try { opts.onProgress({ total, processed, enriched, skipped, errors: errors.length, currentName }); }
+    try {
+      opts.onProgress({
+        total, processed, enriched, skipped,
+        errors: errors.length,
+        // Last 20 errors so callers (status endpoint, mid-run UI peek)
+        // can show which artists are failing without waiting for
+        // completion. Capped to keep the payload small.
+        recentErrors: errors.slice(-20) as any,
+        currentName,
+      });
+    }
     catch { /* swallow */ }
   };
   reportProgress();
@@ -963,7 +977,17 @@ export async function enrichBluesFromDiscogsArtists(
   const total = opts.idFilter ? 1 : (opts.limit ?? totalRowsRes.total);
   const reportProgress = (currentName?: string) => {
     if (!opts.onProgress) return;
-    try { opts.onProgress({ total, processed, enriched, skipped, errors: errors.length, currentName }); }
+    try {
+      opts.onProgress({
+        total, processed, enriched, skipped,
+        errors: errors.length,
+        // Last 20 errors so callers (status endpoint, mid-run UI peek)
+        // can show which artists are failing without waiting for
+        // completion. Capped to keep the payload small.
+        recentErrors: errors.slice(-20) as any,
+        currentName,
+      });
+    }
     catch { /* swallow */ }
   };
   reportProgress();
@@ -999,7 +1023,14 @@ export async function enrichBluesFromDiscogsArtists(
         }
         enriched++;
       } catch (err: any) {
-        errors.push({ id: row.id, message: err?.message ?? String(err) });
+        // Include the row's name + discogs_id so the curator can act
+        // on errors without manually looking up each id.
+        errors.push({
+          id: row.id,
+          name: row.name,
+          discogs_id: row.discogs_id ?? null,
+          message: err?.message ?? String(err),
+        } as any);
       }
       processed++;
       reportProgress();
@@ -1039,7 +1070,17 @@ export async function enrichBluesFromDiscogs(client: DiscogsClient, opts: {
   const total = opts.idFilter ? 1 : (opts.limit ?? totalRowsRes.total);
   const reportProgress = (currentName?: string) => {
     if (!opts.onProgress) return;
-    try { opts.onProgress({ total, processed, enriched, skipped, errors: errors.length, currentName }); }
+    try {
+      opts.onProgress({
+        total, processed, enriched, skipped,
+        errors: errors.length,
+        // Last 20 errors so callers (status endpoint, mid-run UI peek)
+        // can show which artists are failing without waiting for
+        // completion. Capped to keep the payload small.
+        recentErrors: errors.slice(-20) as any,
+        currentName,
+      });
+    }
     catch { /* swallow */ }
   };
   reportProgress();
