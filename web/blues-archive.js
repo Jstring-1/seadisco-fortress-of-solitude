@@ -190,13 +190,16 @@ function _baRenderListTable() {
         const discogsSearchHtml = discogsSearchHref
           ? `<a href="${escHtml(discogsSearchHref)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Search Discogs for an artist named &quot;${escHtml(row.name || "")}&quot; — opens discogs.com in a new tab so you can grab the right id" style="margin-left:0.4rem;font-size:0.78rem;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:4px;padding:0.05rem 0.35rem;font-variant-numeric:tabular-nums">🔎 Discogs</a>`
           : "";
-        // Discogs ID — link out to discogs.com/artist/<id> when set so
-        // the user can jump straight to the canonical artist page;
-        // stopPropagation so the row-click doesn't also fire and steal
-        // them into the archive detail. Blank when no id is on file.
+        // Discogs ID — click opens the full Edit Artist form so the
+        // curator can fix / add the id (or any other field) without
+        // an extra trip into the artist profile. stopPropagation so
+        // the row's profile-open click doesn't also fire. Blank-id
+        // rows still click-to-edit (rendered as an em-dash). The
+        // 'Open on Discogs.com' link lives inside the editor's
+        // external-links bar, so it's not lost.
         const didHtml = row.discogs_id
-          ? `<a href="https://www.discogs.com/artist/${row.discogs_id}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--accent);text-decoration:none;font-variant-numeric:tabular-nums" title="Open on Discogs.com ↗">${row.discogs_id}</a>`
-          : `<span style="color:var(--muted)">—</span>`;
+          ? `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenFullEditor(${row.id})" style="color:var(--accent);text-decoration:none;font-variant-numeric:tabular-nums" title="Click to edit this artist">${row.discogs_id}</a>`
+          : `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenFullEditor(${row.id})" style="color:var(--muted);text-decoration:none" title="Click to edit this artist and add a Discogs ID">—</a>`;
         // first_release_year: server computes LEAST(MB first_recording_year,
         // MIN(discogs_releases.year)). Renders as a plain year cell;
         // dash when neither MB nor Discogs has supplied one yet.
