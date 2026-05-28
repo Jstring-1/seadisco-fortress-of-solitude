@@ -163,6 +163,7 @@ function _baRenderListTable() {
   rowsEl.innerHTML = `
     <table class="api-log-table" style="font-size:0.86rem;width:100%">
       <thead><tr>
+        <th style="width:48px"></th>
         ${_baSortTh("Name",       "name",               S, "_baSortList")}
         ${_baSortTh("Discogs ID", "discogs_id",         S, "_baSortList")}
         ${_baSortTh("Year",       "first_release_year", S, "_baSortList", "text-align:right")}
@@ -190,7 +191,17 @@ function _baRenderListTable() {
         // dash when neither MB nor Discogs has supplied one yet.
         const yr = Number.isFinite(Number(row.first_release_year)) ? Number(row.first_release_year) : null;
         const yrHtml = yr ? `<span style="font-variant-numeric:tabular-nums">${yr}</span>` : `<span style="color:var(--muted)">—</span>`;
+        // Photo thumb — blues_artists.photo_url is populated by the
+        // Wikidata / Wikipedia / Discogs seeds. Lazy-load + decode async
+        // so a row of 100 thumbs doesn't block the table render; broken
+        // URLs collapse to a faint placeholder so the column width
+        // stays consistent across rows that have / don't have a photo.
+        const photo = (typeof row.photo_url === "string" && row.photo_url) ? row.photo_url : "";
+        const photoHtml = photo
+          ? `<img src="${escHtml(photo)}" alt="" loading="lazy" decoding="async" style="width:40px;height:40px;object-fit:cover;border-radius:4px;background:var(--border);display:block" onerror="this.style.visibility='hidden'">`
+          : `<span style="width:40px;height:40px;border-radius:4px;background:rgba(255,255,255,0.04);display:inline-block" aria-hidden="true"></span>`;
         return `<tr style="cursor:pointer" onclick="_baOpenArtist(${row.id})">
+          <td style="padding:0.25rem 0.4rem">${photoHtml}</td>
           <td style="font-weight:600;color:var(--text)">${nameHtml}</td>
           <td style="font-size:0.78rem">${didHtml}</td>
           <td style="text-align:right;font-size:0.82rem">${yrHtml}</td>
