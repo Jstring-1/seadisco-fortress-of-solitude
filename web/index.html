@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260528.1004" />
+  <link rel="stylesheet" href="/style.css?v=20260528.1021" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260528.1004"></script>
+<script defer src="/shared.js?v=20260528.1021"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -1052,6 +1052,7 @@ e.g.  miles davis | coltrane
         <button type="button" id="lyrics-stop-btn" class="archive-btn" onclick="_baAdminAction('lyricsStop')" title="Stop a running scrape after the current page finishes" style="display:none;color:#e88;border-color:#e88">Stop</button>
         <button type="button" id="lyrics-reextract-btn" class="archive-btn" onclick="_baAdminAction('lyricsReextract')" title="Re-run the tuning + artist extractors against every already-stored row. No HTTP requests — just re-parses the wikitext already in the DB. Use after the extractor regex is updated.">Re-extract</button>
         <button type="button" id="lyrics-sync-artists-btn" class="archive-btn" onclick="_baAdminAction('lyricsSyncArtists', event)" title="Walk Category:Lyrics by Artist on weeniecampbell.com — the wiki itself maps each page to an artist via subcategories. Authoritative. By default only fills rows with no artist yet; hold Shift while clicking to overwrite all.">Sync artists from wiki</button>
+        <button type="button" class="archive-btn" onclick="_baOpenLyricEditor(null)" title="Manually add a new lyric row. Title + artist are unique per source_host so the same song title under different artists is allowed.">+ Add lyric</button>
         <span id="lyrics-scrape-status" style="font-size:0.78rem;color:var(--muted)"></span>
         <span id="lyrics-stats" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
       </div>
@@ -1569,13 +1570,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260528.1004"></script>
-<script defer src="/search.js?v=20260528.1004"></script>
-<script defer src="/collection.js?v=20260528.1004"></script>
+<script defer src="/utils.js?v=20260528.1021"></script>
+<script defer src="/search.js?v=20260528.1021"></script>
+<script defer src="/collection.js?v=20260528.1021"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260528.1004"></script>
-<script defer src="/app.js?v=20260528.1004"></script>
+<script defer src="/modal.js?v=20260528.1021"></script>
+<script defer src="/app.js?v=20260528.1021"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1586,13 +1587,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260528.1004"></script>
-<script defer src="/queue.js?v=20260528.1004"></script>
+<script defer src="/loc.js?v=20260528.1021"></script>
+<script defer src="/queue.js?v=20260528.1021"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260528.1004";
+  window._SD_LAZY_VERSION = "20260528.1021";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1622,8 +1623,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260528.1004"></script>
-<script defer src="/offline.js?v=20260528.1004"></script>
+<script defer src="/idb.js?v=20260528.1021"></script>
+<script defer src="/offline.js?v=20260528.1021"></script>
 
 </body>
 </html>
