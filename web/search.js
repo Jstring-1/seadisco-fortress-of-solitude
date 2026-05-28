@@ -2504,6 +2504,14 @@ async function loadRandomRecords(more) {
     wrap.style.display = "";
   }
   if (typeof applyVisitedCards === "function") applyVisitedCards();
+  // Admin-only: stamp 🎸 on cards whose artist is in the Blues
+  // Archive. THIS is the initial-load path (loadRandomRecords →
+  // _sdRenderRandomGrid); _sdRenderRandomSlice runs separately for
+  // filter / genre re-renders. Both need the call. Pass the grid
+  // explicitly — auto-resolution lands on #results otherwise.
+  if (typeof window._baStampCards === "function") {
+    window._baStampCards(slice, grid).catch(() => {});
+  }
 }
 
 function showRandomRecords() {
