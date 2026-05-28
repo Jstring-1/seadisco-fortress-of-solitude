@@ -612,7 +612,15 @@ export async function enrichBluesFromWikipedia(opts = {}) {
         if (!opts.onProgress)
             return;
         try {
-            opts.onProgress({ total, processed, enriched, skipped, errors: errors.length, currentName });
+            opts.onProgress({
+                total, processed, enriched, skipped,
+                errors: errors.length,
+                // Last 20 errors so callers (status endpoint, mid-run UI peek)
+                // can show which artists are failing without waiting for
+                // completion. Capped to keep the payload small.
+                recentErrors: errors.slice(-20),
+                currentName,
+            });
         }
         catch { /* swallow */ }
     };
@@ -696,7 +704,8 @@ const DISCOGS_RATE_LIMIT_MS = 1100; // 60/min for authenticated traffic
  *  blues_artists row. Idempotent — array fields union, scalar fields
  *  only fill blanks. The bio (Discogs `profile`) overwrites notes
  *  unless `force === false` is set. */
-async function _enrichOneFromDiscogsArtist(client, row) {
+async function _enrichOneFromDiscogsArtist(client, row, opts = {}) {
+    const force = !!opts.force;
     const data = await client.get(`/artists/${row.discogs_id}`);
     // Stay polite between the two calls per artist.
     await new Promise(res => setTimeout(res, DISCOGS_RATE_LIMIT_MS));
@@ -714,8 +723,12 @@ async function _enrichOneFromDiscogsArtist(client, row) {
     const patch = {};
     // Bio. Discogs uses [b]/[i]/[url=…] BBCode-ish markup; we keep it
     // raw (the existing notes field is a free-text string already).
+    // Default-conservative: only fill when blank. Force mode overwrites
+    // (user has confirmed via per-row Refresh that the new discogs_id
+    // is the canonical artist).
     if (typeof data.profile === "string" && data.profile.trim()) {
-        patch.notes = data.profile.trim();
+        if (force || !row.notes)
+            patch.notes = data.profile.trim();
     }
     // Aliases come from three Discogs sources: the explicit `aliases`
     // array, the `namevariations` strings, and `realname`. Union them
@@ -764,10 +777,27 @@ async function _enrichOneFromDiscogsArtist(client, row) {
     }
     if (collabs.length !== existingCollabs.length)
         patch.collaborators = collabs;
-    // First image → photo_url if blank. Discogs returns an array sorted
-    // by primary first; the `uri` field is the full-size CDN URL.
-    if (!row.photo_url && Array.isArray(data.images) && data.images[0]?.uri) {
-        patch.photo_url = data.images[0].uri;
+    // Photo handling — photo follows the Discogs id.
+    //   Default (non-force, bulk sweep): fill photo_url only when blank,
+    //     using Discogs's first image. Never trample manual edits.
+    //   Force (per-row "Refresh from Discogs" button): photo_url is
+    //     rewritten to mirror whatever the new id has — use Discogs's
+    //     first image when present, NULL when Discogs has no images.
+    //     This way after a discogs_id correction the picture is always
+    //     consistent with the id (or absent), never a stale photo from
+    //     the prior wrong id.
+    const newPhoto = Array.isArray(data.images) && data.images[0]?.uri ? data.images[0].uri : null;
+    if (force) {
+        if (newPhoto) {
+            if (row.photo_url !== newPhoto)
+                patch.photo_url = newPhoto;
+        }
+        else if (row.photo_url) {
+            patch.photo_url = null;
+        }
+    }
+    else if (newPhoto && !row.photo_url) {
+        patch.photo_url = newPhoto;
     }
     // External URLs — store the full array so we can render them later.
     // Wikipedia / AllMusic / SecondHandSongs / Wikipedia foreign-language
@@ -808,29 +838,43 @@ async function _enrichOneFromDiscogsArtist(client, row) {
         patch.first_recording_year = firstPick.year;
         patch.first_recording_title = firstPick.title || null;
     }
-    // Merge fetched releases into discogs_releases by (type:id) so the
-    // existing per-row JSONB array gains entries we didn't have before
-    // without duplicating ones we already stored from earlier passes.
+    // Releases. Default-conservative: dedupe-merge into the existing
+    // JSONB (so prior passes' entries aren't lost). Force mode: REPLACE
+    // the array — when the admin has just changed the discogs_id, the
+    // existing entries came from a different artist and shouldn't
+    // contaminate the new artist's discography.
     if (rawReleases.length) {
-        const existing = Array.isArray(row.discogs_releases) ? row.discogs_releases : [];
-        const seen = new Set(existing.map((r) => `${r.type}:${r.id}`));
-        const merged = [...existing];
-        for (const r of rawReleases) {
-            const k = `${r.type ?? "release"}:${r.id}`;
-            if (seen.has(k))
-                continue;
-            seen.add(k);
-            merged.push({
-                id: r.id,
-                type: (r.type ?? "release"),
-                title: typeof r.title === "string" ? r.title : "",
-                year: typeof r.year === "number" ? r.year : undefined,
-                label: r.label ?? undefined,
-                role: r.role ?? undefined,
-            });
+        const normalize = (r) => ({
+            id: r.id,
+            type: (r.type ?? "release"),
+            title: typeof r.title === "string" ? r.title : "",
+            year: typeof r.year === "number" ? r.year : undefined,
+            label: r.label ?? undefined,
+            role: r.role ?? undefined,
+        });
+        if (force) {
+            patch.discogs_releases = rawReleases.map(normalize);
         }
-        if (merged.length !== existing.length)
-            patch.discogs_releases = merged;
+        else {
+            const existing = Array.isArray(row.discogs_releases) ? row.discogs_releases : [];
+            const seen = new Set(existing.map((r) => `${r.type}:${r.id}`));
+            const merged = [...existing];
+            for (const r of rawReleases) {
+                const k = `${r.type ?? "release"}:${r.id}`;
+                if (seen.has(k))
+                    continue;
+                seen.add(k);
+                merged.push(normalize(r));
+            }
+            if (merged.length !== existing.length)
+                patch.discogs_releases = merged;
+        }
+    }
+    else if (force) {
+        // Force mode + new id returns no releases → clear the stale array.
+        if (Array.isArray(row.discogs_releases) && row.discogs_releases.length) {
+            patch.discogs_releases = [];
+        }
     }
     // Mark this enrichment so we can skip-already-done in future passes.
     const status = (row.enrichment_status && typeof row.enrichment_status === "object")
@@ -853,7 +897,15 @@ export async function enrichBluesFromDiscogsArtists(client, opts = {}) {
         if (!opts.onProgress)
             return;
         try {
-            opts.onProgress({ total, processed, enriched, skipped, errors: errors.length, currentName });
+            opts.onProgress({
+                total, processed, enriched, skipped,
+                errors: errors.length,
+                // Last 20 errors so callers (status endpoint, mid-run UI peek)
+                // can show which artists are failing without waiting for
+                // completion. Capped to keep the payload small.
+                recentErrors: errors.slice(-20),
+                currentName,
+            });
         }
         catch { /* swallow */ }
     };
@@ -893,14 +945,21 @@ export async function enrichBluesFromDiscogsArtists(client, opts = {}) {
                 continue;
             }
             try {
-                const { patch } = await _enrichOneFromDiscogsArtist(client, row);
+                const { patch } = await _enrichOneFromDiscogsArtist(client, row, { force: opts.force });
                 if (Object.keys(patch).length) {
                     await updateBluesArtist(row.id, patch);
                 }
                 enriched++;
             }
             catch (err) {
-                errors.push({ id: row.id, message: err?.message ?? String(err) });
+                // Include the row's name + discogs_id so the curator can act
+                // on errors without manually looking up each id.
+                errors.push({
+                    id: row.id,
+                    name: row.name,
+                    discogs_id: row.discogs_id ?? null,
+                    message: err?.message ?? String(err),
+                });
             }
             processed++;
             reportProgress();
@@ -939,7 +998,15 @@ export async function enrichBluesFromDiscogs(client, opts = {}) {
         if (!opts.onProgress)
             return;
         try {
-            opts.onProgress({ total, processed, enriched, skipped, errors: errors.length, currentName });
+            opts.onProgress({
+                total, processed, enriched, skipped,
+                errors: errors.length,
+                // Last 20 errors so callers (status endpoint, mid-run UI peek)
+                // can show which artists are failing without waiting for
+                // completion. Capped to keep the payload small.
+                recentErrors: errors.slice(-20),
+                currentName,
+            });
         }
         catch { /* swallow */ }
     };

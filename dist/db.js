@@ -2,20 +2,42 @@ import pg from "pg";
 const { Pool } = pg;
 import { expandWithSynonyms } from "./classical-synonyms.js";
 let pool = null;
-function getPool() {
+// Exported so feature modules (gutenberg endpoints in search-api.ts, etc.)
+// can run ad-hoc queries without forcing every new feature to land a
+// pile of helper functions in this file. Existing helpers stay in place
+// for stable hot paths.
+export function getPool() {
     if (!pool) {
         const connStr = process.env.APP_DB_URL;
         if (!connStr)
             throw new Error("APP_DB_URL not set");
-        // Explicit pool sizing. Defaults (max:10, no idleTimeoutMillis)
-        // were fine at small scale but caused queue buildup during
-        // sync bursts (every signed-in user can hit /api/user/* in
-        // parallel for collection / wantlist / inventory / lists).
-        // Overridable via env so we can tune without a redeploy.
-        const max = Number(process.env.APP_DB_POOL_MAX ?? 20);
+        // Explicit pool sizing. max bumped down to 10 (from 20) because
+        // Railway's Postgres connection cap is shared with sync workers,
+        // admin tooling, the Railway dashboard, etc. — and a crash-loop
+        // can pile up enough sockets in TIME_WAIT to push us past the
+        // cap (Postgres SQLSTATE 53300 "sorry, too many clients already"
+        // at boot, exactly what we just hit). 10 leaves plenty of
+        // headroom even with multiple instances temporarily overlapping.
+        // Overridable via env so we can raise it after upgrading the DB
+        // tier or lower it further on smaller plans.
+        const max = Number(process.env.APP_DB_POOL_MAX ?? 10);
         const min = Number(process.env.APP_DB_POOL_MIN ?? 2);
         const idle = Number(process.env.APP_DB_POOL_IDLE_MS ?? 30000);
-        const connTimeout = Number(process.env.APP_DB_POOL_CONN_MS ?? 5000);
+        // 5s was too aggressive on Railway — when its Postgres is under
+        // load or recovering from a restart, the first connect can take
+        // 8–12s before the pool warms up. 15s gives a more forgiving
+        // window so transient slowness doesn't surface as a flood of
+        // user-visible 500s.
+        const connTimeout = Number(process.env.APP_DB_POOL_CONN_MS ?? 15000);
+        // statement_timeout enforced at connection startup via the libpq
+        // `options` parameter. Previously set via pool.on("connect")
+        // running an async SET — that race-conditioned with the pool
+        // handing the client to a caller (triggering the
+        // "client.query() ... already executing a query" deprecation
+        // warning) and didn't guarantee the timeout was in place before
+        // the first user query ran. Setting it through `options` applies
+        // before the client is exposed.
+        const stmtTimeoutMs = Number(process.env.APP_DB_STATEMENT_TIMEOUT_MS ?? 30000);
         pool = new Pool({
             connectionString: connStr,
             ssl: process.env.DB_CA_CERT
@@ -25,6 +47,7 @@ function getPool() {
             min,
             idleTimeoutMillis: idle,
             connectionTimeoutMillis: connTimeout,
+            options: `-c statement_timeout=${stmtTimeoutMs}`,
         });
         pool.on("error", (err) => {
             // Idle-client errors aren't fatal — log so we notice if Railway
@@ -138,6 +161,14 @@ export async function initDb() {
     catch (e) {
         // Constraint may already exist — ignore
     }
+    // instance_id used to be INTEGER (int4, max 2,147,483,647). Discogs'
+    // monotonically-increasing collection-instance IDs crossed that
+    // boundary in May 2026 — first symptom was "value … is out of range
+    // for type integer" on sync for users with newly-added items.
+    // ALTER to BIGINT (int8) so the column can hold all current and
+    // future IDs. Idempotent: ALTER TYPE is a no-op when the column is
+    // already bigint.
+    await getPool().query(`ALTER TABLE user_collection ALTER COLUMN instance_id TYPE BIGINT`);
     await getPool().query(`
     CREATE TABLE IF NOT EXISTS user_wantlist (
       id                 SERIAL PRIMARY KEY,
@@ -344,6 +375,95 @@ export async function initDb() {
     )
   `);
     await getPool().query(`CREATE INDEX IF NOT EXISTS archive_search_cache_age_idx ON archive_search_cache (cached_at)`);
+    // ── Project Gutenberg book cache (DB-as-cache, no separate proxy layer) ──
+    // First-ever read of a book fetches the HTML body from gutenberg.org,
+    // sanitizes, and stores it here. Every subsequent read serves directly
+    // from this row — no upstream hop, no in-memory cache to manage.
+    // Postgres TOAST handles the large `html` column transparently; a 2MB
+    // book is just a 2MB row. Metadata (title, authors, etc.) is duplicated
+    // out of the JSONB blob into top-level columns to keep saved-list /
+    // search-display queries fast without re-parsing JSON.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS gutenberg_books (
+      book_id          INTEGER     PRIMARY KEY,    -- Gutenberg etext id
+      title            TEXT,
+      authors          JSONB,                      -- [{name, birth_year, death_year}, ...]
+      languages        JSONB,                      -- ["en", ...]
+      subjects         JSONB,                      -- ["topic", ...]
+      html             TEXT,                       -- sanitized body
+      plain_text       TEXT,                       -- optional, populated on first read
+      byte_size        INTEGER,                    -- length(html), for stats
+      metadata         JSONB,                      -- raw Gutendex row (forward-compat)
+      fetched_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      last_accessed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS gutenberg_books_accessed_idx ON gutenberg_books (last_accessed_at DESC)`);
+    // Per-user saved Gutenberg books — the "Library" tab on the
+    // Gutenberg view. Just the membership pointer; rendered metadata
+    // comes from gutenberg_books (joined on book_id).
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS gutenberg_saved (
+      clerk_user_id TEXT        NOT NULL,
+      book_id       INTEGER     NOT NULL,
+      saved_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (clerk_user_id, book_id)
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS gutenberg_saved_user_time_idx ON gutenberg_saved (clerk_user_id, saved_at DESC)`);
+    // Per-user, per-book bookmarks. position_pct is the 0–100% scroll
+    // position; position_anchor is an optional element id ("p123",
+    // "chapter-iii", etc.) that the reader can jump to directly when
+    // the HTML body provides stable anchors. label is user-supplied
+    // (or auto-derived from nearby heading text on save).
+    //
+    // Special row: bookmark_kind='auto' is the auto-resume position,
+    // one per (user, book). 'manual' rows are user-pinned bookmarks,
+    // many per (user, book). Composite unique constraint enforces the
+    // singleton on auto.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS gutenberg_bookmarks (
+      id              SERIAL      PRIMARY KEY,
+      clerk_user_id   TEXT        NOT NULL,
+      book_id         INTEGER     NOT NULL,
+      bookmark_kind   TEXT        NOT NULL DEFAULT 'manual',  -- 'manual' | 'auto'
+      position_pct    REAL        NOT NULL DEFAULT 0,
+      position_anchor TEXT,
+      label           TEXT,
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS gutenberg_bookmarks_user_book_idx ON gutenberg_bookmarks (clerk_user_id, book_id, created_at DESC)`);
+    await getPool().query(`CREATE UNIQUE INDEX IF NOT EXISTS gutenberg_bookmarks_auto_unique ON gutenberg_bookmarks (clerk_user_id, book_id) WHERE bookmark_kind = 'auto'`);
+    // Admin-curated annotations linking book positions to Discogs
+    // entities. Shared (not per-user): one annotation set everyone
+    // sees. Two-way surface — the reader shows them in the sidebar
+    // and as inline anchor markers; the artist/album/label popups
+    // query the same table to surface "📖 Mentioned in books".
+    // entity_id is nullable so name-only links (artist not in Discogs)
+    // still work — those don't surface on the reverse side but still
+    // render in the book.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS gutenberg_annotations (
+      id              SERIAL      PRIMARY KEY,
+      book_id         INTEGER     NOT NULL,
+      position_pct    REAL        NOT NULL DEFAULT 0,
+      position_anchor TEXT,
+      entity_type     TEXT        NOT NULL,    -- 'artist'|'release'|'master'|'label'
+      entity_id       BIGINT,                   -- Discogs id, nullable
+      entity_name     TEXT        NOT NULL,
+      snippet         TEXT,                     -- short quoted excerpt for the reverse-side card
+      label           TEXT,                     -- admin context note
+      created_by      TEXT        NOT NULL,     -- clerk_user_id of admin who created it
+      created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+    // Lookup by book (reader side): all annotations for the open book.
+    await getPool().query(`CREATE INDEX IF NOT EXISTS gutenberg_annotations_book_idx ON gutenberg_annotations (book_id, position_pct ASC)`);
+    // Lookup by entity (artist/album popup side): name-based fallback
+    // when entity_id is null, id-based when known.
+    await getPool().query(`CREATE INDEX IF NOT EXISTS gutenberg_annotations_entity_id_idx ON gutenberg_annotations (entity_type, entity_id) WHERE entity_id IS NOT NULL`);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS gutenberg_annotations_entity_name_idx ON gutenberg_annotations (entity_type, lower(entity_name))`);
     // ── Per-user "banished" suggestions ──────────────────────────────────────
     // When a user dismisses a personal-suggestion card with the × button,
     // the (id,type) is recorded here and the background generator skips it
@@ -418,6 +538,36 @@ export async function initDb() {
     )
   `);
     await getPool().query(`CREATE INDEX IF NOT EXISTS user_wiki_saves_user_time_idx ON user_wiki_saves (clerk_user_id, saved_at DESC)`);
+    // ── Chronicling America (historic newspapers) saves ───────────────────
+    // chronam_id is the canonical relative path returned by the API:
+    // "/lccn/<lccn>/<date>/ed-X/seq-N/". Stable + unique per page; pairs
+    // with a fixed URL prefix on render.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS user_chronam_saves (
+      clerk_user_id TEXT        NOT NULL,
+      chronam_id    TEXT        NOT NULL,
+      paper_title   TEXT,
+      issue_date    TEXT,
+      snippet       TEXT,
+      thumbnail     TEXT,
+      data          JSONB       NOT NULL,
+      saved_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (clerk_user_id, chronam_id)
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS user_chronam_saves_user_time_idx ON user_chronam_saves (clerk_user_id, saved_at DESC)`);
+    // Persistent search cache for Chronicling America. loc.gov's search
+    // API is slow (10–20s common) — a shared DB cache means the first
+    // user's wait warms it for everyone, and the cache survives Railway
+    // restarts (vs the in-memory LRU which doesn't).
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS chronam_search_cache (
+      cache_key TEXT        PRIMARY KEY,
+      data      JSONB       NOT NULL,
+      cached_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS chronam_search_cache_at_idx ON chronam_search_cache (cached_at)`);
     // ── User play queue (cross-source: LOC + YouTube) ───────────────────────
     // Items are ordered by `position` (1-indexed). Source is "loc" or "yt"
     // and `data` JSONB carries everything needed to play without a Discogs
@@ -574,6 +724,23 @@ export async function initDb() {
     )
   `);
     await getPool().query(`CREATE INDEX IF NOT EXISTS cache_fetch_queue_drain_idx ON cache_fetch_queue (priority DESC, requested_at ASC)`);
+    // ── Background-job run history (admin audit) ─────────────────────────
+    // Durable, exact record of every scheduled-job invocation. In-memory
+    // counters reset on redeploy; this survives so the admin panel can
+    // show real last-run time + outcome.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS job_runs (
+      id          SERIAL      PRIMARY KEY,
+      job_name    TEXT        NOT NULL,
+      status      TEXT        NOT NULL DEFAULT 'running',  -- 'running' | 'ok' | 'error'
+      started_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      ended_at    TIMESTAMPTZ,
+      items       INTEGER     NOT NULL DEFAULT 0,
+      errors      INTEGER     NOT NULL DEFAULT 0,
+      detail      TEXT
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS job_runs_name_time_idx ON job_runs (job_name, started_at DESC)`);
     // ── Behavior events (admin "behavior stats" panel) ───────────────────
     // Two narrow append-only tables. Album-click counts already live in
     // user_recent_views and favorite counts in user_favorites, so we
@@ -599,6 +766,18 @@ export async function initDb() {
     )
   `);
     await getPool().query(`CREATE INDEX IF NOT EXISTS user_play_events_user_time_idx ON user_play_events (clerk_user_id, created_at DESC)`);
+    // Discogs identity for play-derived taste suggestions. Nullable +
+    // additive: LOC/Archive plays (and legacy rows) leave these NULL and
+    // simply don't feed Discogs taste tuples. release_id/master_id let
+    // the suggestions job resolve genre/style/year via release_cache;
+    // play_meta is an optional client-sent snapshot ({genres,styles,year})
+    // used directly when present so a play counts even before the release
+    // is cached.
+    await getPool().query(`ALTER TABLE user_play_events ADD COLUMN IF NOT EXISTS release_type TEXT`);
+    await getPool().query(`ALTER TABLE user_play_events ADD COLUMN IF NOT EXISTS release_id   INTEGER`);
+    await getPool().query(`ALTER TABLE user_play_events ADD COLUMN IF NOT EXISTS master_id    INTEGER`);
+    await getPool().query(`ALTER TABLE user_play_events ADD COLUMN IF NOT EXISTS play_meta    JSONB`);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS user_play_events_taste_idx ON user_play_events (clerk_user_id, created_at DESC) WHERE release_id IS NOT NULL`);
     // ── Phase 4: Price intelligence tables ──────────────────────────────────
     await getPool().query(`
     CREATE TABLE IF NOT EXISTS price_cache (
@@ -709,6 +888,171 @@ export async function initDb() {
     ALTER TABLE blues_artists
     ADD COLUMN IF NOT EXISTS external_urls JSONB DEFAULT '[]'::jsonb
   `);
+    // ── Blues lyrics (scraped from weeniecampbell.com wiki, admin-only) ───
+    // Source: weeniecampbell.com/wiki, Category:Lyrics (and subcategories).
+    // page_title is the canonical wiki page title (unique per source host).
+    // tuning extracted from page body via regex (Open D, Spanish, etc.)
+    // so we can filter by it in the admin view.
+    await getPool().query(`
+    CREATE TABLE IF NOT EXISTS blues_lyrics (
+      id          SERIAL PRIMARY KEY,
+      source_host TEXT        NOT NULL DEFAULT 'weeniecampbell.com',
+      page_title  TEXT        NOT NULL,
+      page_url    TEXT        NOT NULL,
+      artist      TEXT,
+      tuning      TEXT,
+      wikitext    TEXT,
+      plaintext   TEXT,
+      scraped_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE(source_host, page_title)
+    )
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS blues_lyrics_tuning_idx ON blues_lyrics (tuning)`);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS blues_lyrics_artist_idx ON blues_lyrics (artist)`);
+    // ── Phase: schema-level merge of lyrics with the blues_artists DB ───
+    // artist_id is the canonical join. The free-text `artist` column is
+    // retained as a fallback display value and to seed the FK on import,
+    // but lookups everywhere should prefer artist_id when present.
+    // ON DELETE SET NULL — deleting an artist orphans the lyric rather
+    // than cascading destruction.
+    await getPool().query(`
+    ALTER TABLE blues_lyrics
+    ADD COLUMN IF NOT EXISTS artist_id BIGINT REFERENCES blues_artists(id) ON DELETE SET NULL
+  `);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS blues_lyrics_artist_id_idx ON blues_lyrics (artist_id)`);
+    // Lyric-level pinning to a specific Discogs release / master. Lets
+    // the per-track 📜 affordance in album modals know precisely which
+    // lyric belongs to which release, instead of guessing by title +
+    // artist alone.
+    await getPool().query(`ALTER TABLE blues_lyrics ADD COLUMN IF NOT EXISTS discogs_release_id BIGINT`);
+    await getPool().query(`ALTER TABLE blues_lyrics ADD COLUMN IF NOT EXISTS discogs_master_id BIGINT`);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS blues_lyrics_discogs_release_idx ON blues_lyrics (discogs_release_id)`);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS blues_lyrics_discogs_master_idx  ON blues_lyrics (discogs_master_id)`);
+    // updated_at on blues_lyrics — recent-edits feed needs it; existing
+    // rows get NOW() once, then a trigger keeps it fresh.
+    await getPool().query(`ALTER TABLE blues_lyrics ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`);
+    // Shared trigger function that bumps updated_at to NOW() on every
+    // row update. Applied to both blues_lyrics and blues_artists so the
+    // recent-edits feed stays accurate without app-level wiring at every
+    // mutation site. CREATE OR REPLACE so re-running the migration is
+    // idempotent.
+    await getPool().query(`
+    CREATE OR REPLACE FUNCTION _blues_set_updated_at() RETURNS TRIGGER AS $$
+    BEGIN
+      NEW.updated_at = NOW();
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+  `);
+    // DROP+CREATE pattern because CREATE TRIGGER doesn't have IF NOT
+    // EXISTS in Postgres < 14 and would error on re-run otherwise.
+    await getPool().query(`DROP TRIGGER IF EXISTS blues_lyrics_set_updated_at  ON blues_lyrics`);
+    await getPool().query(`DROP TRIGGER IF EXISTS blues_artists_set_updated_at ON blues_artists`);
+    await getPool().query(`
+    CREATE TRIGGER blues_lyrics_set_updated_at
+      BEFORE UPDATE ON blues_lyrics
+      FOR EACH ROW EXECUTE FUNCTION _blues_set_updated_at();
+  `);
+    await getPool().query(`
+    CREATE TRIGGER blues_artists_set_updated_at
+      BEFORE UPDATE ON blues_artists
+      FOR EACH ROW EXECUTE FUNCTION _blues_set_updated_at();
+  `);
+    // One-shot backfill of artist_id for any rows missing it. Matches on
+    // case-insensitive trim equality — same key the merge / import code
+    // paths have always used. Idempotent: once populated, the WHERE
+    // artist_id IS NULL clause is a no-op.
+    await getPool().query(`
+    UPDATE blues_lyrics l
+       SET artist_id = a.id
+      FROM blues_artists a
+     WHERE l.artist_id IS NULL
+       AND l.artist IS NOT NULL
+       AND LOWER(TRIM(l.artist)) = LOWER(a.name)
+  `);
+    // Tuning normalization: bluesman slang and the modern canonical name
+    // are the same physical tuning. Merge so the dropdown / breakdown
+    // doesn't split equivalent rows.
+    //   "Open G (Spanish)"     → "Open G"
+    //   "Open D (Vestapol)"    → "Open D"
+    //   "Cross Note"           → "Open Em (Cross Note)"
+    // Idempotent (rerunning is a no-op once values are normalized).
+    await getPool().query(`UPDATE blues_lyrics SET tuning = 'Open G' WHERE tuning = 'Open G (Spanish)'`);
+    await getPool().query(`UPDATE blues_lyrics SET tuning = 'Open D' WHERE tuning = 'Open D (Vestapol)'`);
+    await getPool().query(`UPDATE blues_lyrics SET tuning = 'Open Em (Cross Note)' WHERE tuning = 'Cross Note'`);
+    // Allow the same page_title to appear under different artists. The
+    // original UNIQUE(source_host, page_title) blocked manual adds of
+    // covers (e.g. Robert Johnson's "Crossroads" and Eric Clapton's
+    // "Crossroads"), even though they're different songs by different
+    // performers. Drop the old constraint and replace with a partial
+    // unique index that includes a normalized artist so the scraper's
+    // re-run upsert still de-dupes, but a different artist with the
+    // same title is allowed.
+    //
+    // The expression COALESCE(LOWER(TRIM(artist)), '') keeps NULL
+    // artists in their own bucket (so a second NULL-artist scrape of
+    // the same page still upserts cleanly).
+    await getPool().query(`ALTER TABLE blues_lyrics DROP CONSTRAINT IF EXISTS blues_lyrics_source_host_page_title_key`);
+    await getPool().query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS blues_lyrics_dedup_idx
+      ON blues_lyrics (source_host, page_title, (COALESCE(LOWER(TRIM(artist)), '')))
+  `);
+}
+// ── Blues lyrics: re-link orphans to existing blues_artists rows ──
+// More aggressive than the boot-time backfill: also matches when one
+// side has a Discogs " (N)" disambiguator and the other doesn't, and
+// collapses internal whitespace. Returns the number of rows linked.
+// Idempotent. Triggered by the admin "Re-link orphans" button so the
+// user can sweep up near-misses without restarting the server.
+export async function relinkOrphanLyricsToArtists() {
+    const r = await getPool().query(`
+    UPDATE blues_lyrics l
+       SET artist_id = a.id
+      FROM blues_artists a
+     WHERE l.artist_id IS NULL
+       AND l.artist IS NOT NULL
+       AND (
+         -- Pass 1: exact lowercase trim match (cheap).
+         LOWER(TRIM(l.artist)) = LOWER(a.name)
+         OR
+         -- Pass 2: drop the " (N)" Discogs disambiguator from EITHER
+         -- side before comparing. Catches "Tommy Tucker" lyric vs
+         -- "Tommy Tucker (3)" artist row and vice versa.
+         REGEXP_REPLACE(LOWER(TRIM(l.artist)), '\\s*\\(\\d+\\)\\s*$', '')
+           =
+         REGEXP_REPLACE(LOWER(a.name),         '\\s*\\(\\d+\\)\\s*$', '')
+       )
+  `);
+    return r.rowCount ?? 0;
+}
+// ── Blues lyrics: bulk normalize empty tuning → "Standard" ─────────
+// On a blues-lyrics wiki an unmentioned tuning is overwhelmingly
+// standard. Backend for the admin-triggered button on the archive
+// list. Returns the rowcount so the UI can report it. Idempotent
+// (NULL set shrinks to zero after first run).
+export async function normalizeEmptyTuningsToStandard() {
+    const r = await getPool().query(`UPDATE blues_lyrics SET tuning = 'Standard' WHERE tuning IS NULL OR tuning = ''`);
+    return r.rowCount ?? 0;
+}
+// ── Blues lyrics: get-or-create artist by name ─────────────────────
+// Backs the "+ Create as new" affordance on the lyric editor's Artist
+// input. Looks up by case-insensitive name first to avoid duplicates,
+// otherwise inserts a fresh row with enrichment_status flagged so it
+// can be distinguished from imported/seeded rows.
+export async function getOrCreateBluesArtistByName(rawName) {
+    const name = String(rawName || "").replace(/\s+/g, " ").trim();
+    if (!name)
+        throw new Error("name required");
+    if (name.length > 200)
+        throw new Error("name too long");
+    const existing = await getPool().query(`SELECT id, name FROM blues_artists WHERE LOWER(name) = LOWER($1) LIMIT 1`, [name]);
+    if (existing.rows.length) {
+        return { id: existing.rows[0].id, name: existing.rows[0].name, created: false };
+    }
+    const inserted = await getPool().query(`INSERT INTO blues_artists (name, enrichment_status)
+     VALUES ($1, '{"source":"manual_editor_create"}'::jsonb)
+     RETURNING id, name`, [name]);
+    return { id: inserted.rows[0].id, name: inserted.rows[0].name, created: true };
 }
 // ── Blues DB helpers (admin-only) ──────────────────────────────────────
 // Field whitelist used by upsert/update so the admin UI can't smuggle
@@ -848,6 +1192,49 @@ export async function getBluesArtist(id) {
 }
 export async function deleteBluesArtist(id) {
     await getPool().query(`DELETE FROM blues_artists WHERE id = $1`, [id]);
+}
+// Cascade-delete the artist AND every lyric tied to them. Matches
+// lyrics by FK (canonical) OR by case-insensitive name (legacy rows
+// whose artist_id hasn't been backfilled). Single transaction so a
+// partial failure rolls back the whole thing. Returns counts so the
+// UI can report exactly how many lyrics went with the artist.
+export async function deleteBluesArtistAndLyrics(id) {
+    const client = await getPool().connect();
+    try {
+        await client.query("BEGIN");
+        const ar = await client.query(`SELECT id, name FROM blues_artists WHERE id = $1 FOR UPDATE`, [id]);
+        if (!ar.rows.length) {
+            await client.query("ROLLBACK");
+            throw new Error("artist not found");
+        }
+        const name = String(ar.rows[0].name || "");
+        // 1. Drop lyrics linked by FK.
+        const r1 = await client.query(`DELETE FROM blues_lyrics WHERE artist_id = $1`, [id]);
+        // 2. Drop lyrics that name-match but never got FK-linked (legacy).
+        const r2 = name
+            ? await client.query(`DELETE FROM blues_lyrics
+            WHERE artist_id IS NULL
+              AND LOWER(TRIM(COALESCE(artist, ''))) = LOWER(TRIM($1))`, [name])
+            : { rowCount: 0 };
+        // 3. Drop the artist.
+        await client.query(`DELETE FROM blues_artists WHERE id = $1`, [id]);
+        await client.query("COMMIT");
+        return {
+            ok: true,
+            artistName: name,
+            lyricsDeleted: (r1.rowCount ?? 0) + (r2.rowCount ?? 0),
+        };
+    }
+    catch (e) {
+        try {
+            await client.query("ROLLBACK");
+        }
+        catch { }
+        throw e;
+    }
+    finally {
+        client.release();
+    }
 }
 /** Upsert a Wikidata-sourced blues artist row.
  *
@@ -1383,8 +1770,14 @@ export async function upsertCollectionItems(clerkUserId, items) {
         instanceArr.push(key);
         notesArr.push(item.notes ? JSON.stringify(item.notes) : null);
     }
+    // instance_id is BIGINT (Discogs IDs crossed int4 in May 2026) — the
+    // unnest cast for column 7 must be bigint[], otherwise Postgres
+    // narrows each element to int4 BEFORE the column accepts it and
+    // throws "value … is out of range for type integer". release_id /
+    // folder_id / rating stay int — release IDs are ~30M and folder /
+    // rating values are tiny.
     await getPool().query(`INSERT INTO user_collection (clerk_user_id, discogs_release_id, data, added_at, synced_at, folder_id, rating, instance_id, notes)
-     SELECT $1, unnest($2::int[]), unnest($3::jsonb[]), unnest($4::timestamptz[]), NOW(), unnest($5::int[]), unnest($6::int[]), unnest($7::int[]), unnest($8::jsonb[])
+     SELECT $1, unnest($2::int[]), unnest($3::jsonb[]), unnest($4::timestamptz[]), NOW(), unnest($5::int[]), unnest($6::int[]), unnest($7::bigint[]), unnest($8::jsonb[])
      ON CONFLICT (clerk_user_id, instance_id)
      DO UPDATE SET data = EXCLUDED.data, added_at = EXCLUDED.added_at, synced_at = NOW(),
                    folder_id = EXCLUDED.folder_id, rating = EXCLUDED.rating,
@@ -1481,7 +1874,10 @@ export async function pruneWantlistItems(clerkUserId, keepIds) {
 export async function pruneCollectionItems(clerkUserId, keepInstanceIds) {
     if (!keepInstanceIds.length)
         return 0;
-    const r = await getPool().query(`DELETE FROM user_collection WHERE clerk_user_id = $1 AND instance_id IS NOT NULL AND instance_id != ALL($2::int[]) RETURNING 1`, [clerkUserId, keepInstanceIds]);
+    // Cast to bigint[] — instance_id is bigint as of the May 2026
+    // migration above (Discogs IDs crossed int4 max). An int[] cast
+    // would re-overflow here even with the column widened.
+    const r = await getPool().query(`DELETE FROM user_collection WHERE clerk_user_id = $1 AND instance_id IS NOT NULL AND instance_id != ALL($2::bigint[]) RETURNING 1`, [clerkUserId, keepInstanceIds]);
     return r.rowCount ?? 0;
 }
 export async function updateCollectionRating(clerkUserId, releaseId, rating, instanceId) {
@@ -1766,6 +2162,95 @@ export async function getWikiSaveIds(clerkUserId) {
     const r = await getPool().query(`SELECT wiki_title FROM user_wiki_saves WHERE clerk_user_id = $1`, [clerkUserId]);
     return r.rows.map(row => row.wiki_title);
 }
+// ── Chronicling America (historic newspapers) saves ─────────────────────
+// Mirrors the wiki saves API. chronam_id is the canonical relative path
+// returned by the LOC API ("/lccn/<lccn>/<date>/ed-X/seq-N/"). Cap per
+// user matches wiki/loc/archive saves at 1000.
+const CHRONAM_SAVES_MAX_PER_USER = 1000;
+export async function saveChronAmItem(clerkUserId, chronamId, paperTitle, issueDate, snippet, thumbnail, data) {
+    const pool = getPool();
+    await pool.query(`INSERT INTO user_chronam_saves (clerk_user_id, chronam_id, paper_title, issue_date, snippet, thumbnail, data, saved_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+     ON CONFLICT (clerk_user_id, chronam_id)
+     DO UPDATE SET paper_title = EXCLUDED.paper_title, issue_date = EXCLUDED.issue_date,
+                   snippet = EXCLUDED.snippet, thumbnail = EXCLUDED.thumbnail,
+                   data = EXCLUDED.data, saved_at = NOW()`, [clerkUserId, chronamId, paperTitle, issueDate, snippet, thumbnail, JSON.stringify(data)]);
+    await pool.query(`DELETE FROM user_chronam_saves
+      WHERE clerk_user_id = $1
+        AND chronam_id NOT IN (
+          SELECT chronam_id FROM user_chronam_saves
+           WHERE clerk_user_id = $1
+           ORDER BY saved_at DESC
+           LIMIT ${CHRONAM_SAVES_MAX_PER_USER}
+        )`, [clerkUserId]);
+}
+export async function getChronAmSaves(clerkUserId, limit = 500) {
+    const capped = Math.min(Math.max(1, limit), 1000);
+    const r = await getPool().query(`SELECT chronam_id, paper_title, issue_date, snippet, thumbnail, data, saved_at
+       FROM user_chronam_saves
+      WHERE clerk_user_id = $1
+      ORDER BY saved_at DESC
+      LIMIT $2`, [clerkUserId, capped]);
+    return r.rows.map(row => ({
+        id: row.chronam_id,
+        paperTitle: row.paper_title,
+        issueDate: row.issue_date,
+        snippet: row.snippet,
+        thumbnail: row.thumbnail,
+        data: row.data ?? {},
+        savedAt: row.saved_at,
+    }));
+}
+export async function deleteChronAmSave(clerkUserId, chronamId) {
+    await getPool().query(`DELETE FROM user_chronam_saves WHERE clerk_user_id = $1 AND chronam_id = $2`, [clerkUserId, chronamId]);
+}
+export async function getChronAmSaveIds(clerkUserId) {
+    const r = await getPool().query(`SELECT chronam_id FROM user_chronam_saves WHERE clerk_user_id = $1`, [clerkUserId]);
+    return r.rows.map(row => row.chronam_id);
+}
+// Persistent search cache. Historic newspaper data effectively never
+// changes, so a 30-day TTL is conservative — older rows are simply
+// treated as expired and a fresh upstream call refreshes them.
+const CHRONAM_SEARCH_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+export async function getChronAmSearchCache(cacheKey) {
+    try {
+        const r = await getPool().query(`SELECT data, cached_at FROM chronam_search_cache WHERE cache_key = $1`, [cacheKey]);
+        if (!r.rows.length)
+            return null;
+        const at = new Date(r.rows[0].cached_at).getTime();
+        if (Date.now() - at > CHRONAM_SEARCH_CACHE_TTL_MS)
+            return null;
+        return r.rows[0].data;
+    }
+    catch {
+        return null;
+    }
+}
+// Stale fallback — returns ANY cached row for a key regardless of TTL.
+// Used by the chronam search endpoint when the loc.gov upstream times
+// out or errors: serving slightly-old historic-newspaper results is
+// way better than returning a 504 to the user. Returns { data, cachedAt }
+// so the endpoint can surface "served stale, last refreshed N ago".
+export async function getChronAmSearchCacheStale(cacheKey) {
+    try {
+        const r = await getPool().query(`SELECT data, cached_at FROM chronam_search_cache WHERE cache_key = $1`, [cacheKey]);
+        if (!r.rows.length)
+            return null;
+        return { data: r.rows[0].data, cachedAt: new Date(r.rows[0].cached_at) };
+    }
+    catch {
+        return null;
+    }
+}
+export async function setChronAmSearchCache(cacheKey, data) {
+    try {
+        await getPool().query(`INSERT INTO chronam_search_cache (cache_key, data, cached_at)
+       VALUES ($1, $2, NOW())
+       ON CONFLICT (cache_key)
+       DO UPDATE SET data = EXCLUDED.data, cached_at = NOW()`, [cacheKey, JSON.stringify(data)]);
+    }
+    catch { /* best-effort cache write */ }
+}
 // ── Play queue (cross-source: LOC + YouTube) ─────────────────────────
 const PLAY_QUEUE_MAX = 500;
 export async function getPlayQueue(clerkUserId) {
@@ -1794,6 +2279,27 @@ export async function appendPlayQueue(clerkUserId, items, opts) {
     const client = await pool.connect();
     try {
         await client.query("BEGIN");
+        // Serialize all multi-statement queue writes for this user. Both
+        // this and reorderPlayQueue do DELETE-then-INSERT bursts on the
+        // same (clerk_user_id, position) rows; run concurrently they can
+        // deadlock and Postgres aborts one — surfacing to the client as an
+        // intermittent "reorder failed" that snaps back. The advisory lock
+        // (namespaced with a constant so it can't collide with other
+        // advisory locks) makes them queue instead. Auto-released on
+        // COMMIT/ROLLBACK.
+        await client.query(`SELECT pg_advisory_xact_lock(hashtext($1), 424242)`, [clerkUserId]);
+        // De-dupe: re-adding a track that's already in the queue is a MOVE,
+        // not a stack. Delete any existing rows whose external_id matches an
+        // incoming item BEFORE positioning the new copies. Without this the
+        // server kept both copies; the client render-dedup hid the old one
+        // (lowest position wins) but it stayed live in the queue, so
+        // play/next nav still hit the stale copy — the queue appeared to
+        // "jump back" to where the track already was. The anon localStorage
+        // path already de-dupes this way; this brings the server in line.
+        const incomingExtIds = Array.from(new Set(items.map(it => String(it.externalId))));
+        if (incomingExtIds.length) {
+            await client.query(`DELETE FROM user_play_queue WHERE clerk_user_id = $1 AND external_id = ANY($2::text[])`, [clerkUserId, incomingExtIds]);
+        }
         let startPos;
         if (mode === "append") {
             const r = await client.query(`SELECT COALESCE(MAX(position), 0) AS maxp FROM user_play_queue WHERE clerk_user_id = $1`, [clerkUserId]);
@@ -1861,6 +2367,10 @@ export async function reorderPlayQueue(clerkUserId, orderedPositions) {
     const client = await pool.connect();
     try {
         await client.query("BEGIN");
+        // Same per-user serialization as appendPlayQueue (see note there) —
+        // prevents reorder/add deadlocks that bubbled up as a flaky
+        // "reorder failed" + snap-back.
+        await client.query(`SELECT pg_advisory_xact_lock(hashtext($1), 424242)`, [clerkUserId]);
         const r = await client.query(`SELECT position, source, external_id, data FROM user_play_queue WHERE clerk_user_id = $1`, [clerkUserId]);
         const byPos = new Map();
         r.rows.forEach(row => byPos.set(row.position, row));
@@ -2732,8 +3242,13 @@ export async function pruneAllStaleData() {
     const col = await getPool().query(`DELETE FROM user_collection WHERE synced_at < ${interval30d}`);
     // User wantlist older than 30 days
     const wl = await getPool().query(`DELETE FROM user_wantlist WHERE synced_at < ${interval30d}`);
-    // User collection folders older than 30 days
-    const fld = await getPool().query(`DELETE FROM user_collection_folders WHERE synced_at < ${interval30d}`);
+    // user_collection_folders has no synced_at column (and was never going
+    // to — folders are user-scoped metadata, lifecycle tied to the user).
+    // The old query here was erroring daily in the Postgres logs. Folder
+    // rows are tiny and already removed via the user-deletion cascade, so
+    // dropping the prune step entirely. fld stays at 0 so the return-shape
+    // is unchanged.
+    const fld = { rowCount: 0 };
     // User inventory older than 30 days
     const inv = await getPool().query(`DELETE FROM user_inventory WHERE synced_at < ${interval30d}`);
     // User list items older than 30 days
@@ -2954,6 +3469,210 @@ export async function getApiRequestStats(hours = 24) {
     ORDER BY total_requests DESC
   `, [hours]);
     return r.rows;
+}
+// Per-service API health for the admin "Active APIs" popup: volume,
+// success rate, p50/p95 latency, error count, and the most recent
+// error message + time — all within the requested window.
+export async function getApiHealth(hours = 24) {
+    const r = await getPool().query(`
+    SELECT e1.service,
+           COUNT(*)::int AS total,
+           COUNT(*) FILTER (WHERE e1.success)::int      AS successes,
+           COUNT(*) FILTER (WHERE NOT e1.success)::int  AS failures,
+           PERCENTILE_CONT(0.5)  WITHIN GROUP (ORDER BY e1.duration_ms)::int AS p50_ms,
+           PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY e1.duration_ms)::int AS p95_ms,
+           (SELECT e2.error_message FROM api_request_log e2
+             WHERE e2.service = e1.service AND NOT e2.success
+               AND e2.created_at > NOW() - INTERVAL '1 hour' * $1
+             ORDER BY e2.created_at DESC LIMIT 1) AS last_error,
+           (SELECT e3.created_at FROM api_request_log e3
+             WHERE e3.service = e1.service AND NOT e3.success
+               AND e3.created_at > NOW() - INTERVAL '1 hour' * $1
+             ORDER BY e3.created_at DESC LIMIT 1) AS last_error_at
+      FROM api_request_log e1
+     WHERE e1.created_at > NOW() - INTERVAL '1 hour' * $1
+     GROUP BY e1.service
+     ORDER BY total DESC
+  `, [hours]);
+    return r.rows;
+}
+// Site-wide KPI bundle for the admin Overview + Users summary boxes.
+// One round-trip; all counts derive from existing tables (user_tokens
+// for accounts/activity, the event tables for plays/searches/opens).
+export async function getAdminOverview() {
+    const r = await getPool().query(`
+    SELECT
+      (SELECT COUNT(*)::int FROM user_tokens) AS total_users,
+      (SELECT COUNT(*)::int FROM user_tokens WHERE created_at > NOW() - INTERVAL '7 days')  AS new_users_7d,
+      (SELECT COUNT(*)::int FROM user_tokens WHERE created_at > NOW() - INTERVAL '30 days') AS new_users_30d,
+      (SELECT COUNT(*)::int FROM user_tokens WHERE last_active_at > NOW() - INTERVAL '1 day')   AS dau,
+      (SELECT COUNT(*)::int FROM user_tokens WHERE last_active_at > NOW() - INTERVAL '7 days')  AS wau,
+      (SELECT COUNT(*)::int FROM user_tokens WHERE last_active_at > NOW() - INTERVAL '30 days') AS mau,
+      (SELECT COUNT(*)::int FROM user_play_events   WHERE created_at > NOW() - INTERVAL '1 day')  AS plays_24h,
+      (SELECT COUNT(*)::int FROM user_play_events   WHERE created_at > NOW() - INTERVAL '7 days') AS plays_7d,
+      (SELECT COUNT(*)::int FROM user_search_events WHERE created_at > NOW() - INTERVAL '1 day')  AS searches_24h,
+      (SELECT COUNT(*)::int FROM user_search_events WHERE created_at > NOW() - INTERVAL '7 days') AS searches_7d,
+      (SELECT COUNT(*)::int FROM user_recent_views  WHERE opened_at > NOW() - INTERVAL '1 day')  AS album_opens_24h,
+      (SELECT COUNT(*)::int FROM user_recent_views  WHERE opened_at > NOW() - INTERVAL '7 days') AS album_opens_7d
+  `);
+    const x = r.rows[0] || {};
+    return {
+        totalUsers: x.total_users ?? 0,
+        newUsers7d: x.new_users_7d ?? 0,
+        newUsers30d: x.new_users_30d ?? 0,
+        dau: x.dau ?? 0, wau: x.wau ?? 0, mau: x.mau ?? 0,
+        plays24h: x.plays_24h ?? 0, plays7d: x.plays_7d ?? 0,
+        searches24h: x.searches_24h ?? 0, searches7d: x.searches_7d ?? 0,
+        albumOpens24h: x.album_opens_24h ?? 0, albumOpens7d: x.album_opens_7d ?? 0,
+    };
+}
+// Media-player + playlist/queue usage for the admin dashboard.
+// All from existing tables: user_play_events (plays), user_playlists /
+// user_playlist_items (saved playlists), user_play_queue (live queues).
+export async function getMediaStats(topLimit = 10) {
+    const pool = getPool();
+    const lim = Math.max(1, Math.min(100, Math.floor(topLimit) || 10));
+    const [agg, bySource, topTitles, playlists, queue] = await Promise.all([
+        pool.query(`
+      SELECT
+        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 day')::int   AS plays_24h,
+        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '7 days')::int  AS plays_7d,
+        COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '30 days')::int AS plays_30d,
+        COUNT(DISTINCT clerk_user_id) FILTER (WHERE created_at > NOW() - INTERVAL '30 days')::int AS listeners_30d
+      FROM user_play_events`),
+        pool.query(`
+      SELECT source, COUNT(*)::int AS n
+      FROM user_play_events
+      WHERE created_at > NOW() - INTERVAL '7 days'
+      GROUP BY source ORDER BY n DESC`),
+        pool.query(`
+      SELECT COALESCE(NULLIF(title,''), '(untitled)') AS title, source,
+             MAX(external_id) AS external_id, COUNT(*)::int AS n
+      FROM user_play_events
+      WHERE created_at > NOW() - INTERVAL '30 days'
+        AND NOT (source = 'yt' AND NULLIF(title,'') IS NULL)
+      GROUP BY 1, 2 ORDER BY n DESC LIMIT ${lim}`),
+        pool.query(`
+      SELECT
+        (SELECT COUNT(*)::int FROM user_playlists) AS total_playlists,
+        (SELECT COUNT(*)::int FROM user_playlist_items) AS total_items,
+        (SELECT COUNT(DISTINCT clerk_user_id)::int FROM user_playlists) AS users_with_playlists`),
+        pool.query(`
+      SELECT
+        (SELECT COUNT(*)::int FROM user_play_queue) AS queue_rows,
+        (SELECT COUNT(DISTINCT clerk_user_id)::int FROM user_play_queue) AS users_with_queue`),
+    ]);
+    const a = agg.rows[0] || {};
+    const pl = playlists.rows[0] || {};
+    const q = queue.rows[0] || {};
+    const totalPlaylists = pl.total_playlists ?? 0;
+    return {
+        plays24h: a.plays_24h ?? 0,
+        plays7d: a.plays_7d ?? 0,
+        plays30d: a.plays_30d ?? 0,
+        listeners30d: a.listeners_30d ?? 0,
+        bySource7d: bySource.rows, // [{source,n}]
+        topTitles30d: topTitles.rows, // [{title,source,n}]
+        totalPlaylists,
+        totalPlaylistItems: pl.total_items ?? 0,
+        avgPlaylistLen: totalPlaylists ? Math.round(((pl.total_items ?? 0) / totalPlaylists) * 10) / 10 : 0,
+        usersWithPlaylists: pl.users_with_playlists ?? 0,
+        queueRows: q.queue_rows ?? 0,
+        usersWithQueue: q.users_with_queue ?? 0,
+    };
+}
+// Discogs request volume in rolling windows — a headroom proxy. There
+// is no instrumented Discogs limiter (calls are paced ad-hoc and rely
+// on Discogs's own 60/min OAuth ceiling), so we approximate pressure
+// from api_request_log.
+export async function getDiscogsRateWindow() {
+    const r = await getPool().query(`
+    SELECT
+      COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '60 seconds')::int AS last_minute,
+      COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 day')::int      AS last_24h
+    FROM api_request_log WHERE service = 'discogs'`);
+    const x = r.rows[0] || {};
+    return { lastMinute: x.last_minute ?? 0, last24h: x.last_24h ?? 0 };
+}
+// Durable background-job "last activity" timestamps. In-memory job
+// state resets on every process restart (Railway redeploys often), so
+// the admin panel was reporting "not run yet" for jobs that had in
+// fact run. These derive last-run from persisted side-effects:
+//   - daily suggestions  → newest user_personal_suggestions.generated_at
+//   - cache-warm worker   → newest still-unviewed release_cache row
+//     (warm-only rows are written with seen_at NULL until a human opens
+//      the modal), which tracks recent warm activity.
+export async function getJobHealth() {
+    const pool = getPool();
+    const [s, c] = await Promise.all([
+        pool.query(`SELECT MAX(generated_at) AS t FROM user_personal_suggestions`),
+        pool.query(`SELECT MAX(cached_at) AS t FROM release_cache WHERE seen_at IS NULL`),
+    ]);
+    const iso = (v) => v ? new Date(v).toISOString() : null;
+    return {
+        suggestionsLastAt: iso(s.rows[0]?.t),
+        cacheWarmLastAt: iso(c.rows[0]?.t),
+    };
+}
+// ── Background-job run tracking ──────────────────────────────────────
+// Wrap a scheduled job: startJobRun() at the top, finishJobRun() in a
+// finally. Best-effort — a logging failure must never break the job,
+// so callers should .catch() these.
+export async function startJobRun(jobName) {
+    try {
+        const r = await getPool().query(`INSERT INTO job_runs (job_name, status) VALUES ($1, 'running') RETURNING id`, [jobName]);
+        return r.rows[0]?.id ?? null;
+    }
+    catch {
+        return null;
+    }
+}
+export async function finishJobRun(id, opts) {
+    if (id == null)
+        return;
+    try {
+        await getPool().query(`UPDATE job_runs
+          SET status = $2, ended_at = NOW(),
+              items = $3, errors = $4, detail = $5
+        WHERE id = $1`, [id, opts.status, opts.items ?? 0, opts.errors ?? 0,
+            (opts.detail ?? "").slice(0, 500) || null]);
+        // Keep the table bounded: retain the most recent 100 runs per job.
+        await getPool().query(`DELETE FROM job_runs jr
+        WHERE jr.job_name = (SELECT job_name FROM job_runs WHERE id = $1)
+          AND jr.id NOT IN (
+            SELECT id FROM job_runs
+             WHERE job_name = (SELECT job_name FROM job_runs WHERE id = $1)
+             ORDER BY started_at DESC LIMIT 100
+          )`, [id]);
+    }
+    catch { /* best-effort */ }
+}
+// Latest run per job (for the admin Active-APIs popup).
+export async function getJobLastRuns() {
+    try {
+        const r = await getPool().query(`
+      SELECT DISTINCT ON (job_name)
+             job_name, status, started_at, ended_at, items, errors, detail
+        FROM job_runs
+       ORDER BY job_name, started_at DESC
+    `);
+        return r.rows;
+    }
+    catch {
+        return [];
+    }
+}
+// Full recent history for one job (audit drill-down).
+export async function getRecentJobRuns(jobName, limit = 25) {
+    try {
+        const r = await getPool().query(`SELECT id, job_name, status, started_at, ended_at, items, errors, detail
+         FROM job_runs WHERE job_name = $1
+        ORDER BY started_at DESC LIMIT $2`, [jobName, Math.max(1, Math.min(200, limit))]);
+        return r.rows;
+    }
+    catch {
+        return [];
+    }
 }
 // ── Table row counts (admin dashboard) ───────────────────────────────────
 export async function getTableRowCounts() {
@@ -3392,29 +4111,126 @@ export async function getAiExclusionTitles(clerkUserId, limit = 200) {
 // ── Personal suggestions: taste profile + library dedup + persistence ──
 //
 // Taste tuples power the per-user background suggestions job. We
-// expand the user's collection + wantlist by (genre, style, year)
-// and rank by frequency: the top tuples are what the user listens to
-// the most. The job then queries Discogs for masters matching each
-// tuple. Wide net by design — top 9 covers a few different bands
-// of the user's taste rather than just their #1 obsession.
+// expand the user's favorites + plays + collection + wantlist by
+// (genre, style, year) and rank by a WEIGHTED frequency:
+//   favorites 3x · plays 2x · collection 1x · wantlist 1x
+// Collections accumulate noise (gifts, completionism, flips, dupes) so
+// they're a weak taste proxy; an explicit favorite is the strongest
+// signal, and what the user actually listens to (plays, recency-
+// windowed + master/day-deduped) sits just under it. The job then
+// queries Discogs for masters matching each tuple. Wide net by design.
+//
+// Play rows carry only source + external_id, so genre/style/year come
+// from either the client-sent snapshot (play_meta) or, failing that,
+// a release_cache lookup keyed by the logged Discogs release/master id.
+// LOC/Archive plays have no Discogs id → release_id NULL → excluded.
+// Engagement check for the suggestions job — answers "is it worth
+// spending Discogs API budget on this user's feed?". Returns the
+// signals needed for the scheduler to skip:
+//   - hibernated:        user_tokens.hibernated_at IS NOT NULL
+//                        (6mo inactive, already flagged)
+//   - hasSuggestions:    user has any rows in user_personal_suggestions
+//   - oldestSuggDays:    age in days of the user's oldest current
+//                        suggestion (proxies "how long has the feed
+//                        existed for them"); 0 if none.
+//   - recentClicks:      count of the user's saved suggestions opened
+//                        in user_recent_views in the last 30 days.
+//                        Zero ⇒ they don't engage with the feed.
+// One round-trip, all-in-one query.
+export async function getUserSuggestionEngagement(clerkUserId) {
+    try {
+        const r = await getPool().query(`SELECT
+         (SELECT hibernated_at IS NOT NULL FROM user_tokens WHERE clerk_user_id = $1) AS hibernated,
+         (SELECT COUNT(*)::int FROM user_personal_suggestions WHERE clerk_user_id = $1) AS sugg_count,
+         COALESCE(
+           EXTRACT(EPOCH FROM (NOW() - (SELECT MIN(generated_at) FROM user_personal_suggestions WHERE clerk_user_id = $1))) / 86400.0,
+           0
+         )::float AS oldest_sugg_days,
+         (
+           SELECT COUNT(*)::int FROM user_personal_suggestions ps
+            JOIN user_recent_views rv
+              ON rv.clerk_user_id = ps.clerk_user_id
+             AND rv.discogs_id    = ps.discogs_id
+             AND rv.entity_type   = ps.entity_type
+            WHERE ps.clerk_user_id = $1
+              AND rv.opened_at > NOW() - INTERVAL '30 days'
+         ) AS recent_clicks`, [clerkUserId]);
+        const row = r.rows[0] || {};
+        return {
+            hibernated: !!row.hibernated,
+            hasSuggestions: Number(row.sugg_count) > 0,
+            oldestSuggDays: Number(row.oldest_sugg_days) || 0,
+            recentClicks: Number(row.recent_clicks) || 0,
+        };
+    }
+    catch {
+        return { hibernated: false, hasSuggestions: false, oldestSuggDays: 0, recentClicks: 0 };
+    }
+}
+// Cheap fingerprint of a user's taste-source state. The suggestions
+// job compares the current signature to the one stored from its last
+// successful run; if nothing has changed (no new plays, no new
+// favorites, no collection/wantlist deltas), the run early-exits. Lets
+// us run frequently without burning Discogs API budget on idle users.
+export async function getUserTasteSignature(clerkUserId) {
+    try {
+        const r = await getPool().query(`SELECT
+         COALESCE(EXTRACT(EPOCH FROM (SELECT MAX(created_at) FROM user_play_events WHERE clerk_user_id = $1))::bigint, 0) AS p,
+         COALESCE(EXTRACT(EPOCH FROM (SELECT MAX(created_at) FROM user_favorites   WHERE clerk_user_id = $1))::bigint, 0) AS f,
+         (SELECT COUNT(*)::int FROM user_collection WHERE clerk_user_id = $1) AS c,
+         (SELECT COUNT(*)::int FROM user_wantlist   WHERE clerk_user_id = $1) AS w`, [clerkUserId]);
+        const row = r.rows[0] || {};
+        return `${row.p ?? 0}|${row.f ?? 0}|${row.c ?? 0}|${row.w ?? 0}`;
+    }
+    catch {
+        return "";
+    }
+}
 export async function getUserTasteTuples(clerkUserId, limit = 9) {
     try {
-        const r = await getPool().query(`WITH src AS (
-         SELECT data FROM user_collection WHERE clerk_user_id = $1
+        const r = await getPool().query(`WITH plays AS (
+         -- Play-derived taste: one row per (master/release, day) in the
+         -- last 90 days so a track on repeat can't dominate. Metadata is
+         -- the client snapshot when present, else resolved from
+         -- release_cache via the logged Discogs id + type.
+         SELECT DISTINCT ON (mkey, d) data
+           FROM (
+             SELECT
+               COALESCE(NULLIF(pe.master_id, 0), pe.release_id) AS mkey,
+               (pe.created_at)::date                            AS d,
+               COALESCE(pe.play_meta, rc.data)                  AS data
+             FROM user_play_events pe
+             LEFT JOIN release_cache rc
+               ON rc.discogs_id = pe.release_id
+              AND rc.type       = COALESCE(pe.release_type, 'release')
+             WHERE pe.clerk_user_id = $1
+               AND pe.release_id IS NOT NULL
+               AND pe.created_at > NOW() - INTERVAL '90 days'
+           ) q
+          WHERE q.data IS NOT NULL
+          ORDER BY mkey, d
+       ),
+       src AS (
+         SELECT data, 3 AS w FROM user_favorites  WHERE clerk_user_id = $1
          UNION ALL
-         SELECT data FROM user_wantlist  WHERE clerk_user_id = $1
+         SELECT data, 2 AS w FROM plays
+         UNION ALL
+         SELECT data, 1 AS w FROM user_collection WHERE clerk_user_id = $1
+         UNION ALL
+         SELECT data, 1 AS w FROM user_wantlist   WHERE clerk_user_id = $1
        ),
        expanded AS (
          SELECT
            g.value AS genre,
            s.value AS style,
-           NULLIF(src.data->>'year','')::int AS year
+           NULLIF(src.data->>'year','')::int AS year,
+           src.w   AS w
          FROM src,
               jsonb_array_elements_text(src.data->'genres') AS g(value),
               jsonb_array_elements_text(src.data->'styles') AS s(value)
        ),
        counts AS (
-         SELECT genre, style, year, COUNT(*)::int AS n
+         SELECT genre, style, year, SUM(w)::int AS n
          FROM expanded
          WHERE year IS NOT NULL AND year > 1900 AND year < 2030
          GROUP BY genre, style, year
@@ -3570,11 +4386,22 @@ export async function dismissPersonalSuggestion(clerkUserId, discogsId, entityTy
        WHERE clerk_user_id = $1 AND discogs_id = $2 AND entity_type = $3`, [clerkUserId, discogsId, entityType]);
 }
 // Returns set of "type:id" strings the user has banished so the
-// generator can skip them in O(1).
-export async function getDismissedSuggestionKeys(clerkUserId) {
+// generator can skip them in O(1). `withinDays` constrains to recent
+// dismissals only — caller passes e.g. 90 to let older dismissals
+// expire so the pool can thaw over time. Default unbounded preserves
+// existing behaviour for any other caller.
+export async function getDismissedSuggestionKeys(clerkUserId, withinDays) {
     const out = new Set();
     try {
-        const r = await getPool().query(`SELECT discogs_id, entity_type FROM user_suggestion_dismissals WHERE clerk_user_id = $1`, [clerkUserId]);
+        const params = [clerkUserId];
+        let where = "clerk_user_id = $1";
+        if (Number.isFinite(withinDays) && withinDays > 0) {
+            const d = Math.max(1, Math.min(3650, Math.trunc(withinDays)));
+            // Inline the integer (already clamped) — Postgres can't bind
+            // intervals through parameters cleanly.
+            where += ` AND dismissed_at > NOW() - INTERVAL '${d} days'`;
+        }
+        const r = await getPool().query(`SELECT discogs_id, entity_type FROM user_suggestion_dismissals WHERE ${where}`, params);
         for (const row of r.rows)
             out.add(`${row.entity_type}:${row.discogs_id}`);
     }
@@ -3677,11 +4504,37 @@ export async function logUserSearch(clerkUserId, query) {
         return;
     await getPool().query(`INSERT INTO user_search_events (clerk_user_id, query) VALUES ($1, $2)`, [clerkUserId, (query || "").slice(0, 200)]);
 }
-export async function logUserPlay(clerkUserId, source, externalId, title) {
+export async function logUserPlay(clerkUserId, source, externalId, title, ident) {
     if (!clerkUserId || !externalId)
         return;
-    await getPool().query(`INSERT INTO user_play_events (clerk_user_id, source, external_id, title)
-     VALUES ($1, $2, $3, $4)`, [clerkUserId, source, String(externalId).slice(0, 100), (title || "").slice(0, 200) || null]);
+    const relType = ident?.releaseType === "release" || ident?.releaseType === "master"
+        ? ident.releaseType : null;
+    const relId = Number.isFinite(ident?.releaseId) && ident.releaseId > 0
+        ? Math.trunc(ident.releaseId) : null;
+    const masId = Number.isFinite(ident?.masterId) && ident.masterId > 0
+        ? Math.trunc(ident.masterId) : null;
+    // Keep only the three fields the taste expansion needs; drop anything
+    // else the client may have sent so the JSONB stays small.
+    let meta = null;
+    if (ident?.meta && typeof ident.meta === "object") {
+        const g = Array.isArray(ident.meta.genres) ? ident.meta.genres.slice(0, 12).map(String) : [];
+        const s = Array.isArray(ident.meta.styles) ? ident.meta.styles.slice(0, 24).map(String) : [];
+        const y = Number.isFinite(ident.meta.year) ? Number(ident.meta.year) : null;
+        if (g.length || s.length || y)
+            meta = { genres: g, styles: s, year: y };
+    }
+    await getPool().query(`INSERT INTO user_play_events
+       (clerk_user_id, source, external_id, title, release_type, release_id, master_id, play_meta)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`, [
+        clerkUserId,
+        source,
+        String(externalId).slice(0, 100),
+        (title || "").slice(0, 200) || null,
+        relType,
+        relId,
+        masId,
+        meta ? JSON.stringify(meta) : null,
+    ]);
 }
 // Per-user behavior summary for the admin panel. Aggregates across
 // existing tables (favorites, recent_views, suggestions) and the new
@@ -3860,11 +4713,20 @@ export async function getUnavailableYoutubeVideoIds() {
 // Newest reports first so admin sees recent issues at the top.
 export async function listYoutubeVideoUnavailable(limit = 500) {
     try {
-        const r = await getPool().query(`SELECT video_id, status, report_count,
-              first_reported_at, last_reported_at,
-              sample_user_id, sample_error_code
-         FROM youtube_video_unavailable
-        ORDER BY last_reported_at DESC
+        const r = await getPool().query(`SELECT u.video_id, u.status, u.report_count,
+              u.first_reported_at, u.last_reported_at,
+              u.sample_user_id, u.sample_error_code,
+              ov.release_type, ov.release_id,
+              ov.track_title, ov.track_position
+         FROM youtube_video_unavailable u
+         LEFT JOIN LATERAL (
+           SELECT release_type, release_id, track_title, track_position
+             FROM track_youtube_overrides o
+            WHERE o.video_id = u.video_id
+            ORDER BY o.submitted_at DESC
+            LIMIT 1
+         ) ov ON true
+        ORDER BY u.last_reported_at DESC
         LIMIT $1`, [Math.max(1, Math.min(2000, limit))]);
         return r.rows;
     }
@@ -4042,5 +4904,714 @@ export async function listAllTrackYtOverrides(limit = 500) {
     }
     catch {
         return [];
+    }
+}
+// ── Lyrics helpers (scraped from weeniecampbell.com) ─────────────────
+// upsertLyric is keyed on (source_host, page_title) so a re-scrape
+// updates existing rows instead of duplicating.
+export async function upsertLyric(record) {
+    const host = record.sourceHost || "weeniecampbell.com";
+    // ON CONFLICT target matches the partial unique index defined in
+    // initDb (source_host, page_title, COALESCE(LOWER(TRIM(artist)), '')).
+    // Re-scraping the same page still upserts (artist matches itself),
+    // but a manual add with a different artist on the same title goes
+    // through as a fresh INSERT.
+    await getPool().query(`INSERT INTO blues_lyrics (source_host, page_title, page_url, artist, tuning, wikitext, plaintext, scraped_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+     ON CONFLICT (source_host, page_title, (COALESCE(LOWER(TRIM(artist)), '')))
+     DO UPDATE SET page_url = EXCLUDED.page_url,
+                   tuning = EXCLUDED.tuning,
+                   wikitext = EXCLUDED.wikitext,
+                   plaintext = EXCLUDED.plaintext,
+                   scraped_at = NOW()`, [host, record.pageTitle, record.pageUrl, record.artist ?? null, record.tuning ?? null, record.wikitext ?? null, record.plaintext ?? null]);
+}
+// Manual lyric insert — used by the admin "+ Add lyric" affordance.
+// Returns the new row. page_title + artist together are unique per
+// source_host, so adding a duplicate (same title + same artist) on
+// the same source throws unique_violation (23505) which the caller
+// surfaces as 409.
+export async function createLyric(record) {
+    const host = record.sourceHost || "manual";
+    const title = String(record.pageTitle || "").trim();
+    if (!title)
+        throw new Error("page_title required");
+    // Auto-resolve artist_id from name when not explicitly provided.
+    let artistId = record.artistId ?? null;
+    if (artistId == null && record.artist) {
+        const r = await getPool().query(`SELECT id FROM blues_artists WHERE LOWER(name) = LOWER(TRIM($1)) LIMIT 1`, [record.artist]);
+        if (r.rows.length)
+            artistId = r.rows[0].id;
+    }
+    const ins = await getPool().query(`INSERT INTO blues_lyrics
+       (source_host, page_title, page_url, artist, artist_id, tuning,
+        wikitext, plaintext, discogs_release_id, discogs_master_id, scraped_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+     RETURNING *`, [host, title, record.pageUrl ?? null, record.artist ?? null, artistId,
+        record.tuning ?? null, record.wikitext ?? null, record.plaintext ?? null,
+        record.discogsReleaseId ?? null, record.discogsMasterId ?? null]);
+    return ins.rows[0];
+}
+// Set of (source_host, page_title) keys we've already scraped — so a
+// resumed scrape skips them. Returns lowercased titles in a Set for
+// fast probing.
+export async function getLyricTitlesAlreadyScraped(sourceHost = "weeniecampbell.com") {
+    try {
+        const r = await getPool().query(`SELECT page_title FROM blues_lyrics WHERE source_host = $1`, [sourceHost]);
+        return new Set(r.rows.map((row) => String(row.page_title)));
+    }
+    catch {
+        return new Set();
+    }
+}
+export async function getLyricById(id) {
+    const r = await getPool().query(`SELECT * FROM blues_lyrics WHERE id = $1`, [id]);
+    return r.rows[0] || null;
+}
+// Whitelist of columns allowed for the sort= URL param. Anything else
+// (or unset) falls back to page_title. Keeps the SQL injection-safe
+// while letting the client header click drive ORDER BY.
+const _LYRICS_SORT_COLS = {
+    page_title: "page_title",
+    artist: "artist",
+    tuning: "tuning",
+    scraped_at: "scraped_at",
+    updated_at: "updated_at",
+};
+export async function listLyrics(opts) {
+    const where = [];
+    const params = [];
+    if (opts.search) {
+        params.push(`%${opts.search}%`);
+        where.push(`(page_title ILIKE $${params.length} OR artist ILIKE $${params.length} OR plaintext ILIKE $${params.length})`);
+    }
+    if (opts.tuning) {
+        // Special sentinel: "(unspecified)" filters rows where no tuning
+        // was extracted from the page body. On a blues-lyrics wiki, an
+        // unmentioned tuning effectively means standard, so this is the
+        // catch-all for "standard tuning" pages that don't say so
+        // explicitly.
+        if (opts.tuning === "(unspecified)") {
+            where.push(`tuning IS NULL`);
+        }
+        else {
+            params.push(opts.tuning);
+            where.push(`tuning = $${params.length}`);
+        }
+    }
+    if (opts.artist) {
+        params.push(opts.artist);
+        where.push(`artist = $${params.length}`);
+    }
+    if (opts.unmatchedOnly) {
+        where.push(`artist_id IS NULL`);
+    }
+    const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+    const limit = Math.max(1, Math.min(500, opts.limit ?? 100));
+    const offset = Math.max(0, opts.offset ?? 0);
+    // Sort column: whitelist-mapped to defeat SQL injection. NULLs LAST
+    // so empty-tuning rows don't dominate a "Tuning ASC" sort — the
+    // most-common-by-far value otherwise crowds the visible page out.
+    const sortCol = _LYRICS_SORT_COLS[String(opts.sort ?? "")] || "page_title";
+    const order = opts.order === "desc" ? "DESC" : "ASC";
+    // Secondary sort by page_title for stable ordering within ties.
+    const orderSql = sortCol === "page_title"
+        ? `ORDER BY page_title ${order}`
+        : `ORDER BY ${sortCol} ${order} NULLS LAST, page_title ASC`;
+    const totalRow = await getPool().query(`SELECT COUNT(*)::int AS n FROM blues_lyrics ${whereSql}`, params);
+    const total = totalRow.rows[0]?.n ?? 0;
+    params.push(limit, offset);
+    const rowsRes = await getPool().query(`SELECT id, page_title, page_url, artist, artist_id, tuning,
+            discogs_release_id, discogs_master_id,
+            scraped_at, updated_at,
+            substring(plaintext, 1, 240) AS snippet
+       FROM blues_lyrics ${whereSql}
+       ${orderSql}
+       LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+    return { rows: rowsRes.rows, total };
+}
+export async function getLyricTunings() {
+    const r = await getPool().query(`SELECT tuning, COUNT(*)::int AS n
+       FROM blues_lyrics
+      WHERE tuning IS NOT NULL AND tuning <> ''
+      GROUP BY tuning
+      ORDER BY n DESC, tuning ASC`);
+    // Append a virtual (unspecified) entry counting rows where no
+    // tuning was extracted — almost all of these are standard tuning
+    // on a blues-lyrics wiki, so the dropdown surfaces it as a usable
+    // filter. Pinned to the bottom of the list regardless of count.
+    const nullR = await getPool().query(`SELECT COUNT(*)::int AS n FROM blues_lyrics WHERE tuning IS NULL OR tuning = ''`);
+    const nullCount = nullR.rows[0]?.n ?? 0;
+    const rows = r.rows;
+    if (nullCount > 0)
+        rows.push({ tuning: "(unspecified)", n: nullCount });
+    return rows;
+}
+export async function getLyricCount() {
+    const r = await getPool().query(`SELECT COUNT(*)::int AS n FROM blues_lyrics`);
+    return r.rows[0]?.n ?? 0;
+}
+// ── Blues archive (unified artist + lyrics + releases view) ──────────
+// Powers the admin Discovery sub-view that combines blues_artists,
+// blues_lyrics, and the JSONB releases array into a single per-artist
+// page. Matching of lyrics → artist is case-insensitive on name.
+// Walks distinct lyrics.artist values, finds those that don't already
+// exist as a blues_artists.name (case-insensitive), and inserts each
+// as a minimal new row (name only). Returns { added, total, existing }
+// so the UI can report what happened.
+export async function importLyricsArtistsToBluesDb(validate) {
+    // Distinct non-null lyric-artist names. Trim + dedupe in JS so we
+    // can match against the (lowercased) existing set in one pass.
+    const rawNamesR = await getPool().query(`SELECT DISTINCT TRIM(artist) AS artist
+       FROM blues_lyrics
+      WHERE artist IS NOT NULL AND TRIM(artist) <> ''`);
+    const rawCandidates = rawNamesR.rows
+        .map(r => r.artist.replace(/\s+/g, " ").trim())
+        .filter(s => s.length >= 2 && s.length <= 200);
+    // Validator pass — applied at IMPORT time as well as extraction so
+    // stale bad values left in blues_lyrics.artist (from old scrapes
+    // before the validator was added) don't leak into blues_artists.
+    // Without this, "1934 version" / "alternate take" / catalog
+    // numbers etc. would still get imported as artists.
+    const candidates = [];
+    let rejected = 0;
+    for (const c of rawCandidates) {
+        if (validate && !validate(c)) {
+            rejected++;
+            continue;
+        }
+        candidates.push(c);
+    }
+    const existingR = await getPool().query(`SELECT LOWER(name) AS lname FROM blues_artists`);
+    const existing = new Set(existingR.rows.map(r => r.lname));
+    // De-dupe locally + filter against the existing set so the bulk
+    // INSERT below only carries names that genuinely need adding.
+    const toAdd = [];
+    const localSeen = new Set();
+    let already = 0;
+    for (const name of candidates) {
+        const key = name.toLowerCase();
+        if (existing.has(key)) {
+            already++;
+            continue;
+        }
+        if (localSeen.has(key))
+            continue;
+        localSeen.add(key);
+        toAdd.push(name);
+    }
+    // Bulk INSERT via unnest — one round-trip regardless of size.
+    // Previous version did one INSERT per name which 60s-timed-out
+    // once the candidate set got into the low thousands.
+    let added = 0;
+    if (toAdd.length) {
+        const r = await getPool().query(`INSERT INTO blues_artists (name, enrichment_status)
+       SELECT n, '{"source":"lyrics_import"}'::jsonb FROM unnest($1::text[]) AS n
+       RETURNING id`, [toAdd]);
+        added = r.rowCount ?? 0;
+    }
+    // Wire up the FK on any orphan lyrics whose artist string now
+    // matches a freshly-imported (or previously-existing) artist row.
+    // This is what makes the import the "merge step" — without it, the
+    // new artist rows would exist but their lyrics would still be
+    // joined only by string match.
+    await getPool().query(`
+    UPDATE blues_lyrics l
+       SET artist_id = a.id
+      FROM blues_artists a
+     WHERE l.artist_id IS NULL
+       AND l.artist IS NOT NULL
+       AND LOWER(TRIM(l.artist)) = LOWER(a.name)
+  `);
+    return { added, total: rawCandidates.length, existing: already, rejected };
+}
+// Paginated artist list with aggregated counts. Joins lyrics on
+// case-insensitive name match (no alias support yet — keeps the SQL
+// fast; we can add aliases JSONB matching later). Releases come from
+// the existing discogs_releases JSONB column.
+// Whitelist of sort columns. Maps the URL-safe key to a SQL fragment
+// (some are computed expressions, not bare column refs).
+const _BLUES_ARCHIVE_SORT_COLS = {
+    name: "a.name",
+    discogs_id: "a.discogs_id",
+    releases_count: "COALESCE(jsonb_array_length(a.discogs_releases), 0)",
+    lyrics_count: `(SELECT COUNT(*)::int FROM blues_lyrics l
+                     WHERE l.artist_id = a.id
+                        OR (l.artist_id IS NULL
+                            AND LOWER(TRIM(l.artist)) = LOWER(a.name)))`,
+    // Year of first release — LEAST(MB first_recording_year,
+    // MIN(discogs_releases[*].year)). _EARLIEST_REL_SQL references
+    // unqualified columns, so we substitute the a. alias inline.
+    first_release_year: _EARLIEST_REL_SQL
+        .replace(/\bfirst_recording_year\b/g, "a.first_recording_year")
+        .replace(/\bdiscogs_releases\b/g, "a.discogs_releases"),
+    // Has-photo: 1 when photo_url is set + non-empty, 0 otherwise.
+    // Sorting DESC puts rows WITH a photo first (find-by-eye),
+    // ASC puts MISSING rows first (curation queue).
+    has_photo: "CASE WHEN COALESCE(a.photo_url, '') <> '' THEN 1 ELSE 0 END",
+};
+export async function listBluesArchive(opts = {}) {
+    const params = [];
+    const where = [];
+    if (opts.search) {
+        params.push(`%${opts.search}%`);
+        where.push(`(a.name ILIKE $${params.length})`);
+    }
+    // Category filter — translates to a HAS_LYRICS / HAS_RELEASES
+    // combo. Built as a correlated EXISTS so the index on
+    // blues_lyrics.artist_id stays useful; the lyrics-by-name fallback
+    // covers legacy rows whose artist_id hasn't been backfilled yet.
+    if (opts.category) {
+        const HAS_LYRICS = `EXISTS (
+      SELECT 1 FROM blues_lyrics l
+       WHERE l.artist_id = a.id
+          OR (l.artist_id IS NULL AND LOWER(TRIM(l.artist)) = LOWER(a.name))
+    )`;
+        const HAS_RELEASES = `COALESCE(jsonb_array_length(a.discogs_releases), 0) > 0`;
+        if (opts.category === "with_both")
+            where.push(`${HAS_LYRICS} AND ${HAS_RELEASES}`);
+        else if (opts.category === "with_lyrics_only")
+            where.push(`${HAS_LYRICS} AND NOT ${HAS_RELEASES}`);
+        else if (opts.category === "with_releases_only")
+            where.push(`NOT ${HAS_LYRICS} AND ${HAS_RELEASES}`);
+        else if (opts.category === "empty")
+            where.push(`NOT ${HAS_LYRICS} AND NOT ${HAS_RELEASES}`);
+    }
+    const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+    const limit = Math.max(1, Math.min(500, opts.limit ?? 100));
+    const offset = Math.max(0, opts.offset ?? 0);
+    // Whitelist sort column + direction. Secondary sort by name keeps
+    // ordering stable within ties (e.g. two artists with same lyrics
+    // count). NULLS LAST on numeric/id columns so empty discogs_id
+    // rows fall to the bottom instead of crowding the top.
+    const sortCol = _BLUES_ARCHIVE_SORT_COLS[String(opts.sort ?? "")] || "a.name";
+    const order = opts.order === "desc" ? "DESC" : "ASC";
+    const orderSql = sortCol === "a.name"
+        ? `ORDER BY a.name ${order}`
+        : `ORDER BY ${sortCol} ${order} NULLS LAST, a.name ASC`;
+    const totalR = await getPool().query(`SELECT COUNT(*)::int AS n FROM blues_artists a ${whereSql}`, params);
+    const total = totalR.rows[0]?.n ?? 0;
+    params.push(limit, offset);
+    const r = await getPool().query(`SELECT a.id,
+            a.name,
+            a.birth_date,
+            a.death_date,
+            a.photo_url,
+            a.discogs_id,
+            COALESCE(jsonb_array_length(a.discogs_releases), 0) AS releases_count,
+            -- lyrics_count: prefer FK count (canonical) but fall back
+            -- to the legacy name-match count for any unmigrated rows
+            -- so the number doesn't read 0 before backfill completes.
+            (SELECT COUNT(*)::int FROM blues_lyrics l
+              WHERE l.artist_id = a.id
+                 OR (l.artist_id IS NULL
+                     AND LOWER(TRIM(l.artist)) = LOWER(a.name))) AS lyrics_count,
+            -- first_release_year: smaller of MB first_recording_year
+            -- and MIN(discogs_releases[*].year). Drives the new "Year"
+            -- column + its sort key.
+            ${_BLUES_ARCHIVE_SORT_COLS.first_release_year} AS first_release_year
+       FROM blues_artists a
+       ${whereSql}
+       ${orderSql}
+       LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+    return { rows: r.rows, total };
+}
+// ── Blues Archive: flat releases list ─────────────────────────────────
+// Unnests every blues_artists.discogs_releases JSONB array into a flat
+// per-release row joined back to the source artist. Powers the Releases
+// sub-tab on the Discovery Blues Archive view so a curator can browse,
+// filter, and sort the catalog without bouncing through artist popups.
+const _BLUES_REL_SORT_COLS = {
+    // Display title comes from the JSONB blob.
+    title: "lower(coalesce(rel->>'title',''))",
+    // Cast year text to int so 1928 < 1932 sorts numerically.
+    year: "NULLIF(rel->>'year','')::int",
+    artist: "lower(a.name)",
+    type: "lower(coalesce(rel->>'type',''))",
+    role: "lower(coalesce(rel->>'role',''))",
+};
+export async function listBluesArchiveReleases(opts = {}) {
+    const params = [];
+    const where = [];
+    if (opts.search?.trim()) {
+        const q = opts.search.trim();
+        params.push(`%${q}%`);
+        // Match title, artist name — and if the query is a bare 4-digit
+        // year, also match release year. Keeps the existing dedicated
+        // Year input useful (exact int) while letting the curator type
+        // '1928' into the main search and find what they expect.
+        if (/^\d{4}$/.test(q)) {
+            params.push(parseInt(q, 10));
+            where.push(`(rel->>'title' ILIKE $${params.length - 1} OR a.name ILIKE $${params.length - 1} OR NULLIF(rel->>'year','')::int = $${params.length})`);
+        }
+        else {
+            where.push(`(rel->>'title' ILIKE $${params.length} OR a.name ILIKE $${params.length})`);
+        }
+    }
+    if (opts.artist?.trim()) {
+        params.push(`%${opts.artist.trim()}%`);
+        where.push(`a.name ILIKE $${params.length}`);
+    }
+    if (opts.year != null && Number.isFinite(opts.year)) {
+        params.push(opts.year);
+        where.push(`NULLIF(rel->>'year','')::int = $${params.length}`);
+    }
+    if (opts.type?.trim()) {
+        params.push(opts.type.trim().toLowerCase());
+        where.push(`LOWER(COALESCE(rel->>'type','')) = $${params.length}`);
+    }
+    if (opts.role?.trim()) {
+        params.push(opts.role.trim().toLowerCase());
+        where.push(`LOWER(COALESCE(rel->>'role','')) = $${params.length}`);
+    }
+    // Drop rows whose JSONB entry doesn't have a usable id — they can't
+    // be linked out to discogs.com so they're effectively noise.
+    where.push(`(rel ? 'id') AND (rel->>'id') ~ '^[0-9]+$'`);
+    const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+    const limit = Math.max(1, Math.min(500, opts.limit ?? 100));
+    const offset = Math.max(0, opts.offset ?? 0);
+    const sortCol = _BLUES_REL_SORT_COLS[String(opts.sort ?? "")] || _BLUES_REL_SORT_COLS.year;
+    const order = opts.order === "asc" ? "ASC" : "DESC";
+    // Tie-break by artist then title so identical sort keys stay stable.
+    const orderSql = `ORDER BY ${sortCol} ${order} NULLS LAST, lower(a.name) ASC, lower(coalesce(rel->>'title','')) ASC`;
+    const fromSql = `FROM blues_artists a, jsonb_array_elements(coalesce(a.discogs_releases, '[]'::jsonb)) AS rel`;
+    const totalR = await getPool().query(`SELECT COUNT(*)::int AS n ${fromSql} ${whereSql}`, params);
+    const total = totalR.rows[0]?.n ?? 0;
+    params.push(limit, offset);
+    const r = await getPool().query(`SELECT a.id   AS artist_id,
+            a.name AS artist_name,
+            a.photo_url,
+            a.discogs_id AS artist_discogs_id,
+            (rel->>'id')::bigint                    AS release_id,
+            COALESCE(rel->>'type', 'release')       AS release_type,
+            COALESCE(rel->>'title','')              AS release_title,
+            NULLIF(rel->>'year','')::int            AS release_year,
+            rel->'label'                            AS release_label,
+            rel->>'role'                            AS role
+       ${fromSql}
+       ${whereSql}
+       ${orderSql}
+       LIMIT $${params.length - 1} OFFSET $${params.length}`, params);
+    return { rows: r.rows, total };
+}
+// Full artist record + matched lyrics + releases sorted oldest→newest.
+// Lyrics match by artist_id (canonical FK) OR — for legacy rows not
+// yet backfilled — by case-insensitive name. The name fallback keeps
+// the artist popup useful even before the import button has been run.
+export async function getBluesArchiveArtist(id) {
+    const ar = await getPool().query(`SELECT * FROM blues_artists WHERE id = $1`, [id]);
+    if (!ar.rows.length)
+        return null;
+    const a = ar.rows[0];
+    const lr = await getPool().query(`SELECT id, page_title, page_url, tuning, scraped_at, updated_at,
+            artist_id, discogs_release_id, discogs_master_id,
+            substring(plaintext, 1, 240) AS snippet
+       FROM blues_lyrics
+      WHERE artist_id = $1
+         OR (artist_id IS NULL AND LOWER(TRIM(artist)) = LOWER($2))
+      ORDER BY page_title ASC`, [id, a.name]);
+    // Tuning breakdown — per-artist counts, descending. Powers the
+    // little chip strip above the lyrics table on the artist popup.
+    const tr = await getPool().query(`SELECT COALESCE(NULLIF(tuning, ''), '(unspecified)') AS tuning,
+            COUNT(*)::int AS n
+       FROM blues_lyrics
+      WHERE artist_id = $1
+         OR (artist_id IS NULL AND LOWER(TRIM(artist)) = LOWER($2))
+      GROUP BY 1
+      ORDER BY n DESC, tuning ASC`, [id, a.name]);
+    // Sort the JSONB releases array oldest→newest (NULL years last).
+    const releases = Array.isArray(a.discogs_releases) ? a.discogs_releases.slice() : [];
+    releases.sort((x, y) => {
+        const xy = Number(x?.year) || 9999;
+        const yy = Number(y?.year) || 9999;
+        if (xy !== yy)
+            return xy - yy;
+        return String(x?.title ?? "").localeCompare(String(y?.title ?? ""));
+    });
+    return { ...a, lyrics: lr.rows, tunings: tr.rows, releases };
+}
+// Patch a single blues_lyrics row's tuning + artist fields. Both are
+// optional — only the keys you pass get updated. Returns the row
+// after the write so the client can repaint without a second fetch.
+// Patch a single blues_lyrics row's editable fields. Only the keys
+// present in `patch` get touched. When `artist` changes, artist_id is
+// re-resolved against blues_artists by case-insensitive name match;
+// a `null` artist clears artist_id too. Caller can also pass
+// `artist_id` directly (e.g. promote-to-artist flow) to short-circuit
+// the lookup.
+export async function updateLyricFields(id, patch) {
+    const sets = [];
+    const params = [];
+    if ("tuning" in patch) {
+        params.push(patch.tuning === "" ? null : patch.tuning ?? null);
+        sets.push(`tuning = $${params.length}`);
+    }
+    if ("artist" in patch) {
+        const name = patch.artist === "" ? null : patch.artist ?? null;
+        params.push(name);
+        sets.push(`artist = $${params.length}`);
+        // Re-resolve artist_id from the new name unless the caller has
+        // also supplied an explicit artist_id (handled below). Null name
+        // → null FK. Postgres-side LOWER(TRIM(...)) keeps the lookup
+        // matching the import/merge convention.
+        if (!("artist_id" in patch)) {
+            if (name) {
+                params.push(name);
+                sets.push(`artist_id = (SELECT id FROM blues_artists WHERE LOWER(name) = LOWER(TRIM($${params.length})) LIMIT 1)`);
+            }
+            else {
+                sets.push(`artist_id = NULL`);
+            }
+        }
+    }
+    if ("artist_id" in patch) {
+        if (patch.artist_id === null) {
+            sets.push(`artist_id = NULL`);
+        }
+        else {
+            params.push(Number(patch.artist_id));
+            sets.push(`artist_id = $${params.length}`);
+        }
+    }
+    if ("page_title" in patch && typeof patch.page_title === "string" && patch.page_title) {
+        params.push(patch.page_title);
+        sets.push(`page_title = $${params.length}`);
+    }
+    if ("discogs_release_id" in patch) {
+        if (patch.discogs_release_id == null) {
+            sets.push(`discogs_release_id = NULL`);
+        }
+        else {
+            params.push(Number(patch.discogs_release_id));
+            sets.push(`discogs_release_id = $${params.length}`);
+        }
+    }
+    if ("discogs_master_id" in patch) {
+        if (patch.discogs_master_id == null) {
+            sets.push(`discogs_master_id = NULL`);
+        }
+        else {
+            params.push(Number(patch.discogs_master_id));
+            sets.push(`discogs_master_id = $${params.length}`);
+        }
+    }
+    if (!sets.length)
+        return await getLyricById(id);
+    params.push(id);
+    await getPool().query(`UPDATE blues_lyrics SET ${sets.join(", ")} WHERE id = $${params.length}`, params);
+    return await getLyricById(id);
+}
+// Merge two blues_artists rows. `intoId` is the survivor; `fromId`
+// gets deleted after its data is migrated:
+//   - lyrics whose artist matched the source row by name are
+//     reassigned to the target row's name (case-insensitive match)
+//   - discogs_releases JSONB arrays are concatenated (deduped by
+//     id + type so a manually-curated target doesn't grow stale
+//     duplicates)
+//   - other blues_artists columns are left as the target's — if
+//     the target lacks data the source had, the admin can re-run
+//     "Get all info from Discogs" afterward to re-enrich
+// Wrapped in a transaction so a mid-merge crash doesn't leave the
+// DB in a half-merged state.
+export async function mergeBluesArtists(fromId, intoId) {
+    if (fromId === intoId)
+        throw new Error("source and target are the same row");
+    const client = await getPool().connect();
+    try {
+        await client.query("BEGIN");
+        const fr = await client.query(`SELECT id, name, discogs_releases FROM blues_artists WHERE id = $1 FOR UPDATE`, [fromId]);
+        const tr = await client.query(`SELECT id, name, discogs_releases FROM blues_artists WHERE id = $1 FOR UPDATE`, [intoId]);
+        if (!fr.rows.length || !tr.rows.length) {
+            await client.query("ROLLBACK");
+            throw new Error("one of the artists doesn't exist");
+        }
+        const from = fr.rows[0];
+        const into = tr.rows[0];
+        // Reassign lyrics. Two-pass: first update by canonical FK (the
+        // common case once backfill has run), then mop up any unmigrated
+        // legacy rows that only join by name. Both passes also update the
+        // display `artist` string so the UI shows the target's name on
+        // every affected row even when a lyric was previously joined only
+        // by string.
+        const lr1 = await client.query(`UPDATE blues_lyrics
+          SET artist_id = $1, artist = $2
+        WHERE artist_id = $3`, [into.id, into.name, from.id]);
+        const lr2 = await client.query(`UPDATE blues_lyrics
+          SET artist_id = $1, artist = $2
+        WHERE artist_id IS NULL
+          AND LOWER(TRIM(artist)) = LOWER($3)`, [into.id, into.name, from.name]);
+        const lyricsReassigned = (lr1.rowCount ?? 0) + (lr2.rowCount ?? 0);
+        // Merge discogs_releases JSONB. Dedupe by id+type.
+        const fromRels = Array.isArray(from.discogs_releases) ? from.discogs_releases : [];
+        const intoRels = Array.isArray(into.discogs_releases) ? into.discogs_releases : [];
+        const seen = new Set(intoRels.map((r) => `${r?.type ?? "release"}:${r?.id}`));
+        let releasesAdded = 0;
+        for (const r of fromRels) {
+            const key = `${r?.type ?? "release"}:${r?.id}`;
+            if (seen.has(key))
+                continue;
+            intoRels.push(r);
+            seen.add(key);
+            releasesAdded++;
+        }
+        if (releasesAdded) {
+            await client.query(`UPDATE blues_artists SET discogs_releases = $1::jsonb WHERE id = $2`, [JSON.stringify(intoRels), intoId]);
+        }
+        // Drop the source row.
+        await client.query(`DELETE FROM blues_artists WHERE id = $1`, [fromId]);
+        await client.query("COMMIT");
+        return {
+            ok: true,
+            fromName: from.name,
+            intoName: into.name,
+            lyricsReassigned,
+            releasesAdded,
+        };
+    }
+    catch (e) {
+        try {
+            await client.query("ROLLBACK");
+        }
+        catch { }
+        throw e;
+    }
+    finally {
+        client.release();
+    }
+}
+// ── Blues Archive aggregate helpers (admin) ──────────────────────────
+// Top-of-page stats strip. One pass per metric — the table is small
+// enough that this is fine; index on artist_id + tuning keeps each
+// query milliseconds.
+export async function getBluesArchiveStats() {
+    const r = await getPool().query(`
+    WITH a AS (
+      SELECT id,
+             COALESCE(jsonb_array_length(discogs_releases), 0) > 0 AS has_releases,
+             EXISTS (SELECT 1 FROM blues_lyrics l
+                      WHERE l.artist_id = blues_artists.id
+                         OR (l.artist_id IS NULL AND LOWER(TRIM(l.artist)) = LOWER(blues_artists.name)))
+               AS has_lyrics
+        FROM blues_artists
+    )
+    SELECT
+      (SELECT COUNT(*)::int FROM blues_artists)                                     AS artists_total,
+      (SELECT COUNT(*)::int FROM a WHERE has_lyrics)                                AS artists_with_lyrics,
+      (SELECT COUNT(*)::int FROM a WHERE has_releases)                              AS artists_with_releases,
+      (SELECT COUNT(*)::int FROM a WHERE has_lyrics AND has_releases)               AS artists_with_both,
+      (SELECT COUNT(*)::int FROM a WHERE NOT has_lyrics AND NOT has_releases)       AS artists_empty,
+      (SELECT COUNT(*)::int FROM blues_lyrics)                                      AS lyrics_total,
+      (SELECT COUNT(*)::int FROM blues_lyrics WHERE artist_id IS NULL)              AS lyrics_orphan,
+      (SELECT COUNT(*)::int FROM blues_lyrics WHERE tuning IS NULL OR tuning = '') AS lyrics_missing_tuning
+  `);
+    return r.rows[0];
+}
+// Recent edits feed across blues_artists + blues_lyrics, newest first.
+// Each row carries `kind` so the UI can label it ("artist" vs "lyric")
+// and link appropriately.
+export async function getRecentBluesEdits(limit = 20) {
+    const lim = Math.max(1, Math.min(200, limit));
+    const r = await getPool().query(`
+    (SELECT 'artist'::text AS kind, id, name AS title, NULL::text AS artist_name,
+            updated_at FROM blues_artists)
+    UNION ALL
+    (SELECT 'lyric'::text  AS kind, l.id, l.page_title AS title,
+            COALESCE(a.name, l.artist) AS artist_name, l.updated_at
+       FROM blues_lyrics l
+       LEFT JOIN blues_artists a ON a.id = l.artist_id)
+    ORDER BY updated_at DESC
+    LIMIT $1
+  `, [lim]);
+    return r.rows;
+}
+// Bulk reassign lyrics to a target artist. Caller supplies either a
+// source artist id (FK match) or a free-text artist string (matches
+// LOWER(TRIM(artist)) for unmigrated rows). Both can be passed
+// together — the union is reassigned. Single transaction so partial
+// failures don't half-rewrite.
+export async function reassignLyrics(opts) {
+    const toId = Number(opts.toArtistId);
+    if (!Number.isFinite(toId))
+        throw new Error("toArtistId required");
+    const client = await getPool().connect();
+    try {
+        await client.query("BEGIN");
+        const tr = await client.query(`SELECT id, name FROM blues_artists WHERE id = $1 FOR UPDATE`, [toId]);
+        if (!tr.rows.length) {
+            await client.query("ROLLBACK");
+            throw new Error("target artist not found");
+        }
+        const to = tr.rows[0];
+        let reassigned = 0;
+        if (opts.fromArtistId != null) {
+            const r = await client.query(`UPDATE blues_lyrics SET artist_id = $1, artist = $2 WHERE artist_id = $3`, [to.id, to.name, Number(opts.fromArtistId)]);
+            reassigned += r.rowCount ?? 0;
+        }
+        if (opts.fromArtistName) {
+            const r = await client.query(`UPDATE blues_lyrics SET artist_id = $1, artist = $2
+          WHERE LOWER(TRIM(COALESCE(artist, ''))) = LOWER(TRIM($3))
+            AND (artist_id IS NULL OR artist_id <> $1)`, [to.id, to.name, opts.fromArtistName]);
+            reassigned += r.rowCount ?? 0;
+        }
+        await client.query("COMMIT");
+        return { ok: true, toName: to.name, reassigned };
+    }
+    catch (e) {
+        try {
+            await client.query("ROLLBACK");
+        }
+        catch { }
+        throw e;
+    }
+    finally {
+        client.release();
+    }
+}
+// Promote an orphan lyric (no artist_id) to a brand-new blues_artists
+// row using its current `artist` string as the name. Also retro-links
+// every other orphan lyric with the same name so a single click
+// rescues the whole batch. Transaction.
+export async function promoteOrphanLyricToArtist(lyricId) {
+    const client = await getPool().connect();
+    try {
+        await client.query("BEGIN");
+        const lr = await client.query(`SELECT id, artist FROM blues_lyrics WHERE id = $1 FOR UPDATE`, [lyricId]);
+        if (!lr.rows.length) {
+            await client.query("ROLLBACK");
+            throw new Error("lyric not found");
+        }
+        const name = String(lr.rows[0].artist || "").trim();
+        if (!name) {
+            await client.query("ROLLBACK");
+            throw new Error("lyric has no artist name to promote");
+        }
+        // If a row already exists with this name (case-insensitive), reuse
+        // it instead of creating a duplicate.
+        let artistId;
+        const existR = await client.query(`SELECT id FROM blues_artists WHERE LOWER(name) = LOWER($1) LIMIT 1`, [name]);
+        if (existR.rows.length) {
+            artistId = existR.rows[0].id;
+        }
+        else {
+            const insR = await client.query(`INSERT INTO blues_artists (name, enrichment_status)
+         VALUES ($1, '{"source":"promote_from_orphan_lyric"}'::jsonb)
+         RETURNING id`, [name]);
+            artistId = insR.rows[0].id;
+        }
+        const upR = await client.query(`UPDATE blues_lyrics
+          SET artist_id = $1, artist = $2
+        WHERE artist_id IS NULL
+          AND LOWER(TRIM(COALESCE(artist, ''))) = LOWER($3)`, [artistId, name, name]);
+        await client.query("COMMIT");
+        return { ok: true, artistId, artistName: name, lyricsLinked: upR.rowCount ?? 0 };
+    }
+    catch (e) {
+        try {
+            await client.query("ROLLBACK");
+        }
+        catch { }
+        throw e;
+    }
+    finally {
+        client.release();
     }
 }
