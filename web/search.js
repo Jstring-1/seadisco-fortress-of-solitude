@@ -875,9 +875,10 @@ function renderResults(items, append = false) {
   if (typeof applyVisitedCards === "function") applyVisitedCards();
   // Admin-only: stamp 🎸 on cards whose artist/release/master is in
   // the Blues Archive. Fire-and-forget, runs after applyVisitedCards
-  // so it doesn't block paint.
+  // so it doesn't block paint. Pass the search results grid
+  // explicitly (we know which one we wrote to).
   if (window._isAdmin && typeof window._baStampCards === "function") {
-    window._baStampCards(filtered).catch(() => {});
+    window._baStampCards(filtered, grid).catch(() => {});
   }
   // "Hard to Find" mode — decorate cards that have no embedded YT
   // videos with a small purple 🎵 badge so users can spot contribution
@@ -1300,11 +1301,11 @@ function _sdRenderRandomSlice() {
   }
   _randomShown += slice.length;
   // Admin-only: stamp 🎸 on any cards whose artist is in the Blues
-  // Archive. The strip surfaces (recent / suggestions / submitted /
-  // feed) all paint into #random-records-grid, which _baStampCards
-  // now recognizes too.
+  // Archive. Pass the strip's own grid explicitly so the lookup
+  // doesn't land on #results (the search grid is in the DOM at all
+  // times and would silently absorb the auto-resolution).
   if (window._isAdmin && typeof window._baStampCards === "function") {
-    window._baStampCards(slice).catch(() => {});
+    window._baStampCards(slice, grid).catch(() => {});
   }
 }
 window._sdRenderRandomSlice = _sdRenderRandomSlice;
