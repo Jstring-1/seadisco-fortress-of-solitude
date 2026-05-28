@@ -1039,6 +1039,144 @@ async function bluesDbRunDiscogsPicker() {
     if (status) status.textContent = "";
   }
 }
+// ── Merge picker ─────────────────────────────────────────────────────
+// Opened from the editor's "Merge into…" button. Lets the admin pick
+// a target blues_artists row; on confirm, calls POST /api/blues-archive/merge
+// which reassigns lyrics, dedupes discogs_releases, and deletes the
+// source. Then closes the editor and refreshes the list.
+let _bluesMergeDebounce = null;
+function bluesDbOpenMergePicker() {
+  const id = _bluesDbState.editingId;
+  if (!id) return;
+  const form = document.getElementById("blues-editor-form");
+  const nameVal = form?.elements?.namedItem("name")?.value?.trim() || "";
+  const overlay = document.getElementById("blues-merge-picker");
+  const qInput = document.getElementById("blues-merge-picker-q");
+  const status = document.getElementById("blues-merge-picker-status");
+  const results = document.getElementById("blues-merge-picker-results");
+  const srcLbl = document.getElementById("blues-merge-source-name");
+  if (!overlay || !qInput || !results) return;
+  if (srcLbl) srcLbl.textContent = nameVal || `#${id}`;
+  // Seed the search box with the current name so the top hit is
+  // usually the obvious dup. Admin can refine if not.
+  qInput.value = nameVal;
+  if (status) status.textContent = "";
+  results.innerHTML = `<div style="color:#777">Loading candidates…</div>`;
+  overlay.style.display = "flex";
+  setTimeout(() => qInput.focus(), 30);
+  bluesDbRunMergePicker();
+}
+function bluesDbCloseMergePicker() {
+  const overlay = document.getElementById("blues-merge-picker");
+  if (overlay) overlay.style.display = "none";
+}
+function bluesDbRunMergePickerDebounced() {
+  if (_bluesMergeDebounce) clearTimeout(_bluesMergeDebounce);
+  _bluesMergeDebounce = setTimeout(bluesDbRunMergePicker, 250);
+}
+async function bluesDbRunMergePicker() {
+  const sourceId = _bluesDbState.editingId;
+  if (!sourceId) return;
+  const qInput = document.getElementById("blues-merge-picker-q");
+  const status = document.getElementById("blues-merge-picker-status");
+  const results = document.getElementById("blues-merge-picker-results");
+  if (!qInput || !results) return;
+  const q = qInput.value.trim();
+  if (status) status.textContent = "Searching…";
+  try {
+    const r = await apiFetch(
+      "/api/admin/blues/list?limit=25&search=" + encodeURIComponent(q),
+    );
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      results.innerHTML = `<div style="color:#a55">${(err.error || "Search failed").replace(/</g,"&lt;")}</div>`;
+      if (status) status.textContent = "";
+      return;
+    }
+    const data = await r.json();
+    // Filter out the source row itself — merging into yourself errors.
+    const rows = (Array.isArray(data?.rows) ? data.rows : []).filter(
+      (row) => Number(row.id) !== Number(sourceId),
+    );
+    if (status) status.textContent = `${rows.length} match${rows.length === 1 ? "" : "es"}`;
+    if (!rows.length) {
+      results.innerHTML = `<div style="color:#777">No other artists match "${q.replace(/</g,"&lt;")}".</div>`;
+      return;
+    }
+    const esc = (s) => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
+    results.innerHTML = `<ul style="list-style:none;margin:0;padding:0">${rows.map((row) => {
+      const lyricsCount = Number(row.lyrics_count ?? row.lyric_count ?? 0);
+      const releasesCount = Array.isArray(row.discogs_releases) ? row.discogs_releases.length : 0;
+      const discogsId = row.discogs_id ?? "";
+      const subtitle = [
+        discogsId ? `Discogs ${esc(discogsId)}` : "",
+        lyricsCount ? `${lyricsCount} lyric${lyricsCount === 1 ? "" : "s"}` : "",
+        releasesCount ? `${releasesCount} release${releasesCount === 1 ? "" : "s"}` : "",
+      ].filter(Boolean).join(" · ");
+      return `<li style="display:flex;align-items:center;gap:0.6rem;padding:0.4rem 0.3rem;border-bottom:1px solid rgba(255,255,255,0.06)">
+        <span style="flex:1;min-width:0">
+          <span style="color:#ddd;font-weight:600">${esc(row.name)}</span>
+          <div style="font-size:0.7rem;color:#777">id ${esc(row.id)}${subtitle ? " · " + subtitle : ""}</div>
+        </span>
+        <button type="button" class="admin-btn" onclick="bluesDbPickMergeTarget(${Number(row.id)}, ${JSON.stringify(String(row.name))})">Merge here</button>
+      </li>`;
+    }).join("")}</ul>`;
+  } catch (e) {
+    results.innerHTML = `<div style="color:#a55">Search error: ${String(e).replace(/</g,"&lt;")}</div>`;
+    if (status) status.textContent = "";
+  }
+}
+async function bluesDbPickMergeTarget(targetId, targetName) {
+  const sourceId = _bluesDbState.editingId;
+  if (!sourceId) return;
+  const form = document.getElementById("blues-editor-form");
+  const sourceName = form?.elements?.namedItem("name")?.value?.trim() || `#${sourceId}`;
+  const msg =
+    `Merge "${sourceName}" INTO "${targetName}"?\n\n` +
+    `• Every lyric currently linked to "${sourceName}" (by FK or name match) will be reassigned to "${targetName}".\n` +
+    `• "${targetName}"'s discogs_releases will absorb any new entries from "${sourceName}".\n` +
+    `• Other metadata on "${targetName}" wins — fields like notes, bio, photos on "${sourceName}" are LOST.\n` +
+    `• "${sourceName}" (row #${sourceId}) will be deleted.\n\n` +
+    `This cannot be undone. Continue?`;
+  if (!confirm(msg)) return;
+  try {
+    const r = await apiFetch("/api/blues-archive/merge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fromId: sourceId, intoId: targetId }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert("Merge failed: " + (err.error ?? r.status));
+      return;
+    }
+    const out = await r.json();
+    bluesDbCloseMergePicker();
+    bluesDbCloseEditor();
+    // List refresh — the source row is gone, target's lyric count grew.
+    if (typeof bluesDbRenderList === "function") {
+      try { await _bluesDbLoad?.(); } catch {}
+      bluesDbRenderList();
+    }
+    // Also refresh stats strip + archive list on the public-facing
+    // Blues Archive view so the change reflects everywhere it shows.
+    try { window._baLoadStats?.(); } catch {}
+    try { window._baLoadList?.(); } catch {}
+    if (typeof showToast === "function") {
+      showToast(`Merged into "${out.intoName}" (${out.lyricsReassigned} lyric${out.lyricsReassigned === 1 ? "" : "s"} moved)`, "ok");
+    } else {
+      alert(`Merged. ${out.lyricsReassigned} lyrics moved to "${out.intoName}".`);
+    }
+  } catch (e) {
+    alert("Merge failed: " + e);
+  }
+}
+window.bluesDbOpenMergePicker = bluesDbOpenMergePicker;
+window.bluesDbCloseMergePicker = bluesDbCloseMergePicker;
+window.bluesDbRunMergePicker = bluesDbRunMergePicker;
+window.bluesDbRunMergePickerDebounced = bluesDbRunMergePickerDebounced;
+window.bluesDbPickMergeTarget = bluesDbPickMergeTarget;
+
 async function bluesDbPickDiscogsCandidate(discogsId) {
   const id = _bluesDbState.editingId;
   if (!id) return;
@@ -1075,6 +1213,7 @@ async function bluesDbOpenEditor(id) {
   const mbBtn = document.getElementById("blues-editor-mb");
   const wikiBtn = document.getElementById("blues-editor-wiki");
   const discogsBtn = document.getElementById("blues-editor-discogs");
+  const mergeBtn = document.getElementById("blues-editor-merge");
   const ytBtn = document.getElementById("blues-editor-yt");
   form.reset();
   if (id) {
@@ -1083,6 +1222,7 @@ async function bluesDbOpenEditor(id) {
     mbBtn.style.display = "";
     wikiBtn.style.display = "";
     discogsBtn.style.display = "";
+    if (mergeBtn) mergeBtn.style.display = "";
     ytBtn.style.display = "";
     try {
       const r = await apiFetch("/api/admin/blues/" + id);
@@ -1108,6 +1248,7 @@ async function bluesDbOpenEditor(id) {
     mbBtn.style.display = "none";
     wikiBtn.style.display = "none";
     discogsBtn.style.display = "none";
+    if (mergeBtn) mergeBtn.style.display = "none";
     ytBtn.style.display = "none";
   }
   _bluesDbUpdateEditorLinks();
