@@ -19,7 +19,7 @@ let _baListRowsCache = [];
 //   "", "with_both", "with_lyrics_only", "with_releases_only", "empty"
 let _baListCategory = "";
 const _baListSort = { key: "name", dir: "asc" };
-const _BA_LIST_TYPES = { name: "str", discogs_id: "num", lyrics_count: "num", releases_count: "num" };
+const _BA_LIST_TYPES = { name: "str", discogs_id: "num", first_release_year: "num", lyrics_count: "num", releases_count: "num" };
 
 let _baDetailArtist = null;
 const _baLyricsSort = { key: "page_title", dir: "asc" };
@@ -163,10 +163,11 @@ function _baRenderListTable() {
   rowsEl.innerHTML = `
     <table class="api-log-table" style="font-size:0.86rem;width:100%">
       <thead><tr>
-        ${_baSortTh("Name",       "name",            S, "_baSortList")}
-        ${_baSortTh("Discogs ID", "discogs_id",      S, "_baSortList")}
-        ${_baSortTh("Lyrics",     "lyrics_count",    S, "_baSortList", "text-align:right")}
-        ${_baSortTh("Releases",   "releases_count",  S, "_baSortList", "text-align:right")}
+        ${_baSortTh("Name",       "name",               S, "_baSortList")}
+        ${_baSortTh("Discogs ID", "discogs_id",         S, "_baSortList")}
+        ${_baSortTh("Year",       "first_release_year", S, "_baSortList", "text-align:right")}
+        ${_baSortTh("Lyrics",     "lyrics_count",       S, "_baSortList", "text-align:right")}
+        ${_baSortTh("Releases",   "releases_count",     S, "_baSortList", "text-align:right")}
       </tr></thead>
       <tbody>${rows.map(row => {
         // Name cell uses entityLookupLinkHtml so clicking the text
@@ -184,9 +185,15 @@ function _baRenderListTable() {
         const didHtml = row.discogs_id
           ? `<a href="https://www.discogs.com/artist/${row.discogs_id}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--accent);text-decoration:none;font-variant-numeric:tabular-nums" title="Open on Discogs.com ↗">${row.discogs_id}</a>`
           : `<span style="color:var(--muted)">—</span>`;
+        // first_release_year: server computes LEAST(MB first_recording_year,
+        // MIN(discogs_releases.year)). Renders as a plain year cell;
+        // dash when neither MB nor Discogs has supplied one yet.
+        const yr = Number.isFinite(Number(row.first_release_year)) ? Number(row.first_release_year) : null;
+        const yrHtml = yr ? `<span style="font-variant-numeric:tabular-nums">${yr}</span>` : `<span style="color:var(--muted)">—</span>`;
         return `<tr style="cursor:pointer" onclick="_baOpenArtist(${row.id})">
           <td style="font-weight:600;color:var(--text)">${nameHtml}</td>
           <td style="font-size:0.78rem">${didHtml}</td>
+          <td style="text-align:right;font-size:0.82rem">${yrHtml}</td>
           <td style="text-align:right;color:${row.lyrics_count ? "var(--accent)" : "var(--muted)"}">${row.lyrics_count || ""}</td>
           <td style="text-align:right;color:${row.releases_count ? "var(--accent)" : "var(--muted)"}">${row.releases_count || ""}</td>
         </tr>`;
