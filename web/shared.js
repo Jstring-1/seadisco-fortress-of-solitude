@@ -1453,7 +1453,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260528.0838";
+  const SITE_VERSION = "build 20260528.0903";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -1975,6 +1975,14 @@ function openLookupPopup(ev, scope, label, ctx) {
   // option in everyday use and the visual primary slot is better spent
   // on the most-used SeaDisco / Wikipedia / YouTube entries.
   const internal = [];
+  // Admin-only EDIT — only relevant for artist scope. Opens the Blues
+  // Archive artist detail popup if the artist is in the archive; if
+  // it isn't, offers to add them. Sits at the top of the popup since
+  // curators reach for it more than the search buttons when they're
+  // actively cleaning up data.
+  if (window._isAdmin && scope === "artist") {
+    internal.push({ key: "edit", icon: "✎", text: "Edit in Blues Archive" });
+  }
   // SeaDisco / collection use the same line-art SVGs as the navbar so
   // the popup feels like an extension of the nav. Wrapped in a span
   // tagged `lookup-popup-icon-svg` so CSS forces white stroke (the
@@ -2093,6 +2101,44 @@ function openLookupPopup(ev, scope, label, ctx) {
               tryToast(`Copied: ${preview}`);
             } catch {
               tryToast("Could not copy", "error");
+            }
+          })();
+        }
+        else if (b.key === "edit") {
+          // Resolve to archive row → open popup. If not in archive,
+          // offer to add via the existing +blues add-by-id endpoint
+          // (when we have a Discogs id) or just tell the user.
+          (async () => {
+            try {
+              const r = await apiFetch("/api/blues-archive/check", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  artistNames: [label, label.replace(/\s*\(\d+\)\s*$/, "").trim()].filter(Boolean),
+                  artistIds:   entityId ? [Number(entityId)] : [],
+                }),
+              });
+              if (!r.ok) { showToast?.("Couldn't check archive", "error"); return; }
+              const result = await r.json();
+              const hit = (entityId && result.artistsById?.[String(entityId)])
+                       || result.artists?.[String(label).trim().toLowerCase()]
+                       || result.artists?.[String(label).replace(/\s*\(\d+\)\s*$/, "").trim().toLowerCase()];
+              if (hit) {
+                if (typeof window._baOpenArtistFromBadge === "function") {
+                  window._baOpenArtistFromBadge(hit.id);
+                } else {
+                  window.location.href = `/?v=blues-archive&baArtist=${hit.id}`;
+                }
+              } else if (entityId && typeof window._bluesAddArtist === "function") {
+                if (confirm(`"${label}" isn't in the Blues Archive yet. Add now?`)) {
+                  window._bluesAddArtist(Number(entityId), label, null);
+                }
+              } else {
+                showToast?.(`"${label}" isn't in the Blues Archive`, "info");
+              }
+            } catch (err) {
+              showToast?.("Couldn't open editor", "error");
+              console.warn("[edit lookup popup]", err);
             }
           })();
         }
