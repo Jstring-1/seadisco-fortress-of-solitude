@@ -1019,6 +1019,17 @@ export async function initDb() {
        AND l.artist IS NOT NULL
        AND LOWER(TRIM(l.artist)) = LOWER(a.name)
   `);
+
+  // Tuning normalization: bluesman slang and the modern canonical name
+  // are the same physical tuning. Merge so the dropdown / breakdown
+  // doesn't split equivalent rows.
+  //   "Open G (Spanish)"     → "Open G"
+  //   "Open D (Vestapol)"    → "Open D"
+  //   "Cross Note"           → "Open Em (Cross Note)"
+  // Idempotent (rerunning is a no-op once values are normalized).
+  await getPool().query(`UPDATE blues_lyrics SET tuning = 'Open G' WHERE tuning = 'Open G (Spanish)'`);
+  await getPool().query(`UPDATE blues_lyrics SET tuning = 'Open D' WHERE tuning = 'Open D (Vestapol)'`);
+  await getPool().query(`UPDATE blues_lyrics SET tuning = 'Open Em (Cross Note)' WHERE tuning = 'Cross Note'`);
 }
 
 // ── Blues DB helpers (admin-only) ──────────────────────────────────────

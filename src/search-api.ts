@@ -8712,17 +8712,22 @@ function _lyricsExtractTuning(text: string): string | null {
     const m = text.match(re);
     if (m && m[1]) {
       const raw = m[1].trim();
-      // Canonicalize aliases
+      // Canonicalize aliases. Spanish / Vestapol / Sebastopol are
+      // bluesman slang for Open G / Open D respectively — same
+      // physical tunings, merged into the canonical names so filter
+      // buckets aren't split. Cross-note (≈ Open Em / EBEGBE) keeps
+      // the historical label as a parenthetical since "Cross Note"
+      // is the term you'd actually hear on the recordings.
       const canonical: Record<string, string> = {
         "standard":    "Standard",
         "regular":     "Standard",
         "eadgbe":      "Standard",
-        "spanish":     "Open G (Spanish)",
-        "vestapol":    "Open D (Vestapol)",
-        "sebastopol":  "Open D (Vestapol)",
-        "cross note":  "Cross Note",
-        "cross-note":  "Cross Note",
-        "crossnote":   "Cross Note",
+        "spanish":     "Open G",
+        "vestapol":    "Open D",
+        "sebastopol":  "Open D",
+        "cross note":  "Open Em (Cross Note)",
+        "cross-note":  "Open Em (Cross Note)",
+        "crossnote":   "Open Em (Cross Note)",
       };
       const key = raw.toLowerCase();
       if (canonical[key]) return canonical[key];
