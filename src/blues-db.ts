@@ -832,21 +832,23 @@ async function _enrichOneFromDiscogsArtist(
   }
   if (collabs.length !== existingCollabs.length) patch.collaborators = collabs;
 
-  // First image → photo_url. Default-conservative (only fill blank);
-  // force mode overwrites — the typical use case is the admin just
-  // fixed an incorrect discogs_id and needs the stale photo replaced
-  // with the right artist's.
-  //
-  // Force + no Discogs image: actively CLEAR the existing photo_url.
-  // The stale photo came from the prior (wrong) discogs_id, so
-  // leaving it in place after the admin's correction would lie about
-  // who the photo depicts. Better to show a placeholder until the
-  // admin uploads/pastes a correct URL.
+  // Photo handling.
+  //   Default (non-force, bulk sweep): fill photo_url only when blank,
+  //     using Discogs's first image. Never trample manual edits.
+  //   Force (per-row "Refresh from Discogs" button): ALWAYS clear the
+  //     existing photo_url. After an admin changes a discogs_id the
+  //     prior photo is by definition from the wrong artist, and
+  //     Discogs's auto-image for pre-WWII blues artists is almost
+  //     always also wrong (modern namesake hits). Cleaner UX is to
+  //     leave the placeholder up so the curator pastes a known-good
+  //     URL manually rather than playing whack-a-mole with a second
+  //     button. To opt back in to the Discogs image, paste it from
+  //     the "Open on Discogs" link.
   const newPhoto = Array.isArray(data.images) && data.images[0]?.uri ? data.images[0].uri : null;
-  if (newPhoto) {
-    if (force || !row.photo_url) patch.photo_url = newPhoto;
-  } else if (force && row.photo_url) {
-    patch.photo_url = null;
+  if (force) {
+    if (row.photo_url) patch.photo_url = null;
+  } else if (newPhoto && !row.photo_url) {
+    patch.photo_url = newPhoto;
   }
 
   // External URLs — store the full array so we can render them later.
