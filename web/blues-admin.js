@@ -238,8 +238,21 @@ function _bluesDbFilterRows(rows) {
 function bluesDbRenderList() {
   const list = document.getElementById("blues-list");
   // No admin Blues DB panel on this page (main site loads
-  // blues-admin.js only for the editor overlay) — bail silently.
-  if (!list) return;
+  // blues-admin.js only for the editor overlay). When that's the
+  // case, refresh the Discovery-side Blues Archive grid instead so
+  // inline editor actions (Refresh from Discogs, Pick Discogs match,
+  // per-row enrich, etc.) reflect immediately in the row behind the
+  // overlay. Otherwise the user closes the editor and the row is
+  // still showing the pre-edit photo / id / name.
+  if (!list) {
+    if (typeof window._baLoadList === "function") {
+      try { window._baLoadList(); } catch {}
+    }
+    if (typeof window._baLoadStats === "function") {
+      try { window._baLoadStats(); } catch {}
+    }
+    return;
+  }
   if (!_bluesDbState.rows.length) {
     list.innerHTML = '<div style="padding:0.6rem;color:var(--muted)">No artists yet. Click <strong>Seed from Discogs</strong> or <strong>+ Add artist</strong>.</div>';
     bluesDbRenderPager();
