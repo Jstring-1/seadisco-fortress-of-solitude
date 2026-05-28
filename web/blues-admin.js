@@ -527,9 +527,11 @@ async function bluesDbExportCsv() {
   // Use apiFetch so the Bearer token comes along, then trigger a blob
   // download client-side — direct anchor with `?token=…` would leak the
   // session token into browser history.
+  // Button null-safe: the Discovery view has a different button id, so
+  // we just no-op the loading-state UI when it's missing.
   const btn = document.getElementById("blues-export-btn");
-  const orig = btn.textContent;
-  btn.disabled = true; btn.textContent = "Exporting…";
+  const orig = btn ? btn.textContent : "";
+  if (btn) { btn.disabled = true; btn.textContent = "Exporting…"; }
   try {
     const r = await apiFetch("/api/admin/blues/export.csv?sort=" + encodeURIComponent(_bluesDbState.sort) + "&order=" + encodeURIComponent(_bluesDbState.order));
     if (!r.ok) {
@@ -545,7 +547,7 @@ async function bluesDbExportCsv() {
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
   } catch (e) { alert("Export failed: " + e); }
-  finally { btn.disabled = false; btn.textContent = orig; }
+  finally { if (btn) { btn.disabled = false; btn.textContent = orig; } }
 }
 
 async function bluesDbDeleteAll() {
