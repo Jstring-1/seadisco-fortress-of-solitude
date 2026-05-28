@@ -8143,6 +8143,48 @@ app.get("/api/admin/blues/export.csv", async (req, res) => {
   }
 });
 
+// GET /api/admin/lyrics/export.csv — dump every blues_lyrics row.
+// Mirrors the artists CSV: UTF-8 BOM, Excel-friendly quoting, formula-
+// injection guard on cells starting with =/@/+/-. plaintext is the
+// big column; everything else is a couple-hundred bytes at most.
+app.get("/api/admin/lyrics/export.csv", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const r = await getPool().query(
+      `SELECT id, source_host, page_title, page_url, artist, artist_id,
+              tuning, discogs_release_id, discogs_master_id,
+              scraped_at, updated_at, wikitext, plaintext
+         FROM blues_lyrics
+         ORDER BY page_title ASC`,
+    );
+    const cols = [
+      "id", "source_host", "page_title", "page_url",
+      "artist", "artist_id", "tuning",
+      "discogs_release_id", "discogs_master_id",
+      "scraped_at", "updated_at",
+      "wikitext", "plaintext",
+    ];
+    const csvCell = (v: any): string => {
+      if (v == null) return "";
+      if (Array.isArray(v) || typeof v === "object") v = JSON.stringify(v);
+      const s = String(v);
+      if (/[",\n\r]/.test(s) || /^[=@+\-]/.test(s)) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+    const header = cols.join(",");
+    const body = r.rows.map(row => cols.map(c => csvCell(row[c])).join(",")).join("\n");
+    const csv = "﻿" + header + "\n" + body + "\n";
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="seadisco-lyrics-${new Date().toISOString().slice(0, 10)}.csv"`);
+    res.send(csv);
+  } catch (err: any) {
+    console.error("[lyrics export.csv]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
+});
+
 // Delete every row in blues_artists. Admin-only. Used to wipe a noisy
 // seed (e.g. the Wikidata pass that smuggled non-blues artists in via
 // loose genre tags) before re-running.

@@ -3689,9 +3689,15 @@ async function _trackYtOpenAlbumSuggest(el) {
   // tailed with the literal word "album" to bias toward full-album
   // uploads, but it stifled too many otherwise-valid results.
   const _albumTitleHasLive = /\blive\b/i.test(albumTitle || "");
+  // Strip Discogs's " (N)" disambiguator from the artist name — it's
+  // a catalog convention, not how a YouTuber would title an upload.
+  // Quotes still wrap the artist so multi-word names stay phrasal.
+  // The release title goes in unquoted (per request) since strict-
+  // phrase matching on long album titles drops too many candidates.
+  const ytArtist = String(albumArtist || "").replace(/\s*\(\d+\)\s*$/, "").trim();
   const q = [
-    albumArtist ? `"${albumArtist}"` : "",
-    albumTitle ? `"${albumTitle}"` : "",
+    ytArtist ? `"${ytArtist}"` : "",
+    albumTitle ? albumTitle : "",
     _albumTitleHasLive ? "" : "-live",
     "-karaoke",
   ].filter(Boolean).join(" ");
