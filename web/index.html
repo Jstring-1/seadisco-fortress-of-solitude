@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260528.1452" />
+  <link rel="stylesheet" href="/style.css?v=20260528.1534" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260528.1452"></script>
+<script defer src="/shared.js?v=20260528.1534"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -1032,6 +1032,7 @@ e.g.  miles davis | coltrane
     <div id="blues-archive-subtabs" style="display:flex;gap:0.4rem;margin-bottom:0.6rem;border-bottom:1px solid var(--border);padding-bottom:0.4rem">
       <button type="button" class="archive-btn ba-subtab is-active" data-ba-tab="artists" onclick="_baSwitchSubtab('artists')">Artists</button>
       <button type="button" class="archive-btn ba-subtab" data-ba-tab="lyrics" onclick="_baSwitchSubtab('lyrics')">Lyrics</button>
+      <button type="button" class="archive-btn ba-subtab" data-ba-tab="releases" onclick="_baSwitchSubtab('releases')">Releases</button>
     </div>
     <div id="blues-archive-artists-panel">
       <input id="blues-archive-search" type="search" placeholder="Search artists by name" style="width:100%;padding:0.5rem 0.7rem;font-size:0.9rem;margin-bottom:0.6rem" oninput="_bluesArchiveDebouncedSearch()">
@@ -1071,6 +1072,32 @@ e.g.  miles davis | coltrane
       </div>
       <div id="blues-archive-lyrics-rows" style="font-size:0.86rem;color:var(--muted)">Loading…</div>
       <div id="blues-archive-lyrics-pager" style="margin-top:0.6rem;display:flex;gap:0.4rem;align-items:center;font-size:0.78rem"></div>
+    </div>
+    <div id="blues-archive-releases-panel" style="display:none">
+      <!-- Flat list of every release stored across all blues_artists.discogs_releases.
+           Search hits release title OR artist name. Year is a single int (use the
+           Year column header to sort). Type filter narrows to release vs master,
+           role narrows to Main credits vs appearances/producer credits. -->
+      <div style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.6rem;flex-wrap:wrap">
+        <input id="blues-archive-releases-search" type="search" placeholder="Search title or artist…" style="flex:1;min-width:220px;padding:0.5rem 0.7rem;font-size:0.9rem" oninput="_baReleasesDebouncedSearch()">
+        <input id="blues-archive-releases-year" type="number" placeholder="Year" min="1850" max="2100" style="width:90px;padding:0.45rem 0.5rem;font-size:0.85rem" oninput="_baReleasesDebouncedSearch()">
+        <select id="blues-archive-releases-type" onchange="_baReleasesApplyFilters()" style="padding:0.45rem 0.5rem;font-size:0.85rem">
+          <option value="">All types</option>
+          <option value="release">Release</option>
+          <option value="master">Master</option>
+        </select>
+        <select id="blues-archive-releases-role" onchange="_baReleasesApplyFilters()" style="padding:0.45rem 0.5rem;font-size:0.85rem">
+          <option value="">All roles</option>
+          <option value="Main">Main</option>
+          <option value="TrackAppearance">TrackAppearance</option>
+          <option value="Producer">Producer</option>
+          <option value="UnofficialRelease">UnofficialRelease</option>
+        </select>
+        <button type="button" id="blues-archive-releases-clear" class="archive-btn" onclick="_baReleasesClearFilters()" style="display:none" title="Clear search, year, type, and role filters; back to the full list.">Clear filters</button>
+        <span id="blues-archive-releases-count" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
+      </div>
+      <div id="blues-archive-releases-rows" style="font-size:0.86rem;color:var(--muted)">Loading…</div>
+      <div id="blues-archive-releases-pager" style="margin-top:0.6rem;display:flex;gap:0.4rem;align-items:center;font-size:0.78rem"></div>
     </div>
   </div>
   <!-- Detail panel — populated when an artist row is clicked.
@@ -1595,13 +1622,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260528.1452"></script>
-<script defer src="/search.js?v=20260528.1452"></script>
-<script defer src="/collection.js?v=20260528.1452"></script>
+<script defer src="/utils.js?v=20260528.1534"></script>
+<script defer src="/search.js?v=20260528.1534"></script>
+<script defer src="/collection.js?v=20260528.1534"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260528.1452"></script>
-<script defer src="/app.js?v=20260528.1452"></script>
+<script defer src="/modal.js?v=20260528.1534"></script>
+<script defer src="/app.js?v=20260528.1534"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1612,13 +1639,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260528.1452"></script>
-<script defer src="/queue.js?v=20260528.1452"></script>
+<script defer src="/loc.js?v=20260528.1534"></script>
+<script defer src="/queue.js?v=20260528.1534"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260528.1452";
+  window._SD_LAZY_VERSION = "20260528.1534";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1648,8 +1675,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260528.1452"></script>
-<script defer src="/offline.js?v=20260528.1452"></script>
+<script defer src="/idb.js?v=20260528.1534"></script>
+<script defer src="/offline.js?v=20260528.1534"></script>
 
 </body>
 </html>

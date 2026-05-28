@@ -998,7 +998,7 @@ window.bluesArchivePurgeImports = bluesArchivePurgeImports;
 // artist. Reuses /api/admin/lyrics (admin-gated, which matches the
 // archive's own gate) for data, and the existing _baOpenLyric overlay
 // for viewing. Tuning dropdown is populated lazily from /tunings.
-let _baSubtab = "artists"; // "artists" | "lyrics"
+let _baSubtab = "artists"; // "artists" | "lyrics" | "releases"
 let _baLyricsPage = 0;
 const _BA_LYRICS_LIMIT = 100;
 let _baLyricsTotal = 0;
@@ -1011,18 +1011,22 @@ const _BA_LYRICS_LIST_TYPES = { page_title: "str", artist: "str", tuning: "str",
 let _baLyricsTuningsLoaded = false;
 
 function _baSwitchSubtab(tab) {
-  _baSubtab = tab === "lyrics" ? "lyrics" : "artists";
+  _baSubtab = (tab === "lyrics" || tab === "releases") ? tab : "artists";
   // Toggle button active state
   document.querySelectorAll("#blues-archive-subtabs .ba-subtab").forEach(b => {
     b.classList.toggle("is-active", b.dataset.baTab === _baSubtab);
   });
   const ap = document.getElementById("blues-archive-artists-panel");
   const lp = document.getElementById("blues-archive-lyrics-panel");
-  if (ap) ap.style.display = _baSubtab === "artists" ? "" : "none";
-  if (lp) lp.style.display = _baSubtab === "lyrics"  ? "" : "none";
+  const rp = document.getElementById("blues-archive-releases-panel");
+  if (ap) ap.style.display = _baSubtab === "artists"  ? "" : "none";
+  if (lp) lp.style.display = _baSubtab === "lyrics"   ? "" : "none";
+  if (rp) rp.style.display = _baSubtab === "releases" ? "" : "none";
   if (_baSubtab === "lyrics") {
     if (!_baLyricsTuningsLoaded) _baLoadTunings();
     _baLoadLyrics();
+  } else if (_baSubtab === "releases") {
+    _baLoadReleases();
   }
 }
 window._baSwitchSubtab = _baSwitchSubtab;
@@ -1239,6 +1243,159 @@ function _baLyricsGoToPage(p) {
   _baLoadLyrics();
 }
 window._baLyricsGoToPage = _baLyricsGoToPage;
+
+// ── Releases sub-tab ──────────────────────────────────────────────────
+// Flat view over every blues_artists.discogs_releases entry. Powered
+// by GET /api/blues-archive/releases (admin-gated). Filters: free-text
+// search over title OR artist name, year (single int), type
+// (release | master), role (Main | TrackAppearance | …). Sort is
+// server-side; tie-break is artist then title for stability.
+let _baReleasesPage = 0;
+const _BA_RELEASES_LIMIT = 100;
+let _baReleasesTotal = 0;
+let _baReleasesSearchTimer = null;
+let _baReleasesRowsCache = [];
+const _baReleasesListSort = { key: "year", dir: "desc" };
+const _BA_RELEASES_LIST_TYPES = { artist: "str", title: "str", year: "num", type: "str", role: "str" };
+
+async function _baLoadReleases() {
+  const rowsEl  = document.getElementById("blues-archive-releases-rows");
+  const countEl = document.getElementById("blues-archive-releases-count");
+  if (!rowsEl) return;
+  const q     = (document.getElementById("blues-archive-releases-search")?.value || "").trim();
+  const year  = (document.getElementById("blues-archive-releases-year")?.value || "").trim();
+  const type  = document.getElementById("blues-archive-releases-type")?.value || "";
+  const role  = document.getElementById("blues-archive-releases-role")?.value || "";
+  const params = new URLSearchParams();
+  if (q)    params.set("q",    q);
+  if (year) params.set("year", year);
+  if (type) params.set("type", type);
+  if (role) params.set("role", role);
+  if (_baReleasesListSort?.key) {
+    params.set("sort",  _baReleasesListSort.key);
+    params.set("order", _baReleasesListSort.dir);
+  }
+  params.set("limit",  String(_BA_RELEASES_LIMIT));
+  params.set("offset", String(_baReleasesPage * _BA_RELEASES_LIMIT));
+  // Show the "Clear filters" button when any filter is active.
+  const clearBtn = document.getElementById("blues-archive-releases-clear");
+  if (clearBtn) clearBtn.style.display = (q || year || type || role) ? "" : "none";
+  const scrollY = window.scrollY;
+  rowsEl.classList.add("ba-loading");
+  try {
+    const r = await apiFetch(`/api/blues-archive/releases?${params}`);
+    if (!r.ok) { rowsEl.innerHTML = `<p style="color:#e88">Failed: HTTP ${r.status}</p>`; return; }
+    const { rows = [], total = 0 } = await r.json();
+    _baReleasesTotal = total;
+    if (countEl) countEl.textContent = total
+      ? `${total.toLocaleString()} release${total === 1 ? "" : "s"}`
+      : "No matches.";
+    _baReleasesRowsCache = rows;
+    _baRenderReleasesTable();
+    _baRenderReleasesPager();
+    requestAnimationFrame(() => window.scrollTo(0, Math.min(scrollY, document.documentElement.scrollHeight - window.innerHeight)));
+  } catch (e) {
+    rowsEl.innerHTML = `<p style="color:#e88">Failed: ${escHtml(e?.message || String(e))}</p>`;
+  } finally {
+    rowsEl.classList.remove("ba-loading");
+  }
+}
+
+function _baRenderReleasesTable() {
+  const rowsEl = document.getElementById("blues-archive-releases-rows");
+  if (!rowsEl) return;
+  const rows = _baReleasesRowsCache;
+  if (!rows.length) {
+    rowsEl.innerHTML = `<p style="color:var(--muted);padding:0.5rem 0">No matches.</p>`;
+    return;
+  }
+  const S = _baReleasesListSort;
+  rowsEl.innerHTML = `
+    <table class="api-log-table" style="font-size:0.84rem;width:100%">
+      <thead><tr>
+        ${_baSortTh("Year",   "year",   S, "_baSortReleasesList", "width:60px;text-align:right")}
+        ${_baSortTh("Title",  "title",  S, "_baSortReleasesList")}
+        ${_baSortTh("Artist", "artist", S, "_baSortReleasesList")}
+        ${_baSortTh("Type",   "type",   S, "_baSortReleasesList", "width:70px")}
+        ${_baSortTh("Role",   "role",   S, "_baSortReleasesList", "width:100px")}
+        <th style="width:1%"></th>
+      </tr></thead>
+      <tbody>${rows.map(_baReleaseRowHtml).join("")}</tbody>
+    </table>`;
+}
+
+// Per-row HTML. Title links to discogs.com/release|/master/<id> in a
+// new tab. Artist links to the in-app artist popup (so the curator
+// can pivot to the artist's full record). Type+role rendered as
+// muted text. Cells are click-through-friendly: stopPropagation on
+// the action links so any future row-click handler doesn't pre-empt.
+function _baReleaseRowHtml(row) {
+  const id   = row.release_id;
+  const type = (row.release_type || "release").toLowerCase();
+  const url  = id ? `https://www.discogs.com/${type}/${id}` : "";
+  const titleHtml = id
+    ? `<a href="${escHtml(url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--accent);text-decoration:none" title="Open on Discogs.com ↗">${escHtml(row.release_title || "(untitled)")}</a>`
+    : escHtml(row.release_title || "(untitled)");
+  const artistHtml = row.artist_id
+    ? `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenArtist(${row.artist_id})" style="color:var(--text);text-decoration:none" title="Open in Blues Archive">${escHtml(row.artist_name || "")}</a>`
+    : escHtml(row.artist_name || "");
+  const yr = Number.isFinite(Number(row.release_year)) ? Number(row.release_year) : null;
+  const yrHtml = yr ? `<span style="font-variant-numeric:tabular-nums">${yr}</span>` : `<span style="color:var(--muted)">—</span>`;
+  return `<tr data-release-id="${id || ""}">
+    <td style="text-align:right;font-size:0.82rem">${yrHtml}</td>
+    <td>${titleHtml}</td>
+    <td style="color:var(--text)">${artistHtml}</td>
+    <td style="font-size:0.78rem;color:var(--muted)">${escHtml(row.release_type || "")}</td>
+    <td style="font-size:0.78rem;color:var(--muted)">${escHtml(row.role || "")}</td>
+    <td></td>
+  </tr>`;
+}
+
+function _baRenderReleasesPager() {
+  const el = document.getElementById("blues-archive-releases-pager");
+  if (!el) return;
+  const pageCount = Math.max(1, Math.ceil(_baReleasesTotal / _BA_RELEASES_LIMIT));
+  const cur = _baReleasesPage + 1;
+  if (pageCount <= 1) { el.innerHTML = ""; return; }
+  el.innerHTML = `
+    <button class="archive-btn" ${cur <= 1 ? "disabled" : ""} onclick="_baReleasesGoToPage(${_baReleasesPage - 1})">‹ Prev</button>
+    <span style="color:var(--muted)">Page ${cur} / ${pageCount}</span>
+    <button class="archive-btn" ${cur >= pageCount ? "disabled" : ""} onclick="_baReleasesGoToPage(${_baReleasesPage + 1})">Next ›</button>
+  `;
+}
+
+function _baReleasesGoToPage(p) { _baReleasesPage = Math.max(0, p); _baLoadReleases(); }
+window._baReleasesGoToPage = _baReleasesGoToPage;
+
+function _baSortReleasesList(key) {
+  _baToggleSort(_baReleasesListSort, key);
+  _baReleasesPage = 0;
+  _baLoadReleases();
+}
+window._baSortReleasesList = _baSortReleasesList;
+
+function _baReleasesDebouncedSearch() {
+  if (_baReleasesSearchTimer) clearTimeout(_baReleasesSearchTimer);
+  _baReleasesSearchTimer = setTimeout(() => { _baReleasesPage = 0; _baLoadReleases(); }, 280);
+}
+window._baReleasesDebouncedSearch = _baReleasesDebouncedSearch;
+
+function _baReleasesApplyFilters() { _baReleasesPage = 0; _baLoadReleases(); }
+window._baReleasesApplyFilters = _baReleasesApplyFilters;
+
+function _baReleasesClearFilters() {
+  const s = document.getElementById("blues-archive-releases-search");
+  const y = document.getElementById("blues-archive-releases-year");
+  const t = document.getElementById("blues-archive-releases-type");
+  const r = document.getElementById("blues-archive-releases-role");
+  if (s) s.value = "";
+  if (y) y.value = "";
+  if (t) t.value = "";
+  if (r) r.value = "";
+  _baReleasesPage = 0;
+  _baLoadReleases();
+}
+window._baReleasesClearFilters = _baReleasesClearFilters;
 
 // ── Stats strip ──────────────────────────────────────────────────────
 // Curation dashboard chips at the top of the archive list view. Each
