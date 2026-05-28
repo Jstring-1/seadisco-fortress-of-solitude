@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260527.2144" />
+  <link rel="stylesheet" href="/style.css?v=20260528.0827" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260527.2144"></script>
-<script defer src="/shared.js?v=20260527.2144"></script>
+<script defer src="/utils.js?v=20260528.0827"></script>
+<script defer src="/shared.js?v=20260528.0827"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -449,7 +449,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260527.2144"></script>
+<script defer src="/modal.js?v=20260528.0827"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -3466,21 +3466,25 @@ function lyricsDebouncedSearch() {
 }
 window.lyricsDebouncedSearch = lyricsDebouncedSearch;
 
-// Cached rows of the current page + a sort state — sort runs
-// client-side over the visible page (server still owns pagination).
+// Cached rows of the current page + a sort state. Sort is now driven
+// server-side — clicking a header re-fetches the list with the new
+// sort/order. (Previously this was a client-side sort over the visible
+// 100 rows, which gave confusing partial orderings on large datasets.)
 let _lyricsRowsCache = [];
 const _lyricsSortState = { key: "page_title", dir: "asc" };
 const _LYRICS_SORT_TYPES = { page_title: "str", artist: "str", tuning: "str", snippet: "str", scraped_at: "date" };
 function _lyricsSort(key) {
   _adminToggleSort(_lyricsSortState, key);
-  _lyricsRenderTable();
+  _lyricsPage = 0;          // back to page 1 when the order changes
+  lyricsLoadList();
 }
 window._lyricsSort = _lyricsSort;
 
 function _lyricsRenderTable() {
   const list = document.getElementById("lyrics-list");
   if (!list) return;
-  const rows = _adminSortApply(_lyricsRowsCache, _lyricsSortState, _LYRICS_SORT_TYPES);
+  // Server-side sort: just render what we got back, no client re-sort.
+  const rows = _lyricsRowsCache;
   if (!rows.length) {
     list.innerHTML = `<p style="color:var(--muted);padding:0.5rem 0">No matches.</p>`;
     return;
@@ -3513,6 +3517,12 @@ async function lyricsLoadList() {
   const params = new URLSearchParams();
   if (q) params.set("q", q);
   if (tuning) params.set("tuning", tuning);
+  // Plumb the current sort state through — the server is the
+  // authority now, not _adminSortApply.
+  if (_lyricsSortState.key) {
+    params.set("sort",  _lyricsSortState.key);
+    params.set("order", _lyricsSortState.dir);
+  }
   params.set("limit", String(_lyricsLimit));
   params.set("offset", String(_lyricsPage * _lyricsLimit));
   list.textContent = "Loading…";
