@@ -14,7 +14,7 @@
 // MusicBrainz endpoint:       https://musicbrainz.org/ws/2/  (JSON, 1 req/s)
 // Required header on both:    User-Agent (per Wikimedia/MetaBrainz policy)
 
-import { upsertBluesArtistByQid, upsertBluesArtistByDiscogsId, listBluesArtists, updateBluesArtist } from "./db.js";
+import { upsertBluesArtistByQid, upsertBluesArtistByDiscogsId, listBluesArtists, getBluesArtist, updateBluesArtist } from "./db.js";
 import { DiscogsClient } from "./discogs-client.js";
 
 const WIKIDATA_ENDPOINT = "https://query.wikidata.org/sparql";
@@ -991,6 +991,45 @@ export async function enrichBluesFromDiscogsArtists(
     catch { /* swallow */ }
   };
   reportProgress();
+  // Per-row mode (idFilter set): fetch the single target row directly.
+  // The paginated loop below broke after one page even if the target
+  // wasn't in it, so anyone past name-position ~200 silently returned
+  // 0/0 attempted with no error. Direct fetch removes the bug AND
+  // skips ~3 wasted listBluesArtists calls.
+  if (opts.idFilter != null && Number.isFinite(opts.idFilter as number)) {
+    const single = await getBluesArtist(opts.idFilter as number);
+    if (single) {
+      const row: any = single;
+      attempted++;
+      reportProgress(row.name);
+      let resolvedId = row.discogs_id;
+      if (!resolvedId && !opts.requireExistingId) {
+        try { resolvedId = await _searchDiscogsArtist(client, row.name); } catch {}
+        if (resolvedId) {
+          try { await updateBluesArtist(row.id, { discogs_id: resolvedId }); } catch {}
+          row.discogs_id = resolvedId;
+          await new Promise(res => setTimeout(res, DISCOGS_RATE_LIMIT_MS));
+        }
+      }
+      if (!row.discogs_id) { skipped++; }
+      else {
+        try {
+          const { patch } = await _enrichOneFromDiscogsArtist(client, row, { force: opts.force });
+          if (Object.keys(patch).length) await updateBluesArtist(row.id, patch);
+          enriched++;
+        } catch (err: any) {
+          errors.push({
+            id: row.id, name: row.name, discogs_id: row.discogs_id ?? null,
+            message: err?.message ?? String(err),
+          } as any);
+        }
+        processed++;
+        reportProgress();
+      }
+    }
+    reportProgress();
+    return { attempted, enriched, skipped, errors, durationMs: Date.now() - start };
+  }
   outer: while (true) {
     const { rows } = await listBluesArtists({ limit: PAGE, offset });
     if (!rows.length) break;
