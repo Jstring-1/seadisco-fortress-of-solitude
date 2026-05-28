@@ -6577,8 +6577,18 @@ export async function listBluesArchiveReleases(opts: {
   const params: any[] = [];
   const where: string[] = [];
   if (opts.search?.trim()) {
-    params.push(`%${opts.search.trim()}%`);
-    where.push(`(rel->>'title' ILIKE $${params.length} OR a.name ILIKE $${params.length})`);
+    const q = opts.search.trim();
+    params.push(`%${q}%`);
+    // Match title, artist name — and if the query is a bare 4-digit
+    // year, also match release year. Keeps the existing dedicated
+    // Year input useful (exact int) while letting the curator type
+    // '1928' into the main search and find what they expect.
+    if (/^\d{4}$/.test(q)) {
+      params.push(parseInt(q, 10));
+      where.push(`(rel->>'title' ILIKE $${params.length - 1} OR a.name ILIKE $${params.length - 1} OR NULLIF(rel->>'year','')::int = $${params.length})`);
+    } else {
+      where.push(`(rel->>'title' ILIKE $${params.length} OR a.name ILIKE $${params.length})`);
+    }
   }
   if (opts.artist?.trim()) {
     params.push(`%${opts.artist.trim()}%`);
