@@ -6081,11 +6081,24 @@ export async function getLyricById(id: number): Promise<any | null> {
   return r.rows[0] || null;
 }
 
+// Whitelist of columns allowed for the sort= URL param. Anything else
+// (or unset) falls back to page_title. Keeps the SQL injection-safe
+// while letting the client header click drive ORDER BY.
+const _LYRICS_SORT_COLS: Record<string, string> = {
+  page_title: "page_title",
+  artist:     "artist",
+  tuning:     "tuning",
+  scraped_at: "scraped_at",
+  updated_at: "updated_at",
+};
+
 export async function listLyrics(opts: {
   search?: string;
   tuning?: string;
   artist?: string;
   unmatchedOnly?: boolean;
+  sort?: string;
+  order?: "asc" | "desc";
   limit?: number;
   offset?: number;
 }): Promise<{ rows: any[]; total: number }> {
@@ -6118,6 +6131,15 @@ export async function listLyrics(opts: {
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const limit = Math.max(1, Math.min(500, opts.limit ?? 100));
   const offset = Math.max(0, opts.offset ?? 0);
+  // Sort column: whitelist-mapped to defeat SQL injection. NULLs LAST
+  // so empty-tuning rows don't dominate a "Tuning ASC" sort — the
+  // most-common-by-far value otherwise crowds the visible page out.
+  const sortCol = _LYRICS_SORT_COLS[String(opts.sort ?? "")] || "page_title";
+  const order   = opts.order === "desc" ? "DESC" : "ASC";
+  // Secondary sort by page_title for stable ordering within ties.
+  const orderSql = sortCol === "page_title"
+    ? `ORDER BY page_title ${order}`
+    : `ORDER BY ${sortCol} ${order} NULLS LAST, page_title ASC`;
   const totalRow = await getPool().query(`SELECT COUNT(*)::int AS n FROM blues_lyrics ${whereSql}`, params);
   const total = totalRow.rows[0]?.n ?? 0;
   params.push(limit, offset);
@@ -6127,7 +6149,7 @@ export async function listLyrics(opts: {
             scraped_at, updated_at,
             substring(plaintext, 1, 240) AS snippet
        FROM blues_lyrics ${whereSql}
-       ORDER BY page_title ASC
+       ${orderSql}
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params,
   );

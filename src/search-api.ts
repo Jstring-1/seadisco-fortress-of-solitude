@@ -9133,7 +9133,7 @@ app.get("/api/admin/lyrics/scrape/status", async (req, res) => {
   }
 });
 
-// GET /api/admin/lyrics?q=&tuning=&artist=&unmatched=1&limit=&offset=
+// GET /api/admin/lyrics?q=&tuning=&artist=&unmatched=1&sort=&order=&limit=&offset=
 app.get("/api/admin/lyrics", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   try {
@@ -9141,6 +9141,10 @@ app.get("/api/admin/lyrics", async (req, res) => {
     const tuning  = String(req.query.tuning ?? "").trim().slice(0, 80);
     const artist  = String(req.query.artist ?? "").trim().slice(0, 200);
     const unmatched = req.query.unmatched === "1" || req.query.unmatched === "true";
+    // Sort column (whitelisted server-side) + direction. Anything else
+    // is ignored / falls back to the default in listLyrics.
+    const sort  = String(req.query.sort  ?? "").trim().slice(0, 30);
+    const order = String(req.query.order ?? "").trim().toLowerCase() === "desc" ? "desc" : "asc";
     const limit   = Math.max(1, Math.min(500, parseInt(String(req.query.limit ?? "100"), 10) || 100));
     const offset  = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
     const result  = await listLyrics({
@@ -9148,6 +9152,8 @@ app.get("/api/admin/lyrics", async (req, res) => {
       tuning: tuning || undefined,
       artist: artist || undefined,
       unmatchedOnly: unmatched,
+      sort: sort || undefined,
+      order,
       limit, offset,
     });
     res.json(result);

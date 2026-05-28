@@ -786,6 +786,14 @@ async function _baLoadLyrics() {
   if (q)                 params.set("q", q);
   if (_baLyricsTuning)   params.set("tuning", _baLyricsTuning);
   if (_baLyricsUnmatched) params.set("unmatched", "1");
+  // Server-side sort — see admin.html for the parallel wiring. The
+  // client-side _baSortApply over the visible page was misleading
+  // on the master Lyrics list because it only reordered the current
+  // 100 rows, not the full dataset.
+  if (_baLyricsListSort?.key) {
+    params.set("sort",  _baLyricsListSort.key);
+    params.set("order", _baLyricsListSort.dir);
+  }
   params.set("limit",  String(_BA_LYRICS_LIMIT));
   params.set("offset", String(_baLyricsPage * _BA_LYRICS_LIMIT));
   rowsEl.textContent = "Loading…";
@@ -805,14 +813,16 @@ async function _baLoadLyrics() {
 
 function _baSortLyricsList(key) {
   _baToggleSort(_baLyricsListSort, key);
-  _baRenderLyricsTable();
+  _baLyricsPage = 0;          // back to page 1 when the order changes
+  _baLoadLyrics();
 }
 window._baSortLyricsList = _baSortLyricsList;
 
 function _baRenderLyricsTable() {
   const rowsEl = document.getElementById("blues-archive-lyrics-rows");
   if (!rowsEl) return;
-  const rows = _baSortApply(_baLyricsRowsCache, _baLyricsListSort, _BA_LYRICS_LIST_TYPES);
+  // Server-side sort — render as-is.
+  const rows = _baLyricsRowsCache;
   if (!rows.length) {
     rowsEl.innerHTML = `<p style="color:var(--muted);padding:0.5rem 0">No matches.</p>`;
     return;
