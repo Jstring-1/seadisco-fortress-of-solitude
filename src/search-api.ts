@@ -9491,6 +9491,24 @@ app.patch("/api/admin/lyrics/:id", express.json({ limit: "4kb" }), async (req, r
   }
 });
 
+// DELETE /api/admin/lyrics/:id — hard-delete a single lyric row.
+// Used by curators to resolve unique-index conflicts and to remove
+// stray scrape rows. No FK fan-out: blues_lyrics.artist_id is a
+// nullable back-reference, nothing else points at this row.
+app.delete("/api/admin/lyrics/:id", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id) || id <= 0) { res.status(400).json({ error: "bad_id" }); return; }
+    const r = await getPool().query(`DELETE FROM blues_lyrics WHERE id = $1`, [id]);
+    if ((r.rowCount ?? 0) === 0) { res.status(404).json({ error: "not_found" }); return; }
+    res.json({ ok: true });
+  } catch (err: any) {
+    console.error("[lyrics delete]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
+});
+
 // ── Blues archive (unified artists + lyrics + releases) ───────────────
 // Admin-gated Discovery sub-view that merges blues_artists, blues_lyrics,
 // and the discogs_releases JSONB. Endpoints below back the new

@@ -455,6 +455,7 @@ async function _baOpenLyric(id) {
           </div>
           <div style="display:flex;gap:0.4rem;align-items:start">
             <button class="archive-btn" onclick="_baOpenLyricEditor(${row.id})" title="Edit title / artist / tuning on this lyric">Edit</button>
+            <button class="archive-btn" onclick="_baDeleteLyric(${row.id})" style="color:#e88" title="Permanently delete this lyric row">Delete</button>
             <button class="archive-btn" onclick="document.getElementById('ba-lyric-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
           </div>
         </div>
@@ -579,7 +580,8 @@ async function _baOpenLyricEditor(id) {
       <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)" title="The lyric body. Used when no wiki source is available — the viewer popup renders this verbatim.">Lyrics (plaintext)</label>
       <textarea id="ba-edit-plaintext" rows="10" placeholder="Paste or type the song lyrics here…" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem;font-family:inherit"></textarea>
       ` : ""}
-      <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem">
+      <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem;flex-wrap:wrap">
+        ${isNew ? "" : `<button class="archive-btn" onclick="_baDeleteLyric(${id})" style="margin-right:auto;color:#e88" title="Permanently delete this lyric row">Delete</button>`}
         <button class="archive-btn" onclick="document.getElementById('ba-lyric-edit-overlay')?.remove()">Cancel</button>
         <button class="archive-btn archive-btn-suggest" onclick="${isNew ? "_baCreateLyric()" : `_baSaveLyricEdit(${id})`}">${isNew ? "Create" : "Save"}</button>
       </div>
@@ -773,6 +775,42 @@ async function _baSaveLyricEdit(id) {
   }
 }
 window._baSaveLyricEdit = _baSaveLyricEdit;
+
+// Hard-delete a single lyric row. Used both by the editor's Delete
+// button and by the viewer popup's Delete (the latter is the main
+// path for resolving title-conflict 409s — open the blocking row,
+// hit Delete, then re-save the original). Closes whichever overlays
+// are open and drops the row from the visible cache + list DOM so
+// the user doesn't need to refresh.
+async function _baDeleteLyric(id) {
+  const n = Number(id);
+  if (!Number.isFinite(n) || n <= 0) return;
+  if (!confirm(`Permanently delete lyric #${n}? This cannot be undone.`)) return;
+  try {
+    const r = await apiFetch(`/api/admin/lyrics/${n}`, { method: "DELETE" });
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      alert(`Delete failed: ${body?.error || `HTTP ${r.status}`}`);
+      return;
+    }
+    // Close both possible overlays.
+    document.getElementById("ba-lyric-edit-overlay")?.remove();
+    document.getElementById("ba-lyric-overlay")?.remove();
+    // Prune from local caches so the master list / artist popup
+    // re-renders without an extra fetch.
+    _baLyricsRowsCache = _baLyricsRowsCache.filter(x => Number(x.id) !== n);
+    if (_baDetailArtist && Array.isArray(_baDetailArtist.lyrics)) {
+      _baDetailArtist.lyrics = _baDetailArtist.lyrics.filter(x => Number(x.id) !== n);
+    }
+    // Drop the row from the DOM. Both the master list and any open
+    // artist-popup sub-table tag their <tr> with data-lyric-row.
+    document.querySelectorAll(`tr[data-lyric-row="${n}"]`).forEach(tr => tr.remove());
+    if (typeof showToast === "function") showToast("Lyric deleted", "ok");
+  } catch (e) {
+    alert(`Delete failed: ${e?.message || e}`);
+  }
+}
+window._baDeleteLyric = _baDeleteLyric;
 
 // ── Merge picker ─────────────────────────────────────────────────────
 // Two-step flow: type to filter the artist list, click the target,
