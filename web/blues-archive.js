@@ -70,6 +70,19 @@ function initBluesArchiveView() {
   // Stats strip + recent-edits feed — fire in parallel, non-blocking.
   _baLoadStats().catch(() => {});
   _baLoadRecent().catch(() => {});
+  // Lazy-load /blues-admin.js for admins so the bulk-Discogs job
+  // status + lyrics scrape polling auto-attach to anything already
+  // running on the server (e.g. user reloaded mid-scrape). Non-
+  // critical path — silent on failure. Polling itself is started
+  // by lyricsPollScrapeOnce + _bluesResumeBulkIfRunning once loaded.
+  if (window._isAdmin && typeof window._sdLoadModule === "function") {
+    window._sdLoadModule("/blues-admin.js").then(() => {
+      // Reattach to any in-flight lyrics scrape (start polling for
+      // live progress; the poll self-cancels when the job finishes).
+      try { window.lyricsStartPolling?.(); } catch {}
+      try { window._bluesResumeBulkIfRunning?.("blues-enrich-discogs-full-btn", "/api/admin/blues/enrich-discogs-full/status", "Get all info from Discogs"); } catch {}
+    }).catch(() => { /* non-critical */ });
+  }
   // Deep-link support: /?v=blues-archive&baArtist=ID opens the given
   // archive artist after the list view paints. Used by the 🎸 badge
   // on album/version modals to jump straight to a matched artist.
@@ -1179,6 +1192,38 @@ function _baClearArtistsCategory() {
   _baLoadList();
 }
 window._baClearArtistsCategory = _baClearArtistsCategory;
+
+// Single dispatcher for every admin-only action that's powered by
+// /blues-admin.js. Each kind maps to a function name; we lazy-load
+// the module on first call, then invoke. Keeps the inline onclick
+// attributes short and centralizes the lazy-load plumbing.
+function _baAdminAction(kind, ev) {
+  const map = {
+    addArtist:        () => window.bluesDbOpenEditor?.(null),
+    enrichDiscogsFull:() => window.bluesDbEnrichDiscogsFull?.(null),
+    exportCsv:        () => window.bluesDbExportCsv?.(),
+    deleteAll:        () => window.bluesDbDeleteAll?.(),
+    lyricsScrape:     () => window.lyricsStartScrape?.(),
+    lyricsStop:       () => window.lyricsStopScrape?.(),
+    lyricsReextract:  () => window.lyricsReextract?.(),
+    lyricsSyncArtists:() => window.lyricsSyncArtists?.(ev),
+  };
+  const fn = map[kind];
+  if (!fn) return;
+  const tryOnce = () => {
+    try { fn(); } catch (e) { console.warn("[_baAdminAction]", kind, e); }
+  };
+  // Already loaded? Just run.
+  if (typeof window.bluesDbOpenEditor === "function") return tryOnce();
+  if (typeof window._sdLoadModule === "function") {
+    window._sdLoadModule("/blues-admin.js")
+      .then(tryOnce)
+      .catch(err => alert("Couldn't load admin module: " + (err?.message || err)));
+  } else {
+    alert("Admin module not available.");
+  }
+}
+window._baAdminAction = _baAdminAction;
 
 // Open the full /admin-style editor (25 fields + enrichment buttons)
 // in place. The editor JS lives in /blues-admin.js — lazy-loaded so
