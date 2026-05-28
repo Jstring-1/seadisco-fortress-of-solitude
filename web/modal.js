@@ -1431,14 +1431,11 @@ async function _bluesAddArtist(discogsId, name, anchor) {
     // both the album-artist row and a credit row).
     document.querySelectorAll(`.blues-add-icon[data-blues-id="${discogsId}"]`).forEach(a => a.remove());
     // Re-fire the archive stamping so the 🎸 badge appears immediately
-    // (the just-added artist is now in the DB). Reset the dataset flag
-    // so _baStampArchiveIndicators's idempotence guard doesn't skip.
-    // The data needed (d/searchResult) is already encoded in the
-    // rendered DOM, so a fresh probe round-trips it back as a hit.
+    // (the just-added artist is now in the DB). The data needed
+    // (d/searchResult) isn't available here; instead we run a thin
+    // artist-only probe via _baReStampArtistsAfterAdd. The old dataset
+    // guard has been removed entirely, so no flag to reset.
     document.querySelectorAll("#album-info, #version-info").forEach(root => {
-      delete root.dataset.baStamped;
-      // We don't have d/searchResult here, but we can rebuild a thin
-      // probe directly: just re-run the artist-name check pass.
       _baReStampArtistsAfterAdd(root, discogsId, name).catch(() => {});
     });
     showToast?.("Added to Blues DB");
@@ -4991,9 +4988,15 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
 async function _baStampArchiveIndicators(targetId, d, searchResult) {
   const root = document.getElementById(targetId);
   if (!root) return;
-  // Already stamped? Avoid re-running if the modal was refreshed.
-  if (root.dataset.baStamped === "1") return;
-  root.dataset.baStamped = "1";
+  // Note: previous version guarded re-runs with root.dataset.baStamped.
+  // That broke every modal after the first because the parent element
+  // (#album-info / #version-info) is reused across openModal calls and
+  // the flag survived between renders. The per-badge dedupe inside
+  // each forEach below ("did this exact node already get a sibling
+  // badge?") is sufficient on its own — innerHTML replacement at the
+  // start of renderAlbumInfo wipes any previous badges anyway, so the
+  // dedupe almost always short-circuits to "no, stamp it" on a fresh
+  // open.
 
   const releaseId = Number(searchResult?.type === "master" ? null : (d.id ?? searchResult?.id));
   const masterId  = Number(searchResult?.type === "master" ? (d.id ?? searchResult?.id) : d.master_id);
