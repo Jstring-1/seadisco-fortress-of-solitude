@@ -6407,6 +6407,12 @@ const _BLUES_ARCHIVE_SORT_COLS: Record<string, string> = {
                      WHERE l.artist_id = a.id
                         OR (l.artist_id IS NULL
                             AND LOWER(TRIM(l.artist)) = LOWER(a.name)))`,
+  // Year of first release — LEAST(MB first_recording_year,
+  // MIN(discogs_releases[*].year)). _EARLIEST_REL_SQL references
+  // unqualified columns, so we substitute the a. alias inline.
+  first_release_year: _EARLIEST_REL_SQL
+    .replace(/\bfirst_recording_year\b/g, "a.first_recording_year")
+    .replace(/\bdiscogs_releases\b/g, "a.discogs_releases"),
 };
 
 export async function listBluesArchive(opts: {
@@ -6476,7 +6482,11 @@ export async function listBluesArchive(opts: {
             (SELECT COUNT(*)::int FROM blues_lyrics l
               WHERE l.artist_id = a.id
                  OR (l.artist_id IS NULL
-                     AND LOWER(TRIM(l.artist)) = LOWER(a.name))) AS lyrics_count
+                     AND LOWER(TRIM(l.artist)) = LOWER(a.name))) AS lyrics_count,
+            -- first_release_year: smaller of MB first_recording_year
+            -- and MIN(discogs_releases[*].year). Drives the new "Year"
+            -- column + its sort key.
+            ${_BLUES_ARCHIVE_SORT_COLS.first_release_year} AS first_release_year
        FROM blues_artists a
        ${whereSql}
        ${orderSql}
