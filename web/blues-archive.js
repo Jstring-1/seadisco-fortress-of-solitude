@@ -14,6 +14,10 @@ let _baCurrentArtistId = null;
 // (server still owns pagination); the detail page sorts whichever
 // inner table the user clicks (full lists).
 let _baListRowsCache = [];
+// Category filter — set by the stats-strip chips, cleared by clicking
+// "Artists" (or the × on the filter indicator). One of:
+//   "", "with_both", "with_lyrics_only", "with_releases_only", "empty"
+let _baListCategory = "";
 const _baListSort = { key: "name", dir: "asc" };
 const _BA_LIST_TYPES = { name: "str", discogs_id: "num", lyrics_count: "num", releases_count: "num" };
 
@@ -92,6 +96,7 @@ async function _baLoadList() {
   const q = (document.getElementById("blues-archive-search")?.value || "").trim();
   const params = new URLSearchParams();
   if (q) params.set("q", q);
+  if (_baListCategory) params.set("category", _baListCategory);
   // Server-side sort — same fix as lyrics. Client-side sort over only
   // the visible 100 rows used to mislead users into thinking the
   // entire DB had been sorted.
@@ -101,7 +106,13 @@ async function _baLoadList() {
   }
   params.set("limit", String(_BA_LIMIT));
   params.set("offset", String(_baPage * _BA_LIMIT));
-  rowsEl.textContent = "Loading…";
+  // Render the active-filter indicator (or hide it) regardless of fetch
+  // result so the affordance updates even when the network is slow.
+  _baRenderArtistsFilterIndicator();
+  // Dim instead of wipe — keeps the existing rows visible (and the
+  // user's scroll position) until the new data arrives.
+  const scrollY = window.scrollY;
+  rowsEl.classList.add("ba-loading");
   try {
     const r = await apiFetch(`/api/blues-archive/artists?${params}`);
     if (!r.ok) { rowsEl.innerHTML = `<p style="color:#e88">Failed: HTTP ${r.status}</p>`; return; }
@@ -111,8 +122,11 @@ async function _baLoadList() {
     _baListRowsCache = rows;
     _baRenderListTable();
     _baRenderPager();
+    requestAnimationFrame(() => window.scrollTo(0, Math.min(scrollY, document.documentElement.scrollHeight - window.innerHeight)));
   } catch (e) {
     rowsEl.innerHTML = `<p style="color:#e88">Failed: ${escHtml(String(e?.message || e))}</p>`;
+  } finally {
+    rowsEl.classList.remove("ba-loading");
   }
 }
 
@@ -637,19 +651,35 @@ async function _baSaveLyricEdit(id) {
       if (r.status === 409) throw new Error("Another lyric already has that title on this source.");
       throw new Error(`HTTP ${r.status}`);
     }
+    // The PATCH endpoint returns the updated row so we can patch the
+    // UI in place without a single extra fetch. This preserves the
+    // user's scroll position (the previous version refetched the
+    // master list + artist popup, both of which collapsed the DOM
+    // and bounced the scrollbar to the top).
+    const updated = await r.json().catch(() => null);
     document.getElementById("ba-lyric-edit-overlay")?.remove();
-    // Repaint anything currently showing this row. The viewer popup
-    // (if open) is reopened with fresh data so the user sees the
-    // updated title/tuning without closing+reopening manually.
-    const viewerOpen = !!document.getElementById("ba-lyric-overlay");
-    if (viewerOpen) {
-      document.getElementById("ba-lyric-overlay")?.remove();
-      _baOpenLyric(id);
+    if (updated && updated.id != null) {
+      // Update local caches so subsequent re-renders (e.g. sort
+      // header click) still see the patched data.
+      const i = _baLyricsRowsCache.findIndex(x => Number(x.id) === Number(updated.id));
+      if (i >= 0) _baLyricsRowsCache[i] = { ..._baLyricsRowsCache[i], ...updated };
+      if (_baDetailArtist && Array.isArray(_baDetailArtist.lyrics)) {
+        const j = _baDetailArtist.lyrics.findIndex(x => Number(x.id) === Number(updated.id));
+        if (j >= 0) _baDetailArtist.lyrics[j] = { ..._baDetailArtist.lyrics[j], ...updated };
+      }
+      // Surgical DOM patch — both master list <tr> AND artist popup
+      // sub-table <tr> are swapped if present. Single-row swap
+      // doesn't disturb the surrounding scroll geometry.
+      _baPatchLyricRowEverywhere(updated);
+      // If the viewer popup is showing this same lyric, repaint it
+      // with the new values. It's a single overlay so the scroll
+      // impact on the underlying page is zero.
+      const viewerOpen = !!document.getElementById("ba-lyric-overlay");
+      if (viewerOpen) {
+        document.getElementById("ba-lyric-overlay")?.remove();
+        _baOpenLyric(updated.id);
+      }
     }
-    // Refresh the artist detail so the row repaints with new values.
-    if (_baCurrentArtistId != null) _baOpenArtist(_baCurrentArtistId);
-    // Refresh the master lyrics list if it's loaded.
-    if (_baSubtab === "lyrics") _baLoadLyrics();
   } catch (e) {
     if (statusEl) statusEl.textContent = `Save failed: ${e?.message || e}`;
   }
@@ -936,7 +966,11 @@ async function _baLoadLyrics() {
   }
   params.set("limit",  String(_BA_LYRICS_LIMIT));
   params.set("offset", String(_baLyricsPage * _BA_LYRICS_LIMIT));
-  rowsEl.textContent = "Loading…";
+  // No "Loading…" wipe — that collapsed the table height and dropped
+  // the user's scroll position. Instead dim the existing rows via a
+  // CSS class while the fetch runs.
+  const scrollY = window.scrollY;
+  rowsEl.classList.add("ba-loading");
   try {
     const r = await apiFetch(`/api/admin/lyrics?${params}`);
     if (!r.ok) { rowsEl.innerHTML = `<p style="color:#e88">Failed: HTTP ${r.status}</p>`; return; }
@@ -946,8 +980,13 @@ async function _baLoadLyrics() {
     _baLyricsRowsCache = rows;
     _baRenderLyricsTable();
     _baRenderLyricsPager();
+    // Restore scroll. The new table may be a different height than
+    // the old one; clamp manually to avoid bouncing past the bottom.
+    requestAnimationFrame(() => window.scrollTo(0, Math.min(scrollY, document.documentElement.scrollHeight - window.innerHeight)));
   } catch (e) {
     rowsEl.innerHTML = `<p style="color:#e88">Failed: ${escHtml(String(e?.message || e))}</p>`;
+  } finally {
+    rowsEl.classList.remove("ba-loading");
   }
 }
 
@@ -957,6 +996,45 @@ function _baSortLyricsList(key) {
   _baLoadLyrics();
 }
 window._baSortLyricsList = _baSortLyricsList;
+
+// Single-row HTML — extracted so saves can do surgical in-place
+// replacement without rebuilding the whole table (and blowing the
+// user's scroll position). Used by both the master Lyrics table and
+// the artist popup's lyric sub-table.
+function _baLyricRowHtml(l) {
+  const titleHtml = (typeof entityLookupLinkHtml === "function" && l.page_title)
+    ? entityLookupLinkHtml("track", l.page_title, { trackArtist: l.artist || "", title: `Lookup options for "${l.page_title}"` })
+    : escHtml(l.page_title || "");
+  const artistHtml = l.artist && typeof entityLookupLinkHtml === "function"
+    ? entityLookupLinkHtml("artist", l.artist, { title: `Lookup options for "${l.artist}"` })
+    : escHtml(l.artist || "");
+  // 🎸 archive-link when the lyric resolves to a blues_artists row
+  // (canonical artist_id), or a "+ promote" button when it's an
+  // orphan with a non-blank artist string. Mutually exclusive.
+  const archiveAffordance = l.artist_id
+    ? `<a href="#" class="ba-archive-badge" onclick="event.preventDefault();event.stopPropagation();_baOpenArtistFromBadge(${l.artist_id})" title="Open in Blues Archive">🎸</a>`
+    : (l.artist && String(l.artist).trim()
+        ? `<a href="#" class="ba-promote-link" onclick="event.preventDefault();event.stopPropagation();_baPromoteOrphan(${l.id})" title="Add as a new blues_artists row and link all orphans with this name" style="color:var(--accent);text-decoration:none;font-size:0.86em;margin-left:0.25rem">+ artist</a>`
+        : "");
+  return `<tr data-lyric-row="${l.id}">
+    <td style="font-weight:600;color:var(--text);white-space:nowrap">${titleHtml}</td>
+    <td style="color:var(--muted);white-space:nowrap">${artistHtml}${archiveAffordance}</td>
+    <td style="white-space:nowrap;color:var(--accent);cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml(l.tuning || "")}</td>
+    <td style="font-size:0.76rem;color:#888;cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml((l.snippet || "").replace(/\s+/g, " ").slice(0, 140))}…</td>
+    <td style="text-align:right"><a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenLyricEditor(${l.id})" style="color:var(--muted);text-decoration:none;font-size:0.78rem" title="Edit title / artist / tuning on this lyric">✎</a></td>
+  </tr>`;
+}
+
+// Patch a single rendered row in place after a save. Walks every <tr>
+// with data-lyric-row=id (covers both the master list and the artist
+// popup sub-table) and replaces its outerHTML with the fresh row.
+// Scroll position is preserved because we only swap the one row.
+function _baPatchLyricRowEverywhere(updated) {
+  if (!updated || updated.id == null) return;
+  document.querySelectorAll(`tr[data-lyric-row="${updated.id}"]`).forEach(tr => {
+    tr.outerHTML = _baLyricRowHtml(updated);
+  });
+}
 
 function _baRenderLyricsTable() {
   const rowsEl = document.getElementById("blues-archive-lyrics-rows");
@@ -977,32 +1055,7 @@ function _baRenderLyricsTable() {
         ${_baSortTh("Snippet", "snippet",    S, "_baSortLyricsList")}
         <th style="width:1%"></th>
       </tr></thead>
-      <tbody>${rows.map(l => {
-        // Title + artist are both lookup-popup triggers (title = track
-        // scope, artist = artist scope). Clicking elsewhere on the row
-        // opens the lyric viewer overlay (_baOpenLyric).
-        const titleHtml = (typeof entityLookupLinkHtml === "function" && l.page_title)
-          ? entityLookupLinkHtml("track", l.page_title, { trackArtist: l.artist || "", title: `Lookup options for "${l.page_title}"` })
-          : escHtml(l.page_title || "");
-        const artistHtml = l.artist && typeof entityLookupLinkHtml === "function"
-          ? entityLookupLinkHtml("artist", l.artist, { title: `Lookup options for "${l.artist}"` })
-          : escHtml(l.artist || "");
-        // 🎸 archive-link when the lyric resolves to a blues_artists
-        // row (canonical artist_id), or a "+ promote" button when it's
-        // an orphan with a non-blank artist string. Mutually exclusive.
-        const archiveAffordance = l.artist_id
-          ? `<a href="#" class="ba-archive-badge" onclick="event.preventDefault();event.stopPropagation();_baOpenArtistFromBadge(${l.artist_id})" title="Open in Blues Archive">🎸</a>`
-          : (l.artist && String(l.artist).trim()
-              ? `<a href="#" class="ba-promote-link" onclick="event.preventDefault();event.stopPropagation();_baPromoteOrphan(${l.id})" title="Add as a new blues_artists row and link all orphans with this name" style="color:var(--accent);text-decoration:none;font-size:0.86em;margin-left:0.25rem">+ artist</a>`
-              : "");
-        return `<tr data-lyric-row="${l.id}">
-          <td style="font-weight:600;color:var(--text);white-space:nowrap">${titleHtml}</td>
-          <td style="color:var(--muted);white-space:nowrap">${artistHtml}${archiveAffordance}</td>
-          <td style="white-space:nowrap;color:var(--accent);cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml(l.tuning || "")}</td>
-          <td style="font-size:0.76rem;color:#888;cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml((l.snippet || "").replace(/\s+/g, " ").slice(0, 140))}…</td>
-          <td style="text-align:right"><a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenLyricEditor(${l.id})" style="color:var(--muted);text-decoration:none;font-size:0.78rem" title="Edit title / artist / tuning on this lyric">✎</a></td>
-        </tr>`;
-      }).join("")}</tbody>
+      <tbody>${rows.map(_baLyricRowHtml).join("")}</tbody>
     </table>`;
 }
 
@@ -1047,23 +1100,29 @@ async function _baLoadStats() {
     };
     el.innerHTML = [
       chip("Artists", s.artists_total, {
-        title: "Total rows in the blues_artists table.",
+        onclick: "_baJumpArtists('')",
+        title: "Total rows in the blues_artists table. Click to view all artists (clears any active category filter).",
       }),
       chip("With lyrics + releases", s.artists_with_both, {
-        title: "Artists with at least one lyric (linked or name-matched) AND at least one Discogs release stored in their discogs_releases JSONB.",
+        onclick: "_baJumpArtists('with_both')",
+        title: "Artists with at least one lyric (linked or name-matched) AND at least one Discogs release stored. Click to filter the Artists tab.",
       }),
       chip("With lyrics only", s.artists_with_lyrics - s.artists_with_both, {
-        title: "Artists with lyrics but no Discogs releases stored. Use 'Get all info from Discogs' on the Blues DB tab to enrich.",
+        onclick: "_baJumpArtists('with_lyrics_only')",
+        title: "Artists with lyrics but no Discogs releases stored. Click to filter the Artists tab — use 'Get all info from Discogs' on /admin Blues DB to enrich.",
       }),
       chip("With releases only", s.artists_with_releases - s.artists_with_both, {
-        title: "Artists with releases but no matched lyrics yet. May indicate a name mismatch with the lyrics table or that the artist's lyrics weren't on the source wiki.",
+        onclick: "_baJumpArtists('with_releases_only')",
+        title: "Artists with releases but no matched lyrics yet. Click to filter the Artists tab. Usually a name mismatch with the lyrics table.",
       }),
       chip("Empty", s.artists_empty, {
         tone: "warn",
-        title: "Artists with neither lyrics nor releases — candidates for purge or enrichment.",
+        onclick: "_baJumpArtists('empty')",
+        title: "Artists with neither lyrics nor releases — candidates for purge or enrichment. Click to filter the Artists tab.",
       }),
       chip("Lyrics total", s.lyrics_total, {
-        title: "Total rows in the blues_lyrics table (scraped from weeniecampbell.com).",
+        onclick: "_baJumpAllLyrics()",
+        title: "Total rows in the blues_lyrics table (scraped from weeniecampbell.com). Click to view all lyrics (clears any active filter).",
       }),
       chip("Orphan lyrics", s.lyrics_orphan, {
         tone: "warn",
@@ -1075,12 +1134,50 @@ async function _baLoadStats() {
         onclick: "_baJumpMissingTuning()",
         title: "Lyrics with no tuning extracted from the wiki page (tuning IS NULL). Click to jump to the Lyrics tab pre-filtered to '(unspecified)'.",
       }),
-      // Bulk action — exposed as a chip-style affordance so it lives
-      // next to the count that triggers the question.
-      `<a href="#" onclick="event.preventDefault();_baNormalizeEmptyTuningsToStandard()" title="Bulk-set every lyric with no extracted tuning to 'Standard'. On a blues-lyrics wiki an unmentioned tuning is overwhelmingly standard; this collapses the (unspecified) bucket into the Standard one. Idempotent." style="padding:0.25rem 0.5rem;border:1px solid var(--accent);border-radius:999px;cursor:pointer;color:var(--accent);text-decoration:none">→ Convert missing → Standard</a>`,
     ].join("");
   } catch { el.innerHTML = ""; }
 }
+
+// Jump handlers used by the stats-strip chips on the Artists side.
+// Set the category filter + switch to the Artists tab.
+function _baJumpArtists(category) {
+  _baListCategory = category || "";
+  _baPage = 0;
+  _baSwitchSubtab("artists");
+  _baLoadList();
+}
+window._baJumpArtists = _baJumpArtists;
+
+function _baJumpAllLyrics() {
+  // Clear every lyrics-side filter and switch to the Lyrics tab.
+  _baLyricsClearFilters();
+  _baSwitchSubtab("lyrics");
+}
+window._baJumpAllLyrics = _baJumpAllLyrics;
+
+// Active-filter indicator on the Artists tab. Renders nothing when
+// no category is set; otherwise a labeled chip with an × that clears
+// the filter on click. Labels mirror the stats-strip chip names.
+const _BA_CATEGORY_LABEL = {
+  "with_both":          "With lyrics + releases",
+  "with_lyrics_only":   "With lyrics only",
+  "with_releases_only": "With releases only",
+  "empty":              "Empty (no lyrics or releases)",
+};
+function _baRenderArtistsFilterIndicator() {
+  const el = document.getElementById("blues-archive-artists-filter");
+  if (!el) return;
+  if (!_baListCategory) { el.innerHTML = ""; return; }
+  const label = _BA_CATEGORY_LABEL[_baListCategory] || _baListCategory;
+  el.innerHTML = `<span style="display:inline-flex;align-items:center;gap:0.4rem;padding:0.25rem 0.6rem;border:1px solid var(--accent);border-radius:999px;font-size:0.78rem;color:var(--accent)">Filter: ${escHtml(label)} <a href="#" onclick="event.preventDefault();_baClearArtistsCategory()" title="Clear filter — show all artists" style="color:var(--accent);text-decoration:none">×</a></span>`;
+}
+
+function _baClearArtistsCategory() {
+  _baListCategory = "";
+  _baPage = 0;
+  _baLoadList();
+}
+window._baClearArtistsCategory = _baClearArtistsCategory;
 
 function _baJumpOrphans() {
   _baSwitchSubtab("lyrics");
@@ -1269,8 +1366,168 @@ async function _baConfirmReassign(toId, toName) {
 }
 window._baConfirmReassign = _baConfirmReassign;
 
+// Click handler for the "+ artist" link on orphan lyric rows. Opens a
+// picker so the user can EITHER link the orphan to an existing artist
+// (the common case: "John Lee" → John Lee Hooker) OR fall back to
+// creating a new artist row from the orphan string. Pre-fills the
+// search with the orphan name so existing matches show up immediately.
 async function _baPromoteOrphan(lyricId) {
-  if (!confirm("Promote this lyric's artist string to a new blues_artists row?\n\nAll other orphan lyrics with the same name will also be linked.")) return;
+  // Pull the lyric to get its current artist string. Without this,
+  // we'd have no name to pre-fill or to use as the bulk-reassign key.
+  let row;
+  try {
+    const r = await apiFetch(`/api/admin/lyrics/${lyricId}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    row = await r.json();
+  } catch (e) {
+    alert(`Couldn't load lyric: ${e?.message || e}`);
+    return;
+  }
+  const orphanName = String(row.artist || "").trim();
+  if (!orphanName) {
+    alert("This lyric has no artist string to link.");
+    return;
+  }
+  let overlay = document.getElementById("ba-orphan-picker-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "ba-orphan-picker-overlay";
+    Object.assign(overlay.style, {
+      position: "fixed", inset: "0", background: "rgba(0,0,0,0.78)",
+      zIndex: "320", display: "flex", alignItems: "flex-start",
+      justifyContent: "center", padding: "2rem 1rem", overflow: "auto",
+    });
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+  const safeName = orphanName.replace(/"/g, "&quot;").replace(/'/g, "\\'");
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(620px,100%)">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:0.6rem;margin-bottom:0.6rem">
+        <h3 style="margin:0">Link <em>${escHtml(orphanName)}</em> to an artist</h3>
+        <button class="archive-btn" onclick="document.getElementById('ba-orphan-picker-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
+      </div>
+      <p style="font-size:0.78rem;color:var(--muted);margin:0 0 0.6rem">
+        Pick an existing artist row to take this orphan (and, when the checkbox is on, every other orphan with the same name).
+        If no existing artist fits, use the "Create new" button at the bottom.
+      </p>
+      <input id="ba-orphan-picker-search" type="search" value="${escHtml(orphanName)}" placeholder="Type to filter artists…" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem;margin-bottom:0.5rem" oninput="_baOrphanPickerSearch(${lyricId})">
+      <div id="ba-orphan-picker-results" style="max-height:40vh;overflow:auto;border:1px solid var(--border);border-radius:4px;padding:0.4rem 0.6rem;font-size:0.84rem"></div>
+      <label style="display:flex;align-items:center;gap:0.4rem;margin-top:0.6rem;font-size:0.82rem;color:var(--muted)" title="When on, every orphan lyric whose artist string matches the orphan name (case-insensitive) gets reassigned in the same transaction. Off = only this lyric.">
+        <input id="ba-orphan-picker-bulk" type="checkbox" checked>
+        Also link all other orphans named "${escHtml(orphanName)}"
+      </label>
+      <div style="display:flex;gap:0.5rem;justify-content:space-between;margin-top:1rem;align-items:center;flex-wrap:wrap">
+        <button class="archive-btn" onclick="_baOrphanCreateAsNew(${lyricId})" title="Fallback: create a brand-new blues_artists row using the orphan name as-is and link this lyric (plus siblings) to it.">+ Create "${escHtml(orphanName)}" as new artist</button>
+        <button class="archive-btn" onclick="document.getElementById('ba-orphan-picker-overlay')?.remove()">Cancel</button>
+      </div>
+      <div id="ba-orphan-picker-status" style="font-size:0.76rem;color:var(--muted);margin-top:0.5rem;min-height:1em"></div>
+    </div>
+  `;
+  // Auto-run the initial search using the pre-filled name so matches
+  // show up without the user having to type anything.
+  setTimeout(() => {
+    document.getElementById("ba-orphan-picker-search")?.focus();
+    _baOrphanPickerSearch(lyricId);
+  }, 30);
+}
+window._baPromoteOrphan = _baPromoteOrphan;
+
+let _baOrphanPickerTimer = null;
+function _baOrphanPickerSearch(lyricId) {
+  if (_baOrphanPickerTimer) clearTimeout(_baOrphanPickerTimer);
+  _baOrphanPickerTimer = setTimeout(() => _baOrphanPickerLoad(lyricId), 220);
+}
+window._baOrphanPickerSearch = _baOrphanPickerSearch;
+
+async function _baOrphanPickerLoad(lyricId) {
+  const q = (document.getElementById("ba-orphan-picker-search")?.value || "").trim();
+  const el = document.getElementById("ba-orphan-picker-results");
+  if (!el) return;
+  if (!q) { el.innerHTML = `<span style="color:var(--muted)">Type to filter…</span>`; return; }
+  el.textContent = "Loading…";
+  try {
+    const p = new URLSearchParams(); p.set("q", q); p.set("limit", "40");
+    const r = await apiFetch(`/api/blues-archive/artists?${p}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const { rows = [] } = await r.json();
+    if (!rows.length) {
+      el.innerHTML = `<span style="color:var(--muted)">No matches. Use "+ Create" below to mint a new artist instead.</span>`;
+      return;
+    }
+    el.innerHTML = rows.map(row => `
+      <div onclick="_baOrphanPickerConfirm(${lyricId}, ${row.id}, ${JSON.stringify(row.name || "").replace(/"/g, "&quot;")})" style="cursor:pointer;padding:0.35rem 0.4rem;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;justify-content:space-between;gap:0.6rem" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background=''">
+        <span style="color:var(--text);font-weight:600">${escHtml(row.name || "")}</span>
+        <span style="color:var(--muted);font-size:0.76rem;white-space:nowrap">${row.lyrics_count || 0}L · ${row.releases_count || 0}R${row.discogs_id ? ` · #${row.discogs_id}` : ""}</span>
+      </div>`).join("");
+  } catch (e) {
+    el.innerHTML = `<span style="color:#e88">Failed: ${escHtml(String(e?.message || e))}</span>`;
+  }
+}
+
+async function _baOrphanPickerConfirm(lyricId, toId, toName) {
+  const bulk = !!document.getElementById("ba-orphan-picker-bulk")?.checked;
+  const status = document.getElementById("ba-orphan-picker-status");
+  // We need the orphan name even after the overlay closes, so capture
+  // it before the request. It's the value of the search input — same
+  // as what we pre-filled with.
+  const orphanName = (document.getElementById("ba-orphan-picker-search")?.value || "").trim();
+  if (!confirm(`Link "${orphanName}" to "${toName}"?\n\n${bulk ? `Every orphan lyric with artist = "${orphanName}" will be reassigned.` : "Only this one lyric will be reassigned."}`)) return;
+  if (status) status.textContent = "Linking…";
+  try {
+    let summary;
+    if (bulk) {
+      // Bulk path — use the existing reassign endpoint keyed by name.
+      const r = await apiFetch("/api/blues-archive/lyrics/reassign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ toArtistId: toId, fromArtistName: orphanName }),
+      });
+      if (!r.ok) {
+        const txt = await r.text().catch(() => "");
+        throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
+      }
+      const j = await r.json();
+      summary = `Reassigned ${j.reassigned} lyric${j.reassigned === 1 ? "" : "s"} → ${j.toName}`;
+    } else {
+      // Single-lyric path — PATCH this row's artist_id directly. Also
+      // overwrite the artist string with the target name so the
+      // display matches the canonical artist row.
+      const r = await apiFetch(`/api/admin/lyrics/${lyricId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ artist: toName, artist_id: toId }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const updated = await r.json().catch(() => null);
+      if (updated) {
+        const i = _baLyricsRowsCache.findIndex(x => Number(x.id) === Number(updated.id));
+        if (i >= 0) _baLyricsRowsCache[i] = { ..._baLyricsRowsCache[i], ...updated };
+        _baPatchLyricRowEverywhere(updated);
+      }
+      summary = `Linked this lyric to ${toName}.`;
+    }
+    document.getElementById("ba-orphan-picker-overlay")?.remove();
+    _baLoadStats().catch(() => {});
+    // Bulk mode changed many rows the local cache doesn't know about
+    // — just reload the lyrics list. Scroll position is restored
+    // automatically by _baLoadLyrics.
+    if (bulk && _baSubtab === "lyrics") _baLoadLyrics();
+    alert(summary);
+  } catch (e) {
+    if (status) status.textContent = `Failed: ${e?.message || e}`;
+  }
+}
+window._baOrphanPickerConfirm = _baOrphanPickerConfirm;
+
+// "+ Create as new artist" fallback inside the orphan picker — calls
+// the existing promote endpoint that creates the row + links siblings.
+async function _baOrphanCreateAsNew(lyricId) {
+  const orphanName = (document.getElementById("ba-orphan-picker-search")?.value || "").trim();
+  if (!orphanName) return;
+  if (!confirm(`Create a new blues_artists row named "${orphanName}" and link all orphan lyrics with that name?`)) return;
+  const status = document.getElementById("ba-orphan-picker-status");
+  if (status) status.textContent = "Creating…";
   try {
     const r = await apiFetch(`/api/blues-archive/lyrics/${lyricId}/promote-to-artist`, { method: "POST" });
     if (!r.ok) {
@@ -1278,12 +1535,12 @@ async function _baPromoteOrphan(lyricId) {
       throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
     }
     const j = await r.json();
-    // Refresh the lyrics list so the new 🎸 badge replaces the +.
-    _baLoadLyrics();
+    document.getElementById("ba-orphan-picker-overlay")?.remove();
+    if (_baSubtab === "lyrics") _baLoadLyrics();
     _baLoadStats().catch(() => {});
-    alert(`Promoted to "${j.artistName}". ${j.lyricsLinked} lyric${j.lyricsLinked === 1 ? "" : "s"} linked.`);
+    alert(`Created "${j.artistName}". ${j.lyricsLinked} lyric${j.lyricsLinked === 1 ? "" : "s"} linked.`);
   } catch (e) {
-    alert(`Promote failed: ${e?.message || e}`);
+    if (status) status.textContent = `Failed: ${e?.message || e}`;
   }
 }
-window._baPromoteOrphan = _baPromoteOrphan;
+window._baOrphanCreateAsNew = _baOrphanCreateAsNew;

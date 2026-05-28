@@ -9439,12 +9439,17 @@ app.get("/api/blues-archive/artists", async (req, res) => {
     const q       = String(req.query.q ?? "").trim().slice(0, 200);
     const sort    = String(req.query.sort  ?? "").trim().slice(0, 30);
     const order   = String(req.query.order ?? "").trim().toLowerCase() === "desc" ? "desc" : "asc";
+    // Whitelist the category param — anything else is dropped.
+    const rawCat  = String(req.query.category ?? "").trim();
+    const category = (["with_both", "with_lyrics_only", "with_releases_only", "empty"] as const)
+      .find(c => c === rawCat) || undefined;
     const limit   = Math.max(1, Math.min(500, parseInt(String(req.query.limit ?? "100"), 10) || 100));
     const offset  = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
     res.json(await listBluesArchive({
       search: q || undefined,
       sort: sort || undefined,
       order,
+      category,
       limit, offset,
     }));
   } catch (err) {

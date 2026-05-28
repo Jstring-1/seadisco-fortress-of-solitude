@@ -9085,6 +9085,16 @@ body.is-offline button.offline-disabled {
   font-weight: 600;
 }
 
+/* In-flight fetch indicator on Blues Archive lists. Dims existing
+   rows + blocks clicks while a new page is loading, instead of
+   wiping the table to "Loading…" (which collapsed the page height
+   and dropped the user's scroll position). */
+.ba-loading {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
 /* Admin-only 🎸 indicator stamped on album/version modals when the
    artist / release / track matches a Blues Archive row. Small inline
    marker that sits next to the entity-lookup-link without disrupting
