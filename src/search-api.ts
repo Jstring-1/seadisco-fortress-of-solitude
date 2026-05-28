@@ -10445,9 +10445,15 @@ app.get("/label-releases", async (req, res) => {
   if (!dc) { res.status(503).json({ error: "No Discogs OAuth connection" }); return; }
   const page = req.query.page ? parseInt(req.query.page as string, 10) : 1;
   const perPage = req.query.per_page ? parseInt(req.query.per_page as string, 10) : 48;
+  // Whitelist Discogs's supported sort columns for this endpoint. The
+  // form sends `sort=year|title|format` (matching what /database/search
+  // uses); anything else is dropped silently so a stale URL can't 400.
+  const rawSort = String(req.query.sort ?? "").trim();
+  const sort = (rawSort === "year" || rawSort === "title" || rawSort === "format") ? rawSort : undefined;
+  const sortOrder: "asc" | "desc" = String(req.query.sort_order ?? "").trim().toLowerCase() === "desc" ? "desc" : "asc";
 
   try {
-    const data = await dc.getLabelReleases(id, { page, perPage }) as any;
+    const data = await dc.getLabelReleases(id, { page, perPage, sort, sortOrder }) as any;
     const releases: any[] = data?.releases ?? [];
 
     const reshaped = releases.map(r => {
