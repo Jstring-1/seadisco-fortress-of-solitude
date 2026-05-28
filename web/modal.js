@@ -2424,19 +2424,23 @@ window._normalizeYtArtist = _normalizeYtArtist;
 
 function _renderNowPlayingTitle(parts) {
   const out = [];
-  const link = (scope, label, extraCls) => {
-    const cls = ["vt-link", extraCls].filter(Boolean).join(" ");
-    const lbl = String(label || "").trim();
-    if (!lbl) return "";
-    // data-np-scope / data-np-label drive _npTitleClick. role="button"
-    // + tabindex make the spans keyboard-accessible.
-    return `<span class="${cls}" role="button" tabindex="0" data-np-scope="${escHtml(scope)}" data-np-label="${escHtml(lbl)}" onclick="event.stopPropagation();_npTitleClick(this);return false" title="Search SeaDisco for ${escHtml(lbl)}">${escHtml(lbl)}</span>`;
-  };
   // Belt-and-suspenders: even when an upstream caller already cleaned
   // the artist, run it through _normalizeYtArtist again so any path
   // that forgot (queue meta restored from a pre-fix session, etc.)
   // doesn't leak "- Topic" into the bar.
   const cleanArtist = _normalizeYtArtist(parts?.artist || "");
+  const link = (scope, label, extraCls) => {
+    const cls = ["vt-link", extraCls].filter(Boolean).join(" ");
+    const lbl = String(label || "").trim();
+    if (!lbl) return "";
+    // data-np-scope / data-np-label drive _npTitleClick. Track spans
+    // also carry data-np-artist so the lookup popup can scope YT / LOC
+    // queries to the playing artist. role="button" + tabindex make the
+    // spans keyboard-accessible.
+    const artistAttr = (scope === "track" && cleanArtist)
+      ? ` data-np-artist="${escHtml(cleanArtist)}"` : "";
+    return `<span class="${cls}" role="button" tabindex="0" data-np-scope="${escHtml(scope)}" data-np-label="${escHtml(lbl)}"${artistAttr} onclick="event.stopPropagation();_npTitleClick(this,event);return false" title="Lookup options for ${escHtml(lbl)}">${escHtml(lbl)}</span>`;
+  };
   if (parts?.track)  out.push(link("track",   parts.track,  "vt-track"));
   if (parts?.album)  out.push(link("release", parts.album,  "vt-album"));
   if (cleanArtist)   out.push(link("artist",  cleanArtist,  "vt-artist"));
@@ -2447,15 +2451,20 @@ function _renderNowPlayingTitle(parts) {
 }
 window._renderNowPlayingTitle = _renderNowPlayingTitle;
 
-// Dispatcher for clicks on a now-playing title part. Routes to the
-// shared lookup-popup helper which already knows how to populate
-// the search form and run the query for each scope.
-function _npTitleClick(el) {
+// Dispatcher for clicks on a now-playing title part. Opens the shared
+// entity-lookup popup (Wikipedia / YouTube / LOC / Archive.org / Search
+// SeaDisco / Copy) at the click point, instead of jumping straight into
+// an auto-search — the user picks the destination explicitly. Falls
+// back to _lookupSearchSeaDisco if the popup helper isn't loaded yet.
+function _npTitleClick(el, ev) {
   if (!el) return;
   const scope = el.dataset?.npScope || "track";
   const label = el.dataset?.npLabel || "";
   if (!label) return;
-  if (typeof _lookupSearchSeaDisco === "function") {
+  const trackArtist = el.dataset?.npArtist || "";
+  if (typeof openLookupPopup === "function") {
+    openLookupPopup(ev, scope, label, { trackArtist });
+  } else if (typeof _lookupSearchSeaDisco === "function") {
     _lookupSearchSeaDisco(scope, label);
   }
 }
@@ -4823,7 +4832,143 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
       _trackYtApplyToDom(targetId, d.master_id, releaseId, isMaster);
     }).catch(() => {});
   }
+
+  // Admin-only: probe the Blues Archive for this release + its artists
+  // + its tracks and stamp a small "🎸" indicator on each match. Runs
+  // best-effort and silently fails for non-admin (the endpoint is gated
+  // server-side anyway). Fired late so the DOM is fully built.
+  if (window._isAdmin) {
+    _baStampArchiveIndicators(targetId, d, searchResult).catch(() => {});
+  }
 }
+
+// ── Blues Archive indicator stamping (admin-only) ────────────────────
+// After the album/version modal renders, walk the popup DOM and harvest:
+//   - artist names + Discogs IDs from .modal-artist-link nodes
+//   - track titles from .track-title-link nodes
+//   - the release id + (for non-master) the master id
+// Send them to /api/blues-archive/check in one round-trip, then
+// inject a small "🎸" badge inline next to each matched entity. The
+// badge tooltip names the matched archive row; click navigates to the
+// Blues Archive artist detail page for that row.
+async function _baStampArchiveIndicators(targetId, d, searchResult) {
+  const root = document.getElementById(targetId);
+  if (!root) return;
+  // Already stamped? Avoid re-running if the modal was refreshed.
+  if (root.dataset.baStamped === "1") return;
+  root.dataset.baStamped = "1";
+
+  const releaseId = Number(searchResult?.type === "master" ? null : (d.id ?? searchResult?.id));
+  const masterId  = Number(searchResult?.type === "master" ? (d.id ?? searchResult?.id) : d.master_id);
+
+  // Album-artist link nodes — these have data-lk-id (Discogs artist id)
+  // and data-lk-label (name). Credit-name nodes are skipped here so the
+  // check stays small; the primary album-artist is the highest-signal
+  // place to stamp.
+  const artistNodes = root.querySelectorAll(".modal-artist-link, .album-artist .entity-lookup-link");
+  const artistNames = [];
+  const artistIds   = [];
+  artistNodes.forEach(n => {
+    const nm = (n.dataset.lkLabel || "").trim();
+    const id = Number(n.dataset.lkId || 0);
+    if (nm) artistNames.push(nm);
+    if (id) artistIds.push(id);
+  });
+
+  // Title link for the release — singular.
+  const titleNode = root.querySelector(".modal-title-link");
+
+  // Track-title link nodes.
+  const trackNodes = root.querySelectorAll(".track-title-link");
+  const trackTitles = [];
+  trackNodes.forEach(n => {
+    const t = (n.dataset.lkLabel || n.textContent || "").trim();
+    if (t) trackTitles.push(t);
+  });
+
+  // Nothing worth checking? Skip the round-trip.
+  if (!artistNames.length && !releaseId && !masterId && !trackTitles.length) return;
+
+  let result;
+  try {
+    const r = await apiFetch("/api/blues-archive/check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ artistNames, artistIds, releaseId, masterId, trackTitles }),
+    });
+    if (!r.ok) return; // 401 / 403 — non-admin or gated; silent no-op
+    result = await r.json();
+  } catch { return; }
+
+  const badge = (archiveId, tip) =>
+    `<a href="/?v=blues-archive&baArtist=${archiveId}" class="ba-archive-badge" data-ba-artist-id="${archiveId}" onclick="event.preventDefault();event.stopPropagation();_baOpenArtistFromBadge(${archiveId});return false" title="${escHtml(tip || "In Blues Archive")}" aria-label="${escHtml(tip || "In Blues Archive")}">🎸</a>`;
+
+  // Stamp album-artist links: lookup by lk-id first (preferred), then
+  // by lowercase name. Insert badge right after the link node.
+  artistNodes.forEach(n => {
+    if (n.parentNode?.querySelector(":scope > .ba-archive-badge")) return; // dedupe
+    const id = String(n.dataset.lkId || "");
+    const nm = (n.dataset.lkLabel || "").trim().toLowerCase();
+    const hit = (id && result.artistsById?.[id]) || (nm && result.artists?.[nm]);
+    if (!hit) return;
+    n.insertAdjacentHTML("afterend", badge(hit.id, `In Blues Archive: ${hit.name}`));
+  });
+
+  // Stamp release title — when the release/master id is in any archive
+  // artist's discogs_releases array.
+  if (titleNode && result.release?.inArchive) {
+    const tip = result.release.viaArtistName
+      ? `In Blues Archive: ${result.release.viaArtistName}'s releases`
+      : "In Blues Archive";
+    titleNode.insertAdjacentHTML("afterend", badge(result.release.viaArtistId, tip));
+  }
+
+  // Stamp track-title links — only when the title matches a lyric AND
+  // (server-side) was scoped to the album artist for precision.
+  trackNodes.forEach(n => {
+    if (n.parentNode?.querySelector(":scope > .ba-archive-badge")) return;
+    const t = (n.dataset.lkLabel || n.textContent || "").trim().toLowerCase();
+    const hit = t && result.tracks?.[t];
+    if (!hit) return;
+    // Track badge — no archive-artist id directly, but the lyric has
+    // an artist field; if it matches one of the album artists' archive
+    // rows, jump there; otherwise fall back to the lyrics list view.
+    const lyricArtistLc = String(hit.artist || "").trim().toLowerCase();
+    const archiveRow = result.artists?.[lyricArtistLc];
+    const archiveId  = archiveRow?.id;
+    if (archiveId) {
+      n.insertAdjacentHTML("afterend", badge(archiveId, `Lyric in Blues Archive (${hit.artist})`));
+    } else {
+      // Plain badge, no link — still useful as a visual marker.
+      n.insertAdjacentHTML("afterend",
+        `<span class="ba-archive-badge ba-archive-badge-plain" title="Lyric in Blues Archive">🎸</span>`);
+    }
+  });
+}
+window._baStampArchiveIndicators = _baStampArchiveIndicators;
+
+// Helper: navigate to /?v=blues-archive and open the given archive
+// artist id. Used by the 🎸 badge click. Falls back to URL nav if the
+// blues-archive module isn't loaded in the current session.
+function _baOpenArtistFromBadge(archiveId) {
+  try {
+    if (typeof closeModal === "function") closeModal();
+  } catch {}
+  // If we're already on blues-archive and the module is loaded, just
+  // open the artist directly to avoid a full nav cycle.
+  if (typeof window._baOpenArtist === "function") {
+    if (typeof switchView === "function") {
+      try { switchView("blues-archive"); } catch {}
+    }
+    setTimeout(() => window._baOpenArtist(archiveId), 30);
+    return;
+  }
+  // Cold load: route through the URL so the lazy-loader picks up the
+  // module, then deep-link into the artist (the view's URL handler
+  // honors a baArtist param).
+  window.location.href = `/?v=blues-archive&baArtist=${archiveId}`;
+}
+window._baOpenArtistFromBadge = _baOpenArtistFromBadge;
 
 // ── Modal action buttons (collection/wantlist/rating) ────────────────────
 

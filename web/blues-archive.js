@@ -60,6 +60,16 @@ function initBluesArchiveView() {
   const list = document.querySelector("#blues-archive-view .blues-archive-list");
   if (list) list.style.display = "";
   _baLoadList();
+  // Deep-link support: /?v=blues-archive&baArtist=ID opens the given
+  // archive artist after the list view paints. Used by the 🎸 badge
+  // on album/version modals to jump straight to a matched artist.
+  try {
+    const p = new URLSearchParams(window.location.search);
+    const aid = parseInt(p.get("baArtist") || "", 10);
+    if (Number.isFinite(aid) && aid > 0) {
+      setTimeout(() => _baOpenArtist(aid), 40);
+    }
+  } catch { /* non-fatal */ }
 }
 window.initBluesArchiveView = initBluesArchiveView;
 
@@ -118,8 +128,16 @@ function _baRenderListTable() {
       </tr></thead>
       <tbody>${rows.map(row => {
         const dates = [row.birth_date, row.death_date].filter(Boolean).join(" – ") || "—";
+        // Name cell uses entityLookupLinkHtml so clicking the text
+        // opens the unified search-options popup (Wikipedia / YouTube
+        // / LOC / Archive.org / Search SeaDisco / Copy). Clicking
+        // anywhere else on the row opens the Blues Archive artist
+        // detail page (existing behavior).
+        const nameHtml = (typeof entityLookupLinkHtml === "function" && row.name)
+          ? entityLookupLinkHtml("artist", row.name, { entityId: row.discogs_id, title: `Lookup options for "${row.name}"` })
+          : escHtml(row.name || "");
         return `<tr style="cursor:pointer" onclick="_baOpenArtist(${row.id})">
-          <td style="font-weight:600;color:var(--text)">${escHtml(row.name || "")}</td>
+          <td style="font-weight:600;color:var(--text)">${nameHtml}</td>
           <td style="color:var(--muted);font-size:0.78rem">${escHtml(dates)}</td>
           <td style="text-align:right;color:${row.lyrics_count ? "var(--accent)" : "var(--muted)"}">${row.lyrics_count || ""}</td>
           <td style="text-align:right;color:${row.releases_count ? "var(--accent)" : "var(--muted)"}">${row.releases_count || ""}</td>
@@ -199,6 +217,10 @@ function _baRenderArtistDetail(a) {
   const lyrics   = _baSortApply(lyricsRaw,   _baLyricsSort,   _BA_LYRICS_TYPES);
   const releases = _baSortApply(releasesRaw, _baReleasesSort, _BA_RELEASES_TYPES);
   const LS = _baLyricsSort, RS = _baReleasesSort;
+  // Title cells use entityLookupLinkHtml so the title text fires the
+  // unified search-options popup (Wikipedia / YouTube / LOC / Archive
+  // / Search SeaDisco / Copy). The rest of each row still opens the
+  // detail/viewer (existing behavior preserved).
   const lyricsHtml = lyricsRaw.length
     ? `<table class="api-log-table" style="font-size:0.84rem;width:100%">
         <thead><tr>
@@ -207,13 +229,17 @@ function _baRenderArtistDetail(a) {
           ${_baSortTh("Snippet", "snippet",    LS, "_baSortLyrics")}
           <th style="width:1%"></th>
         </tr></thead>
-        <tbody>${lyrics.map(l => `
-          <tr data-lyric-row="${l.id}">
-            <td style="font-weight:600;color:var(--text);white-space:nowrap;cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml(l.page_title || "")}</td>
+        <tbody>${lyrics.map(l => {
+          const titleHtml = (typeof entityLookupLinkHtml === "function" && l.page_title)
+            ? entityLookupLinkHtml("track", l.page_title, { trackArtist: a.name || "", title: `Lookup options for "${l.page_title}"` })
+            : escHtml(l.page_title || "");
+          return `<tr data-lyric-row="${l.id}">
+            <td style="font-weight:600;color:var(--text);white-space:nowrap">${titleHtml}</td>
             <td style="white-space:nowrap;color:var(--accent);cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml(l.tuning || "")}</td>
             <td style="font-size:0.76rem;color:#888;cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml((l.snippet || "").replace(/\s+/g, " ").slice(0, 140))}…</td>
             <td style="text-align:right"><a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenLyricEditor(${l.id})" style="color:var(--muted);text-decoration:none;font-size:0.78rem" title="Edit tuning / artist on this lyric">✎</a></td>
-          </tr>`).join("")}</tbody>
+          </tr>`;
+        }).join("")}</tbody>
       </table>`
     : `<p style="color:var(--muted);font-style:italic;padding:0.4rem 0">No lyrics matched this artist's name. (Try Import from lyrics on the list page if you've just scraped.)</p>`;
   const releasesHtml = releasesRaw.length
@@ -228,9 +254,12 @@ function _baRenderArtistDetail(a) {
           const type = String(rel.type || "release");
           const url  = `https://www.discogs.com/${type === "master" ? "master" : "release"}/${rel.id}`;
           const safeUrl = url.replace(/'/g, "\\'");
+          const titleHtml = (typeof entityLookupLinkHtml === "function" && rel.title)
+            ? entityLookupLinkHtml("release", rel.title, { entityId: rel.id, title: `Lookup options for "${rel.title}"` })
+            : escHtml(rel.title || "");
           return `<tr style="cursor:pointer" onclick="_baOpenRelease(${rel.id}, '${escHtml(type).replace(/'/g, "\\'")}', '${escHtml(safeUrl)}')">
             <td style="white-space:nowrap;color:var(--muted);font-variant-numeric:tabular-nums">${rel.year || "—"}</td>
-            <td style="font-weight:600;color:var(--text)">${escHtml(rel.title || "")}</td>
+            <td style="font-weight:600;color:var(--text)">${titleHtml}</td>
             <td style="color:#888;font-size:0.78rem">${escHtml(rel.label || "")}</td>
             <td style="color:var(--accent);font-size:0.74rem;text-transform:uppercase">${escHtml(type)}</td>
           </tr>`;
@@ -240,7 +269,9 @@ function _baRenderArtistDetail(a) {
   detail.innerHTML = `
     <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:1rem;flex-wrap:wrap">
       <button class="archive-btn" onclick="_baBackToList()">‹ Back to list</button>
-      <h2 style="margin:0;font-size:1.1rem">${escHtml(a.name || "")}</h2>
+      <h2 style="margin:0;font-size:1.1rem">${(typeof entityLookupLinkHtml === "function" && a.name)
+        ? entityLookupLinkHtml("artist", a.name, { entityId: a.discogs_id, title: `Lookup options for "${a.name}"` })
+        : escHtml(a.name || "")}</h2>
       <span style="color:var(--muted);font-size:0.82rem">${escHtml(dates)}</span>
       <span style="margin-left:auto;display:inline-flex;gap:0.4rem">
         <button class="archive-btn" onclick="_baOpenMergePicker(${a.id}, ${JSON.stringify(a.name || "").replace(/"/g, "&quot;")})" title="Merge this artist into another. Lyrics get reassigned by name; release JSONB arrays are concatenated (deduped); this row is then deleted.">Merge into…</button>
@@ -545,3 +576,154 @@ async function bluesArchivePurgeImports() {
   }
 }
 window.bluesArchivePurgeImports = bluesArchivePurgeImports;
+
+// ── Lyrics sub-tab ───────────────────────────────────────────────────
+// Master searchable list of every scraped lyric, independent of any
+// artist. Reuses /api/admin/lyrics (admin-gated, which matches the
+// archive's own gate) for data, and the existing _baOpenLyric overlay
+// for viewing. Tuning dropdown is populated lazily from /tunings.
+let _baSubtab = "artists"; // "artists" | "lyrics"
+let _baLyricsPage = 0;
+const _BA_LYRICS_LIMIT = 100;
+let _baLyricsTotal = 0;
+let _baLyricsSearchTimer = null;
+let _baLyricsTuning = "";
+let _baLyricsRowsCache = [];
+const _baLyricsListSort = { key: "page_title", dir: "asc" };
+const _BA_LYRICS_LIST_TYPES = { page_title: "str", artist: "str", tuning: "str", snippet: "str" };
+let _baLyricsTuningsLoaded = false;
+
+function _baSwitchSubtab(tab) {
+  _baSubtab = tab === "lyrics" ? "lyrics" : "artists";
+  // Toggle button active state
+  document.querySelectorAll("#blues-archive-subtabs .ba-subtab").forEach(b => {
+    b.classList.toggle("is-active", b.dataset.baTab === _baSubtab);
+  });
+  const ap = document.getElementById("blues-archive-artists-panel");
+  const lp = document.getElementById("blues-archive-lyrics-panel");
+  if (ap) ap.style.display = _baSubtab === "artists" ? "" : "none";
+  if (lp) lp.style.display = _baSubtab === "lyrics"  ? "" : "none";
+  if (_baSubtab === "lyrics") {
+    if (!_baLyricsTuningsLoaded) _baLoadTunings();
+    _baLoadLyrics();
+  }
+}
+window._baSwitchSubtab = _baSwitchSubtab;
+
+function _baLyricsDebouncedSearch() {
+  if (_baLyricsSearchTimer) clearTimeout(_baLyricsSearchTimer);
+  _baLyricsSearchTimer = setTimeout(() => { _baLyricsPage = 0; _baLoadLyrics(); }, 280);
+}
+window._baLyricsDebouncedSearch = _baLyricsDebouncedSearch;
+
+function _baLyricsApplyTuning() {
+  _baLyricsTuning = document.getElementById("blues-archive-lyrics-tuning")?.value || "";
+  _baLyricsPage = 0;
+  _baLoadLyrics();
+}
+window._baLyricsApplyTuning = _baLyricsApplyTuning;
+
+async function _baLoadTunings() {
+  try {
+    const r = await apiFetch("/api/admin/lyrics/tunings");
+    if (!r.ok) return;
+    const { tunings = [] } = await r.json();
+    const sel = document.getElementById("blues-archive-lyrics-tuning");
+    if (!sel) return;
+    // Preserve current selection if user already picked one
+    const current = sel.value;
+    sel.innerHTML = `<option value="">All tunings</option>` +
+      tunings.map(t => `<option value="${escHtml(t.tuning)}">${escHtml(t.tuning)} (${t.n})</option>`).join("");
+    if (current) sel.value = current;
+    _baLyricsTuningsLoaded = true;
+  } catch { /* non-fatal */ }
+}
+
+async function _baLoadLyrics() {
+  const rowsEl  = document.getElementById("blues-archive-lyrics-rows");
+  const countEl = document.getElementById("blues-archive-lyrics-count");
+  if (!rowsEl) return;
+  const q = (document.getElementById("blues-archive-lyrics-search")?.value || "").trim();
+  const params = new URLSearchParams();
+  if (q)               params.set("q", q);
+  if (_baLyricsTuning) params.set("tuning", _baLyricsTuning);
+  params.set("limit",  String(_BA_LYRICS_LIMIT));
+  params.set("offset", String(_baLyricsPage * _BA_LYRICS_LIMIT));
+  rowsEl.textContent = "Loading…";
+  try {
+    const r = await apiFetch(`/api/admin/lyrics?${params}`);
+    if (!r.ok) { rowsEl.innerHTML = `<p style="color:#e88">Failed: HTTP ${r.status}</p>`; return; }
+    const { rows = [], total = 0 } = await r.json();
+    _baLyricsTotal = total;
+    if (countEl) countEl.textContent = total ? `${total.toLocaleString()} lyric${total === 1 ? "" : "s"}` : "No matches.";
+    _baLyricsRowsCache = rows;
+    _baRenderLyricsTable();
+    _baRenderLyricsPager();
+  } catch (e) {
+    rowsEl.innerHTML = `<p style="color:#e88">Failed: ${escHtml(String(e?.message || e))}</p>`;
+  }
+}
+
+function _baSortLyricsList(key) {
+  _baToggleSort(_baLyricsListSort, key);
+  _baRenderLyricsTable();
+}
+window._baSortLyricsList = _baSortLyricsList;
+
+function _baRenderLyricsTable() {
+  const rowsEl = document.getElementById("blues-archive-lyrics-rows");
+  if (!rowsEl) return;
+  const rows = _baSortApply(_baLyricsRowsCache, _baLyricsListSort, _BA_LYRICS_LIST_TYPES);
+  if (!rows.length) {
+    rowsEl.innerHTML = `<p style="color:var(--muted);padding:0.5rem 0">No matches.</p>`;
+    return;
+  }
+  const S = _baLyricsListSort;
+  rowsEl.innerHTML = `
+    <table class="api-log-table" style="font-size:0.84rem;width:100%">
+      <thead><tr>
+        ${_baSortTh("Title",   "page_title", S, "_baSortLyricsList")}
+        ${_baSortTh("Artist",  "artist",     S, "_baSortLyricsList")}
+        ${_baSortTh("Tuning",  "tuning",     S, "_baSortLyricsList")}
+        ${_baSortTh("Snippet", "snippet",    S, "_baSortLyricsList")}
+        <th style="width:1%"></th>
+      </tr></thead>
+      <tbody>${rows.map(l => {
+        // Title + artist are both lookup-popup triggers (title = track
+        // scope, artist = artist scope). Clicking elsewhere on the row
+        // opens the lyric viewer overlay (_baOpenLyric).
+        const titleHtml = (typeof entityLookupLinkHtml === "function" && l.page_title)
+          ? entityLookupLinkHtml("track", l.page_title, { trackArtist: l.artist || "", title: `Lookup options for "${l.page_title}"` })
+          : escHtml(l.page_title || "");
+        const artistHtml = l.artist && typeof entityLookupLinkHtml === "function"
+          ? entityLookupLinkHtml("artist", l.artist, { title: `Lookup options for "${l.artist}"` })
+          : escHtml(l.artist || "");
+        return `<tr data-lyric-row="${l.id}">
+          <td style="font-weight:600;color:var(--text);white-space:nowrap">${titleHtml}</td>
+          <td style="color:var(--muted);white-space:nowrap">${artistHtml}</td>
+          <td style="white-space:nowrap;color:var(--accent);cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml(l.tuning || "")}</td>
+          <td style="font-size:0.76rem;color:#888;cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml((l.snippet || "").replace(/\s+/g, " ").slice(0, 140))}…</td>
+          <td style="text-align:right"><a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenLyricEditor(${l.id})" style="color:var(--muted);text-decoration:none;font-size:0.78rem" title="Edit tuning / artist on this lyric">✎</a></td>
+        </tr>`;
+      }).join("")}</tbody>
+    </table>`;
+}
+
+function _baRenderLyricsPager() {
+  const el = document.getElementById("blues-archive-lyrics-pager");
+  if (!el) return;
+  const pageCount = Math.max(1, Math.ceil(_baLyricsTotal / _BA_LYRICS_LIMIT));
+  const cur = _baLyricsPage + 1;
+  if (pageCount <= 1) { el.innerHTML = ""; return; }
+  el.innerHTML = `
+    <button class="archive-btn" ${cur <= 1 ? "disabled" : ""} onclick="_baLyricsGoToPage(${_baLyricsPage - 1})">‹ Prev</button>
+    <span style="color:var(--muted)">Page ${cur} / ${pageCount}</span>
+    <button class="archive-btn" ${cur >= pageCount ? "disabled" : ""} onclick="_baLyricsGoToPage(${_baLyricsPage + 1})">Next ›</button>
+  `;
+}
+
+function _baLyricsGoToPage(p) {
+  _baLyricsPage = Math.max(0, p);
+  _baLoadLyrics();
+}
+window._baLyricsGoToPage = _baLyricsGoToPage;
