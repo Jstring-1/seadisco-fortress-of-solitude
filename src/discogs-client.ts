@@ -162,11 +162,18 @@ export class DiscogsClient {
   async getLabelReleases(labelId: number | string, options: {
     page?: number;
     perPage?: number;
+    // Discogs supports sort=year|title|format for this endpoint.
+    // Anything else is silently ignored upstream — caller is
+    // responsible for sending one of those.
+    sort?: string;
+    sortOrder?: "asc" | "desc";
   } = {}) {
     const params: Record<string, string> = {
       page: String(options.page ?? 1),
       per_page: String(options.perPage ?? 10),
     };
+    if (options.sort)      params.sort       = options.sort;
+    if (options.sortOrder) params.sort_order = options.sortOrder;
     return this.get(`/labels/${labelId}/releases`, params);
   }
 

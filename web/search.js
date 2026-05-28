@@ -363,6 +363,17 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
         page: String(page),
         per_page: String(perPage),
       });
+      // /label-releases supports sort=year|title|format (same as
+      // /artist-releases). Previously this builder didn't forward
+      // the form's sort at all, so a "Year ASC" pick silently fell
+      // back to Discogs's default order on label-by-id queries.
+      if (sort) {
+        const [sf, so] = sort.split(":");
+        if (sf === "year" || sf === "title" || sf === "format") {
+          p.set("sort", sf);
+          if (so === "asc" || so === "desc") p.set("sort_order", so);
+        }
+      }
       return p;
     };
 
@@ -1288,6 +1299,13 @@ function _sdRenderRandomSlice() {
     grid.insertAdjacentHTML("beforeend", _sdBuildStripCardHtml(slice[i], _randomShown + i, mode));
   }
   _randomShown += slice.length;
+  // Admin-only: stamp 🎸 on any cards whose artist is in the Blues
+  // Archive. The strip surfaces (recent / suggestions / submitted /
+  // feed) all paint into #random-records-grid, which _baStampCards
+  // now recognizes too.
+  if (window._isAdmin && typeof window._baStampCards === "function") {
+    window._baStampCards(slice).catch(() => {});
+  }
 }
 window._sdRenderRandomSlice = _sdRenderRandomSlice;
 
