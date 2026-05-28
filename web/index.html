@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260528.0952" />
+  <link rel="stylesheet" href="/style.css?v=20260528.0956" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260528.0952"></script>
+<script defer src="/shared.js?v=20260528.0956"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -1008,8 +1008,10 @@ e.g.  miles davis | coltrane
            drives /admin Blues DB drives these too. -->
       <button type="button" class="archive-btn" onclick="_baAdminAction('addArtist')" title="Add a new artist row manually via the full editor (~25 fields).">+ Add artist</button>
       <button type="button" id="blues-enrich-discogs-full-btn" class="archive-btn" onclick="_baAdminAction('enrichDiscogsFull')" title="Pull the full Discogs artist record (bio, aliases, realname, name variations, members, groups, photo, URLs) for every row that has a Discogs ID. ~3-5 min at 1 req/sec. Idempotent.">Get all info from Discogs</button>
-      <button type="button" id="blues-export-btn" class="archive-btn" onclick="_baAdminAction('exportCsv')" title="Download every row as a CSV (UTF-8 with BOM, opens cleanly in Excel/Sheets).">Export CSV</button>
-      <button type="button" id="blues-delete-all-btn" class="archive-btn" onclick="_baAdminAction('deleteAll')" title="Wipe every row in the blues_artists table. Two-step confirm." style="color:#e88;border-color:#e88">Delete all</button>
+      <button type="button" id="blues-export-btn" class="archive-btn" onclick="_baAdminAction('exportArtistsCsv')" title="Download every blues_artists row as a CSV (with the discogs_releases JSONB column flattened to JSON). UTF-8 with BOM, opens cleanly in Excel/Sheets.">Export artists CSV</button>
+      <button type="button" id="blues-export-lyrics-btn" class="archive-btn" onclick="_baAdminAction('exportLyricsCsv')" title="Download every blues_lyrics row as a CSV (title, artist, tuning, plaintext, page URL, etc.). UTF-8 with BOM.">Export lyrics CSV</button>
+      <!-- "Delete all" removed — too easy to fat-finger. The table can
+           still be cleared via direct DB access if genuinely needed. -->
       <span id="blues-archive-import-status" style="font-size:0.78rem;color:var(--muted)"></span>
       <span id="blues-archive-count" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
     </div>
@@ -1566,13 +1568,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260528.0952"></script>
-<script defer src="/search.js?v=20260528.0952"></script>
-<script defer src="/collection.js?v=20260528.0952"></script>
+<script defer src="/utils.js?v=20260528.0956"></script>
+<script defer src="/search.js?v=20260528.0956"></script>
+<script defer src="/collection.js?v=20260528.0956"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260528.0952"></script>
-<script defer src="/app.js?v=20260528.0952"></script>
+<script defer src="/modal.js?v=20260528.0956"></script>
+<script defer src="/app.js?v=20260528.0956"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1583,13 +1585,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260528.0952"></script>
-<script defer src="/queue.js?v=20260528.0952"></script>
+<script defer src="/loc.js?v=20260528.0956"></script>
+<script defer src="/queue.js?v=20260528.0956"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260528.0952";
+  window._SD_LAZY_VERSION = "20260528.0956";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1619,8 +1621,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260528.0952"></script>
-<script defer src="/offline.js?v=20260528.0952"></script>
+<script defer src="/idb.js?v=20260528.0956"></script>
+<script defer src="/offline.js?v=20260528.0956"></script>
 
 </body>
 </html>
