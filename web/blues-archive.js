@@ -1163,15 +1163,22 @@ async function _baLoadStats() {
     if (!r.ok) { el.innerHTML = ""; return; }
     const s = await r.json();
     const chip = (label, n, opts = {}) => {
+      // Hide chips with zero instances — clicking them produces an
+      // empty filtered view and they only add noise to the strip.
+      // The "Artists" total chip is always shown so the strip has at
+      // least one anchor when the DB is freshly empty.
+      const count = Number(n) || 0;
+      if (count === 0 && !opts.alwaysShow) return "";
       const click = opts.onclick ? ` onclick="${opts.onclick}"` : "";
       const cur = opts.onclick ? "cursor:pointer;" : "";
       const tone = opts.tone === "warn" ? "color:#e8a85a" : "color:var(--muted)";
       // title= tooltip on every chip so the hover spells out what
       // the bucket means + (for clickable ones) what the click does.
-      return `<span class="ba-stat-chip"${click} title="${escHtml(opts.title || label)}" style="${cur}padding:0.25rem 0.5rem;border:1px solid var(--border);border-radius:999px;${tone}">${escHtml(label)}: <strong style="color:var(--text)">${(n || 0).toLocaleString()}</strong></span>`;
+      return `<span class="ba-stat-chip"${click} title="${escHtml(opts.title || label)}" style="${cur}padding:0.25rem 0.5rem;border:1px solid var(--border);border-radius:999px;${tone}">${escHtml(label)}: <strong style="color:var(--text)">${count.toLocaleString()}</strong></span>`;
     };
     el.innerHTML = [
       chip("Artists", s.artists_total, {
+        alwaysShow: true,
         onclick: "_baJumpArtists('')",
         title: "Total rows in the blues_artists table. Click to view all artists (clears any active category filter).",
       }),
