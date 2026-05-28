@@ -6500,6 +6500,87 @@ export async function listBluesArchive(opts: {
   return { rows: r.rows, total };
 }
 
+// ── Blues Archive: flat releases list ─────────────────────────────────
+// Unnests every blues_artists.discogs_releases JSONB array into a flat
+// per-release row joined back to the source artist. Powers the Releases
+// sub-tab on the Discovery Blues Archive view so a curator can browse,
+// filter, and sort the catalog without bouncing through artist popups.
+const _BLUES_REL_SORT_COLS: Record<string, string> = {
+  // Display title comes from the JSONB blob.
+  title:        "lower(coalesce(rel->>'title',''))",
+  // Cast year text to int so 1928 < 1932 sorts numerically.
+  year:         "NULLIF(rel->>'year','')::int",
+  artist:       "lower(a.name)",
+  type:         "lower(coalesce(rel->>'type',''))",
+  role:         "lower(coalesce(rel->>'role',''))",
+};
+export async function listBluesArchiveReleases(opts: {
+  search?: string;
+  artist?: string;
+  year?: number | null;
+  type?: string;
+  role?: string;
+  sort?: string;
+  order?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
+} = {}): Promise<{ rows: any[]; total: number }> {
+  const params: any[] = [];
+  const where: string[] = [];
+  if (opts.search?.trim()) {
+    params.push(`%${opts.search.trim()}%`);
+    where.push(`(rel->>'title' ILIKE $${params.length} OR a.name ILIKE $${params.length})`);
+  }
+  if (opts.artist?.trim()) {
+    params.push(`%${opts.artist.trim()}%`);
+    where.push(`a.name ILIKE $${params.length}`);
+  }
+  if (opts.year != null && Number.isFinite(opts.year)) {
+    params.push(opts.year);
+    where.push(`NULLIF(rel->>'year','')::int = $${params.length}`);
+  }
+  if (opts.type?.trim()) {
+    params.push(opts.type.trim().toLowerCase());
+    where.push(`LOWER(COALESCE(rel->>'type','')) = $${params.length}`);
+  }
+  if (opts.role?.trim()) {
+    params.push(opts.role.trim().toLowerCase());
+    where.push(`LOWER(COALESCE(rel->>'role','')) = $${params.length}`);
+  }
+  // Drop rows whose JSONB entry doesn't have a usable id — they can't
+  // be linked out to discogs.com so they're effectively noise.
+  where.push(`(rel ? 'id') AND (rel->>'id') ~ '^[0-9]+$'`);
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const limit = Math.max(1, Math.min(500, opts.limit ?? 100));
+  const offset = Math.max(0, opts.offset ?? 0);
+  const sortCol = _BLUES_REL_SORT_COLS[String(opts.sort ?? "")] || _BLUES_REL_SORT_COLS.year;
+  const order   = opts.order === "asc" ? "ASC" : "DESC";
+  // Tie-break by artist then title so identical sort keys stay stable.
+  const orderSql = `ORDER BY ${sortCol} ${order} NULLS LAST, lower(a.name) ASC, lower(coalesce(rel->>'title','')) ASC`;
+  const fromSql = `FROM blues_artists a, jsonb_array_elements(coalesce(a.discogs_releases, '[]'::jsonb)) AS rel`;
+  const totalR = await getPool().query(`SELECT COUNT(*)::int AS n ${fromSql} ${whereSql}`, params);
+  const total = totalR.rows[0]?.n ?? 0;
+  params.push(limit, offset);
+  const r = await getPool().query(
+    `SELECT a.id   AS artist_id,
+            a.name AS artist_name,
+            a.photo_url,
+            a.discogs_id AS artist_discogs_id,
+            (rel->>'id')::bigint                    AS release_id,
+            COALESCE(rel->>'type', 'release')       AS release_type,
+            COALESCE(rel->>'title','')              AS release_title,
+            NULLIF(rel->>'year','')::int            AS release_year,
+            rel->'label'                            AS release_label,
+            rel->>'role'                            AS role
+       ${fromSql}
+       ${whereSql}
+       ${orderSql}
+       LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params,
+  );
+  return { rows: r.rows, total };
+}
+
 // Full artist record + matched lyrics + releases sorted oldest→newest.
 // Lyrics match by artist_id (canonical FK) OR — for legacy rows not
 // yet backfilled — by case-insensitive name. The name fallback keeps
