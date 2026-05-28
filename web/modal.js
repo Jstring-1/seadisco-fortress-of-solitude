@@ -211,7 +211,14 @@ function openModal(event, id, type, discogsUrl) {
       // _signInForMore flag so the modal can show a CTA instead of
       // letting fields silently fall to empty strings.
       if (!r.ok) {
-        const reason = r.status === 401 ? "auth" : "error";
+        // 401 = truly anonymous (no Bearer). 503 = signed-in but no Discogs
+        // OAuth (or upstream Discogs unreachable). 500 = upstream error.
+        // Surface different CTAs so a signed-in user doesn't see "sign in"
+        // when the actual problem is a disconnected Discogs account.
+        let reason;
+        if (r.status === 401) reason = "auth";
+        else if (r.status === 503) reason = "discogs";
+        else reason = "error";
         return { _signInForMore: reason, _httpStatus: r.status, ...cachedItem };
       }
       return r.json();
@@ -4883,7 +4890,13 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
              : `<div class="album-cover-placeholder">♪</div>`}
       <div class="album-meta">
         ${typeLabel ? `<div style="display:flex;align-items:center;gap:0.4rem;margin-bottom:0.3rem"><div class="album-type-badge" style="cursor:pointer;user-select:none" onclick="navigator.clipboard.writeText('${escHtml(String(releaseId))}');this.dataset.copied='true';setTimeout(()=>this.dataset.copied='',1200)" title="Click to copy ID">${escHtml(typeLabel)}</div><button class="popup-share-inline" onclick="sharePopup(this)" title="Copy share link">share</button></div>` : ""}
-        ${d._signInForMore ? `<div style="font-size:0.75rem;color:var(--muted);background:rgba(255,255,255,0.04);border-left:2px solid var(--accent);padding:0.4rem 0.6rem;border-radius:4px;margin-bottom:0.5rem">Sign in to load full release details (tracklist, credits, marketplace).</div>` : ""}
+        ${d._signInForMore ? `<div style="font-size:0.75rem;color:var(--muted);background:rgba(255,255,255,0.04);border-left:2px solid var(--accent);padding:0.4rem 0.6rem;border-radius:4px;margin-bottom:0.5rem">${
+          d._signInForMore === "auth"
+            ? "Sign in to load full release details (tracklist, credits, marketplace)."
+            : d._signInForMore === "discogs"
+              ? `Connect your Discogs account to load full release details. <a href="/account.html" style="color:var(--accent);text-decoration:underline">Open account settings ↗</a>`
+              : `Couldn't load full release details (HTTP ${escHtml(String(d._httpStatus || "?"))}). Try again in a moment.`
+        }</div>` : ""}
         <h2>${entityLookupLinkHtml("release", title, { className: "modal-title-link", title: `Lookup options for "${title}"` })}</h2>
         ${artistEntries.length ? `<div class="album-artist">${artistEntries.map(({ id: aId, name: n }) => `${entityLookupLinkHtml("artist", n, { className: "modal-artist-link", title: `Lookup options for ${n}`, entityId: aId })}${bluesAddIcon(aId, n)}`).join(", ")}</div>` : ""}
         ${detailRows ? `<div class="album-detail-grid">${detailRows}</div>` : ""}

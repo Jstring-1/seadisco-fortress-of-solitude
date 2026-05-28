@@ -8205,7 +8205,7 @@ app.delete("/api/admin/blues/all", async (req, res) => {
   }
 });
 
-app.get("/api/admin/blues/:id", async (req, res) => {
+app.get("/api/admin/blues/:id(\\d+)", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   const id = parseInt(req.params.id, 10);
   if (!Number.isFinite(id)) { res.status(400).json({ error: "bad id" }); return; }
@@ -8229,7 +8229,7 @@ app.post("/api/admin/blues", express.json({ limit: "200kb" }), async (req, res) 
   }
 });
 
-app.put("/api/admin/blues/:id", express.json({ limit: "200kb" }), async (req, res) => {
+app.put("/api/admin/blues/:id(\\d+)", express.json({ limit: "200kb" }), async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   const id = parseInt(req.params.id, 10);
   if (!Number.isFinite(id)) { res.status(400).json({ error: "bad id" }); return; }
@@ -8242,7 +8242,7 @@ app.put("/api/admin/blues/:id", express.json({ limit: "200kb" }), async (req, re
   }
 });
 
-app.delete("/api/admin/blues/:id", async (req, res) => {
+app.delete("/api/admin/blues/:id(\\d+)", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   const id = parseInt(req.params.id, 10);
   if (!Number.isFinite(id)) { res.status(400).json({ error: "bad id" }); return; }
