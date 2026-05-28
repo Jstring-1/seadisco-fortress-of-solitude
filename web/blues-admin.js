@@ -963,6 +963,25 @@ function bluesDbEnrichYt(id) {
 function bluesDbEnrichEditorWiki()    { const id = _bluesDbState.editingId; if (id) bluesDbEnrichWiki(id); }
 function bluesDbEnrichEditorYt()      { const id = _bluesDbState.editingId; if (id) bluesDbEnrichYt(id); }
 
+// Per-row force refresh from Discogs. Use after correcting a stale
+// discogs_id — passes force=1 so the server overwrites the existing
+// photo_url + notes and REPLACES the discogs_releases array rather
+// than merging in the prior (wrong-artist) entries. Default
+// per-row mode is conservative (only fills blanks).
+async function bluesDbRefreshFromDiscogs() {
+  const id = _bluesDbState.editingId;
+  if (!id) return;
+  if (!confirm("Re-pull this artist's full record from Discogs and OVERWRITE photo / bio + REPLACE the stored release list?\n\nUse this after fixing a stale discogs_id.")) return;
+  return _bluesEnrichGeneric({
+    id,
+    endpoint: "/api/admin/blues/enrich-discogs-full",
+    btnId: "blues-editor-discogs-refresh",
+    runningLabel: "Refreshing…",
+    urlExtras: "?force=1",
+  });
+}
+window.bluesDbRefreshFromDiscogs = bluesDbRefreshFromDiscogs;
+
 // ── Discogs candidate picker ────────────────────────────────────────
 // Opened from the editor's "Pick Discogs match" button. Shows the top
 // Discogs artist hits for the row's name so the admin can pick the
@@ -1226,6 +1245,7 @@ async function bluesDbOpenEditor(id) {
   const mbBtn = document.getElementById("blues-editor-mb");
   const wikiBtn = document.getElementById("blues-editor-wiki");
   const discogsBtn = document.getElementById("blues-editor-discogs");
+  const discogsRefreshBtn = document.getElementById("blues-editor-discogs-refresh");
   const mergeBtn = document.getElementById("blues-editor-merge");
   const ytBtn = document.getElementById("blues-editor-yt");
   form.reset();
@@ -1235,6 +1255,7 @@ async function bluesDbOpenEditor(id) {
     mbBtn.style.display = "";
     wikiBtn.style.display = "";
     discogsBtn.style.display = "";
+    if (discogsRefreshBtn) discogsRefreshBtn.style.display = "";
     if (mergeBtn) mergeBtn.style.display = "";
     ytBtn.style.display = "";
     try {
@@ -1261,6 +1282,7 @@ async function bluesDbOpenEditor(id) {
     mbBtn.style.display = "none";
     wikiBtn.style.display = "none";
     discogsBtn.style.display = "none";
+    if (discogsRefreshBtn) discogsRefreshBtn.style.display = "none";
     if (mergeBtn) mergeBtn.style.display = "none";
     ytBtn.style.display = "none";
   }

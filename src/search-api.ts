@@ -8605,6 +8605,10 @@ app.post("/api/admin/blues/enrich-discogs-full", async (req, res) => {
   const limitRaw = req.query.limit as string | undefined;
   const idFilter = idRaw ? parseInt(idRaw, 10) : undefined;
   const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
+  // force=1 → overwrite photo_url / notes and REPLACE discogs_releases
+  // rather than merging. Used by the per-row "Refresh from Discogs"
+  // button after the admin has corrected a stale discogs_id.
+  const force = req.query.force === "1" || req.query.force === "true";
   if (Number.isFinite(idFilter as number)) {
     try {
       // requireExistingId: per-row admin click should NOT silently
@@ -8613,7 +8617,7 @@ app.post("/api/admin/blues/enrich-discogs-full", async (req, res) => {
       // artist's full record. Bulk path (no idFilter) keeps the old
       // auto-resolve behaviour so it can sweep through unidentified
       // rows.
-      const result = await enrichBluesFromDiscogsArtists(client, { idFilter, requireExistingId: true });
+      const result = await enrichBluesFromDiscogsArtists(client, { idFilter, requireExistingId: true, force });
       res.json({ ok: true, ...result });
     } catch (err: any) {
       console.error("[blues enrich-discogs-full single]", err);
