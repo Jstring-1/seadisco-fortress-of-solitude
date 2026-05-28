@@ -1261,6 +1261,55 @@ export async function deleteBluesArtist(id: number): Promise<void> {
   await getPool().query(`DELETE FROM blues_artists WHERE id = $1`, [id]);
 }
 
+// Cascade-delete the artist AND every lyric tied to them. Matches
+// lyrics by FK (canonical) OR by case-insensitive name (legacy rows
+// whose artist_id hasn't been backfilled). Single transaction so a
+// partial failure rolls back the whole thing. Returns counts so the
+// UI can report exactly how many lyrics went with the artist.
+export async function deleteBluesArtistAndLyrics(id: number): Promise<{
+  ok: boolean;
+  artistName: string;
+  lyricsDeleted: number;
+}> {
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    const ar = await client.query(
+      `SELECT id, name FROM blues_artists WHERE id = $1 FOR UPDATE`,
+      [id],
+    );
+    if (!ar.rows.length) { await client.query("ROLLBACK"); throw new Error("artist not found"); }
+    const name = String(ar.rows[0].name || "");
+    // 1. Drop lyrics linked by FK.
+    const r1 = await client.query(
+      `DELETE FROM blues_lyrics WHERE artist_id = $1`,
+      [id],
+    );
+    // 2. Drop lyrics that name-match but never got FK-linked (legacy).
+    const r2 = name
+      ? await client.query(
+          `DELETE FROM blues_lyrics
+            WHERE artist_id IS NULL
+              AND LOWER(TRIM(COALESCE(artist, ''))) = LOWER(TRIM($1))`,
+          [name],
+        )
+      : { rowCount: 0 } as any;
+    // 3. Drop the artist.
+    await client.query(`DELETE FROM blues_artists WHERE id = $1`, [id]);
+    await client.query("COMMIT");
+    return {
+      ok: true,
+      artistName: name,
+      lyricsDeleted: (r1.rowCount ?? 0) + (r2.rowCount ?? 0),
+    };
+  } catch (e) {
+    try { await client.query("ROLLBACK"); } catch {}
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 /** Upsert a Wikidata-sourced blues artist row.
  *
  *  Match order:

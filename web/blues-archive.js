@@ -398,6 +398,7 @@ function _baRenderArtistDetail(a) {
         <button class="archive-btn archive-btn-suggest" onclick="_baOpenFullEditor(${a.id})" title="Open the full edit form (~25 fields: bio, dates, identifiers, enrichment buttons for Wiki / MusicBrainz / Discogs picker / YouTube).">Edit (full form)</button>
         <button class="archive-btn" onclick="_baOpenReassignPicker(${a.id}, ${JSON.stringify(a.name || "").replace(/"/g, "&quot;")})" title="Reassign every lyric matching some other artist name (or artist row) to this artist. Doesn't delete the source artist — use Merge for that.">Reassign lyrics from…</button>
         <button class="archive-btn" onclick="_baOpenMergePicker(${a.id}, ${JSON.stringify(a.name || "").replace(/"/g, "&quot;")})" title="Merge this artist into another. Lyrics get reassigned by name; release JSONB arrays are concatenated (deduped); this row is then deleted.">Merge into…</button>
+        <button class="archive-btn" onclick="_baDeleteArtistWithLyrics(${a.id})" title="Delete THIS artist AND every lyric tied to them (FK-linked OR name-matched). Cannot be undone. Use Merge instead if you just want to consolidate." style="color:#e88;border-color:rgba(232,136,136,0.4)">Delete artist + lyrics</button>
       </span>
     </div>
     <div style="display:flex;gap:1rem;margin-bottom:1.2rem;align-items:flex-start;flex-wrap:wrap">
@@ -423,6 +424,46 @@ function _baRenderArtistDetail(a) {
     ${releasesHtml}
   `;
 }
+
+// Cascade-delete an artist AND every lyric tied to them. Two-step
+// confirm (the count of affected lyrics is shown after we look it
+// up) so a stray click can't nuke a row with 40 lyrics by accident.
+// On success: closes the popup, reloads the grid + stats so the
+// numbers reflect the deletion.
+async function _baDeleteArtistWithLyrics(id) {
+  const artistName = _baDetailArtist?.name || `#${id}`;
+  const lyricsN = Array.isArray(_baDetailArtist?.lyrics) ? _baDetailArtist.lyrics.length : 0;
+  const releasesN = Array.isArray(_baDetailArtist?.releases) ? _baDetailArtist.releases.length : 0;
+  const msg =
+    `Permanently delete ${artistName}?\n\n` +
+    `This removes:\n` +
+    `· the artist row\n` +
+    `· ${lyricsN} associated lyric${lyricsN === 1 ? "" : "s"}\n` +
+    (releasesN ? `\nThe Discogs releases array stored on this row is NOT pushed back to Discogs — only this DB row is affected.\n` : "") +
+    `\nThis cannot be undone. Use 'Merge into…' instead if you want to consolidate without losing lyrics.`;
+  if (!confirm(msg)) return;
+  try {
+    const r = await apiFetch(`/api/admin/blues/${id}?with_lyrics=1`, { method: "DELETE" });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert("Delete failed: " + (err?.error ?? r.status));
+      return;
+    }
+    const out = await r.json().catch(() => ({}));
+    // Close the popup, refresh the underlying list + stats so the
+    // row vanishes and the chip counts update.
+    document.getElementById("ba-artist-overlay")?.remove();
+    _baCurrentArtistId = null;
+    if (typeof _baLoadList === "function")  { try { _baLoadList();  } catch {} }
+    if (typeof _baLoadStats === "function") { try { _baLoadStats(); } catch {} }
+    if (typeof showToast === "function") {
+      showToast(`Deleted ${out.artistName || artistName} + ${out.lyricsDeleted ?? 0} lyric${out.lyricsDeleted === 1 ? "" : "s"}`, "ok");
+    }
+  } catch (e) {
+    alert("Delete failed: " + (e?.message || e));
+  }
+}
+window._baDeleteArtistWithLyrics = _baDeleteArtistWithLyrics;
 
 // Dismiss the artist popup. The function name predates the popup
 // rewrite (it used to swap back to the list page); kept so existing
@@ -1333,9 +1374,16 @@ function _baReleaseRowHtml(row) {
   const id   = row.release_id;
   const type = (row.release_type || "release").toLowerCase();
   const url  = id ? `https://www.discogs.com/${type}/${id}` : "";
+  // Title click opens the SeaDisco album/release modal (same modal
+  // the search-results cards use) so the curator can see tracklist,
+  // credits, marketplace, etc. without leaving the page. The
+  // discogs.com link survives as a tiny '↗' next to the title for
+  // when the curator wants the canonical Discogs page.
+  const titleText = escHtml(row.release_title || "(untitled)");
   const titleHtml = id
-    ? `<a href="${escHtml(url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--accent);text-decoration:none" title="Open on Discogs.com ↗">${escHtml(row.release_title || "(untitled)")}</a>`
-    : escHtml(row.release_title || "(untitled)");
+    ? `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenRelease(${id}, '${type}', '${escHtml(url)}')" style="color:var(--accent);text-decoration:none" title="Open ${type} popup">${titleText}</a>`
+      + ` <a href="${escHtml(url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Open on Discogs.com ↗" style="font-size:0.72rem;color:var(--muted);text-decoration:none;margin-left:0.25rem">↗</a>`
+    : titleText;
   const artistHtml = row.artist_id
     ? `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenArtist(${row.artist_id})" style="color:var(--text);text-decoration:none" title="Open in Blues Archive">${escHtml(row.artist_name || "")}</a>`
     : escHtml(row.artist_name || "");
