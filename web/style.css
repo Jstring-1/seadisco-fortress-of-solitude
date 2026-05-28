@@ -9132,14 +9132,17 @@ body.is-offline button.offline-disabled {
 .ba-lyric-badge          { color: #cda35a; }
 .ba-lyric-badge-pinned   { color: #ffd166; }
 
-/* Admin 🎸 corner indicator on result/collection cards. Positioned
-   absolute inside .card; click navigates to the archive artist popup.
+/* Admin 🎸 corner indicator on result/collection/home-strip cards.
+   Positioned top-RIGHT so it doesn't fight the .recent-dismiss × at
+   top-left on home-strip cards. For wrapped cards (.recent-wrap) the
+   badge is a sibling of .card rather than nested — avoids the
+   invalid <a>-in-<a> the original markup produced.
    Stays small + translucent so it doesn't compete with cover art. */
 .card { position: relative; }
 .card-ba-archive-badge {
   position: absolute;
   top: 6px;
-  left: 6px;
+  right: 6px;
   z-index: 5;
   font-size: 1rem;
   line-height: 1;
