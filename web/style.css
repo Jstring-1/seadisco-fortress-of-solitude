@@ -2782,7 +2782,12 @@ body.sd-anon .card-badge.badge-inventory {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.75);
-  z-index: 100;
+  /* 350: above the Blues Archive artist popup (300) and the docked
+     mini-player bar (300) so a release modal opened from inside
+     either of them renders ON TOP, not stranded behind. Series/
+     version overlays bumped in lockstep below so the master→version
+     pressings stack still layers correctly. */
+  z-index: 350;
   align-items: center;
   justify-content: center;
   padding: 1rem;
@@ -2794,7 +2799,9 @@ body.sd-anon .card-badge.badge-inventory {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.55);
-  z-index: 220;
+  /* 370: above #modal-overlay (350) so version pressings still
+     layer on top of the master modal. */
+  z-index: 370;
   align-items: center;
   justify-content: center;
   padding: 1rem;
@@ -2827,7 +2834,8 @@ body.sd-anon .card-badge.badge-inventory {
   position: fixed;
   inset: 0;
   background: rgba(0,0,0,0.55);
-  z-index: 210;
+  /* 360: above #modal-overlay (350), below #version-overlay (370). */
+  z-index: 360;
   align-items: center;
   justify-content: center;
   padding: 1rem;
