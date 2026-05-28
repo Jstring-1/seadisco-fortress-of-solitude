@@ -9430,6 +9430,140 @@ app.get("/api/blues-archive/artists/:id", async (req, res) => {
   }
 });
 
+// POST /api/blues-archive/check — admin-only "is this in the archive?"
+// probe used to stamp indicators on album / version modals site-wide.
+// Body: { artistNames?: string[], artistIds?: number[],
+//         releaseId?: number, masterId?: number, trackTitles?: string[] }
+// Returns:
+//   {
+//     artists: { [lowercaseName]: { id: number, name: string } },
+//     artistsById: { [discogsId]: { id: number, name: string } },
+//     release:  { inArchive: boolean, viaArtistId?: number },
+//     tracks:   { [lowercaseTitle]: { id: number, page_title: string, artist: string } }
+//   }
+// Lookups are case-insensitive on TRIM(LOWER(...)) to match the same
+// normalization used by the merge / import code paths.
+app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const body = req.body || {};
+    const artistNames: string[] = Array.isArray(body.artistNames)
+      ? body.artistNames.filter((n: any) => typeof n === "string" && n.trim()).slice(0, 50)
+      : [];
+    const artistIds: number[] = Array.isArray(body.artistIds)
+      ? body.artistIds.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n) && n > 0).slice(0, 50)
+      : [];
+    const trackTitles: string[] = Array.isArray(body.trackTitles)
+      ? body.trackTitles.filter((s: any) => typeof s === "string" && s.trim()).slice(0, 200)
+      : [];
+    const releaseId = Number(body.releaseId);
+    const masterId  = Number(body.masterId);
+
+    const out: any = {
+      artists:     {} as Record<string, any>,
+      artistsById: {} as Record<string, any>,
+      release:     { inArchive: false } as any,
+      tracks:      {} as Record<string, any>,
+    };
+
+    // Artists by name (lowercase TRIM match) — covers the common case
+    // where the album popup has a name string but no resolved internal
+    // archive id.
+    if (artistNames.length) {
+      const r = await getPool().query(
+        `SELECT id, name FROM blues_artists
+          WHERE LOWER(TRIM(name)) = ANY($1::text[])`,
+        [artistNames.map(n => n.trim().toLowerCase())],
+      );
+      for (const row of r.rows) {
+        out.artists[String(row.name).trim().toLowerCase()] = { id: row.id, name: row.name };
+      }
+    }
+    // Artists by Discogs ID — when the modal has a resolved Discogs
+    // artist id, a direct id match is more reliable than name match
+    // (handles "Smith (4)" disambiguation cleanly).
+    if (artistIds.length) {
+      const r = await getPool().query(
+        `SELECT id, name, discogs_id FROM blues_artists
+          WHERE discogs_id = ANY($1::int[])`,
+        [artistIds],
+      );
+      for (const row of r.rows) {
+        out.artistsById[String(row.discogs_id)] = { id: row.id, name: row.name };
+      }
+    }
+
+    // Release / master match: walk blues_artists.discogs_releases JSONB
+    // and look for any object whose id matches. The JSONB stores both
+    // release and master entries (each row has a type discriminator),
+    // so we'll match either flavor against the corresponding id.
+    if (Number.isFinite(releaseId) && releaseId > 0) {
+      const r = await getPool().query(
+        `SELECT a.id, a.name
+           FROM blues_artists a,
+                jsonb_array_elements(COALESCE(a.discogs_releases, '[]'::jsonb)) AS rel
+          WHERE (rel->>'id')::bigint = $1
+          LIMIT 1`,
+        [releaseId],
+      );
+      if (r.rows.length) {
+        out.release = { inArchive: true, viaArtistId: r.rows[0].id, viaArtistName: r.rows[0].name };
+      }
+    }
+    if (!out.release.inArchive && Number.isFinite(masterId) && masterId > 0) {
+      const r = await getPool().query(
+        `SELECT a.id, a.name
+           FROM blues_artists a,
+                jsonb_array_elements(COALESCE(a.discogs_releases, '[]'::jsonb)) AS rel
+          WHERE (rel->>'id')::bigint = $1
+          LIMIT 1`,
+        [masterId],
+      );
+      if (r.rows.length) {
+        out.release = { inArchive: true, viaArtistId: r.rows[0].id, viaArtistName: r.rows[0].name, viaMaster: true };
+      }
+    }
+
+    // Track-title matches against blues_lyrics.page_title. When the
+    // caller supplied artistNames, scope the match to that artist
+    // (so "Crossroads" only matches the Robert Johnson row when the
+    // album is by Robert Johnson, not every artist who covered it).
+    // Without artist context, match any artist (less precise but
+    // surfaces something useful).
+    if (trackTitles.length) {
+      const titlesLc = trackTitles.map(t => t.trim().toLowerCase());
+      let r: any;
+      if (artistNames.length) {
+        r = await getPool().query(
+          `SELECT id, page_title, artist
+             FROM blues_lyrics
+            WHERE LOWER(TRIM(page_title)) = ANY($1::text[])
+              AND LOWER(TRIM(COALESCE(artist, ''))) = ANY($2::text[])`,
+          [titlesLc, artistNames.map(n => n.trim().toLowerCase())],
+        );
+      } else {
+        r = await getPool().query(
+          `SELECT id, page_title, artist
+             FROM blues_lyrics
+            WHERE LOWER(TRIM(page_title)) = ANY($1::text[])`,
+          [titlesLc],
+        );
+      }
+      for (const row of r.rows) {
+        const k = String(row.page_title).trim().toLowerCase();
+        // First match wins — order is arbitrary, but the per-row data
+        // is enough for the client to surface a link.
+        if (!out.tracks[k]) out.tracks[k] = { id: row.id, page_title: row.page_title, artist: row.artist };
+      }
+    }
+
+    res.json(out);
+  } catch (err) {
+    console.error("[blues-archive check]", err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // POST /api/ai-search — Claude music recommendations
 app.post("/api/ai-search", express.json(), async (req, res) => {
   const userId = await getClerkUserId(req);

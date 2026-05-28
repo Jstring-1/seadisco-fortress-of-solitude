@@ -9075,6 +9075,46 @@ body.is-offline button.offline-disabled {
   border-color: var(--accent-hi, var(--accent));
   color: var(--accent-hi, var(--accent));
 }
+/* Active sub-tab in the Blues Archive (Artists / Lyrics toggle).
+   Reuses .archive-btn shape so the strip reads as a connected control
+   group; the active one gets the accent fill to call it out. */
+.archive-btn.ba-subtab.is-active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+  font-weight: 600;
+}
+
+/* Admin-only 🎸 indicator stamped on album/version modals when the
+   artist / release / track matches a Blues Archive row. Small inline
+   marker that sits next to the entity-lookup-link without disrupting
+   layout. Click → jump to the matched artist in the archive (handled
+   in modal.js via _baOpenArtistFromBadge). */
+.ba-archive-badge {
+  display: inline-block;
+  margin-left: 0.3rem;
+  font-size: 0.78em;
+  text-decoration: none;
+  color: var(--accent);
+  cursor: pointer;
+  user-select: none;
+  line-height: 1;
+  vertical-align: baseline;
+  opacity: 0.85;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.ba-archive-badge:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+.ba-archive-badge-plain {
+  cursor: default;
+  opacity: 0.65;
+}
+.ba-archive-badge-plain:hover {
+  transform: none;
+  opacity: 0.8;
+}
 .archive-btn-play {
   background: var(--accent);
   border-color: var(--accent);
