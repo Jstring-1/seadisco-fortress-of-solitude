@@ -3271,8 +3271,15 @@ function _trackYtApplyToDom(targetId, masterId, releaseId, isMaster) {
       // .album-popup wrapper, so the previous closest() selector was
       // returning null and trackArtist was always blank. Use the
       // root we already have via `root` (the targetId).
-      const trackArtist = root?.querySelector?.(".album-artist")?.textContent?.split(",")[0]?.trim() || "";
-      const albumTitle  = root?.querySelector?.("h2")?.textContent?.trim() || "";
+      // Prefer data-lk-label so the 🎸 / 📜 archive badges stamped
+      // next to the entity-lookup spans don't leak into the YT
+      // query string baked into the play button's data-* attrs.
+      const trackArtist = (root?.querySelector?.(".album-artist .modal-artist-link")?.dataset?.lkLabel
+        || root?.querySelector?.(".album-artist")?.textContent?.split(",")[0]
+        || "").trim();
+      const albumTitle  = (root?.querySelector?.("h2 .modal-title-link")?.dataset?.lkLabel
+        || root?.querySelector?.("h2")?.textContent
+        || "").trim();
       const entityType  = isMaster ? "master" : "release";
       const playHtml = `<a class="track-play-btn track-link" href="#" data-video="${url}" data-track="${escHtml(trackTitle)}" data-album="${escHtml(albumTitle)}" data-artist="${escHtml(trackArtist)}" data-release-type="${entityType}" data-release-id="${escHtml(String(releaseId || ""))}" onclick="openVideo(event,'${url}')" title="Play this track">▶</a>`;
       // ＋ queue button sits immediately after ▶ in the play-cell so
@@ -3574,9 +3581,19 @@ async function _trackYtOpenAlbumSuggest(el) {
   const releaseId   = popupRoot.dataset?.releaseId  || "";
   const masterId    = popupRoot.dataset?.masterId   || "";
   const isMaster    = popupRoot.dataset?.entityType === "master";
-  const albumTitle  = popupRoot.querySelector("h2")?.textContent?.trim() || "";
+  // Prefer data-lk-label on the entity-lookup spans — those carry the
+  // clean original text. textContent would also pick up any 🎸 / 📜
+  // badges stamped after the link by _baStampArchiveIndicators and
+  // leak them into the YT search query.
+  const titleLink   = popupRoot.querySelector("h2 .modal-title-link");
+  const albumTitle  = (titleLink?.dataset?.lkLabel
+    || popupRoot.querySelector("h2")?.textContent?.trim()
+    || "").trim();
   // First artist from the album-artist line (mirrors per-track flow).
-  const albumArtist = popupRoot.querySelector(".album-artist")?.textContent?.split(",")[0]?.trim() || "";
+  const firstArtistLink = popupRoot.querySelector(".album-artist .modal-artist-link");
+  const albumArtist = (firstArtistLink?.dataset?.lkLabel
+    || popupRoot.querySelector(".album-artist")?.textContent?.split(",")[0]?.trim()
+    || "").trim();
   // Extra album context for the YT popup header — the popup obscures
   // the underlying album modal, so we surface artist / year / label /
   // cover up top so the user knows which album they're submitting for
@@ -3631,7 +3648,10 @@ async function _trackYtOpenAlbumSuggest(el) {
     const hasPlay = !!row.querySelector(".track-play-cell .track-link");
     if (hasPlay) return;
     const titleEl = row.querySelector(".track-title-link");
-    const trackTitle = titleEl?.textContent?.trim() || "";
+    // dataset.lkLabel = the clean track title. textContent would
+    // include any trailing 📜 / 🎸 archive badges and pollute the
+    // YT search query.
+    const trackTitle = (titleEl?.dataset?.lkLabel || titleEl?.textContent || "").trim();
     if (!pos || !trackTitle) return;
     missing.push({ position: pos, title: trackTitle });
   });
@@ -3723,7 +3743,7 @@ async function _trackYtAdminDelete(el) {
   }
   if (!overrideScopeId) return;
 
-  if (!confirm(`Remove the user-suggested YouTube video for track "${row?.querySelector('.track-title-link')?.textContent || pos}"?`)) return;
+  if (!confirm(`Remove the user-suggested YouTube video for track "${row?.querySelector('.track-title-link')?.dataset?.lkLabel || row?.querySelector('.track-title-link')?.textContent || pos}"?`)) return;
   try {
     const r = await apiFetch("/api/admin/track-yt", {
       method: "DELETE",
