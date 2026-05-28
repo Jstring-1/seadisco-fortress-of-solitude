@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId } from "./db.js";
+import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const anthropicKey = process.env.ANTHROPIC_API_KEY ?? "";
@@ -677,6 +677,13 @@ app.get("/index.html", (_req, res, next) => { if (!_sendHtml(res, "index.html"))
 app.get("/account.html", (_req, res) => { res.redirect(301, "/?v=account"); });
 app.get("/admin.html", (_req, res, next) => { if (!_sendHtml(res, "admin.html"))
     next(); });
+// Extensionless /admin — express.static's `extensions:["html"]` would
+// otherwise serve admin.html RAW (bypassing _sendHtml), so the
+// SD_THEME_INJECT placeholder never gets replaced and the page falls
+// back to the default warm palette instead of the locked site theme.
+// Route it through _sendHtml like the other HTML entry points.
+app.get("/admin", (_req, res, next) => { if (!_sendHtml(res, "admin.html"))
+    next(); });
 // Cache headers for static assets (versioned files get long cache, HTML short)
 app.use(express.static(path.join(__dirname, "../web"), {
     extensions: ["html"],
@@ -1074,6 +1081,52 @@ app.get("/api/admin/youtube-quota", async (req, res) => {
         users,
     });
 });
+// GET /api/youtube/quota — non-admin variant of the admin quota
+// endpoint. Returns the caller's own counter alongside the project
+// soft cap so the YouTube popup can render a "X searches left,
+// resets in Y" indicator. Same access gate as the search endpoint
+// (admin / demo / YT_OPEN_TO_USERS) — these are the only users who
+// would burn quota anyway.
+app.get("/api/youtube/quota", async (req, res) => {
+    const userId = await requireYtAccess(req, res);
+    if (!userId)
+        return;
+    _ytQuotaMaybeReset();
+    // Per-user counter, but DON'T bump it (this is a read-only probe).
+    // Mirrors the bookkeeping in _ytUserCheckAndBump but skips the
+    // increment + the cap check.
+    let userEntry = _ytPerUserCounts.get(userId);
+    const nowMs = Date.now();
+    if (userEntry && nowMs >= userEntry.resetAt) {
+        _ytPerUserCounts.delete(userId);
+        userEntry = undefined;
+    }
+    const userUsed = userEntry ? userEntry.count : 0;
+    const userLimit = _YT_PER_USER_DAILY_LIMIT;
+    // Searches left under each cap, then take the tighter one. Project
+    // cap counts in units (100/search); user cap counts in calls.
+    const projectSearchesLeft = Math.max(0, Math.floor((_YT_DAILY_SOFT_CAP_UNITS - _ytQuotaUnitsToday) / 100));
+    const userSearchesLeft = Math.max(0, userLimit - userUsed);
+    const searchesLeft = Math.min(projectSearchesLeft, userSearchesLeft);
+    // Reset is whichever the user actually cares about. Both wrap at
+    // UTC midnight in practice, so they coincide.
+    const resetAt = userEntry ? userEntry.resetAt : _ytQuotaResetAt;
+    res.json({
+        searchesLeft,
+        perCallUnits: 100,
+        project: {
+            usedToday: _ytQuotaUnitsToday,
+            cap: _YT_DAILY_SOFT_CAP_UNITS,
+            searchesLeft: projectSearchesLeft,
+        },
+        user: {
+            used: userUsed,
+            limit: userLimit,
+            searchesLeft: userSearchesLeft,
+        },
+        resetAtIso: new Date(resetAt).toISOString(),
+    });
+});
 // DELETE /api/admin/youtube-unavailable/:videoId — admin clears a
 // single entry (e.g. when a video came back online or was a false
 // positive). Removes the row entirely so a fresh report starts from
@@ -1386,8 +1439,23 @@ setInterval(() => { pruneOAuthRequestTokens().catch(() => { }); }, 10 * 60 * 100
 // Abort flag for stopping all syncs
 let _syncAbort = false;
 const SYNC_STALL_TIMEOUT = 5 * 60 * 1000; // 5 minutes with no progress = stalled
+// Per-user concurrency guards. Three independent code paths can
+// trigger a sync for the same user (the user-initiated /sync endpoint,
+// the admin "Run for me" button, and the scheduled cron). Without a
+// mutex, two of them launching within seconds of each other run two
+// full collection+wantlist+extras pipelines side by side, doubling
+// every request to Discogs and tripping the 60/min rate-limit
+// almost immediately. The Set guards below cause the second starter
+// to log + bail rather than race the first.
+const _syncRunningFor = new Set();
+const _extrasRunningFor = new Set();
 // Background sync worker — runs detached from the HTTP request
 async function runBackgroundSync(userId, client, username, syncCollection, syncWantlist) {
+    if (_syncRunningFor.has(userId)) {
+        console.log(`Sync ${username}: skipped — another sync is already in flight for this user`);
+        return;
+    }
+    _syncRunningFor.add(userId);
     console.log(`Sync ${username}: starting full sync (collection=${syncCollection}, wantlist=${syncWantlist})`);
     // Build headers per-request via the client (handles both PAT and OAuth signing)
     const getHeaders = (url) => client.buildHeaders("GET", url);
@@ -1599,6 +1667,7 @@ async function runBackgroundSync(userId, client, username, syncCollection, syncW
     finally {
         _syncDone = true;
         clearInterval(stallGuard);
+        _syncRunningFor.delete(userId);
     }
 }
 // POST /api/user/sync — kick off background sync of collection, wantlist, inventory & lists
@@ -3866,12 +3935,20 @@ const _ARCHIVE_CACHE_SCHEMA = 8;
 async function _refreshArchiveCache(collectionId, cacheKey) {
     console.log(`[archive] refreshing collection "${collectionId}" cache…`);
     const t0 = Date.now();
-    const items = await _fetchArchiveCollection(collectionId);
-    const payload = { items, fetchedAt: new Date().toISOString(), schemaV: _ARCHIVE_CACHE_SCHEMA };
-    await cacheRelease(cacheKey, "master-versions", payload);
-    const ms = Date.now() - t0;
-    console.log(`[archive] refresh complete: ${items.length} items in ${ms}ms`);
-    return { count: items.length };
+    const _jr = await startJobRun("archive-refresh").catch(() => null);
+    try {
+        const items = await _fetchArchiveCollection(collectionId);
+        const payload = { items, fetchedAt: new Date().toISOString(), schemaV: _ARCHIVE_CACHE_SCHEMA };
+        await cacheRelease(cacheKey, "master-versions", payload);
+        const ms = Date.now() - t0;
+        console.log(`[archive] refresh complete: ${items.length} items in ${ms}ms`);
+        await finishJobRun(_jr, { status: "ok", items: items.length, detail: `${collectionId} · ${ms}ms` });
+        return { count: items.length };
+    }
+    catch (err) {
+        await finishJobRun(_jr, { status: "error", errors: 1, detail: String(err?.message ?? err) });
+        throw err;
+    }
 }
 // Boot the weekly refresh schedule. Runs once at startup if the cache
 // is empty or stale, then every 24h checks and refetches if older than
@@ -4325,6 +4402,1368 @@ app.post("/api/admin/archive/refresh", async (req, res) => {
     _refreshArchiveCache(_ARCHIVE_AADAM_COLLECTION, _ARCHIVE_AADAM_CACHE_KEY).catch((err) => {
         console.error("[archive/refresh]", err?.message ?? err);
     });
+});
+// ── Project Gutenberg integration (admin-only initially) ────────────────
+//
+// Endpoints:
+//   GET  /api/gutenberg/search?q=&page=          → proxy to Gutendex
+//   GET  /api/gutenberg/book/:id                 → metadata + body (DB-as-cache)
+//   GET  /api/user/gutenberg-saves               → list saved books
+//   POST /api/user/gutenberg-saves               → save a book {id}
+//   DELETE /api/user/gutenberg-saves             → unsave {id}
+//   GET  /api/user/gutenberg-bookmarks/:id       → bookmarks (incl. auto-resume) for a book
+//   POST /api/user/gutenberg-bookmarks/:id       → upsert auto or insert manual
+//   DELETE /api/user/gutenberg-bookmarks/:bid    → delete a bookmark by row id
+//
+// First-ever read of a book fetches HTML from gutenberg.org, sanitizes,
+// and writes to gutenberg_books. Every subsequent read serves from the
+// DB row directly — no upstream call, no in-memory cache layer needed
+// (Postgres TOAST handles 2MB rows fine).
+//
+// Admin-gate on all routes initially via requireGutenbergAccess() so
+// the feature can be tested before opening to all signed-in users.
+async function requireGutenbergAccess(req, res) {
+    const userId = await getClerkUserId(req);
+    if (!userId) {
+        res.status(401).json({ error: "auth_required" });
+        return null;
+    }
+    // Admin OR a demo allowlist user can use the feature now. Flip the
+    // condition to `return userId` to open the feature to all signed-in
+    // users once tested.
+    if (userId !== ADMIN_CLERK_ID && !isDemoUser(userId)) {
+        res.status(403).json({ error: "forbidden" });
+        return null;
+    }
+    return userId;
+}
+// Strip <script>, <style>, on*= attribute handlers, and javascript: URLs.
+// Gutenberg HTML is well-behaved most of the time, but it's still
+// upstream-fed content we render verbatim — defense in depth.
+function _gutenbergSanitizeHtml(html) {
+    if (!html)
+        return "";
+    let out = html;
+    // Drop scripts + stylesheets entirely.
+    out = out.replace(/<script\b[^>]*>[\s\S]*?<\/script\s*>/gi, "");
+    out = out.replace(/<style\b[^>]*>[\s\S]*?<\/style\s*>/gi, "");
+    // Drop inline event handlers (onclick=, onload=, etc.).
+    out = out.replace(/\s+on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, "");
+    // Neutralize javascript: URLs (replace with #).
+    out = out.replace(/\b(?:href|src)\s*=\s*("|')\s*javascript:[^"']*\1/gi, 'href="#"');
+    // Strip <meta http-equiv="refresh"> redirects.
+    out = out.replace(/<meta\b[^>]*http-equiv=["']?refresh[^>]*>/gi, "");
+    return out;
+}
+// Extract the body innerHTML from a full HTML document. Gutenberg
+// serves complete <html> docs; we only want the readable inner content
+// so the reader overlay can host the chrome (nav, bookmarks).
+function _gutenbergExtractBody(html) {
+    if (!html)
+        return "";
+    const m = html.match(/<body[^>]*>([\s\S]*?)<\/body\s*>/i);
+    return m ? m[1] : html;
+}
+// Plain-text fallback for full-text search later. Cheap regex strip;
+// not perfect but adequate for a free-text index (which we don't even
+// build yet — just cache it for forward use).
+function _gutenbergToPlainText(html) {
+    if (!html)
+        return "";
+    return html
+        .replace(/<[^>]+>/g, " ")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+// Topic presets — clicking one of these chips client-side fans out
+// to N parallel Gutendex requests (one per constituent subject) and
+// the server merges + dedupes + ranks by download_count. Lets a
+// user browse "all non-fiction" without picking individual subjects.
+//
+// Pagination across a merged set is not coherent (each upstream
+// search has its own page count), so preset queries return up to 96
+// books from page 1 of each constituent and stop there. If the user
+// wants to dig deeper into one topic they pick it singly and the
+// existing per-topic pagination works as before.
+const _GUTENBERG_TOPIC_PRESETS = {
+    "non-fiction": ["biography", "history", "philosophy", "science", "music", "religion", "art", "travel"],
+    "fiction": ["fiction", "science fiction", "fantasy", "mystery", "horror", "romance", "drama", "poetry"],
+    // Music + arts merged. Was two presets (Music, Music & arts) with
+    // heavy overlap on the "music" subject — collapsed so the chip row
+    // is shorter and one click gets you the full arts spread (music
+    // subgenres + visual / performing arts).
+    "music & arts": ["music", "musicians", "composers", "jazz", "opera", "art", "performing arts", "architecture"],
+    "science": ["science", "natural history", "mathematics", "physics", "biology", "astronomy"],
+    "history": ["history", "biography", "war", "ancient history"],
+    "philosophy": ["philosophy", "ethics", "religion", "psychology"],
+};
+// 1-hour in-memory cache for preset fan-out responses, keyed on
+// preset|lang|q. Gutendex is fast but a preset fires ~8 parallel
+// upstream calls; once a user lands the merged set, caching makes
+// browsing snappy (and saves bandwidth + courtesy).
+const _GUTENBERG_PRESET_TTL_MS = 60 * 60 * 1000;
+const _gutenbergPresetCache = new Map();
+// Separate, shorter-TTL cache for plain (non-preset) Gutendex queries.
+// Gutendex itself can be slow (1–3 s) for broad substring searches like
+// "war" or "music", and repeating the same query within a session is
+// common — back-button navigation, tab switching, or just refining a
+// query and then bouncing back to the previous one. 10-minute TTL is
+// long enough to feel snappy but short enough that newly-added books
+// show up on the next session. Keyed on q|topic|lang|page.
+const _GUTENBERG_QUERY_TTL_MS = 10 * 60 * 1000;
+const _gutenbergQueryCache = new Map();
+function _gutenbergNormalizeBook(b) {
+    // The cards render rich now — full subjects/bookshelves/formats so
+    // every result has its own download links + audio detection without
+    // a second click. Bigger payload per book (~1–2KB extra) but
+    // saves N popup-fetches when browsing.
+    return {
+        id: Number(b?.id) || 0,
+        title: String(b?.title ?? ""),
+        authors: Array.isArray(b?.authors) ? b.authors.map((a) => ({
+            name: String(a?.name ?? ""),
+            birth_year: a?.birth_year ?? null,
+            death_year: a?.death_year ?? null,
+        })) : [],
+        languages: Array.isArray(b?.languages) ? b.languages : [],
+        subjects: Array.isArray(b?.subjects) ? b.subjects.slice(0, 12) : [],
+        bookshelves: Array.isArray(b?.bookshelves) ? b.bookshelves : [],
+        formats: b?.formats ?? {},
+        download_count: Number(b?.download_count) || 0,
+        cover: String(b?.formats?.["image/jpeg"] ?? ""),
+    };
+}
+// GET /api/gutenberg/search?q=&page=1[&topic=][&lang=]
+// Thin proxy to Gutendex (https://gutendex.com/books). If `topic`
+// matches a known preset, fan out across its constituent subjects
+// and merge; otherwise pass through as a single Gutendex request.
+app.get("/api/gutenberg/search", async (req, res) => {
+    const userId = await requireGutenbergAccess(req, res);
+    if (!userId)
+        return;
+    const q = String(req.query.q ?? "").trim().slice(0, 200);
+    const page = Math.max(1, Math.min(50, parseInt(String(req.query.page ?? "1"), 10) || 1));
+    const lang = String(req.query.lang ?? "").trim().toLowerCase().slice(0, 16);
+    const topicRaw = String(req.query.topic ?? "").trim().slice(0, 80);
+    const presetKey = topicRaw.toLowerCase();
+    const preset = _GUTENBERG_TOPIC_PRESETS[presetKey];
+    // ── Preset fan-out path ─────────────────────────────────────────
+    if (preset && preset.length > 0) {
+        // Cache check first. Preset queries don't paginate, so page is
+        // ignored in the cache key.
+        const cacheKey = `pre|${presetKey}|${lang}|${q.toLowerCase()}`;
+        const cached = _gutenbergPresetCache.get(cacheKey);
+        if (cached && (Date.now() - cached.at) < _GUTENBERG_PRESET_TTL_MS) {
+            res.setHeader("X-SeaDisco-Cache", "hit");
+            res.json(cached.body);
+            return;
+        }
+        const t0 = Date.now();
+        try {
+            // Per-request 15-s timeout. Gutendex (community Heroku dyno) can
+            // hang for 30+ s on broad substring searches; bound the wait so a
+            // single slow constituent doesn't drag the whole preset down.
+            const fetches = preset.map(t => {
+                const p = new URLSearchParams();
+                if (q)
+                    p.set("search", q);
+                if (lang)
+                    p.set("languages", lang);
+                p.set("topic", t);
+                return loggedFetch("gutendex", `https://gutendex.com/books?${p.toString()}`, {
+                    context: `search-preset:${t}`,
+                    signal: AbortSignal.timeout(15000),
+                })
+                    .then(r => r.ok ? r.json() : null)
+                    .catch(() => null);
+            });
+            const responses = await Promise.all(fetches);
+            console.log(`[gutenberg/search preset] preset=${presetKey} q="${q}" upstream=${Date.now() - t0}ms`);
+            // Merge: dedupe by id (first occurrence wins), then sort by
+            // download_count desc. Cap at 96 — "top of the pool" across
+            // the preset's constituent subjects.
+            const seen = new Set();
+            const merged = [];
+            for (const resp of responses) {
+                const list = Array.isArray(resp?.results) ? resp.results : [];
+                for (const b of list) {
+                    const id = Number(b?.id);
+                    if (!Number.isFinite(id) || id <= 0 || seen.has(id))
+                        continue;
+                    seen.add(id);
+                    merged.push(_gutenbergNormalizeBook(b));
+                }
+            }
+            merged.sort((a, b) => b.download_count - a.download_count);
+            const items = merged.slice(0, 96);
+            const body = {
+                items,
+                count: items.length,
+                page: 1,
+                hasMore: false,
+                // Echo back which preset was used so the client can confirm
+                // and surface a "Preset: Non-fiction (8 subjects)" pill.
+                preset: presetKey,
+                presetSubjects: preset,
+            };
+            _gutenbergPresetCache.set(cacheKey, { at: Date.now(), body });
+            // Bound the cache so it doesn't grow without limit. Crude FIFO
+            // drop once we cross 64 entries.
+            if (_gutenbergPresetCache.size > 64) {
+                const oldest = _gutenbergPresetCache.keys().next().value;
+                if (oldest)
+                    _gutenbergPresetCache.delete(oldest);
+            }
+            res.setHeader("X-SeaDisco-Cache", "miss");
+            res.json(body);
+        }
+        catch (e) {
+            console.error("[gutenberg/search preset]", e?.message ?? e);
+            res.status(500).json({ error: "fetch_failed" });
+        }
+        return;
+    }
+    // ── Single-topic / no-topic path (existing behaviour) ───────────
+    // 10-minute query cache — Gutendex's substring search is slow for
+    // broad terms, so cache identical (q|topic|lang|page) requests in
+    // memory and serve subsequent hits in microseconds. Same FIFO bound
+    // as the preset cache.
+    const queryCacheKey = `q|${q.toLowerCase()}|${topicRaw.toLowerCase()}|${lang}|${page}`;
+    const queryCached = _gutenbergQueryCache.get(queryCacheKey);
+    if (queryCached && (Date.now() - queryCached.at) < _GUTENBERG_QUERY_TTL_MS) {
+        res.setHeader("X-SeaDisco-Cache", "hit");
+        res.json(queryCached.body);
+        return;
+    }
+    const params = new URLSearchParams();
+    if (q)
+        params.set("search", q);
+    if (page > 1)
+        params.set("page", String(page));
+    if (lang)
+        params.set("languages", lang);
+    if (topicRaw)
+        params.set("topic", topicRaw);
+    const url = `https://gutendex.com/books?${params.toString()}`;
+    const t0 = Date.now();
+    try {
+        // 15-s timeout on single-topic / no-topic searches too. Gutendex
+        // can hang for 30+ s on broad terms — far better to surface a fast
+        // "upstream slow" than a 30 s hang the user can't escape.
+        const r = await loggedFetch("gutendex", url, {
+            context: "search",
+            signal: AbortSignal.timeout(15000),
+        });
+        console.log(`[gutenberg/search] q="${q}" topic="${topicRaw}" page=${page} upstream=${Date.now() - t0}ms status=${r.status}`);
+        if (!r.ok) {
+            res.status(502).json({ error: "upstream", status: r.status });
+            return;
+        }
+        const j = await r.json();
+        const items = (Array.isArray(j?.results) ? j.results : [])
+            .map(_gutenbergNormalizeBook)
+            .filter((b) => b.id > 0);
+        const body = {
+            items,
+            count: Number(j?.count) || items.length,
+            page,
+            hasMore: !!j?.next,
+        };
+        _gutenbergQueryCache.set(queryCacheKey, { at: Date.now(), body });
+        if (_gutenbergQueryCache.size > 128) {
+            const oldest = _gutenbergQueryCache.keys().next().value;
+            if (oldest)
+                _gutenbergQueryCache.delete(oldest);
+        }
+        res.setHeader("X-SeaDisco-Cache", "miss");
+        res.json(body);
+    }
+    catch (e) {
+        const ms = Date.now() - t0;
+        const isAbort = e?.name === "AbortError" || e?.name === "TimeoutError";
+        console.error(`[gutenberg/search] q="${q}" topic="${topicRaw}" failed after ${ms}ms`, isAbort ? "TIMEOUT" : (e?.message ?? e));
+        // Negative-cache the slow/failed query for 60 s so a retry doesn't
+        // re-pay the wait. Short body so the client can show a useful state.
+        const body = { items: [], count: 0, page, hasMore: false, upstreamSlow: isAbort };
+        _gutenbergQueryCache.set(queryCacheKey, { at: Date.now() - (_GUTENBERG_QUERY_TTL_MS - 60_000), body });
+        res.status(isAbort ? 504 : 500).json({ ...body, error: isAbort ? "upstream_timeout" : "fetch_failed" });
+    }
+});
+// GET /api/gutenberg/blurb?title=&author=
+// Project Gutenberg doesn't ship book descriptions, so for the info-
+// popup "About this book" panel we lean on Wikipedia. This endpoint
+// fetches the Wikipedia summary for the title, with fallback
+// disambiguation suffixes ("(novel)", "(book)", "(<author>)") for
+// common-phrase titles that resolve to a disambig page on first try.
+// 24h in-memory cache keyed on title|author lowercased.
+const _GUTENBERG_BLURB_TTL_MS = 24 * 60 * 60 * 1000;
+// Cache key suffix — bump when we change lookup logic so stale
+// found:false entries from earlier-stricter guards get invalidated.
+const _GUTENBERG_BLURB_CACHE_VER = "v2";
+const _gutenbergBlurbCache = new Map();
+async function _gutenbergFetchWikiSummary(title) {
+    const url = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`;
+    try {
+        const r = await loggedFetch("wikipedia", url, { context: "gutenberg-blurb" });
+        if (!r.ok)
+            return null;
+        const j = await r.json();
+        if (!j || j.type === "disambiguation")
+            return null;
+        return j;
+    }
+    catch {
+        return null;
+    }
+}
+// Last-resort fallback: ask Wikipedia's search API for the best match
+// given title + author. Returns the top candidate title, which we
+// then re-look-up via the summary endpoint. Far more forgiving than
+// fixed-suffix variants — handles odd titles like "The Adventures of
+// Sherlock Holmes (collection)" or "A Christmas Carol, in Prose".
+async function _gutenbergSearchWikiTitle(query) {
+    const url = `https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=3&srsearch=${encodeURIComponent(query)}`;
+    try {
+        const r = await loggedFetch("wikipedia", url, { context: "gutenberg-blurb-search" });
+        if (!r.ok)
+            return null;
+        const j = await r.json();
+        const hits = j?.query?.search;
+        if (!Array.isArray(hits) || !hits.length)
+            return null;
+        // Take the first hit. The summary endpoint will reject it if it's
+        // a disambiguation page; we'll fall through to "not found" then.
+        return String(hits[0]?.title || "") || null;
+    }
+    catch {
+        return null;
+    }
+}
+app.get("/api/gutenberg/blurb", async (req, res) => {
+    const userId = await requireGutenbergAccess(req, res);
+    if (!userId)
+        return;
+    const titleRaw = String(req.query.title ?? "").trim().slice(0, 300);
+    const authorRaw = String(req.query.author ?? "").trim().slice(0, 200);
+    if (!titleRaw) {
+        res.status(400).json({ error: "title_required" });
+        return;
+    }
+    // Normalize the title for lookups + cache: drop subtitle after a
+    // colon (Wikipedia articles usually omit subtitles), strip volume /
+    // book / part markers, collapse whitespace.
+    const cleanTitle = titleRaw
+        .split(/:\s/)[0]
+        .replace(/\s*[—-]\s*Volume\s+[IVXLC\d]+.*$/i, "")
+        .replace(/\s*Vol\.?\s*[IVXLC\d]+.*$/i, "")
+        .replace(/\s*Book\s+[IVXLC\d]+.*$/i, "")
+        .replace(/\s+/g, " ")
+        .trim();
+    const authorLast = authorRaw.split(/,/)[0].trim().split(/\s+/).pop() || "";
+    const cacheKey = `${_GUTENBERG_BLURB_CACHE_VER}|${cleanTitle.toLowerCase()}|${authorRaw.toLowerCase()}`;
+    const cached = _gutenbergBlurbCache.get(cacheKey);
+    if (cached && (Date.now() - cached.at) < _GUTENBERG_BLURB_TTL_MS) {
+        res.setHeader("X-SeaDisco-Cache", "hit");
+        res.json(cached.body);
+        return;
+    }
+    // Try the exact title first; if no result or disambiguation page,
+    // walk through fallback suffixes that nudge Wikipedia toward the
+    // book article rather than a place / film / song with the same name.
+    // Last resort: hit Wikipedia's search API to find the best-matching
+    // article title given "<title> <author>".
+    const candidates = [
+        cleanTitle,
+        `${cleanTitle} (novel)`,
+        `${cleanTitle} (book)`,
+        `${cleanTitle} (play)`,
+        `${cleanTitle} (poem)`,
+        authorLast ? `${cleanTitle} (${authorLast})` : null,
+    ].filter(Boolean);
+    let summary = null;
+    for (const cand of candidates) {
+        summary = await _gutenbergFetchWikiSummary(cand);
+        if (summary)
+            break;
+    }
+    // Search fallback — handles titles that don't resolve via direct
+    // page lookup (e.g. "Sense and Sensibility: A Novel" doesn't map
+    // to a redirect, but the search API returns the right article).
+    if (!summary) {
+        const searchQuery = authorLast
+            ? `${cleanTitle} ${authorLast} book`
+            : `${cleanTitle} book`;
+        const foundTitle = await _gutenbergSearchWikiTitle(searchQuery);
+        if (foundTitle)
+            summary = await _gutenbergFetchWikiSummary(foundTitle);
+    }
+    if (!summary) {
+        const body = { found: false };
+        _gutenbergBlurbCache.set(cacheKey, { at: Date.now(), body });
+        res.setHeader("X-SeaDisco-Cache", "miss");
+        res.json(body);
+        return;
+    }
+    // Loose relevance hint (not a hard reject): mark low-confidence
+    // when neither the author last name nor a book-y keyword appears
+    // in the extract. We still surface the blurb — the user can judge.
+    // Hard rejection was too aggressive: lots of valid Wikipedia
+    // articles describe a book's plot without literally saying "book"
+    // or "novel", and Project Gutenberg has many short-summary stubs.
+    let lowConfidence = false;
+    if (authorLast && summary?.extract) {
+        const ex = String(summary.extract).toLowerCase();
+        const lastLc = authorLast.toLowerCase();
+        const BOOKY_KEYWORDS = ["book", "novel", "novella", "play", "poem", "treatise", "memoir", "essay", "collection", "stories", "verse", "narrative", "diary", "letters", "autobiography", "biography"];
+        if (!ex.includes(lastLc) && !BOOKY_KEYWORDS.some(k => ex.includes(k))) {
+            lowConfidence = true;
+        }
+    }
+    const body = {
+        found: true,
+        title: String(summary?.title ?? ""),
+        extract: String(summary?.extract ?? ""),
+        thumbnail: summary?.thumbnail?.source ? String(summary.thumbnail.source) : null,
+        sourceUrl: String(summary?.content_urls?.desktop?.page ?? `https://en.wikipedia.org/wiki/${encodeURIComponent(summary?.title ?? cleanTitle)}`),
+        description: summary?.description ? String(summary.description) : null,
+        lowConfidence,
+    };
+    _gutenbergBlurbCache.set(cacheKey, { at: Date.now(), body });
+    // Cap cache size — crude FIFO drop at 256 entries.
+    if (_gutenbergBlurbCache.size > 256) {
+        const oldest = _gutenbergBlurbCache.keys().next().value;
+        if (oldest)
+            _gutenbergBlurbCache.delete(oldest);
+    }
+    res.setHeader("X-SeaDisco-Cache", "miss");
+    res.json(body);
+});
+// GET /api/gutenberg/book-meta/:id
+// Returns metadata only (no HTML body) for the info popup. Cheaper
+// than /api/gutenberg/book/:id because it doesn't trigger the
+// gutenberg.org HTML fetch when the book isn't cached yet. DB-as-
+// cache when the book has been read at least once; falls back to a
+// Gutendex single-book lookup otherwise (and does NOT persist the
+// row — only an actual Read does that, since metadata-only entries
+// without HTML can't be served from the reader cache path later).
+app.get("/api/gutenberg/book-meta/:id", async (req, res) => {
+    const userId = await requireGutenbergAccess(req, res);
+    if (!userId)
+        return;
+    const bookId = parseInt(String(req.params.id ?? ""), 10);
+    if (!Number.isFinite(bookId) || bookId <= 0) {
+        res.status(400).json({ error: "bad_id" });
+        return;
+    }
+    try {
+        // Cache hit from a prior Read — return cached row's metadata fields
+        // plus derived helpers (first-paragraph preview + word count) so
+        // the info popup can show a real teaser. We pull length(plain_text)
+        // and the leading substring to avoid transferring the whole body.
+        const cached = await getPool().query(`SELECT book_id, title, authors, languages, subjects, byte_size, metadata, fetched_at,
+              length(plain_text) AS plain_text_len,
+              substring(plain_text from 1 for 600) AS plain_text_head
+         FROM gutenberg_books
+        WHERE book_id = $1`, [bookId]);
+        if (cached.rows.length) {
+            const r = cached.rows[0];
+            const meta = (r.metadata ?? {});
+            // Words ≈ plain-text length / 5.5 (avg English word + space).
+            // Reading time at ~250 wpm.
+            const plainLen = Number(r.plain_text_len) || 0;
+            const wordCount = plainLen > 0 ? Math.round(plainLen / 5.5) : null;
+            const readingMin = wordCount ? Math.max(1, Math.round(wordCount / 250)) : null;
+            // First paragraph preview — Gutendex bodies typically start with
+            // a Project Gutenberg legal header followed by the actual prose.
+            // Skip the boilerplate by scanning forward to the first long
+            // sentence-y chunk. Cheap heuristic: split on double newlines,
+            // pick the first chunk whose length is in the 80–500 char range
+            // and doesn't look like all-caps boilerplate.
+            let preview = null;
+            if (r.plain_text_head) {
+                const head = String(r.plain_text_head).replace(/\s+/g, " ").trim();
+                // Quick-and-dirty: find a window of 120-280 chars starting
+                // after any preamble keywords. If the head looks short, just
+                // use the first 240 chars.
+                const boilerEnd = head.search(/[\.!?]\s+[A-Z]/);
+                const start = boilerEnd > 0 && boilerEnd < 300 ? boilerEnd + 2 : 0;
+                preview = head.slice(start, start + 280).trim();
+                if (preview && preview.length < 60)
+                    preview = head.slice(0, 240);
+                if (preview)
+                    preview += head.length > start + 280 ? "…" : "";
+            }
+            res.setHeader("X-SeaDisco-Cache", "hit");
+            res.json({
+                id: r.book_id,
+                title: r.title,
+                authors: r.authors ?? [],
+                languages: r.languages ?? [],
+                subjects: r.subjects ?? [],
+                bookshelves: Array.isArray(meta.bookshelves) ? meta.bookshelves : [],
+                formats: meta.formats ?? {},
+                downloadCount: Number(meta.download_count) || 0,
+                byteSize: r.byte_size,
+                wordCount,
+                readingMinutes: readingMin,
+                firstParagraph: preview,
+                fetchedAt: r.fetched_at,
+                cached: true,
+            });
+            return;
+        }
+        // Live fetch — gutendex single-book endpoint. Read-only; no DB
+        // write here so we don't half-cache a row that the reader code
+        // path expects to also have html populated.
+        const r = await loggedFetch("gutendex", `https://gutendex.com/books/${bookId}`, { context: "book-meta-live" });
+        if (!r.ok) {
+            res.status(r.status === 404 ? 404 : 502).json({ error: "upstream", status: r.status });
+            return;
+        }
+        const meta = await r.json();
+        res.setHeader("X-SeaDisco-Cache", "miss");
+        res.json({
+            id: Number(meta?.id) || bookId,
+            title: String(meta?.title ?? ""),
+            authors: Array.isArray(meta?.authors) ? meta.authors : [],
+            languages: Array.isArray(meta?.languages) ? meta.languages : [],
+            subjects: Array.isArray(meta?.subjects) ? meta.subjects : [],
+            bookshelves: Array.isArray(meta?.bookshelves) ? meta.bookshelves : [],
+            formats: meta?.formats ?? {},
+            downloadCount: Number(meta?.download_count) || 0,
+            byteSize: null,
+            wordCount: null,
+            readingMinutes: null,
+            firstParagraph: null,
+            fetchedAt: null,
+            cached: false,
+        });
+    }
+    catch (e) {
+        console.error("[gutenberg/book-meta]", e?.message ?? e);
+        res.status(500).json({ error: "fetch_failed" });
+    }
+});
+// GET /api/gutenberg/book/:id
+// Returns metadata + sanitized HTML body. DB-as-cache:
+//   - Row exists with html populated → serve, bump last_accessed_at.
+//   - Row missing or html null → fetch from gutenberg.org, sanitize,
+//     upsert row, serve.
+// Gutenberg's HTML URL conventions:
+//   https://www.gutenberg.org/cache/epub/{id}/pg{id}-images.html
+//   https://www.gutenberg.org/files/{id}/{id}-h/{id}-h.htm   (fallback)
+// We try both; some books only have one or the other.
+app.get("/api/gutenberg/book/:id", async (req, res) => {
+    const userId = await requireGutenbergAccess(req, res);
+    if (!userId)
+        return;
+    const bookId = parseInt(String(req.params.id ?? ""), 10);
+    if (!Number.isFinite(bookId) || bookId <= 0 || bookId > 9_999_999) {
+        res.status(400).json({ error: "bad_id" });
+        return;
+    }
+    try {
+        // Cache hit path.
+        const cached = await getPool().query(`SELECT book_id, title, authors, languages, subjects, html, byte_size, metadata
+         FROM gutenberg_books
+        WHERE book_id = $1`, [bookId]);
+        if (cached.rows.length && cached.rows[0].html) {
+            // Fire-and-forget bump of last_accessed_at — no need to await.
+            getPool().query(`UPDATE gutenberg_books SET last_accessed_at = NOW() WHERE book_id = $1`, [bookId]).catch(() => { });
+            const r = cached.rows[0];
+            res.setHeader("X-SeaDisco-Cache", "hit");
+            res.json({
+                id: r.book_id,
+                title: r.title,
+                authors: r.authors,
+                languages: r.languages,
+                subjects: r.subjects,
+                byteSize: r.byte_size,
+                html: r.html,
+            });
+            return;
+        }
+        // Need to fetch + cache. Pull metadata from Gutendex AND HTML body
+        // from gutenberg.org in parallel; if metadata fails we can still
+        // serve the body with what we have.
+        const metaUrl = `https://gutendex.com/books/${bookId}`;
+        const htmlUrls = [
+            `https://www.gutenberg.org/cache/epub/${bookId}/pg${bookId}-images.html`,
+            `https://www.gutenberg.org/files/${bookId}/${bookId}-h/${bookId}-h.htm`,
+            `https://www.gutenberg.org/cache/epub/${bookId}/pg${bookId}.html`,
+        ];
+        const [metaRes, ...htmlResults] = await Promise.all([
+            loggedFetch("gutendex", metaUrl, { context: "book-meta" }).catch(() => null),
+            ...htmlUrls.map(u => loggedFetch("gutenberg-html", u, { context: "book-html" }).catch(() => null)),
+        ]);
+        const htmlOk = htmlResults.find(r => r && r.ok);
+        if (!htmlOk) {
+            res.status(404).json({ error: "not_found", message: "Book HTML not available from Gutenberg." });
+            return;
+        }
+        const rawHtml = await htmlOk.text();
+        const bodyHtml = _gutenbergSanitizeHtml(_gutenbergExtractBody(rawHtml));
+        const plainText = _gutenbergToPlainText(bodyHtml);
+        let meta = null;
+        if (metaRes && metaRes.ok) {
+            try {
+                meta = await metaRes.json();
+            }
+            catch { }
+        }
+        const title = String(meta?.title ?? `Book ${bookId}`);
+        const authors = Array.isArray(meta?.authors) ? meta.authors : [];
+        const languages = Array.isArray(meta?.languages) ? meta.languages : [];
+        const subjects = Array.isArray(meta?.subjects) ? meta.subjects.slice(0, 16) : [];
+        await getPool().query(`INSERT INTO gutenberg_books
+         (book_id, title, authors, languages, subjects, html, plain_text, byte_size, metadata, fetched_at, last_accessed_at)
+       VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, $6, $7, $8, $9::jsonb, NOW(), NOW())
+       ON CONFLICT (book_id) DO UPDATE SET
+         title = EXCLUDED.title,
+         authors = EXCLUDED.authors,
+         languages = EXCLUDED.languages,
+         subjects = EXCLUDED.subjects,
+         html = EXCLUDED.html,
+         plain_text = EXCLUDED.plain_text,
+         byte_size = EXCLUDED.byte_size,
+         metadata = EXCLUDED.metadata,
+         fetched_at = NOW(),
+         last_accessed_at = NOW()`, [
+            bookId,
+            title,
+            JSON.stringify(authors),
+            JSON.stringify(languages),
+            JSON.stringify(subjects),
+            bodyHtml,
+            plainText,
+            bodyHtml.length,
+            JSON.stringify(meta ?? {}),
+        ]);
+        res.setHeader("X-SeaDisco-Cache", "miss");
+        res.json({
+            id: bookId,
+            title,
+            authors,
+            languages,
+            subjects,
+            byteSize: bodyHtml.length,
+            html: bodyHtml,
+        });
+    }
+    catch (e) {
+        console.error("[gutenberg/book]", e?.message ?? e);
+        res.status(500).json({ error: "fetch_failed" });
+    }
+});
+// GET /api/user/gutenberg-saves — list the user's saved books with
+// the joined metadata so the Saved tab renders without N+1 lookups.
+app.get("/api/user/gutenberg-saves", async (req, res) => {
+    const userId = await requireGutenbergAccess(req, res);
+    if (!userId)
+        return;
+    try {
+        const r = await getPool().query(`SELECT s.book_id, s.saved_at, b.title, b.authors, b.languages, b.byte_size
+         FROM gutenberg_saved s
+         LEFT JOIN gutenberg_books b ON b.book_id = s.book_id
+        WHERE s.clerk_user_id = $1
+        ORDER BY s.saved_at DESC
+        LIMIT 500`, [userId]);
+        res.json({
+            items: r.rows.map(row => ({
+                id: row.book_id,
+                title: row.title ?? `Book ${row.book_id}`,
+                authors: row.authors ?? [],
+                languages: row.languages ?? [],
+                byteSize: row.byte_size ?? null,
+                savedAt: row.saved_at,
+            })),
+        });
+    }
+    catch (e) {
+        console.error("[gutenberg-saves GET]", e?.message ?? e);
+        res.status(500).json({ error: "fetch_failed" });
+    }
+});
+// POST /api/user/gutenberg-saves  { id, title?, authors?, languages?, subjects? }
+// Optional metadata fields let the client persist a minimal
+// gutenberg_books row so the Library list shows real title / author
+// even if the book has never been Read (the body fetch is what
+// normally populates gutenberg_books).
+app.post("/api/user/gutenberg-saves", express.json({ limit: "16kb" }), async (req, res) => {
+    const userId = await requireGutenbergAccess(req, res);
+    if (!userId)
+        return;
+    const id = parseInt(String(req.body?.id ?? ""), 10);
+    if (!Number.isFinite(id) || id <= 0) {
+        res.status(400).json({ error: "bad_id" });
+        return;
+    }
+    const title = req.body?.title ? String(req.body.title).slice(0, 500) : null;
+    const authors = Array.isArray(req.body?.authors) ? req.body.authors : null;
+    const languages = Array.isArray(req.body?.languages) ? req.body.languages : null;
+    const subjects = Array.isArray(req.body?.subjects) ? req.body.subjects : null;
+    try {
+        // Seed a minimal gutenberg_books row when one doesn't exist —
+        // ON CONFLICT DO NOTHING preserves any already-cached body. If
+        // the user later Reads the book, that path's UPSERT will fill
+        // in html + plain_text on top of these metadata fields.
+        if (title) {
+            await getPool().query(`INSERT INTO gutenberg_books
+           (book_id, title, authors, languages, subjects, byte_size, metadata, fetched_at, last_accessed_at)
+         VALUES ($1, $2, $3::jsonb, $4::jsonb, $5::jsonb, NULL, '{}'::jsonb, NOW(), NOW())
+         ON CONFLICT (book_id) DO NOTHING`, [
+                id,
+                title,
+                JSON.stringify(authors ?? []),
+                JSON.stringify(languages ?? []),
+                JSON.stringify(subjects ?? []),
+            ]);
+        }
+        await getPool().query(`INSERT INTO gutenberg_saved (clerk_user_id, book_id) VALUES ($1, $2)
+       ON CONFLICT (clerk_user_id, book_id) DO NOTHING`, [userId, id]);
+        res.json({ ok: true });
+    }
+    catch (e) {
+        console.error("[gutenberg-saves POST]", e?.message ?? e);
+        res.status(500).json({ error: "save_failed" });
+    }
+});
+// DELETE /api/user/gutenberg-saves  { id }
+app.delete("/api/user/gutenberg-saves", express.json({ limit: "1kb" }), async (req, res) => {
+    const userId = await requireGutenbergAccess(req, res);
+    if (!userId)
+        return;
+    const id = parseInt(String(req.body?.id ?? ""), 10);
+    if (!Number.isFinite(id) || id <= 0) {
+        res.status(400).json({ error: "bad_id" });
+        return;
+    }
+    try {
+        await getPool().query(`DELETE FROM gutenberg_saved WHERE clerk_user_id = $1 AND book_id = $2`, [userId, id]);
+        res.json({ ok: true });
+    }
+    catch (e) {
+        console.error("[gutenberg-saves DELETE]", e?.message ?? e);
+        res.status(500).json({ error: "delete_failed" });
+    }
+});
+// GET /api/user/gutenberg-bookmarks — ALL manual bookmarks for the
+// user across every book, joined with book metadata. Powers the
+// Gutenberg page's Bookmarks tab. Excludes 'auto' resume positions
+// (those are internal — the user didn't explicitly pin them).
+app.get("/api/user/gutenberg-bookmarks", async (req, res) => {
+    const userId = await requireGutenbergAccess(req, res);
+    if (!userId)
+        return;
+    try {
+        const r = await getPool().query(`SELECT bm.id, bm.book_id, bm.position_pct, bm.position_anchor,
+              bm.label, bm.created_at,
+              b.title AS book_title, b.authors AS book_authors
+         FROM gutenberg_bookmarks bm
+         LEFT JOIN gutenberg_books b ON b.book_id = bm.book_id
+        WHERE bm.clerk_user_id = $1 AND bm.bookmark_kind = 'manual'
+        ORDER BY bm.created_at DESC
+        LIMIT 500`, [userId]);
+        res.json({
+            items: r.rows.map(row => ({
+                id: row.id,
+                bookId: row.book_id,
+                bookTitle: row.book_title ?? `Book ${row.book_id}`,
+                bookAuthors: row.book_authors ?? [],
+                positionPct: row.position_pct,
+                positionAnchor: row.position_anchor,
+                label: row.label,
+                createdAt: row.created_at,
+            })),
+        });
+    }
+    catch (e) {
+        console.error("[gutenberg-bookmarks list]", e?.message ?? e);
+        res.status(500).json({ error: "fetch_failed" });
+    }
+});
+// GET /api/user/gutenberg-bookmarks/:bookId — auto + manual bookmarks
+// for a book. Client renders manual ones in the reader sidebar and
+// uses the auto one to resume scroll position on book reopen.
+app.get("/api/user/gutenberg-bookmarks/:bookId", async (req, res) => {
+    const userId = await requireGutenbergAccess(req, res);
+    if (!userId)
+        return;
+    const bookId = parseInt(String(req.params.bookId ?? ""), 10);
+    if (!Number.isFinite(bookId) || bookId <= 0) {
+        res.status(400).json({ error: "bad_id" });
+        return;
+    }
+    try {
+        const r = await getPool().query(`SELECT id, bookmark_kind, position_pct, position_anchor, label, created_at
+         FROM gutenberg_bookmarks
+        WHERE clerk_user_id = $1 AND book_id = $2
+        ORDER BY bookmark_kind ASC, created_at DESC`, [userId, bookId]);
+        const auto = r.rows.find(b => b.bookmark_kind === "auto") ?? null;
+        const manual = r.rows.filter(b => b.bookmark_kind === "manual");
+        res.json({
+            auto: auto ? {
+                id: auto.id,
+                positionPct: auto.position_pct,
+                positionAnchor: auto.position_anchor,
+                updatedAt: auto.created_at,
+            } : null,
+            manual: manual.map(m => ({
+                id: m.id,
+                positionPct: m.position_pct,
+                positionAnchor: m.position_anchor,
+                label: m.label,
+                createdAt: m.created_at,
+            })),
+        });
+    }
+    catch (e) {
+        console.error("[gutenberg-bookmarks GET]", e?.message ?? e);
+        res.status(500).json({ error: "fetch_failed" });
+    }
+});
+// POST /api/user/gutenberg-bookmarks/:bookId
+// Body: { kind: "auto"|"manual", positionPct: 0–100, positionAnchor?: string, label?: string }
+// auto → upsert (one per user/book). manual → insert (many per user/book).
+app.post("/api/user/gutenberg-bookmarks/:bookId", express.json({ limit: "2kb" }), async (req, res) => {
+    const userId = await requireGutenbergAccess(req, res);
+    if (!userId)
+        return;
+    const bookId = parseInt(String(req.params.bookId ?? ""), 10);
+    if (!Number.isFinite(bookId) || bookId <= 0) {
+        res.status(400).json({ error: "bad_id" });
+        return;
+    }
+    const kind = req.body?.kind === "auto" ? "auto" : "manual";
+    const positionPct = Math.max(0, Math.min(100, Number(req.body?.positionPct) || 0));
+    const anchor = req.body?.positionAnchor ? String(req.body.positionAnchor).slice(0, 200) : null;
+    const label = req.body?.label ? String(req.body.label).slice(0, 200) : null;
+    try {
+        if (kind === "auto") {
+            // UPSERT against the partial unique index. The WHERE clause on the
+            // index means a vanilla ON CONFLICT can't target it, so do
+            // delete-then-insert in a transaction. Cheap (one row).
+            const client = await getPool().connect();
+            try {
+                await client.query("BEGIN");
+                await client.query(`DELETE FROM gutenberg_bookmarks
+            WHERE clerk_user_id = $1 AND book_id = $2 AND bookmark_kind = 'auto'`, [userId, bookId]);
+                await client.query(`INSERT INTO gutenberg_bookmarks
+             (clerk_user_id, book_id, bookmark_kind, position_pct, position_anchor)
+           VALUES ($1, $2, 'auto', $3, $4)`, [userId, bookId, positionPct, anchor]);
+                await client.query("COMMIT");
+            }
+            catch (e) {
+                await client.query("ROLLBACK");
+                throw e;
+            }
+            finally {
+                client.release();
+            }
+        }
+        else {
+            await getPool().query(`INSERT INTO gutenberg_bookmarks
+           (clerk_user_id, book_id, bookmark_kind, position_pct, position_anchor, label)
+         VALUES ($1, $2, 'manual', $3, $4, $5)`, [userId, bookId, positionPct, anchor, label]);
+        }
+        res.json({ ok: true });
+    }
+    catch (e) {
+        console.error("[gutenberg-bookmarks POST]", e?.message ?? e);
+        res.status(500).json({ error: "save_failed" });
+    }
+});
+// DELETE /api/user/gutenberg-bookmarks  { id }
+// Drops a single bookmark row by its serial id (manual bookmarks only;
+// auto resumes are managed implicitly via POST upsert).
+app.delete("/api/user/gutenberg-bookmarks", express.json({ limit: "1kb" }), async (req, res) => {
+    const userId = await requireGutenbergAccess(req, res);
+    if (!userId)
+        return;
+    const id = parseInt(String(req.body?.id ?? ""), 10);
+    if (!Number.isFinite(id) || id <= 0) {
+        res.status(400).json({ error: "bad_id" });
+        return;
+    }
+    try {
+        await getPool().query(`DELETE FROM gutenberg_bookmarks
+        WHERE id = $1 AND clerk_user_id = $2 AND bookmark_kind = 'manual'`, [id, userId]);
+        res.json({ ok: true });
+    }
+    catch (e) {
+        console.error("[gutenberg-bookmarks DELETE]", e?.message ?? e);
+        res.status(500).json({ error: "delete_failed" });
+    }
+});
+// ── Project Gutenberg annotations (admin-curated, shared) ───────────────
+//
+// Links specific book positions to Discogs entities (artist / release /
+// master / label). Reads are open to anyone who can use the Gutenberg
+// view (admin/demo today); writes are admin-only via requireAdmin.
+//
+// Two-way surface:
+//   - Reader: GET /api/gutenberg/annotations?book_id=N (per-book list,
+//     used by the sidebar + inline markers).
+//   - Discogs entity popups: GET /api/gutenberg/mentions?entity_type=X
+//     &entity_id=Y[&entity_name=Z] (cross-book list, "📖 Mentioned in
+//     books" panel on artist/album popups).
+// GET /api/gutenberg/annotations?book_id=N
+app.get("/api/gutenberg/annotations", async (req, res) => {
+    const userId = await requireGutenbergAccess(req, res);
+    if (!userId)
+        return;
+    const bookId = parseInt(String(req.query.book_id ?? ""), 10);
+    if (!Number.isFinite(bookId) || bookId <= 0) {
+        res.status(400).json({ error: "bad_book_id" });
+        return;
+    }
+    try {
+        const r = await getPool().query(`SELECT id, book_id, position_pct, position_anchor,
+              entity_type, entity_id, entity_name, snippet, label,
+              created_by, created_at
+         FROM gutenberg_annotations
+        WHERE book_id = $1
+        ORDER BY position_pct ASC, id ASC`, [bookId]);
+        res.json({
+            items: r.rows.map(row => ({
+                id: row.id,
+                bookId: row.book_id,
+                positionPct: row.position_pct,
+                positionAnchor: row.position_anchor,
+                entityType: row.entity_type,
+                entityId: row.entity_id == null ? null : String(row.entity_id),
+                entityName: row.entity_name,
+                snippet: row.snippet,
+                label: row.label,
+                createdBy: row.created_by,
+                createdAt: row.created_at,
+            })),
+        });
+    }
+    catch (e) {
+        console.error("[gutenberg/annotations GET]", e?.message ?? e);
+        res.status(500).json({ error: "fetch_failed" });
+    }
+});
+// POST /api/gutenberg/annotations (admin only)
+// Body: { bookId, positionPct, positionAnchor?, entityType, entityId?, entityName, snippet?, label? }
+app.post("/api/gutenberg/annotations", express.json({ limit: "8kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const adminId = await getClerkUserId(req);
+    if (!adminId) {
+        res.status(401).json({ error: "auth_required" });
+        return;
+    }
+    const bookId = parseInt(String(req.body?.bookId ?? ""), 10);
+    if (!Number.isFinite(bookId) || bookId <= 0) {
+        res.status(400).json({ error: "bad_book_id" });
+        return;
+    }
+    const positionPct = Math.max(0, Math.min(100, Number(req.body?.positionPct) || 0));
+    const positionAnchor = req.body?.positionAnchor
+        ? String(req.body.positionAnchor).slice(0, 200)
+        : null;
+    const entityType = String(req.body?.entityType ?? "").trim().toLowerCase();
+    if (!["artist", "release", "master", "label"].includes(entityType)) {
+        res.status(400).json({ error: "bad_entity_type" });
+        return;
+    }
+    const entityIdRaw = req.body?.entityId;
+    const entityId = (entityIdRaw === null || entityIdRaw === undefined || entityIdRaw === "")
+        ? null
+        : (Number.isFinite(Number(entityIdRaw)) ? Math.trunc(Number(entityIdRaw)) : null);
+    const entityName = String(req.body?.entityName ?? "").trim().slice(0, 300);
+    if (!entityName) {
+        res.status(400).json({ error: "entity_name_required" });
+        return;
+    }
+    const snippet = req.body?.snippet ? String(req.body.snippet).slice(0, 600) : null;
+    const label = req.body?.label ? String(req.body.label).slice(0, 200) : null;
+    try {
+        const r = await getPool().query(`INSERT INTO gutenberg_annotations
+         (book_id, position_pct, position_anchor, entity_type, entity_id, entity_name, snippet, label, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING id, created_at`, [bookId, positionPct, positionAnchor, entityType, entityId, entityName, snippet, label, adminId]);
+        res.json({ ok: true, id: r.rows[0]?.id, createdAt: r.rows[0]?.created_at });
+    }
+    catch (e) {
+        console.error("[gutenberg/annotations POST]", e?.message ?? e);
+        res.status(500).json({ error: "save_failed" });
+    }
+});
+// DELETE /api/gutenberg/annotations  { id } (admin only)
+app.delete("/api/gutenberg/annotations", express.json({ limit: "1kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const id = parseInt(String(req.body?.id ?? ""), 10);
+    if (!Number.isFinite(id) || id <= 0) {
+        res.status(400).json({ error: "bad_id" });
+        return;
+    }
+    try {
+        await getPool().query(`DELETE FROM gutenberg_annotations WHERE id = $1`, [id]);
+        res.json({ ok: true });
+    }
+    catch (e) {
+        console.error("[gutenberg/annotations DELETE]", e?.message ?? e);
+        res.status(500).json({ error: "delete_failed" });
+    }
+});
+// GET /api/gutenberg/mentions?entity_type=X[&entity_id=Y][&entity_name=Z]
+// Cross-book lookup used by the artist/album/label modal's "Mentioned
+// in books" panel. Open to any signed-in user (no admin gate on read —
+// the annotations are public-facing once curated). Returns annotations
+// joined with book metadata so the panel renders without extra calls.
+//
+// Match precedence:
+//   - If entity_id supplied: match by (entity_type, entity_id).
+//   - Else if entity_name supplied: case-insensitive match by
+//     (entity_type, lower(entity_name)).
+//   - Else: 400.
+app.get("/api/gutenberg/mentions", async (req, res) => {
+    const userId = await requireUser(req, res);
+    if (!userId)
+        return;
+    const entityType = String(req.query.entity_type ?? "").trim().toLowerCase();
+    if (!["artist", "release", "master", "label"].includes(entityType)) {
+        res.status(400).json({ error: "bad_entity_type" });
+        return;
+    }
+    const entityIdRaw = String(req.query.entity_id ?? "").trim();
+    const entityId = entityIdRaw && /^\d+$/.test(entityIdRaw) ? entityIdRaw : null;
+    const entityName = String(req.query.entity_name ?? "").trim().slice(0, 300);
+    if (!entityId && !entityName) {
+        res.status(400).json({ error: "entity_id_or_name_required" });
+        return;
+    }
+    try {
+        let sql;
+        let params;
+        if (entityId) {
+            sql = `
+        SELECT a.id, a.book_id, a.position_pct, a.position_anchor,
+               a.entity_type, a.entity_id, a.entity_name,
+               a.snippet, a.label, a.created_at,
+               b.title AS book_title,
+               b.authors AS book_authors
+          FROM gutenberg_annotations a
+          LEFT JOIN gutenberg_books b ON b.book_id = a.book_id
+         WHERE a.entity_type = $1 AND a.entity_id = $2
+         ORDER BY a.created_at DESC
+         LIMIT 100`;
+            params = [entityType, entityId];
+        }
+        else {
+            sql = `
+        SELECT a.id, a.book_id, a.position_pct, a.position_anchor,
+               a.entity_type, a.entity_id, a.entity_name,
+               a.snippet, a.label, a.created_at,
+               b.title AS book_title,
+               b.authors AS book_authors
+          FROM gutenberg_annotations a
+          LEFT JOIN gutenberg_books b ON b.book_id = a.book_id
+         WHERE a.entity_type = $1 AND lower(a.entity_name) = lower($2)
+         ORDER BY a.created_at DESC
+         LIMIT 100`;
+            params = [entityType, entityName];
+        }
+        const r = await getPool().query(sql, params);
+        res.json({
+            items: r.rows.map(row => ({
+                id: row.id,
+                bookId: row.book_id,
+                bookTitle: row.book_title ?? `Book ${row.book_id}`,
+                bookAuthors: row.book_authors ?? [],
+                positionPct: row.position_pct,
+                positionAnchor: row.position_anchor,
+                entityType: row.entity_type,
+                entityId: row.entity_id == null ? null : String(row.entity_id),
+                entityName: row.entity_name,
+                snippet: row.snippet,
+                label: row.label,
+                createdAt: row.created_at,
+            })),
+        });
+    }
+    catch (e) {
+        console.error("[gutenberg/mentions]", e?.message ?? e);
+        res.status(500).json({ error: "fetch_failed" });
+    }
+});
+// ── Chronicling America (LOC historic newspapers) ───────────────────────
+//
+// Endpoints proxy the public chroniclingamerica.loc.gov JSON API for
+// search and serve per-user saves. Admin/demo-gated initially (same
+// pattern as Gutenberg) so we can shake it out before opening up.
+// No API key required upstream; we still cache results in-memory with
+// a long TTL since the corpus is historical and rarely changes.
+async function requireChronAmAccess(req, res) {
+    const userId = await getClerkUserId(req);
+    if (!userId) {
+        res.status(401).json({ error: "auth_required" });
+        return null;
+    }
+    if (userId !== ADMIN_CLERK_ID && !isDemoUser(userId)) {
+        res.status(403).json({ error: "forbidden" });
+        return null;
+    }
+    return userId;
+}
+// Small in-memory LRU for search responses. The corpus is historical
+// so a 24h TTL is plenty; the cache absorbs repeat queries (history
+// dropdown / "Run again" / re-paint after save) cheaply.
+const _chronamSearchCache = new Map();
+const _CHRONAM_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const _CHRONAM_CACHE_MAX = 200;
+function _chronamCacheGet(key) {
+    const e = _chronamSearchCache.get(key);
+    if (!e)
+        return null;
+    if (Date.now() - e.at > _CHRONAM_CACHE_TTL_MS) {
+        _chronamSearchCache.delete(key);
+        return null;
+    }
+    // Move-to-end for LRU.
+    _chronamSearchCache.delete(key);
+    _chronamSearchCache.set(key, e);
+    return e.body;
+}
+function _chronamCachePut(key, body) {
+    _chronamSearchCache.set(key, { at: Date.now(), body });
+    while (_chronamSearchCache.size > _CHRONAM_CACHE_MAX) {
+        const oldest = _chronamSearchCache.keys().next().value;
+        if (!oldest)
+            break;
+        _chronamSearchCache.delete(oldest);
+    }
+}
+// GET /api/chronam/search?q=&page=1[&date1=YYYY][&date2=YYYY][&state=]
+// Proxies https://chroniclingamerica.loc.gov/search/pages/results/?format=json&proxtext=...
+app.get("/api/chronam/search", async (req, res) => {
+    const userId = await requireChronAmAccess(req, res);
+    if (!userId)
+        return;
+    const q = String(req.query.q ?? "").trim().slice(0, 200);
+    if (!q) {
+        res.status(400).json({ error: "q required" });
+        return;
+    }
+    const page = Math.max(1, Math.min(100, parseInt(String(req.query.page ?? "1"), 10) || 1));
+    const date1 = /^\d{4}$/.test(String(req.query.date1 ?? "")) ? String(req.query.date1) : "";
+    const date2 = /^\d{4}$/.test(String(req.query.date2 ?? "")) ? String(req.query.date2) : "";
+    const state = String(req.query.state ?? "").trim().slice(0, 64);
+    // Sort: relevance (default), oldest, newest, title. Map to loc.gov's
+    // `sb` parameter — invalid values fall back to relevance.
+    const sortRaw = String(req.query.sort ?? "").trim();
+    const sortMap = {
+        relevance: "",
+        oldest: "date",
+        newest: "date_desc",
+        title: "title_s",
+    };
+    const sb = Object.prototype.hasOwnProperty.call(sortMap, sortRaw) ? sortMap[sortRaw] : "";
+    const key = `q=${q}|p=${page}|d1=${date1}|d2=${date2}|s=${state}|sb=${sb}`;
+    const cached = _chronamCacheGet(key);
+    if (cached) {
+        res.json({ ...cached, _cache: "memory" });
+        return;
+    }
+    // Persistent DB cache (shared across users, survives restarts). The
+    // first user's wait on a query warms it for everyone.
+    const dbCached = await getChronAmSearchCache(key).catch(() => null);
+    if (dbCached) {
+        _chronamCachePut(key, dbCached);
+        res.json({ ...dbCached, _cache: "db" });
+        return;
+    }
+    // LoC migrated the Chronicling America API surface onto loc.gov;
+    // the old chroniclingamerica.loc.gov/search/pages/results/?format=json
+    // returns 404 for many queries now. The new endpoint is the loc.gov
+    // search API constrained to the Chronicling America "partof" facet,
+    // which returns the same per-page records in JSON.
+    const u = new URL("https://www.loc.gov/search/");
+    u.searchParams.set("fa", "partof:chronicling america");
+    u.searchParams.set("fo", "json");
+    u.searchParams.set("q", q);
+    u.searchParams.set("sp", String(page));
+    u.searchParams.set("c", "20");
+    if (date1 && date2)
+        u.searchParams.set("dates", `${date1}/${date2}`);
+    if (state)
+        u.searchParams.set("location_state", state);
+    if (sb)
+        u.searchParams.set("sb", sb);
+    // 45s timeout — loc.gov search is slow (10–20s common, cold queries
+    // routinely 30s+) so the previous 25s budget was clipping legitimate
+    // results into 504s. AbortController still bails on hung connections.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45_000);
+    const t0 = Date.now();
+    try {
+        const upstream = await fetch(u.toString(), {
+            headers: { "User-Agent": "SeaDisco/1.0 (research; contact via seadisco.com)" },
+            signal: controller.signal,
+        });
+        const ms = Date.now() - t0;
+        console.log(`[chronam/search] upstream ${upstream.status} in ${ms}ms key=${key}`);
+        if (!upstream.ok) {
+            res.status(upstream.status >= 500 ? 502 : upstream.status).json({ error: "upstream_failed" });
+            return;
+        }
+        const j = await upstream.json();
+        const rows = Array.isArray(j.results) ? j.results : [];
+        // Extract sequence ("seq-N") and a stable canonical id ("/lccn/.../seq-N/")
+        // from the LoC URL so saves keep working across the API migration.
+        const items = rows.map((it) => {
+            const url = String(it.id ?? it.url ?? "");
+            const seqMatch = url.match(/seq-(\d+)/);
+            const sequence = seqMatch ? Number(seqMatch[1]) : null;
+            const pathMatch = url.match(/\/(?:resource|lccn)(\/lccn\/[^?#]+)/) || url.match(/(\/lccn\/[^?#]+)/);
+            const canonical = pathMatch ? pathMatch[1] : url;
+            // location_str arrays often look like ["new orleans, louisiana"].
+            const loc = Array.isArray(it.location_str) && it.location_str[0]
+                ? String(it.location_str[0])
+                : "";
+            const [cityRaw, stateRaw] = loc.split(",").map(s => (s || "").trim());
+            const desc = Array.isArray(it.description) ? String(it.description[0] ?? "") : String(it.description ?? "");
+            return {
+                id: canonical, // stable key for saves
+                lccn: "",
+                date: String(it.date ?? ""),
+                sequence,
+                title: Array.isArray(it.partof_title) && it.partof_title[0]
+                    ? String(it.partof_title[0])
+                    : String(it.title ?? ""),
+                city: cityRaw || "",
+                state: stateRaw || "",
+                ocr_eng: desc.slice(0, 1200),
+                page_url: url, // loc.gov resource page
+                thumb_url: Array.isArray(it.image_url) && it.image_url[0]
+                    ? String(it.image_url[0])
+                    : "",
+            };
+        });
+        const pg = j.pagination || {};
+        const body = {
+            items,
+            totalItems: Number(pg.of ?? rows.length) || rows.length,
+            page: Number(pg.current ?? page) || page,
+            itemsPerPage: Number(pg.perpage ?? rows.length) || rows.length,
+            query: q,
+        };
+        _chronamCachePut(key, body);
+        // Write-through to the persistent cache so future users (and future
+        // restarts) skip the upstream slog. Fire-and-forget — a DB write
+        // hiccup shouldn't fail the response.
+        setChronAmSearchCache(key, body).catch(() => { });
+        res.json({ ...body, _cache: "miss" });
+    }
+    catch (e) {
+        const ms = Date.now() - t0;
+        const reason = e?.name === "AbortError" ? "timeout" : "fetch_failed";
+        console.warn(`[chronam/search] ${reason} after ${ms}ms key=${key}:`, e?.message ?? e);
+        // Stale-while-error fallback. Historic newspaper data effectively
+        // never changes, so returning a slightly old cached payload is
+        // strictly better UX than failing the search. Only kicks in when
+        // we actually have a row for this key — first-time queries that
+        // time out still surface as 504.
+        const stale = await getChronAmSearchCacheStale(key).catch(() => null);
+        if (stale) {
+            const ageMs = Date.now() - stale.cachedAt.getTime();
+            console.log(`[chronam/search] serving stale (${Math.round(ageMs / 1000)}s old) for key=${key}`);
+            res.json({ ...stale.data, _cache: "stale", _cacheAge: ageMs, _upstreamError: reason });
+            return;
+        }
+        if (reason === "timeout") {
+            res.status(504).json({ error: "upstream_timeout", waitedMs: ms });
+        }
+        else {
+            res.status(502).json({ error: "fetch_failed" });
+        }
+    }
+    finally {
+        clearTimeout(timeoutId);
+    }
+});
+// GET /api/chronam/saves  → user's saved newspaper pages
+app.get("/api/chronam/saves", async (req, res) => {
+    const userId = await requireChronAmAccess(req, res);
+    if (!userId)
+        return;
+    try {
+        const limit = Math.max(1, Math.min(1000, parseInt(String(req.query.limit ?? "500"), 10) || 500));
+        const items = await getChronAmSaves(userId, limit);
+        res.json({ items });
+    }
+    catch (e) {
+        console.error("[chronam/saves]", e?.message ?? e);
+        res.status(500).json({ error: "fetch_failed" });
+    }
+});
+// GET /api/chronam/saves/ids  → bare list of saved ids (for star state)
+app.get("/api/chronam/saves/ids", async (req, res) => {
+    const userId = await requireChronAmAccess(req, res);
+    if (!userId)
+        return;
+    try {
+        const ids = await getChronAmSaveIds(userId);
+        res.json({ ids });
+    }
+    catch (e) {
+        console.error("[chronam/saves/ids]", e?.message ?? e);
+        res.status(500).json({ error: "fetch_failed" });
+    }
+});
+// POST /api/chronam/save  body: { id, paperTitle?, issueDate?, snippet?, thumbnail?, data? }
+app.post("/api/chronam/save", express.json({ limit: "32kb" }), async (req, res) => {
+    const userId = await requireChronAmAccess(req, res);
+    if (!userId)
+        return;
+    const b = req.body ?? {};
+    const id = typeof b.id === "string" ? b.id.slice(0, 200) : "";
+    if (!id) {
+        res.status(400).json({ error: "id required" });
+        return;
+    }
+    const paperTitle = typeof b.paperTitle === "string" ? b.paperTitle.slice(0, 256) : null;
+    const issueDate = typeof b.issueDate === "string" ? b.issueDate.slice(0, 32) : null;
+    const snippet = typeof b.snippet === "string" ? b.snippet.slice(0, 2000) : null;
+    const thumbnail = typeof b.thumbnail === "string" ? b.thumbnail.slice(0, 512) : null;
+    const data = b.data && typeof b.data === "object" ? b.data : {};
+    try {
+        await saveChronAmItem(userId, id, paperTitle, issueDate, snippet, thumbnail, data);
+        res.json({ ok: true });
+    }
+    catch (e) {
+        console.error("[chronam/save]", e?.message ?? e);
+        res.status(500).json({ error: "save_failed" });
+    }
+});
+// DELETE /api/chronam/save?id=...
+app.delete("/api/chronam/save", async (req, res) => {
+    const userId = await requireChronAmAccess(req, res);
+    if (!userId)
+        return;
+    const id = String(req.query.id ?? "").slice(0, 200);
+    if (!id) {
+        res.status(400).json({ error: "id required" });
+        return;
+    }
+    try {
+        await deleteChronAmSave(userId, id);
+        res.json({ ok: true });
+    }
+    catch (e) {
+        console.error("[chronam/save DELETE]", e?.message ?? e);
+        res.status(500).json({ error: "delete_failed" });
+    }
 });
 // ── Play queue (cross-source: LOC + YouTube) ────────────────────────────
 //
@@ -4984,6 +6423,13 @@ function _clientIp(req) {
     return (xff || (req.ip ?? "unknown")).replace(/^::ffff:/, "").trim();
 }
 app.use("/api/admin", (req, res, next) => {
+    // The status-poll endpoint for the fire-and-forget suggestions run
+    // is hit every few seconds while a 2-minute run is in flight. It
+    // does no real work (in-memory Map read) and is admin-only via
+    // requireAdmin downstream, so bypass the per-IP limit here — the
+    // previous 30/min cap would 429 the poll mid-run.
+    if (req.path === "/run-suggestions-for-self/status")
+        return next();
     const ip = _clientIp(req);
     const now = Date.now();
     const entry = adminRateCounts.get(ip);
@@ -4991,7 +6437,10 @@ app.use("/api/admin", (req, res, next) => {
         adminRateCounts.set(ip, { count: 1, resetAt: now + 60_000 });
         return next();
     }
-    if (entry.count >= 30) {
+    // 120/min: the admin dashboard polls several stats endpoints on a
+    // refresh cycle (overview / job-health / suggestions-stats / etc.),
+    // and a single human session can legitimately reach the old 30/min.
+    if (entry.count >= 120) {
         res.status(429).json({ error: "Rate limited" });
         return;
     }
@@ -6042,24 +7491,111 @@ app.post("/api/user/personal-suggestions/dismiss", express.json({ limit: "1kb" }
         res.status(500).json({ error: "Could not dismiss" });
     }
 });
-// Generate one user's batch of suggestions. Requires the user to have
-// Discogs OAuth set up — we use their token so rate-limit pressure is
-// distributed across users rather than concentrated on admin's. Skips
-// users without OAuth (they can connect Discogs to receive
-// suggestions). Each pass overwrites the user's saved batch.
-async function _runPersonalSuggestionsForUser(userId) {
+async function _runPersonalSuggestionsForUser(userId, opts) {
     const dc = await getDiscogsClientForUser(userId);
     if (!dc)
         return { saved: 0, reason: "no-oauth" };
+    // Engagement gate — don't burn Discogs budget on users who aren't
+    // looking at their feed. Two skips, both bypassed by opts.force:
+    //   1. Hibernated (6mo inactive): skip outright. getAllUsersForSync
+    //      doesn't exclude these, so this is the first time we cull them.
+    //   2. Zero-engagement: feed has existed for the user for at least
+    //      the grace window AND none of their current saved suggestions
+    //      has been opened in the last 30 days. When they finally do
+    //      click one, recent_views records it and the gate releases on
+    //      the next 6h tick.
+    // New users (no feed yet, or feed younger than the grace window)
+    // are always allowed through so the cold-start case still gets a
+    // first feed generated.
+    const ENGAGEMENT_GRACE_DAYS = 14;
+    if (!opts?.force) {
+        const eng = await getUserSuggestionEngagement(userId);
+        if (eng.hibernated)
+            return { saved: 0, reason: "hibernated" };
+        if (eng.hasSuggestions
+            && eng.oldestSuggDays >= ENGAGEMENT_GRACE_DAYS
+            && eng.recentClicks === 0) {
+            return { saved: 0, reason: "no-engagement" };
+        }
+    }
+    // Signal-change early-exit: if the user's taste sources (plays,
+    // favorites, collection, wantlist) haven't changed since the last
+    // successful run AND that run was recent enough, skip — there's
+    // nothing new for the search to discover. A weekly "force re-run"
+    // floor catches edge cases like release_cache backfills that would
+    // resolve previously-unresolvable play rows. opts.force bypasses
+    // (used by the admin manual trigger).
+    const SUGG_REFRESH_FLOOR_MS = 7 * 24 * 60 * 60 * 1000;
+    const sig = await getUserTasteSignature(userId);
+    const prefs = await getUserPrefs(userId).catch(() => ({}));
+    if (!opts?.force && sig && prefs?._suggRunSig === sig) {
+        const lastAt = Number(prefs?._suggRunAt) || 0;
+        if (lastAt && Date.now() - lastAt < SUGG_REFRESH_FLOOR_MS) {
+            return { saved: 0, reason: "no-signal-change" };
+        }
+    }
     // Wider taste sampling so a user dismissing aggressively doesn't run
     // out of fresh suggestions. 30 tuples × master+release search × per-
     // page 25/15 yields ~1200 raw rows pre-dedupe; cap saved at 1000
     // after sorting.
-    const tuples = await getUserTasteTuples(userId, 30);
-    if (!tuples.length)
+    // Diagnostic counters surfaced via the details field on the
+    // admin manual trigger — the scheduler ignores them.
+    const counts = {
+        tuples: 0,
+        tuplesAfterAdminFilter: 0,
+        rawResults: 0,
+        excludedOwned: 0,
+        excludedDismissed: 0,
+        excludedRecentlyClicked: 0,
+        excludedAdminGenre: 0,
+    };
+    let tuples = await getUserTasteTuples(userId, 30);
+    counts.tuples = tuples.length;
+    counts.tuplesAfterAdminFilter = tuples.length;
+    if (!tuples.length) {
+        // Persist sig so an idle user with no taste data doesn't get
+        // re-checked every 6 hours; we'll only run again once their
+        // signature changes (or the weekly floor lapses).
+        if (sig)
+            setUserPrefs(userId, { _suggRunSig: sig, _suggRunAt: Date.now() }).catch(() => { });
         return { saved: 0, reason: "no-taste" };
+    }
+    // (Admin pre-1970 year cap removed: it collapsed the feed to 1960s
+    // vinyl reissues — collection year metadata is the pressing year, so
+    // pre-war blues owned as later reissues clustered in the 1960s while
+    // the >1970 cut discarded the well-curated modern reissues of that
+    // same 1920s–40s material. No year filter now; era is driven purely
+    // by the user's taste tuples.)
+    // Admin-only genre allowlist: restrict the feed to blues / jazz /
+    // folk for now (no rock, reggae, funk/soul, etc). Discogs bundles
+    // folk into the "Folk, World, & Country" genre, so a substring
+    // match on "folk" also admits that combined bucket (world/country
+    // ride along — unavoidable given Discogs's taxonomy). Applied to
+    // the taste tuples so excluded genres don't burn Discogs search
+    // calls, then again per-result as defense in depth. Intentional
+    // hard restriction — NO fallback to unfiltered if it empties.
+    const _isAdmin = userId === ADMIN_CLERK_ID;
+    const ADMIN_GENRE_ALLOW = ["blues", "jazz", "folk"];
+    const _adminGenreOK = (g) => typeof g === "string" && ADMIN_GENRE_ALLOW.some(a => g.toLowerCase().includes(a));
+    if (_isAdmin) {
+        const before = tuples.length;
+        tuples = tuples.filter(t => _adminGenreOK(t.genre));
+        counts.tuplesAfterAdminFilter = tuples.length;
+        if (!tuples.length) {
+            if (sig)
+                setUserPrefs(userId, { _suggRunSig: sig, _suggRunAt: Date.now() }).catch(() => { });
+            return { saved: 0, reason: "admin-genre-filter-empty" };
+        }
+        console.log(`[suggestions] admin genre allowlist (blues/jazz/folk): ${before} → ${tuples.length} tuples`);
+    }
     const ownedMasters = await getUserLibraryMasterIds(userId);
-    const dismissed = await getDismissedSuggestionKeys(userId);
+    // 90-day TTL on dismissals so the pool can thaw over time —
+    // previously dismissed items become eligible to re-surface after
+    // three months. Without this, every dismissal permanently shrinks
+    // the candidate space, and an aggressive dismisser collapses to
+    // zero growth.
+    const DISMISSAL_TTL_DAYS = 90;
+    const dismissed = await getDismissedSuggestionKeys(userId, DISMISSAL_TTL_DAYS);
     // Recently-clicked suggestions act as a soft-suppress: the user
     // already looked at these, so don't re-surface them for a while.
     // 30-day window — long enough to keep the feed feeling fresh, short
@@ -6080,16 +7616,35 @@ async function _runPersonalSuggestionsForUser(userId) {
         const type = row.type === "master" ? "master" : row.type === "release" ? "release" : "release";
         if (type !== row.type)
             return;
+        // Admin genre allowlist, defense in depth: a tuple's genre passed
+        // the allowlist but Discogs's genre-scoped search can still return
+        // rows tagged with other genres. Drop any result that carries no
+        // allowed (blues/jazz/folk) genre.
+        if (_isAdmin) {
+            const genres = Array.isArray(row.genre) ? row.genre : [];
+            if (!genres.some(_adminGenreOK)) {
+                counts.excludedAdminGenre++;
+                return;
+            }
+        }
         // Dedup: skip if user owns the underlying master, or if dismissed.
         const masterIdRaw = Number(row.master_id);
-        if (Number.isFinite(masterIdRaw) && masterIdRaw > 0 && ownedMasters.has(masterIdRaw))
+        if (Number.isFinite(masterIdRaw) && masterIdRaw > 0 && ownedMasters.has(masterIdRaw)) {
+            counts.excludedOwned++;
             return;
-        if (type === "master" && ownedMasters.has(id))
+        }
+        if (type === "master" && ownedMasters.has(id)) {
+            counts.excludedOwned++;
             return;
-        if (dismissed.has(`${type}:${id}`))
+        }
+        if (dismissed.has(`${type}:${id}`)) {
+            counts.excludedDismissed++;
             return;
-        if (recentlyClicked.has(`${type}:${id}`))
+        }
+        if (recentlyClicked.has(`${type}:${id}`)) {
+            counts.excludedRecentlyClicked++;
             return;
+        }
         // For release-type: also skip if its master is already a candidate
         // — the master version wins and we don't want a duplicate card.
         if (type === "release" && Number.isFinite(masterIdRaw) && masterIdRaw > 0
@@ -6126,26 +7681,53 @@ async function _runPersonalSuggestionsForUser(userId) {
             },
         });
     };
+    // Admin search broadening (compounding levers — combined effect lifts
+    // recall sharply for the narrow blues/jazz/folk allowlist):
+    //   1. format=Vinyl dropped → CDs, digital, 78s, box-set reissues
+    //      surface (essential for pre-war material which lives mostly on
+    //      later non-vinyl reissues).
+    //   2. year is a range t.year-5 to t.year+5 instead of exact match
+    //      → reissues with drifted year metadata are caught.
+    //   3. A third "genre+year only" pass per tuple (no style) widens
+    //      recall when Discogs files an album under a sibling style.
+    // Non-admin users keep the narrower, cheaper original behaviour.
+    const YEAR_BAND = 5;
+    const adminPasses = [
+        { type: "master", useStyle: true, perPage: 25 },
+        { type: "release", useStyle: true, perPage: 15 },
+        { type: "master", useStyle: false, perPage: 25 }, // genre+year-only
+        { type: "release", useStyle: false, perPage: 15 },
+    ];
+    const defaultPasses = [
+        { type: "master", useStyle: true, perPage: 25 },
+        { type: "release", useStyle: true, perPage: 15 },
+    ];
+    const passes = _isAdmin ? adminPasses : defaultPasses;
     for (const t of tuples) {
-        // Run master + release searches per tuple. Master scoring is
-        // weighted slightly higher so it floats up when both exist.
-        for (const searchType of ["master", "release"]) {
+        const yearParam = _isAdmin
+            ? `${Math.max(1900, t.year - YEAR_BAND)}-${Math.min(2030, t.year + YEAR_BAND)}`
+            : String(t.year);
+        for (const pass of passes) {
             try {
-                const r = await dc.search("", {
-                    type: searchType,
+                const params = {
+                    type: pass.type,
                     genre: t.genre,
-                    style: t.style,
-                    year: String(t.year),
-                    format: "Vinyl",
-                    perPage: searchType === "master" ? 25 : 15,
-                });
+                    year: yearParam,
+                    perPage: pass.perPage,
+                };
+                if (pass.useStyle)
+                    params.style = t.style;
+                if (!_isAdmin)
+                    params.format = "Vinyl";
+                const r = await dc.search("", params);
                 const results = Array.isArray(r?.results) ? r.results : [];
+                counts.rawResults += results.length;
                 for (let i = 0; i < results.length; i++) {
                     ingest(results[i], t, i);
                 }
             }
             catch (e) {
-                console.warn(`[suggestions] ${searchType} search failed for ${userId} ${t.genre}/${t.style}/${t.year}:`, e?.message ?? e);
+                console.warn(`[suggestions] ${pass.type}${pass.useStyle ? "" : "/nostyle"} search failed for ${userId} ${t.genre}/${t.style}/${yearParam}:`, e?.message ?? e);
             }
             // Pace per request to respect Discogs's ~60/min OAuth limit.
             await sleep(1100);
@@ -6154,8 +7736,11 @@ async function _runPersonalSuggestionsForUser(userId) {
     const items = Array.from(candidates.values())
         .sort((a, b) => b.score - a.score)
         .slice(0, 1000);
-    if (!items.length)
+    if (!items.length) {
+        if (sig)
+            setUserPrefs(userId, { _suggRunSig: sig, _suggRunAt: Date.now() }).catch(() => { });
         return { saved: 0, reason: "no-candidates" };
+    }
     // Merge instead of replace — keep stable rows, only add genuinely
     // new finds. excludeKeys folds dismissals + recent clicks together
     // so existing rows for those keys also get suppressed.
@@ -6188,20 +7773,56 @@ async function _runPersonalSuggestionsForUser(userId) {
             console.warn(`[suggestions] enqueue cache-warm failed for ${userId}:`, e?.message ?? e);
         }
     }
-    return { saved: added.length };
+    // Record this run's signature + timestamp so the next tick can
+    // early-exit if nothing relevant has changed. Stored even when
+    // `added` is empty — the search still ran, just yielded no new
+    // candidates, and we don't want to re-spend Discogs budget on the
+    // next tick over the same idle inputs.
+    if (sig) {
+        setUserPrefs(userId, { _suggRunSig: sig, _suggRunAt: Date.now() }).catch(() => { });
+    }
+    // Total currently saved (post-merge) — surfaces in the admin
+    // manual-trigger response so "saved 0" can be read in context
+    // ("added 0 new; 336 total" vs "added 0; 336 total" wasn't broken).
+    let totalSavedAfter = 0;
+    try {
+        const r = await getPool().query(`SELECT COUNT(*)::int AS n FROM user_personal_suggestions WHERE clerk_user_id = $1`, [userId]);
+        totalSavedAfter = Number(r.rows[0]?.n) || 0;
+    }
+    catch { }
+    return {
+        saved: added.length,
+        details: {
+            tuples: counts.tuples,
+            tuplesAfterAdminFilter: counts.tuplesAfterAdminFilter,
+            rawResults: counts.rawResults,
+            candidatesAfterDedup: candidates.size,
+            excludedOwned: counts.excludedOwned,
+            excludedDismissed: counts.excludedDismissed,
+            excludedRecentlyClicked: counts.excludedRecentlyClicked,
+            excludedAdminGenre: counts.excludedAdminGenre,
+            itemsToMerge: items.length,
+            totalSavedAfter,
+        },
+    };
 }
-// Hourly scheduler: walk every signed-up user, run the generator
+// Scheduler: walk every signed-up user, run the generator
 // sequentially with a small delay between users so we don't spike
 // Discogs traffic. Users without OAuth or with empty taste profiles
 // are skipped quickly.
 async function _runPersonalSuggestionsForAllUsers() {
+    const _jr = await startJobRun("daily-suggestions").catch(() => null);
+    let total = 0;
+    let skipped = 0;
+    let userCount = 0;
     try {
         const users = await getAllUsersForSync();
-        if (!users.length)
+        userCount = users.length;
+        if (!users.length) {
+            await finishJobRun(_jr, { status: "ok", items: 0, detail: "no users" });
             return;
+        }
         console.log(`[suggestions] hourly run starting for ${users.length} users`);
-        let total = 0;
-        let skipped = 0;
         for (const u of users) {
             const userId = u.clerkUserId;
             const result = await _runPersonalSuggestionsForUser(userId).catch(e => {
@@ -6215,24 +7836,25 @@ async function _runPersonalSuggestionsForAllUsers() {
             await sleep(2000);
         }
         console.log(`[suggestions] hourly run complete; saved ${total} items, ${skipped} users skipped`);
+        await finishJobRun(_jr, { status: "ok", items: total, detail: `${userCount} users, ${skipped} skipped` });
     }
     catch (e) {
         console.error("[suggestions] scheduler failed:", e?.message ?? e);
+        await finishJobRun(_jr, { status: "error", items: total, errors: 1, detail: String(e?.message ?? e) });
     }
 }
-// Daily scheduler — fires once per day at 02:xx Pacific (just before
-// the cache-warm window opens at 03:00 PT, so the warm worker has
-// fresh suggestion deltas to drain). Was hourly, which burned ~2 min
-// of Discogs API budget per user every hour even though taste
-// tuples barely change. Daily is plenty for personal suggestions
-// since the user's library doesn't shift much in 24 hours.
+// Scheduler — fires once daily at 04:xx Pacific. The 6h cadence
+// (02/08/14/20 PT) added incremental Discogs load that, combined
+// with the other 6h syncs, pushed us into 429 territory; reverting
+// to a single overnight run trims that load. 04:xx PT keeps it
+// after the 03:00 PT cache-warm window (so the warmer's results
+// are available) and well clear of US peak hours.
 //
-// Implemented as a 15-min tick that asks "is it 02:xx PT AND have
-// we run today already?" — same pattern as the cache-warm window
-// check, just narrower (one hour instead of four).
+// Implemented as a 15-min tick that asks "are we in a firing hour AND
+// have we run for this date+hour already?".
 const _SUGG_GEN_TZ = "America/Los_Angeles";
-const _SUGG_GEN_HOUR = 2;
-let _suggGenLastRunDate = null; // YYYY-MM-DD in PT
+const _SUGG_GEN_HOURS = new Set([4]);
+let _suggGenLastRunKey = null; // YYYY-MM-DD-HH in PT
 function _ptDateStr() {
     return new Date().toLocaleDateString("en-CA", { timeZone: _SUGG_GEN_TZ });
 }
@@ -6248,19 +7870,20 @@ function _ptHour() {
     }
 }
 function _maybeStartDailySuggestionsRun() {
-    const today = _ptDateStr();
-    if (_suggGenLastRunDate === today)
-        return; // already ran today
-    if (_ptHour() !== _SUGG_GEN_HOUR)
-        return; // not the firing hour
-    _suggGenLastRunDate = today;
+    const hr = _ptHour();
+    if (!_SUGG_GEN_HOURS.has(hr))
+        return; // not a firing hour
+    const key = `${_ptDateStr()}-${String(hr).padStart(2, "0")}`;
+    if (_suggGenLastRunKey === key)
+        return; // already ran this slot
+    _suggGenLastRunKey = key;
     _runPersonalSuggestionsForAllUsers().catch(() => { });
 }
 if (process.env.APP_DB_URL) {
-    // First check 60s after startup (handles boot during the firing hour).
+    // First check 60s after startup (handles boot during a firing hour).
     setTimeout(() => { _maybeStartDailySuggestionsRun(); }, 60_000);
     // Subsequent checks every 15 min — narrow enough that we never
-    // miss the firing hour, broad enough to cost nothing.
+    // miss a firing hour, broad enough to cost nothing.
     setInterval(() => { _maybeStartDailySuggestionsRun(); }, 15 * 60 * 1000);
 }
 // ── Cache-warm worker (overnight job) ──────────────────────────────────
@@ -6326,6 +7949,7 @@ async function _runSuggestionsCacheWarm(opts) {
     _suggCacheWarmState.errors = 0;
     _suggCacheWarmState.lastError = null;
     let totalDrained = 0;
+    const _jr = await startJobRun("cache-warm").catch(() => null);
     try {
         // Drain the queue in batches. The queue can grow mid-pass (the
         // suggestions generator might add to it during early-morning
@@ -6369,10 +7993,22 @@ async function _runSuggestionsCacheWarm(opts) {
             }
         }
         console.log(`[cache-warm] done; fetched ${_suggCacheWarmState.fetched}, errors ${_suggCacheWarmState.errors}, drained ${totalDrained}`);
+        await finishJobRun(_jr, {
+            status: "ok",
+            items: _suggCacheWarmState.fetched,
+            errors: _suggCacheWarmState.errors,
+            detail: `drained ${totalDrained}, ${_suggCacheWarmState.skipped} skipped${_suggCacheWarmState.lastError ? `; last err: ${_suggCacheWarmState.lastError}` : ""}`,
+        });
     }
     catch (err) {
         _suggCacheWarmState.lastError = err?.message ?? String(err);
         console.error("[cache-warm] worker crashed:", err);
+        await finishJobRun(_jr, {
+            status: "error",
+            items: _suggCacheWarmState.fetched,
+            errors: _suggCacheWarmState.errors + 1,
+            detail: String(err?.message ?? err),
+        });
     }
     finally {
         _suggCacheWarmState.running = false;
@@ -6444,8 +8080,26 @@ app.post("/api/user/events/play", express.json({ limit: "4kb" }), async (req, re
         res.status(400).json({ error: "externalId required" });
         return;
     }
+    // Optional Discogs identity so the play can feed taste suggestions.
+    // releaseType/releaseId let the suggestions job resolve genre/style/
+    // year from release_cache; meta is a client snapshot used directly
+    // when present (counts even before the release is cached).
+    const releaseType = body.releaseType === "release" || body.releaseType === "master"
+        ? body.releaseType : null;
+    const releaseId = Number.isFinite(Number(body.releaseId)) && Number(body.releaseId) > 0
+        ? Number(body.releaseId) : null;
+    const masterId = Number.isFinite(Number(body.masterId)) && Number(body.masterId) > 0
+        ? Number(body.masterId) : null;
+    const m = body.meta && typeof body.meta === "object" ? body.meta : null;
+    const meta = m ? {
+        genres: Array.isArray(m.genres) ? m.genres : [],
+        styles: Array.isArray(m.styles) ? m.styles : [],
+        year: Number.isFinite(Number(m.year)) ? Number(m.year) : null,
+    } : null;
     // Fire-and-forget so the player doesn't block on logging.
-    logUserPlay(userId, source, externalId, title).catch(() => { });
+    logUserPlay(userId, source, externalId, title, {
+        releaseType, releaseId, masterId, meta,
+    }).catch(() => { });
     res.json({ ok: true, logged: true });
 });
 // GET /api/youtube/search-meta?q=<query> — pure read, returns whether
@@ -6524,18 +8178,56 @@ app.post("/api/admin/run-suggestions", express.json({ limit: "1kb" }), async (re
     _runPersonalSuggestionsForAllUsers().catch(() => { });
     res.json({ ok: true, message: "Suggestions run kicked off in the background." });
 });
-// Admin manual trigger for a single user — for fast iteration.
+// Admin manual trigger for a single user — fire-and-forget so a
+// proxy timeout (Railway/CF edge ~100s) doesn't reset the connection
+// mid-run. The broadened admin search (4 passes × ~28 tuples × 1.1s
+// pacing) takes 2+ minutes, well past any sane HTTP wait. Client
+// kicks the job and polls GET .../status for the result.
+const _lastSuggRunResult = new Map();
+const _runningSuggestionsFor = new Set();
 app.post("/api/admin/run-suggestions-for-self", express.json({ limit: "1kb" }), async (req, res) => {
     const userId = await requireAdmin(req, res);
     if (!userId)
         return;
-    try {
-        const result = await _runPersonalSuggestionsForUser(userId);
-        res.json({ ok: true, ...result });
+    if (_runningSuggestionsFor.has(userId)) {
+        res.json({ ok: true, status: "already-running" });
+        return;
     }
-    catch (e) {
-        res.status(500).json({ error: String(e?.message ?? e) });
-    }
+    _runningSuggestionsFor.add(userId);
+    const startedAt = Date.now();
+    // Detach: the actual work runs after we've already responded.
+    // force:true bypasses the signal-change early-exit so tuning runs
+    // always execute even when nothing's changed.
+    (async () => {
+        try {
+            const result = await _runPersonalSuggestionsForUser(userId, { force: true });
+            _lastSuggRunResult.set(userId, { finishedAt: Date.now(), ...result });
+        }
+        catch (e) {
+            _lastSuggRunResult.set(userId, {
+                finishedAt: Date.now(),
+                saved: 0,
+                error: String(e?.message ?? e),
+            });
+        }
+        finally {
+            _runningSuggestionsFor.delete(userId);
+        }
+    })();
+    res.json({ ok: true, status: "started", startedAt });
+});
+// Status poll for the fire-and-forget admin trigger. Returns whether a
+// run is in flight and the most recently completed result for this
+// admin user (the client compares last.finishedAt against the start
+// time it received from POST to know when its run is done).
+app.get("/api/admin/run-suggestions-for-self/status", async (req, res) => {
+    const userId = await requireAdmin(req, res);
+    if (!userId)
+        return;
+    res.json({
+        running: _runningSuggestionsFor.has(userId),
+        last: _lastSuggRunResult.get(userId) || null,
+    });
 });
 // GET /api/site-theme — public read of the current global theme (used
 // by clients to verify their cached HTML matches the live setting).
@@ -6556,8 +8248,18 @@ app.post("/api/admin/site-theme", express.json({ limit: "1kb" }), async (req, re
 app.get("/api/admin/feedback", async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
-    const items = await getFeedback();
-    res.json({ items });
+    try {
+        const items = await getFeedback();
+        res.json({ items });
+    }
+    catch (err) {
+        // DB timeout / pool error must not propagate — admin page polls
+        // this endpoint and an unhandled rejection here will exit the
+        // whole process on Node 22+. Log + 500 so the admin sees a real
+        // error and the server keeps running.
+        console.error("[admin/feedback]", err);
+        res.status(500).json({ error: String(err) });
+    }
 });
 // DELETE /api/admin/feedback/:id — delete a feedback item, admin only
 app.delete("/api/admin/feedback/:id", async (req, res) => {
@@ -6570,7 +8272,18 @@ app.delete("/api/admin/feedback/:id", async (req, res) => {
 app.get("/api/admin/sync-status", async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
-    const [users, favCounts] = await Promise.all([getAllUsersSyncStatus(), getAllFavoriteCounts()]);
+    // DB calls wrapped — the admin page polls this on a tight loop, so
+    // an unhandled rejection here (pg pool connect timeout, etc.) will
+    // exit the whole Node process on 22+. Surface as 500 instead.
+    let users, favCounts;
+    try {
+        [users, favCounts] = await Promise.all([getAllUsersSyncStatus(), getAllFavoriteCounts()]);
+    }
+    catch (err) {
+        console.error("[admin/sync-status DB]", err);
+        res.status(500).json({ error: String(err) });
+        return;
+    }
     // Check Clerk sessions for accurate last-activity timestamps
     const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
     const lastActiveMap = new Map(); // clerkUserId → most recent session activity ms
@@ -7054,6 +8767,49 @@ app.get("/api/admin/blues/export.csv", async (req, res) => {
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
+// GET /api/admin/lyrics/export.csv — dump every blues_lyrics row.
+// Mirrors the artists CSV: UTF-8 BOM, Excel-friendly quoting, formula-
+// injection guard on cells starting with =/@/+/-. plaintext is the
+// big column; everything else is a couple-hundred bytes at most.
+app.get("/api/admin/lyrics/export.csv", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const r = await getPool().query(`SELECT id, source_host, page_title, page_url, artist, artist_id,
+              tuning, discogs_release_id, discogs_master_id,
+              scraped_at, updated_at, wikitext, plaintext
+         FROM blues_lyrics
+         ORDER BY page_title ASC`);
+        const cols = [
+            "id", "source_host", "page_title", "page_url",
+            "artist", "artist_id", "tuning",
+            "discogs_release_id", "discogs_master_id",
+            "scraped_at", "updated_at",
+            "wikitext", "plaintext",
+        ];
+        const csvCell = (v) => {
+            if (v == null)
+                return "";
+            if (Array.isArray(v) || typeof v === "object")
+                v = JSON.stringify(v);
+            const s = String(v);
+            if (/[",\n\r]/.test(s) || /^[=@+\-]/.test(s)) {
+                return `"${s.replace(/"/g, '""')}"`;
+            }
+            return s;
+        };
+        const header = cols.join(",");
+        const body = r.rows.map(row => cols.map(c => csvCell(row[c])).join(",")).join("\n");
+        const csv = "﻿" + header + "\n" + body + "\n";
+        res.setHeader("Content-Type", "text/csv; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="seadisco-lyrics-${new Date().toISOString().slice(0, 10)}.csv"`);
+        res.send(csv);
+    }
+    catch (err) {
+        console.error("[lyrics export.csv]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
 // Delete every row in blues_artists. Admin-only. Used to wipe a noisy
 // seed (e.g. the Wikidata pass that smuggled non-blues artists in via
 // loose genre tags) before re-running.
@@ -7075,7 +8831,7 @@ app.delete("/api/admin/blues/all", async (req, res) => {
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
-app.get("/api/admin/blues/:id", async (req, res) => {
+app.get("/api/admin/blues/:id(\\d+)", async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
     const id = parseInt(req.params.id, 10);
@@ -7113,7 +8869,7 @@ app.post("/api/admin/blues", express.json({ limit: "200kb" }), async (req, res) 
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
-app.put("/api/admin/blues/:id", express.json({ limit: "200kb" }), async (req, res) => {
+app.put("/api/admin/blues/:id(\\d+)", express.json({ limit: "200kb" }), async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
     const id = parseInt(req.params.id, 10);
@@ -7130,7 +8886,7 @@ app.put("/api/admin/blues/:id", express.json({ limit: "200kb" }), async (req, re
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
-app.delete("/api/admin/blues/:id", async (req, res) => {
+app.delete("/api/admin/blues/:id(\\d+)", async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
     const id = parseInt(req.params.id, 10);
@@ -7138,13 +8894,26 @@ app.delete("/api/admin/blues/:id", async (req, res) => {
         res.status(400).json({ error: "bad id" });
         return;
     }
+    // ?with_lyrics=1 → cascade-delete every lyric tied to this artist
+    // (by FK or by case-insensitive name). Default leaves lyrics alone
+    // (FK nulls out via ON DELETE SET NULL) so existing scripts that
+    // hit this endpoint to drop a stray artist don't suddenly lose
+    // their orphan lyrics. The Discovery profile button passes the
+    // flag explicitly.
+    const cascadeLyrics = req.query.with_lyrics === "1" || req.query.with_lyrics === "true";
     try {
-        await deleteBluesArtist(id);
-        res.json({ ok: true });
+        if (cascadeLyrics) {
+            const out = await deleteBluesArtistAndLyrics(id);
+            res.json(out);
+        }
+        else {
+            await deleteBluesArtist(id);
+            res.json({ ok: true });
+        }
     }
     catch (err) {
         console.error("[blues delete]", err);
-        res.status(500).json({ error: String(err) });
+        res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
 // Trigger the Wikidata seed. Returns a summary of fetched/upserted/errors.
@@ -7450,6 +9219,10 @@ app.post("/api/admin/blues/enrich-discogs-full", async (req, res) => {
     const limitRaw = req.query.limit;
     const idFilter = idRaw ? parseInt(idRaw, 10) : undefined;
     const limit = limitRaw ? parseInt(limitRaw, 10) : undefined;
+    // force=1 → overwrite photo_url / notes and REPLACE discogs_releases
+    // rather than merging. Used by the per-row "Refresh from Discogs"
+    // button after the admin has corrected a stale discogs_id.
+    const force = req.query.force === "1" || req.query.force === "true";
     if (Number.isFinite(idFilter)) {
         try {
             // requireExistingId: per-row admin click should NOT silently
@@ -7458,7 +9231,7 @@ app.post("/api/admin/blues/enrich-discogs-full", async (req, res) => {
             // artist's full record. Bulk path (no idFilter) keeps the old
             // auto-resolve behaviour so it can sweep through unidentified
             // rows.
-            const result = await enrichBluesFromDiscogsArtists(client, { idFilter, requireExistingId: true });
+            const result = await enrichBluesFromDiscogsArtists(client, { idFilter, requireExistingId: true, force });
             res.json({ ok: true, ...result });
         }
         catch (err) {
@@ -7521,6 +9294,1346 @@ app.post("/api/admin/blues/enrich-yt/:id", async (req, res) => {
     catch (err) {
         console.error("[blues enrich-yt]", err);
         res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// ── Lyrics scraper (weeniecampbell.com wiki, admin-only) ─────────────
+// Walks the MediaWiki API at weeniecampbell.com/wiki, starting from
+// Category:Lyrics and recursing into every subcategory. For each lyric
+// page we fetch the wikitext, derive a plaintext rendering, and
+// regex out the tuning if mentioned. Throttled at 1.2 s/req to stay
+// polite. Resumable: every successful page is written to blues_lyrics
+// immediately and on a restart we skip already-stored titles.
+const _LYRICS_WIKI_BASE = "https://www.weeniecampbell.com/wiki";
+const _LYRICS_API = `${_LYRICS_WIKI_BASE}/api.php`;
+// weeniecampbell.com sits behind Cloudflare's bot WAF, which 403s any
+// UA that doesn't look like a real browser (including our previous
+// "SeaDisco-Lyrics-Archiver/1.0…"). Use a recent Chrome UA so the
+// MediaWiki API responses come through. Pacing stays polite at
+// 1.2 s/req — we're not bypassing anything, just clearing the bot
+// challenge.
+const _LYRICS_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36";
+const _LYRICS_THROTTLE_MS = 1200; // page-content fetches (heavier)
+const _LYRICS_DISCOVERY_THROTTLE_MS = 400; // category-member lookups (light)
+const _LYRICS_HARD_CAP = 5000; // safety cap (4006 known)
+let _lyricsScrapeState = {
+    running: false,
+    jobKind: "idle",
+    phase: "idle",
+    startedAt: 0,
+    finishedAt: null,
+    pagesDiscovered: 0,
+    pagesScraped: 0,
+    pagesSkipped: 0,
+    pagesFailed: 0,
+    currentTitle: "",
+    message: "Idle",
+    error: null,
+};
+function _lyricsExtractTuning(text) {
+    if (!text)
+        return null;
+    // Common tuning conventions on the wiki:
+    //   "Tuning: Open D"   "Tuning - Spanish"   "Open G tuning"
+    //   "Played in DADGAD" "Drop D tuning"   "Standard tuning"
+    //   "in standard tuning"   "EADGBE"
+    const patterns = [
+        // Explicit "standard" / "regular" mentions → canonicalized later.
+        /\b(standard|regular)\s+tuning\b/i,
+        /\btuning\s*[:\-=]\s*(standard|regular)\b/i,
+        /\b(EADGBE)\b/,
+        // Open / Drop with letter + optional minor / 7
+        /\b(open\s+[A-G](?:\s*(?:minor|m|7))?)\s+tuning\b/i,
+        /\b(drop\s+[A-G])\s+tuning\b/i,
+        // Bare alt-tuning shorthand (no surrounding "tuning" word).
+        /\b(DADGAD|DGDGBD|DADF#AD|EBEG#BE|CGCGCE|DADFAD|DADGBE|DGDGAD)\b/,
+        // Named tunings, with or without trailing "tuning"
+        /\bin\s+(spanish|vestapol|sebastopol|cross[\- ]?note)\s+tuning\b/i,
+        /\b(spanish|vestapol|sebastopol)\s+tuning\b/i,
+        // Generic fallback — "Tuning: X" where X is any word
+        /\btuning\s*[:\-=]\s*([A-Za-z][A-Za-z0-9 #\-/]{1,30})/i,
+    ];
+    for (const re of patterns) {
+        const m = text.match(re);
+        if (m && m[1]) {
+            const raw = m[1].trim();
+            // Canonicalize aliases. Spanish / Vestapol / Sebastopol are
+            // bluesman slang for Open G / Open D respectively — same
+            // physical tunings, merged into the canonical names so filter
+            // buckets aren't split. Cross-note (≈ Open Em / EBEGBE) keeps
+            // the historical label as a parenthetical since "Cross Note"
+            // is the term you'd actually hear on the recordings.
+            const canonical = {
+                "standard": "Standard",
+                "regular": "Standard",
+                "eadgbe": "Standard",
+                "spanish": "Open G",
+                "vestapol": "Open D",
+                "sebastopol": "Open D",
+                "cross note": "Open Em (Cross Note)",
+                "cross-note": "Open Em (Cross Note)",
+                "crossnote": "Open Em (Cross Note)",
+            };
+            const key = raw.toLowerCase();
+            if (canonical[key])
+                return canonical[key];
+            // Title-case "open d" / "drop d" / etc.
+            return raw.replace(/\b\w/g, c => c.toUpperCase());
+        }
+    }
+    return null;
+}
+// Reject things that clearly aren't artist names — catalog numbers
+// ("14065-1"), version annotations ("1934 version", "alternate take"),
+// labels alone, leading-quote fragments ('"A" version'), pure
+// numerics, etc. Used by all artist-extraction paths below so the
+// trash never reaches the DB in the first place.
+function _lyricsLooksLikeArtist(s) {
+    const t = String(s || "").trim();
+    if (t.length < 3 || t.length > 80)
+        return false;
+    if (!/[a-zA-Z]/.test(t))
+        return false; // must have at least one letter
+    if (/^[\d\-_\s.]+$/.test(t))
+        return false; // pure catalog-ish (14065-1, 21629)
+    if (/^\d{4}\b/.test(t))
+        return false; // leading year
+    if (/^["'']/.test(t))
+        return false; // starts with a quote (title fragment)
+    if (/\b(version|take|alternate|matrix|master\s*\d|copy|reissue|unissued|untitled|instrumental)\b/i.test(t))
+        return false;
+    if (/^(intro|verse|chorus|bridge|outro|solo)\b/i.test(t))
+        return false;
+    return true;
+}
+function _lyricsExtractArtist(wikitext, title) {
+    if (!wikitext)
+        return null;
+    // Common patterns on the wiki:
+    //   "Performed by [[Robert Johnson]]"
+    //   "Artist: Skip James"
+    //   "By [[Big Bill Broonzy]]"
+    const patterns = [
+        /artist\s*[:\-=]\s*([^\n\r|<{]{2,80})/i,
+        /performed\s+by\s+\[\[([^\]|]{2,80})/i,
+        /performed\s+by\s+([^\n\r|<{]{2,80})/i,
+        /written\s+by\s+\[\[([^\]|]{2,80})/i,
+        /\bby\s+\[\[([^\]|]{2,80})\]\]/i,
+    ];
+    for (const re of patterns) {
+        const m = wikitext.match(re);
+        if (m && m[1]) {
+            const a = m[1].trim().replace(/[\s_]+/g, " ").slice(0, 200);
+            if (_lyricsLooksLikeArtist(a))
+                return a;
+        }
+    }
+    // Fallback: page-title parens like "Sweet Home Chicago (Robert Johnson)"
+    // The validator filters out "(1934 version)", "(alternate take)", etc.
+    // — that path was the main source of the post-import trash.
+    const tm = title.match(/^(.*?)\s*\(([^)]{2,80})\)\s*$/);
+    if (tm && tm[2]) {
+        const candidate = tm[2].trim();
+        if (_lyricsLooksLikeArtist(candidate))
+            return candidate;
+    }
+    return null;
+}
+function _lyricsWikitextToPlain(wt) {
+    if (!wt)
+        return "";
+    let s = wt;
+    // Strip <ref>…</ref>, HTML comments, basic tags
+    s = s.replace(/<ref[^>]*>[\s\S]*?<\/ref>/gi, "");
+    s = s.replace(/<ref[^/]*\/>/gi, "");
+    s = s.replace(/<!--[\s\S]*?-->/g, "");
+    s = s.replace(/<\/?[a-z][^>]*>/gi, "");
+    // [[Link|alias]] -> alias ; [[Link]] -> Link
+    s = s.replace(/\[\[([^|\]]+)\|([^\]]+)\]\]/g, "$2");
+    s = s.replace(/\[\[([^\]]+)\]\]/g, "$1");
+    // [url label] -> label ; bare [url]
+    s = s.replace(/\[https?:\/\/\S+\s+([^\]]+)\]/g, "$1");
+    s = s.replace(/\[https?:\/\/\S+\]/g, "");
+    // Templates: strip {{...}} (greedy through balanced braces is overkill;
+    // a non-nested pass handles the common cases)
+    for (let i = 0; i < 3; i++)
+        s = s.replace(/\{\{[^{}]*\}\}/g, "");
+    // Bold/italics/headings
+    s = s.replace(/'''([^']+)'''/g, "$1");
+    s = s.replace(/''([^']+)''/g, "$1");
+    s = s.replace(/^=+\s*(.*?)\s*=+$/gm, "$1");
+    // Collapse multi-blank-lines
+    s = s.replace(/\n{3,}/g, "\n\n");
+    return s.trim();
+}
+async function _lyricsFetchJson(url) {
+    // Per-fetch cap dropped from 25 s → 12 s so a stuck request can't
+    // halt the loop for long. Cloudflare normally responds in <1 s when
+    // it's going to respond at all; if a request takes 12 s it's
+    // either being challenged or blackholed and we should move on.
+    // Referer added because Cloudflare's bot protection sometimes
+    // requires one to match the User-Agent's "real browser" story.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 12_000);
+    const t0 = Date.now();
+    try {
+        const r = await fetch(url, {
+            headers: {
+                "User-Agent": _LYRICS_UA,
+                "Accept": "application/json",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer": `${_LYRICS_WIKI_BASE}/index.php?title=Special:Search`,
+            },
+            signal: controller.signal,
+        });
+        if (!r.ok)
+            throw new Error(`HTTP ${r.status} in ${Date.now() - t0}ms`);
+        return await r.json();
+    }
+    finally {
+        clearTimeout(timeoutId);
+    }
+}
+// Walk `Category:Lyrics by Artist`, enumerate every artist subcat
+// (each named like `Category:Alfred Karnes Lyrics`), then enumerate
+// the page members of each. Returns a Map<pageTitle, artistName>
+// where artistName is derived from the subcat title by stripping
+// the leading "Category:" and trailing " Lyrics". Much cleaner than
+// regex-mining wikitext bodies because the wiki itself maintains
+// this mapping for the entire corpus.
+//
+// Returns a Map (first-encountered wins for pages that show up in
+// multiple artist subcats — duets, covers, etc.).
+async function _lyricsCollectArtistMappingFromWiki() {
+    const ROOT = "Category:Lyrics by Artist";
+    const map = new Map();
+    // Phase 1: enumerate every artist subcategory under the root.
+    const artistCats = [];
+    {
+        let cmcontinue = "";
+        do {
+            const params = new URLSearchParams({
+                action: "query",
+                list: "categorymembers",
+                cmtitle: ROOT,
+                cmlimit: "500",
+                cmtype: "subcat",
+                format: "json",
+            });
+            if (cmcontinue)
+                params.set("cmcontinue", cmcontinue);
+            _lyricsScrapeState.message = `Listing artist categories (${artistCats.length} so far)…`;
+            const j = await _lyricsFetchJson(`${_LYRICS_API}?${params.toString()}`).catch((e) => {
+                console.warn("[lyrics] artist-cats fetch failed:", e?.message ?? e);
+                return null;
+            });
+            await new Promise(r => setTimeout(r, _LYRICS_DISCOVERY_THROTTLE_MS));
+            const members = j?.query?.categorymembers ?? [];
+            for (const m of members) {
+                const t = String(m?.title || "");
+                if (t.startsWith("Category:") && /\sLyrics$/.test(t))
+                    artistCats.push(t);
+            }
+            cmcontinue = j?.continue?.cmcontinue ?? "";
+            if (!_lyricsScrapeState.running)
+                break;
+        } while (cmcontinue);
+    }
+    // Phase 2: for each artist subcat, enumerate its page members and
+    // map every title to the derived artist name.
+    let i = 0;
+    let totalPages = 0;
+    for (const cat of artistCats) {
+        if (!_lyricsScrapeState.running)
+            break;
+        i++;
+        const artistName = cat.replace(/^Category:/, "").replace(/\s+Lyrics$/, "").trim();
+        if (!artistName)
+            continue;
+        let cmcontinue = "";
+        do {
+            const params = new URLSearchParams({
+                action: "query",
+                list: "categorymembers",
+                cmtitle: cat,
+                cmlimit: "500",
+                cmtype: "page",
+                format: "json",
+            });
+            if (cmcontinue)
+                params.set("cmcontinue", cmcontinue);
+            _lyricsScrapeState.message = `Mapping artists (${i}/${artistCats.length}: ${artistName} — ${totalPages} pages tagged)`;
+            const j = await _lyricsFetchJson(`${_LYRICS_API}?${params.toString()}`).catch((e) => {
+                console.warn("[lyrics] artist-cat fetch failed:", cat, e?.message ?? e);
+                return null;
+            });
+            await new Promise(r => setTimeout(r, _LYRICS_DISCOVERY_THROTTLE_MS));
+            const members = j?.query?.categorymembers ?? [];
+            for (const m of members) {
+                const t = String(m?.title || "");
+                if (!t)
+                    continue;
+                if (!map.has(t)) {
+                    map.set(t, artistName);
+                    totalPages++;
+                }
+            }
+            cmcontinue = j?.continue?.cmcontinue ?? "";
+            if (!_lyricsScrapeState.running)
+                break;
+        } while (cmcontinue);
+    }
+    return { map, subcats: artistCats.length, pages: totalPages };
+}
+async function _lyricsCollectPagesUnderCategory(rootCategory) {
+    // BFS through subcategories. Each category page is fetched via
+    // list=categorymembers with cmtype=page|subcat. Page titles get
+    // accumulated; subcat titles get enqueued for further descent.
+    const seenCats = new Set();
+    const queue = [rootCategory];
+    const pages = [];
+    const seenPages = new Set();
+    while (queue.length) {
+        // Honor the /scrape/stop request — the running flag is the kill
+        // signal for both phases. Without this, stop wouldn't actually
+        // take effect until discovery walked every remaining subcategory
+        // (minutes), and the UI kept overwriting the "Stopping…" message
+        // with "Walking Category:X" every 0.4 s.
+        if (!_lyricsScrapeState.running) {
+            console.log("[lyrics] stop requested during discovery");
+            break;
+        }
+        if (pages.length >= _LYRICS_HARD_CAP)
+            break;
+        const cat = queue.shift();
+        if (seenCats.has(cat))
+            continue;
+        seenCats.add(cat);
+        let cmcontinue = "";
+        do {
+            if (!_lyricsScrapeState.running)
+                break;
+            const params = new URLSearchParams({
+                action: "query",
+                list: "categorymembers",
+                cmtitle: cat,
+                cmlimit: "500",
+                cmtype: "page|subcat",
+                format: "json",
+            });
+            if (cmcontinue)
+                params.set("cmcontinue", cmcontinue);
+            _lyricsScrapeState.message = `Walking ${cat} (${pages.length} pages discovered, ${queue.length} categories queued)`;
+            const j = await _lyricsFetchJson(`${_LYRICS_API}?${params.toString()}`).catch((e) => {
+                console.warn("[lyrics] category fetch failed:", cat, e?.message ?? e);
+                return null;
+            });
+            // Discovery uses the lighter throttle — category-member queries are
+            // ~ms-cheap on the wiki side and 4000+ subcategories at 1.2 s each
+            // would mean ~5+ minutes JUST to enumerate page titles before any
+            // fetch happens.
+            await new Promise(r => setTimeout(r, _LYRICS_DISCOVERY_THROTTLE_MS));
+            const members = j?.query?.categorymembers ?? [];
+            for (const m of members) {
+                const ns = Number(m?.ns);
+                const t = String(m?.title || "");
+                if (!t)
+                    continue;
+                if (ns === 14) { // subcategory
+                    if (!seenCats.has(t))
+                        queue.push(t);
+                }
+                else if (ns === 0) { // article
+                    if (!seenPages.has(t)) {
+                        seenPages.add(t);
+                        pages.push(t);
+                        _lyricsScrapeState.pagesDiscovered = pages.length;
+                        if (pages.length >= _LYRICS_HARD_CAP)
+                            break;
+                    }
+                }
+            }
+            cmcontinue = j?.continue?.cmcontinue ?? "";
+        } while (cmcontinue);
+    }
+    return pages;
+}
+async function _lyricsFetchPage(title) {
+    // revisions API: prop=revisions&rvprop=content returns the latest
+    // wikitext. Faster + lower bandwidth than action=parse.
+    const params = new URLSearchParams({
+        action: "query",
+        prop: "revisions",
+        rvprop: "content",
+        rvslots: "main",
+        titles: title,
+        format: "json",
+        formatversion: "2",
+    });
+    const j = await _lyricsFetchJson(`${_LYRICS_API}?${params.toString()}`).catch(() => null);
+    const page = j?.query?.pages?.[0];
+    if (!page || page.missing)
+        return null;
+    const wikitext = page?.revisions?.[0]?.slots?.main?.content ?? "";
+    const url = `${_LYRICS_WIKI_BASE}/index.php?title=${encodeURIComponent(title.replace(/ /g, "_"))}`;
+    return { wikitext, url };
+}
+async function _lyricsScrapeRun() {
+    if (_lyricsScrapeState.running)
+        return;
+    _lyricsScrapeState = {
+        running: true,
+        jobKind: "scrape",
+        phase: "discovering",
+        startedAt: Date.now(),
+        finishedAt: null,
+        pagesDiscovered: 0,
+        pagesScraped: 0,
+        pagesSkipped: 0,
+        pagesFailed: 0,
+        currentTitle: "",
+        message: "Collecting page list…",
+        error: null,
+    };
+    try {
+        const already = await getLyricTitlesAlreadyScraped("weeniecampbell.com");
+        const pages = await _lyricsCollectPagesUnderCategory("Category:Lyrics");
+        // Stop request during discovery — don't drop into the fetch loop
+        // (which would re-enter for whatever partial page list we have).
+        // The finally block resets everything cleanly.
+        if (!_lyricsScrapeState.running) {
+            _lyricsScrapeState.phase = "done";
+            _lyricsScrapeState.pagesDiscovered = pages.length;
+            _lyricsScrapeState.message = `Stopped during discovery. ${pages.length} pages had been queued.`;
+            console.log(`[lyrics] stopped during discovery after ${pages.length} pages queued`);
+            return;
+        }
+        _lyricsScrapeState.phase = "fetching";
+        _lyricsScrapeState.pagesDiscovered = pages.length;
+        _lyricsScrapeState.message = `Discovered ${pages.length} pages — fetching…`;
+        console.log(`[lyrics] discovery done in ${Math.round((Date.now() - _lyricsScrapeState.startedAt) / 1000)}s: ${pages.length} pages`);
+        console.log(`[lyrics] entering scrape loop: ${pages.length} pages, ${already.size} already stored`);
+        for (let i = 0; i < pages.length; i++) {
+            // Honor the /scrape/stop request — running flag is the signal.
+            if (!_lyricsScrapeState.running) {
+                console.log(`[lyrics] stop requested at ${i}/${pages.length}`);
+                break;
+            }
+            const title = pages[i];
+            if (already.has(title)) {
+                _lyricsScrapeState.pagesSkipped++;
+                continue;
+            }
+            _lyricsScrapeState.currentTitle = title;
+            const iterT0 = Date.now();
+            try {
+                const fetched = await _lyricsFetchPage(title);
+                if (!fetched) {
+                    _lyricsScrapeState.pagesFailed++;
+                    console.warn(`[lyrics] ${i + 1}/${pages.length} fetch returned null: ${title} (${Date.now() - iterT0}ms)`);
+                }
+                else {
+                    const wikitext = fetched.wikitext;
+                    const plaintext = _lyricsWikitextToPlain(wikitext);
+                    const tuning = _lyricsExtractTuning(wikitext) || _lyricsExtractTuning(plaintext);
+                    const artist = _lyricsExtractArtist(wikitext, title);
+                    await upsertLyric({
+                        pageTitle: title,
+                        pageUrl: fetched.url,
+                        artist,
+                        tuning,
+                        wikitext,
+                        plaintext,
+                        sourceHost: "weeniecampbell.com",
+                    });
+                    _lyricsScrapeState.pagesScraped++;
+                    if (i < 5 || i % 50 === 0) {
+                        console.log(`[lyrics] ${i + 1}/${pages.length} scraped: ${title} (artist=${artist ?? "-"}, tuning=${tuning ?? "-"}, ${Date.now() - iterT0}ms)`);
+                    }
+                }
+            }
+            catch (e) {
+                _lyricsScrapeState.pagesFailed++;
+                console.warn(`[lyrics] ${i + 1}/${pages.length} threw: ${title}`, e?.message ?? e);
+            }
+            _lyricsScrapeState.message = `Scraped ${_lyricsScrapeState.pagesScraped} / ${_lyricsScrapeState.pagesDiscovered}`;
+            await new Promise(r => setTimeout(r, _LYRICS_THROTTLE_MS));
+        }
+        _lyricsScrapeState.phase = "done";
+        _lyricsScrapeState.message = `Done. ${_lyricsScrapeState.pagesScraped} scraped, ${_lyricsScrapeState.pagesSkipped} skipped (already had), ${_lyricsScrapeState.pagesFailed} failed.`;
+    }
+    catch (e) {
+        _lyricsScrapeState.phase = "error";
+        _lyricsScrapeState.error = e?.message ?? String(e);
+        _lyricsScrapeState.message = `Failed: ${_lyricsScrapeState.error}`;
+        console.error("[lyrics] scrape run failed:", e);
+    }
+    finally {
+        _lyricsScrapeState.running = false;
+        _lyricsScrapeState.finishedAt = Date.now();
+        _lyricsScrapeState.currentTitle = "";
+    }
+}
+// POST /api/admin/lyrics/scrape — fire-and-forget background scrape
+app.post("/api/admin/lyrics/scrape", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    if (_lyricsScrapeState.running) {
+        res.status(409).json({ error: "already_running", state: _lyricsScrapeState });
+        return;
+    }
+    _lyricsScrapeRun().catch((e) => console.error("[lyrics] background run threw:", e));
+    res.json({ ok: true, started: true });
+});
+// POST /api/admin/lyrics/scrape/stop — request the running scrape to bail
+// (sets running=false; loop checks it on next iteration). Useful when a
+// run looks stuck or we want to retry with different code without
+// waiting / restarting Railway.
+app.post("/api/admin/lyrics/scrape/stop", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    if (!_lyricsScrapeState.running) {
+        res.json({ ok: true, wasRunning: false });
+        return;
+    }
+    _lyricsScrapeState.running = false;
+    _lyricsScrapeState.message = "Stopping… (current page will finish)";
+    res.json({ ok: true, wasRunning: true });
+});
+// GET /api/admin/lyrics/scrape/status — poll progress
+app.get("/api/admin/lyrics/scrape/status", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const count = await getLyricCount();
+        res.json({ ...(_lyricsScrapeState), totalStored: count });
+    }
+    catch (err) {
+        console.error("[lyrics status]", err);
+        res.status(500).json({ error: String(err) });
+    }
+});
+// POST /api/admin/lyrics — manually create a new lyric row.
+// Used by the "+ Add lyric" affordance in the Discovery view. Title
+// is required; everything else is optional. source_host defaults to
+// "manual" so manual entries don't collide with the scraped corpus.
+// page_title + artist (case-insensitive) are unique per source_host;
+// duplicate combos return 409.
+app.post("/api/admin/lyrics", express.json({ limit: "200kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const body = req.body || {};
+        const pageTitle = typeof body.page_title === "string" ? body.page_title.trim().slice(0, 240) : "";
+        if (!pageTitle) {
+            res.status(400).json({ error: "page_title required" });
+            return;
+        }
+        const row = await createLyric({
+            pageTitle,
+            pageUrl: typeof body.page_url === "string" ? body.page_url.trim().slice(0, 500) : null,
+            artist: typeof body.artist === "string" ? body.artist.trim().slice(0, 200) : null,
+            tuning: typeof body.tuning === "string" ? body.tuning.trim().slice(0, 80) : null,
+            plaintext: typeof body.plaintext === "string" ? body.plaintext.slice(0, 200000) : null,
+            wikitext: typeof body.wikitext === "string" ? body.wikitext.slice(0, 200000) : null,
+            sourceHost: typeof body.source_host === "string" && body.source_host.trim() ? body.source_host.trim().slice(0, 80) : "manual",
+            artistId: body.artist_id != null ? Number(body.artist_id) : null,
+            discogsReleaseId: body.discogs_release_id != null && body.discogs_release_id !== "" ? Number(body.discogs_release_id) : null,
+            discogsMasterId: body.discogs_master_id != null && body.discogs_master_id !== "" ? Number(body.discogs_master_id) : null,
+        });
+        res.json(row);
+    }
+    catch (err) {
+        // 23505 = unique_violation — same title + same artist on the
+        // same source_host. Surface as 409 with a readable detail.
+        if (err?.code === "23505") {
+            console.warn("[lyrics create] title+artist collision:", err?.detail || err?.message);
+            res.status(409).json({ error: "duplicate", detail: String(err?.detail || err?.message || "") });
+            return;
+        }
+        console.error("[lyrics create]", err);
+        res.status(400).json({ error: err?.message ?? String(err) });
+    }
+});
+// GET /api/admin/lyrics?q=&tuning=&artist=&unmatched=1&sort=&order=&limit=&offset=
+app.get("/api/admin/lyrics", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const q = String(req.query.q ?? "").trim().slice(0, 200);
+        const tuning = String(req.query.tuning ?? "").trim().slice(0, 80);
+        const artist = String(req.query.artist ?? "").trim().slice(0, 200);
+        const unmatched = req.query.unmatched === "1" || req.query.unmatched === "true";
+        // Sort column (whitelisted server-side) + direction. Anything else
+        // is ignored / falls back to the default in listLyrics.
+        const sort = String(req.query.sort ?? "").trim().slice(0, 30);
+        const order = String(req.query.order ?? "").trim().toLowerCase() === "desc" ? "desc" : "asc";
+        const limit = Math.max(1, Math.min(500, parseInt(String(req.query.limit ?? "100"), 10) || 100));
+        const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
+        const result = await listLyrics({
+            search: q || undefined,
+            tuning: tuning || undefined,
+            artist: artist || undefined,
+            unmatchedOnly: unmatched,
+            sort: sort || undefined,
+            order,
+            limit, offset,
+        });
+        res.json(result);
+    }
+    catch (err) {
+        console.error("[lyrics list]", err);
+        res.status(500).json({ error: String(err) });
+    }
+});
+// GET /api/admin/lyrics/tunings — distinct tunings + counts
+app.get("/api/admin/lyrics/tunings", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        res.json({ tunings: await getLyricTunings() });
+    }
+    catch (err) {
+        console.error("[lyrics tunings]", err);
+        res.status(500).json({ error: String(err) });
+    }
+});
+// POST /api/admin/lyrics/reextract — re-runs the tuning + artist
+// extractors against every stored row's wikitext and writes updated
+// values. Useful after extending the regex patterns without re-scraping.
+// No HTTP requests, just DB iteration, so it's fast (~seconds).
+app.post("/api/admin/lyrics/reextract", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const rows = (await getPool().query(`SELECT id, page_title, wikitext, plaintext, tuning, artist FROM blues_lyrics`)).rows;
+        let updated = 0;
+        let tuningChanged = 0;
+        let artistChanged = 0;
+        for (const row of rows) {
+            const wt = row.wikitext || "";
+            const pt = row.plaintext || "";
+            const newTuning = _lyricsExtractTuning(wt) || _lyricsExtractTuning(pt);
+            const newArtist = _lyricsExtractArtist(wt, row.page_title);
+            if (newTuning !== row.tuning || newArtist !== row.artist) {
+                await getPool().query(`UPDATE blues_lyrics SET tuning = $1, artist = $2 WHERE id = $3`, [newTuning, newArtist, row.id]);
+                updated++;
+                if (newTuning !== row.tuning)
+                    tuningChanged++;
+                if (newArtist !== row.artist)
+                    artistChanged++;
+            }
+        }
+        console.log(`[lyrics] re-extract: ${updated} rows updated (${tuningChanged} tuning, ${artistChanged} artist) of ${rows.length} total`);
+        res.json({ ok: true, total: rows.length, updated, tuningChanged, artistChanged });
+    }
+    catch (err) {
+        console.error("[lyrics reextract]", err);
+        res.status(500).json({ error: String(err) });
+    }
+});
+// POST /api/admin/lyrics/sync-artists-from-wiki — walk
+// Category:Lyrics by Artist on weeniecampbell.com, derive each
+// page's artist from the subcategory it sits in, and update the
+// `artist` column on matching blues_lyrics rows. Much more
+// reliable than the body-text regex extractor — the wiki itself
+// maintains this mapping, so there's no guessing.
+//
+// Optional ?force=1 — by default we only fill rows whose `artist`
+// is NULL (so manually-set values aren't clobbered); force=1
+// overwrites everything.
+async function _lyricsSyncArtistsRun(force) {
+    if (_lyricsScrapeState.running)
+        return;
+    _lyricsScrapeState = {
+        running: true,
+        jobKind: "artist-sync",
+        phase: "discovering",
+        startedAt: Date.now(),
+        finishedAt: null,
+        pagesDiscovered: 0,
+        pagesScraped: 0,
+        pagesSkipped: 0,
+        pagesFailed: 0,
+        currentTitle: "",
+        message: "Walking Category:Lyrics by Artist…",
+        error: null,
+    };
+    try {
+        const { map, subcats, pages } = await _lyricsCollectArtistMappingFromWiki();
+        _lyricsScrapeState.phase = "fetching";
+        _lyricsScrapeState.pagesDiscovered = pages;
+        _lyricsScrapeState.message = `Built mapping: ${pages} pages across ${subcats} artists. Updating DB…`;
+        console.log(`[lyrics] artist-sync: built mapping ${pages} pages / ${subcats} artists`);
+        // Batched UPDATEs — keyed on page_title. PostgreSQL doesn't
+        // accept arbitrary parameter explosion, so we chunk to 200 at
+        // a time. Conditional on artist IS NULL unless force=true.
+        const items = Array.from(map.entries());
+        let updated = 0;
+        let alreadySet = 0;
+        let missing = 0;
+        const CHUNK = 200;
+        for (let i = 0; i < items.length; i += CHUNK) {
+            if (!_lyricsScrapeState.running) {
+                console.log("[lyrics] artist-sync: stop requested");
+                break;
+            }
+            const slice = items.slice(i, i + CHUNK);
+            // We do this row-by-row to handle the "only-if-NULL" condition
+            // cleanly; a bulk VALUES table-join could be done but adds
+            // complexity for marginal speed (the slow part is the wiki
+            // walk, not the DB writes).
+            for (const [title, artistName] of slice) {
+                const where = force
+                    ? `WHERE page_title = $2`
+                    : `WHERE page_title = $2 AND (artist IS NULL OR TRIM(artist) = '')`;
+                const r = await getPool().query(`UPDATE blues_lyrics SET artist = $1 ${where} RETURNING id, artist`, [artistName, title]);
+                if (r.rowCount && r.rowCount > 0)
+                    updated++;
+                else {
+                    // Find out why: title not in DB → missing; otherwise already set.
+                    const probe = await getPool().query(`SELECT artist FROM blues_lyrics WHERE page_title = $1`, [title]);
+                    if (!probe.rows.length)
+                        missing++;
+                    else
+                        alreadySet++;
+                }
+            }
+            _lyricsScrapeState.pagesScraped = updated;
+            _lyricsScrapeState.pagesSkipped = alreadySet;
+            _lyricsScrapeState.pagesFailed = missing;
+            _lyricsScrapeState.message = `Updating DB: ${updated} updated · ${alreadySet} already set · ${missing} not in DB · ${Math.round((i + slice.length) / items.length * 100)}%`;
+        }
+        _lyricsScrapeState.phase = "done";
+        _lyricsScrapeState.message = `Done. ${updated} artist fields updated, ${alreadySet} left alone (already set), ${missing} mapped titles not in blues_lyrics.`;
+        console.log(`[lyrics] artist-sync: ${updated} updated, ${alreadySet} already set, ${missing} missing`);
+    }
+    catch (e) {
+        _lyricsScrapeState.phase = "error";
+        _lyricsScrapeState.error = e?.message ?? String(e);
+        _lyricsScrapeState.message = `Failed: ${_lyricsScrapeState.error}`;
+        console.error("[lyrics] artist-sync run failed:", e);
+    }
+    finally {
+        _lyricsScrapeState.running = false;
+        _lyricsScrapeState.finishedAt = Date.now();
+        _lyricsScrapeState.currentTitle = "";
+    }
+}
+app.post("/api/admin/lyrics/sync-artists-from-wiki", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    if (_lyricsScrapeState.running) {
+        res.status(409).json({ error: "already_running", state: _lyricsScrapeState });
+        return;
+    }
+    const force = String(req.query.force ?? "") === "1";
+    _lyricsSyncArtistsRun(force).catch((e) => console.error("[lyrics] artist-sync background threw:", e));
+    res.json({ ok: true, started: true, force });
+});
+// GET /api/admin/lyrics/:id — full lyric record
+app.get("/api/admin/lyrics/:id", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (!Number.isFinite(id)) {
+            res.status(400).json({ error: "bad_id" });
+            return;
+        }
+        const row = await getLyricById(id);
+        if (!row) {
+            res.status(404).json({ error: "not_found" });
+            return;
+        }
+        res.json(row);
+    }
+    catch (err) {
+        console.error("[lyrics get]", err);
+        res.status(500).json({ error: String(err) });
+    }
+});
+// PATCH /api/admin/lyrics/:id  body { tuning?, artist?, page_title? }
+// Only the keys present in the body get updated. Empty-string values
+// for tuning / artist are coerced to NULL so the dropdown's
+// "(unspecified)" round-trips. page_title cannot be cleared — an
+// empty title would orphan the row from its source-host UNIQUE
+// constraint — so blank/whitespace titles are rejected with 400.
+app.patch("/api/admin/lyrics/:id", express.json({ limit: "4kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (!Number.isFinite(id)) {
+            res.status(400).json({ error: "bad_id" });
+            return;
+        }
+        const patch = {};
+        if ("tuning" in (req.body ?? {}))
+            patch.tuning = typeof req.body.tuning === "string" ? req.body.tuning.trim().slice(0, 80) : null;
+        if ("artist" in (req.body ?? {}))
+            patch.artist = typeof req.body.artist === "string" ? req.body.artist.trim().slice(0, 200) : null;
+        if ("page_title" in (req.body ?? {})) {
+            const t = typeof req.body.page_title === "string" ? req.body.page_title.trim().slice(0, 240) : "";
+            if (!t) {
+                res.status(400).json({ error: "empty_title" });
+                return;
+            }
+            patch.page_title = t;
+        }
+        if ("artist_id" in (req.body ?? {})) {
+            const v = req.body.artist_id;
+            patch.artist_id = (v === null || v === "" || v === undefined) ? null : Number(v);
+        }
+        if ("discogs_release_id" in (req.body ?? {})) {
+            const v = req.body.discogs_release_id;
+            patch.discogs_release_id = (v === null || v === "" || v === undefined) ? null : Number(v);
+        }
+        if ("discogs_master_id" in (req.body ?? {})) {
+            const v = req.body.discogs_master_id;
+            patch.discogs_master_id = (v === null || v === "" || v === undefined) ? null : Number(v);
+        }
+        const row = await updateLyricFields(id, patch);
+        if (!row) {
+            res.status(404).json({ error: "not_found" });
+            return;
+        }
+        res.json(row);
+    }
+    catch (err) {
+        // 23505 = unique_violation — another row already owns this title
+        // on the same source_host. Surface 409 with the conflicting row's
+        // id so the client can offer "open it" / "delete it" rather than
+        // just complaining at the user.
+        if (err?.code === "23505") {
+            console.warn("[lyrics patch] title collision:", err?.detail || err?.message);
+            let conflictId = null;
+            let conflictArtist = null;
+            let conflictTitle = null;
+            try {
+                // Re-read the candidate values from the body so we can find
+                // the row that's blocking us. Server-side trim mirrors the
+                // PATCH path so the lookup matches the constraint exactly.
+                const title = typeof req.body?.page_title === "string" ? req.body.page_title.trim() : null;
+                const artist = typeof req.body?.artist === "string" ? req.body.artist.trim() : null;
+                const id = parseInt(req.params.id, 10);
+                if (title) {
+                    // Scope by source_host — the unique index is per-source so
+                    // a row with the same title on a different source isn't
+                    // actually the conflict. Read the editing row's source_host
+                    // and look for a sibling row that matches the new values.
+                    const lookup = await getPool().query(`SELECT l2.id, l2.artist, l2.page_title FROM blues_lyrics l1
+               JOIN blues_lyrics l2 ON l2.source_host = l1.source_host
+              WHERE l1.id = $3
+                AND l2.id <> l1.id
+                AND l2.page_title = $1
+                AND COALESCE(LOWER(TRIM(l2.artist)), '') = COALESCE(LOWER(TRIM($2::text)), '')
+              LIMIT 1`, [title, artist, id]);
+                    if (lookup.rows[0]) {
+                        conflictId = Number(lookup.rows[0].id);
+                        conflictArtist = lookup.rows[0].artist ?? null;
+                        conflictTitle = lookup.rows[0].page_title ?? null;
+                    }
+                }
+            }
+            catch (lookupErr) {
+                console.warn("[lyrics patch] conflict lookup failed:", lookupErr);
+            }
+            res.status(409).json({
+                error: "title_taken",
+                conflictId,
+                conflictArtist,
+                conflictTitle,
+                detail: String(err?.detail || err?.message || ""),
+            });
+            return;
+        }
+        console.error("[lyrics patch]", err);
+        res.status(500).json({ error: String(err) });
+    }
+});
+// DELETE /api/admin/lyrics/:id — hard-delete a single lyric row.
+// Used by curators to resolve unique-index conflicts and to remove
+// stray scrape rows. No FK fan-out: blues_lyrics.artist_id is a
+// nullable back-reference, nothing else points at this row.
+app.delete("/api/admin/lyrics/:id", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (!Number.isFinite(id) || id <= 0) {
+            res.status(400).json({ error: "bad_id" });
+            return;
+        }
+        const r = await getPool().query(`DELETE FROM blues_lyrics WHERE id = $1`, [id]);
+        if ((r.rowCount ?? 0) === 0) {
+            res.status(404).json({ error: "not_found" });
+            return;
+        }
+        res.json({ ok: true });
+    }
+    catch (err) {
+        console.error("[lyrics delete]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// ── Blues archive (unified artists + lyrics + releases) ───────────────
+// Admin-gated Discovery sub-view that merges blues_artists, blues_lyrics,
+// and the discogs_releases JSONB. Endpoints below back the new
+// /?v=blues-archive view in collection.js.
+// POST /api/blues-archive/import-from-lyrics — walks distinct
+// lyrics.artist values and inserts any that aren't already in
+// blues_artists (case-insensitive name match). Idempotent.
+app.post("/api/blues-archive/import-from-lyrics", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        // Pass the same artist-name validator the scrape uses so stale
+        // bad values left in blues_lyrics.artist (from before the
+        // validator was added) don't leak through into blues_artists.
+        const r = await importLyricsArtistsToBluesDb(_lyricsLooksLikeArtist);
+        console.log(`[blues-archive] import: added=${r.added}, existing=${r.existing}, rejected=${r.rejected}, total=${r.total}`);
+        res.json({ ok: true, ...r });
+    }
+    catch (err) {
+        console.error("[blues-archive import]", err);
+        res.status(500).json({ error: String(err) });
+    }
+});
+// POST /api/blues-archive/purge-lyric-imports — removes blues_artists
+// rows that were inserted by the lyrics-import job AND have no other
+// data attached (no Discogs / Wikidata / MusicBrainz IDs, no releases,
+// no bio, no dates). Safety net for when the lyric-artist extractor
+// pulled in trash (catalog numbers, "1934 version", labels, etc.)
+// before the validator was tightened. Manually-edited rows are
+// preserved — the WHERE clause requires every meaningful field to
+// still be NULL/empty.
+app.post("/api/blues-archive/purge-lyric-imports", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        // Column is `notes` on this schema, not `profile` — earlier query
+        // referenced a non-existent column and 500'd. All other fields
+        // checked here exist on blues_artists.
+        const r = await getPool().query(`
+      DELETE FROM blues_artists
+       WHERE enrichment_status @> '{"source":"lyrics_import"}'::jsonb
+         AND discogs_id        IS NULL
+         AND wikidata_qid      IS NULL
+         AND musicbrainz_mbid  IS NULL
+         AND birth_date        IS NULL
+         AND death_date        IS NULL
+         AND (notes            IS NULL OR notes          = '')
+         AND (birth_place      IS NULL OR birth_place    = '')
+         AND (hometown_region  IS NULL OR hometown_region = '')
+         AND (photo_url        IS NULL OR photo_url      = '')
+         AND (discogs_releases IS NULL OR jsonb_array_length(discogs_releases) = 0)
+      RETURNING id, name
+    `);
+        const removed = r.rowCount ?? 0;
+        console.log(`[blues-archive] purge-lyric-imports: removed=${removed}`);
+        res.json({ ok: true, removed, names: (r.rows ?? []).slice(0, 50).map((row) => row.name) });
+    }
+    catch (err) {
+        console.error("[blues-archive purge]", err);
+        res.status(500).json({ error: String(err) });
+    }
+});
+// GET /api/blues-archive/artists?q=&limit=&offset= — paginated list
+// with releases_count + lyrics_count per artist.
+app.get("/api/blues-archive/artists", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const q = String(req.query.q ?? "").trim().slice(0, 200);
+        const sort = String(req.query.sort ?? "").trim().slice(0, 30);
+        const order = String(req.query.order ?? "").trim().toLowerCase() === "desc" ? "desc" : "asc";
+        // Whitelist the category param — anything else is dropped.
+        const rawCat = String(req.query.category ?? "").trim();
+        const category = ["with_both", "with_lyrics_only", "with_releases_only", "empty"]
+            .find(c => c === rawCat) || undefined;
+        const limit = Math.max(1, Math.min(500, parseInt(String(req.query.limit ?? "100"), 10) || 100));
+        const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
+        res.json(await listBluesArchive({
+            search: q || undefined,
+            sort: sort || undefined,
+            order,
+            category,
+            limit, offset,
+        }));
+    }
+    catch (err) {
+        console.error("[blues-archive list]", err);
+        res.status(500).json({ error: String(err) });
+    }
+});
+// GET /api/blues-archive/releases — flat list of every release
+// stored across all blues_artists.discogs_releases JSONB arrays.
+// Supports search (title or artist name), single-year filter, type
+// (release / master), role (Main / TrackAppearance / …), and
+// sort+pagination. Powers the Releases sub-tab on Blues Archive.
+app.get("/api/blues-archive/releases", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const q = String(req.query.q ?? "").trim().slice(0, 200);
+        const artist = String(req.query.artist ?? "").trim().slice(0, 200);
+        const type = String(req.query.type ?? "").trim().slice(0, 30);
+        const role = String(req.query.role ?? "").trim().slice(0, 30);
+        const yearRaw = String(req.query.year ?? "").trim();
+        const year = yearRaw ? parseInt(yearRaw, 10) : null;
+        const sort = String(req.query.sort ?? "").trim().slice(0, 30);
+        const order = String(req.query.order ?? "").trim().toLowerCase() === "asc" ? "asc" : "desc";
+        const limit = Math.max(1, Math.min(500, parseInt(String(req.query.limit ?? "100"), 10) || 100));
+        const offset = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
+        res.json(await listBluesArchiveReleases({
+            search: q || undefined,
+            artist: artist || undefined,
+            year: (year != null && Number.isFinite(year)) ? year : null,
+            type: type || undefined,
+            role: role || undefined,
+            sort: sort || undefined,
+            order,
+            limit, offset,
+        }));
+    }
+    catch (err) {
+        console.error("[blues-archive releases list]", err);
+        res.status(500).json({ error: String(err) });
+    }
+});
+// POST /api/blues-archive/merge body { fromId, intoId }
+// Reassigns the source artist's lyrics (by name match) to the target,
+// merges discogs_releases (deduped by id+type), and deletes the
+// source row. Wrapped in a transaction.
+app.post("/api/blues-archive/merge", express.json({ limit: "1kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const fromId = Number(req.body?.fromId);
+        const intoId = Number(req.body?.intoId);
+        if (!Number.isFinite(fromId) || !Number.isFinite(intoId) || fromId === intoId) {
+            res.status(400).json({ error: "bad_ids" });
+            return;
+        }
+        const out = await mergeBluesArtists(fromId, intoId);
+        console.log(`[blues-archive] merge: ${out.fromName} → ${out.intoName} (lyrics=${out.lyricsReassigned}, releases=${out.releasesAdded})`);
+        res.json(out);
+    }
+    catch (err) {
+        console.error("[blues-archive merge]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// GET /api/blues-archive/stats — counts powering the list-page stats
+// strip (artists w/ lyrics+releases, orphan lyrics, etc.).
+app.get("/api/blues-archive/stats", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        res.json(await getBluesArchiveStats());
+    }
+    catch (err) {
+        console.error("[blues-archive stats]", err);
+        res.status(500).json({ error: String(err) });
+    }
+});
+// GET /api/blues-archive/recent?limit= — last N edits across both
+// blues_lyrics and blues_artists, newest first. Powers the recent-
+// edits feed on the archive list page.
+app.get("/api/blues-archive/recent", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const limit = Math.max(1, Math.min(200, parseInt(String(req.query.limit ?? "20"), 10) || 20));
+        res.json({ rows: await getRecentBluesEdits(limit) });
+    }
+    catch (err) {
+        console.error("[blues-archive recent]", err);
+        res.status(500).json({ error: String(err) });
+    }
+});
+// POST /api/blues-archive/lyrics/reassign body { fromArtistId?, fromArtistName?, toArtistId }
+// Bulk re-key every matching lyric to the target artist. Used by the
+// "fix all of artist X's lyrics → artist Y" curator flow when artists
+// shouldn't be merged but lyrics are mislabeled.
+app.post("/api/blues-archive/lyrics/reassign", express.json({ limit: "1kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const toArtistId = Number(req.body?.toArtistId);
+        const fromArtistId = req.body?.fromArtistId != null ? Number(req.body.fromArtistId) : null;
+        const fromArtistName = typeof req.body?.fromArtistName === "string" ? req.body.fromArtistName.trim().slice(0, 200) : null;
+        if (!Number.isFinite(toArtistId)) {
+            res.status(400).json({ error: "toArtistId required" });
+            return;
+        }
+        if (fromArtistId == null && !fromArtistName) {
+            res.status(400).json({ error: "fromArtistId or fromArtistName required" });
+            return;
+        }
+        const out = await reassignLyrics({ toArtistId, fromArtistId, fromArtistName });
+        console.log(`[blues-archive] reassign: ${out.reassigned} → ${out.toName}`);
+        res.json(out);
+    }
+    catch (err) {
+        console.error("[blues-archive reassign]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// POST /api/blues-archive/lyrics/relink-orphans
+// Sweep orphans (artist_id IS NULL) and link any whose artist text
+// matches a blues_artists row — exact case-insensitive trim OR
+// disambiguator-stripped match. Returns the linked count so the UI
+// can tell the user how many rows were rescued.
+app.post("/api/blues-archive/lyrics/relink-orphans", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const linked = await relinkOrphanLyricsToArtists();
+        console.log(`[blues-archive] relink-orphans: linked=${linked}`);
+        res.json({ ok: true, linked });
+    }
+    catch (err) {
+        console.error("[blues-archive relink-orphans]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// POST /api/blues-archive/lyrics/normalize-empty-tunings
+// Bulk-set every lyric with NULL or empty tuning to 'Standard'. On a
+// blues-lyrics wiki an unmentioned tuning is overwhelmingly standard;
+// this collapses the (unspecified) bucket into the Standard one.
+app.post("/api/blues-archive/lyrics/normalize-empty-tunings", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const updated = await normalizeEmptyTuningsToStandard();
+        console.log(`[blues-archive] normalize-empty-tunings: updated=${updated}`);
+        res.json({ ok: true, updated });
+    }
+    catch (err) {
+        console.error("[blues-archive normalize-empty-tunings]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// POST /api/blues-archive/artists  body { name }
+// Get-or-create a blues_artists row by case-insensitive name. Used by
+// the lyric editor's "+ Create as new" affordance — clicking it before
+// Save mints a row so the FK can link on the subsequent PATCH.
+app.post("/api/blues-archive/artists", express.json({ limit: "2kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const name = typeof req.body?.name === "string" ? req.body.name : "";
+        const out = await getOrCreateBluesArtistByName(name);
+        console.log(`[blues-archive] artists: ${out.created ? "created" : "matched"} ${out.id} (${out.name})`);
+        res.json(out);
+    }
+    catch (err) {
+        console.error("[blues-archive artists create]", err);
+        res.status(400).json({ error: err?.message ?? String(err) });
+    }
+});
+// POST /api/blues-archive/lyrics/:id/promote-to-artist
+// Promotes an orphan lyric's free-text artist string to a new (or
+// existing) blues_artists row and links every other orphan lyric
+// with the same name in one transaction.
+app.post("/api/blues-archive/lyrics/:id/promote-to-artist", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (!Number.isFinite(id)) {
+            res.status(400).json({ error: "bad_id" });
+            return;
+        }
+        const out = await promoteOrphanLyricToArtist(id);
+        console.log(`[blues-archive] promote: lyric ${id} → artist ${out.artistId} (${out.artistName}); ${out.lyricsLinked} lyrics linked`);
+        res.json(out);
+    }
+    catch (err) {
+        console.error("[blues-archive promote]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// GET /api/blues-archive/artists/:id — artist + lyrics + sorted releases
+app.get("/api/blues-archive/artists/:id", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const id = parseInt(req.params.id, 10);
+        if (!Number.isFinite(id)) {
+            res.status(400).json({ error: "bad_id" });
+            return;
+        }
+        const row = await getBluesArchiveArtist(id);
+        if (!row) {
+            res.status(404).json({ error: "not_found" });
+            return;
+        }
+        res.json(row);
+    }
+    catch (err) {
+        console.error("[blues-archive artist]", err);
+        res.status(500).json({ error: String(err) });
+    }
+});
+// POST /api/blues-archive/check — admin-only "is this in the archive?"
+// probe used to stamp indicators on album / version modals site-wide.
+// Body: { artistNames?: string[], artistIds?: number[],
+//         releaseId?: number, masterId?: number, trackTitles?: string[] }
+// Returns:
+//   {
+//     artists: { [lowercaseName]: { id: number, name: string } },
+//     artistsById: { [discogsId]: { id: number, name: string } },
+//     release:  { inArchive: boolean, viaArtistId?: number },
+//     tracks:   { [lowercaseTitle]: { id: number, page_title: string, artist: string } }
+//   }
+// Lookups are case-insensitive on TRIM(LOWER(...)) to match the same
+// normalization used by the merge / import code paths.
+app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const body = req.body || {};
+        const artistNames = Array.isArray(body.artistNames)
+            ? body.artistNames.filter((n) => typeof n === "string" && n.trim()).slice(0, 50)
+            : [];
+        const artistIds = Array.isArray(body.artistIds)
+            ? body.artistIds.map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0).slice(0, 50)
+            : [];
+        const trackTitles = Array.isArray(body.trackTitles)
+            ? body.trackTitles.filter((s) => typeof s === "string" && s.trim()).slice(0, 200)
+            : [];
+        const releaseId = Number(body.releaseId);
+        const masterId = Number(body.masterId);
+        const out = {
+            artists: {},
+            artistsById: {},
+            release: { inArchive: false },
+            tracks: {},
+        };
+        // Artists by name (lowercase TRIM match) — covers the common case
+        // where the album popup has a name string but no resolved internal
+        // archive id.
+        if (artistNames.length) {
+            const r = await getPool().query(`SELECT id, name FROM blues_artists
+          WHERE LOWER(TRIM(name)) = ANY($1::text[])`, [artistNames.map(n => n.trim().toLowerCase())]);
+            for (const row of r.rows) {
+                out.artists[String(row.name).trim().toLowerCase()] = { id: row.id, name: row.name };
+            }
+        }
+        // Artists by Discogs ID — when the modal has a resolved Discogs
+        // artist id, a direct id match is more reliable than name match
+        // (handles "Smith (4)" disambiguation cleanly).
+        if (artistIds.length) {
+            const r = await getPool().query(`SELECT id, name, discogs_id FROM blues_artists
+          WHERE discogs_id = ANY($1::int[])`, [artistIds]);
+            for (const row of r.rows) {
+                out.artistsById[String(row.discogs_id)] = { id: row.id, name: row.name };
+            }
+        }
+        // Release / master match: walk blues_artists.discogs_releases JSONB
+        // and look for any object whose id matches. The JSONB stores both
+        // release and master entries (each row has a type discriminator),
+        // so we'll match either flavor against the corresponding id.
+        if (Number.isFinite(releaseId) && releaseId > 0) {
+            const r = await getPool().query(`SELECT a.id, a.name
+           FROM blues_artists a,
+                jsonb_array_elements(COALESCE(a.discogs_releases, '[]'::jsonb)) AS rel
+          WHERE (rel->>'id')::bigint = $1
+          LIMIT 1`, [releaseId]);
+            if (r.rows.length) {
+                out.release = { inArchive: true, viaArtistId: r.rows[0].id, viaArtistName: r.rows[0].name };
+            }
+        }
+        if (!out.release.inArchive && Number.isFinite(masterId) && masterId > 0) {
+            const r = await getPool().query(`SELECT a.id, a.name
+           FROM blues_artists a,
+                jsonb_array_elements(COALESCE(a.discogs_releases, '[]'::jsonb)) AS rel
+          WHERE (rel->>'id')::bigint = $1
+          LIMIT 1`, [masterId]);
+            if (r.rows.length) {
+                out.release = { inArchive: true, viaArtistId: r.rows[0].id, viaArtistName: r.rows[0].name, viaMaster: true };
+            }
+        }
+        // Track-title matches against blues_lyrics.page_title. Match
+        // precedence (most precise first):
+        //   1. lyric.discogs_release_id == releaseId           — pinned
+        //   2. lyric.discogs_master_id  == masterId            — pinned
+        //   3. lyric.artist_id matches a resolved archive artist for the
+        //      album (via name or Discogs id)
+        //   4. legacy fallback: artist string match
+        //   5. no artist context: title-only match
+        // The matched row is annotated with `pinned: true` when path 1/2
+        // hit, so the client can prefer the 📜-with-link affordance.
+        if (trackTitles.length) {
+            const titlesLc = trackTitles.map(t => t.trim().toLowerCase());
+            // Collect the resolved archive artist ids for path 3.
+            const resolvedArchiveArtistIds = [];
+            for (const v of Object.values(out.artists))
+                resolvedArchiveArtistIds.push(v.id);
+            for (const v of Object.values(out.artistsById))
+                resolvedArchiveArtistIds.push(v.id);
+            const archiveArtistIds = Array.from(new Set(resolvedArchiveArtistIds));
+            // Path 1+2: pinned matches by Discogs release/master id.
+            if ((Number.isFinite(releaseId) && releaseId > 0) || (Number.isFinite(masterId) && masterId > 0)) {
+                const r = await getPool().query(`SELECT id, page_title, artist, artist_id,
+                  discogs_release_id, discogs_master_id
+             FROM blues_lyrics
+            WHERE LOWER(TRIM(page_title)) = ANY($1::text[])
+              AND (
+                ($2::bigint IS NOT NULL AND discogs_release_id = $2::bigint)
+                OR
+                ($3::bigint IS NOT NULL AND discogs_master_id  = $3::bigint)
+              )`, [titlesLc, Number.isFinite(releaseId) && releaseId > 0 ? releaseId : null,
+                    Number.isFinite(masterId) && masterId > 0 ? masterId : null]);
+                for (const row of r.rows) {
+                    const k = String(row.page_title).trim().toLowerCase();
+                    out.tracks[k] = { id: row.id, page_title: row.page_title, artist: row.artist, artist_id: row.artist_id, pinned: true };
+                }
+            }
+            // Path 3: artist_id match (canonical post-FK).
+            if (archiveArtistIds.length) {
+                const r = await getPool().query(`SELECT id, page_title, artist, artist_id
+             FROM blues_lyrics
+            WHERE LOWER(TRIM(page_title)) = ANY($1::text[])
+              AND artist_id = ANY($2::int[])`, [titlesLc, archiveArtistIds]);
+                for (const row of r.rows) {
+                    const k = String(row.page_title).trim().toLowerCase();
+                    if (!out.tracks[k])
+                        out.tracks[k] = { id: row.id, page_title: row.page_title, artist: row.artist, artist_id: row.artist_id };
+                }
+            }
+            // Path 4: legacy artist-string match.
+            if (artistNames.length) {
+                const r = await getPool().query(`SELECT id, page_title, artist, artist_id
+             FROM blues_lyrics
+            WHERE LOWER(TRIM(page_title)) = ANY($1::text[])
+              AND LOWER(TRIM(COALESCE(artist, ''))) = ANY($2::text[])`, [titlesLc, artistNames.map(n => n.trim().toLowerCase())]);
+                for (const row of r.rows) {
+                    const k = String(row.page_title).trim().toLowerCase();
+                    if (!out.tracks[k])
+                        out.tracks[k] = { id: row.id, page_title: row.page_title, artist: row.artist, artist_id: row.artist_id };
+                }
+            }
+            // Path 5: pure title match — only used when caller has no artist
+            // context at all (e.g. mini-player bar with a "Topic" channel).
+            if (!artistNames.length && !archiveArtistIds.length) {
+                const r = await getPool().query(`SELECT id, page_title, artist, artist_id
+             FROM blues_lyrics
+            WHERE LOWER(TRIM(page_title)) = ANY($1::text[])`, [titlesLc]);
+                for (const row of r.rows) {
+                    const k = String(row.page_title).trim().toLowerCase();
+                    if (!out.tracks[k])
+                        out.tracks[k] = { id: row.id, page_title: row.page_title, artist: row.artist, artist_id: row.artist_id };
+                }
+            }
+        }
+        res.json(out);
+    }
+    catch (err) {
+        console.error("[blues-archive check]", err);
+        res.status(500).json({ error: String(err) });
     }
 });
 // POST /api/ai-search — Claude music recommendations
@@ -7726,21 +10839,58 @@ app.get("/api/wikipedia/lookup", async (req, res) => {
             return;
         }
         const pageUrl = (Array.isArray(sdata[3]) && sdata[3][0]) ? sdata[3][0] : `https://en.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`;
-        // Step 2: fetch the article body. The TextExtracts API gives clean
-        // paragraph HTML (no infoboxes/refs/edit-links). exintro=1 → lead only;
-        // omit it to get the full article body. Always pull the thumbnail too.
+        if (full) {
+            // Full-article path: TextExtracts (prop=extracts) deliberately
+            // strips tables, lists, and infoboxes — it only returns clean
+            // prose. That breaks list-style articles like "List of folk songs
+            // by Roud number", which are essentially one big sortable
+            // wikitable: the surrounding prose rendered, the table vanished.
+            // Use the Parse API instead, which returns the fully rendered
+            // article HTML (tables included). Pull the thumbnail in parallel
+            // via pageimages so the header image still shows.
+            const parseUrl = `https://en.wikipedia.org/w/api.php?action=parse&format=json&prop=text&redirects=1&disabletoc=1&page=${encodeURIComponent(title)}`;
+            const thumbUrl = `https://en.wikipedia.org/w/api.php?action=query&format=json&prop=pageimages&piprop=thumbnail&pithumbsize=200&redirects=1&titles=${encodeURIComponent(title)}`;
+            const [pr, tr] = await Promise.all([
+                loggedFetch("wikipedia", parseUrl, { context: "wiki parse full", headers: wikiHeaders }),
+                loggedFetch("wikipedia", thumbUrl, { context: "wiki parse thumb", headers: wikiHeaders }).catch(() => null),
+            ]);
+            if (!pr.ok) {
+                console.error("[wikipedia] parse HTTP", pr.status);
+                res.status(502).json({ error: "Wikipedia parse failed", status: pr.status });
+                return;
+            }
+            const pdata = await pr.json();
+            const rawHtml = pdata?.parse?.text?.["*"] ?? "";
+            // Reuse the shared sanitizer (strips <script>/<style>/inline
+            // handlers/javascript: URLs) and additionally drop <link> tags
+            // (TemplateStyles stylesheet refs that would 404 cross-origin).
+            const html = _gutenbergSanitizeHtml(rawHtml).replace(/<link\b[^>]*>/gi, "");
+            const finalTitle = pdata?.parse?.title ?? title;
+            let thumbnail = null;
+            try {
+                const tdata = tr && tr.ok ? await tr.json() : null;
+                const tpages = tdata?.query?.pages ?? {};
+                const tkey = Object.keys(tpages)[0];
+                thumbnail = (tkey ? tpages[tkey]?.thumbnail?.source : null) ?? null;
+            }
+            catch { }
+            res.json({ found: !!html, title: finalTitle, url: pageUrl, html, thumbnail, full: true });
+            return;
+        }
+        // Lead-only path (fast): TextExtracts with exintro=1. Used by
+        // artist-bio / inline popups — unchanged, no tables expected there.
         const extractParams = [
             "action=query",
             "format=json",
             "prop=extracts|pageimages",
-            ...(full ? [] : ["exintro=1"]),
+            "exintro=1",
             "piprop=thumbnail",
             "pithumbsize=200",
             "redirects=1",
             `titles=${encodeURIComponent(title)}`,
         ].join("&");
         const extractUrl = `https://en.wikipedia.org/w/api.php?${extractParams}`;
-        const er = await loggedFetch("wikipedia", extractUrl, { context: full ? "wiki extract full" : "wiki extract", headers: wikiHeaders });
+        const er = await loggedFetch("wikipedia", extractUrl, { context: "wiki extract", headers: wikiHeaders });
         if (!er.ok) {
             console.error("[wikipedia] extract HTTP", er.status);
             res.status(502).json({ error: "Wikipedia extract failed", status: er.status });
@@ -7948,8 +11098,42 @@ app.get("/search", async (req, res) => {
         res.json(results);
     }
     catch (err) {
-        console.error(err);
-        res.status(500).json({ error: "Discogs API error" });
+        // DiscogsClient.get throws "Discogs API error <STATUS>: <BODY>"
+        // when the upstream returns non-200. Parse that out so we can
+        // forward an accurate status to the client instead of always
+        // masking as 500 — the client can then distinguish auth (401)
+        // / rate-limit (429) / upstream outage (5xx) and show targeted
+        // messages instead of a generic "Search failed".
+        const msg = String(err?.message ?? err ?? "");
+        const m = /Discogs API error (\d+):\s*([\s\S]*)$/.exec(msg);
+        const upstreamStatus = m ? Number(m[1]) : 0;
+        const upstreamBody = m ? m[2].slice(0, 500) : "";
+        console.error("[/search] discogs error", { upstreamStatus, upstreamBody, msg });
+        if (upstreamStatus === 401 || upstreamStatus === 403) {
+            res.status(401).json({
+                error: "discogs_auth",
+                message: "Your Discogs connection looks invalid or expired. Reconnect it in Account settings.",
+            });
+            return;
+        }
+        if (upstreamStatus === 429) {
+            res.status(429).json({
+                error: "discogs_rate_limited",
+                message: "Discogs is rate-limiting our requests. Please retry in a minute.",
+            });
+            return;
+        }
+        if (upstreamStatus >= 500 && upstreamStatus <= 599) {
+            res.status(502).json({
+                error: "discogs_upstream",
+                message: `Discogs API returned ${upstreamStatus}. This is usually transient — retry in a moment.`,
+            });
+            return;
+        }
+        res.status(500).json({
+            error: "Discogs API error",
+            message: upstreamStatus ? `Discogs returned ${upstreamStatus}.` : "Search failed unexpectedly.",
+        });
     }
 });
 // GET /release/:id
@@ -8180,8 +11364,14 @@ app.get("/label-releases", async (req, res) => {
     }
     const page = req.query.page ? parseInt(req.query.page, 10) : 1;
     const perPage = req.query.per_page ? parseInt(req.query.per_page, 10) : 48;
+    // Whitelist Discogs's supported sort columns for this endpoint. The
+    // form sends `sort=year|title|format` (matching what /database/search
+    // uses); anything else is dropped silently so a stale URL can't 400.
+    const rawSort = String(req.query.sort ?? "").trim();
+    const sort = (rawSort === "year" || rawSort === "title" || rawSort === "format") ? rawSort : undefined;
+    const sortOrder = String(req.query.sort_order ?? "").trim().toLowerCase() === "desc" ? "desc" : "asc";
     try {
-        const data = await dc.getLabelReleases(id, { page, perPage });
+        const data = await dc.getLabelReleases(id, { page, perPage, sort, sortOrder });
         const releases = data?.releases ?? [];
         const reshaped = releases.map(r => {
             const artistName = (r?.artist ?? "").toString();
@@ -8767,6 +11957,184 @@ app.get("/api/admin/api-stats", async (req, res) => {
     const stats = await getApiRequestStats(hours);
     res.json({ stats });
 });
+// GET /api/admin/api-health — per-service health (success %, p50/p95,
+// errors, last error) + background-job status. Powers the consolidated
+// "Active APIs" popup (folds in the old standalone LOC tab).
+app.get("/api/admin/api-health", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const hours = Math.min(parseInt(req.query.hours) || 24, 168);
+    try {
+        const services = await getApiHealth(hours);
+        // Durable last-run timestamps (survive redeploys), enriched with
+        // live in-memory state when this process happens to have run it.
+        const durable = await getJobHealth().catch(() => ({ suggestionsLastAt: null, cacheWarmLastAt: null }));
+        const ago = (iso) => {
+            if (!iso)
+                return null;
+            const ms = Date.now() - Date.parse(iso);
+            if (!Number.isFinite(ms))
+                return null;
+            const m = Math.round(ms / 60000);
+            if (m < 60)
+                return `${m}m ago`;
+            const h = Math.round(m / 60);
+            if (h < 48)
+                return `${h}h ago`;
+            return `${Math.round(h / 24)}d ago`;
+        };
+        // Exact job-run history (job_runs table) is the source of truth;
+        // fall back to the durable proxy / in-memory state only for jobs
+        // that haven't recorded a run yet (e.g. right after this deploy).
+        const lastRuns = await getJobLastRuns().catch(() => []);
+        const byJob = new Map(lastRuns.map((r) => [r.job_name, r]));
+        const fmtRun = (r) => {
+            const when = r.ended_at || r.started_at;
+            const rel = ago(when);
+            const abs = new Date(when).toLocaleString();
+            if (r.status === "running")
+                return `running now (started ${ago(r.started_at)})`;
+            const tag = r.status === "error" ? "FAILED" : "ok";
+            const bits = [`${tag} ${rel} (${abs})`];
+            if (r.items)
+                bits.push(`${r.items} items`);
+            if (r.errors)
+                bits.push(`${r.errors} errors`);
+            if (r.detail)
+                bits.push(String(r.detail));
+            return bits.join(" · ");
+        };
+        const jobs = {};
+        {
+            const r = byJob.get("cache-warm");
+            const cw = _suggCacheWarmState;
+            if (cw?.running)
+                jobs["Cache-warm worker"] = `running now — ${cw.fetched} fetched, ${cw.errors} errors`;
+            else if (r)
+                jobs["Cache-warm worker"] = fmtRun(r);
+            else if (durable.cacheWarmLastAt)
+                jobs["Cache-warm worker"] = `~last warmed a row ${ago(durable.cacheWarmLastAt)} (no run logged yet)`;
+            else
+                jobs["Cache-warm worker"] = "no run on record";
+        }
+        {
+            const r = byJob.get("daily-suggestions");
+            if (r)
+                jobs["Daily suggestions"] = fmtRun(r);
+            else if (durable.suggestionsLastAt)
+                jobs["Daily suggestions"] = `~last generated ${ago(durable.suggestionsLastAt)} (no run logged yet)`;
+            else if (_suggGenLastRunKey)
+                jobs["Daily suggestions"] = `ran ${_suggGenLastRunKey} (this process)`;
+            else
+                jobs["Daily suggestions"] = "no run on record";
+        }
+        {
+            const r = byJob.get("archive-refresh");
+            jobs["Archive refresh"] = r ? fmtRun(r) : "no run on record";
+        }
+        // Rate-limit headroom. LOC has a real instrumented window limiter;
+        // Discogs has none (ad-hoc pacing under its own 60/min OAuth cap),
+        // so we report an approximate request count for the last minute.
+        const limiters = {};
+        try {
+            limiters.loc = locLimiter.getStats();
+        }
+        catch { }
+        let discogs = null;
+        try {
+            const dw = await getDiscogsRateWindow();
+            discogs = { ...dw, ceilingPerMin: 60, headroom: Math.max(0, 60 - dw.lastMinute) };
+        }
+        catch { }
+        res.json({ hours, services, jobs, limiters, discogs });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// GET /api/admin/job-runs?job=<name>&limit=N — recent run history for
+// one background job (audit drill-down from the Active APIs popup).
+app.get("/api/admin/job-runs", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const job = String(req.query.job ?? "").trim();
+    if (!job) {
+        res.status(400).json({ error: "job required" });
+        return;
+    }
+    const limit = parseInt(String(req.query.limit ?? "25"), 10) || 25;
+    try {
+        res.json({ job, runs: await getRecentJobRuns(job, limit) });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// GET /api/admin/overview — site KPI bundle (users, activity, usage).
+app.get("/api/admin/overview", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const o = await getAdminOverview();
+        const since = new Date(Date.now() - 7 * 86400000);
+        o.sinceLabel7d = `since ${since.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+        // Clerk account count (signed-up users, incl. those who never
+        // connected Discogs). user_tokens only has a row once a user
+        // connects Discogs, so totalUsers = Discogs-connected; this is the
+        // broader signup figure. Best-effort — null if Clerk unreachable.
+        o.clerkUsers = null;
+        const clerkSecret = process.env.CLERK_SECRET_KEY ?? "";
+        if (clerkSecret) {
+            try {
+                const cr = await fetch("https://api.clerk.com/v1/users/count", {
+                    headers: { Authorization: `Bearer ${clerkSecret}` },
+                });
+                if (cr.ok) {
+                    const cj = await cr.json();
+                    const n = Number(cj?.total_count);
+                    if (Number.isFinite(n))
+                        o.clerkUsers = n;
+                }
+            }
+            catch { /* leave null */ }
+        }
+        res.json(o);
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
+// GET /api/admin/media-stats — media-player + playlist/queue usage,
+// plus a per-feature activity split (upstream service hits, 7d).
+app.get("/api/admin/media-stats", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const topLimit = Math.max(1, Math.min(100, parseInt(String(req.query.topLimit || "10"), 10) || 10));
+        const [m, svc] = await Promise.all([
+            getMediaStats(topLimit),
+            getApiRequestStats(168).catch(() => []),
+        ]);
+        // Feature usage proxy: upstream calls per service over 7d. These
+        // map ~1:1 to user-driven feature use (a Gutenberg search hits
+        // gutendex, a Wikipedia open hits wikipedia, etc.).
+        const want = ["discogs", "gutendex", "wikipedia", "loc", "archive", "youtube", "anthropic"];
+        const labels = {
+            discogs: "Discogs", gutendex: "Gutenberg", wikipedia: "Wikipedia",
+            loc: "Library of Congress", archive: "Archive.org", youtube: "YouTube", anthropic: "AI (Anthropic)",
+        };
+        const feature7d = want
+            .map(s => {
+            const row = svc.find(r => r.service === s);
+            return row ? { service: labels[s] || s, requests: row.total_requests } : null;
+        })
+            .filter(Boolean);
+        res.json({ ...m, feature7d });
+    }
+    catch (e) {
+        res.status(500).json({ error: String(e?.message ?? e) });
+    }
+});
 // GET /api/admin/db-stats — row counts for all tables
 app.get("/api/admin/db-stats", async (req, res) => {
     if (!await requireAdmin(req, res))
@@ -8975,6 +12343,16 @@ function startDailySyncSchedule() {
 }
 // ── Inventory / Lists / Orders sync (5 AM Pacific daily) ──────────────────
 async function syncUserExtras(userId, username, client) {
+    // Per-user mutex — see _syncRunningFor for rationale. Without this,
+    // the scheduled extras sync racing the runBackgroundSync tail-call
+    // racing the admin "Run for me" button hammers the same paginated
+    // inventory/lists URLs with parallel pacing loops and burns through
+    // the 60/min Discogs cap in under a minute.
+    if (_extrasRunningFor.has(userId)) {
+        console.log(`[extras] ${username}: skipped — another extras sync is already in flight`);
+        return { inventory: 0, lists: 0, orders: 0 };
+    }
+    _extrasRunningFor.add(userId);
     const getHeaders = (url) => client.buildHeaders("GET", url);
     // Simple fetch with retry for extras sync
     async function extrasFetch(url, retries = 3) {
@@ -9128,6 +12506,7 @@ async function syncUserExtras(userId, username, client) {
     catch (err) {
         console.error(`[extras] ${username} orders error:`, err);
     }
+    _extrasRunningFor.delete(userId);
     return { inventory, lists, orders };
 }
 function startExtrasSyncSchedule() {
@@ -9158,6 +12537,21 @@ function startExtrasSyncSchedule() {
     }
     schedule();
 }
+// Process-level safety net. Node 22 exits on unhandled promise
+// rejection by default, which means ONE missing try/catch around a
+// pg-pool call during a transient DB connect-timeout takes the whole
+// server down. The admin page polls /sync-status and /feedback on a
+// loop, so a Railway Postgres hiccup turns into a tight crash-loop.
+// Log + swallow at the process level so individual endpoint bugs
+// don't cascade. Endpoints should still wrap their own awaits in
+// try/catch to surface clean 500s to callers — this is defense in
+// depth, not a substitute.
+process.on("unhandledRejection", (reason) => {
+    console.error("[unhandledRejection]", reason);
+});
+process.on("uncaughtException", (err) => {
+    console.error("[uncaughtException]", err);
+});
 app.listen(PORT, "0.0.0.0", async () => {
     console.log(`Discogs search API listening on port ${PORT}`);
     if (process.env.APP_DB_URL) {

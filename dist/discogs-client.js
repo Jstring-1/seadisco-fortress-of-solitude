@@ -132,6 +132,10 @@ export class DiscogsClient {
             page: String(options.page ?? 1),
             per_page: String(options.perPage ?? 10),
         };
+        if (options.sort)
+            params.sort = options.sort;
+        if (options.sortOrder)
+            params.sort_order = options.sortOrder;
         return this.get(`/labels/${labelId}/releases`, params);
     }
     async getMarketplaceStats(releaseId, currency) {
