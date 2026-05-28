@@ -1376,13 +1376,10 @@ function _baReleaseRowHtml(row) {
   const url  = id ? `https://www.discogs.com/${type}/${id}` : "";
   // Title click opens the SeaDisco album/release modal (same modal
   // the search-results cards use) so the curator can see tracklist,
-  // credits, marketplace, etc. without leaving the page. The
-  // discogs.com link survives as a tiny '↗' next to the title for
-  // when the curator wants the canonical Discogs page.
+  // credits, marketplace, etc. without leaving the page.
   const titleText = escHtml(row.release_title || "(untitled)");
   const titleHtml = id
     ? `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenRelease(${id}, '${type}', '${escHtml(url)}')" style="color:var(--accent);text-decoration:none" title="Open ${type} popup">${titleText}</a>`
-      + ` <a href="${escHtml(url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Open on Discogs.com ↗" style="font-size:0.72rem;color:var(--muted);text-decoration:none;margin-left:0.25rem">↗</a>`
     : titleText;
   const artistHtml = row.artist_id
     ? `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenArtist(${row.artist_id})" style="color:var(--text);text-decoration:none" title="Open in Blues Archive">${escHtml(row.artist_name || "")}</a>`
