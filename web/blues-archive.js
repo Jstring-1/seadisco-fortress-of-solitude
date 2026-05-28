@@ -149,6 +149,10 @@ function _baSortList(key) {
   _baLoadList();
 }
 window._baSortList = _baSortList;
+// Expose so blues-admin.js's bluesDbRenderList() can refresh this
+// grid after inline editor mutations (Refresh from Discogs, Pick
+// Discogs match, per-row enrich, etc.) without admin.html present.
+window._baLoadList = _baLoadList;
 
 function _baRenderListTable() {
   const rowsEl = document.getElementById("blues-archive-rows");
@@ -1302,6 +1306,10 @@ async function _baLoadStats() {
     ].join("");
   } catch { el.innerHTML = ""; }
 }
+// Expose alongside _baLoadList so blues-admin.js can repaint the
+// stats strip when the editor mutates a row (e.g. clearing a photo
+// shifts the empty/with-photo bucket counts).
+window._baLoadStats = _baLoadStats;
 
 // Jump handlers used by the stats-strip chips on the Artists side.
 // Set the category filter + switch to the Artists tab.
@@ -1445,9 +1453,14 @@ function _baOpenFullEditor(id) {
   // Set the one-shot post-save callback BEFORE opening. The Discovery
   // artist popup is what's open behind the editor overlay; refreshing
   // it re-renders the bio / dates / photo / lyrics with any edits.
+  // Also reload the underlying artist list so the row reflects the
+  // save (cleared photo → empty placeholder, updated name → new
+  // entry text, etc.) without needing a manual refresh.
   window._bluesDbAfterSaveOnce = (savedId) => {
     const targetId = Number(savedId || id);
     if (Number.isFinite(targetId)) _baOpenArtist(targetId);
+    if (typeof _baLoadList === "function") { try { _baLoadList(); } catch {} }
+    if (typeof _baLoadStats === "function") { try { _baLoadStats(); } catch {} }
   };
   const openIt = () => {
     if (typeof window.bluesDbOpenEditor === "function") {
