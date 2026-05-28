@@ -1380,15 +1380,28 @@ document.addEventListener("keydown", e => {
 
 // Admin-only "+" icon — adds a Discogs artist to the Blues DB inline.
 // Re-enabled (was a no-op for a while when curation moved to /admin).
-// Renders only for admins and only when we have a Discogs artist id
-// (the add-by-id endpoint needs it). The icon switches to 🎸 with a
-// deep-link into the archive once the artist actually lands in the
-// archive — _baStampArchiveIndicators handles that overwrite during
-// the same modal-render pass, so users see the right state regardless
-// of which side gets there first.
+// Renders only for admins, only when we have a Discogs artist id
+// (the add-by-id endpoint needs it), and only when the artist isn't
+// already in the archive. The "already in" check consults two caches
+// populated by shared.js once /api/me confirms admin:
+//   - window._adminBluesIds:   Set<number> of Discogs artist ids
+//   - window._adminBluesNames: Set<string> of lowercased names
+// Discogs's " (N)" disambiguator is stripped before the name lookup
+// so "Robert Johnson (3)" still resolves to the bare "Robert Johnson"
+// row in the archive.
 function bluesAddIcon(discogsId, name) {
   if (!window._isAdmin) return "";
   if (!discogsId)       return "";
+  // Suppress when already in the DB. Both checks short-circuit so
+  // a hot-loaded set isn't required (e.g. if the admin opens a popup
+  // before shared.js's /api/blues/ids probe lands, the icon will
+  // render and be removed later by _baStampArchiveIndicators below).
+  if (window._adminBluesIds?.has(Number(discogsId))) return "";
+  const nameKey = String(name || "")
+    .replace(/\s*\(\d+\)\s*$/, "") // strip " (N)" disambiguator
+    .trim()
+    .toLowerCase();
+  if (nameKey && window._adminBluesNames?.has(nameKey)) return "";
   const safeName = String(name || "").replace(/'/g, "\\'").replace(/"/g, "&quot;");
   return ` <a href="#" class="blues-add-icon" data-blues-id="${escHtml(String(discogsId))}" onclick="event.preventDefault();event.stopPropagation();_bluesAddArtist(${discogsId}, '${safeName}', this);return false" title="Add this artist to the Blues DB" style="color:var(--muted);text-decoration:none;font-size:0.86em;margin-left:0.2rem">+blues</a>`;
 }
@@ -1406,15 +1419,66 @@ async function _bluesAddArtist(discogsId, name, anchor) {
       return;
     }
     if (window._adminBluesIds) window._adminBluesIds.add(Number(discogsId));
-    if (window._adminBluesNames && name) window._adminBluesNames.add(String(name).trim().toLowerCase());
+    if (window._adminBluesNames && name) {
+      window._adminBluesNames.add(String(name).trim().toLowerCase());
+      // Also cache the stripped form so a follow-up render that uses
+      // the disambiguator (e.g. "Robert Johnson (3)") still suppresses.
+      const stripped = String(name).replace(/\s*\(\d+\)\s*$/, "").trim().toLowerCase();
+      if (stripped) window._adminBluesNames.add(stripped);
+    }
     // Remove every "+ add" link for this id from the DOM so the popup
     // updates in place (multiple may exist if the artist appears in
     // both the album-artist row and a credit row).
     document.querySelectorAll(`.blues-add-icon[data-blues-id="${discogsId}"]`).forEach(a => a.remove());
+    // Re-fire the archive stamping so the 🎸 badge appears immediately
+    // (the just-added artist is now in the DB). Reset the dataset flag
+    // so _baStampArchiveIndicators's idempotence guard doesn't skip.
+    // The data needed (d/searchResult) is already encoded in the
+    // rendered DOM, so a fresh probe round-trips it back as a hit.
+    document.querySelectorAll("#album-info, #version-info").forEach(root => {
+      delete root.dataset.baStamped;
+      // We don't have d/searchResult here, but we can rebuild a thin
+      // probe directly: just re-run the artist-name check pass.
+      _baReStampArtistsAfterAdd(root, discogsId, name).catch(() => {});
+    });
     showToast?.("Added to Blues DB");
   } catch (e) {
     showToast?.("Add failed: " + e, "error");
   }
+}
+
+// Thin re-probe used by _bluesAddArtist immediately after a successful
+// add: hit /api/blues-archive/check for THIS artist and, if it returns,
+// stamp the 🎸 next to every matching .modal-artist-link in the popup.
+async function _baReStampArtistsAfterAdd(root, discogsId, name) {
+  if (!root) return;
+  try {
+    const r = await apiFetch("/api/blues-archive/check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        artistIds:   discogsId ? [Number(discogsId)] : [],
+        artistNames: name ? [name, String(name).replace(/\s*\(\d+\)\s*$/, "").trim()].filter(Boolean) : [],
+      }),
+    });
+    if (!r.ok) return;
+    const result = await r.json();
+    const hit = (discogsId && result.artistsById?.[String(discogsId)])
+             || (name && result.artists?.[String(name).trim().toLowerCase()])
+             || (name && result.artists?.[String(name).replace(/\s*\(\d+\)\s*$/, "").trim().toLowerCase()]);
+    if (!hit) return;
+    root.querySelectorAll(".modal-artist-link, .album-artist .entity-lookup-link").forEach(n => {
+      if (n.parentNode?.querySelector(":scope > .ba-archive-badge")) return; // already stamped
+      const id = String(n.dataset.lkId || "");
+      const nm = (n.dataset.lkLabel || "").trim().toLowerCase();
+      const nmClean = nm.replace(/\s*\(\d+\)\s*$/, "");
+      if (id !== String(discogsId) && nm !== String(name).trim().toLowerCase() && nmClean !== String(name).replace(/\s*\(\d+\)\s*$/, "").trim().toLowerCase()) return;
+      n.insertAdjacentHTML(
+        "afterend",
+        `<a href="/?v=blues-archive&baArtist=${hit.id}" class="ba-archive-badge" data-ba-artist-id="${hit.id}" onclick="event.preventDefault();event.stopPropagation();_baOpenArtistFromBadge(${hit.id});return false" title="In Blues Archive: ${escHtml(hit.name)}" aria-label="In Blues Archive: ${escHtml(hit.name)}">🎸</a>`,
+      );
+    });
+  } catch { /* silent */ }
 }
 
 // Card-level + adder — cards only have the artist NAME parsed from the
@@ -4903,9 +4967,16 @@ function renderAlbumInfo(d, searchResult, discogsUrl = "", stats = null, targetI
   // + its tracks and stamp a small "🎸" indicator on each match. Runs
   // best-effort and silently fails for non-admin (the endpoint is gated
   // server-side anyway). Fired late so the DOM is fully built.
-  if (window._isAdmin) {
-    _baStampArchiveIndicators(targetId, d, searchResult).catch(() => {});
-  }
+  // The admin flag may not yet be resolved on cold URL loads (?vp=...)
+  // — await _ensureAdminFlag so the stamping runs once it lands.
+  (async () => {
+    if (typeof window._isAdmin !== "boolean" && typeof window._ensureAdminFlag === "function") {
+      try { await window._ensureAdminFlag(); } catch {}
+    }
+    if (window._isAdmin) {
+      _baStampArchiveIndicators(targetId, d, searchResult).catch(() => {});
+    }
+  })();
 }
 
 // ── Blues Archive indicator stamping (admin-only) ────────────────────
@@ -4931,15 +5002,23 @@ async function _baStampArchiveIndicators(targetId, d, searchResult) {
   // and data-lk-label (name). Credit-name nodes are skipped here so the
   // check stays small; the primary album-artist is the highest-signal
   // place to stamp.
+  // Discogs's " (N)" disambiguator: send BOTH the raw form and the
+  // stripped form so archive rows that don't carry the suffix still
+  // match. The server uses an IN(...) query so duplicates are fine.
   const artistNodes = root.querySelectorAll(".modal-artist-link, .album-artist .entity-lookup-link");
-  const artistNames = [];
+  const artistNamesSet = new Set();
   const artistIds   = [];
   artistNodes.forEach(n => {
     const nm = (n.dataset.lkLabel || "").trim();
     const id = Number(n.dataset.lkId || 0);
-    if (nm) artistNames.push(nm);
+    if (nm) {
+      artistNamesSet.add(nm);
+      const stripped = nm.replace(/\s*\(\d+\)\s*$/, "").trim();
+      if (stripped && stripped !== nm) artistNamesSet.add(stripped);
+    }
     if (id) artistIds.push(id);
   });
+  const artistNames = Array.from(artistNamesSet);
 
   // Title link for the release — singular.
   const titleNode = root.querySelector(".modal-title-link");
@@ -4970,14 +5049,35 @@ async function _baStampArchiveIndicators(targetId, d, searchResult) {
     `<a href="/?v=blues-archive&baArtist=${archiveId}" class="ba-archive-badge" data-ba-artist-id="${archiveId}" onclick="event.preventDefault();event.stopPropagation();_baOpenArtistFromBadge(${archiveId});return false" title="${escHtml(tip || "In Blues Archive")}" aria-label="${escHtml(tip || "In Blues Archive")}">🎸</a>`;
 
   // Stamp album-artist links: lookup by lk-id first (preferred), then
-  // by lowercase name. Insert badge right after the link node.
+  // by lowercase name (raw or disambiguator-stripped). Insert badge
+  // right after the link node. Also remove any sibling "+blues" icon
+  // that was rendered eagerly — once we confirm the artist is in the
+  // archive, the +blues affordance is redundant noise. Also warm up
+  // _adminBluesIds / _adminBluesNames so the next render skips +blues
+  // outright (instead of paying for another round-trip to remove it).
   artistNodes.forEach(n => {
     if (n.parentNode?.querySelector(":scope > .ba-archive-badge")) return; // dedupe
     const id = String(n.dataset.lkId || "");
-    const nm = (n.dataset.lkLabel || "").trim().toLowerCase();
-    const hit = (id && result.artistsById?.[id]) || (nm && result.artists?.[nm]);
+    const nmRaw   = (n.dataset.lkLabel || "").trim();
+    const nm      = nmRaw.toLowerCase();
+    const nmClean = nmRaw.replace(/\s*\(\d+\)\s*$/, "").trim().toLowerCase();
+    const hit = (id && result.artistsById?.[id])
+             || (nm      && result.artists?.[nm])
+             || (nmClean && result.artists?.[nmClean]);
     if (!hit) return;
     n.insertAdjacentHTML("afterend", badge(hit.id, `In Blues Archive: ${hit.name}`));
+    // Sweep the sibling "+blues" link for this artist (it sits right
+    // after the lookup span, before our badge). Match by data-blues-id
+    // == lk-id when ids are known.
+    if (id) {
+      n.parentNode?.querySelectorAll(`.blues-add-icon[data-blues-id="${id}"]`).forEach(a => a.remove());
+    }
+    // Warm caches so future renders short-circuit at bluesAddIcon time.
+    if (window._adminBluesIds && id)        window._adminBluesIds.add(Number(id));
+    if (window._adminBluesNames) {
+      if (nm)      window._adminBluesNames.add(nm);
+      if (nmClean) window._adminBluesNames.add(nmClean);
+    }
   });
 
   // Stamp release title — when the release/master id is in any archive
@@ -5030,25 +5130,34 @@ function _baOpenLyricFromBadge(lyricId) {
 window._baOpenLyricFromBadge = _baOpenLyricFromBadge;
 window._baStampArchiveIndicators = _baStampArchiveIndicators;
 
-// Helper: navigate to /?v=blues-archive and open the given archive
-// artist id. Used by the 🎸 badge click. Falls back to URL nav if the
-// blues-archive module isn't loaded in the current session.
+// Helper: open the archive artist popup overlay in place. The overlay
+// is a fixed-position layer appended to <body> by _baOpenArtist, so it
+// stacks cleanly on top of whatever view (album modal, search, etc.)
+// the user is currently on — no closeModal, no switchView, no nav. If
+// the blues-archive module hasn't been loaded yet (cold session, user
+// clicked 🎸 before visiting the archive view), lazy-load it first.
+// URL nav is only the absolute-last fallback when the loader itself
+// isn't around.
 function _baOpenArtistFromBadge(archiveId) {
-  try {
-    if (typeof closeModal === "function") closeModal();
-  } catch {}
-  // If we're already on blues-archive and the module is loaded, just
-  // open the artist directly to avoid a full nav cycle.
-  if (typeof window._baOpenArtist === "function") {
-    if (typeof switchView === "function") {
-      try { switchView("blues-archive"); } catch {}
+  const tryOpen = () => {
+    if (typeof window._baOpenArtist === "function") {
+      window._baOpenArtist(archiveId);
+      return true;
     }
-    setTimeout(() => window._baOpenArtist(archiveId), 30);
+    return false;
+  };
+  if (tryOpen()) return;
+  if (typeof window._sdLoadModule === "function") {
+    window._sdLoadModule("/blues-archive.js")
+      .then(() => { if (!tryOpen()) console.warn("[ba] blues-archive.js loaded but _baOpenArtist missing"); })
+      .catch(err => {
+        console.warn("[ba] blues-archive.js load failed:", err);
+        // Loader available but failed — fall through to URL nav.
+        window.location.href = `/?v=blues-archive&baArtist=${archiveId}`;
+      });
     return;
   }
-  // Cold load: route through the URL so the lazy-loader picks up the
-  // module, then deep-link into the artist (the view's URL handler
-  // honors a baArtist param).
+  // Last resort.
   window.location.href = `/?v=blues-archive&baArtist=${archiveId}`;
 }
 window._baOpenArtistFromBadge = _baOpenArtistFromBadge;
