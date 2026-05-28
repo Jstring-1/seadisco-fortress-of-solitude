@@ -179,6 +179,17 @@ function _baRenderListTable() {
         const nameHtml = (typeof entityLookupLinkHtml === "function" && row.name)
           ? entityLookupLinkHtml("artist", row.name, { entityId: row.discogs_id, title: `Lookup options for "${row.name}"` })
           : escHtml(row.name || "");
+        // Per-row "Search Discogs as artist" affordance — fastest way
+        // to track down the canonical id when curating. Opens
+        // discogs.com's artist-scoped site search in a new tab; the
+        // admin then pastes the right id into the editor + hits
+        // Refresh from Discogs.
+        const discogsSearchHref = row.name
+          ? "https://www.discogs.com/search/?type=artist&q=" + encodeURIComponent(row.name)
+          : "";
+        const discogsSearchHtml = discogsSearchHref
+          ? `<a href="${escHtml(discogsSearchHref)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Search Discogs for an artist named &quot;${escHtml(row.name || "")}&quot; — opens discogs.com in a new tab so you can grab the right id" style="margin-left:0.4rem;font-size:0.78rem;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:4px;padding:0.05rem 0.35rem;font-variant-numeric:tabular-nums">🔎 Discogs</a>`
+          : "";
         // Discogs ID — link out to discogs.com/artist/<id> when set so
         // the user can jump straight to the canonical artist page;
         // stopPropagation so the row-click doesn't also fire and steal
@@ -202,7 +213,7 @@ function _baRenderListTable() {
           : `<span style="width:40px;height:40px;border-radius:4px;background:rgba(255,255,255,0.04);display:inline-block" aria-hidden="true"></span>`;
         return `<tr style="cursor:pointer" onclick="_baOpenArtist(${row.id})">
           <td style="padding:0.25rem 0.4rem">${photoHtml}</td>
-          <td style="font-weight:600;color:var(--text)">${nameHtml}</td>
+          <td style="font-weight:600;color:var(--text)">${nameHtml}${discogsSearchHtml}</td>
           <td style="font-size:0.78rem">${didHtml}</td>
           <td style="text-align:right;font-size:0.82rem">${yrHtml}</td>
           <td style="text-align:right;color:${row.lyrics_count ? "var(--accent)" : "var(--muted)"}">${row.lyrics_count || ""}</td>
