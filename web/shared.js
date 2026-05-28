@@ -1453,7 +1453,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260528.0903";
+  const SITE_VERSION = "build 20260528.0930";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -2124,10 +2124,31 @@ function openLookupPopup(ev, scope, label, ctx) {
                        || result.artists?.[String(label).trim().toLowerCase()]
                        || result.artists?.[String(label).replace(/\s*\(\d+\)\s*$/, "").trim().toLowerCase()];
               if (hit) {
-                if (typeof window._baOpenArtistFromBadge === "function") {
-                  window._baOpenArtistFromBadge(hit.id);
+                // Hit → lazy-load /blues-admin.js (where the full
+                // editor lives), then open the editor on this row.
+                // No view switch, no nav — the editor overlay layers
+                // on top of whatever the user was doing.
+                const openIt = () => {
+                  if (typeof window.bluesDbOpenEditor === "function") {
+                    window.bluesDbOpenEditor(hit.id);
+                    return true;
+                  }
+                  return false;
+                };
+                if (openIt()) return;
+                if (typeof window._sdLoadModule === "function") {
+                  window._sdLoadModule("/blues-admin.js")
+                    .then(() => { if (!openIt()) showToast?.("Editor not available", "error"); })
+                    .catch(() => showToast?.("Couldn't load editor", "error"));
                 } else {
-                  window.location.href = `/?v=blues-archive&baArtist=${hit.id}`;
+                  // Last-resort fallback: open the archive artist popup
+                  // (merge / reassign / lyric edits) instead of the
+                  // full form editor.
+                  if (typeof window._baOpenArtistFromBadge === "function") {
+                    window._baOpenArtistFromBadge(hit.id);
+                  } else {
+                    window.location.href = `/?v=blues-archive&baArtist=${hit.id}`;
+                  }
                 }
               } else if (entityId && typeof window._bluesAddArtist === "function") {
                 if (confirm(`"${label}" isn't in the Blues Archive yet. Add now?`)) {

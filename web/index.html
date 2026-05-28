@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260528.0903" />
+  <link rel="stylesheet" href="/style.css?v=20260528.0930" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260528.0903"></script>
+<script defer src="/shared.js?v=20260528.0930"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -1207,6 +1207,77 @@ e.g.  miles davis | coltrane
   </div>
 </div>
 
+<!-- ── Blues DB admin editor overlays (loaded lazily for admin) ──────
+     Copied from admin.html so the same editor can open inline on the
+     Discovery Blues Archive view without leaving the page. The JS
+     that drives them lives in /blues-admin.js — lazy-loaded via
+     _sdLoadModule when an EDIT affordance is clicked. -->
+<div id="blues-editor-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.78);z-index:340;align-items:flex-start;justify-content:center;padding:2rem 1rem;overflow:auto" onclick="if(event.target===this)bluesDbCloseEditor()">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(900px,100%)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.7rem">
+      <h3 id="blues-editor-title" style="margin:0">Edit artist</h3>
+      <button class="archive-btn" onclick="bluesDbCloseEditor()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
+    </div>
+    <div id="blues-editor-extlinks" style="display:none;gap:0.6rem;flex-wrap:wrap;font-size:0.78rem;margin-bottom:0.7rem;padding:0.4rem 0.6rem;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:6px">
+      <span style="color:var(--muted)">Lookup:</span>
+      <a id="blues-editor-link-discogs" href="#" target="_blank" rel="noopener">Discogs ↗</a>
+      <a id="blues-editor-link-wikipedia" href="#" target="_blank" rel="noopener">Wikipedia ↗</a>
+      <a id="blues-editor-link-musicbrainz" href="#" target="_blank" rel="noopener">MusicBrainz ↗</a>
+      <a id="blues-editor-link-wikidata" href="#" target="_blank" rel="noopener">Wikidata ↗</a>
+    </div>
+    <form id="blues-editor-form" onsubmit="event.preventDefault();bluesDbSaveEditor()" oninput="_bluesDbUpdateEditorLinks()" style="display:grid;grid-template-columns:1fr 1fr;gap:0.6rem 1rem">
+      <label style="grid-column:1/-1">Name <input name="name" required style="width:100%"></label>
+      <label>Wikidata QID <input name="wikidata_qid" placeholder="Q123456"></label>
+      <label>MusicBrainz MBID <input name="musicbrainz_mbid" placeholder="uuid"></label>
+      <label>Discogs ID <input name="discogs_id" type="number"></label>
+      <label>Wikipedia suffix <input name="wikipedia_suffix" placeholder="/wiki/Charley_Patton"></label>
+      <label>Birth date <input name="birth_date" placeholder="YYYY-MM-DD"></label>
+      <label>Death date <input name="death_date" placeholder="YYYY-MM-DD"></label>
+      <label>Birth place <input name="birth_place"></label>
+      <label>Death place <input name="death_place"></label>
+      <label>Death cause <input name="death_cause"></label>
+      <label>Hometown / region <input name="hometown_region"></label>
+      <label>1st recording year <input name="first_recording_year" type="number"></label>
+      <label>1st recording title <input name="first_recording_title"></label>
+      <label style="grid-column:1/-1">Aliases (comma-sep) <input name="aliases"></label>
+      <label style="grid-column:1/-1">Styles (comma-sep) <input name="styles"></label>
+      <label style="grid-column:1/-1">Instruments (comma-sep) <input name="instruments"></label>
+      <label style="grid-column:1/-1">Associated labels (comma-sep) <input name="associated_labels"></label>
+      <label style="grid-column:1/-1">Songs authored (comma-sep) <input name="songs_authored"></label>
+      <label style="grid-column:1/-1">Collaborators (comma-sep) <input name="collaborators"></label>
+      <label style="grid-column:1/-1">YouTube URLs (comma-sep) <input name="youtube_urls"></label>
+      <label style="grid-column:1/-1">Discogs masters/releases (JSON array — populated by "Seed from Discogs", edit cautiously) <textarea name="discogs_releases" rows="4" style="width:100%;font-family:monospace;font-size:0.78rem"></textarea></label>
+      <label style="grid-column:1/-1">Photo URL <input name="photo_url"></label>
+      <label style="grid-column:1/-1">Notes <textarea name="notes" rows="4" style="width:100%"></textarea></label>
+      <div style="grid-column:1/-1;display:flex;gap:0.5rem;justify-content:flex-end;margin-top:0.5rem;flex-wrap:wrap">
+        <button type="button" class="archive-btn" id="blues-editor-delete" onclick="bluesDbDeleteFromEditor()" style="margin-right:auto;display:none;color:#e88">Delete</button>
+        <button type="button" class="archive-btn" id="blues-editor-mb" onclick="bluesDbEnrichEditorRow()" title="Pull first/last recording year + title from MusicBrainz for THIS artist (uses the MBID in the field above)" style="display:none">Enrich from MB</button>
+        <button type="button" class="archive-btn" id="blues-editor-wiki" onclick="bluesDbEnrichEditorWiki()" title="Pull the Wikipedia lead paragraph into the notes field (uses wikipedia_suffix). Force-overwrites existing notes." style="display:none">Wiki notes</button>
+        <button type="button" class="archive-btn" id="blues-editor-discogs" onclick="bluesDbOpenDiscogsPicker()" title="Search Discogs by name and let YOU pick the right match (vs. silently taking the top result)" style="display:none">Pick Discogs match</button>
+        <button type="button" class="archive-btn" id="blues-editor-yt" onclick="bluesDbEnrichEditorYt()" title="Search YouTube for the artist + first known recording, append top 3 video URLs (~100 quota units)" style="display:none">Find YouTube</button>
+        <button type="button" class="archive-btn" onclick="bluesDbCloseEditor()">Cancel</button>
+        <button type="submit" class="archive-btn archive-btn-suggest">Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Discogs candidate picker — opened from the editor's "Pick Discogs match" button. -->
+<div id="blues-discogs-picker" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.78);z-index:350;align-items:flex-start;justify-content:center;padding:2rem 1rem;overflow:auto" onclick="if(event.target===this)bluesDbCloseDiscogsPicker()">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;width:min(640px,90vw);max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
+    <div style="display:flex;align-items:center;gap:0.6rem;padding:0.6rem 0.8rem;border-bottom:1px solid var(--border)">
+      <span style="font-weight:600;font-size:0.9rem;color:#ddd">Pick a Discogs match</span>
+      <span id="blues-discogs-picker-status" style="font-size:0.72rem;color:var(--muted);flex:1"></span>
+      <button type="button" class="archive-btn" onclick="bluesDbCloseDiscogsPicker()">Close</button>
+    </div>
+    <div style="display:flex;gap:0.5rem;padding:0.5rem 0.8rem;border-bottom:1px solid var(--border)">
+      <input id="blues-discogs-picker-q" type="search" placeholder="Search Discogs for…" style="flex:1;padding:0.4rem 0.6rem;font-size:0.85rem" onkeydown="if(event.key==='Enter')bluesDbRunDiscogsPicker()" />
+      <button type="button" class="archive-btn" onclick="bluesDbRunDiscogsPicker()">Search</button>
+    </div>
+    <div id="blues-discogs-picker-results" style="overflow-y:auto;padding:0.5rem 0.8rem 0.8rem;flex:1;font-size:0.82rem;color:var(--muted)"></div>
+  </div>
+</div>
+
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter({ spa: true }));</script>
 
@@ -1475,13 +1546,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260528.0903"></script>
-<script defer src="/search.js?v=20260528.0903"></script>
-<script defer src="/collection.js?v=20260528.0903"></script>
+<script defer src="/utils.js?v=20260528.0930"></script>
+<script defer src="/search.js?v=20260528.0930"></script>
+<script defer src="/collection.js?v=20260528.0930"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260528.0903"></script>
-<script defer src="/app.js?v=20260528.0903"></script>
+<script defer src="/modal.js?v=20260528.0930"></script>
+<script defer src="/app.js?v=20260528.0930"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1492,13 +1563,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260528.0903"></script>
-<script defer src="/queue.js?v=20260528.0903"></script>
+<script defer src="/loc.js?v=20260528.0930"></script>
+<script defer src="/queue.js?v=20260528.0930"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260528.0903";
+  window._SD_LAZY_VERSION = "20260528.0930";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1528,8 +1599,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260528.0903"></script>
-<script defer src="/offline.js?v=20260528.0903"></script>
+<script defer src="/idb.js?v=20260528.0930"></script>
+<script defer src="/offline.js?v=20260528.0930"></script>
 
 </body>
 </html>
