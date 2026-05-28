@@ -9132,28 +9132,30 @@ body.is-offline button.offline-disabled {
 .ba-lyric-badge          { color: #cda35a; }
 .ba-lyric-badge-pinned   { color: #ffd166; }
 
-/* Admin 🎸 corner indicator on result/collection/home-strip cards.
-   The right-edge badge column (collection / wantlist / favorite /
-   inventory / lists) sits at right: 0; the dismiss × on home-strip
-   cards sits at top-left. The only conflict-free spot is BOTTOM-LEFT
-   of the cover image area — well clear of both.
-   For wrapped cards (.recent-wrap) the badge is a sibling of .card
-   rather than nested, since .card is an <a> and HTML5 auto-closes
-   the outer anchor when it hits a nested one. */
+/* Admin 🎸 corner indicator. Lives INSIDE .card-thumb-wrap so it
+   sits on the cover image, never over the text body below.
+   Positioned top-right BUT offset left of the right-edge badge column
+   (.card-thumb-badges at right:4 width:14, so we clear at right:26).
+   The .card-instance-badge already owns bottom-left, the right-edge
+   column owns top-right, and the .recent-dismiss × owns top-left
+   (on .recent-wrap, visually overlaps cover) — top-right offset is
+   the only collision-free spot. */
 .card { position: relative; }
 .card-ba-archive-badge {
   position: absolute;
-  bottom: 6px;
-  left: 6px;
+  top: 4px;
+  right: 26px;
   z-index: 5;
-  font-size: 1rem;
+  font-size: 0.9rem;
   line-height: 1;
   padding: 2px 5px;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.6);
   border-radius: 4px;
   text-decoration: none;
   color: #ffd166;
-  opacity: 0.85;
+  opacity: 0.92;
+  cursor: pointer;
+  user-select: none;
   transition: opacity 0.12s ease, transform 0.12s ease;
 }
 .card-ba-archive-badge:hover {
