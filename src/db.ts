@@ -1030,6 +1030,24 @@ export async function initDb() {
   await getPool().query(`UPDATE blues_lyrics SET tuning = 'Open G' WHERE tuning = 'Open G (Spanish)'`);
   await getPool().query(`UPDATE blues_lyrics SET tuning = 'Open D' WHERE tuning = 'Open D (Vestapol)'`);
   await getPool().query(`UPDATE blues_lyrics SET tuning = 'Open Em (Cross Note)' WHERE tuning = 'Cross Note'`);
+
+  // Allow the same page_title to appear under different artists. The
+  // original UNIQUE(source_host, page_title) blocked manual adds of
+  // covers (e.g. Robert Johnson's "Crossroads" and Eric Clapton's
+  // "Crossroads"), even though they're different songs by different
+  // performers. Drop the old constraint and replace with a partial
+  // unique index that includes a normalized artist so the scraper's
+  // re-run upsert still de-dupes, but a different artist with the
+  // same title is allowed.
+  //
+  // The expression COALESCE(LOWER(TRIM(artist)), '') keeps NULL
+  // artists in their own bucket (so a second NULL-artist scrape of
+  // the same page still upserts cleanly).
+  await getPool().query(`ALTER TABLE blues_lyrics DROP CONSTRAINT IF EXISTS blues_lyrics_source_host_page_title_key`);
+  await getPool().query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS blues_lyrics_dedup_idx
+      ON blues_lyrics (source_host, page_title, (COALESCE(LOWER(TRIM(artist)), '')))
+  `);
 }
 
 // ── Blues lyrics: re-link orphans to existing blues_artists rows ──
@@ -6118,18 +6136,64 @@ export async function upsertLyric(record: {
   sourceHost?: string;
 }): Promise<void> {
   const host = record.sourceHost || "weeniecampbell.com";
+  // ON CONFLICT target matches the partial unique index defined in
+  // initDb (source_host, page_title, COALESCE(LOWER(TRIM(artist)), '')).
+  // Re-scraping the same page still upserts (artist matches itself),
+  // but a manual add with a different artist on the same title goes
+  // through as a fresh INSERT.
   await getPool().query(
     `INSERT INTO blues_lyrics (source_host, page_title, page_url, artist, tuning, wikitext, plaintext, scraped_at)
      VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-     ON CONFLICT (source_host, page_title)
+     ON CONFLICT (source_host, page_title, (COALESCE(LOWER(TRIM(artist)), '')))
      DO UPDATE SET page_url = EXCLUDED.page_url,
-                   artist = EXCLUDED.artist,
                    tuning = EXCLUDED.tuning,
                    wikitext = EXCLUDED.wikitext,
                    plaintext = EXCLUDED.plaintext,
                    scraped_at = NOW()`,
     [host, record.pageTitle, record.pageUrl, record.artist ?? null, record.tuning ?? null, record.wikitext ?? null, record.plaintext ?? null],
   );
+}
+
+// Manual lyric insert — used by the admin "+ Add lyric" affordance.
+// Returns the new row. page_title + artist together are unique per
+// source_host, so adding a duplicate (same title + same artist) on
+// the same source throws unique_violation (23505) which the caller
+// surfaces as 409.
+export async function createLyric(record: {
+  pageTitle: string;
+  pageUrl?: string | null;
+  artist?: string | null;
+  tuning?: string | null;
+  plaintext?: string | null;
+  wikitext?: string | null;
+  sourceHost?: string;
+  artistId?: number | null;
+  discogsReleaseId?: number | null;
+  discogsMasterId?: number | null;
+}): Promise<any> {
+  const host = record.sourceHost || "manual";
+  const title = String(record.pageTitle || "").trim();
+  if (!title) throw new Error("page_title required");
+  // Auto-resolve artist_id from name when not explicitly provided.
+  let artistId = record.artistId ?? null;
+  if (artistId == null && record.artist) {
+    const r = await getPool().query(
+      `SELECT id FROM blues_artists WHERE LOWER(name) = LOWER(TRIM($1)) LIMIT 1`,
+      [record.artist],
+    );
+    if (r.rows.length) artistId = r.rows[0].id;
+  }
+  const ins = await getPool().query(
+    `INSERT INTO blues_lyrics
+       (source_host, page_title, page_url, artist, artist_id, tuning,
+        wikitext, plaintext, discogs_release_id, discogs_master_id, scraped_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+     RETURNING *`,
+    [host, title, record.pageUrl ?? null, record.artist ?? null, artistId,
+     record.tuning ?? null, record.wikitext ?? null, record.plaintext ?? null,
+     record.discogsReleaseId ?? null, record.discogsMasterId ?? null],
+  );
+  return ins.rows[0];
 }
 
 // Set of (source_host, page_title) keys we've already scraped — so a

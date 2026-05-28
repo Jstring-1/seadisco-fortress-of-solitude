@@ -485,14 +485,21 @@ window._baOpenRelease = _baOpenRelease;
 // so existing values auto-complete and stay consistent; the user can
 // type a new value too.
 async function _baOpenLyricEditor(id) {
+  // id === null → "new lyric" mode. Empty row template, "Create"
+  // button instead of Save, no Delete affordance.
+  const isNew = id == null;
   let row;
-  try {
-    const r = await apiFetch(`/api/admin/lyrics/${id}`);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    row = await r.json();
-  } catch (e) {
-    alert(`Couldn't load lyric: ${e?.message || e}`);
-    return;
+  if (isNew) {
+    row = { id: null, page_title: "", artist: "", artist_id: null, tuning: "", page_url: "", discogs_release_id: null, discogs_master_id: null, plaintext: "", wikitext: "" };
+  } else {
+    try {
+      const r = await apiFetch(`/api/admin/lyrics/${id}`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      row = await r.json();
+    } catch (e) {
+      alert(`Couldn't load lyric: ${e?.message || e}`);
+      return;
+    }
   }
   // Pull existing tunings for the datalist
   let tunings = [];
@@ -534,8 +541,8 @@ async function _baOpenLyricEditor(id) {
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(560px,100%)">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:0.6rem;margin-bottom:0.6rem">
         <div style="min-width:0">
-          <h3 style="margin:0 0 0.25rem">Edit lyric</h3>
-          <div style="font-size:0.76rem;color:var(--muted)"><a href="${escHtml(row.page_url || "")}" target="_blank" rel="noopener" style="color:var(--accent)">View on wiki ↗</a></div>
+          <h3 style="margin:0 0 0.25rem">${isNew ? "Add lyric" : "Edit lyric"}</h3>
+          ${row.page_url ? `<div style="font-size:0.76rem;color:var(--muted)"><a href="${escHtml(row.page_url)}" target="_blank" rel="noopener" style="color:var(--accent)">View on wiki ↗</a></div>` : ""}
         </div>
         <button class="archive-btn" onclick="document.getElementById('ba-lyric-edit-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
       </div>
@@ -566,9 +573,15 @@ async function _baOpenLyricEditor(id) {
           <input id="ba-edit-master-id" type="number" min="1" value="${row.discogs_master_id ?? ""}" placeholder="(optional)" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem">
         </div>
       </div>
+      ${isNew ? `
+      <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)">Source URL (optional)</label>
+      <input id="ba-edit-page-url" type="url" placeholder="https://… (only for new manual lyrics; scraped rows already have one)" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem">
+      <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)" title="The lyric body. Used when no wiki source is available — the viewer popup renders this verbatim.">Lyrics (plaintext)</label>
+      <textarea id="ba-edit-plaintext" rows="10" placeholder="Paste or type the song lyrics here…" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem;font-family:inherit"></textarea>
+      ` : ""}
       <div style="display:flex;gap:0.5rem;justify-content:flex-end;margin-top:1rem">
         <button class="archive-btn" onclick="document.getElementById('ba-lyric-edit-overlay')?.remove()">Cancel</button>
-        <button class="archive-btn archive-btn-suggest" onclick="_baSaveLyricEdit(${id})">Save</button>
+        <button class="archive-btn archive-btn-suggest" onclick="${isNew ? "_baCreateLyric()" : `_baSaveLyricEdit(${id})`}">${isNew ? "Create" : "Save"}</button>
       </div>
       <div id="ba-edit-status" style="font-size:0.76rem;color:var(--muted);margin-top:0.5rem;min-height:1em"></div>
     </div>
@@ -639,6 +652,51 @@ async function _baEditCreateArtist() {
   }
 }
 window._baEditCreateArtist = _baEditCreateArtist;
+
+// Create a brand-new lyric row from the editor's "new" mode.
+// Source host defaults to "manual" server-side so the new row
+// doesn't collide with the scraped corpus. Title + artist together
+// are unique per source_host — a 409 from the server means the
+// same title + same artist already exists.
+async function _baCreateLyric() {
+  const statusEl   = document.getElementById("ba-edit-status");
+  const page_title = (document.getElementById("ba-edit-title")?.value ?? "").trim();
+  if (!page_title) { if (statusEl) statusEl.textContent = "Title is required."; return; }
+  const artist     = (document.getElementById("ba-edit-artist")?.value ?? "").trim();
+  const tuning     = (document.getElementById("ba-edit-tuning")?.value ?? "").trim();
+  const page_url   = (document.getElementById("ba-edit-page-url")?.value ?? "").trim();
+  const plaintext  = (document.getElementById("ba-edit-plaintext")?.value ?? "");
+  const releaseIdRaw = document.getElementById("ba-edit-release-id")?.value ?? "";
+  const masterIdRaw  = document.getElementById("ba-edit-master-id")?.value ?? "";
+  const discogs_release_id = releaseIdRaw === "" ? null : Number(releaseIdRaw);
+  const discogs_master_id  = masterIdRaw  === "" ? null : Number(masterIdRaw);
+  if (statusEl) statusEl.textContent = "Creating…";
+  try {
+    const r = await apiFetch("/api/admin/lyrics", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        page_title, artist, tuning, page_url, plaintext,
+        discogs_release_id, discogs_master_id,
+      }),
+    });
+    if (!r.ok) {
+      if (r.status === 409) throw new Error(`A lyric titled "${page_title}" by "${artist || "(no artist)"}" already exists on this source.`);
+      const txt = await r.text().catch(() => "");
+      throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
+    }
+    const created = await r.json();
+    document.getElementById("ba-lyric-edit-overlay")?.remove();
+    _baLoadStats().catch(() => {});
+    if (_baSubtab === "lyrics") _baLoadLyrics();
+    // Open the newly-created lyric in the viewer so the user sees
+    // confirmation + can quick-fix anything they got wrong.
+    setTimeout(() => _baOpenLyric(created.id), 80);
+  } catch (e) {
+    if (statusEl) statusEl.textContent = `Create failed: ${e?.message || e}`;
+  }
+}
+window._baCreateLyric = _baCreateLyric;
 
 async function _baSaveLyricEdit(id) {
   const statusEl   = document.getElementById("ba-edit-status");
