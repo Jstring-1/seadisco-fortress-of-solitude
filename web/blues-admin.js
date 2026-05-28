@@ -848,6 +848,16 @@ async function _bluesEnrichGeneric({ id, endpoint, btnId, runningLabel, confirmM
       if (_bluesDbState.editingId === id) bluesDbOpenEditor(id);
       bluesDbLoadStats();
       bluesDbRenderList();
+      // Discovery-side refresh: when the editor was launched from the
+      // Blues Archive artist profile popup, the profile itself
+      // (#ba-artist-overlay) is what the user sees behind the editor.
+      // It was rendered with pre-enrich data, so without this it
+      // shows STALE bio / photo / releases until the user re-opens
+      // the artist. Re-open it now so closing the editor reveals the
+      // fresh data the enrich just wrote.
+      if (typeof window._baOpenArtist === "function" && window._baCurrentArtistId === id) {
+        try { window._baOpenArtist(id); } catch {}
+      }
     } else {
       bluesDbLoadStats();
       bluesDbLoadList();
@@ -1050,22 +1060,66 @@ function bluesDbEnrichYt(id) {
 function bluesDbEnrichEditorWiki()    { const id = _bluesDbState.editingId; if (id) bluesDbEnrichWiki(id); }
 function bluesDbEnrichEditorYt()      { const id = _bluesDbState.editingId; if (id) bluesDbEnrichYt(id); }
 
-// Per-row force refresh from Discogs. Use after correcting a stale
-// discogs_id — passes force=1 so the server overwrites the existing
-// photo_url + notes and REPLACES the discogs_releases array rather
-// than merging in the prior (wrong-artist) entries. Default
-// per-row mode is conservative (only fills blanks).
+// Per-row preview from Discogs. PULLS the data, populates the open
+// editor form, but does NOT write to the DB. The curator reviews
+// (and tweaks) the fields, then hits Save to commit. force=1 so
+// the preview includes overwrite-eligible fields (photo, notes,
+// releases-replaced); non-force would only fill blanks.
 async function bluesDbRefreshFromDiscogs() {
   const id = _bluesDbState.editingId;
   if (!id) return;
-  if (!confirm("Re-pull this artist's full record from Discogs.\n\n- Overwrites bio / notes\n- Replaces the stored release list\n- Rewrites the photo to match the new id (Discogs's image when present, cleared when Discogs has none)\n\nUse this after fixing a stale discogs_id.")) return;
-  return _bluesEnrichGeneric({
-    id,
-    endpoint: "/api/admin/blues/enrich-discogs-full",
-    btnId: "blues-editor-discogs-refresh",
-    runningLabel: "Refreshing…",
-    urlExtras: "?force=1",
-  });
+  const form = document.getElementById("blues-editor-form");
+  if (!form) return;
+  const btn = document.getElementById("blues-editor-discogs-refresh");
+  const orig = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = "Loading Discogs…"; }
+  try {
+    const r = await apiFetch(`/api/admin/blues/${id}/discogs-preview?force=1`, { method: "POST" });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert("Refresh failed: " + (err.error ?? r.status));
+      return;
+    }
+    const { patch = {} } = await r.json();
+    // Apply the patch to the open form. Each field gets the value
+    // Discogs returned; the curator can edit it inline before saving.
+    // Arrays render as JSON in textareas (matches the editor's load
+    // path) or comma-separated for simple-array inputs.
+    let changed = 0;
+    for (const [k, v] of Object.entries(patch)) {
+      const el = form.elements.namedItem(k);
+      if (!el) continue;
+      if (Array.isArray(v)) {
+        const isComplex = v.length > 0 && typeof v[0] === "object" && v[0] !== null;
+        el.value = isComplex ? JSON.stringify(v, null, 2) : v.join(", ");
+      } else if (v == null) {
+        el.value = "";
+      } else if (typeof v === "object") {
+        el.value = JSON.stringify(v, null, 2);
+      } else {
+        el.value = String(v);
+      }
+      // Tint changed inputs briefly so the curator sees what moved.
+      try {
+        el.style.outline = "1px solid var(--accent)";
+        setTimeout(() => { try { el.style.outline = ""; } catch {} }, 1800);
+      } catch {}
+      changed++;
+    }
+    if (!changed) {
+      alert("Discogs returned no new info for this artist — nothing to preview.");
+      return;
+    }
+    // Refresh the editor's external-links bar in case discogs_id changed.
+    if (typeof _bluesDbUpdateEditorLinks === "function") _bluesDbUpdateEditorLinks();
+    if (typeof showToast === "function") {
+      showToast(`Discogs preview loaded — review and hit Save to commit (${changed} field${changed === 1 ? "" : "s"})`, "ok");
+    }
+  } catch (e) {
+    alert("Refresh failed: " + (e?.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = orig || "Refresh from Discogs"; }
+  }
 }
 window.bluesDbRefreshFromDiscogs = bluesDbRefreshFromDiscogs;
 
