@@ -92,6 +92,13 @@ async function _baLoadList() {
   const q = (document.getElementById("blues-archive-search")?.value || "").trim();
   const params = new URLSearchParams();
   if (q) params.set("q", q);
+  // Server-side sort — same fix as lyrics. Client-side sort over only
+  // the visible 100 rows used to mislead users into thinking the
+  // entire DB had been sorted.
+  if (_baListSort?.key) {
+    params.set("sort",  _baListSort.key);
+    params.set("order", _baListSort.dir);
+  }
   params.set("limit", String(_BA_LIMIT));
   params.set("offset", String(_baPage * _BA_LIMIT));
   rowsEl.textContent = "Loading…";
@@ -111,14 +118,16 @@ async function _baLoadList() {
 
 function _baSortList(key) {
   _baToggleSort(_baListSort, key);
-  _baRenderListTable();
+  _baPage = 0;           // back to page 1 when the order changes
+  _baLoadList();
 }
 window._baSortList = _baSortList;
 
 function _baRenderListTable() {
   const rowsEl = document.getElementById("blues-archive-rows");
   if (!rowsEl) return;
-  const rows = _baSortApply(_baListRowsCache, _baListSort, _BA_LIST_TYPES);
+  // Server-side sort — render as-is.
+  const rows = _baListRowsCache;
   if (!rows.length) {
     rowsEl.innerHTML = `<p style="color:var(--muted);padding:0.5rem 0">No matches.</p>`;
     return;
@@ -467,6 +476,20 @@ async function _baOpenLyricEditor(id) {
     .filter(t => t.tuning && t.tuning !== "(unspecified)")
     .map(t => `<option value="${escHtml(t.tuning)}">`)
     .join("");
+  // Pull existing artists for an Artist datalist so the user can pick
+  // an existing row instead of typing a free-text orphan. Capped at
+  // 500 — datalist autocompletes locally so the cap is just a guard
+  // against huge transfers.
+  let artistOpts = "";
+  try {
+    const r = await apiFetch("/api/blues-archive/artists?limit=500");
+    if (r.ok) {
+      const { rows = [] } = await r.json();
+      artistOpts = rows
+        .map(a => `<option value="${escHtml(a.name)}" data-id="${a.id}">`)
+        .join("");
+    }
+  } catch {}
   let overlay = document.getElementById("ba-lyric-edit-overlay");
   if (!overlay) {
     overlay = document.createElement("div");
@@ -489,10 +512,17 @@ async function _baOpenLyricEditor(id) {
         <button class="archive-btn" onclick="document.getElementById('ba-lyric-edit-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
       </div>
       <datalist id="ba-tuning-options">${opts}</datalist>
+      <datalist id="ba-artist-options">${artistOpts}</datalist>
       <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)">Title</label>
       <input id="ba-edit-title" type="text" value="${escHtml(row.page_title || "")}" placeholder="(required)" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem">
-      <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)">Artist</label>
-      <input id="ba-edit-artist" type="text" value="${escHtml(row.artist || "")}" placeholder="(leave blank to clear)" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem">
+      <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)" title="Type to search existing artists (autocomplete from the Blues DB). Pick one to link via artist_id, or type a fresh name and hit '+ Create as new' to mint a row.">Artist</label>
+      <div style="display:flex;gap:0.4rem;align-items:stretch">
+        <input id="ba-edit-artist" type="text" value="${escHtml(row.artist || "")}" list="ba-artist-options" placeholder="(leave blank to clear)" style="flex:1;padding:0.45rem 0.7rem;font-size:0.88rem" autocomplete="off" oninput="_baEditArtistInput()">
+        <button type="button" id="ba-edit-create-artist" class="archive-btn" onclick="_baEditCreateArtist()" title="Create a new blues_artists row from the typed name and link this lyric to it. Use when no existing artist matches.">+ Create as new</button>
+      </div>
+      <div id="ba-edit-artist-status" style="font-size:0.74rem;color:var(--muted);margin-top:0.25rem;min-height:1em">${
+        row.artist_id ? "✓ Linked to existing artist row" : (row.artist ? "Orphan — not linked. Pick an existing match or click '+ Create as new'." : "")
+      }</div>
       <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)">Tuning</label>
       <input id="ba-edit-tuning" type="text" value="${escHtml(row.tuning || "")}" list="ba-tuning-options" placeholder="(leave blank to clear)" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem">
       <!-- Optional Discogs release/master pin. When set, the album-
@@ -517,6 +547,70 @@ async function _baOpenLyricEditor(id) {
   `;
 }
 window._baOpenLyricEditor = _baOpenLyricEditor;
+
+// Live status under the Artist input: tells the user whether the
+// currently-typed name matches an existing blues_artists row (✓), is
+// blank (cleared), or doesn't match (will save as orphan).
+function _baEditArtistInput() {
+  const input = document.getElementById("ba-edit-artist");
+  const dl    = document.getElementById("ba-artist-options");
+  const stat  = document.getElementById("ba-edit-artist-status");
+  if (!input || !stat) return;
+  const v = input.value.trim();
+  if (!v) { stat.textContent = "Will clear the artist on save."; stat.style.color = "var(--muted)"; return; }
+  const lc = v.toLowerCase();
+  const matched = dl
+    ? [...dl.querySelectorAll("option")].some(o => o.value.toLowerCase() === lc)
+    : false;
+  if (matched) {
+    stat.textContent = "✓ Matches an existing artist row — will link on save.";
+    stat.style.color = "#7bc77b";
+  } else {
+    stat.textContent = "No matching artist row — will save as orphan. Click '+ Create as new' to mint one.";
+    stat.style.color = "#e8a85a";
+  }
+}
+window._baEditArtistInput = _baEditArtistInput;
+
+// "+ Create as new" — POST a new blues_artists row with the typed
+// name, then save the lyric edit so the FK links immediately. Skips
+// creation when the name already matches an existing row (just saves).
+async function _baEditCreateArtist() {
+  const input = document.getElementById("ba-edit-artist");
+  const stat  = document.getElementById("ba-edit-artist-status");
+  const name  = (input?.value || "").trim();
+  if (!name) {
+    if (stat) { stat.textContent = "Type a name first."; stat.style.color = "#e8a85a"; }
+    return;
+  }
+  if (stat) { stat.textContent = "Creating…"; stat.style.color = "var(--muted)"; }
+  try {
+    const r = await apiFetch("/api/blues-archive/artists", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
+    }
+    const j = await r.json();
+    if (stat) {
+      stat.textContent = j.created
+        ? `✓ Created new artist row #${j.id}. Click Save to link.`
+        : `✓ Existing artist row #${j.id} matched. Click Save to link.`;
+      stat.style.color = "#7bc77b";
+    }
+    // Drop the new option into the datalist so future renders show it.
+    const dl = document.getElementById("ba-artist-options");
+    if (dl && j.name) {
+      dl.insertAdjacentHTML("beforeend", `<option value="${escHtml(j.name)}" data-id="${j.id}">`);
+    }
+  } catch (e) {
+    if (stat) { stat.textContent = `Failed: ${e?.message || e}`; stat.style.color = "#e88"; }
+  }
+}
+window._baEditCreateArtist = _baEditCreateArtist;
 
 async function _baSaveLyricEdit(id) {
   const statusEl   = document.getElementById("ba-edit-status");
@@ -761,6 +855,48 @@ function _baLyricsApplyUnmatched() {
 }
 window._baLyricsApplyUnmatched = _baLyricsApplyUnmatched;
 
+// Clear all active filters on the Lyrics tab. Bound to the
+// "Clear filters" button that auto-shows/hides based on filter state.
+function _baLyricsClearFilters() {
+  const search    = document.getElementById("blues-archive-lyrics-search");
+  const tuningSel = document.getElementById("blues-archive-lyrics-tuning");
+  const unmatched = document.getElementById("blues-archive-lyrics-unmatched");
+  if (search)    search.value = "";
+  if (tuningSel) tuningSel.value = "";
+  if (unmatched) unmatched.checked = false;
+  _baLyricsTuning    = "";
+  _baLyricsUnmatched = false;
+  _baLyricsPage      = 0;
+  _baLoadLyrics();
+}
+window._baLyricsClearFilters = _baLyricsClearFilters;
+
+// Bulk-set every NULL / empty tuning to "Standard". On a blues-lyrics
+// wiki an unmentioned tuning is overwhelmingly standard, so collapsing
+// the "(unspecified)" bucket into the Standard one matches reality.
+// Confirms, then PATCHes via a single dedicated server endpoint added
+// alongside this UI.
+async function _baNormalizeEmptyTuningsToStandard() {
+  if (!confirm("Set every lyric with no extracted tuning to 'Standard'?\n\nOn a blues-lyrics wiki the unmentioned default is standard. Reversible by editing rows individually afterward.")) return;
+  try {
+    const r = await apiFetch("/api/blues-archive/lyrics/normalize-empty-tunings", { method: "POST", timeoutMs: 60000 });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
+    }
+    const j = await r.json();
+    alert(`Updated ${j.updated.toLocaleString()} lyric${j.updated === 1 ? "" : "s"} → Standard.`);
+    _baLoadStats().catch(() => {});
+    if (_baSubtab === "lyrics") _baLoadLyrics();
+    // Refresh tuning dropdown so "(unspecified)" disappears.
+    _baLyricsTuningsLoaded = false;
+    _baLoadTunings().catch(() => {});
+  } catch (e) {
+    alert(`Failed: ${e?.message || e}`);
+  }
+}
+window._baNormalizeEmptyTuningsToStandard = _baNormalizeEmptyTuningsToStandard;
+
 async function _baLoadTunings() {
   try {
     const r = await apiFetch("/api/admin/lyrics/tunings");
@@ -786,6 +922,10 @@ async function _baLoadLyrics() {
   if (q)                 params.set("q", q);
   if (_baLyricsTuning)   params.set("tuning", _baLyricsTuning);
   if (_baLyricsUnmatched) params.set("unmatched", "1");
+  // Toggle the "Clear filters" button visibility based on whether
+  // any filter is currently active.
+  const clearBtn = document.getElementById("blues-archive-lyrics-clear");
+  if (clearBtn) clearBtn.style.display = (q || _baLyricsTuning || _baLyricsUnmatched) ? "" : "none";
   // Server-side sort — see admin.html for the parallel wiring. The
   // client-side _baSortApply over the visible page was misleading
   // on the master Lyrics list because it only reordered the current
@@ -901,17 +1041,43 @@ async function _baLoadStats() {
       const click = opts.onclick ? ` onclick="${opts.onclick}"` : "";
       const cur = opts.onclick ? "cursor:pointer;" : "";
       const tone = opts.tone === "warn" ? "color:#e8a85a" : "color:var(--muted)";
-      return `<span class="ba-stat-chip"${click} title="${escHtml(opts.title || "")}" style="${cur}padding:0.25rem 0.5rem;border:1px solid var(--border);border-radius:999px;${tone}">${escHtml(label)}: <strong style="color:var(--text)">${(n || 0).toLocaleString()}</strong></span>`;
+      // title= tooltip on every chip so the hover spells out what
+      // the bucket means + (for clickable ones) what the click does.
+      return `<span class="ba-stat-chip"${click} title="${escHtml(opts.title || label)}" style="${cur}padding:0.25rem 0.5rem;border:1px solid var(--border);border-radius:999px;${tone}">${escHtml(label)}: <strong style="color:var(--text)">${(n || 0).toLocaleString()}</strong></span>`;
     };
     el.innerHTML = [
-      chip("Artists", s.artists_total),
-      chip("With lyrics + releases", s.artists_with_both, { title: "Artists with at least one lyric AND at least one Discogs release stored." }),
-      chip("With lyrics only", s.artists_with_lyrics - s.artists_with_both, { title: "Artists with lyrics but no Discogs releases stored." }),
-      chip("With releases only", s.artists_with_releases - s.artists_with_both, { title: "Artists with releases but no matched lyrics yet." }),
-      chip("Empty", s.artists_empty, { tone: "warn", title: "Artists with neither lyrics nor releases — candidates for purge or enrichment." }),
-      chip("Lyrics total", s.lyrics_total),
-      chip("Orphan lyrics", s.lyrics_orphan, { tone: "warn", onclick: "_baJumpOrphans()", title: "Lyrics whose artist string doesn't link to an artist row. Click to view." }),
-      chip("Missing tuning", s.lyrics_missing_tuning, { tone: "warn", onclick: "_baJumpMissingTuning()", title: "Lyrics with no tuning extracted. Click to view." }),
+      chip("Artists", s.artists_total, {
+        title: "Total rows in the blues_artists table.",
+      }),
+      chip("With lyrics + releases", s.artists_with_both, {
+        title: "Artists with at least one lyric (linked or name-matched) AND at least one Discogs release stored in their discogs_releases JSONB.",
+      }),
+      chip("With lyrics only", s.artists_with_lyrics - s.artists_with_both, {
+        title: "Artists with lyrics but no Discogs releases stored. Use 'Get all info from Discogs' on the Blues DB tab to enrich.",
+      }),
+      chip("With releases only", s.artists_with_releases - s.artists_with_both, {
+        title: "Artists with releases but no matched lyrics yet. May indicate a name mismatch with the lyrics table or that the artist's lyrics weren't on the source wiki.",
+      }),
+      chip("Empty", s.artists_empty, {
+        tone: "warn",
+        title: "Artists with neither lyrics nor releases — candidates for purge or enrichment.",
+      }),
+      chip("Lyrics total", s.lyrics_total, {
+        title: "Total rows in the blues_lyrics table (scraped from weeniecampbell.com).",
+      }),
+      chip("Orphan lyrics", s.lyrics_orphan, {
+        tone: "warn",
+        onclick: "_baJumpOrphans()",
+        title: "Lyrics whose artist string doesn't link to a blues_artists row (artist_id IS NULL). Click to jump to the Lyrics tab with the unmatched filter on.",
+      }),
+      chip("Missing tuning", s.lyrics_missing_tuning, {
+        tone: "warn",
+        onclick: "_baJumpMissingTuning()",
+        title: "Lyrics with no tuning extracted from the wiki page (tuning IS NULL). Click to jump to the Lyrics tab pre-filtered to '(unspecified)'.",
+      }),
+      // Bulk action — exposed as a chip-style affordance so it lives
+      // next to the count that triggers the question.
+      `<a href="#" onclick="event.preventDefault();_baNormalizeEmptyTuningsToStandard()" title="Bulk-set every lyric with no extracted tuning to 'Standard'. On a blues-lyrics wiki an unmentioned tuning is overwhelmingly standard; this collapses the (unspecified) bucket into the Standard one. Idempotent." style="padding:0.25rem 0.5rem;border:1px solid var(--accent);border-radius:999px;cursor:pointer;color:var(--accent);text-decoration:none">→ Convert missing → Standard</a>`,
     ].join("");
   } catch { el.innerHTML = ""; }
 }

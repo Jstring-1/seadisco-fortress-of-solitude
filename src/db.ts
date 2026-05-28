@@ -1032,6 +1032,47 @@ export async function initDb() {
   await getPool().query(`UPDATE blues_lyrics SET tuning = 'Open Em (Cross Note)' WHERE tuning = 'Cross Note'`);
 }
 
+// ── Blues lyrics: bulk normalize empty tuning → "Standard" ─────────
+// On a blues-lyrics wiki an unmentioned tuning is overwhelmingly
+// standard. Backend for the admin-triggered button on the archive
+// list. Returns the rowcount so the UI can report it. Idempotent
+// (NULL set shrinks to zero after first run).
+export async function normalizeEmptyTuningsToStandard(): Promise<number> {
+  const r = await getPool().query(
+    `UPDATE blues_lyrics SET tuning = 'Standard' WHERE tuning IS NULL OR tuning = ''`,
+  );
+  return r.rowCount ?? 0;
+}
+
+// ── Blues lyrics: get-or-create artist by name ─────────────────────
+// Backs the "+ Create as new" affordance on the lyric editor's Artist
+// input. Looks up by case-insensitive name first to avoid duplicates,
+// otherwise inserts a fresh row with enrichment_status flagged so it
+// can be distinguished from imported/seeded rows.
+export async function getOrCreateBluesArtistByName(rawName: string): Promise<{
+  id: number;
+  name: string;
+  created: boolean;
+}> {
+  const name = String(rawName || "").replace(/\s+/g, " ").trim();
+  if (!name) throw new Error("name required");
+  if (name.length > 200) throw new Error("name too long");
+  const existing = await getPool().query(
+    `SELECT id, name FROM blues_artists WHERE LOWER(name) = LOWER($1) LIMIT 1`,
+    [name],
+  );
+  if (existing.rows.length) {
+    return { id: existing.rows[0].id, name: existing.rows[0].name, created: false };
+  }
+  const inserted = await getPool().query(
+    `INSERT INTO blues_artists (name, enrichment_status)
+     VALUES ($1, '{"source":"manual_editor_create"}'::jsonb)
+     RETURNING id, name`,
+    [name],
+  );
+  return { id: inserted.rows[0].id, name: inserted.rows[0].name, created: true };
+}
+
 // ── Blues DB helpers (admin-only) ──────────────────────────────────────
 // Field whitelist used by upsert/update so the admin UI can't smuggle
 // arbitrary columns. Keep this list aligned with the table schema above.
@@ -6264,8 +6305,25 @@ export async function importLyricsArtistsToBluesDb(
 // case-insensitive name match (no alias support yet — keeps the SQL
 // fast; we can add aliases JSONB matching later). Releases come from
 // the existing discogs_releases JSONB column.
-export async function listBluesArchive(opts: { search?: string; limit?: number; offset?: number } = {}):
-  Promise<{ rows: Array<any>; total: number }> {
+// Whitelist of sort columns. Maps the URL-safe key to a SQL fragment
+// (some are computed expressions, not bare column refs).
+const _BLUES_ARCHIVE_SORT_COLS: Record<string, string> = {
+  name:           "a.name",
+  discogs_id:     "a.discogs_id",
+  releases_count: "COALESCE(jsonb_array_length(a.discogs_releases), 0)",
+  lyrics_count:   `(SELECT COUNT(*)::int FROM blues_lyrics l
+                     WHERE l.artist_id = a.id
+                        OR (l.artist_id IS NULL
+                            AND LOWER(TRIM(l.artist)) = LOWER(a.name)))`,
+};
+
+export async function listBluesArchive(opts: {
+  search?: string;
+  sort?: string;
+  order?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
+} = {}): Promise<{ rows: Array<any>; total: number }> {
   const params: any[] = [];
   const where: string[] = [];
   if (opts.search) {
@@ -6275,6 +6333,15 @@ export async function listBluesArchive(opts: { search?: string; limit?: number; 
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const limit = Math.max(1, Math.min(500, opts.limit ?? 100));
   const offset = Math.max(0, opts.offset ?? 0);
+  // Whitelist sort column + direction. Secondary sort by name keeps
+  // ordering stable within ties (e.g. two artists with same lyrics
+  // count). NULLS LAST on numeric/id columns so empty discogs_id
+  // rows fall to the bottom instead of crowding the top.
+  const sortCol = _BLUES_ARCHIVE_SORT_COLS[String(opts.sort ?? "")] || "a.name";
+  const order   = opts.order === "desc" ? "DESC" : "ASC";
+  const orderSql = sortCol === "a.name"
+    ? `ORDER BY a.name ${order}`
+    : `ORDER BY ${sortCol} ${order} NULLS LAST, a.name ASC`;
   const totalR = await getPool().query(
     `SELECT COUNT(*)::int AS n FROM blues_artists a ${whereSql}`,
     params,
@@ -6298,7 +6365,7 @@ export async function listBluesArchive(opts: { search?: string; limit?: number; 
                      AND LOWER(TRIM(l.artist)) = LOWER(a.name))) AS lyrics_count
        FROM blues_artists a
        ${whereSql}
-       ORDER BY a.name ASC
+       ${orderSql}
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params,
   );
