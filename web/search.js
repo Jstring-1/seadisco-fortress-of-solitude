@@ -874,10 +874,10 @@ function renderResults(items, append = false) {
   const ws = document.getElementById("random-records"); if (ws) ws.style.display = "none";
   if (typeof applyVisitedCards === "function") applyVisitedCards();
   // Admin-only: stamp 🎸 on cards whose artist/release/master is in
-  // the Blues Archive. Fire-and-forget, runs after applyVisitedCards
-  // so it doesn't block paint. Pass the search results grid
-  // explicitly (we know which one we wrote to).
-  if (window._isAdmin && typeof window._baStampCards === "function") {
+  // the Blues Archive. Fire-and-forget. _baStampCards awaits the
+  // admin flag internally so we don't gate here (pages loaded
+  // directly from a URL may not have _isAdmin set yet).
+  if (typeof window._baStampCards === "function") {
     window._baStampCards(filtered, grid).catch(() => {});
   }
   // "Hard to Find" mode — decorate cards that have no embedded YT
@@ -1301,10 +1301,12 @@ function _sdRenderRandomSlice() {
   }
   _randomShown += slice.length;
   // Admin-only: stamp 🎸 on any cards whose artist is in the Blues
-  // Archive. Pass the strip's own grid explicitly so the lookup
-  // doesn't land on #results (the search grid is in the DOM at all
-  // times and would silently absorb the auto-resolution).
-  if (window._isAdmin && typeof window._baStampCards === "function") {
+  // Archive. Pass the strip's own grid explicitly. Don't gate on
+  // _isAdmin here — the home strip renders on page-load before the
+  // /api/me probe lands, so the flag is undefined at this point.
+  // _baStampCards awaits _ensureAdminFlag internally and bails if
+  // the user turns out to be non-admin.
+  if (typeof window._baStampCards === "function") {
     window._baStampCards(slice, grid).catch(() => {});
   }
 }
