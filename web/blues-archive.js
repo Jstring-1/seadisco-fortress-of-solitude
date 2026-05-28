@@ -1354,7 +1354,7 @@ function _baRenderReleasesTable() {
   rowsEl.innerHTML = `
     <table class="api-log-table" style="font-size:0.84rem;width:100%">
       <thead><tr>
-        ${_baSortTh("Year",   "year",   S, "_baSortReleasesList", "width:60px;text-align:right")}
+        ${_baSortTh("Year",   "year",   S, "_baSortReleasesList", "width:60px;text-align:right;padding-right:0.9rem")}
         ${_baSortTh("Title",  "title",  S, "_baSortReleasesList")}
         ${_baSortTh("Artist", "artist", S, "_baSortReleasesList")}
         ${_baSortTh("Type",   "type",   S, "_baSortReleasesList", "width:70px")}
@@ -1390,11 +1390,11 @@ function _baReleaseRowHtml(row) {
   const yr = Number.isFinite(Number(row.release_year)) ? Number(row.release_year) : null;
   const yrHtml = yr ? `<span style="font-variant-numeric:tabular-nums">${yr}</span>` : `<span style="color:var(--muted)">—</span>`;
   return `<tr data-release-id="${id || ""}">
-    <td style="text-align:right;font-size:0.82rem">${yrHtml}</td>
-    <td>${titleHtml}</td>
-    <td style="color:var(--text)">${artistHtml}</td>
-    <td style="font-size:0.78rem;color:var(--muted)">${escHtml(row.release_type || "")}</td>
-    <td style="font-size:0.78rem;color:var(--muted)">${escHtml(row.role || "")}</td>
+    <td style="text-align:right;font-size:0.82rem;padding-right:0.9rem;white-space:nowrap">${yrHtml}</td>
+    <td style="padding-left:0.4rem">${titleHtml}</td>
+    <td style="color:var(--text);padding-left:0.6rem">${artistHtml}</td>
+    <td style="font-size:0.78rem;color:var(--muted);padding-left:0.6rem">${escHtml(row.release_type || "")}</td>
+    <td style="font-size:0.78rem;color:var(--muted);padding-left:0.6rem">${escHtml(row.role || "")}</td>
     <td></td>
   </tr>`;
 }
