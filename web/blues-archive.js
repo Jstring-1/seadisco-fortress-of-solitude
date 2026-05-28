@@ -1317,28 +1317,35 @@ function _baOpenFullEditor(id) {
 window._baOpenFullEditor = _baOpenFullEditor;
 
 function _baJumpOrphans() {
-  _baSwitchSubtab("lyrics");
+  // Set the filter state + checkbox BEFORE switching the subtab so
+  // the switch's auto-load already runs with unmatched=1. Otherwise
+  // two requests race: switchSubtab's no-filter load + the follow-up
+  // _baLyricsApplyUnmatched load. The no-filter response sometimes
+  // wins the race and overwrites the filtered rows with the full
+  // 4k+ list.
+  _baLyricsUnmatched = true;
+  _baLyricsPage      = 0;
   const cb = document.getElementById("blues-archive-lyrics-unmatched");
-  if (cb && !cb.checked) { cb.checked = true; _baLyricsApplyUnmatched(); }
+  if (cb) cb.checked = true;
+  _baSwitchSubtab("lyrics");
 }
 window._baJumpOrphans = _baJumpOrphans;
 
 function _baJumpMissingTuning() {
-  _baSwitchSubtab("lyrics");
-  setTimeout(() => {
+  // Same race fix as orphans — set the tuning filter BEFORE switching
+  // so the switch's load already includes the filter param.
+  _baLyricsTuning = "(unspecified)";
+  _baLyricsPage   = 0;
+  // Update the dropdown UI so it reflects the active filter once the
+  // tab is visible. If the dropdown hasn't loaded its options yet,
+  // queue the value-set for after the lazy fetch.
+  const applySelection = () => {
     const sel = document.getElementById("blues-archive-lyrics-tuning");
-    if (sel) {
-      // Make sure the dropdown is populated, then pick the sentinel.
-      if (![...sel.options].some(o => o.value === "(unspecified)")) _baLoadTunings().then(() => {
-        sel.value = "(unspecified)";
-        _baLyricsApplyTuning();
-      });
-      else {
-        sel.value = "(unspecified)";
-        _baLyricsApplyTuning();
-      }
-    }
-  }, 50);
+    if (sel) sel.value = "(unspecified)";
+  };
+  if (_baLyricsTuningsLoaded) applySelection();
+  else _baLoadTunings().then(applySelection);
+  _baSwitchSubtab("lyrics");
 }
 window._baJumpMissingTuning = _baJumpMissingTuning;
 
