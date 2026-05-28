@@ -54,7 +54,10 @@ function _baSortTh(label, key, state, fn, extraStyle) {
 }
 
 function initBluesArchiveView() {
-  // First entry — paint the list view, hide any leftover detail panel.
+  // First entry — paint the list view. Artist detail is now a popup
+  // overlay (#ba-artist-overlay) created on demand, so we no longer
+  // toggle the legacy inline #blues-archive-detail panel; we just make
+  // sure it's hidden in case anything left it visible.
   const detail = document.getElementById("blues-archive-detail");
   if (detail) detail.style.display = "none";
   const list = document.querySelector("#blues-archive-view .blues-archive-list");
@@ -171,21 +174,34 @@ function _baGoToPage(p) {
 }
 window._baGoToPage = _baGoToPage;
 
+// Open an artist as an overlay popup. Was previously a page swap that
+// hid .blues-archive-list and rendered into #blues-archive-detail; the
+// popup pattern reads better (the list stays put, close = ×) and lines
+// up with how lyric viewing already works. #blues-archive-detail is no
+// longer touched — left in the DOM for backward compat only.
 async function _baOpenArtist(id) {
   _baCurrentArtistId = id;
-  const detail = document.getElementById("blues-archive-detail");
-  const list = document.querySelector("#blues-archive-view .blues-archive-list");
-  if (!detail || !list) return;
-  list.style.display = "none";
-  detail.style.display = "block";
-  detail.innerHTML = `<div style="padding:1rem;color:var(--muted)">Loading…</div>`;
+  // Reuse overlay if already there (e.g. opened twice in a row).
+  let overlay = document.getElementById("ba-artist-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "ba-artist-overlay";
+    Object.assign(overlay.style, {
+      position: "fixed", inset: "0", background: "rgba(0,0,0,0.78)",
+      zIndex: "300", display: "flex", alignItems: "flex-start",
+      justifyContent: "center", padding: "2rem 1rem", overflow: "auto",
+    });
+    overlay.onclick = (e) => { if (e.target === overlay) _baBackToList(); };
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(980px,100%);color:var(--muted)">Loading…</div>`;
   try {
     const r = await apiFetch(`/api/blues-archive/artists/${id}`);
-    if (!r.ok) { detail.innerHTML = `<p style="color:#e88;padding:1rem">Failed: HTTP ${r.status}</p>`; return; }
+    if (!r.ok) { overlay.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(980px,100%)"><p style="color:#e88;margin:0">Failed: HTTP ${r.status}</p></div>`; return; }
     const a = await r.json();
     _baRenderArtistDetail(a);
   } catch (e) {
-    detail.innerHTML = `<p style="color:#e88;padding:1rem">Failed: ${escHtml(String(e?.message || e))}</p>`;
+    overlay.innerHTML = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(980px,100%)"><p style="color:#e88;margin:0">Failed: ${escHtml(String(e?.message || e))}</p></div>`;
   }
 }
 window._baOpenArtist = _baOpenArtist;
@@ -204,8 +220,32 @@ window._baSortReleases = _baSortReleases;
 
 function _baRenderArtistDetail(a) {
   _baDetailArtist = a;
-  const detail = document.getElementById("blues-archive-detail");
+  // Render into the overlay's inner box. Falls back to the legacy
+  // #blues-archive-detail panel only if the overlay isn't around (e.g.
+  // someone called _baRenderArtistDetail directly outside the popup
+  // flow). New callers should go through _baOpenArtist.
+  const overlay = document.getElementById("ba-artist-overlay");
+  const detail = overlay
+    ? (overlay.firstElementChild || (() => {
+        const inner = document.createElement("div");
+        Object.assign(inner.style, {
+          background: "var(--surface)", border: "1px solid var(--border)",
+          borderRadius: "8px", padding: "1.2rem 1.4rem", width: "min(980px,100%)",
+        });
+        overlay.appendChild(inner);
+        return inner;
+      })())
+    : document.getElementById("blues-archive-detail");
   if (!detail) return;
+  // Ensure the overlay's container has the popup chrome styles
+  // (re-rendering swaps innerHTML on the loading shell that already
+  // has them, but a defensive re-apply guarantees it).
+  if (overlay && detail === overlay.firstElementChild) {
+    Object.assign(detail.style, {
+      background: "var(--surface)", border: "1px solid var(--border)",
+      borderRadius: "8px", padding: "1.2rem 1.4rem", width: "min(980px,100%)",
+    });
+  }
   const dates = [a.birth_date, a.death_date].filter(Boolean).join(" – ");
   // Schema field is `notes` (no `profile` column on blues_artists).
   const bio = a.notes ? `<p style="font-size:0.86rem;line-height:1.5;color:var(--text);white-space:pre-wrap;margin:0.6rem 0">${escHtml(a.notes).slice(0, 4000)}</p>` : "";
@@ -274,7 +314,7 @@ function _baRenderArtistDetail(a) {
     : `<p style="color:var(--muted);font-style:italic;padding:0.4rem 0">No releases stored. Use the existing "Get all info from Discogs" button on the Blues DB tab to populate them.</p>`;
   detail.innerHTML = `
     <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:1rem;flex-wrap:wrap">
-      <button class="archive-btn" onclick="_baBackToList()">‹ Back to list</button>
+      <button class="archive-btn" onclick="_baBackToList()" title="Close">×</button>
       <h2 style="margin:0;font-size:1.1rem">${(typeof entityLookupLinkHtml === "function" && a.name)
         ? entityLookupLinkHtml("artist", a.name, { entityId: a.discogs_id, title: `Lookup options for "${a.name}"` })
         : escHtml(a.name || "")}</h2>
@@ -297,7 +337,13 @@ function _baRenderArtistDetail(a) {
   `;
 }
 
+// Dismiss the artist popup. The function name predates the popup
+// rewrite (it used to swap back to the list page); kept so existing
+// onclick attributes don't need rewriting.
 function _baBackToList() {
+  document.getElementById("ba-artist-overlay")?.remove();
+  // Legacy: if anything still uses the inline panel, hide it too so
+  // we don't end up with both visible after a hot reload.
   const detail = document.getElementById("blues-archive-detail");
   const list = document.querySelector("#blues-archive-view .blues-archive-list");
   if (detail) detail.style.display = "none";
@@ -331,9 +377,12 @@ async function _baOpenLyric(id) {
         <div style="display:flex;justify-content:space-between;align-items:start;gap:0.6rem;margin-bottom:0.6rem">
           <div style="min-width:0">
             <h3 style="margin:0 0 0.25rem">${escHtml(row.page_title || "")}</h3>
-            <div style="font-size:0.78rem;color:var(--muted)">${row.tuning ? `Tuning: ${escHtml(row.tuning)} · ` : ""}<a href="${escHtml(row.page_url || "")}" target="_blank" rel="noopener" style="color:var(--accent)">View on wiki ↗</a></div>
+            ${row.tuning ? `<div style="font-size:0.78rem;color:var(--muted)">Tuning: ${escHtml(row.tuning)}</div>` : ""}
           </div>
-          <button class="archive-btn" onclick="document.getElementById('ba-lyric-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
+          <div style="display:flex;gap:0.4rem;align-items:start">
+            <button class="archive-btn" onclick="_baOpenLyricEditor(${row.id})" title="Edit title / artist / tuning on this lyric">Edit</button>
+            <button class="archive-btn" onclick="document.getElementById('ba-lyric-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
+          </div>
         </div>
         <pre style="white-space:pre-wrap;font-family:inherit;font-size:0.88rem;line-height:1.5;color:var(--text);max-height:60vh;overflow:auto;background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:4px;padding:0.8rem 1rem;margin:0">${escHtml(row.plaintext || "(no plaintext)")}</pre>
       </div>
@@ -397,12 +446,14 @@ async function _baOpenLyricEditor(id) {
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(560px,100%)">
       <div style="display:flex;justify-content:space-between;align-items:start;gap:0.6rem;margin-bottom:0.6rem">
         <div style="min-width:0">
-          <h3 style="margin:0 0 0.25rem">${escHtml(row.page_title || "")}</h3>
+          <h3 style="margin:0 0 0.25rem">Edit lyric</h3>
           <div style="font-size:0.76rem;color:var(--muted)"><a href="${escHtml(row.page_url || "")}" target="_blank" rel="noopener" style="color:var(--accent)">View on wiki ↗</a></div>
         </div>
         <button class="archive-btn" onclick="document.getElementById('ba-lyric-edit-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
       </div>
       <datalist id="ba-tuning-options">${opts}</datalist>
+      <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)">Title</label>
+      <input id="ba-edit-title" type="text" value="${escHtml(row.page_title || "")}" placeholder="(required)" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem">
       <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)">Artist</label>
       <input id="ba-edit-artist" type="text" value="${escHtml(row.artist || "")}" placeholder="(leave blank to clear)" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem">
       <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)">Tuning</label>
@@ -418,20 +469,38 @@ async function _baOpenLyricEditor(id) {
 window._baOpenLyricEditor = _baOpenLyricEditor;
 
 async function _baSaveLyricEdit(id) {
-  const statusEl = document.getElementById("ba-edit-status");
-  const artist = document.getElementById("ba-edit-artist")?.value ?? "";
-  const tuning = document.getElementById("ba-edit-tuning")?.value ?? "";
+  const statusEl   = document.getElementById("ba-edit-status");
+  const artist     = document.getElementById("ba-edit-artist")?.value ?? "";
+  const tuning     = document.getElementById("ba-edit-tuning")?.value ?? "";
+  const page_title = (document.getElementById("ba-edit-title")?.value ?? "").trim();
+  if (!page_title) { if (statusEl) statusEl.textContent = "Title is required."; return; }
   if (statusEl) statusEl.textContent = "Saving…";
   try {
     const r = await apiFetch(`/api/admin/lyrics/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ artist, tuning }),
+      body: JSON.stringify({ artist, tuning, page_title }),
     });
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    if (!r.ok) {
+      // 409 = title already taken on this source_host. Surface the
+      // server's reason so the user knows what to do; other failures
+      // bubble up as a generic HTTP message.
+      if (r.status === 409) throw new Error("Another lyric already has that title on this source.");
+      throw new Error(`HTTP ${r.status}`);
+    }
     document.getElementById("ba-lyric-edit-overlay")?.remove();
+    // Repaint anything currently showing this row. The viewer popup
+    // (if open) is reopened with fresh data so the user sees the
+    // updated title/tuning without closing+reopening manually.
+    const viewerOpen = !!document.getElementById("ba-lyric-overlay");
+    if (viewerOpen) {
+      document.getElementById("ba-lyric-overlay")?.remove();
+      _baOpenLyric(id);
+    }
     // Refresh the artist detail so the row repaints with new values.
     if (_baCurrentArtistId != null) _baOpenArtist(_baCurrentArtistId);
+    // Refresh the master lyrics list if it's loaded.
+    if (_baSubtab === "lyrics") _baLoadLyrics();
   } catch (e) {
     if (statusEl) statusEl.textContent = `Save failed: ${e?.message || e}`;
   }
