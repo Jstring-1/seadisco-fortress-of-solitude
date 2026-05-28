@@ -1453,7 +1453,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260528.1021";
+  const SITE_VERSION = "build 20260528.1025";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -2279,7 +2279,13 @@ window._closeLookupPopup    = _closeLookupPopup;
 // card array and asks /api/blues-archive/check which ones are present
 // in the archive. Stamps a small 🎸 corner indicator on every match.
 // No-op for non-admins; the server endpoint is admin-gated anyway.
-async function _baStampCards(items) {
+//
+// gridEl (optional): the specific grid the cards were rendered into.
+// When omitted we fall through the well-known grid ids. Callers on
+// pages where #results coexists with the home strip MUST pass their
+// grid — otherwise the auto-resolution lands on #results (which is
+// empty on the home page) and the stamping silently no-ops.
+async function _baStampCards(items, gridEl) {
   if (!window._isAdmin) return;
   if (!Array.isArray(items) || !items.length) return;
   // Harvest unique signal — keep small to avoid huge POSTs on big pages.
@@ -2310,14 +2316,18 @@ async function _baStampCards(items) {
     if (!r.ok) return;
     result = await r.json();
   } catch { return; }
-  // Try the common card-host grids in priority order.
+  // Explicit caller-passed element wins (avoids the home-page race
+  // where #results coexists with the home strip and silently absorbs
+  // the lookup). Falls back to the well-known grid ids in priority
+  // order when not provided.
   //   #results               — main search results
   //   #collection-results    — collection / wantlist / lists / favorites
   //   #random-records-grid   — home strip (recent / suggestions /
   //                            submitted / feed) — all four modes paint
   //                            into the same container
   //   .card-grid             — last-resort generic fallback
-  const grid = document.getElementById("results")
+  const grid = gridEl
+            || document.getElementById("results")
             || document.getElementById("collection-results")
             || document.getElementById("random-records-grid")
             || document.querySelector(".card-grid");
