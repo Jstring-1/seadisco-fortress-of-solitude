@@ -1453,7 +1453,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260528.0947";
+  const SITE_VERSION = "build 20260528.0952";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -2310,8 +2310,16 @@ async function _baStampCards(items) {
     if (!r.ok) return;
     result = await r.json();
   } catch { return; }
+  // Try the common card-host grids in priority order.
+  //   #results               — main search results
+  //   #collection-results    — collection / wantlist / lists / favorites
+  //   #random-records-grid   — home strip (recent / suggestions /
+  //                            submitted / feed) — all four modes paint
+  //                            into the same container
+  //   .card-grid             — last-resort generic fallback
   const grid = document.getElementById("results")
             || document.getElementById("collection-results")
+            || document.getElementById("random-records-grid")
             || document.querySelector(".card-grid");
   if (!grid) return;
   const cards = grid.querySelectorAll(".card");
