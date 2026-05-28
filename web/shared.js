@@ -1453,7 +1453,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260528.1043";
+  const SITE_VERSION = "build 20260528.1049";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -2342,13 +2342,11 @@ async function _baStampCards(items, gridEl) {
   if (!grid) return;
   const cards = grid.querySelectorAll(".card");
   cards.forEach(card => {
-    // Where the badge lands depends on whether the card is bare
-    // (search results) or wrapped (.recent-wrap on the home strip).
-    // For wrapped cards we put the badge as a sibling of the .card
-    // so we don't end up with an <a> nested inside an <a> — the
-    // parser auto-closes the outer one and breaks the click target.
-    const wrap = card.parentElement?.classList?.contains("recent-wrap") ? card.parentElement : null;
-    const host = wrap || card;
+    // Put the badge INSIDE .card-thumb-wrap (the cover image area).
+    // That guarantees it never lands over the text body below the
+    // cover, regardless of card mode (compact / wide). Falls back to
+    // .card itself only if the thumb-wrap is somehow missing.
+    const host = card.querySelector(".card-thumb-wrap") || card;
     if (host.querySelector(":scope > .card-ba-archive-badge")) return;
     const cardType = card.dataset.cardType || card.dataset.entityType || "";
     let archiveId = null;
@@ -2366,9 +2364,11 @@ async function _baStampCards(items, gridEl) {
       if (hit) { archiveId = hit.id; tip = `Artist in Blues Archive: ${hit.name}`; }
     }
     if (!archiveId) return;
+    // <span role="button"> not <a> — .card is itself an <a> and the
+    // parser auto-closes the outer anchor when it hits a nested one.
     host.insertAdjacentHTML(
       "beforeend",
-      `<a href="#" class="card-ba-archive-badge" onclick="event.preventDefault();event.stopPropagation();_baOpenArtistFromBadge(${archiveId})" title="${escHtml(tip)}" aria-label="${escHtml(tip)}">🎸</a>`,
+      `<span class="card-ba-archive-badge" role="button" tabindex="0" onclick="event.preventDefault();event.stopPropagation();_baOpenArtistFromBadge(${archiveId})" title="${escHtml(tip)}" aria-label="${escHtml(tip)}">🎸</span>`,
     );
   });
 }
