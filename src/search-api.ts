@@ -9438,11 +9438,52 @@ app.patch("/api/admin/lyrics/:id", express.json({ limit: "4kb" }), async (req, r
     res.json(row);
   } catch (err: any) {
     // 23505 = unique_violation — another row already owns this title
-    // on the same source_host. Surface 409 so the client can show a
-    // helpful message rather than a generic 500.
+    // on the same source_host. Surface 409 with the conflicting row's
+    // id so the client can offer "open it" / "delete it" rather than
+    // just complaining at the user.
     if (err?.code === "23505") {
       console.warn("[lyrics patch] title collision:", err?.detail || err?.message);
-      res.status(409).json({ error: "title_taken", detail: String(err?.detail || err?.message || "") });
+      let conflictId: number | null = null;
+      let conflictArtist: string | null = null;
+      let conflictTitle: string | null = null;
+      try {
+        // Re-read the candidate values from the body so we can find
+        // the row that's blocking us. Server-side trim mirrors the
+        // PATCH path so the lookup matches the constraint exactly.
+        const title = typeof req.body?.page_title === "string" ? req.body.page_title.trim() : null;
+        const artist = typeof req.body?.artist === "string" ? req.body.artist.trim() : null;
+        const id = parseInt(req.params.id, 10);
+        if (title) {
+          // Scope by source_host — the unique index is per-source so
+          // a row with the same title on a different source isn't
+          // actually the conflict. Read the editing row's source_host
+          // and look for a sibling row that matches the new values.
+          const lookup = await getPool().query(
+            `SELECT l2.id, l2.artist, l2.page_title FROM blues_lyrics l1
+               JOIN blues_lyrics l2 ON l2.source_host = l1.source_host
+              WHERE l1.id = $3
+                AND l2.id <> l1.id
+                AND l2.page_title = $1
+                AND COALESCE(LOWER(TRIM(l2.artist)), '') = COALESCE(LOWER(TRIM($2::text)), '')
+              LIMIT 1`,
+            [title, artist, id],
+          );
+          if (lookup.rows[0]) {
+            conflictId = Number(lookup.rows[0].id);
+            conflictArtist = lookup.rows[0].artist ?? null;
+            conflictTitle = lookup.rows[0].page_title ?? null;
+          }
+        }
+      } catch (lookupErr) {
+        console.warn("[lyrics patch] conflict lookup failed:", lookupErr);
+      }
+      res.status(409).json({
+        error: "title_taken",
+        conflictId,
+        conflictArtist,
+        conflictTitle,
+        detail: String(err?.detail || err?.message || ""),
+      });
       return;
     }
     console.error("[lyrics patch]", err);
