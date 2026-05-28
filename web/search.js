@@ -644,6 +644,37 @@ async function doSearch(page = 1, skipPushState = false, keepAiPanel = false) {
 
         const bu = new URL(window.location.href);
         if (!bu.searchParams.has("b")) { bu.searchParams.set("b", "y"); history.replaceState({}, "", bu.toString()); }
+
+        // Admin-only: probe the archive for this artist and, if matched,
+        // append a "View in Blues Archive →" link to the bio panel.
+        if (window._isAdmin && bioData.name) {
+          (async () => {
+            try {
+              const r = await apiFetch("/api/blues-archive/check", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  artistNames: [bioData.name],
+                  artistIds:   bioData.discogsId ? [Number(bioData.discogsId)] : [],
+                }),
+              });
+              if (!r.ok) return;
+              const result = await r.json();
+              const hitById   = bioData.discogsId ? result.artistsById?.[String(bioData.discogsId)] : null;
+              const hitByName = result.artists?.[String(bioData.name).trim().toLowerCase()];
+              const hit = hitById || hitByName;
+              if (!hit) return;
+              // Append a clickable link inside the bio panel. Re-renders
+              // are debounced via the blurbEl id so duplicate calls don't
+              // stack badges.
+              if (blurbEl.querySelector(".ba-bio-archive-link")) return;
+              blurbEl.insertAdjacentHTML(
+                "beforeend",
+                ` <a href="#" class="ba-bio-archive-link" onclick="event.preventDefault();_baOpenArtistFromBadge(${hit.id});return false" style="display:inline-block;margin-top:0.4rem;color:#ffd166;text-decoration:none;font-size:0.84rem">🎸 View in Blues Archive →</a>`,
+              );
+            } catch { /* silent */ }
+          })();
+        }
       }
     }
 
@@ -831,6 +862,12 @@ function renderResults(items, append = false) {
   // Hide favorites section when showing search results
   const ws = document.getElementById("random-records"); if (ws) ws.style.display = "none";
   if (typeof applyVisitedCards === "function") applyVisitedCards();
+  // Admin-only: stamp 🎸 on cards whose artist/release/master is in
+  // the Blues Archive. Fire-and-forget, runs after applyVisitedCards
+  // so it doesn't block paint.
+  if (window._isAdmin && typeof window._baStampCards === "function") {
+    window._baStampCards(filtered).catch(() => {});
+  }
   // "Hard to Find" mode — decorate cards that have no embedded YT
   // videos with a small purple 🎵 badge so users can spot contribution
   // opportunities. No-op when the toggle isn't on.

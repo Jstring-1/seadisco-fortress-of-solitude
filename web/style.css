@@ -9115,6 +9115,36 @@ body.is-offline button.offline-disabled {
   transform: none;
   opacity: 0.8;
 }
+/* 📜 — lyric-specific badge stamped per-track in album/version modals
+   and mini-player bar. Pinned (lyric.discogs_release_id matches) gets
+   a brighter color so the more-precise match reads as the stronger
+   affordance. */
+.ba-lyric-badge          { color: #cda35a; }
+.ba-lyric-badge-pinned   { color: #ffd166; }
+
+/* Admin 🎸 corner indicator on result/collection cards. Positioned
+   absolute inside .card; click navigates to the archive artist popup.
+   Stays small + translucent so it doesn't compete with cover art. */
+.card { position: relative; }
+.card-ba-archive-badge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 5;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 2px 5px;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 4px;
+  text-decoration: none;
+  color: #ffd166;
+  opacity: 0.85;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+.card-ba-archive-badge:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
 .archive-btn-play {
   background: var(--accent);
   border-color: var(--accent);

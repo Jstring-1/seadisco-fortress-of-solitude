@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, listBluesArchive, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists } from "./db.js";
+import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getUserCount, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getAppSetting, setAppSetting, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, replaceUserPersonalSuggestions, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getListItemStats, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistDiscogsIds, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, listBluesArchive, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists } from "./blues-db.js";
 
 
@@ -9128,16 +9128,23 @@ app.get("/api/admin/lyrics/scrape/status", async (req, res) => {
   }
 });
 
-// GET /api/admin/lyrics?q=&tuning=&artist=&limit=&offset=
+// GET /api/admin/lyrics?q=&tuning=&artist=&unmatched=1&limit=&offset=
 app.get("/api/admin/lyrics", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   try {
     const q       = String(req.query.q ?? "").trim().slice(0, 200);
     const tuning  = String(req.query.tuning ?? "").trim().slice(0, 80);
     const artist  = String(req.query.artist ?? "").trim().slice(0, 200);
+    const unmatched = req.query.unmatched === "1" || req.query.unmatched === "true";
     const limit   = Math.max(1, Math.min(500, parseInt(String(req.query.limit ?? "100"), 10) || 100));
     const offset  = Math.max(0, parseInt(String(req.query.offset ?? "0"), 10) || 0);
-    const result  = await listLyrics({ search: q || undefined, tuning: tuning || undefined, artist: artist || undefined, limit, offset });
+    const result  = await listLyrics({
+      search: q || undefined,
+      tuning: tuning || undefined,
+      artist: artist || undefined,
+      unmatchedOnly: unmatched,
+      limit, offset,
+    });
     res.json(result);
   } catch (err) {
     console.error("[lyrics list]", err);
@@ -9308,13 +9315,32 @@ app.patch("/api/admin/lyrics/:id", express.json({ limit: "4kb" }), async (req, r
   try {
     const id = parseInt(req.params.id, 10);
     if (!Number.isFinite(id)) { res.status(400).json({ error: "bad_id" }); return; }
-    const patch: { tuning?: string | null; artist?: string | null; page_title?: string } = {};
+    const patch: {
+      tuning?: string | null;
+      artist?: string | null;
+      page_title?: string;
+      artist_id?: number | null;
+      discogs_release_id?: number | null;
+      discogs_master_id?: number | null;
+    } = {};
     if ("tuning" in (req.body ?? {})) patch.tuning = typeof req.body.tuning === "string" ? req.body.tuning.trim().slice(0, 80) : null;
     if ("artist" in (req.body ?? {})) patch.artist = typeof req.body.artist === "string" ? req.body.artist.trim().slice(0, 200) : null;
     if ("page_title" in (req.body ?? {})) {
       const t = typeof req.body.page_title === "string" ? req.body.page_title.trim().slice(0, 240) : "";
       if (!t) { res.status(400).json({ error: "empty_title" }); return; }
       patch.page_title = t;
+    }
+    if ("artist_id" in (req.body ?? {})) {
+      const v = req.body.artist_id;
+      patch.artist_id = (v === null || v === "" || v === undefined) ? null : Number(v);
+    }
+    if ("discogs_release_id" in (req.body ?? {})) {
+      const v = req.body.discogs_release_id;
+      patch.discogs_release_id = (v === null || v === "" || v === undefined) ? null : Number(v);
+    }
+    if ("discogs_master_id" in (req.body ?? {})) {
+      const v = req.body.discogs_master_id;
+      patch.discogs_master_id = (v === null || v === "" || v === undefined) ? null : Number(v);
     }
     const row = await updateLyricFields(id, patch);
     if (!row) { res.status(404).json({ error: "not_found" }); return; }
@@ -9431,6 +9457,64 @@ app.post("/api/blues-archive/merge", express.json({ limit: "1kb" }), async (req,
   }
 });
 
+// GET /api/blues-archive/stats — counts powering the list-page stats
+// strip (artists w/ lyrics+releases, orphan lyrics, etc.).
+app.get("/api/blues-archive/stats", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try { res.json(await getBluesArchiveStats()); }
+  catch (err) { console.error("[blues-archive stats]", err); res.status(500).json({ error: String(err) }); }
+});
+
+// GET /api/blues-archive/recent?limit= — last N edits across both
+// blues_lyrics and blues_artists, newest first. Powers the recent-
+// edits feed on the archive list page.
+app.get("/api/blues-archive/recent", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const limit = Math.max(1, Math.min(200, parseInt(String(req.query.limit ?? "20"), 10) || 20));
+    res.json({ rows: await getRecentBluesEdits(limit) });
+  } catch (err) { console.error("[blues-archive recent]", err); res.status(500).json({ error: String(err) }); }
+});
+
+// POST /api/blues-archive/lyrics/reassign body { fromArtistId?, fromArtistName?, toArtistId }
+// Bulk re-key every matching lyric to the target artist. Used by the
+// "fix all of artist X's lyrics → artist Y" curator flow when artists
+// shouldn't be merged but lyrics are mislabeled.
+app.post("/api/blues-archive/lyrics/reassign", express.json({ limit: "1kb" }), async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const toArtistId   = Number(req.body?.toArtistId);
+    const fromArtistId = req.body?.fromArtistId != null ? Number(req.body.fromArtistId) : null;
+    const fromArtistName = typeof req.body?.fromArtistName === "string" ? req.body.fromArtistName.trim().slice(0, 200) : null;
+    if (!Number.isFinite(toArtistId)) { res.status(400).json({ error: "toArtistId required" }); return; }
+    if (fromArtistId == null && !fromArtistName) { res.status(400).json({ error: "fromArtistId or fromArtistName required" }); return; }
+    const out = await reassignLyrics({ toArtistId, fromArtistId, fromArtistName });
+    console.log(`[blues-archive] reassign: ${out.reassigned} → ${out.toName}`);
+    res.json(out);
+  } catch (err: any) {
+    console.error("[blues-archive reassign]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
+});
+
+// POST /api/blues-archive/lyrics/:id/promote-to-artist
+// Promotes an orphan lyric's free-text artist string to a new (or
+// existing) blues_artists row and links every other orphan lyric
+// with the same name in one transaction.
+app.post("/api/blues-archive/lyrics/:id/promote-to-artist", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) { res.status(400).json({ error: "bad_id" }); return; }
+    const out = await promoteOrphanLyricToArtist(id);
+    console.log(`[blues-archive] promote: lyric ${id} → artist ${out.artistId} (${out.artistName}); ${out.lyricsLinked} lyrics linked`);
+    res.json(out);
+  } catch (err: any) {
+    console.error("[blues-archive promote]", err);
+    res.status(500).json({ error: err?.message ?? String(err) });
+  }
+});
+
 // GET /api/blues-archive/artists/:id — artist + lyrics + sorted releases
 app.get("/api/blues-archive/artists/:id", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
@@ -9540,36 +9624,88 @@ app.post("/api/blues-archive/check", express.json({ limit: "8kb" }), async (req,
       }
     }
 
-    // Track-title matches against blues_lyrics.page_title. When the
-    // caller supplied artistNames, scope the match to that artist
-    // (so "Crossroads" only matches the Robert Johnson row when the
-    // album is by Robert Johnson, not every artist who covered it).
-    // Without artist context, match any artist (less precise but
-    // surfaces something useful).
+    // Track-title matches against blues_lyrics.page_title. Match
+    // precedence (most precise first):
+    //   1. lyric.discogs_release_id == releaseId           — pinned
+    //   2. lyric.discogs_master_id  == masterId            — pinned
+    //   3. lyric.artist_id matches a resolved archive artist for the
+    //      album (via name or Discogs id)
+    //   4. legacy fallback: artist string match
+    //   5. no artist context: title-only match
+    // The matched row is annotated with `pinned: true` when path 1/2
+    // hit, so the client can prefer the 📜-with-link affordance.
     if (trackTitles.length) {
       const titlesLc = trackTitles.map(t => t.trim().toLowerCase());
-      let r: any;
+      // Collect the resolved archive artist ids for path 3.
+      const resolvedArchiveArtistIds: number[] = [];
+      for (const v of Object.values(out.artists)) resolvedArchiveArtistIds.push((v as any).id);
+      for (const v of Object.values(out.artistsById)) resolvedArchiveArtistIds.push((v as any).id);
+      const archiveArtistIds = Array.from(new Set(resolvedArchiveArtistIds));
+
+      // Path 1+2: pinned matches by Discogs release/master id.
+      if ((Number.isFinite(releaseId) && releaseId > 0) || (Number.isFinite(masterId) && masterId > 0)) {
+        const r = await getPool().query(
+          `SELECT id, page_title, artist, artist_id,
+                  discogs_release_id, discogs_master_id
+             FROM blues_lyrics
+            WHERE LOWER(TRIM(page_title)) = ANY($1::text[])
+              AND (
+                ($2::bigint IS NOT NULL AND discogs_release_id = $2::bigint)
+                OR
+                ($3::bigint IS NOT NULL AND discogs_master_id  = $3::bigint)
+              )`,
+          [titlesLc, Number.isFinite(releaseId) && releaseId > 0 ? releaseId : null,
+                     Number.isFinite(masterId)  && masterId  > 0 ? masterId  : null],
+        );
+        for (const row of r.rows) {
+          const k = String(row.page_title).trim().toLowerCase();
+          out.tracks[k] = { id: row.id, page_title: row.page_title, artist: row.artist, artist_id: row.artist_id, pinned: true };
+        }
+      }
+
+      // Path 3: artist_id match (canonical post-FK).
+      if (archiveArtistIds.length) {
+        const r = await getPool().query(
+          `SELECT id, page_title, artist, artist_id
+             FROM blues_lyrics
+            WHERE LOWER(TRIM(page_title)) = ANY($1::text[])
+              AND artist_id = ANY($2::int[])`,
+          [titlesLc, archiveArtistIds],
+        );
+        for (const row of r.rows) {
+          const k = String(row.page_title).trim().toLowerCase();
+          if (!out.tracks[k]) out.tracks[k] = { id: row.id, page_title: row.page_title, artist: row.artist, artist_id: row.artist_id };
+        }
+      }
+
+      // Path 4: legacy artist-string match.
       if (artistNames.length) {
-        r = await getPool().query(
-          `SELECT id, page_title, artist
+        const r = await getPool().query(
+          `SELECT id, page_title, artist, artist_id
              FROM blues_lyrics
             WHERE LOWER(TRIM(page_title)) = ANY($1::text[])
               AND LOWER(TRIM(COALESCE(artist, ''))) = ANY($2::text[])`,
           [titlesLc, artistNames.map(n => n.trim().toLowerCase())],
         );
-      } else {
-        r = await getPool().query(
-          `SELECT id, page_title, artist
+        for (const row of r.rows) {
+          const k = String(row.page_title).trim().toLowerCase();
+          if (!out.tracks[k]) out.tracks[k] = { id: row.id, page_title: row.page_title, artist: row.artist, artist_id: row.artist_id };
+        }
+      }
+
+      // Path 5: pure title match — only used when caller has no artist
+      // context at all (e.g. mini-player bar with a "Topic" channel).
+      if (!artistNames.length && !archiveArtistIds.length) {
+        const r = await getPool().query(
+          `SELECT id, page_title, artist, artist_id
              FROM blues_lyrics
             WHERE LOWER(TRIM(page_title)) = ANY($1::text[])`,
           [titlesLc],
         );
-      }
-      for (const row of r.rows) {
-        const k = String(row.page_title).trim().toLowerCase();
-        // First match wins — order is arbitrary, but the per-row data
-        // is enough for the client to surface a link.
-        if (!out.tracks[k]) out.tracks[k] = { id: row.id, page_title: row.page_title, artist: row.artist };
+        for (const row of r.rows) {
+          const k = String(row.page_title).trim().toLowerCase();
+          if (!out.tracks[k]) out.tracks[k] = { id: row.id, page_title: row.page_title, artist: row.artist, artist_id: row.artist_id };
+        }
       }
     }
 
