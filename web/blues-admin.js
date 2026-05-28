@@ -872,6 +872,14 @@ function _bluesEnrichBulkPoll({ btnId, statusEndpoint, label }) {
         const p = job.progress;
         if (p) btn.textContent = `${label}: ${p.processed}/${p.total} · ${p.enriched} hit · ${p.skipped} skip` + (p.errors ? ` · ${p.errors} err` : "");
         else btn.textContent = label + "…";
+        // Mid-run: server now exposes the last 20 errors via
+        // job.progress.recentErrors so the curator can hover-peek
+        // without waiting for the job to finish.
+        const recent = job?.progress?.recentErrors;
+        if (Array.isArray(recent) && recent.length) {
+          const sample = recent.slice(-5).map(e => `${e.name || `#${e.id}`}: ${(e.message || "").slice(0, 80)}`).join("\n");
+          btn.title = `Latest errors (click 'Stop' on /admin if these look systemic):\n${sample}`;
+        } else { btn.title = ""; }
         return;
       }
       clearInterval(window[timerKey]); window[timerKey] = null;
@@ -879,10 +887,17 @@ function _bluesEnrichBulkPoll({ btnId, statusEndpoint, label }) {
       bluesDbLoadStats(); bluesDbLoadList();
       if (job.status === "done" && job.result) {
         const o = job.result;
-        alert(`${label} done in ${(o.durationMs/60000).toFixed(1)} min:\n` +
-          `· ${o.enriched}/${o.attempted} enriched\n` +
-          `· ${o.skipped} skipped\n` +
-          (o.errors?.length ? `· ${o.errors.length} errors` : "· no errors"));
+        // When there are errors, show a proper details overlay so the
+        // curator can see WHICH artists failed and WHY — the prior
+        // 'N errors' alert was a dead end.
+        if (o.errors?.length) {
+          _bluesShowEnrichErrors(label, o);
+        } else {
+          alert(`${label} done in ${(o.durationMs/60000).toFixed(1)} min:\n` +
+            `· ${o.enriched}/${o.attempted} enriched\n` +
+            `· ${o.skipped} skipped\n` +
+            `· no errors`);
+        }
       } else if (job.status === "error") {
         alert(`${label} errored: ` + (job.error ?? "unknown"));
       }
@@ -891,6 +906,65 @@ function _bluesEnrichBulkPoll({ btnId, statusEndpoint, label }) {
   tick();
   window[timerKey] = setInterval(tick, 5000);
 }
+// Show a small modal with a summary + the per-row error list when
+// a bulk enrichment finishes. Group identical messages so a Discogs
+// 429-storm doesn't fill the list with 100 identical lines. Each row
+// is clickable to open that artist's editor for direct curation.
+function _bluesShowEnrichErrors(label, result) {
+  document.getElementById("blues-enrich-errors-overlay")?.remove();
+  const overlay = document.createElement("div");
+  overlay.id = "blues-enrich-errors-overlay";
+  Object.assign(overlay.style, {
+    position: "fixed", inset: "0", background: "rgba(0,0,0,0.78)",
+    zIndex: "330", display: "flex", alignItems: "flex-start",
+    justifyContent: "center", padding: "2rem 1rem", overflow: "auto",
+  });
+  overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+  // Group errors by message so a Discogs 429-storm collapses to one
+  // line with a count, and the rare unique failures are easy to spot.
+  const groups = new Map();
+  for (const e of result.errors) {
+    const k = e?.message || "(no message)";
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(e);
+  }
+  const groupRows = [...groups.entries()]
+    .sort((a, b) => b[1].length - a[1].length)
+    .map(([msg, list]) => {
+      const sample = list.slice(0, 50).map(e => {
+        const name  = (e.name || `id ${e.id}`).replace(/</g, "&lt;");
+        const did   = e.discogs_id ? ` <span style="color:#888">#${e.discogs_id}</span>` : "";
+        const editAttr = e.id ? `onclick="document.getElementById('blues-enrich-errors-overlay')?.remove();_baOpenFullEditor?.(${Number(e.id)})"` : "";
+        return `<li style="margin:0.15rem 0"><a href="#" ${editAttr} style="color:var(--accent);text-decoration:none">${name}${did}</a></li>`;
+      }).join("");
+      const more = list.length > 50 ? `<li style="color:#888">…and ${list.length - 50} more</li>` : "";
+      return `<details style="margin:0.4rem 0;border:1px solid var(--border);border-radius:4px;padding:0.4rem 0.6rem">
+        <summary style="cursor:pointer;color:#e88">
+          <strong>${list.length}×</strong>
+          <code style="color:var(--text);background:rgba(255,255,255,0.05);padding:0.05rem 0.3rem;border-radius:3px">${(msg || "").replace(/</g, "&lt;").slice(0, 180)}</code>
+        </summary>
+        <ul style="margin:0.4rem 0 0 1rem;padding:0;list-style:disc;font-size:0.82rem">${sample}${more}</ul>
+      </details>`;
+    }).join("");
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;width:min(820px,100%);max-height:85vh;overflow:auto">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:0.6rem;margin-bottom:0.6rem">
+        <h3 style="margin:0;font-size:1rem">${label.replace(/</g,'&lt;')} — finished with errors</h3>
+        <button class="archive-btn" onclick="document.getElementById('blues-enrich-errors-overlay')?.remove()">Close</button>
+      </div>
+      <div style="font-size:0.82rem;color:var(--muted);margin-bottom:0.6rem">
+        ${result.enriched}/${result.attempted} enriched · ${result.skipped} skipped · <span style="color:#e88">${result.errors.length} errors</span> · ${(result.durationMs/60000).toFixed(1)} min
+      </div>
+      <p style="font-size:0.78rem;color:var(--muted);margin:0 0 0.6rem">
+        Errors grouped by message. Expand a group to see the failing artists; click an artist name to open its editor.
+      </p>
+      ${groupRows}
+    </div>
+  `;
+  document.body.appendChild(overlay);
+}
+window._bluesShowEnrichErrors = _bluesShowEnrichErrors;
+
 async function _bluesEnrichBulkStart({ endpoint, statusEndpoint, btnId, label, confirmMsg, urlExtras }) {
   if (confirmMsg && !confirm(confirmMsg)) return;
   const btn = document.getElementById(btnId);
