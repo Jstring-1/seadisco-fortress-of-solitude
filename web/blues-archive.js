@@ -15,7 +15,7 @@ let _baCurrentArtistId = null;
 // inner table the user clicks (full lists).
 let _baListRowsCache = [];
 const _baListSort = { key: "name", dir: "asc" };
-const _BA_LIST_TYPES = { name: "str", birth_date: "date", death_date: "date", lyrics_count: "num", releases_count: "num" };
+const _BA_LIST_TYPES = { name: "str", discogs_id: "num", lyrics_count: "num", releases_count: "num" };
 
 let _baDetailArtist = null;
 const _baLyricsSort = { key: "page_title", dir: "asc" };
@@ -121,13 +121,12 @@ function _baRenderListTable() {
   rowsEl.innerHTML = `
     <table class="api-log-table" style="font-size:0.86rem;width:100%">
       <thead><tr>
-        ${_baSortTh("Name",     "name",          S, "_baSortList")}
-        ${_baSortTh("Dates",    "birth_date",    S, "_baSortList")}
-        ${_baSortTh("Lyrics",   "lyrics_count",  S, "_baSortList", "text-align:right")}
-        ${_baSortTh("Releases", "releases_count",S, "_baSortList", "text-align:right")}
+        ${_baSortTh("Name",       "name",            S, "_baSortList")}
+        ${_baSortTh("Discogs ID", "discogs_id",      S, "_baSortList")}
+        ${_baSortTh("Lyrics",     "lyrics_count",    S, "_baSortList", "text-align:right")}
+        ${_baSortTh("Releases",   "releases_count",  S, "_baSortList", "text-align:right")}
       </tr></thead>
       <tbody>${rows.map(row => {
-        const dates = [row.birth_date, row.death_date].filter(Boolean).join(" – ") || "—";
         // Name cell uses entityLookupLinkHtml so clicking the text
         // opens the unified search-options popup (Wikipedia / YouTube
         // / LOC / Archive.org / Search SeaDisco / Copy). Clicking
@@ -136,9 +135,16 @@ function _baRenderListTable() {
         const nameHtml = (typeof entityLookupLinkHtml === "function" && row.name)
           ? entityLookupLinkHtml("artist", row.name, { entityId: row.discogs_id, title: `Lookup options for "${row.name}"` })
           : escHtml(row.name || "");
+        // Discogs ID — link out to discogs.com/artist/<id> when set so
+        // the user can jump straight to the canonical artist page;
+        // stopPropagation so the row-click doesn't also fire and steal
+        // them into the archive detail. Blank when no id is on file.
+        const didHtml = row.discogs_id
+          ? `<a href="https://www.discogs.com/artist/${row.discogs_id}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="color:var(--accent);text-decoration:none;font-variant-numeric:tabular-nums" title="Open on Discogs.com ↗">${row.discogs_id}</a>`
+          : `<span style="color:var(--muted)">—</span>`;
         return `<tr style="cursor:pointer" onclick="_baOpenArtist(${row.id})">
           <td style="font-weight:600;color:var(--text)">${nameHtml}</td>
-          <td style="color:var(--muted);font-size:0.78rem">${escHtml(dates)}</td>
+          <td style="font-size:0.78rem">${didHtml}</td>
           <td style="text-align:right;color:${row.lyrics_count ? "var(--accent)" : "var(--muted)"}">${row.lyrics_count || ""}</td>
           <td style="text-align:right;color:${row.releases_count ? "var(--accent)" : "var(--muted)"}">${row.releases_count || ""}</td>
         </tr>`;
