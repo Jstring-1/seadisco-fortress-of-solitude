@@ -1453,7 +1453,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260528.1030";
+  const SITE_VERSION = "build 20260528.1034";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -2286,8 +2286,16 @@ window._closeLookupPopup    = _closeLookupPopup;
 // grid — otherwise the auto-resolution lands on #results (which is
 // empty on the home page) and the stamping silently no-ops.
 async function _baStampCards(items, gridEl) {
-  if (!window._isAdmin) return;
   if (!Array.isArray(items) || !items.length) return;
+  // The admin flag resolves async after /api/me. The home strip
+  // renders during page-load, BEFORE that resolves, so this used to
+  // early-return with _isAdmin === undefined and never run — which is
+  // why the badges showed up on search results (rendered AFTER the
+  // probe lands) but never on the home strip. Block on the flag.
+  if (typeof window._isAdmin !== "boolean" && typeof window._ensureAdminFlag === "function") {
+    try { await window._ensureAdminFlag(); } catch {}
+  }
+  if (!window._isAdmin) return;
   // Harvest unique signal — keep small to avoid huge POSTs on big pages.
   const artistNamesSet = new Set();
   for (const it of items) {
