@@ -1103,8 +1103,15 @@ async function bluesDbRunMergePicker() {
       results.innerHTML = `<div style="color:#777">No other artists match "${q.replace(/</g,"&lt;")}".</div>`;
       return;
     }
+    // Stash names in a sidecar map keyed by id. We can't safely embed
+    // arbitrary names in the onclick="…" attribute — artist names like
+    // Aaron "Pinetop" Sparks contain double quotes that close the attr
+    // and silently swallow the click. Passing just the id keeps the
+    // attribute boring; the click handler looks the name up here.
+    window._bluesMergeNames = window._bluesMergeNames || {};
     const esc = (s) => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;");
     results.innerHTML = `<ul style="list-style:none;margin:0;padding:0">${rows.map((row) => {
+      window._bluesMergeNames[row.id] = row.name;
       const lyricsCount = Number(row.lyrics_count ?? row.lyric_count ?? 0);
       const releasesCount = Array.isArray(row.discogs_releases) ? row.discogs_releases.length : 0;
       const discogsId = row.discogs_id ?? "";
@@ -1118,7 +1125,7 @@ async function bluesDbRunMergePicker() {
           <span style="color:#ddd;font-weight:600">${esc(row.name)}</span>
           <div style="font-size:0.7rem;color:#777">id ${esc(row.id)}${subtitle ? " · " + subtitle : ""}</div>
         </span>
-        <button type="button" class="admin-btn" onclick="bluesDbPickMergeTarget(${Number(row.id)}, ${JSON.stringify(String(row.name))})">Merge here</button>
+        <button type="button" class="admin-btn" onclick="bluesDbPickMergeTarget(${Number(row.id)})">Merge here</button>
       </li>`;
     }).join("")}</ul>`;
   } catch (e) {
@@ -1126,11 +1133,17 @@ async function bluesDbRunMergePicker() {
     if (status) status.textContent = "";
   }
 }
-async function bluesDbPickMergeTarget(targetId, targetName) {
+async function bluesDbPickMergeTarget(targetId, targetNameArg) {
   const sourceId = _bluesDbState.editingId;
   if (!sourceId) return;
   const form = document.getElementById("blues-editor-form");
   const sourceName = form?.elements?.namedItem("name")?.value?.trim() || `#${sourceId}`;
+  // Caller now passes only the id (names containing " broke the
+  // onclick="…" attribute). Look the name up from the sidecar map we
+  // populated when rendering the results, with a graceful fallback.
+  const targetName = targetNameArg
+    || (window._bluesMergeNames && window._bluesMergeNames[targetId])
+    || `#${targetId}`;
   const msg =
     `Merge "${sourceName}" INTO "${targetName}"?\n\n` +
     `• Every lyric currently linked to "${sourceName}" (by FK or name match) will be reassigned to "${targetName}".\n` +
