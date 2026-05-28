@@ -717,10 +717,26 @@ async function _baSaveLyricEdit(id) {
       body: JSON.stringify({ artist, tuning, page_title, discogs_release_id, discogs_master_id }),
     });
     if (!r.ok) {
-      // 409 = title already taken on this source_host. Surface the
-      // server's reason so the user knows what to do; other failures
-      // bubble up as a generic HTTP message.
-      if (r.status === 409) throw new Error("Another lyric already has that title on this source.");
+      // 409 = title already taken on this source_host. Server returns
+      // the blocking row's id so we can give the curator a way out
+      // (open the conflict to merge content / delete the duplicate /
+      // change the title here) instead of just a dead-end message.
+      if (r.status === 409) {
+        const body = await r.json().catch(() => ({}));
+        if (body?.conflictId) {
+          if (statusEl) {
+            const otherArtist = body.conflictArtist || "(no artist)";
+            const otherTitle = body.conflictTitle || "(no title)";
+            statusEl.innerHTML =
+              `Save failed: lyric #${escHtml(String(body.conflictId))} already has ` +
+              `<strong>${escHtml(otherTitle)}</strong> by <strong>${escHtml(otherArtist)}</strong> on this source. ` +
+              `<a href="#" onclick="event.preventDefault();document.getElementById('ba-lyric-edit-overlay')?.remove();_baOpenLyric(${Number(body.conflictId)})" style="color:var(--accent);text-decoration:underline">Open it ↗</a> ` +
+              `<span style="color:var(--muted)">· then delete or rename one of them.</span>`;
+          }
+          return;
+        }
+        throw new Error("Another lyric already has that title on this source.");
+      }
       throw new Error(`HTTP ${r.status}`);
     }
     // The PATCH endpoint returns the updated row so we can patch the
