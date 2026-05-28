@@ -1453,7 +1453,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260527.2028";
+  const SITE_VERSION = "build 20260527.2055";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -2206,3 +2206,70 @@ window.entityLookupLinkHtml = entityLookupLinkHtml;
 window.openLookupPopup      = openLookupPopup;
 window._handleLookupClick   = _handleLookupClick;
 window._closeLookupPopup    = _closeLookupPopup;
+
+// ── Admin: Blues Archive card stamping ──────────────────────────────
+// Collects artist names + release/master ids from a freshly-rendered
+// card array and asks /api/blues-archive/check which ones are present
+// in the archive. Stamps a small 🎸 corner indicator on every match.
+// No-op for non-admins; the server endpoint is admin-gated anyway.
+async function _baStampCards(items) {
+  if (!window._isAdmin) return;
+  if (!Array.isArray(items) || !items.length) return;
+  // Harvest unique signal — keep small to avoid huge POSTs on big pages.
+  const artistNamesSet = new Set();
+  for (const it of items) {
+    if (!it) continue;
+    const type = String(it.type || "");
+    if (type === "artist" && typeof it.title === "string") {
+      const cleanName = it.title.replace(/\s*\(\d+\)\s*$/, "").trim();
+      if (cleanName) artistNamesSet.add(cleanName);
+    }
+    if (type === "release" || type === "master") {
+      if (typeof it.title === "string" && it.title.includes(" - ")) {
+        const a = it.title.slice(0, it.title.indexOf(" - ")).replace(/\s*\(\d+\)\s*$/, "").trim();
+        if (a) artistNamesSet.add(a);
+      }
+    }
+  }
+  const artistNames = Array.from(artistNamesSet).slice(0, 60);
+  if (!artistNames.length) return;
+  let result;
+  try {
+    const r = await apiFetch("/api/blues-archive/check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ artistNames }),
+    });
+    if (!r.ok) return;
+    result = await r.json();
+  } catch { return; }
+  const grid = document.getElementById("results")
+            || document.getElementById("collection-results")
+            || document.querySelector(".card-grid");
+  if (!grid) return;
+  const cards = grid.querySelectorAll(".card");
+  cards.forEach(card => {
+    if (card.querySelector(":scope > .card-ba-archive-badge")) return;
+    const cardType = card.dataset.cardType || card.dataset.entityType || "";
+    let archiveId = null;
+    let tip = "";
+    if (cardType === "artist") {
+      const nm = (card.dataset.entityName || "").replace(/\s*\(\d+\)\s*$/, "").trim().toLowerCase();
+      const hit = nm && result.artists?.[nm];
+      if (hit) { archiveId = hit.id; tip = `In Blues Archive: ${hit.name}`; }
+    } else if (cardType === "release" || cardType === "master") {
+      const titleAttr = card.getAttribute("title") || "";
+      const nm = titleAttr.includes(" - ")
+        ? titleAttr.slice(0, titleAttr.indexOf(" - ")).replace(/\s*\(\d+\)\s*$/, "").trim().toLowerCase()
+        : "";
+      const hit = nm && result.artists?.[nm];
+      if (hit) { archiveId = hit.id; tip = `Artist in Blues Archive: ${hit.name}`; }
+    }
+    if (!archiveId) return;
+    card.insertAdjacentHTML(
+      "beforeend",
+      `<a href="#" class="card-ba-archive-badge" onclick="event.preventDefault();event.stopPropagation();_baOpenArtistFromBadge(${archiveId})" title="${escHtml(tip)}" aria-label="${escHtml(tip)}">🎸</a>`,
+    );
+  });
+}
+window._baStampCards = _baStampCards;

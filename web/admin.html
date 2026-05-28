@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260527.2028" />
+  <link rel="stylesheet" href="/style.css?v=20260527.2055" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260527.2028"></script>
-<script defer src="/shared.js?v=20260527.2028"></script>
+<script defer src="/utils.js?v=20260527.2055"></script>
+<script defer src="/shared.js?v=20260527.2055"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -449,7 +449,7 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260527.2028"></script>
+<script defer src="/modal.js?v=20260527.2055"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1870,6 +1870,9 @@ function bluesDbRenderList() {
                      + "&r="  + encodeURIComponent("master+")
                      + "&s="  + encodeURIComponent("year:asc");
     const wikiHref   = "/?wk=" + encodeURIComponent('"' + r.name + '"');
+    // Discogs's site search, scoped to artists — fastest way to find
+    // the canonical artist ID to drop into the Discogs ID field above.
+    const discogsHref = "https://www.discogs.com/search/?type=artist&q=" + encodeURIComponent(r.name);
     // Photo thumb cell — small avatar that pops a full-size lightbox on
     // click. Empty placeholder square keeps the column aligned for rows
     // with no photo yet.
@@ -1881,6 +1884,7 @@ function bluesDbRenderList() {
       <td>
         <a href="#" class="blues-row-name" data-hover-type="name" data-row-id="${r.id}" onclick="event.preventDefault();bluesDbOpenEditor(${r.id})">${esc(r.name)}</a>
         <a href="${esc(searchHref)}" target="_blank" rel="noopener" title="Search SeaDisco" class="blues-row-icon blues-row-search">⌕</a>
+        <a href="${esc(discogsHref)}" target="_blank" rel="noopener" title="Search Discogs for this artist (use to find the canonical Discogs ID)" class="blues-row-icon blues-row-discogs">D</a>
         <a href="${esc(wikiHref)}" target="_blank" rel="noopener" title="Wikipedia popup" class="blues-row-icon blues-row-wiki">W</a>
         <a href="#" class="blues-row-icon" title="Merge this artist into another (moves lyrics + releases, deletes this row)" onclick="event.preventDefault();bluesDbMergePicker(${r.id}, '${esc(r.name).replace(/'/g, "&#39;")}')">⇄</a>
       </td>

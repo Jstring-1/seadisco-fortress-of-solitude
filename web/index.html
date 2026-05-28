@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260527.2028" />
+  <link rel="stylesheet" href="/style.css?v=20260527.2055" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260527.2028"></script>
+<script defer src="/shared.js?v=20260527.2055"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -1007,6 +1007,17 @@ e.g.  miles davis | coltrane
       <span id="blues-archive-import-status" style="font-size:0.78rem;color:var(--muted)"></span>
       <span id="blues-archive-count" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
     </div>
+    <!-- Stats strip — admin curation dashboard. Each chip is a click-
+         shortcut into a filtered view (e.g. orphans → Lyrics tab with
+         the unmatched filter on). Populated by /api/blues-archive/stats. -->
+    <div id="blues-archive-stats" style="display:flex;gap:0.4rem;flex-wrap:wrap;font-size:0.74rem;margin-bottom:0.6rem"></div>
+    <!-- Recently-edited feed (admin curation aid). Collapsed by default
+         so it doesn't crowd the stats strip; expand to see what's
+         been touched recently. -->
+    <details id="blues-archive-recent-wrap" style="margin-bottom:0.6rem;font-size:0.78rem;border:1px solid var(--border);border-radius:5px;padding:0.3rem 0.6rem">
+      <summary style="cursor:pointer;color:var(--muted)">Recent edits</summary>
+      <div id="blues-archive-recent" style="margin-top:0.4rem">Loading…</div>
+    </details>
     <!-- Sub-tabs: switch between the artists list and the searchable
          master lyrics list. Both surfaces use the same admin-gated
          endpoints; client-side toggle hides/shows the right panel. -->
@@ -1025,6 +1036,10 @@ e.g.  miles davis | coltrane
         <select id="blues-archive-lyrics-tuning" onchange="_baLyricsApplyTuning()" style="padding:0.45rem 0.5rem;font-size:0.85rem">
           <option value="">All tunings</option>
         </select>
+        <label style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.78rem;color:var(--muted)" title="Show only lyrics whose artist string doesn't resolve to a blues_artists row (orphans). Use the + button per row to promote one to a new artist.">
+          <input id="blues-archive-lyrics-unmatched" type="checkbox" onchange="_baLyricsApplyUnmatched()">
+          Unmatched only
+        </label>
         <span id="blues-archive-lyrics-count" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
       </div>
       <div id="blues-archive-lyrics-rows" style="font-size:0.86rem;color:var(--muted)">Loading…</div>
@@ -1457,13 +1472,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260527.2028"></script>
-<script defer src="/search.js?v=20260527.2028"></script>
-<script defer src="/collection.js?v=20260527.2028"></script>
+<script defer src="/utils.js?v=20260527.2055"></script>
+<script defer src="/search.js?v=20260527.2055"></script>
+<script defer src="/collection.js?v=20260527.2055"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260527.2028"></script>
-<script defer src="/app.js?v=20260527.2028"></script>
+<script defer src="/modal.js?v=20260527.2055"></script>
+<script defer src="/app.js?v=20260527.2055"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1474,13 +1489,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260527.2028"></script>
-<script defer src="/queue.js?v=20260527.2028"></script>
+<script defer src="/loc.js?v=20260527.2055"></script>
+<script defer src="/queue.js?v=20260527.2055"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260527.2028";
+  window._SD_LAZY_VERSION = "20260527.2055";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1510,8 +1525,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260527.2028"></script>
-<script defer src="/offline.js?v=20260527.2028"></script>
+<script defer src="/idb.js?v=20260527.2055"></script>
+<script defer src="/offline.js?v=20260527.2055"></script>
 
 </body>
 </html>
