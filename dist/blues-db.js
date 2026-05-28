@@ -13,7 +13,7 @@
 // Wikidata SPARQL endpoint:   https://query.wikidata.org/sparql
 // MusicBrainz endpoint:       https://musicbrainz.org/ws/2/  (JSON, 1 req/s)
 // Required header on both:    User-Agent (per Wikimedia/MetaBrainz policy)
-import { upsertBluesArtistByQid, upsertBluesArtistByDiscogsId, listBluesArtists, updateBluesArtist } from "./db.js";
+import { upsertBluesArtistByQid, upsertBluesArtistByDiscogsId, listBluesArtists, getBluesArtist, updateBluesArtist } from "./db.js";
 const WIKIDATA_ENDPOINT = "https://query.wikidata.org/sparql";
 const WIKIDATA_UA = "SeaDisco/1.0 (+https://seadisco.com; vinyl discovery app)";
 // Genre Q-numbers the seeder treats as "blues" for matching.
@@ -910,6 +910,55 @@ export async function enrichBluesFromDiscogsArtists(client, opts = {}) {
         catch { /* swallow */ }
     };
     reportProgress();
+    // Per-row mode (idFilter set): fetch the single target row directly.
+    // The paginated loop below broke after one page even if the target
+    // wasn't in it, so anyone past name-position ~200 silently returned
+    // 0/0 attempted with no error. Direct fetch removes the bug AND
+    // skips ~3 wasted listBluesArtists calls.
+    if (opts.idFilter != null && Number.isFinite(opts.idFilter)) {
+        const single = await getBluesArtist(opts.idFilter);
+        if (single) {
+            const row = single;
+            attempted++;
+            reportProgress(row.name);
+            let resolvedId = row.discogs_id;
+            if (!resolvedId && !opts.requireExistingId) {
+                try {
+                    resolvedId = await _searchDiscogsArtist(client, row.name);
+                }
+                catch { }
+                if (resolvedId) {
+                    try {
+                        await updateBluesArtist(row.id, { discogs_id: resolvedId });
+                    }
+                    catch { }
+                    row.discogs_id = resolvedId;
+                    await new Promise(res => setTimeout(res, DISCOGS_RATE_LIMIT_MS));
+                }
+            }
+            if (!row.discogs_id) {
+                skipped++;
+            }
+            else {
+                try {
+                    const { patch } = await _enrichOneFromDiscogsArtist(client, row, { force: opts.force });
+                    if (Object.keys(patch).length)
+                        await updateBluesArtist(row.id, patch);
+                    enriched++;
+                }
+                catch (err) {
+                    errors.push({
+                        id: row.id, name: row.name, discogs_id: row.discogs_id ?? null,
+                        message: err?.message ?? String(err),
+                    });
+                }
+                processed++;
+                reportProgress();
+            }
+        }
+        reportProgress();
+        return { attempted, enriched, skipped, errors, durationMs: Date.now() - start };
+    }
     outer: while (true) {
         const { rows } = await listBluesArtists({ limit: PAGE, offset });
         if (!rows.length)
