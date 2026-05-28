@@ -882,6 +882,20 @@ async function _enrichOneFromDiscogsArtist(client, row, opts = {}) {
     patch.enrichment_status = { ...status, discogs_full: 1, discogs_full_at: new Date().toISOString() };
     return { patch, raw: data };
 }
+/** Compute the patch that Refresh from Discogs WOULD write for a
+ *  single artist, WITHOUT writing it. The editor uses this to
+ *  populate its open form so the curator can review + save (or
+ *  edit) rather than committing blindly. force flag affects which
+ *  fields are eligible (photo/notes/releases). */
+export async function previewBluesArtistFromDiscogs(client, id, force) {
+    const row = await getBluesArtist(id);
+    if (!row)
+        throw new Error("artist not found");
+    if (!row.discogs_id)
+        throw new Error("row has no discogs_id");
+    const { patch } = await _enrichOneFromDiscogsArtist(client, row, { force });
+    return { patch, row };
+}
 /** Walk every row that has a discogs_id and pull the full artist
  *  record. Rate-limited 1.1s/req. ~3-5 min for 200 rows. */
 export async function enrichBluesFromDiscogsArtists(client, opts = {}) {
