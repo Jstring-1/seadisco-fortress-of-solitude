@@ -836,8 +836,17 @@ async function _enrichOneFromDiscogsArtist(
   // force mode overwrites — the typical use case is the admin just
   // fixed an incorrect discogs_id and needs the stale photo replaced
   // with the right artist's.
-  if (Array.isArray(data.images) && data.images[0]?.uri) {
-    if (force || !row.photo_url) patch.photo_url = data.images[0].uri;
+  //
+  // Force + no Discogs image: actively CLEAR the existing photo_url.
+  // The stale photo came from the prior (wrong) discogs_id, so
+  // leaving it in place after the admin's correction would lie about
+  // who the photo depicts. Better to show a placeholder until the
+  // admin uploads/pastes a correct URL.
+  const newPhoto = Array.isArray(data.images) && data.images[0]?.uri ? data.images[0].uri : null;
+  if (newPhoto) {
+    if (force || !row.photo_url) patch.photo_url = newPhoto;
+  } else if (force && row.photo_url) {
+    patch.photo_url = null;
   }
 
   // External URLs — store the full array so we can render them later.
