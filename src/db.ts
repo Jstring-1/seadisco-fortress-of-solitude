@@ -6413,6 +6413,10 @@ const _BLUES_ARCHIVE_SORT_COLS: Record<string, string> = {
   first_release_year: _EARLIEST_REL_SQL
     .replace(/\bfirst_recording_year\b/g, "a.first_recording_year")
     .replace(/\bdiscogs_releases\b/g, "a.discogs_releases"),
+  // Has-photo: 1 when photo_url is set + non-empty, 0 otherwise.
+  // Sorting DESC puts rows WITH a photo first (find-by-eye),
+  // ASC puts MISSING rows first (curation queue).
+  has_photo: "CASE WHEN COALESCE(a.photo_url, '') <> '' THEN 1 ELSE 0 END",
 };
 
 export async function listBluesArchive(opts: {

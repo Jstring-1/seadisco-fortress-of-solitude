@@ -19,7 +19,7 @@ let _baListRowsCache = [];
 //   "", "with_both", "with_lyrics_only", "with_releases_only", "empty"
 let _baListCategory = "";
 const _baListSort = { key: "name", dir: "asc" };
-const _BA_LIST_TYPES = { name: "str", discogs_id: "num", first_release_year: "num", lyrics_count: "num", releases_count: "num" };
+const _BA_LIST_TYPES = { name: "str", discogs_id: "num", has_photo: "num", first_release_year: "num", lyrics_count: "num", releases_count: "num" };
 
 let _baDetailArtist = null;
 const _baLyricsSort = { key: "page_title", dir: "asc" };
@@ -167,7 +167,7 @@ function _baRenderListTable() {
   rowsEl.innerHTML = `
     <table class="api-log-table" style="font-size:0.86rem;width:100%">
       <thead><tr>
-        <th style="width:48px"></th>
+        ${_baSortTh("📷",          "has_photo",          S, "_baSortList", "width:48px;text-align:center")}
         ${_baSortTh("Name",       "name",               S, "_baSortList")}
         ${_baSortTh("Discogs ID", "discogs_id",         S, "_baSortList")}
         ${_baSortTh("Year",       "first_release_year", S, "_baSortList", "text-align:right")}
