@@ -345,7 +345,8 @@ function _baRenderArtistDetail(a) {
         ? entityLookupLinkHtml("artist", a.name, { entityId: a.discogs_id, title: `Lookup options for "${a.name}"` })
         : escHtml(a.name || "")}</h2>
       <span style="color:var(--muted);font-size:0.82rem">${escHtml(dates)}</span>
-      <span style="margin-left:auto;display:inline-flex;gap:0.4rem">
+      <span style="margin-left:auto;display:inline-flex;gap:0.4rem;flex-wrap:wrap">
+        <button class="archive-btn archive-btn-suggest" onclick="_baOpenFullEditor(${a.id})" title="Open the full edit form (~25 fields: bio, dates, identifiers, enrichment buttons for Wiki / MusicBrainz / Discogs picker / YouTube).">Edit (full form)</button>
         <button class="archive-btn" onclick="_baOpenReassignPicker(${a.id}, ${JSON.stringify(a.name || "").replace(/"/g, "&quot;")})" title="Reassign every lyric matching some other artist name (or artist row) to this artist. Doesn't delete the source artist — use Merge for that.">Reassign lyrics from…</button>
         <button class="archive-btn" onclick="_baOpenMergePicker(${a.id}, ${JSON.stringify(a.name || "").replace(/"/g, "&quot;")})" title="Merge this artist into another. Lyrics get reassigned by name; release JSONB arrays are concatenated (deduped); this row is then deleted.">Merge into…</button>
       </span>
@@ -1178,6 +1179,38 @@ function _baClearArtistsCategory() {
   _baLoadList();
 }
 window._baClearArtistsCategory = _baClearArtistsCategory;
+
+// Open the full /admin-style editor (25 fields + enrichment buttons)
+// in place. The editor JS lives in /blues-admin.js — lazy-loaded so
+// non-admin sessions never pay for it. The editor overlay DOM is
+// embedded in index.html as #blues-editor-overlay and friends.
+// On save, the editor fires window._bluesDbAfterSaveOnce so we can
+// refresh the artist popup that was open behind it.
+function _baOpenFullEditor(id) {
+  // Set the one-shot post-save callback BEFORE opening. The Discovery
+  // artist popup is what's open behind the editor overlay; refreshing
+  // it re-renders the bio / dates / photo / lyrics with any edits.
+  window._bluesDbAfterSaveOnce = (savedId) => {
+    const targetId = Number(savedId || id);
+    if (Number.isFinite(targetId)) _baOpenArtist(targetId);
+  };
+  const openIt = () => {
+    if (typeof window.bluesDbOpenEditor === "function") {
+      window.bluesDbOpenEditor(id);
+      return true;
+    }
+    return false;
+  };
+  if (openIt()) return;
+  if (typeof window._sdLoadModule === "function") {
+    window._sdLoadModule("/blues-admin.js")
+      .then(() => { if (!openIt()) alert("Editor not available."); })
+      .catch(err => alert("Couldn't load editor: " + (err?.message || err)));
+  } else {
+    alert("Editor not available.");
+  }
+}
+window._baOpenFullEditor = _baOpenFullEditor;
 
 function _baJumpOrphans() {
   _baSwitchSubtab("lyrics");
