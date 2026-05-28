@@ -971,7 +971,7 @@ function bluesDbEnrichEditorYt()      { const id = _bluesDbState.editingId; if (
 async function bluesDbRefreshFromDiscogs() {
   const id = _bluesDbState.editingId;
   if (!id) return;
-  if (!confirm("Re-pull this artist's full record from Discogs and OVERWRITE photo / bio + REPLACE the stored release list?\n\nUse this after fixing a stale discogs_id.")) return;
+  if (!confirm("Re-pull this artist's full record from Discogs.\n\n- Overwrites bio / notes\n- Replaces the stored release list\n- CLEARS the photo (Discogs auto-photos for pre-WWII artists are almost always wrong; paste a correct URL manually)\n\nUse this after fixing a stale discogs_id.")) return;
   return _bluesEnrichGeneric({
     id,
     endpoint: "/api/admin/blues/enrich-discogs-full",
@@ -981,41 +981,6 @@ async function bluesDbRefreshFromDiscogs() {
   });
 }
 window.bluesDbRefreshFromDiscogs = bluesDbRefreshFromDiscogs;
-
-// One-click "delete the wrong photo". Clears the input field locally
-// AND immediately PUTs photo_url=null to the server so the change
-// sticks without the user having to remember to hit Save. Used when
-// the current image is wrong (stale Discogs id, modern-namesake hit,
-// or just a bad auto-pick).
-async function bluesDbClearPhoto() {
-  const id = _bluesDbState.editingId;
-  const form = document.getElementById("blues-editor-form");
-  const input = form?.elements?.namedItem("photo_url");
-  // Always clear the field client-side so the editor reflects the
-  // intent immediately, even on a brand-new (unsaved) row.
-  if (input) input.value = "";
-  if (!id) return;
-  try {
-    const r = await apiFetch("/api/admin/blues/" + id, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ photo_url: null }),
-    });
-    if (!r.ok) {
-      const err = await r.json().catch(() => ({}));
-      alert("Clear photo failed: " + (err.error ?? r.status));
-      return;
-    }
-    // Patch the cached row so the list grid repaints without an
-    // extra fetch, then re-render the list to pick up the empty cell.
-    await _bluesDbRefreshRow(id);
-    bluesDbRenderList();
-    if (typeof window._baLoadList === "function") window._baLoadList();
-  } catch (e) {
-    alert("Clear photo failed: " + e);
-  }
-}
-window.bluesDbClearPhoto = bluesDbClearPhoto;
 
 // ── Discogs candidate picker ────────────────────────────────────────
 // Opened from the editor's "Pick Discogs match" button. Shows the top
