@@ -1032,6 +1032,34 @@ export async function initDb() {
   await getPool().query(`UPDATE blues_lyrics SET tuning = 'Open Em (Cross Note)' WHERE tuning = 'Cross Note'`);
 }
 
+// ── Blues lyrics: re-link orphans to existing blues_artists rows ──
+// More aggressive than the boot-time backfill: also matches when one
+// side has a Discogs " (N)" disambiguator and the other doesn't, and
+// collapses internal whitespace. Returns the number of rows linked.
+// Idempotent. Triggered by the admin "Re-link orphans" button so the
+// user can sweep up near-misses without restarting the server.
+export async function relinkOrphanLyricsToArtists(): Promise<number> {
+  const r = await getPool().query(`
+    UPDATE blues_lyrics l
+       SET artist_id = a.id
+      FROM blues_artists a
+     WHERE l.artist_id IS NULL
+       AND l.artist IS NOT NULL
+       AND (
+         -- Pass 1: exact lowercase trim match (cheap).
+         LOWER(TRIM(l.artist)) = LOWER(a.name)
+         OR
+         -- Pass 2: drop the " (N)" Discogs disambiguator from EITHER
+         -- side before comparing. Catches "Tommy Tucker" lyric vs
+         -- "Tommy Tucker (3)" artist row and vice versa.
+         REGEXP_REPLACE(LOWER(TRIM(l.artist)), '\\s*\\(\\d+\\)\\s*$', '')
+           =
+         REGEXP_REPLACE(LOWER(a.name),         '\\s*\\(\\d+\\)\\s*$', '')
+       )
+  `);
+  return r.rowCount ?? 0;
+}
+
 // ── Blues lyrics: bulk normalize empty tuning → "Standard" ─────────
 // On a blues-lyrics wiki an unmentioned tuning is overwhelmingly
 // standard. Backend for the admin-triggered button on the archive

@@ -1197,6 +1197,30 @@ window._baClearArtistsCategory = _baClearArtistsCategory;
 // the entire blues_lyrics table. Same blob-download pattern as the
 // artists export (apiFetch to carry the bearer token, then trigger a
 // client-side anchor click on an object URL).
+// "Re-link orphans" sweep. Calls the server endpoint that re-matches
+// every orphan lyric to a blues_artists row using two strategies:
+//   1. exact LOWER(TRIM(artist)) = LOWER(name)
+//   2. " (N)" Discogs disambiguator stripped from EITHER side
+// Reports the count + refreshes the list and stats so the user sees
+// the orphan count drop immediately.
+async function _baRelinkOrphans() {
+  if (!confirm("Sweep orphan lyrics and link them to existing artists when names match (with or without ' (N)' disambiguators)?")) return;
+  try {
+    const r = await apiFetch("/api/blues-archive/lyrics/relink-orphans", { method: "POST", timeoutMs: 60000 });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
+    }
+    const j = await r.json();
+    alert(`Linked ${j.linked.toLocaleString()} orphan${j.linked === 1 ? "" : "s"}.`);
+    _baLoadStats().catch(() => {});
+    if (_baSubtab === "lyrics") _baLoadLyrics();
+  } catch (e) {
+    alert("Re-link failed: " + (e?.message || e));
+  }
+}
+window._baRelinkOrphans = _baRelinkOrphans;
+
 async function _baExportLyricsCsv() {
   const btn = document.getElementById("blues-export-lyrics-btn");
   const orig = btn ? btn.textContent : "";
