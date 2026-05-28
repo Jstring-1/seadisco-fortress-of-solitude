@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260528.1543" />
+  <link rel="stylesheet" href="/style.css?v=20260528.1551" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260528.1543"></script>
+<script defer src="/shared.js?v=20260528.1551"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -1035,7 +1035,10 @@ e.g.  miles davis | coltrane
       <button type="button" class="archive-btn ba-subtab" data-ba-tab="releases" onclick="_baSwitchSubtab('releases')">Releases</button>
     </div>
     <div id="blues-archive-artists-panel">
-      <input id="blues-archive-search" type="search" placeholder="Search artists by name" style="width:100%;padding:0.5rem 0.7rem;font-size:0.9rem;margin-bottom:0.6rem" oninput="_bluesArchiveDebouncedSearch()">
+      <div style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.6rem">
+        <input id="blues-archive-search" type="search" placeholder="Search artists by name" style="flex:1;padding:0.5rem 0.7rem;font-size:0.9rem" oninput="_bluesArchiveDebouncedSearch()">
+        <button type="button" class="archive-btn" onclick="_baLoadList();_baLoadStats();" title="Re-fetch the artist list from the server">↻ Refresh</button>
+      </div>
       <!-- Active-filter indicator. Populated by _baRenderArtistsFilterIndicator
            whenever the category filter (chip-driven) is non-empty. -->
       <div id="blues-archive-artists-filter" style="margin-bottom:0.6rem"></div>
@@ -1067,6 +1070,7 @@ e.g.  miles davis | coltrane
           Unmatched only
         </label>
         <button type="button" class="archive-btn" onclick="_baRelinkOrphans()" title="Sweep orphan lyrics (artist_id IS NULL) and link them to a blues_artists row when the artist text matches — exact match OR Discogs ' (N)' disambiguator stripped from either side. Use when 'orphan' rows look like they should resolve.">Re-link orphans</button>
+        <button type="button" class="archive-btn" onclick="_baLoadLyrics();_baLoadStats();" title="Re-fetch the lyrics list from the server">↻ Refresh</button>
         <button type="button" id="blues-archive-lyrics-clear" class="archive-btn" onclick="_baLyricsClearFilters()" style="display:none" title="Clear search, tuning, and unmatched filters; back to the full list.">Clear filters</button>
         <span id="blues-archive-lyrics-count" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
       </div>
@@ -1093,6 +1097,7 @@ e.g.  miles davis | coltrane
           <option value="Producer">Producer</option>
           <option value="UnofficialRelease">UnofficialRelease</option>
         </select>
+        <button type="button" class="archive-btn" onclick="_baLoadReleases();_baLoadStats();" title="Re-fetch the releases list from the server">↻ Refresh</button>
         <button type="button" id="blues-archive-releases-clear" class="archive-btn" onclick="_baReleasesClearFilters()" style="display:none" title="Clear search, year, type, and role filters; back to the full list.">Clear filters</button>
         <span id="blues-archive-releases-count" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
       </div>
@@ -1622,13 +1627,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260528.1543"></script>
-<script defer src="/search.js?v=20260528.1543"></script>
-<script defer src="/collection.js?v=20260528.1543"></script>
+<script defer src="/utils.js?v=20260528.1551"></script>
+<script defer src="/search.js?v=20260528.1551"></script>
+<script defer src="/collection.js?v=20260528.1551"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260528.1543"></script>
-<script defer src="/app.js?v=20260528.1543"></script>
+<script defer src="/modal.js?v=20260528.1551"></script>
+<script defer src="/app.js?v=20260528.1551"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1639,13 +1644,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260528.1543"></script>
-<script defer src="/queue.js?v=20260528.1543"></script>
+<script defer src="/loc.js?v=20260528.1551"></script>
+<script defer src="/queue.js?v=20260528.1551"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260528.1543";
+  window._SD_LAZY_VERSION = "20260528.1551";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1675,8 +1680,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260528.1543"></script>
-<script defer src="/offline.js?v=20260528.1543"></script>
+<script defer src="/idb.js?v=20260528.1551"></script>
+<script defer src="/offline.js?v=20260528.1551"></script>
 
 </body>
 </html>
