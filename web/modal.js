@@ -1378,14 +1378,20 @@ document.addEventListener("keydown", e => {
   }
 }, true);
 
-// Admin-only "+" icon — used to add Discogs artists to the Blues DB
-// inline. Disabled per admin request: blues-DB curation now happens
-// manually via the /admin Blues panel rather than from search results
-// / album popup credit lines. Kept as a no-op so the call sites
-// don't need to be deleted (and so it can be flipped back on later
-// without touching every caller). _bluesAddArtist below is also kept
-// since it's still wired to the admin panel's own add flow.
-function bluesAddIcon(_discogsId, _name) { return ""; }
+// Admin-only "+" icon — adds a Discogs artist to the Blues DB inline.
+// Re-enabled (was a no-op for a while when curation moved to /admin).
+// Renders only for admins and only when we have a Discogs artist id
+// (the add-by-id endpoint needs it). The icon switches to 🎸 with a
+// deep-link into the archive once the artist actually lands in the
+// archive — _baStampArchiveIndicators handles that overwrite during
+// the same modal-render pass, so users see the right state regardless
+// of which side gets there first.
+function bluesAddIcon(discogsId, name) {
+  if (!window._isAdmin) return "";
+  if (!discogsId)       return "";
+  const safeName = String(name || "").replace(/'/g, "\\'").replace(/"/g, "&quot;");
+  return ` <a href="#" class="blues-add-icon" data-blues-id="${escHtml(String(discogsId))}" onclick="event.preventDefault();event.stopPropagation();_bluesAddArtist(${discogsId}, '${safeName}', this);return false" title="Add this artist to the Blues DB" style="color:var(--muted);text-decoration:none;font-size:0.86em;margin-left:0.2rem">+blues</a>`;
+}
 
 async function _bluesAddArtist(discogsId, name, anchor) {
   try {
@@ -2167,6 +2173,7 @@ function _createYTPlayer(id) {
                   track:  vd.title,
                   artist: ytAuthorClean,
                 });
+                if (window._isAdmin) _baStampMiniPlayer();
                 if (!msTitle) msTitle = vd.title;
                 if (!msArtist) msArtist = ytAuthorClean;
               }
@@ -2353,6 +2360,8 @@ function updateVideoNavButtons() {
         fallback: "Playing",
       });
     }
+    // Admin-only: re-probe + stamp 🎸 / 📜 against the new title.
+    if (window._isAdmin) _baStampMiniPlayer();
   }
   // Show/hide album + share buttons. Engine-aware: YT needs a release
   // ID, LOC needs a loaded item. See openPlayerRelease for the
@@ -2469,6 +2478,63 @@ function _npTitleClick(el, ev) {
   }
 }
 window._npTitleClick = _npTitleClick;
+
+// ── Mini-player bar Blues Archive stamping (admin-only) ──────────────
+// Probes /api/blues-archive/check for the currently-rendered title and
+// stamps a 🎸 after the artist span and a 📜 after the track span when
+// matches exist. Debounced so it doesn't fire on every keystroke of a
+// fast-forward / scrub. Idempotent — already-stamped pairs are skipped.
+let _baPlayerStampTimer = null;
+function _baStampMiniPlayer() {
+  if (!window._isAdmin) return;
+  if (_baPlayerStampTimer) clearTimeout(_baPlayerStampTimer);
+  _baPlayerStampTimer = setTimeout(_baStampMiniPlayerNow, 350);
+}
+window._baStampMiniPlayer = _baStampMiniPlayer;
+
+async function _baStampMiniPlayerNow() {
+  const titleEl = document.getElementById("mini-player-title");
+  if (!titleEl) return;
+  // Strip any prior stamps so a track change doesn't leave stale ones.
+  titleEl.querySelectorAll(".ba-archive-badge, .ba-lyric-badge").forEach(el => el.remove());
+  const trackSpan  = titleEl.querySelector(".vt-track");
+  const artistSpan = titleEl.querySelector(".vt-artist");
+  const trackLbl  = trackSpan?.dataset?.npLabel  || "";
+  const artistLbl = artistSpan?.dataset?.npLabel || "";
+  if (!trackLbl && !artistLbl) return;
+  try {
+    const r = await apiFetch("/api/blues-archive/check", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        artistNames: artistLbl ? [artistLbl] : [],
+        trackTitles: trackLbl  ? [trackLbl]  : [],
+      }),
+    });
+    if (!r.ok) return;
+    const result = await r.json();
+    // 🎸 next to artist when artist matches an archive row
+    if (artistSpan && artistLbl) {
+      const hit = result.artists?.[artistLbl.trim().toLowerCase()];
+      if (hit) {
+        artistSpan.insertAdjacentHTML(
+          "afterend",
+          ` <a href="#" class="ba-archive-badge" onclick="event.preventDefault();event.stopPropagation();_baOpenArtistFromBadge(${hit.id});return false" title="${escHtml("In Blues Archive: " + hit.name)}">🎸</a>`,
+        );
+      }
+    }
+    // 📜 next to track when a lyric matches
+    if (trackSpan && trackLbl) {
+      const hit = result.tracks?.[trackLbl.trim().toLowerCase()];
+      if (hit) {
+        trackSpan.insertAdjacentHTML(
+          "afterend",
+          ` <a href="#" class="ba-archive-badge ba-lyric-badge" onclick="event.preventDefault();event.stopPropagation();_baOpenLyricFromBadge(${hit.id});return false" title="${escHtml("Lyric in Blues Archive" + (hit.artist ? ` (${hit.artist})` : "") + " — open viewer")}">📜</a>`,
+        );
+      }
+    }
+  } catch { /* silent — admin-only nicety */ }
+}
 
 // ── Unified player dispatchers ─────────────────────────────────────────
 // The persistent bar hosts both the YouTube iframe engine and the LOC
@@ -4923,28 +4989,45 @@ async function _baStampArchiveIndicators(targetId, d, searchResult) {
     titleNode.insertAdjacentHTML("afterend", badge(result.release.viaArtistId, tip));
   }
 
-  // Stamp track-title links — only when the title matches a lyric AND
-  // (server-side) was scoped to the album artist for precision.
+  // Stamp track-title links with a 📜 that opens the lyric viewer
+  // directly. The 🎸 (artist-level) badge is already stamped above on
+  // the album-artist line; per-track we want the precise affordance.
+  // Pinned matches (lyric.discogs_release_id == this release) get a
+  // brighter tooltip; ambiguous artist-only matches get a softer one.
   trackNodes.forEach(n => {
-    if (n.parentNode?.querySelector(":scope > .ba-archive-badge")) return;
+    if (n.parentNode?.querySelector(":scope > .ba-lyric-badge")) return;
     const t = (n.dataset.lkLabel || n.textContent || "").trim().toLowerCase();
     const hit = t && result.tracks?.[t];
     if (!hit) return;
-    // Track badge — no archive-artist id directly, but the lyric has
-    // an artist field; if it matches one of the album artists' archive
-    // rows, jump there; otherwise fall back to the lyrics list view.
-    const lyricArtistLc = String(hit.artist || "").trim().toLowerCase();
-    const archiveRow = result.artists?.[lyricArtistLc];
-    const archiveId  = archiveRow?.id;
-    if (archiveId) {
-      n.insertAdjacentHTML("afterend", badge(archiveId, `Lyric in Blues Archive (${hit.artist})`));
-    } else {
-      // Plain badge, no link — still useful as a visual marker.
-      n.insertAdjacentHTML("afterend",
-        `<span class="ba-archive-badge ba-archive-badge-plain" title="Lyric in Blues Archive">🎸</span>`);
-    }
+    const tip = hit.pinned
+      ? `Lyric pinned to this release${hit.artist ? ` (${hit.artist})` : ""} — open viewer`
+      : `Lyric in Blues Archive${hit.artist ? ` (${hit.artist})` : ""} — open viewer`;
+    n.insertAdjacentHTML(
+      "afterend",
+      `<a href="#" class="ba-archive-badge ba-lyric-badge${hit.pinned ? " ba-lyric-badge-pinned" : ""}" data-ba-lyric-id="${hit.id}" onclick="event.preventDefault();event.stopPropagation();_baOpenLyricFromBadge(${hit.id});return false" title="${escHtml(tip)}" aria-label="${escHtml(tip)}">📜</a>`,
+    );
   });
 }
+
+// Click 📜 → open the lyric viewer popup. Lazy-loads blues-archive.js
+// if needed so the viewer is available even when the user hasn't
+// visited the archive view yet this session.
+function _baOpenLyricFromBadge(lyricId) {
+  const tryOpen = () => {
+    if (typeof window._baOpenLyric === "function") {
+      window._baOpenLyric(lyricId);
+      return true;
+    }
+    return false;
+  };
+  if (tryOpen()) return;
+  if (typeof window._sdLoadModule === "function") {
+    window._sdLoadModule("/blues-archive.js")
+      .then(() => { if (!tryOpen()) { console.warn("[ba] blues-archive.js loaded but _baOpenLyric missing"); } })
+      .catch(err => console.warn("[ba] blues-archive.js load failed:", err));
+  }
+}
+window._baOpenLyricFromBadge = _baOpenLyricFromBadge;
 window._baStampArchiveIndicators = _baStampArchiveIndicators;
 
 // Helper: navigate to /?v=blues-archive and open the given archive
