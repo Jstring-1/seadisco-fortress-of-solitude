@@ -378,11 +378,18 @@ function _baRenderArtistDetail(a) {
           const titleHtml = (typeof entityLookupLinkHtml === "function" && rel.title)
             ? entityLookupLinkHtml("release", rel.title, { entityId: rel.id, title: `Lookup options for "${rel.title}"` })
             : escHtml(rel.title || "");
-          return `<tr style="cursor:pointer" onclick="_baOpenRelease(${rel.id}, '${escHtml(type).replace(/'/g, "\\'")}', '${escHtml(safeUrl)}')">
+          // Type cell is an explicit anchor that opens the in-app
+          // release/master popup. Title still routes through
+          // entityLookupLinkHtml (search-options popup), so the curator
+          // can pick: title → lookup options, type → straight to the
+          // release/album popup.
+          const typeSafe = escHtml(type).replace(/'/g, "\\'");
+          const typeLinkHtml = `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenRelease(${rel.id}, '${typeSafe}', '${escHtml(safeUrl)}')" style="color:var(--accent);text-decoration:none;text-transform:uppercase" title="Open ${type} popup">${escHtml(type)} ↗</a>`;
+          return `<tr style="cursor:pointer" onclick="_baOpenRelease(${rel.id}, '${typeSafe}', '${escHtml(safeUrl)}')">
             <td style="white-space:nowrap;color:var(--muted);font-variant-numeric:tabular-nums">${rel.year || "—"}</td>
             <td style="font-weight:600;color:var(--text)">${titleHtml}</td>
             <td style="color:#888;font-size:0.78rem">${escHtml(rel.label || "")}</td>
-            <td style="color:var(--accent);font-size:0.74rem;text-transform:uppercase">${escHtml(type)}</td>
+            <td style="font-size:0.74rem">${typeLinkHtml}</td>
           </tr>`;
         }).join("")}</tbody>
       </table>`
