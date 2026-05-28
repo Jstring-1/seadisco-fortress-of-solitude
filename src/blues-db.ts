@@ -832,21 +832,22 @@ async function _enrichOneFromDiscogsArtist(
   }
   if (collabs.length !== existingCollabs.length) patch.collaborators = collabs;
 
-  // Photo handling.
+  // Photo handling — photo follows the Discogs id.
   //   Default (non-force, bulk sweep): fill photo_url only when blank,
   //     using Discogs's first image. Never trample manual edits.
-  //   Force (per-row "Refresh from Discogs" button): ALWAYS clear the
-  //     existing photo_url. After an admin changes a discogs_id the
-  //     prior photo is by definition from the wrong artist, and
-  //     Discogs's auto-image for pre-WWII blues artists is almost
-  //     always also wrong (modern namesake hits). Cleaner UX is to
-  //     leave the placeholder up so the curator pastes a known-good
-  //     URL manually rather than playing whack-a-mole with a second
-  //     button. To opt back in to the Discogs image, paste it from
-  //     the "Open on Discogs" link.
+  //   Force (per-row "Refresh from Discogs" button): photo_url is
+  //     rewritten to mirror whatever the new id has — use Discogs's
+  //     first image when present, NULL when Discogs has no images.
+  //     This way after a discogs_id correction the picture is always
+  //     consistent with the id (or absent), never a stale photo from
+  //     the prior wrong id.
   const newPhoto = Array.isArray(data.images) && data.images[0]?.uri ? data.images[0].uri : null;
   if (force) {
-    if (row.photo_url) patch.photo_url = null;
+    if (newPhoto) {
+      if (row.photo_url !== newPhoto) patch.photo_url = newPhoto;
+    } else if (row.photo_url) {
+      patch.photo_url = null;
+    }
   } else if (newPhoto && !row.photo_url) {
     patch.photo_url = newPhoto;
   }

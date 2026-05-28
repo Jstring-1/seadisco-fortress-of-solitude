@@ -971,7 +971,7 @@ function bluesDbEnrichEditorYt()      { const id = _bluesDbState.editingId; if (
 async function bluesDbRefreshFromDiscogs() {
   const id = _bluesDbState.editingId;
   if (!id) return;
-  if (!confirm("Re-pull this artist's full record from Discogs.\n\n- Overwrites bio / notes\n- Replaces the stored release list\n- CLEARS the photo (Discogs auto-photos for pre-WWII artists are almost always wrong; paste a correct URL manually)\n\nUse this after fixing a stale discogs_id.")) return;
+  if (!confirm("Re-pull this artist's full record from Discogs.\n\n- Overwrites bio / notes\n- Replaces the stored release list\n- Rewrites the photo to match the new id (Discogs's image when present, cleared when Discogs has none)\n\nUse this after fixing a stale discogs_id.")) return;
   return _bluesEnrichGeneric({
     id,
     endpoint: "/api/admin/blues/enrich-discogs-full",
