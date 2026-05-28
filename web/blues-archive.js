@@ -386,12 +386,35 @@ async function _baOpenLyric(id) {
       overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
       document.body.appendChild(overlay);
     }
+    // Header meta line — artist (clickable to archive popup if linked,
+    // plain text otherwise), tuning, and the optional Discogs release /
+    // master pins linked out to discogs.com. Each segment shows only
+    // if the field has a value, separated by middle dots.
+    const metaParts = [];
+    if (row.artist) {
+      const artistTxt = escHtml(row.artist);
+      if (row.artist_id) {
+        metaParts.push(`<a href="#" onclick="event.preventDefault();_baOpenArtistFromBadge(${row.artist_id});return false" style="color:var(--accent);text-decoration:none" title="Open in Blues Archive">${artistTxt}</a>`);
+      } else {
+        metaParts.push(`<span>${artistTxt}</span>`);
+      }
+    }
+    if (row.tuning) metaParts.push(`<span>Tuning: ${escHtml(row.tuning)}</span>`);
+    if (row.discogs_release_id) {
+      metaParts.push(`<a href="https://www.discogs.com/release/${row.discogs_release_id}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none" title="Open release on Discogs">Release ${row.discogs_release_id} ↗</a>`);
+    }
+    if (row.discogs_master_id) {
+      metaParts.push(`<a href="https://www.discogs.com/master/${row.discogs_master_id}" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none" title="Open master on Discogs">Master ${row.discogs_master_id} ↗</a>`);
+    }
+    const metaHtml = metaParts.length
+      ? `<div style="font-size:0.78rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center">${metaParts.join('<span style="color:#555">·</span>')}</div>`
+      : "";
     overlay.innerHTML = `
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(820px,100%)">
         <div style="display:flex;justify-content:space-between;align-items:start;gap:0.6rem;margin-bottom:0.6rem">
           <div style="min-width:0">
             <h3 style="margin:0 0 0.25rem">${escHtml(row.page_title || "")}</h3>
-            ${row.tuning ? `<div style="font-size:0.78rem;color:var(--muted)">Tuning: ${escHtml(row.tuning)}</div>` : ""}
+            ${metaHtml}
           </div>
           <div style="display:flex;gap:0.4rem;align-items:start">
             <button class="archive-btn" onclick="_baOpenLyricEditor(${row.id})" title="Edit title / artist / tuning on this lyric">Edit</button>
