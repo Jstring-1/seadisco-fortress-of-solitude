@@ -6321,6 +6321,12 @@ export async function listBluesArchive(opts: {
   search?: string;
   sort?: string;
   order?: "asc" | "desc";
+  // Optional category filter — used by the stats-strip chips.
+  //   "with_both"          → artists with lyrics AND releases
+  //   "with_lyrics_only"   → lyrics but no releases
+  //   "with_releases_only" → releases but no lyrics
+  //   "empty"              → neither
+  category?: "with_both" | "with_lyrics_only" | "with_releases_only" | "empty";
   limit?: number;
   offset?: number;
 } = {}): Promise<{ rows: Array<any>; total: number }> {
@@ -6329,6 +6335,22 @@ export async function listBluesArchive(opts: {
   if (opts.search) {
     params.push(`%${opts.search}%`);
     where.push(`(a.name ILIKE $${params.length})`);
+  }
+  // Category filter — translates to a HAS_LYRICS / HAS_RELEASES
+  // combo. Built as a correlated EXISTS so the index on
+  // blues_lyrics.artist_id stays useful; the lyrics-by-name fallback
+  // covers legacy rows whose artist_id hasn't been backfilled yet.
+  if (opts.category) {
+    const HAS_LYRICS = `EXISTS (
+      SELECT 1 FROM blues_lyrics l
+       WHERE l.artist_id = a.id
+          OR (l.artist_id IS NULL AND LOWER(TRIM(l.artist)) = LOWER(a.name))
+    )`;
+    const HAS_RELEASES = `COALESCE(jsonb_array_length(a.discogs_releases), 0) > 0`;
+    if      (opts.category === "with_both")          where.push(`${HAS_LYRICS} AND ${HAS_RELEASES}`);
+    else if (opts.category === "with_lyrics_only")   where.push(`${HAS_LYRICS} AND NOT ${HAS_RELEASES}`);
+    else if (opts.category === "with_releases_only") where.push(`NOT ${HAS_LYRICS} AND ${HAS_RELEASES}`);
+    else if (opts.category === "empty")              where.push(`NOT ${HAS_LYRICS} AND NOT ${HAS_RELEASES}`);
   }
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const limit = Math.max(1, Math.min(500, opts.limit ?? 100));
