@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260529.0839" />
+  <link rel="stylesheet" href="/style.css?v=20260529.0848" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260529.0839"></script>
-<script defer src="/shared.js?v=20260529.0839"></script>
+<script defer src="/utils.js?v=20260529.0848"></script>
+<script defer src="/shared.js?v=20260529.0848"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -55,11 +55,6 @@
         <button class="admin-tab" onclick="switchAdminTab('users')">Users</button>
         <button class="admin-tab" onclick="switchAdminTab('content')">Content</button>
         <button class="admin-tab" onclick="switchAdminTab('system')">System</button>
-        <!-- Blues DB + Lyrics tabs removed — both now live in the
-             Discovery Blues Archive view (/?v=blues-archive). The
-             editor + bulk actions + scrape controls are accessible
-             there with the same /blues-admin.js code path. -->
-        <a href="/?v=blues-archive" class="admin-tab" style="text-decoration:none" title="The Blues DB + Lyrics admin sections moved to the main site's Discovery view.">Blues Archive ↗</a>
       </div>
 
       <!-- ── Overview KPI box (Overview group) ─────────────────────── -->
@@ -309,8 +304,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260529.0839"></script>
-<script defer src="/blues-admin.js?v=20260529.0839"></script>
+<script defer src="/modal.js?v=20260529.0848"></script>
+<script defer src="/blues-admin.js?v=20260529.0848"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
