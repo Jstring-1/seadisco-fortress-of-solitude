@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260528.2022" />
+  <link rel="stylesheet" href="/style.css?v=20260528.2029" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260528.2022"></script>
+<script defer src="/shared.js?v=20260528.2029"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -1020,6 +1020,7 @@ e.g.  miles davis | coltrane
       <button type="button" class="archive-btn ba-subtab is-active" data-ba-tab="artists" onclick="_baSwitchSubtab('artists')">Artists</button>
       <button type="button" class="archive-btn ba-subtab" data-ba-tab="lyrics" onclick="_baSwitchSubtab('lyrics')">Lyrics</button>
       <button type="button" class="archive-btn ba-subtab" data-ba-tab="releases" onclick="_baSwitchSubtab('releases')">Releases</button>
+      <button type="button" class="archive-btn ba-subtab" data-ba-tab="setlists" onclick="_baSwitchSubtab('setlists')">Setlists</button>
     </div>
     <div id="blues-archive-artists-panel">
       <div style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.6rem">
@@ -1083,6 +1084,22 @@ e.g.  miles davis | coltrane
       </div>
       <div id="blues-archive-releases-rows" style="font-size:0.86rem;color:var(--muted)">Loading…</div>
       <div id="blues-archive-releases-pager" style="margin-top:0.6rem;display:flex;gap:0.4rem;align-items:center;font-size:0.78rem"></div>
+    </div>
+    <div id="blues-archive-setlists-panel" style="display:none">
+      <!-- Left: setlist list with new/delete. Right: selected setlist
+           contents with reorder/remove + export. ★ favorites filter
+           inline so a lyric flagged via the viewer's star is one click
+           away. -->
+      <div style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.6rem;flex-wrap:wrap">
+        <button type="button" class="archive-btn" onclick="_baOpenNewSetlistDialog()" title="Create a new setlist. Name has to be unique among your setlists.">+ New setlist</button>
+        <button type="button" class="archive-btn" onclick="_baShowFavorites()" title="Browse every lyric you've ★ favorited.">★ Favorites</button>
+        <button type="button" class="archive-btn" onclick="_baLoadSetlists()" title="Re-fetch your setlists from the server">↻ Refresh</button>
+        <span id="blues-archive-setlists-count" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
+      </div>
+      <div style="display:grid;grid-template-columns:280px 1fr;gap:0.8rem;align-items:start">
+        <div id="blues-archive-setlists-list" style="font-size:0.86rem;color:var(--muted);border:1px solid var(--border);border-radius:5px;padding:0.4rem">Loading…</div>
+        <div id="blues-archive-setlists-detail" style="font-size:0.86rem;color:var(--muted);border:1px solid var(--border);border-radius:5px;padding:0.6rem;min-height:200px">Pick a setlist on the left, or create a new one.</div>
+      </div>
     </div>
   </div>
   <!-- Detail panel — populated when an artist row is clicked.
@@ -1607,13 +1624,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260528.2022"></script>
-<script defer src="/search.js?v=20260528.2022"></script>
-<script defer src="/collection.js?v=20260528.2022"></script>
+<script defer src="/utils.js?v=20260528.2029"></script>
+<script defer src="/search.js?v=20260528.2029"></script>
+<script defer src="/collection.js?v=20260528.2029"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260528.2022"></script>
-<script defer src="/app.js?v=20260528.2022"></script>
+<script defer src="/modal.js?v=20260528.2029"></script>
+<script defer src="/app.js?v=20260528.2029"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1624,13 +1641,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260528.2022"></script>
-<script defer src="/queue.js?v=20260528.2022"></script>
+<script defer src="/loc.js?v=20260528.2029"></script>
+<script defer src="/queue.js?v=20260528.2029"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260528.2022";
+  window._SD_LAZY_VERSION = "20260528.2029";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1660,8 +1677,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260528.2022"></script>
-<script defer src="/offline.js?v=20260528.2022"></script>
+<script defer src="/idb.js?v=20260528.2029"></script>
+<script defer src="/offline.js?v=20260528.2029"></script>
 
 </body>
 </html>
