@@ -569,13 +569,22 @@ window._baOpenRelease = _baOpenRelease;
 // Tuning input is a datalist populated from /api/admin/lyrics/tunings
 // so existing values auto-complete and stay consistent; the user can
 // type a new value too.
-async function _baOpenLyricEditor(id) {
+async function _baOpenLyricEditor(id, prefill) {
   // id === null → "new lyric" mode. Empty row template, "Create"
-  // button instead of Save, no Delete affordance.
+  // button instead of Save, no Delete affordance. The optional
+  // `prefill` object lets callers (e.g. the site-wide "Add to lyrics"
+  // popup action on a track) seed title + artist so the curator
+  // only needs to paste the body and hit Create.
   const isNew = id == null;
   let row;
   if (isNew) {
     row = { id: null, page_title: "", artist: "", artist_id: null, tuning: "", page_url: "", discogs_release_id: null, discogs_master_id: null, plaintext: "", wikitext: "" };
+    if (prefill && typeof prefill === "object") {
+      if (typeof prefill.page_title === "string") row.page_title = prefill.page_title;
+      if (typeof prefill.artist     === "string") row.artist     = prefill.artist;
+      if (Number.isFinite(prefill.discogs_release_id)) row.discogs_release_id = Number(prefill.discogs_release_id);
+      if (Number.isFinite(prefill.discogs_master_id))  row.discogs_master_id  = Number(prefill.discogs_master_id);
+    }
   } else {
     try {
       const r = await apiFetch(`/api/admin/lyrics/${id}`);
@@ -1054,6 +1063,7 @@ let _baLyricsSearchTimer = null;
 let _baLyricsTuning = "";
 let _baLyricsUnmatched = false;
 let _baLyricsUnpinned = false;
+let _baLyricsEmpty = false;
 let _baLyricsRowsCache = [];
 const _baLyricsListSort = { key: "page_title", dir: "asc" };
 const _BA_LYRICS_LIST_TYPES = { page_title: "str", artist: "str", tuning: "str", snippet: "str" };
@@ -1107,6 +1117,13 @@ function _baLyricsApplyUnpinned() {
 }
 window._baLyricsApplyUnpinned = _baLyricsApplyUnpinned;
 
+function _baLyricsApplyEmpty() {
+  _baLyricsEmpty = !!document.getElementById("blues-archive-lyrics-empty")?.checked;
+  _baLyricsPage = 0;
+  _baLoadLyrics();
+}
+window._baLyricsApplyEmpty = _baLyricsApplyEmpty;
+
 // Clear all active filters on the Lyrics tab. Bound to the
 // "Clear filters" button that auto-shows/hides based on filter state.
 function _baLyricsClearFilters() {
@@ -1114,13 +1131,16 @@ function _baLyricsClearFilters() {
   const tuningSel = document.getElementById("blues-archive-lyrics-tuning");
   const unmatched = document.getElementById("blues-archive-lyrics-unmatched");
   const unpinned  = document.getElementById("blues-archive-lyrics-unpinned");
+  const empty     = document.getElementById("blues-archive-lyrics-empty");
   if (search)    search.value = "";
   if (tuningSel) tuningSel.value = "";
   if (unmatched) unmatched.checked = false;
   if (unpinned)  unpinned.checked  = false;
+  if (empty)     empty.checked     = false;
   _baLyricsTuning    = "";
   _baLyricsUnmatched = false;
   _baLyricsUnpinned  = false;
+  _baLyricsEmpty     = false;
   _baLyricsPage      = 0;
   _baLoadLyrics();
 }
@@ -1178,10 +1198,11 @@ async function _baLoadLyrics() {
   if (_baLyricsTuning)   params.set("tuning", _baLyricsTuning);
   if (_baLyricsUnmatched) params.set("unmatched", "1");
   if (_baLyricsUnpinned)  params.set("unpinned",  "1");
+  if (_baLyricsEmpty)     params.set("empty",     "1");
   // Toggle the "Clear filters" button visibility based on whether
   // any filter is currently active.
   const clearBtn = document.getElementById("blues-archive-lyrics-clear");
-  if (clearBtn) clearBtn.style.display = (q || _baLyricsTuning || _baLyricsUnmatched || _baLyricsUnpinned) ? "" : "none";
+  if (clearBtn) clearBtn.style.display = (q || _baLyricsTuning || _baLyricsUnmatched || _baLyricsUnpinned || _baLyricsEmpty) ? "" : "none";
   // Server-side sort — see admin.html for the parallel wiring. The
   // client-side _baSortApply over the visible page was misleading
   // on the master Lyrics list because it only reordered the current

@@ -1453,7 +1453,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260528.2000";
+  const SITE_VERSION = "build 20260528.2013";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -1983,6 +1983,13 @@ function openLookupPopup(ev, scope, label, ctx) {
   if (window._isAdmin && scope === "artist") {
     internal.push({ key: "edit", icon: "✎", text: "Edit in Blues Archive" });
   }
+  // Admin-only "Add to lyrics" — track scope only. Opens the new-lyric
+  // editor pre-populated with this track's title (and artist when the
+  // popup knows it via ctx.trackArtist). Curator pastes the body and
+  // hits Create. Sits at the top alongside the artist edit shortcut.
+  if (window._isAdmin && scope === "track") {
+    internal.push({ key: "addLyric", icon: "📜", text: "Add to lyrics" });
+  }
   // SeaDisco / collection use the same line-art SVGs as the navbar so
   // the popup feels like an extension of the nav. Wrapped in a span
   // tagged `lookup-popup-icon-svg` so CSS forces white stroke (the
@@ -2162,6 +2169,28 @@ function openLookupPopup(ev, scope, label, ctx) {
               console.warn("[edit lookup popup]", err);
             }
           })();
+        }
+        else if (b.key === "addLyric") {
+          // Open the Blues Archive new-lyric editor seeded with this
+          // track's title (+ artist when known). Lazy-loads
+          // blues-archive.js if needed so the editor is reachable from
+          // any view, not just /?v=blues-archive.
+          const seed = {
+            page_title: String(label || "").trim(),
+            artist: String(trackArtist || "").trim(),
+          };
+          const open = () => {
+            if (typeof window._baOpenLyricEditor === "function") {
+              window._baOpenLyricEditor(null, seed);
+              return true;
+            }
+            return false;
+          };
+          if (!open() && typeof window._sdLoadModule === "function") {
+            window._sdLoadModule("/blues-archive.js")
+              .then(() => { if (!open()) showToast?.("Lyric editor unavailable", "error"); })
+              .catch(() => showToast?.("Couldn't load lyric editor", "error"));
+          }
         }
         else if (b.key === "sd")    _lookupSearchSeaDisco(scope, label, entityId);
         else if (b.key === "coll") {

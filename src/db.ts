@@ -6283,6 +6283,10 @@ export async function listLyrics(opts: {
    *  discogs_master_id are NULL (no release pin at all). Lets the
    *  curator find lyrics that still need a Discogs release linked. */
   unpinnedOnly?: boolean;
+  /** True → only return rows whose plaintext body is empty / NULL.
+   *  Used to surface lyric titles awaiting their text body so the
+   *  curator can paste it in via the editor. */
+  emptyOnly?: boolean;
   sort?: string;
   order?: "asc" | "desc";
   limit?: number;
@@ -6316,6 +6320,9 @@ export async function listLyrics(opts: {
   }
   if (opts.unpinnedOnly) {
     where.push(`discogs_release_id IS NULL AND discogs_master_id IS NULL`);
+  }
+  if (opts.emptyOnly) {
+    where.push(`(plaintext IS NULL OR LENGTH(TRIM(plaintext)) = 0)`);
   }
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
   const limit = Math.max(1, Math.min(500, opts.limit ?? 100));
