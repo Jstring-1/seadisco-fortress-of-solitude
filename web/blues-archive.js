@@ -73,6 +73,16 @@ function initBluesArchiveView() {
   // Warm the favorites cache so the star renders correct on the first
   // lyric viewer open. Non-blocking; default empty Set if it fails.
   _baLoadFavoriteIds().catch(() => {});
+  // Auto-resume the Discogs-search worker poll if a job is already
+  // running on the server (page reload mid-run shouldn't lose the UI).
+  (async () => {
+    try {
+      const r = await apiFetch("/api/admin/lyrics/resolve-years-discogs/status");
+      if (!r.ok) return;
+      const job = await r.json();
+      if (job.status === "running") _baPollYearJob();
+    } catch {}
+  })();
   // Lazy-load /blues-admin.js for admins so the bulk-Discogs job
   // status + lyrics scrape polling auto-attach to anything already
   // running on the server (e.g. user reloaded mid-scrape). Non-
@@ -677,6 +687,10 @@ async function _baOpenLyricEditor(id, prefill) {
           <label style="display:block;margin:0 0 0.3rem;font-size:0.82rem;color:var(--muted)" title="Discogs master ID this lyric belongs to (optional). Covers every pressing of the work.">Discogs master ID</label>
           <input id="ba-edit-master-id" type="number" min="1" value="${row.discogs_master_id ?? ""}" placeholder="(optional)" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem">
         </div>
+        <div style="width:120px">
+          <label style="display:block;margin:0 0 0.3rem;font-size:0.82rem;color:var(--muted)" title="Year the song was first recorded/released. Auto-resolved by 'Resolve years' from the linked artist's Discogs releases; enter manually here to override or fill blanks the resolver couldn't find.">First year</label>
+          <input id="ba-edit-first-year" type="number" min="1850" max="2100" value="${row.first_release_year ?? ""}" placeholder="YYYY" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem">
+        </div>
       </div>
       ${isNew ? `
       <label style="display:block;margin:0.6rem 0 0.3rem;font-size:0.82rem;color:var(--muted)">Source URL (optional)</label>
@@ -774,8 +788,10 @@ async function _baCreateLyric() {
   const plaintext  = (document.getElementById("ba-edit-plaintext")?.value ?? "");
   const releaseIdRaw = document.getElementById("ba-edit-release-id")?.value ?? "";
   const masterIdRaw  = document.getElementById("ba-edit-master-id")?.value ?? "";
+  const firstYearRaw = document.getElementById("ba-edit-first-year")?.value ?? "";
   const discogs_release_id = releaseIdRaw === "" ? null : Number(releaseIdRaw);
   const discogs_master_id  = masterIdRaw  === "" ? null : Number(masterIdRaw);
+  const first_release_year = firstYearRaw === "" ? null : Number(firstYearRaw);
   if (statusEl) statusEl.textContent = "Creating…";
   try {
     const r = await apiFetch("/api/admin/lyrics", {
@@ -783,7 +799,7 @@ async function _baCreateLyric() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         page_title, artist, tuning, page_url, plaintext,
-        discogs_release_id, discogs_master_id,
+        discogs_release_id, discogs_master_id, first_release_year,
       }),
     });
     if (!r.ok) {
@@ -812,15 +828,17 @@ async function _baSaveLyricEdit(id) {
   // Empty string → null on the server (releases pin cleared).
   const releaseIdRaw = document.getElementById("ba-edit-release-id")?.value ?? "";
   const masterIdRaw  = document.getElementById("ba-edit-master-id")?.value ?? "";
+  const firstYearRaw = document.getElementById("ba-edit-first-year")?.value ?? "";
   const discogs_release_id = releaseIdRaw === "" ? null : Number(releaseIdRaw);
   const discogs_master_id  = masterIdRaw  === "" ? null : Number(masterIdRaw);
+  const first_release_year = firstYearRaw === "" ? null : Number(firstYearRaw);
   if (!page_title) { if (statusEl) statusEl.textContent = "Title is required."; return; }
   if (statusEl) statusEl.textContent = "Saving…";
   try {
     const r = await apiFetch(`/api/admin/lyrics/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ artist, tuning, page_title, discogs_release_id, discogs_master_id }),
+      body: JSON.stringify({ artist, tuning, page_title, discogs_release_id, discogs_master_id, first_release_year }),
     });
     if (!r.ok) {
       // 409 = title already taken on this source_host. Server returns
@@ -1169,6 +1187,84 @@ async function _baResolveYearsCheap() {
   }
 }
 window._baResolveYearsCheap = _baResolveYearsCheap;
+
+// Slow Discogs-search resolver. POSTs to the background-job endpoint
+// then polls /status every 4s until done. Button stays disabled while
+// running and shows live counts; click while running flips to "Stop"
+// (which requests graceful shutdown after the current row).
+let _baYearJobTimer = null;
+async function _baResolveYearsDiscogs() {
+  const btn = document.getElementById("blues-archive-lyrics-resolve-years-discogs-btn");
+  // If already running, this click is a stop request.
+  if (btn?.dataset.running === "1") {
+    if (!confirm("Stop the Discogs-search worker after the current row?")) return;
+    try { await apiFetch("/api/admin/lyrics/resolve-years-discogs/stop", { method: "POST" }); }
+    catch {}
+    return;
+  }
+  if (!confirm(
+    "Run the Discogs-search worker for every lyric still missing a year?\n\n" +
+    "Slow — rate-limited 1 req/sec on Discogs.\n" +
+    "Leaving the page is fine; the job runs server-side and you can reload to watch progress."
+  )) return;
+  try {
+    const r = await apiFetch("/api/admin/lyrics/resolve-years-discogs", { method: "POST" });
+    if (r.status === 409) {
+      const j = await r.json().catch(() => ({}));
+      alert("Already running since " + (j.startedAt ?? "earlier") + ". Watching progress.");
+    } else if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert("Couldn't start: " + (err.error ?? r.status));
+      return;
+    }
+  } catch (e) { alert("Couldn't start: " + (e?.message || e)); return; }
+  _baPollYearJob();
+}
+window._baResolveYearsDiscogs = _baResolveYearsDiscogs;
+
+function _baPollYearJob() {
+  const btn = document.getElementById("blues-archive-lyrics-resolve-years-discogs-btn");
+  if (!btn) return;
+  if (_baYearJobTimer) { clearInterval(_baYearJobTimer); _baYearJobTimer = null; }
+  const tick = async () => {
+    try {
+      const r = await apiFetch("/api/admin/lyrics/resolve-years-discogs/status");
+      if (!r.ok) return;
+      const job = await r.json();
+      if (job.status === "running") {
+        btn.dataset.running = "1";
+        const p = job.progress;
+        btn.textContent = p
+          ? `Discogs: ${p.processed}/${p.total} · ${p.resolved} hit · ${p.notFound} miss · click to Stop`
+          : "Running… click to Stop";
+        if (Array.isArray(p?.recentErrors) && p.recentErrors.length) {
+          btn.title = "Latest errors:\n" + p.recentErrors.slice(-5).map(e => `${e.title}: ${e.message?.slice(0, 80) || ""}`).join("\n");
+        }
+        return;
+      }
+      // Done / error / idle
+      clearInterval(_baYearJobTimer); _baYearJobTimer = null;
+      btn.dataset.running = "";
+      btn.textContent = "Resolve via Discogs ↗";
+      btn.title = "Slow background worker: Discogs-searches each still-missing lyric by artist + title and takes the earliest year. ~1 req/sec → ~1-2 min per 100 lyrics. Resumable.";
+      if (job.status === "done" && job.result) {
+        const o = job.result;
+        alert(
+          `Discogs-search worker done in ${(o.durationMs / 60000).toFixed(1)} min:\n` +
+          `· ${o.resolved} year${o.resolved === 1 ? "" : "s"} resolved\n` +
+          `· ${o.notFound} not found on Discogs\n` +
+          (o.errors?.length ? `· ${o.errors.length} errors` : `· no errors`)
+        );
+        if (_baSubtab === "lyrics") _baLoadLyrics();
+      } else if (job.status === "error") {
+        alert("Worker errored: " + (job.error ?? "unknown"));
+      }
+    } catch {}
+  };
+  tick();
+  _baYearJobTimer = setInterval(tick, 4000);
+}
+window._baPollYearJob = _baPollYearJob;
 
 // ── Favorites + Setlists ─────────────────────────────────────────────
 // In-memory cache of favorited lyric IDs so the viewer star renders

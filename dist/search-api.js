@@ -8,7 +8,7 @@ import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
 import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap } from "./db.js";
-import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists, previewBluesArtistFromDiscogs } from "./blues-db.js";
+import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists, previewBluesArtistFromDiscogs, resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const anthropicKey = process.env.ANTHROPIC_API_KEY ?? "";
 // Discogs OAuth 1.0a consumer credentials (register at discogs.com/settings/developers)
@@ -9868,6 +9868,7 @@ app.post("/api/admin/lyrics", express.json({ limit: "200kb" }), async (req, res)
             artistId: body.artist_id != null ? Number(body.artist_id) : null,
             discogsReleaseId: body.discogs_release_id != null && body.discogs_release_id !== "" ? Number(body.discogs_release_id) : null,
             discogsMasterId: body.discogs_master_id != null && body.discogs_master_id !== "" ? Number(body.discogs_master_id) : null,
+            firstReleaseYear: body.first_release_year != null && body.first_release_year !== "" ? Math.max(1850, Math.min(2100, Number(body.first_release_year))) : null,
         });
         res.json(row);
     }
@@ -9916,6 +9917,62 @@ app.get("/api/admin/lyrics", async (req, res) => {
     catch (err) {
         console.error("[lyrics list]", err);
         res.status(500).json({ error: String(err) });
+    }
+});
+// ── Discogs-search worker for missing lyric years ────────────────────
+// Background job: rate-limited at 1.1s/req, ~1-2 minutes per 100
+// missing lyrics. POST starts (returns 409 if already running),
+// GET /status polls counts + recent errors, POST /stop requests
+// graceful shutdown after the current row.
+let _bluesLyricYearJob = { status: "idle" };
+app.post("/api/admin/lyrics/resolve-years-discogs", async (req, res) => {
+    const adminId = await requireAdmin(req, res);
+    if (!adminId)
+        return;
+    const client = await getDiscogsClientForUser(adminId);
+    if (!client) {
+        res.status(400).json({ error: "Admin has not connected Discogs via OAuth. Connect Discogs on the Account page first." });
+        return;
+    }
+    if (_bluesLyricYearJob.status === "running") {
+        res.status(409).json({ error: "Lyric-year worker already running", startedAt: _bluesLyricYearJob.startedAt, progress: _bluesLyricYearJob.progress });
+        return;
+    }
+    const limitRaw = req.query.limit;
+    const limit = limitRaw ? Math.max(1, Math.min(5000, parseInt(limitRaw, 10) || 5000)) : 5000;
+    _bluesLyricYearJob = { status: "running", startedAt: new Date().toISOString(), stopRequested: false };
+    resolveLyricFirstReleaseYearsDiscogs(client, {
+        limit,
+        onProgress: (p) => { _bluesLyricYearJob.progress = p; },
+        shouldStop: () => !!_bluesLyricYearJob.stopRequested,
+    })
+        .then(result => {
+        _bluesLyricYearJob.status = "done";
+        _bluesLyricYearJob.result = result;
+        _bluesLyricYearJob.endedAt = new Date().toISOString();
+    })
+        .catch(err => {
+        _bluesLyricYearJob.status = "error";
+        _bluesLyricYearJob.error = err?.message ?? String(err);
+        _bluesLyricYearJob.endedAt = new Date().toISOString();
+        console.error("[lyric-year worker]", err);
+    });
+    res.status(202).json({ ok: true, started: true, startedAt: _bluesLyricYearJob.startedAt });
+});
+app.get("/api/admin/lyrics/resolve-years-discogs/status", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    res.json(_bluesLyricYearJob);
+});
+app.post("/api/admin/lyrics/resolve-years-discogs/stop", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    if (_bluesLyricYearJob.status === "running") {
+        _bluesLyricYearJob.stopRequested = true;
+        res.json({ ok: true, stopRequested: true });
+    }
+    else {
+        res.json({ ok: true, notRunning: true });
     }
 });
 // POST /api/admin/lyrics/resolve-years-cheap
@@ -10147,6 +10204,11 @@ app.patch("/api/admin/lyrics/:id", express.json({ limit: "4kb" }), async (req, r
         if ("discogs_master_id" in (req.body ?? {})) {
             const v = req.body.discogs_master_id;
             patch.discogs_master_id = (v === null || v === "" || v === undefined) ? null : Number(v);
+        }
+        if ("first_release_year" in (req.body ?? {})) {
+            const v = req.body.first_release_year;
+            const n = Number(v);
+            patch.first_release_year = (v === null || v === "" || v === undefined || !Number.isFinite(n)) ? null : Math.max(1850, Math.min(2100, n));
         }
         const row = await updateLyricFields(id, patch);
         if (!row) {
