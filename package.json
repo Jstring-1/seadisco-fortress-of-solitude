@@ -12,10 +12,12 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@types/pdfkit": "^0.17.6",
     "compression": "^1.8.1",
     "cookie-parser": "^1.4.7",
     "express": "^4.21.2",
     "jose": "^6.2.2",
+    "pdfkit": "^0.18.0",
     "pg": "^8.20.0"
   },
   "devDependencies": {

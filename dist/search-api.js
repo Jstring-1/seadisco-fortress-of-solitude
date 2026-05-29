@@ -3,6 +3,7 @@ import compression from "compression";
 import cookieParser from "cookie-parser";
 import crypto from "crypto";
 import fs from "fs";
+import PDFDocument from "pdfkit";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
@@ -8808,6 +8809,128 @@ app.get("/api/admin/lyrics/export.csv", async (req, res) => {
     catch (err) {
         console.error("[lyrics export.csv]", err);
         res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// GET /api/admin/lyrics/export.pdf — streamed PDF of every lyric in
+// the archive, sorted alphabetically by song title (case-insensitive).
+// One continuous flow with a page break per starting-letter section
+// so an A4 / Letter reader can jump between letters. Header on each
+// lyric: title (large) + artist · tuning · first-release year (small
+// italic). Body: plaintext. Empty plaintext rows print the header
+// only with a "(no text yet)" marker. Streamed so the response
+// starts before the full document is built — important for a 4k-row
+// run that can take a few seconds to render.
+app.get("/api/admin/lyrics/export.pdf", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const r = await getPool().query(`SELECT page_title, artist, tuning, plaintext, first_release_year
+         FROM blues_lyrics
+        ORDER BY lower(page_title) ASC, page_title ASC`);
+        const rows = r.rows;
+        res.setHeader("Content-Type", "application/pdf");
+        res.setHeader("Content-Disposition", `attachment; filename="seadisco-lyrics-${new Date().toISOString().slice(0, 10)}.pdf"`);
+        const doc = new PDFDocument({
+            size: "LETTER",
+            margins: { top: 56, bottom: 56, left: 56, right: 56 },
+            info: {
+                Title: "SeaDisco Blues Archive — Lyrics",
+                Author: "SeaDisco",
+                Subject: `${rows.length} lyrics, sorted by song title`,
+            },
+            bufferPages: true,
+        });
+        doc.pipe(res);
+        // ── Cover page ─────────────────────────────────────────────────
+        doc.font("Times-Bold").fontSize(28).text("Blues Archive", { align: "center" });
+        doc.moveDown(0.3);
+        doc.font("Times-Italic").fontSize(14).text("Lyrics, sorted by song title", { align: "center" });
+        doc.moveDown(2);
+        doc.font("Times-Roman").fontSize(11)
+            .text(`${rows.length.toLocaleString()} lyrics`, { align: "center" })
+            .text(new Date().toISOString().slice(0, 10), { align: "center" });
+        // ── Lyric flow ─────────────────────────────────────────────────
+        // Start each starting-letter section on a fresh page so the
+        // reader's go-to-page UI is useful for jumping around. Within a
+        // section the lyrics flow continuously with a small spacer.
+        let currentLetter = null;
+        const firstLetterOf = (s) => {
+            const m = String(s || "").trim().match(/[A-Za-z0-9]/);
+            return m ? m[0].toUpperCase() : "#";
+        };
+        for (const row of rows) {
+            const letter = firstLetterOf(row.page_title);
+            const startsNewSection = letter !== currentLetter;
+            if (startsNewSection) {
+                doc.addPage();
+                currentLetter = letter;
+                doc.font("Times-Bold").fontSize(36).fillColor("#444").text(letter, { align: "left" });
+                doc.moveDown(0.5);
+                doc.fillColor("black");
+            }
+            // If we'd start a new lyric near the bottom of the page,
+            // push to the next page so the header+first lines don't get
+            // orphaned. ~80pt = enough for a title + meta + a few lines.
+            if (!startsNewSection && doc.y > doc.page.height - doc.page.margins.bottom - 80) {
+                doc.addPage();
+            }
+            // Title
+            doc.font("Times-Bold").fontSize(13).fillColor("black")
+                .text(String(row.page_title || "Untitled"));
+            // Meta line: artist · tuning · year — only the parts we have.
+            const metaParts = [];
+            if (row.artist)
+                metaParts.push(String(row.artist));
+            if (row.tuning)
+                metaParts.push(String(row.tuning));
+            if (row.first_release_year)
+                metaParts.push(String(row.first_release_year));
+            if (metaParts.length) {
+                doc.font("Times-Italic").fontSize(9).fillColor("#555")
+                    .text(metaParts.join("  ·  "));
+            }
+            doc.moveDown(0.35);
+            // Body
+            const body = String(row.plaintext || "").trim();
+            if (body) {
+                doc.font("Times-Roman").fontSize(10).fillColor("black")
+                    .text(body, { paragraphGap: 4, lineGap: 1 });
+            }
+            else {
+                doc.font("Times-Italic").fontSize(9).fillColor("#999")
+                    .text("(no text yet)");
+            }
+            doc.moveDown(0.9);
+            // Thin separator between lyrics so the eye finds the next title.
+            const sepY = doc.y;
+            doc.strokeColor("#ddd").lineWidth(0.5)
+                .moveTo(doc.page.margins.left, sepY)
+                .lineTo(doc.page.width - doc.page.margins.right, sepY)
+                .stroke();
+            doc.moveDown(0.6);
+        }
+        // ── Page numbers ───────────────────────────────────────────────
+        // Buffered so we know the total page count. Skip the cover (page 0).
+        const range = doc.bufferedPageRange();
+        for (let i = 0; i < range.count; i++) {
+            doc.switchToPage(range.start + i);
+            if (i === 0)
+                continue;
+            doc.font("Times-Roman").fontSize(9).fillColor("#888");
+            const y = doc.page.height - doc.page.margins.bottom + 20;
+            doc.text(`${i} / ${range.count - 1}`, doc.page.margins.left, y, { align: "center", width: doc.page.width - doc.page.margins.left - doc.page.margins.right });
+        }
+        doc.end();
+    }
+    catch (err) {
+        console.error("[lyrics export.pdf]", err);
+        // If we already started streaming we can't change status; just
+        // tear down the connection so the user sees an error in their
+        // download manager rather than a half-good PDF.
+        if (!res.headersSent)
+            res.status(500).json({ error: err?.message ?? String(err) });
+        else
+            res.end();
     }
 });
 // Delete every row in blues_artists. Admin-only. Used to wipe a noisy
