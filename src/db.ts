@@ -1007,6 +1007,26 @@ export async function initDb() {
       FOR EACH ROW EXECUTE FUNCTION _blues_set_updated_at();
   `);
 
+  // ── Pseudonym / band-member links between blues_artists rows ─────
+  // Symmetric junction table — the same row covers both directions of
+  // a link. We normalise (a_id, b_id) to (lo, hi) so a single row per
+  // pair is enforced by the PK. `kind` is what kind of connection it
+  // is: 'pseudonym' = same person under different recording name,
+  // 'band' = played together in any group / sideman capacity. The
+  // editor adds/removes; the artist popup renders chips on either side.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS blues_artist_links (
+      lo_id      INTEGER NOT NULL REFERENCES blues_artists(id) ON DELETE CASCADE,
+      hi_id      INTEGER NOT NULL REFERENCES blues_artists(id) ON DELETE CASCADE,
+      kind       TEXT    NOT NULL DEFAULT 'pseudonym',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (lo_id, hi_id),
+      CHECK (lo_id < hi_id),
+      CHECK (kind IN ('pseudonym', 'band'))
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS blues_artist_links_hi_idx ON blues_artist_links (hi_id)`);
+
   // One-shot backfill of artist_id for any rows missing it. Matches on
   // case-insensitive trim equality — same key the merge / import code
   // paths have always used. Idempotent: once populated, the WHERE
@@ -6995,7 +7015,78 @@ export async function getBluesArchiveArtist(id: number): Promise<any | null> {
     if (xy !== yy) return xy - yy;
     return String(x?.title ?? "").localeCompare(String(y?.title ?? ""));
   });
-  return { ...a, lyrics: lr.rows, tunings: tr.rows, releases };
+  // Linked artists — symmetric junction. Either lo_id or hi_id can
+  // be us; the other side is the linked row. Returns name + photo +
+  // discogs_id so the popup can render a clickable chip with art.
+  const lk = await getPool().query(
+    `SELECT
+        CASE WHEN l.lo_id = $1 THEN l.hi_id ELSE l.lo_id END AS id,
+        l.kind,
+        b.name,
+        b.photo_url,
+        b.discogs_id
+       FROM blues_artist_links l
+       JOIN blues_artists b
+         ON b.id = CASE WHEN l.lo_id = $1 THEN l.hi_id ELSE l.lo_id END
+      WHERE l.lo_id = $1 OR l.hi_id = $1
+      ORDER BY l.kind ASC, lower(b.name) ASC`,
+    [id],
+  );
+  return { ...a, lyrics: lr.rows, tunings: tr.rows, releases, links: lk.rows };
+}
+
+// ── blues_artist_links helpers ─────────────────────────────────────
+// Symmetric (lo,hi) storage — we normalise the pair before write so
+// the PK enforces single-row-per-pair regardless of click direction.
+export async function addBluesArtistLink(
+  aId: number,
+  bId: number,
+  kind: "pseudonym" | "band",
+): Promise<void> {
+  if (!Number.isFinite(aId) || !Number.isFinite(bId) || aId === bId) {
+    throw new Error("Invalid artist ids");
+  }
+  if (kind !== "pseudonym" && kind !== "band") {
+    throw new Error("Invalid kind");
+  }
+  const lo = Math.min(aId, bId);
+  const hi = Math.max(aId, bId);
+  // ON CONFLICT updates the kind — lets the user re-categorise an
+  // existing link (e.g. pseudonym → band) without having to delete +
+  // re-add it.
+  await getPool().query(
+    `INSERT INTO blues_artist_links (lo_id, hi_id, kind)
+     VALUES ($1, $2, $3)
+     ON CONFLICT (lo_id, hi_id) DO UPDATE SET kind = EXCLUDED.kind`,
+    [lo, hi, kind],
+  );
+}
+
+export async function removeBluesArtistLink(aId: number, bId: number): Promise<void> {
+  if (!Number.isFinite(aId) || !Number.isFinite(bId)) return;
+  const lo = Math.min(aId, bId);
+  const hi = Math.max(aId, bId);
+  await getPool().query(
+    `DELETE FROM blues_artist_links WHERE lo_id = $1 AND hi_id = $2`,
+    [lo, hi],
+  );
+}
+
+export async function listBluesArtistLinks(aId: number): Promise<any[]> {
+  const r = await getPool().query(
+    `SELECT
+        CASE WHEN l.lo_id = $1 THEN l.hi_id ELSE l.lo_id END AS id,
+        l.kind,
+        b.name,
+        b.discogs_id
+       FROM blues_artist_links l
+       JOIN blues_artists b
+         ON b.id = CASE WHEN l.lo_id = $1 THEN l.hi_id ELSE l.lo_id END
+      WHERE l.lo_id = $1 OR l.hi_id = $1
+      ORDER BY l.kind ASC, lower(b.name) ASC`,
+    [aId],
+  );
+  return r.rows;
 }
 
 
