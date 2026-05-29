@@ -8229,28 +8229,15 @@ app.get("/api/admin/lyrics/export.pdf", async (req, res) => {
       .text(`${rows.length.toLocaleString()} lyrics`, { align: "center" })
       .text(new Date().toISOString().slice(0, 10), { align: "center" });
     // ── Lyric flow ─────────────────────────────────────────────────
-    // Start each starting-letter section on a fresh page so the
-    // reader's go-to-page UI is useful for jumping around. Within a
-    // section the lyrics flow continuously with a small spacer.
-    let currentLetter: string | null = null;
-    const firstLetterOf = (s: string): string => {
-      const m = String(s || "").trim().match(/[A-Za-z0-9]/);
-      return m ? m[0].toUpperCase() : "#";
-    };
+    // Continuous flow — no per-letter section breaks. Each lyric
+    // gets its title + meta + body, then a thin separator and a
+    // generous gap so consecutive entries are clearly delimited.
+    doc.addPage();
     for (const row of rows) {
-      const letter = firstLetterOf(row.page_title);
-      const startsNewSection = letter !== currentLetter;
-      if (startsNewSection) {
-        doc.addPage();
-        currentLetter = letter;
-        doc.font("Times-Bold").fontSize(36).fillColor("#444").text(letter, { align: "left" });
-        doc.moveDown(0.5);
-        doc.fillColor("black");
-      }
       // If we'd start a new lyric near the bottom of the page,
       // push to the next page so the header+first lines don't get
       // orphaned. ~80pt = enough for a title + meta + a few lines.
-      if (!startsNewSection && doc.y > doc.page.height - doc.page.margins.bottom - 80) {
+      if (doc.y > doc.page.height - doc.page.margins.bottom - 80) {
         doc.addPage();
       }
       // Title
@@ -8275,14 +8262,14 @@ app.get("/api/admin/lyrics/export.pdf", async (req, res) => {
         doc.font("Times-Italic").fontSize(9).fillColor("#999")
           .text("(no text yet)");
       }
-      doc.moveDown(0.9);
+      doc.moveDown(1.6);
       // Thin separator between lyrics so the eye finds the next title.
       const sepY = doc.y;
       doc.strokeColor("#ddd").lineWidth(0.5)
         .moveTo(doc.page.margins.left, sepY)
         .lineTo(doc.page.width - doc.page.margins.right, sepY)
         .stroke();
-      doc.moveDown(0.6);
+      doc.moveDown(1.4);
     }
     // ── Page numbers ───────────────────────────────────────────────
     // Buffered so we know the total page count. Skip the cover (page 0).
