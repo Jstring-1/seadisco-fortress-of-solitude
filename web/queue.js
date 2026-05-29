@@ -1549,10 +1549,15 @@ async function queueAddAlbumOrPlay(items, opts) {
     // outrun the browser's autoplay policy window. Play the head
     // directly from the in-memory cache instead.
     if (Array.isArray(_queue) && _queue.length > 0) {
-      const head = _queueCurrentPosition != null
-        ? (_queue.find(it => it.position === _queueCurrentPosition) ?? _queue[0])
-        : _queue[0];
-      return _queuePlayItem(head);
+      // Play mode: the user just hit ▶ on a release/album. The newly
+      // inserted tracks are at the head (queueAdd mode:"next" prepends
+      // and re-stamps positions). Always play _queue[0] — the first
+      // track of what we just added. The prior check used
+      // _queueCurrentPosition as a fallback, but after re-stamping that
+      // stale position number lands on whatever OTHER track now sits at
+      // it (typically the old playlist's middle), causing a "random
+      // queue song" to play instead of the album the user clicked.
+      return _queuePlayItem(_queue[0]);
     }
     // Fallback for the unlikely case _queue didn't repopulate.
     await queuePlayHead();
