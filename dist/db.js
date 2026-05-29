@@ -997,6 +997,16 @@ export async function initDb() {
     CREATE UNIQUE INDEX IF NOT EXISTS blues_lyrics_dedup_idx
       ON blues_lyrics (source_host, page_title, (COALESCE(LOWER(TRIM(artist)), '')))
   `);
+    // ── Lyric first_release_year (chronological sort) ────────────────────
+    // Year the song was first recorded/released. Resolved cheaply by
+    // matching the lyric's page_title against blues_artists.discogs_releases
+    // titles for the linked artist; falls back to manual entry. NULL until
+    // resolved. Source enum lets the curator audit where each value came
+    // from (e.g. tighten matches that were 'artist_releases' guesses).
+    await getPool().query(`ALTER TABLE blues_lyrics ADD COLUMN IF NOT EXISTS first_release_year INTEGER`);
+    await getPool().query(`ALTER TABLE blues_lyrics ADD COLUMN IF NOT EXISTS first_release_source TEXT`);
+    await getPool().query(`ALTER TABLE blues_lyrics ADD COLUMN IF NOT EXISTS first_release_checked_at TIMESTAMPTZ`);
+    await getPool().query(`CREATE INDEX IF NOT EXISTS blues_lyrics_first_release_year_idx ON blues_lyrics (first_release_year)`);
     // ── Lyric favorites + Setlists (admin curator tools) ─────────────────
     // Per-user favorites: (clerk_user_id, lyric_id) PK so a single user
     // can't double-favorite the same lyric. ON DELETE CASCADE on the
@@ -1281,6 +1291,49 @@ export async function deleteBluesArtistAndLyrics(id) {
     finally {
         client.release();
     }
+}
+// ── Lyric first_release_year resolver: cheap path ────────────────────
+// For every lyric whose linked artist has a discogs_releases entry
+// whose title case-insensitively matches the lyric's page_title, set
+// first_release_year to the minimum year among Main-role matches.
+// Idempotent — only touches rows where first_release_year IS NULL or
+// the linked artist's release set has shifted. Returns updated count.
+export async function resolveLyricFirstReleaseYearsCheap(opts = {}) {
+    const guard = opts.force
+        ? ""
+        : `AND (l.first_release_year IS NULL OR l.first_release_source IN ('artist_releases'))`;
+    const r = await getPool().query(`
+    WITH cand AS (
+      SELECT l.id AS lyric_id,
+             MIN((rel->>'year')::int) AS year
+        FROM blues_lyrics l
+        JOIN blues_artists a ON a.id = l.artist_id,
+             jsonb_array_elements(COALESCE(a.discogs_releases, '[]'::jsonb)) AS rel
+       WHERE LOWER(TRIM(rel->>'title')) = LOWER(TRIM(l.page_title))
+         AND (rel->>'year') ~ '^[0-9]+$'
+         AND ((rel->>'role') IS NULL OR (rel->>'role') = '' OR (rel->>'role') = 'Main')
+         ${guard}
+       GROUP BY l.id
+    )
+    UPDATE blues_lyrics l
+       SET first_release_year       = c.year,
+           first_release_source     = 'artist_releases',
+           first_release_checked_at = NOW()
+      FROM cand c
+     WHERE c.lyric_id = l.id
+       AND (l.first_release_year IS DISTINCT FROM c.year OR l.first_release_source IS DISTINCT FROM 'artist_releases')
+  `);
+    return { updated: r.rowCount ?? 0 };
+}
+// Return blues_lyrics ids missing first_release_year — feed for the
+// (future) Discogs-search worker. Capped to keep payloads sane.
+export async function getLyricsMissingFirstReleaseYear(limit = 1000) {
+    const r = await getPool().query(`SELECT id, page_title, artist, artist_id
+       FROM blues_lyrics
+      WHERE first_release_year IS NULL
+      ORDER BY id ASC
+      LIMIT $1`, [Math.max(1, Math.min(5000, limit))]);
+    return r.rows;
 }
 // ── Lyric favorites ──────────────────────────────────────────────────
 export async function listLyricFavoriteIds(userId) {
@@ -5145,6 +5198,7 @@ const _LYRICS_SORT_COLS = {
     tuning: "tuning",
     scraped_at: "scraped_at",
     updated_at: "updated_at",
+    first_release_year: "first_release_year",
 };
 export async function listLyrics(opts) {
     const where = [];
@@ -5197,6 +5251,7 @@ export async function listLyrics(opts) {
     params.push(limit, offset);
     const rowsRes = await getPool().query(`SELECT id, page_title, page_url, artist, artist_id, tuning,
             discogs_release_id, discogs_master_id,
+            first_release_year, first_release_source,
             scraped_at, updated_at,
             substring(plaintext, 1, 240) AS snippet
        FROM blues_lyrics ${whereSql}
@@ -5479,6 +5534,7 @@ export async function getBluesArchiveArtist(id) {
     const a = ar.rows[0];
     const lr = await getPool().query(`SELECT id, page_title, page_url, tuning, scraped_at, updated_at,
             artist_id, discogs_release_id, discogs_master_id,
+            first_release_year, first_release_source,
             substring(plaintext, 1, 240) AS snippet
        FROM blues_lyrics
       WHERE artist_id = $1

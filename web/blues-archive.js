@@ -348,17 +348,23 @@ function _baRenderArtistDetail(a) {
   const lyricsHtml = lyricsRaw.length
     ? `<table class="api-log-table" style="font-size:0.84rem;width:100%">
         <thead><tr>
-          ${_baSortTh("Title",   "page_title", LS, "_baSortLyrics")}
-          ${_baSortTh("Tuning",  "tuning",     LS, "_baSortLyrics")}
-          ${_baSortTh("Snippet", "snippet",    LS, "_baSortLyrics")}
+          ${_baSortTh("Title",   "page_title",         LS, "_baSortLyrics")}
+          ${_baSortTh("Year",    "first_release_year", LS, "_baSortLyrics", "text-align:right;padding-right:0.6rem")}
+          ${_baSortTh("Tuning",  "tuning",             LS, "_baSortLyrics")}
+          ${_baSortTh("Snippet", "snippet",            LS, "_baSortLyrics")}
           <th style="width:1%"></th>
         </tr></thead>
         <tbody>${lyrics.map(l => {
           const titleHtml = (typeof entityLookupLinkHtml === "function" && l.page_title)
             ? entityLookupLinkHtml("track", l.page_title, { trackArtist: a.name || "", title: `Lookup options for "${l.page_title}"` })
             : escHtml(l.page_title || "");
+          const yr = Number.isFinite(Number(l.first_release_year)) ? Number(l.first_release_year) : null;
+          const yrHtml = yr
+            ? `<span style="font-variant-numeric:tabular-nums" title="${escHtml(l.first_release_source ? "via " + l.first_release_source : "")}">${yr}</span>`
+            : `<span style="color:#555">—</span>`;
           return `<tr data-lyric-row="${l.id}">
             <td style="font-weight:600;color:var(--text);white-space:nowrap">${titleHtml}</td>
+            <td style="text-align:right;font-size:0.82rem;padding-right:0.6rem;white-space:nowrap">${yrHtml}</td>
             <td style="white-space:nowrap;color:var(--accent);cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml(l.tuning || "")}</td>
             <td style="font-size:0.76rem;color:#888;cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml((l.snippet || "").replace(/\s+/g, " ").slice(0, 140))}…</td>
             <td style="text-align:right"><a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenLyricEditor(${l.id})" style="color:var(--muted);text-decoration:none;font-size:0.78rem" title="Edit tuning / artist on this lyric">✎</a></td>
@@ -1071,7 +1077,7 @@ let _baLyricsUnpinned = false;
 let _baLyricsEmpty = false;
 let _baLyricsRowsCache = [];
 const _baLyricsListSort = { key: "page_title", dir: "asc" };
-const _BA_LYRICS_LIST_TYPES = { page_title: "str", artist: "str", tuning: "str", snippet: "str" };
+const _BA_LYRICS_LIST_TYPES = { page_title: "str", artist: "str", tuning: "str", snippet: "str", first_release_year: "num" };
 let _baLyricsTuningsLoaded = false;
 
 function _baSwitchSubtab(tab) {
@@ -1132,6 +1138,37 @@ function _baLyricsApplyEmpty() {
   _baLoadLyrics();
 }
 window._baLyricsApplyEmpty = _baLyricsApplyEmpty;
+
+// Cheap pass: set every lyric's first_release_year from its linked
+// artist's discogs_releases (title match). Zero Discogs API calls.
+// Reports the rows updated and how many still have no year — the
+// remainder will need either manual entry or a future Discogs-search
+// worker.
+async function _baResolveYearsCheap() {
+  const btn = document.getElementById("blues-archive-lyrics-resolve-years-btn");
+  const orig = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = "Resolving…"; }
+  try {
+    const r = await apiFetch("/api/admin/lyrics/resolve-years-cheap", { method: "POST" });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert("Resolve failed: " + (err?.error ?? r.status));
+      return;
+    }
+    const { updated = 0, stillMissing = 0 } = await r.json();
+    const msg = `Resolved ${updated} year${updated === 1 ? "" : "s"} from the linked artist's Discogs releases.\n\n` +
+      (stillMissing
+        ? `${stillMissing.toLocaleString()} lyric${stillMissing === 1 ? "" : "s"} still have no year — they need either a release pin in the editor, or a future Discogs-search worker pass.`
+        : `All lyrics now have a first_release_year.`);
+    alert(msg);
+    _baLoadLyrics();
+  } catch (e) {
+    alert("Resolve failed: " + (e?.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = orig || "Resolve years"; }
+  }
+}
+window._baResolveYearsCheap = _baResolveYearsCheap;
 
 // ── Favorites + Setlists ─────────────────────────────────────────────
 // In-memory cache of favorited lyric IDs so the viewer star renders
@@ -1614,9 +1651,17 @@ function _baLyricRowHtml(l) {
     : (l.artist && String(l.artist).trim()
         ? `<a href="#" class="ba-promote-link" onclick="event.preventDefault();event.stopPropagation();_baPromoteOrphan(${l.id})" title="Add as a new blues_artists row and link all orphans with this name" style="color:var(--accent);text-decoration:none;font-size:0.86em;margin-left:0.25rem">+ artist</a>`
         : "");
+  // Year of first release — resolved by /api/admin/lyrics/resolve-years-cheap
+  // against the linked artist's discogs_releases. NULL until resolved
+  // (rendered as a faint em-dash so the column doesn't visually wobble).
+  const yr = Number.isFinite(Number(l.first_release_year)) ? Number(l.first_release_year) : null;
+  const yrHtml = yr
+    ? `<span style="font-variant-numeric:tabular-nums" title="${escHtml(l.first_release_source ? "via " + l.first_release_source : "")}">${yr}</span>`
+    : `<span style="color:#555">—</span>`;
   return `<tr data-lyric-row="${l.id}">
     <td style="font-weight:600;color:var(--text);white-space:nowrap">${titleHtml}</td>
     <td style="color:var(--muted);white-space:nowrap">${artistHtml}${archiveAffordance}</td>
+    <td style="text-align:right;font-size:0.82rem;padding-right:0.6rem;white-space:nowrap">${yrHtml}</td>
     <td style="white-space:nowrap;color:var(--accent);cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml(l.tuning || "")}</td>
     <td style="font-size:0.76rem;color:#888;cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml((l.snippet || "").replace(/\s+/g, " ").slice(0, 140))}…</td>
     <td style="text-align:right"><a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenLyricEditor(${l.id})" style="color:var(--muted);text-decoration:none;font-size:0.78rem" title="Edit title / artist / tuning on this lyric">✎</a></td>
@@ -1647,9 +1692,10 @@ function _baRenderLyricsTable() {
   rowsEl.innerHTML = `
     <table class="api-log-table" style="font-size:0.84rem;width:100%">
       <thead><tr>
-        ${_baSortTh("Title",   "page_title", S, "_baSortLyricsList")}
-        ${_baSortTh("Artist",  "artist",     S, "_baSortLyricsList")}
-        ${_baSortTh("Tuning",  "tuning",     S, "_baSortLyricsList")}
+        ${_baSortTh("Title",   "page_title",         S, "_baSortLyricsList")}
+        ${_baSortTh("Artist",  "artist",             S, "_baSortLyricsList")}
+        ${_baSortTh("Year",    "first_release_year", S, "_baSortLyricsList", "text-align:right;padding-right:0.6rem")}
+        ${_baSortTh("Tuning",  "tuning",             S, "_baSortLyricsList")}
         ${_baSortTh("Snippet", "snippet",    S, "_baSortLyricsList")}
         <th style="width:1%"></th>
       </tr></thead>
