@@ -5191,13 +5191,21 @@ export async function createLyric(record) {
         if (r.rows.length)
             artistId = r.rows[0].id;
     }
+    const fy = record.firstReleaseYear != null && Number.isFinite(Number(record.firstReleaseYear))
+        ? Number(record.firstReleaseYear) : null;
     const ins = await getPool().query(`INSERT INTO blues_lyrics
        (source_host, page_title, page_url, artist, artist_id, tuning,
-        wikitext, plaintext, discogs_release_id, discogs_master_id, scraped_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+        wikitext, plaintext, discogs_release_id, discogs_master_id,
+        first_release_year, first_release_source, first_release_checked_at,
+        scraped_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+             $11, CASE WHEN $11::int IS NULL THEN NULL ELSE 'manual' END,
+             CASE WHEN $11::int IS NULL THEN NULL ELSE NOW() END,
+             NOW())
      RETURNING *`, [host, title, record.pageUrl ?? null, record.artist ?? null, artistId,
         record.tuning ?? null, record.wikitext ?? null, record.plaintext ?? null,
-        record.discogsReleaseId ?? null, record.discogsMasterId ?? null]);
+        record.discogsReleaseId ?? null, record.discogsMasterId ?? null,
+        fy]);
     return ins.rows[0];
 }
 // Set of (source_host, page_title) keys we've already scraped — so a
@@ -5650,6 +5658,18 @@ export async function updateLyricFields(id, patch) {
         else {
             params.push(Number(patch.discogs_master_id));
             sets.push(`discogs_master_id = $${params.length}`);
+        }
+    }
+    if ("first_release_year" in patch) {
+        if (patch.first_release_year == null) {
+            sets.push(`first_release_year = NULL, first_release_source = NULL`);
+        }
+        else {
+            params.push(Number(patch.first_release_year));
+            // source='manual' so the curator can audit which years were
+            // hand-entered vs derived. Resolver respects this — won't
+            // overwrite manual entries unless force=1.
+            sets.push(`first_release_year = $${params.length}, first_release_source = 'manual', first_release_checked_at = NOW()`);
         }
     }
     if (!sets.length)
