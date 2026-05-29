@@ -67,9 +67,9 @@ function initBluesArchiveView() {
   const list = document.querySelector("#blues-archive-view .blues-archive-list");
   if (list) list.style.display = "";
   _baLoadList();
-  // Stats strip + recent-edits feed — fire in parallel, non-blocking.
+  // Stats strip — fire non-blocking. Recent-edits feed removed from
+  // the UI (the BE endpoint stays for future re-enablement).
   _baLoadStats().catch(() => {});
-  _baLoadRecent().catch(() => {});
   // Lazy-load /blues-admin.js for admins so the bulk-Discogs job
   // status + lyrics scrape polling auto-attach to anything already
   // running on the server (e.g. user reloaded mid-scrape). Non-
@@ -1485,7 +1485,7 @@ async function _baLoadStats() {
       const tone = opts.tone === "warn" ? "color:#e8a85a" : "color:var(--muted)";
       // title= tooltip on every chip so the hover spells out what
       // the bucket means + (for clickable ones) what the click does.
-      return `<span class="ba-stat-chip"${click} title="${escHtml(opts.title || label)}" style="${cur}padding:0.25rem 0.5rem;border:1px solid var(--border);border-radius:999px;${tone}">${escHtml(label)}: <strong style="color:var(--text)">${count.toLocaleString()}</strong></span>`;
+      return `<span class="ba-stat-chip"${click} title="${escHtml(opts.title || label)}" style="${cur}font-size:0.7rem;padding:0.05rem 0.25rem;${tone}">${escHtml(label)}: <strong style="color:var(--text)">${count.toLocaleString()}</strong></span>`;
     };
     el.innerHTML = [
       chip("Artists", s.artists_total, {

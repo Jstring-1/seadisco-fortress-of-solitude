@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260528.1938" />
+  <link rel="stylesheet" href="/style.css?v=20260528.2000" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260528.1938"></script>
+<script defer src="/shared.js?v=20260528.2000"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -1002,30 +1002,17 @@ e.g.  miles davis | coltrane
   <div class="blues-archive-list">
     <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.8rem;flex-wrap:wrap">
       <h2 style="margin:0;font-size:1.05rem">Blues Archive</h2>
-      <button type="button" id="blues-archive-import-btn" class="archive-btn" onclick="bluesArchiveImport()" title="Walk lyrics.artist and insert any name not already in the Blues DB. Idempotent — re-runs are safe.">Import from lyrics</button>
-      <!-- Bulk admin actions — IDs match what /blues-admin.js looks up.
-           Lazy-load the module on click; once loaded the same code that
-           drives /admin Blues DB drives these too. -->
+      <!-- Bulk admin actions — IDs match what /blues-admin.js looks up. -->
       <button type="button" class="archive-btn" onclick="_baAdminAction('addArtist')" title="Add a new artist row manually via the full editor (~25 fields).">+ Add artist</button>
       <button type="button" id="blues-enrich-discogs-full-btn" class="archive-btn" onclick="_baAdminAction('enrichDiscogsFull')" title="Pull the full Discogs artist record (bio, aliases, realname, name variations, members, groups, photo, URLs) for every row that has a Discogs ID. ~3-5 min at 1 req/sec. Idempotent.">Get all info from Discogs</button>
       <button type="button" id="blues-export-btn" class="archive-btn" onclick="_baAdminAction('exportArtistsCsv')" title="Download every blues_artists row as a CSV (with the discogs_releases JSONB column flattened to JSON). UTF-8 with BOM, opens cleanly in Excel/Sheets.">Export artists CSV</button>
       <button type="button" id="blues-export-lyrics-btn" class="archive-btn" onclick="_baAdminAction('exportLyricsCsv')" title="Download every blues_lyrics row as a CSV (title, artist, tuning, plaintext, page URL, etc.). UTF-8 with BOM.">Export lyrics CSV</button>
-      <!-- "Delete all" removed — too easy to fat-finger. The table can
-           still be cleared via direct DB access if genuinely needed. -->
-      <span id="blues-archive-import-status" style="font-size:0.78rem;color:var(--muted)"></span>
       <span id="blues-archive-count" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
     </div>
-    <!-- Stats strip — admin curation dashboard. Each chip is a click-
-         shortcut into a filtered view (e.g. orphans → Lyrics tab with
-         the unmatched filter on). Populated by /api/blues-archive/stats. -->
-    <div id="blues-archive-stats" style="display:flex;gap:0.4rem;flex-wrap:wrap;font-size:0.74rem;margin-bottom:0.6rem"></div>
-    <!-- Recently-edited feed (admin curation aid). Collapsed by default
-         so it doesn't crowd the stats strip; expand to see what's
-         been touched recently. -->
-    <details id="blues-archive-recent-wrap" style="margin-bottom:0.6rem;font-size:0.78rem;border:1px solid var(--border);border-radius:5px;padding:0.3rem 0.6rem">
-      <summary style="cursor:pointer;color:var(--muted)">Recent edits</summary>
-      <div id="blues-archive-recent" style="margin-top:0.4rem">Loading…</div>
-    </details>
+    <!-- Stats strip — curation dashboard. Click a chip to jump to a
+         filtered view (e.g. orphans → Lyrics tab with the unmatched
+         filter on). Populated by /api/blues-archive/stats. -->
+    <div id="blues-archive-stats" style="display:flex;gap:0.6rem;flex-wrap:wrap;font-size:0.7rem;margin-bottom:0.6rem;color:var(--muted)"></div>
     <!-- Sub-tabs: switch between the artists list and the searchable
          master lyrics list. Both surfaces use the same admin-gated
          endpoints; client-side toggle hides/shows the right panel. -->
@@ -1046,37 +1033,21 @@ e.g.  miles davis | coltrane
       <div id="blues-archive-pager" style="margin-top:0.6rem;display:flex;gap:0.4rem;align-items:center;font-size:0.78rem"></div>
     </div>
     <div id="blues-archive-lyrics-panel" style="display:none">
-      <!-- Lyrics scrape control row — admin-only. IDs match what
-           /blues-admin.js expects (lyrics-scrape-btn, lyrics-stop-btn,
-           lyrics-scrape-status, lyrics-stats) so the same functions
-           that drove the /admin Lyrics tab now drive these. Lazy-loaded
-           via _baAdminAction. -->
-      <div style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.6rem;flex-wrap:wrap;padding:0.4rem 0.6rem;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:5px">
-        <button type="button" id="lyrics-scrape-btn" class="archive-btn" onclick="_baAdminAction('lyricsScrape')" title="Walk Category:Lyrics on weeniecampbell.com and store every page. ~80 min at 1.2 s/page. Resumable: re-running skips titles already stored.">Scrape weeniecampbell.com</button>
-        <button type="button" id="lyrics-stop-btn" class="archive-btn" onclick="_baAdminAction('lyricsStop')" title="Stop a running scrape after the current page finishes" style="display:none;color:#e88;border-color:#e88">Stop</button>
-        <button type="button" id="lyrics-reextract-btn" class="archive-btn" onclick="_baAdminAction('lyricsReextract')" title="Re-run the tuning + artist extractors against every already-stored row. No HTTP requests — just re-parses the wikitext already in the DB. Use after the extractor regex is updated.">Re-extract</button>
-        <button type="button" id="lyrics-sync-artists-btn" class="archive-btn" onclick="_baAdminAction('lyricsSyncArtists', event)" title="Walk Category:Lyrics by Artist on weeniecampbell.com — the wiki itself maps each page to an artist via subcategories. Authoritative. By default only fills rows with no artist yet; hold Shift while clicking to overwrite all.">Sync artists from wiki</button>
-        <button type="button" class="archive-btn" onclick="_baOpenLyricEditor(null)" title="Manually add a new lyric row. Title + artist are unique per source_host so the same song title under different artists is allowed.">+ Add lyric</button>
-        <span id="lyrics-scrape-status" style="font-size:0.78rem;color:var(--muted)"></span>
-        <span id="lyrics-stats" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
-      </div>
+      <!-- Single filter / actions row. Scrape / re-extract / sync-from-wiki /
+           re-link orphans buttons removed — the source wiki is dormant and
+           every lyric is matched. + Add lyric stays for manual one-offs. -->
       <div style="display:flex;gap:0.4rem;align-items:center;margin-bottom:0.6rem;flex-wrap:wrap">
         <input id="blues-archive-lyrics-search" type="search" placeholder="Search lyrics: title, artist, or text" style="flex:1;min-width:220px;padding:0.5rem 0.7rem;font-size:0.9rem" oninput="_baLyricsDebouncedSearch()">
         <select id="blues-archive-lyrics-tuning" onchange="_baLyricsApplyTuning()" style="padding:0.45rem 0.5rem;font-size:0.85rem">
           <option value="">All tunings</option>
         </select>
-        <label style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.78rem;color:var(--muted)" title="Show only lyrics whose artist string doesn't resolve to a blues_artists row (artist_id IS NULL). 'Orphan' here means the FK link is missing — the artist text may still match a row by spelling, just not via the index. Hit 'Re-link orphans' to sweep up near-misses.">
-          <input id="blues-archive-lyrics-unmatched" type="checkbox" onchange="_baLyricsApplyUnmatched()">
-          Unmatched only
-        </label>
-        <label style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.78rem;color:var(--muted)" title="Show only lyrics with NO Discogs release pin (both discogs_release_id and discogs_master_id are NULL). Use to find lyrics that still need a Discogs release linked.">
-          <input id="blues-archive-lyrics-unpinned" type="checkbox" onchange="_baLyricsApplyUnpinned()">
-          No release pinned
-        </label>
-        <button type="button" class="archive-btn" onclick="_baRelinkOrphans()" title="Sweep orphan lyrics (artist_id IS NULL) and link them to a blues_artists row when the artist text matches — exact match OR Discogs ' (N)' disambiguator stripped from either side. Use when 'orphan' rows look like they should resolve.">Re-link orphans</button>
+        <button type="button" class="archive-btn" onclick="_baOpenLyricEditor(null)" title="Manually add a new lyric row. Title + artist are unique per source_host so the same song title under different artists is allowed.">+ Add lyric</button>
         <button type="button" class="archive-btn" onclick="_baLoadLyrics();_baLoadStats();" title="Re-fetch the lyrics list from the server">↻ Refresh</button>
-        <button type="button" id="blues-archive-lyrics-clear" class="archive-btn" onclick="_baLyricsClearFilters()" style="display:none" title="Clear search, tuning, and unmatched filters; back to the full list.">Clear filters</button>
-        <span id="blues-archive-lyrics-count" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
+        <button type="button" id="blues-archive-lyrics-clear" class="archive-btn" onclick="_baLyricsClearFilters()" style="display:none" title="Clear search and tuning filters; back to the full list.">Clear filters</button>
+        <!-- Idle / running job status (lyrics-scrape-status id kept for the
+             /blues-admin.js poller). Sits between the buttons and the count. -->
+        <span id="lyrics-scrape-status" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
+        <span id="blues-archive-lyrics-count" style="font-size:0.78rem;color:var(--muted)"></span>
       </div>
       <div id="blues-archive-lyrics-rows" style="font-size:0.86rem;color:var(--muted)">Loading…</div>
       <div id="blues-archive-lyrics-pager" style="margin-top:0.6rem;display:flex;gap:0.4rem;align-items:center;font-size:0.78rem"></div>
@@ -1631,13 +1602,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260528.1938"></script>
-<script defer src="/search.js?v=20260528.1938"></script>
-<script defer src="/collection.js?v=20260528.1938"></script>
+<script defer src="/utils.js?v=20260528.2000"></script>
+<script defer src="/search.js?v=20260528.2000"></script>
+<script defer src="/collection.js?v=20260528.2000"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260528.1938"></script>
-<script defer src="/app.js?v=20260528.1938"></script>
+<script defer src="/modal.js?v=20260528.2000"></script>
+<script defer src="/app.js?v=20260528.2000"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1648,13 +1619,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260528.1938"></script>
-<script defer src="/queue.js?v=20260528.1938"></script>
+<script defer src="/loc.js?v=20260528.2000"></script>
+<script defer src="/queue.js?v=20260528.2000"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260528.1938";
+  window._SD_LAZY_VERSION = "20260528.2000";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1684,8 +1655,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260528.1938"></script>
-<script defer src="/offline.js?v=20260528.1938"></script>
+<script defer src="/idb.js?v=20260528.2000"></script>
+<script defer src="/offline.js?v=20260528.2000"></script>
 
 </body>
 </html>
