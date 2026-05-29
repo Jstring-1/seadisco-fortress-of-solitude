@@ -355,6 +355,47 @@ function _baRenderArtistDetail(a) {
     a.hometown_region ? `From: ${escHtml(a.hometown_region)}` : "",
     a.first_recording_year ? `First recording: ${a.first_recording_year}` : "",
   ].filter(Boolean).join(" · ");
+  // Pseudonyms / bands strip — aliases (alternate names the artist
+  // recorded under) and collaborators (bands or sidemen they played
+  // with). Both are plain string arrays on the row; clicking a chip
+  // opens its lookup popup so the curator can jump to a search /
+  // Wikipedia / Discogs for that name. Hidden when both are empty.
+  const aliasArr = Array.isArray(a.aliases) ? a.aliases.filter(Boolean) : [];
+  const bandsArr = Array.isArray(a.collaborators)
+    ? a.collaborators
+        .map(c => (typeof c === "string" ? c : (c && typeof c === "object" ? (c.name || "") : "")))
+        .filter(Boolean)
+    : [];
+  const chipHtml = (label, items) => items.length
+    ? `<div style="display:flex;gap:0.4rem;flex-wrap:wrap;align-items:center;margin-top:0.4rem">
+         <span style="font-size:0.74rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em">${label}</span>
+         ${items.map(n => {
+           const safe = escHtml(n);
+           // Custom chip — entityLookupLinkHtml doesn't accept inline
+           // style, so wire openLookupPopup directly via onclick. Same
+           // lookup popup the artist names use, in artist scope.
+           return `<span role="button" tabindex="0" onclick="event.preventDefault();event.stopPropagation();openLookupPopup(event,'artist',${JSON.stringify(n).replace(/"/g, '&quot;')},{})" title="Lookup options for &quot;${safe}&quot;" style="padding:0.18rem 0.5rem;border:1px solid var(--border);border-radius:999px;font-size:0.76rem;color:var(--text);background:rgba(255,255,255,0.03);cursor:pointer">${safe}</span>`;
+         }).join("")}
+       </div>`
+    : "";
+  const aliasBandsHtml = chipHtml("Pseudonyms", aliasArr) + chipHtml("Bands / played with", bandsArr);
+  // Structured artist↔artist links — separate from the freeform
+  // aliases/collaborators above. These point at OTHER blues_artists
+  // rows by id so the chip can open that artist's profile directly.
+  const linksAll = Array.isArray(a.links) ? a.links : [];
+  const linkPseudo = linksAll.filter(l => l.kind === "pseudonym");
+  const linkBand   = linksAll.filter(l => l.kind === "band");
+  const linkChipHtml = (label, items) => items.length
+    ? `<div style="display:flex;gap:0.4rem;flex-wrap:wrap;align-items:center;margin-top:0.4rem">
+         <span style="font-size:0.74rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.04em">${label}</span>
+         ${items.map(l => {
+           const safe = escHtml(l.name || "");
+           return `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenArtist(${l.id})" title="Open ${safe} in Blues Archive" style="padding:0.18rem 0.5rem;border:1px solid var(--accent);border-radius:999px;font-size:0.76rem;color:var(--accent);background:rgba(255,255,255,0.03);text-decoration:none;cursor:pointer">🔗 ${safe}</a>`;
+         }).join("")}
+       </div>`
+    : "";
+  const linksHtml = linkChipHtml("Linked: pseudonym", linkPseudo)
+                  + linkChipHtml("Linked: band / member", linkBand);
   const lyricsRaw = Array.isArray(a.lyrics) ? a.lyrics : [];
   const releasesRaw = Array.isArray(a.releases) ? a.releases : [];
   const lyrics   = _baSortApply(lyricsRaw,   _baLyricsSort,   _BA_LYRICS_TYPES);
@@ -430,7 +471,7 @@ function _baRenderArtistDetail(a) {
         : escHtml(a.name || "")}</h2>
       <span style="color:var(--muted);font-size:0.82rem">${escHtml(dates)}</span>
       <span style="margin-left:auto;display:inline-flex;gap:0.4rem;flex-wrap:wrap">
-        <button class="archive-btn archive-btn-suggest" onclick="_baOpenFullEditor(${a.id})" title="Open the full edit form (~25 fields: bio, dates, identifiers, enrichment buttons for Wiki / MusicBrainz / Discogs picker / YouTube).">Edit (full form)</button>
+        <button class="archive-btn archive-btn-suggest" onclick="_baOpenFullEditor(${a.id})" title="Open the full edit form (~25 fields: name / dates / identifiers / pseudonyms / bands / notes / photo + enrichment buttons for Wiki, MusicBrainz, Discogs, YouTube).">✎ Edit artist</button>
         <button class="archive-btn" onclick="_baOpenReassignPicker(${a.id}, ${JSON.stringify(a.name || "").replace(/"/g, "&quot;")})" title="Reassign every lyric matching some other artist name (or artist row) to this artist. Doesn't delete the source artist — use Merge for that.">Reassign lyrics from…</button>
         <button class="archive-btn" onclick="_baOpenMergePicker(${a.id}, ${JSON.stringify(a.name || "").replace(/"/g, "&quot;")})" title="Merge this artist into another. Lyrics get reassigned by name; release JSONB arrays are concatenated (deduped); this row is then deleted.">Merge into…</button>
         <button class="archive-btn" onclick="_baDeleteArtistWithLyrics(${a.id})" title="Delete THIS artist AND every lyric tied to them (FK-linked OR name-matched). Cannot be undone. Use Merge instead if you just want to consolidate." style="color:#e88;border-color:rgba(232,136,136,0.4)">Delete artist + lyrics</button>
@@ -440,6 +481,8 @@ function _baRenderArtistDetail(a) {
       ${photo}
       <div style="flex:1;min-width:240px">
         ${meta ? `<div style="font-size:0.82rem;color:var(--muted);margin-bottom:0.4rem">${meta}</div>` : ""}
+        ${linksHtml}
+        ${aliasBandsHtml}
         ${bio}
       </div>
     </div>

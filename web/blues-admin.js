@@ -1428,6 +1428,10 @@ async function bluesDbOpenEditor(id) {
     ytBtn.style.display = "none";
   }
   _bluesDbUpdateEditorLinks();
+  // Linked artists list (separate /links endpoint — not part of the
+  // main row payload). Fires only for existing rows; new rows show
+  // a "save first" prompt.
+  try { bluesDbLoadLinks(id || null); } catch {}
   overlay.style.display = "flex";
 }
 
@@ -1616,6 +1620,157 @@ async function _bluesDbConfirmMerge(fromId, intoId, intoName) {
   }
 }
 window._bluesDbConfirmMerge = _bluesDbConfirmMerge;
+
+// ── Linked artists (pseudonym / band) — editor section ────────────
+// Loads the current set on editor open, lets the admin add/remove
+// via a search picker. Storage is blues_artist_links — a symmetric
+// junction table. Separate from the freeform aliases / collaborators
+// inputs above because those are plain strings; this points at
+// actual other rows by id so chip clicks open their profiles.
+async function bluesDbLoadLinks(id) {
+  const listEl = document.getElementById("blues-editor-links-list");
+  if (!listEl) return;
+  if (!id) { listEl.textContent = "Save the artist first to add links."; return; }
+  listEl.textContent = "Loading…";
+  try {
+    const r = await apiFetch(`/api/admin/blues/${id}/links`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const { rows = [] } = await r.json();
+    _bluesDbRenderLinks(rows);
+  } catch (e) {
+    listEl.innerHTML = `<span style="color:#e88">Load failed: ${e?.message || e}</span>`;
+  }
+}
+window.bluesDbLoadLinks = bluesDbLoadLinks;
+
+function _bluesDbRenderLinks(rows) {
+  const listEl = document.getElementById("blues-editor-links-list");
+  if (!listEl) return;
+  if (!rows.length) { listEl.innerHTML = `<span style="color:var(--muted);font-style:italic">No links yet.</span>`; return; }
+  const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+  listEl.innerHTML = rows.map(r => {
+    const label = r.kind === "band" ? "band" : "pseudonym";
+    return `<span style="display:inline-flex;align-items:center;gap:0.35rem;padding:0.18rem 0.45rem;border:1px solid var(--accent);border-radius:999px;color:var(--accent);background:rgba(255,255,255,0.03)">
+      <span style="color:var(--muted);font-size:0.68rem;text-transform:uppercase;letter-spacing:0.04em">${label}</span>
+      <span>${esc(r.name)}</span>
+      <a href="#" onclick="event.preventDefault();bluesDbRemoveLink(${r.id})" title="Remove link" style="color:#e88;text-decoration:none;font-weight:600">×</a>
+    </span>`;
+  }).join("");
+}
+
+async function bluesDbRemoveLink(otherId) {
+  const id = _bluesDbState.editingId;
+  if (!id) return;
+  try {
+    const r = await apiFetch(`/api/admin/blues/${id}/links/${otherId}`, { method: "DELETE" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    await bluesDbLoadLinks(id);
+  } catch (e) {
+    const s = document.getElementById("blues-editor-links-status");
+    if (s) s.textContent = `Remove failed: ${e?.message || e}`;
+  }
+}
+window.bluesDbRemoveLink = bluesDbRemoveLink;
+
+// Picker overlay — same pattern as the Merge picker. Search field
+// debounced; selecting a row prompts for kind (pseudonym/band) and
+// POSTs to /links. Multi-add: stays open until the user closes.
+let _bluesLinkSearchTimer = null;
+function bluesDbOpenLinkPicker() {
+  const fromId = _bluesDbState.editingId;
+  if (!fromId) { alert("Save the artist first."); return; }
+  let overlay = document.getElementById("blues-db-link-overlay");
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "blues-db-link-overlay";
+    Object.assign(overlay.style, {
+      position: "fixed", inset: "0", background: "rgba(0,0,0,0.78)",
+      zIndex: "360", display: "flex", alignItems: "flex-start",
+      justifyContent: "center", padding: "2rem 1rem", overflow: "auto",
+    });
+    overlay.onclick = (e) => { if (e.target === overlay) overlay.remove(); };
+    document.body.appendChild(overlay);
+  }
+  overlay.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1.2rem 1.4rem;width:min(600px,100%)">
+      <div style="display:flex;justify-content:space-between;align-items:start;gap:0.6rem;margin-bottom:0.6rem">
+        <h3 style="margin:0">Link to another artist</h3>
+        <button class="archive-btn" onclick="document.getElementById('blues-db-link-overlay')?.remove();bluesDbLoadLinks(_bluesDbState.editingId)" style="font-size:1.2rem;padding:0 0.6rem">×</button>
+      </div>
+      <p style="font-size:0.78rem;color:var(--muted);margin:0 0 0.6rem">
+        Picks a target row, then asks: is this a <em>pseudonym</em>
+        (same person, different recording name) or a <em>band</em>
+        (they played together)? Symmetric — adding it from either
+        side links both. Use Merge instead if you actually want to
+        consolidate two rows.
+      </p>
+      <input id="blues-link-search" type="search" placeholder="Type to filter artists…" style="width:100%;padding:0.45rem 0.7rem;font-size:0.88rem;margin-bottom:0.5rem" oninput="bluesDbLinkPickerSearch(${fromId})">
+      <div id="blues-link-results" style="max-height:40vh;overflow:auto;border:1px solid var(--border);border-radius:4px;padding:0.4rem 0.6rem;font-size:0.84rem"></div>
+      <div id="blues-link-status" style="font-size:0.76rem;color:var(--muted);margin-top:0.5rem;min-height:1em"></div>
+    </div>
+  `;
+  setTimeout(() => document.getElementById("blues-link-search")?.focus(), 50);
+  _bluesDbLinkPickerLoad(fromId);
+}
+window.bluesDbOpenLinkPicker = bluesDbOpenLinkPicker;
+
+function bluesDbLinkPickerSearch(fromId) {
+  if (_bluesLinkSearchTimer) clearTimeout(_bluesLinkSearchTimer);
+  _bluesLinkSearchTimer = setTimeout(() => _bluesDbLinkPickerLoad(fromId), 240);
+}
+window.bluesDbLinkPickerSearch = bluesDbLinkPickerSearch;
+
+async function _bluesDbLinkPickerLoad(fromId) {
+  const q = (document.getElementById("blues-link-search")?.value || "").trim();
+  const el = document.getElementById("blues-link-results");
+  if (!el) return;
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  params.set("limit", "40");
+  el.textContent = "Loading…";
+  try {
+    const r = await apiFetch(`/api/blues-archive/artists?${params}`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const { rows = [] } = await r.json();
+    const choices = rows.filter(row => row.id !== fromId);
+    if (!choices.length) {
+      el.innerHTML = `<div style="color:var(--muted);padding:0.4rem 0">No matches.</div>`;
+      return;
+    }
+    const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g, "&#39;");
+    el.innerHTML = choices.map(row => `
+      <div style="padding:0.3rem 0;border-bottom:1px solid rgba(255,255,255,0.04);display:flex;justify-content:space-between;align-items:center;gap:0.6rem">
+        <span style="font-weight:600;color:var(--text)">${esc(row.name || "")}</span>
+        <span style="display:inline-flex;gap:0.35rem">
+          <button type="button" class="archive-btn" onclick="_bluesDbConfirmLink(${fromId}, ${row.id}, '${esc(row.name || "")}', 'pseudonym')" title="Same person, different recording name">Pseudonym</button>
+          <button type="button" class="archive-btn" onclick="_bluesDbConfirmLink(${fromId}, ${row.id}, '${esc(row.name || "")}', 'band')" title="Played together (band, sideman, side project)">Band</button>
+        </span>
+      </div>`).join("");
+  } catch (e) {
+    el.innerHTML = `<div style="color:#e88">Failed: ${e?.message || e}</div>`;
+  }
+}
+
+async function _bluesDbConfirmLink(fromId, otherId, otherName, kind) {
+  const statusEl = document.getElementById("blues-link-status");
+  if (statusEl) statusEl.textContent = `Linking ${otherName} as ${kind}…`;
+  try {
+    const r = await apiFetch(`/api/admin/blues/${fromId}/links`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ otherId, kind }),
+    });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
+    }
+    if (statusEl) statusEl.textContent = `Linked ${otherName} as ${kind}. Add more or close.`;
+    await bluesDbLoadLinks(fromId);
+  } catch (e) {
+    if (statusEl) statusEl.textContent = `Failed: ${e?.message || e}`;
+  }
+}
+window._bluesDbConfirmLink = _bluesDbConfirmLink;
 
 async function bluesDbDeleteFromEditor() {
   const id = _bluesDbState.editingId;
