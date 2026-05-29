@@ -1053,6 +1053,7 @@ let _baLyricsTotal = 0;
 let _baLyricsSearchTimer = null;
 let _baLyricsTuning = "";
 let _baLyricsUnmatched = false;
+let _baLyricsUnpinned = false;
 let _baLyricsRowsCache = [];
 const _baLyricsListSort = { key: "page_title", dir: "asc" };
 const _BA_LYRICS_LIST_TYPES = { page_title: "str", artist: "str", tuning: "str", snippet: "str" };
@@ -1099,17 +1100,27 @@ function _baLyricsApplyUnmatched() {
 }
 window._baLyricsApplyUnmatched = _baLyricsApplyUnmatched;
 
+function _baLyricsApplyUnpinned() {
+  _baLyricsUnpinned = !!document.getElementById("blues-archive-lyrics-unpinned")?.checked;
+  _baLyricsPage = 0;
+  _baLoadLyrics();
+}
+window._baLyricsApplyUnpinned = _baLyricsApplyUnpinned;
+
 // Clear all active filters on the Lyrics tab. Bound to the
 // "Clear filters" button that auto-shows/hides based on filter state.
 function _baLyricsClearFilters() {
   const search    = document.getElementById("blues-archive-lyrics-search");
   const tuningSel = document.getElementById("blues-archive-lyrics-tuning");
   const unmatched = document.getElementById("blues-archive-lyrics-unmatched");
+  const unpinned  = document.getElementById("blues-archive-lyrics-unpinned");
   if (search)    search.value = "";
   if (tuningSel) tuningSel.value = "";
   if (unmatched) unmatched.checked = false;
+  if (unpinned)  unpinned.checked  = false;
   _baLyricsTuning    = "";
   _baLyricsUnmatched = false;
+  _baLyricsUnpinned  = false;
   _baLyricsPage      = 0;
   _baLoadLyrics();
 }
@@ -1166,10 +1177,11 @@ async function _baLoadLyrics() {
   if (q)                 params.set("q", q);
   if (_baLyricsTuning)   params.set("tuning", _baLyricsTuning);
   if (_baLyricsUnmatched) params.set("unmatched", "1");
+  if (_baLyricsUnpinned)  params.set("unpinned",  "1");
   // Toggle the "Clear filters" button visibility based on whether
   // any filter is currently active.
   const clearBtn = document.getElementById("blues-archive-lyrics-clear");
-  if (clearBtn) clearBtn.style.display = (q || _baLyricsTuning || _baLyricsUnmatched) ? "" : "none";
+  if (clearBtn) clearBtn.style.display = (q || _baLyricsTuning || _baLyricsUnmatched || _baLyricsUnpinned) ? "" : "none";
   // Server-side sort — see admin.html for the parallel wiring. The
   // client-side _baSortApply over the visible page was misleading
   // on the master Lyrics list because it only reordered the current
