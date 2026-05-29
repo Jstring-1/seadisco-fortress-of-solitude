@@ -4873,15 +4873,15 @@ body.card-mode-wide .card-tracklist .card-tracklist-rows {
 }
 
 .card img {
-  /* Image is exactly the card's width and renders at its natural
-     aspect ratio — no forced square, no crop, no letterbox. Card
-     heights become variable to match the cover. Discogs's
-     cover_image thumbs ARE actually square most of the time, so
-     in practice cards stay close to uniform-tall in a row; tall or
-     wide artwork (compilation covers, magazine sleeves) shows in
-     full instead of being chopped. */
+  /* Force a square crop so the grid stays uniform — tall sleeves
+     (magazine-format covers, portrait-orientation 78s) previously
+     stretched their row taller than its neighbours. object-fit:cover
+     centres on the artwork without letterboxing. Wide-mode already
+     squares its cover via a separate rule below. */
   width: 100%;
+  aspect-ratio: 1 / 1;
   height: auto;
+  object-fit: cover;
   display: block;
   background: var(--surface);
 }
