@@ -70,6 +70,9 @@ function initBluesArchiveView() {
   // Stats strip — fire non-blocking. Recent-edits feed removed from
   // the UI (the BE endpoint stays for future re-enablement).
   _baLoadStats().catch(() => {});
+  // Warm the favorites cache so the star renders correct on the first
+  // lyric viewer open. Non-blocking; default empty Set if it fails.
+  _baLoadFavoriteIds().catch(() => {});
   // Lazy-load /blues-admin.js for admins so the bulk-Discogs job
   // status + lyrics scrape polling auto-attach to anything already
   // running on the server (e.g. user reloaded mid-scrape). Non-
@@ -538,6 +541,8 @@ async function _baOpenLyric(id) {
             ${metaHtml}
           </div>
           <div style="display:flex;gap:0.4rem;align-items:start">
+            <button class="archive-btn" data-ba-fav-id="${row.id}" onclick="_baToggleLyricFavorite(${row.id})" title="${_baFavoriteIds.has(Number(row.id)) ? "Favorited — click to un-favorite" : "Click to favorite"}" style="font-size:1.1rem;padding:0 0.55rem;color:#ffd166">${_baFavoriteIds.has(Number(row.id)) ? "★" : "☆"}</button>
+            <button class="archive-btn" onclick="_baAddLyricToSetlist(${row.id})" title="Add this lyric to a setlist…">+ Setlist</button>
             <button class="archive-btn" onclick="_baOpenLyricEditor(${row.id})" title="Edit title / artist / tuning on this lyric">Edit</button>
             <button class="archive-btn" onclick="_baDeleteLyric(${row.id})" style="color:#e88" title="Permanently delete this lyric row">Delete</button>
             <button class="archive-btn" onclick="document.getElementById('ba-lyric-overlay')?.remove()" style="font-size:1.2rem;padding:0 0.6rem">×</button>
@@ -1070,7 +1075,7 @@ const _BA_LYRICS_LIST_TYPES = { page_title: "str", artist: "str", tuning: "str",
 let _baLyricsTuningsLoaded = false;
 
 function _baSwitchSubtab(tab) {
-  _baSubtab = (tab === "lyrics" || tab === "releases") ? tab : "artists";
+  _baSubtab = (tab === "lyrics" || tab === "releases" || tab === "setlists") ? tab : "artists";
   // Toggle button active state
   document.querySelectorAll("#blues-archive-subtabs .ba-subtab").forEach(b => {
     b.classList.toggle("is-active", b.dataset.baTab === _baSubtab);
@@ -1078,14 +1083,18 @@ function _baSwitchSubtab(tab) {
   const ap = document.getElementById("blues-archive-artists-panel");
   const lp = document.getElementById("blues-archive-lyrics-panel");
   const rp = document.getElementById("blues-archive-releases-panel");
+  const sp = document.getElementById("blues-archive-setlists-panel");
   if (ap) ap.style.display = _baSubtab === "artists"  ? "" : "none";
   if (lp) lp.style.display = _baSubtab === "lyrics"   ? "" : "none";
   if (rp) rp.style.display = _baSubtab === "releases" ? "" : "none";
+  if (sp) sp.style.display = _baSubtab === "setlists" ? "" : "none";
   if (_baSubtab === "lyrics") {
     if (!_baLyricsTuningsLoaded) _baLoadTunings();
     _baLoadLyrics();
   } else if (_baSubtab === "releases") {
     _baLoadReleases();
+  } else if (_baSubtab === "setlists") {
+    _baLoadSetlists();
   }
 }
 window._baSwitchSubtab = _baSwitchSubtab;
@@ -1157,6 +1166,348 @@ async function _baScrubLyricFooters() {
   }
 }
 window._baScrubLyricFooters = _baScrubLyricFooters;
+
+// ── Favorites + Setlists ─────────────────────────────────────────────
+// In-memory cache of favorited lyric IDs so the viewer star renders
+// the right state without a network round-trip per popup.
+let _baFavoriteIds = new Set();
+let _baSetlistsCache = [];
+let _baCurrentSetlistId = null;
+
+async function _baLoadFavoriteIds() {
+  try {
+    const r = await apiFetch("/api/blues-archive/favorites/ids");
+    if (!r.ok) return;
+    const { ids = [] } = await r.json();
+    _baFavoriteIds = new Set(ids.map(Number));
+  } catch {}
+}
+window._baLoadFavoriteIds = _baLoadFavoriteIds;
+
+async function _baToggleLyricFavorite(lyricId) {
+  const id = Number(lyricId);
+  if (!Number.isFinite(id)) return;
+  const wasFav = _baFavoriteIds.has(id);
+  // Optimistic flip — repaint star immediately, undo on error.
+  if (wasFav) _baFavoriteIds.delete(id); else _baFavoriteIds.add(id);
+  document.querySelectorAll(`[data-ba-fav-id="${id}"]`).forEach(el => {
+    el.textContent = _baFavoriteIds.has(id) ? "★" : "☆";
+    el.title = _baFavoriteIds.has(id) ? "Favorited — click to un-favorite" : "Click to favorite";
+  });
+  try {
+    const r = wasFav
+      ? await apiFetch(`/api/blues-archive/favorites/${id}`, { method: "DELETE" })
+      : await apiFetch(`/api/blues-archive/favorites`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lyricId: id }),
+        });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  } catch (e) {
+    // Revert the optimistic flip on failure.
+    if (wasFav) _baFavoriteIds.add(id); else _baFavoriteIds.delete(id);
+    document.querySelectorAll(`[data-ba-fav-id="${id}"]`).forEach(el => {
+      el.textContent = _baFavoriteIds.has(id) ? "★" : "☆";
+    });
+    if (typeof showToast === "function") showToast("Favorite update failed", "error");
+  }
+}
+window._baToggleLyricFavorite = _baToggleLyricFavorite;
+
+// Setlists: list rendering ───────────────────────────────────────────
+async function _baLoadSetlists() {
+  const listEl  = document.getElementById("blues-archive-setlists-list");
+  const countEl = document.getElementById("blues-archive-setlists-count");
+  if (!listEl) return;
+  listEl.innerHTML = `<div style="color:var(--muted)">Loading…</div>`;
+  try {
+    const r = await apiFetch("/api/blues-archive/setlists");
+    if (!r.ok) { listEl.innerHTML = `<div style="color:#e88">Failed: HTTP ${r.status}</div>`; return; }
+    const { rows = [] } = await r.json();
+    _baSetlistsCache = rows;
+    if (countEl) countEl.textContent = rows.length ? `${rows.length} setlist${rows.length === 1 ? "" : "s"}` : "No setlists yet.";
+    if (!rows.length) {
+      listEl.innerHTML = `<div style="color:var(--muted);padding:0.4rem">No setlists yet. Click <strong>+ New setlist</strong>.</div>`;
+      return;
+    }
+    listEl.innerHTML = rows.map(s => {
+      const sel = (_baCurrentSetlistId === s.id) ? "background:rgba(255,255,255,0.06);" : "";
+      const updated = s.updated_at ? new Date(s.updated_at).toLocaleDateString() : "";
+      return `<div style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--border);cursor:pointer;${sel}" onclick="_baOpenSetlist(${s.id})">
+        <div style="font-weight:600;color:var(--text)">${escHtml(s.name)}</div>
+        <div style="font-size:0.72rem;color:var(--muted);margin-top:0.1rem">${s.item_count} song${s.item_count === 1 ? "" : "s"}${updated ? " · " + escHtml(updated) : ""}</div>
+      </div>`;
+    }).join("");
+  } catch (e) {
+    listEl.innerHTML = `<div style="color:#e88">Failed: ${escHtml(e?.message || String(e))}</div>`;
+  }
+}
+window._baLoadSetlists = _baLoadSetlists;
+
+async function _baOpenSetlist(id) {
+  _baCurrentSetlistId = Number(id);
+  const detailEl = document.getElementById("blues-archive-setlists-detail");
+  if (!detailEl) return;
+  detailEl.innerHTML = `<div style="color:var(--muted)">Loading…</div>`;
+  try {
+    const r = await apiFetch(`/api/blues-archive/setlists/${id}`);
+    if (!r.ok) { detailEl.innerHTML = `<div style="color:#e88">Failed: HTTP ${r.status}</div>`; return; }
+    const s = await r.json();
+    _baLoadSetlists(); // repaint left list with new selection highlight
+    const items = Array.isArray(s.items) ? s.items : [];
+    const itemsHtml = items.length
+      ? `<ol style="list-style:none;margin:0;padding:0;counter-reset:setlist">${items.map((it, i) => {
+          const pos = i + 1;
+          const tuning = it.tuning ? `<span style="color:#888;font-size:0.74rem;margin-left:0.4rem">${escHtml(it.tuning)}</span>` : "";
+          return `<li data-li="${it.lyric_id}" style="display:flex;align-items:center;gap:0.4rem;padding:0.35rem 0.4rem;border-bottom:1px solid var(--border)">
+            <span style="color:var(--muted);font-size:0.78rem;width:1.8em;text-align:right">${pos}.</span>
+            <span style="flex:1;min-width:0">
+              <a href="#" onclick="event.preventDefault();_baOpenLyric(${it.lyric_id})" style="color:var(--text);text-decoration:none;font-weight:600">${escHtml(it.page_title || "(untitled)")}</a>
+              <span style="color:var(--muted);font-size:0.78rem;margin-left:0.4rem">${escHtml(it.artist || "")}</span>
+              ${tuning}
+            </span>
+            <button class="archive-btn" title="Move up"   ${i === 0 ? "disabled" : ""} onclick="_baSetlistMoveItem(${s.id}, ${it.lyric_id}, -1)" style="padding:0 0.5rem">↑</button>
+            <button class="archive-btn" title="Move down" ${i === items.length - 1 ? "disabled" : ""} onclick="_baSetlistMoveItem(${s.id}, ${it.lyric_id}, +1)" style="padding:0 0.5rem">↓</button>
+            <button class="archive-btn" title="Remove from setlist" onclick="_baSetlistRemoveItem(${s.id}, ${it.lyric_id})" style="color:#e88;padding:0 0.5rem">×</button>
+          </li>`;
+        }).join("")}</ol>`
+      : `<div style="color:var(--muted);padding:0.6rem 0;font-style:italic">No songs yet. Add lyrics from their viewer popup (the + Setlist button).</div>`;
+    detailEl.innerHTML = `
+      <div style="display:flex;align-items:start;justify-content:space-between;gap:0.6rem;margin-bottom:0.6rem">
+        <div style="min-width:0">
+          <h3 style="margin:0 0 0.2rem;font-size:1rem;color:var(--text)">${escHtml(s.name)}</h3>
+          ${s.notes ? `<div style="font-size:0.78rem;color:var(--muted);white-space:pre-wrap">${escHtml(s.notes)}</div>` : ""}
+        </div>
+        <div style="display:flex;gap:0.3rem;flex-wrap:wrap;justify-content:flex-end">
+          <button class="archive-btn" onclick="_baRenameSetlist(${s.id})" title="Rename / edit notes">Edit</button>
+          <button class="archive-btn" onclick="window.open('/api/blues-archive/setlists/${s.id}/export.txt')" title="Download as performer-friendly plain text">Export TXT</button>
+          <button class="archive-btn" onclick="window.open('/api/blues-archive/setlists/${s.id}/export.csv')" title="Download as CSV (spreadsheet-friendly)">Export CSV</button>
+          <button class="archive-btn" onclick="window.open('/api/blues-archive/setlists/${s.id}/export.json')" title="Download as JSON (round-trip)">Export JSON</button>
+          <button class="archive-btn" onclick="_baDeleteSetlist(${s.id})" style="color:#e88" title="Permanently delete this setlist">Delete</button>
+        </div>
+      </div>
+      ${itemsHtml}`;
+  } catch (e) {
+    detailEl.innerHTML = `<div style="color:#e88">Failed: ${escHtml(e?.message || String(e))}</div>`;
+  }
+}
+window._baOpenSetlist = _baOpenSetlist;
+
+async function _baOpenNewSetlistDialog() {
+  const name = prompt("Name your setlist:");
+  if (!name || !name.trim()) return;
+  try {
+    const r = await apiFetch("/api/blues-archive/setlists", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert("Create failed: " + (err?.error ?? r.status));
+      return;
+    }
+    const { id } = await r.json();
+    await _baLoadSetlists();
+    _baOpenSetlist(id);
+  } catch (e) { alert("Create failed: " + (e?.message || e)); }
+}
+window._baOpenNewSetlistDialog = _baOpenNewSetlistDialog;
+
+async function _baRenameSetlist(id) {
+  const cur = _baSetlistsCache.find(s => Number(s.id) === Number(id));
+  const newName = prompt("Setlist name:", cur?.name || "");
+  if (newName == null) return;
+  const trimmed = newName.trim();
+  if (!trimmed) return;
+  try {
+    const r = await apiFetch(`/api/blues-archive/setlists/${id}`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: trimmed }),
+    });
+    if (!r.ok) { const err = await r.json().catch(() => ({})); alert("Rename failed: " + (err?.error ?? r.status)); return; }
+    await _baLoadSetlists();
+    _baOpenSetlist(id);
+  } catch (e) { alert("Rename failed: " + (e?.message || e)); }
+}
+window._baRenameSetlist = _baRenameSetlist;
+
+async function _baDeleteSetlist(id) {
+  const cur = _baSetlistsCache.find(s => Number(s.id) === Number(id));
+  if (!confirm(`Delete setlist "${cur?.name || ""}"?\n\nSongs are removed from the setlist but the underlying lyrics stay in the archive.`)) return;
+  try {
+    const r = await apiFetch(`/api/blues-archive/setlists/${id}`, { method: "DELETE" });
+    if (!r.ok) { alert("Delete failed: HTTP " + r.status); return; }
+    _baCurrentSetlistId = null;
+    await _baLoadSetlists();
+    const detail = document.getElementById("blues-archive-setlists-detail");
+    if (detail) detail.innerHTML = `Pick a setlist on the left, or create a new one.`;
+  } catch (e) { alert("Delete failed: " + (e?.message || e)); }
+}
+window._baDeleteSetlist = _baDeleteSetlist;
+
+// Reorder via two-pass: pull current order, swap the moved item with
+// its neighbor, PUT the new sort order. Server doesn't trust the
+// client's numbers blindly — it overwrites whatever is sent. Up-arrow
+// at top and down-arrow at bottom are disabled in the UI so this only
+// fires on valid moves.
+async function _baSetlistMoveItem(setlistId, lyricId, direction) {
+  try {
+    const r = await apiFetch(`/api/blues-archive/setlists/${setlistId}`);
+    if (!r.ok) return;
+    const s = await r.json();
+    const items = Array.isArray(s.items) ? s.items.slice() : [];
+    const i = items.findIndex(it => Number(it.lyric_id) === Number(lyricId));
+    if (i < 0) return;
+    const j = i + direction;
+    if (j < 0 || j >= items.length) return;
+    [items[i], items[j]] = [items[j], items[i]];
+    const payload = items.map((it, idx) => ({ lyricId: it.lyric_id, sort_order: idx + 1 }));
+    const pr = await apiFetch(`/api/blues-archive/setlists/${setlistId}/items`, {
+      method: "PUT", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items: payload }),
+    });
+    if (!pr.ok) return;
+    _baOpenSetlist(setlistId);
+  } catch {}
+}
+window._baSetlistMoveItem = _baSetlistMoveItem;
+
+async function _baSetlistRemoveItem(setlistId, lyricId) {
+  try {
+    const r = await apiFetch(`/api/blues-archive/setlists/${setlistId}/items/${lyricId}`, { method: "DELETE" });
+    if (!r.ok) { alert("Remove failed: HTTP " + r.status); return; }
+    _baOpenSetlist(setlistId);
+  } catch (e) { alert("Remove failed: " + (e?.message || e)); }
+}
+window._baSetlistRemoveItem = _baSetlistRemoveItem;
+
+// Add a lyric to a setlist — picker dialog if more than one option,
+// straight-add when only one exists, "+ Create new" when zero.
+async function _baAddLyricToSetlist(lyricId) {
+  const id = Number(lyricId);
+  if (!Number.isFinite(id)) return;
+  // Refresh setlists cache so a freshly-created list shows up.
+  if (!_baSetlistsCache.length) {
+    try {
+      const r = await apiFetch("/api/blues-archive/setlists");
+      if (r.ok) _baSetlistsCache = (await r.json()).rows ?? [];
+    } catch {}
+  }
+  let chosenId = null;
+  if (_baSetlistsCache.length === 0) {
+    if (!confirm("You have no setlists yet. Create one now?")) return;
+    const name = prompt("Name your setlist:");
+    if (!name || !name.trim()) return;
+    try {
+      const cr = await apiFetch("/api/blues-archive/setlists", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim() }),
+      });
+      if (!cr.ok) { alert("Create failed."); return; }
+      chosenId = Number((await cr.json()).id);
+      _baSetlistsCache = []; // force refresh next time
+    } catch (e) { alert("Create failed: " + e); return; }
+  } else {
+    // Inline picker overlay — small list with each setlist + "+ New".
+    chosenId = await _baPickSetlistDialog();
+    if (chosenId == null) return;
+  }
+  try {
+    const ar = await apiFetch(`/api/blues-archive/setlists/${chosenId}/items`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lyricId: id }),
+    });
+    if (!ar.ok) { alert("Add failed: HTTP " + ar.status); return; }
+    const out = await ar.json().catch(() => ({}));
+    if (typeof showToast === "function") {
+      showToast(out.added ? "Added to setlist" : "Already in setlist", "ok");
+    }
+  } catch (e) { alert("Add failed: " + (e?.message || e)); }
+}
+window._baAddLyricToSetlist = _baAddLyricToSetlist;
+
+// Setlist picker overlay — returns the chosen id via Promise. New
+// setlist creation is offered inline so the curator doesn't bounce
+// through the Setlists tab.
+function _baPickSetlistDialog() {
+  return new Promise((resolve) => {
+    document.getElementById("ba-pick-setlist-overlay")?.remove();
+    const overlay = document.createElement("div");
+    overlay.id = "ba-pick-setlist-overlay";
+    Object.assign(overlay.style, {
+      position: "fixed", inset: "0", background: "rgba(0,0,0,0.78)",
+      zIndex: "380", display: "flex", alignItems: "flex-start",
+      justifyContent: "center", padding: "3rem 1rem", overflow: "auto",
+    });
+    overlay.onclick = (e) => { if (e.target === overlay) { overlay.remove(); resolve(null); } };
+    const items = _baSetlistsCache.map(s =>
+      `<button type="button" class="archive-btn" style="display:block;width:100%;text-align:left;margin:0.2rem 0;padding:0.4rem 0.6rem" onclick="document.getElementById('ba-pick-setlist-overlay')?.remove();window.__baPickSetlistResolve?.(${s.id})"><strong>${escHtml(s.name)}</strong> <span style="color:var(--muted);font-size:0.72rem;margin-left:0.4rem">${s.item_count} song${s.item_count === 1 ? "" : "s"}</span></button>`
+    ).join("");
+    overlay.innerHTML = `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:1rem 1.2rem;width:min(440px,100%)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.6rem">
+          <h3 style="margin:0;font-size:1rem">Add to setlist…</h3>
+          <button class="archive-btn" onclick="document.getElementById('ba-pick-setlist-overlay')?.remove();window.__baPickSetlistResolve?.(null)">Cancel</button>
+        </div>
+        ${items}
+        <button type="button" class="archive-btn" style="display:block;width:100%;text-align:left;margin-top:0.6rem;padding:0.4rem 0.6rem;color:var(--accent)" onclick="document.getElementById('ba-pick-setlist-overlay')?.remove();window.__baPickSetlistResolve?.('__new__')">+ Create new setlist…</button>
+      </div>`;
+    document.body.appendChild(overlay);
+    window.__baPickSetlistResolve = async (val) => {
+      window.__baPickSetlistResolve = null;
+      if (val === "__new__") {
+        const name = prompt("Name your new setlist:");
+        if (!name || !name.trim()) { resolve(null); return; }
+        try {
+          const cr = await apiFetch("/api/blues-archive/setlists", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ name: name.trim() }),
+          });
+          if (!cr.ok) { alert("Create failed."); resolve(null); return; }
+          const { id } = await cr.json();
+          _baSetlistsCache = []; // force refresh
+          resolve(id);
+        } catch (e) { alert("Create failed: " + e); resolve(null); }
+      } else { resolve(val); }
+    };
+  });
+}
+
+// Quick favorites browser — opens a setlist-style overlay showing
+// every favorited lyric so the curator can revisit / add-to-setlist
+// without scrolling through the master list.
+async function _baShowFavorites() {
+  const detailEl = document.getElementById("blues-archive-setlists-detail");
+  if (!detailEl) return;
+  _baCurrentSetlistId = null;
+  detailEl.innerHTML = `<div style="color:var(--muted)">Loading…</div>`;
+  try {
+    const r = await apiFetch("/api/blues-archive/favorites");
+    if (!r.ok) { detailEl.innerHTML = `<div style="color:#e88">Failed: HTTP ${r.status}</div>`; return; }
+    const { rows = [] } = await r.json();
+    if (!rows.length) {
+      detailEl.innerHTML = `<div style="color:var(--muted);padding:0.6rem 0;font-style:italic">No favorites yet. Open a lyric and click ★ to flag it.</div>`;
+      return;
+    }
+    detailEl.innerHTML = `
+      <h3 style="margin:0 0 0.6rem;font-size:1rem;color:var(--text)">★ Favorites <span style="color:var(--muted);font-size:0.78rem;font-weight:normal">· ${rows.length}</span></h3>
+      <ol style="list-style:none;margin:0;padding:0">${rows.map((it, i) => `
+        <li style="display:flex;align-items:center;gap:0.4rem;padding:0.35rem 0.4rem;border-bottom:1px solid var(--border)">
+          <span style="color:var(--muted);font-size:0.78rem;width:1.8em;text-align:right">${i + 1}.</span>
+          <span style="flex:1;min-width:0">
+            <a href="#" onclick="event.preventDefault();_baOpenLyric(${it.id})" style="color:var(--text);text-decoration:none;font-weight:600">${escHtml(it.page_title || "(untitled)")}</a>
+            <span style="color:var(--muted);font-size:0.78rem;margin-left:0.4rem">${escHtml(it.artist || "")}</span>
+            ${it.tuning ? `<span style="color:#888;font-size:0.74rem;margin-left:0.4rem">${escHtml(it.tuning)}</span>` : ""}
+          </span>
+          <button class="archive-btn" onclick="_baAddLyricToSetlist(${it.id})" title="Add to a setlist…">+ Setlist</button>
+        </li>
+      `).join("")}</ol>`;
+  } catch (e) {
+    detailEl.innerHTML = `<div style="color:#e88">Failed: ${escHtml(e?.message || String(e))}</div>`;
+  }
+}
+window._baShowFavorites = _baShowFavorites;
 
 // Clear all active filters on the Lyrics tab. Bound to the
 // "Clear filters" button that auto-shows/hides based on filter state.

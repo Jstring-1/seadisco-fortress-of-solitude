@@ -1048,6 +1048,55 @@ export async function initDb() {
     CREATE UNIQUE INDEX IF NOT EXISTS blues_lyrics_dedup_idx
       ON blues_lyrics (source_host, page_title, (COALESCE(LOWER(TRIM(artist)), '')))
   `);
+
+  // ── Lyric favorites + Setlists (admin curator tools) ─────────────────
+  // Per-user favorites: (clerk_user_id, lyric_id) PK so a single user
+  // can't double-favorite the same lyric. ON DELETE CASCADE on the
+  // lyric FK so deleting a lyric cleans up its favorite rows.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS blues_lyric_favorites (
+      clerk_user_id TEXT       NOT NULL,
+      lyric_id      INTEGER    NOT NULL REFERENCES blues_lyrics(id) ON DELETE CASCADE,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (clerk_user_id, lyric_id)
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS blues_lyric_favorites_user_idx ON blues_lyric_favorites (clerk_user_id)`);
+
+  // Named setlists. One per name per user; deleting cascades to items.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS blues_setlists (
+      id            SERIAL PRIMARY KEY,
+      clerk_user_id TEXT       NOT NULL,
+      name          TEXT       NOT NULL,
+      notes         TEXT,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS blues_setlists_user_idx ON blues_setlists (clerk_user_id)`);
+  await getPool().query(`CREATE UNIQUE INDEX IF NOT EXISTS blues_setlists_user_name_idx ON blues_setlists (clerk_user_id, LOWER(TRIM(name)))`);
+  await getPool().query(`DROP TRIGGER IF EXISTS blues_setlists_set_updated_at ON blues_setlists`);
+  await getPool().query(`
+    CREATE TRIGGER blues_setlists_set_updated_at
+      BEFORE UPDATE ON blues_setlists
+      FOR EACH ROW EXECUTE FUNCTION _blues_set_updated_at();
+  `);
+
+  // Setlist items (lyrics in order). sort_order is a plain int; gaps
+  // are fine, ties tie-break by lyric_id. Per-item note for things like
+  // "open with this" or alternate tuning reminders.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS blues_setlist_items (
+      setlist_id INTEGER NOT NULL REFERENCES blues_setlists(id) ON DELETE CASCADE,
+      lyric_id   INTEGER NOT NULL REFERENCES blues_lyrics(id)   ON DELETE CASCADE,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      note       TEXT,
+      added_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (setlist_id, lyric_id)
+    )
+  `);
+  await getPool().query(`CREATE INDEX IF NOT EXISTS blues_setlist_items_setlist_idx ON blues_setlist_items (setlist_id, sort_order)`);
 }
 
 // ── Blues lyrics: re-link orphans to existing blues_artists rows ──
@@ -1302,6 +1351,162 @@ export async function deleteBluesArtistAndLyrics(id: number): Promise<{
       artistName: name,
       lyricsDeleted: (r1.rowCount ?? 0) + (r2.rowCount ?? 0),
     };
+  } catch (e) {
+    try { await client.query("ROLLBACK"); } catch {}
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
+// ── Lyric favorites ──────────────────────────────────────────────────
+export async function listLyricFavoriteIds(userId: string): Promise<number[]> {
+  const r = await getPool().query(
+    `SELECT lyric_id FROM blues_lyric_favorites WHERE clerk_user_id = $1 ORDER BY created_at DESC`,
+    [userId],
+  );
+  return r.rows.map(row => Number(row.lyric_id));
+}
+export async function listLyricFavoritesWithDetails(userId: string): Promise<any[]> {
+  const r = await getPool().query(
+    `SELECT l.id, l.page_title, l.artist, l.artist_id, l.tuning,
+            l.discogs_release_id, l.discogs_master_id,
+            substring(l.plaintext, 1, 240) AS snippet,
+            f.created_at AS favorited_at
+       FROM blues_lyric_favorites f
+       JOIN blues_lyrics l ON l.id = f.lyric_id
+      WHERE f.clerk_user_id = $1
+      ORDER BY f.created_at DESC`,
+    [userId],
+  );
+  return r.rows;
+}
+export async function addLyricFavorite(userId: string, lyricId: number): Promise<boolean> {
+  const r = await getPool().query(
+    `INSERT INTO blues_lyric_favorites (clerk_user_id, lyric_id) VALUES ($1, $2)
+     ON CONFLICT DO NOTHING`,
+    [userId, lyricId],
+  );
+  return (r.rowCount ?? 0) > 0;
+}
+export async function removeLyricFavorite(userId: string, lyricId: number): Promise<boolean> {
+  const r = await getPool().query(
+    `DELETE FROM blues_lyric_favorites WHERE clerk_user_id = $1 AND lyric_id = $2`,
+    [userId, lyricId],
+  );
+  return (r.rowCount ?? 0) > 0;
+}
+
+// ── Setlists ─────────────────────────────────────────────────────────
+export async function listSetlists(userId: string): Promise<any[]> {
+  const r = await getPool().query(
+    `SELECT s.id, s.name, s.notes, s.created_at, s.updated_at,
+            (SELECT COUNT(*)::int FROM blues_setlist_items si WHERE si.setlist_id = s.id) AS item_count
+       FROM blues_setlists s
+      WHERE s.clerk_user_id = $1
+      ORDER BY s.updated_at DESC`,
+    [userId],
+  );
+  return r.rows;
+}
+export async function getSetlist(userId: string, id: number): Promise<any | null> {
+  const sr = await getPool().query(
+    `SELECT id, name, notes, created_at, updated_at FROM blues_setlists
+      WHERE id = $1 AND clerk_user_id = $2`,
+    [id, userId],
+  );
+  if (!sr.rows.length) return null;
+  const items = await getPool().query(
+    `SELECT si.lyric_id, si.sort_order, si.note, si.added_at,
+            l.page_title, l.artist, l.artist_id, l.tuning,
+            l.discogs_release_id, l.discogs_master_id,
+            substring(l.plaintext, 1, 240) AS snippet
+       FROM blues_setlist_items si
+       JOIN blues_lyrics l ON l.id = si.lyric_id
+      WHERE si.setlist_id = $1
+      ORDER BY si.sort_order ASC, si.lyric_id ASC`,
+    [id],
+  );
+  return { ...sr.rows[0], items: items.rows };
+}
+export async function createSetlist(userId: string, name: string, notes: string | null = null): Promise<number> {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("name required");
+  const r = await getPool().query(
+    `INSERT INTO blues_setlists (clerk_user_id, name, notes) VALUES ($1, $2, $3) RETURNING id`,
+    [userId, trimmed, notes],
+  );
+  return Number(r.rows[0].id);
+}
+export async function updateSetlist(userId: string, id: number, patch: { name?: string; notes?: string | null }): Promise<boolean> {
+  const sets: string[] = [];
+  const params: any[] = [];
+  if (patch.name != null)  { params.push(patch.name.trim());  sets.push(`name = $${params.length}`); }
+  if (patch.notes !== undefined) { params.push(patch.notes); sets.push(`notes = $${params.length}`); }
+  if (!sets.length) return false;
+  params.push(userId, id);
+  const r = await getPool().query(
+    `UPDATE blues_setlists SET ${sets.join(", ")} WHERE clerk_user_id = $${params.length - 1} AND id = $${params.length}`,
+    params,
+  );
+  return (r.rowCount ?? 0) > 0;
+}
+export async function deleteSetlist(userId: string, id: number): Promise<boolean> {
+  const r = await getPool().query(
+    `DELETE FROM blues_setlists WHERE id = $1 AND clerk_user_id = $2`,
+    [id, userId],
+  );
+  return (r.rowCount ?? 0) > 0;
+}
+export async function addSetlistItem(userId: string, setlistId: number, lyricId: number, note: string | null = null): Promise<boolean> {
+  // Verify setlist ownership before write so a malicious caller can't
+  // append items to someone else's setlist via id-guessing.
+  const own = await getPool().query(
+    `SELECT 1 FROM blues_setlists WHERE id = $1 AND clerk_user_id = $2`,
+    [setlistId, userId],
+  );
+  if (!own.rows.length) throw new Error("setlist not found");
+  // sort_order defaults to current max + 1 so new items land at the end.
+  const r = await getPool().query(
+    `INSERT INTO blues_setlist_items (setlist_id, lyric_id, sort_order, note)
+       SELECT $1, $2, COALESCE(MAX(sort_order), 0) + 1, $3
+         FROM blues_setlist_items WHERE setlist_id = $1
+     ON CONFLICT DO NOTHING`,
+    [setlistId, lyricId, note],
+  );
+  await getPool().query(`UPDATE blues_setlists SET updated_at = NOW() WHERE id = $1`, [setlistId]);
+  return (r.rowCount ?? 0) > 0;
+}
+export async function removeSetlistItem(userId: string, setlistId: number, lyricId: number): Promise<boolean> {
+  const own = await getPool().query(
+    `SELECT 1 FROM blues_setlists WHERE id = $1 AND clerk_user_id = $2`,
+    [setlistId, userId],
+  );
+  if (!own.rows.length) throw new Error("setlist not found");
+  const r = await getPool().query(
+    `DELETE FROM blues_setlist_items WHERE setlist_id = $1 AND lyric_id = $2`,
+    [setlistId, lyricId],
+  );
+  await getPool().query(`UPDATE blues_setlists SET updated_at = NOW() WHERE id = $1`, [setlistId]);
+  return (r.rowCount ?? 0) > 0;
+}
+export async function reorderSetlistItems(userId: string, setlistId: number, items: Array<{ lyricId: number; sort_order: number }>): Promise<void> {
+  const own = await getPool().query(
+    `SELECT 1 FROM blues_setlists WHERE id = $1 AND clerk_user_id = $2`,
+    [setlistId, userId],
+  );
+  if (!own.rows.length) throw new Error("setlist not found");
+  const client = await getPool().connect();
+  try {
+    await client.query("BEGIN");
+    for (const it of items) {
+      await client.query(
+        `UPDATE blues_setlist_items SET sort_order = $1 WHERE setlist_id = $2 AND lyric_id = $3`,
+        [Number(it.sort_order) || 0, setlistId, Number(it.lyricId)],
+      );
+    }
+    await client.query(`UPDATE blues_setlists SET updated_at = NOW() WHERE id = $1`, [setlistId]);
+    await client.query("COMMIT");
   } catch (e) {
     try { await client.query("ROLLBACK"); } catch {}
     throw e;

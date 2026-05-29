@@ -7,7 +7,7 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric } from "./db.js";
+import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists, previewBluesArtistFromDiscogs } from "./blues-db.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const anthropicKey = process.env.ANTHROPIC_API_KEY ?? "";
@@ -10375,6 +10375,252 @@ app.get("/api/blues-archive/releases", async (req, res) => {
 // Reassigns the source artist's lyrics (by name match) to the target,
 // merges discogs_releases (deduped by id+type), and deletes the
 // source row. Wrapped in a transaction.
+// ── Lyric favorites + Setlists ──────────────────────────────────────
+app.get("/api/blues-archive/favorites", async (req, res) => {
+    const userId = await requireAdmin(req, res);
+    if (!userId)
+        return;
+    try {
+        res.json({ rows: await listLyricFavoritesWithDetails(userId) });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.get("/api/blues-archive/favorites/ids", async (req, res) => {
+    const userId = await requireAdmin(req, res);
+    if (!userId)
+        return;
+    try {
+        res.json({ ids: await listLyricFavoriteIds(userId) });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.post("/api/blues-archive/favorites", express.json({ limit: "1kb" }), async (req, res) => {
+    const userId = await requireAdmin(req, res);
+    if (!userId)
+        return;
+    try {
+        const lyricId = Number(req.body?.lyricId);
+        if (!Number.isFinite(lyricId)) {
+            res.status(400).json({ error: "lyricId required" });
+            return;
+        }
+        const added = await addLyricFavorite(userId, lyricId);
+        res.json({ ok: true, added });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.delete("/api/blues-archive/favorites/:lyricId(\\d+)", async (req, res) => {
+    const userId = await requireAdmin(req, res);
+    if (!userId)
+        return;
+    try {
+        const removed = await removeLyricFavorite(userId, parseInt(req.params.lyricId, 10));
+        res.json({ ok: true, removed });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.get("/api/blues-archive/setlists", async (req, res) => {
+    const userId = await requireAdmin(req, res);
+    if (!userId)
+        return;
+    try {
+        res.json({ rows: await listSetlists(userId) });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.post("/api/blues-archive/setlists", express.json({ limit: "8kb" }), async (req, res) => {
+    const userId = await requireAdmin(req, res);
+    if (!userId)
+        return;
+    try {
+        const name = String(req.body?.name ?? "").trim();
+        if (!name) {
+            res.status(400).json({ error: "name required" });
+            return;
+        }
+        const notes = typeof req.body?.notes === "string" ? req.body.notes : null;
+        const id = await createSetlist(userId, name, notes);
+        res.json({ ok: true, id });
+    }
+    catch (err) {
+        if (err?.code === "23505") {
+            res.status(409).json({ error: "A setlist with that name already exists." });
+            return;
+        }
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.get("/api/blues-archive/setlists/:id(\\d+)", async (req, res) => {
+    const userId = await requireAdmin(req, res);
+    if (!userId)
+        return;
+    try {
+        const s = await getSetlist(userId, parseInt(req.params.id, 10));
+        if (!s) {
+            res.status(404).json({ error: "not_found" });
+            return;
+        }
+        res.json(s);
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.put("/api/blues-archive/setlists/:id(\\d+)", express.json({ limit: "8kb" }), async (req, res) => {
+    const userId = await requireAdmin(req, res);
+    if (!userId)
+        return;
+    try {
+        const patch = {};
+        if (typeof req.body?.name === "string")
+            patch.name = req.body.name;
+        if ("notes" in (req.body ?? {}))
+            patch.notes = req.body.notes ?? null;
+        await updateSetlist(userId, parseInt(req.params.id, 10), patch);
+        res.json({ ok: true });
+    }
+    catch (err) {
+        if (err?.code === "23505") {
+            res.status(409).json({ error: "A setlist with that name already exists." });
+            return;
+        }
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.delete("/api/blues-archive/setlists/:id(\\d+)", async (req, res) => {
+    const userId = await requireAdmin(req, res);
+    if (!userId)
+        return;
+    try {
+        const removed = await deleteSetlist(userId, parseInt(req.params.id, 10));
+        res.json({ ok: true, removed });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.post("/api/blues-archive/setlists/:id(\\d+)/items", express.json({ limit: "1kb" }), async (req, res) => {
+    const userId = await requireAdmin(req, res);
+    if (!userId)
+        return;
+    try {
+        const lyricId = Number(req.body?.lyricId);
+        if (!Number.isFinite(lyricId)) {
+            res.status(400).json({ error: "lyricId required" });
+            return;
+        }
+        const note = typeof req.body?.note === "string" ? req.body.note : null;
+        const added = await addSetlistItem(userId, parseInt(req.params.id, 10), lyricId, note);
+        res.json({ ok: true, added });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.delete("/api/blues-archive/setlists/:id(\\d+)/items/:lyricId(\\d+)", async (req, res) => {
+    const userId = await requireAdmin(req, res);
+    if (!userId)
+        return;
+    try {
+        const removed = await removeSetlistItem(userId, parseInt(req.params.id, 10), parseInt(req.params.lyricId, 10));
+        res.json({ ok: true, removed });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+app.put("/api/blues-archive/setlists/:id(\\d+)/items", express.json({ limit: "32kb" }), async (req, res) => {
+    const userId = await requireAdmin(req, res);
+    if (!userId)
+        return;
+    try {
+        const items = Array.isArray(req.body?.items)
+            ? req.body.items.map((it) => ({ lyricId: Number(it.lyricId), sort_order: Number(it.sort_order) }))
+                .filter((it) => Number.isFinite(it.lyricId))
+            : [];
+        await reorderSetlistItems(userId, parseInt(req.params.id, 10), items);
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// Setlist exports — plain text (singer/player-friendly), JSON (round-trip),
+// CSV (spreadsheet). Streamed with content-disposition headers so a click
+// downloads the file directly.
+app.get("/api/blues-archive/setlists/:id(\\d+)/export.:fmt(txt|json|csv)", async (req, res) => {
+    const userId = await requireAdmin(req, res);
+    if (!userId)
+        return;
+    try {
+        const s = await getSetlist(userId, parseInt(req.params.id, 10));
+        if (!s) {
+            res.status(404).json({ error: "not_found" });
+            return;
+        }
+        const safeName = String(s.name).replace(/[^A-Za-z0-9._-]+/g, "_").slice(0, 80) || "setlist";
+        const fmt = req.params.fmt;
+        if (fmt === "json") {
+            res.setHeader("Content-Type", "application/json; charset=utf-8");
+            res.setHeader("Content-Disposition", `attachment; filename="${safeName}.json"`);
+            res.send(JSON.stringify(s, null, 2));
+            return;
+        }
+        if (fmt === "csv") {
+            const esc = (v) => {
+                const t = v == null ? "" : String(v);
+                return /[",\n\r]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t;
+            };
+            const header = ["#", "title", "artist", "tuning", "discogs_release_id", "discogs_master_id", "note"];
+            const lines = [header.join(",")];
+            s.items.forEach((it, i) => {
+                lines.push([
+                    i + 1,
+                    esc(it.page_title),
+                    esc(it.artist),
+                    esc(it.tuning),
+                    esc(it.discogs_release_id),
+                    esc(it.discogs_master_id),
+                    esc(it.note),
+                ].join(","));
+            });
+            res.setHeader("Content-Type", "text/csv; charset=utf-8");
+            res.setHeader("Content-Disposition", `attachment; filename="${safeName}.csv"`);
+            // BOM so Excel/Sheets render UTF-8 cleanly.
+            res.send("﻿" + lines.join("\n"));
+            return;
+        }
+        // txt — performer-friendly. Title, artist, tuning. No body (would
+        // bloat the file); the user views the body in-app when rehearsing.
+        const lines = [`${s.name}`, ""];
+        if (s.notes) {
+            lines.push(s.notes, "");
+        }
+        s.items.forEach((it, i) => {
+            const meta = [it.artist || "(no artist)", it.tuning || "Standard"].filter(Boolean).join(" · ");
+            lines.push(`${i + 1}. ${it.page_title || "(untitled)"} — ${meta}`);
+            if (it.note)
+                lines.push(`   ${it.note}`);
+        });
+        res.setHeader("Content-Type", "text/plain; charset=utf-8");
+        res.setHeader("Content-Disposition", `attachment; filename="${safeName}.txt"`);
+        res.send(lines.join("\n"));
+    }
+    catch (err) {
+        console.error("[setlist export]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
 app.post("/api/blues-archive/merge", express.json({ limit: "1kb" }), async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
