@@ -8296,6 +8296,187 @@ app.get("/api/admin/lyrics/export.pdf", async (req, res) => {
   }
 });
 
+// GET /api/admin/blues/export.pdf — streamed PDF profile book of
+// every artist in blues_artists. Alphabetical by name (case-
+// insensitive). Per-artist: name + dates/hometown/first-recording
+// meta + pseudonyms + bands + notes (bio) + every Discogs release
+// (sorted oldest→newest). No lyrics here — that's the separate
+// /api/admin/lyrics/export.pdf endpoint.
+app.get("/api/admin/blues/export.pdf", async (req, res) => {
+  if (!await requireAdmin(req, res)) return;
+  try {
+    const r = await getPool().query(
+      `SELECT id, name, aliases, collaborators,
+              birth_date, death_date, birth_place, death_place, hometown_region,
+              first_recording_year, first_recording_title,
+              last_recording_year,  last_recording_title,
+              styles, instruments, associated_labels,
+              notes, discogs_id, wikipedia_suffix,
+              discogs_releases
+         FROM blues_artists
+        ORDER BY lower(name) ASC, name ASC`,
+    );
+    const rows = r.rows;
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="seadisco-artists-${new Date().toISOString().slice(0, 10)}.pdf"`,
+    );
+    const doc = new PDFDocument({
+      size: "LETTER",
+      margins: { top: 56, bottom: 56, left: 56, right: 56 },
+      info: {
+        Title: "SeaDisco Blues Archive — Artist Profiles",
+        Author: "SeaDisco",
+        Subject: `${rows.length} artists`,
+      },
+      bufferPages: true,
+    });
+    doc.pipe(res);
+    // ── Cover page ─────────────────────────────────────────────────
+    doc.font("Times-Bold").fontSize(28).text("Blues Archive", { align: "center" });
+    doc.moveDown(0.3);
+    doc.font("Times-Italic").fontSize(14).text("Artist profiles, sorted A–Z", { align: "center" });
+    doc.moveDown(2);
+    doc.font("Times-Roman").fontSize(11)
+      .text(`${rows.length.toLocaleString()} artists`, { align: "center" })
+      .text(new Date().toISOString().slice(0, 10), { align: "center" });
+    doc.addPage();
+
+    // Helpers — extract flat string lists out of fields that may be
+    // either string arrays (manual entry) or object arrays (Discogs-
+    // enriched data with {name, discogs_id, kind}).
+    const flatStrings = (v: any): string[] => {
+      if (!Array.isArray(v)) return [];
+      return v.map((x: any) =>
+        typeof x === "string" ? x : (x && typeof x === "object" ? String(x.name ?? "") : "")
+      ).filter(Boolean);
+    };
+    const labelLine = (label: string, items: string[]) => {
+      if (!items.length) return;
+      doc.font("Times-Italic").fontSize(9).fillColor("#555")
+        .text(`${label}: `, { continued: true })
+        .font("Times-Roman").fillColor("#222")
+        .text(items.join(", "));
+    };
+
+    for (const row of rows) {
+      // Orphan-protection: a fresh artist needs at least the name +
+      // meta line + a few release rows to look like a profile.
+      if (doc.y > doc.page.height - doc.page.margins.bottom - 120) {
+        doc.addPage();
+      }
+
+      // ── Name (title) ─────────────────────────────────────────
+      doc.font("Times-Bold").fontSize(18).fillColor("black")
+        .text(String(row.name || "Untitled"));
+
+      // ── Top meta line: born/died/from + first/last recording ─
+      const metaParts: string[] = [];
+      const dates = [row.birth_date, row.death_date].filter(Boolean).join(" – ");
+      if (dates) metaParts.push(dates);
+      if (row.birth_place) metaParts.push(`Born ${row.birth_place}`);
+      if (row.death_place) metaParts.push(`Died ${row.death_place}`);
+      if (row.hometown_region) metaParts.push(`From ${row.hometown_region}`);
+      if (row.first_recording_year) {
+        metaParts.push(
+          row.first_recording_title
+            ? `First: ${row.first_recording_year} (${row.first_recording_title})`
+            : `First: ${row.first_recording_year}`,
+        );
+      }
+      if (row.last_recording_year) {
+        metaParts.push(
+          row.last_recording_title
+            ? `Last: ${row.last_recording_year} (${row.last_recording_title})`
+            : `Last: ${row.last_recording_year}`,
+        );
+      }
+      if (metaParts.length) {
+        doc.font("Times-Italic").fontSize(9).fillColor("#555")
+          .text(metaParts.join("  ·  "));
+      }
+      doc.moveDown(0.4);
+
+      // ── Labelled lists ─────────────────────────────────────
+      labelLine("Pseudonyms", flatStrings(row.aliases));
+      labelLine("Bands / collaborators", flatStrings(row.collaborators));
+      labelLine("Styles", flatStrings(row.styles));
+      labelLine("Instruments", flatStrings(row.instruments));
+      labelLine("Labels", flatStrings(row.associated_labels));
+
+      doc.moveDown(0.4);
+
+      // ── Bio (notes) ────────────────────────────────────────
+      const bio = String(row.notes || "").trim();
+      if (bio) {
+        doc.font("Times-Roman").fontSize(10).fillColor("black")
+          .text(bio, { paragraphGap: 4, lineGap: 1 });
+        doc.moveDown(0.5);
+      }
+
+      // ── Releases ───────────────────────────────────────────
+      // Sort oldest → newest, NULL years last.
+      const releases = Array.isArray(row.discogs_releases)
+        ? row.discogs_releases.slice()
+        : [];
+      releases.sort((x: any, y: any) => {
+        const xy = Number(x?.year) || 9999;
+        const yy = Number(y?.year) || 9999;
+        if (xy !== yy) return xy - yy;
+        return String(x?.title ?? "").localeCompare(String(y?.title ?? ""));
+      });
+      if (releases.length) {
+        doc.font("Times-Bold").fontSize(10).fillColor("#444")
+          .text(`Releases (${releases.length})`);
+        doc.moveDown(0.15);
+        // Plain text block — year, title, label, type — one row each.
+        // No table grid (would add complexity for marginal benefit).
+        for (const rel of releases) {
+          if (doc.y > doc.page.height - doc.page.margins.bottom - 30) {
+            doc.addPage();
+          }
+          const year  = rel?.year  ? String(rel.year) : "—";
+          const title = rel?.title ? String(rel.title) : "Untitled";
+          const label = rel?.label ? `  ·  ${rel.label}` : "";
+          const type  = rel?.type  ? `  ·  ${String(rel.type).toUpperCase()}` : "";
+          doc.font("Times-Roman").fontSize(9).fillColor("#222")
+            .text(`${year}   ${title}${label}${type}`);
+        }
+        doc.moveDown(0.4);
+      }
+
+      // ── Separator between artists ──────────────────────────
+      doc.moveDown(1.0);
+      const sepY = doc.y;
+      doc.strokeColor("#ddd").lineWidth(0.5)
+        .moveTo(doc.page.margins.left, sepY)
+        .lineTo(doc.page.width - doc.page.margins.right, sepY)
+        .stroke();
+      doc.moveDown(1.0);
+    }
+
+    // ── Page numbers ───────────────────────────────────────────────
+    const range = doc.bufferedPageRange();
+    for (let i = 0; i < range.count; i++) {
+      doc.switchToPage(range.start + i);
+      if (i === 0) continue;
+      doc.font("Times-Roman").fontSize(9).fillColor("#888");
+      const y = doc.page.height - doc.page.margins.bottom + 20;
+      doc.text(`${i} / ${range.count - 1}`,
+        doc.page.margins.left,
+        y,
+        { align: "center", width: doc.page.width - doc.page.margins.left - doc.page.margins.right },
+      );
+    }
+    doc.end();
+  } catch (err: any) {
+    console.error("[blues export.pdf]", err);
+    if (!res.headersSent) res.status(500).json({ error: err?.message ?? String(err) });
+    else res.end();
+  }
+});
+
 // Delete every row in blues_artists. Admin-only. Used to wipe a noisy
 // seed (e.g. the Wikidata pass that smuggled non-blues artists in via
 // loose genre tags) before re-running.
