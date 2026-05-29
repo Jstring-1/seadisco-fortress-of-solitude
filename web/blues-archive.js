@@ -2245,6 +2245,34 @@ async function _baExportLyricsPdf() {
 }
 window._baExportLyricsPdf = _baExportLyricsPdf;
 
+// Artist-profile PDF — same flow as the lyrics one. Big bib of every
+// artist alphabetised: name + dates / hometown / first-last recording
+// + pseudonyms + bands + bio + every Discogs release oldest→newest.
+async function _baExportArtistsPdf() {
+  const btn = document.getElementById("blues-export-artists-pdf-btn");
+  const orig = btn ? btn.textContent : "";
+  if (btn) { btn.disabled = true; btn.textContent = "Building PDF…"; }
+  try {
+    const r = await apiFetch("/api/admin/blues/export.pdf");
+    if (!r.ok) {
+      const txt = await r.text().catch(() => "");
+      throw new Error(`HTTP ${r.status}: ${txt.slice(0, 200)}`);
+    }
+    const blob = await r.blob();
+    const fname = `seadisco-artists-${new Date().toISOString().slice(0, 10)}.pdf`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch (e) {
+    alert("Export failed: " + (e?.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = orig; }
+  }
+}
+window._baExportArtistsPdf = _baExportArtistsPdf;
+
 // Single dispatcher for every admin-only action that's powered by
 // /blues-admin.js. Each kind maps to a function name; we lazy-load
 // the module on first call, then invoke. Keeps the inline onclick
@@ -2261,6 +2289,7 @@ function _baAdminAction(kind, ev) {
     exportCsv:        () => window.bluesDbExportCsv?.(),
     exportLyricsCsv:  () => _baExportLyricsCsv(),
     exportLyricsPdf:  () => _baExportLyricsPdf(),
+    exportArtistsPdf: () => _baExportArtistsPdf(),
     deleteAll:        () => window.bluesDbDeleteAll?.(),
     lyricsScrape:     () => window.lyricsStartScrape?.(),
     lyricsStop:       () => window.lyricsStopScrape?.(),
