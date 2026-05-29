@@ -1453,7 +1453,7 @@ function renderSharedHeader(opts) {
   // Site build/version tag shown as tiny grey text under the logo. Updated
   // whenever the cache-bust version is bumped so the user can eyeball whether
   // they're on the latest build without digging into devtools.
-  const SITE_VERSION = "build 20260528.2138";
+  const SITE_VERSION = "build 20260528.2147";
   header.innerHTML = `
     <div class="header-logo-wrap">
       <a href="${isSPA ? 'javascript:void(0)' : '/'}" ${isSPA ? 'onclick="if(typeof goHome===\'function\'){goHome();return false;}"' : ''} class="header-logo text-logo"><span class="logo-hi">SEA</span><span class="logo-lo">rch</span><span class="logo-gap"></span><span class="logo-hi">DISCO</span><span class="logo-lo">gs</span></a>
@@ -1981,7 +1981,8 @@ function openLookupPopup(ev, scope, label, ctx) {
   // curators reach for it more than the search buttons when they're
   // actively cleaning up data.
   if (window._isAdmin && scope === "artist") {
-    internal.push({ key: "edit", icon: "✎", text: "Edit in Blues Archive" });
+    internal.push({ key: "edit",    icon: "✎", text: "Edit in Blues Archive" });
+    internal.push({ key: "profile", icon: "🎸", text: "Open archive profile" });
   }
   // Admin-only "Add to lyrics" — track scope only. Opens the new-lyric
   // editor pre-populated with this track's title (and artist when the
@@ -2168,6 +2169,41 @@ function openLookupPopup(ev, scope, label, ctx) {
               showToast?.("Couldn't open editor", "error");
               console.warn("[edit lookup popup]", err);
             }
+          })();
+        }
+        else if (b.key === "profile") {
+          // Resolve the archive row by name (or Discogs id when known)
+          // and open the artist profile popup. Lazy-loads
+          // blues-archive.js when triggered from a non-archive view.
+          (async () => {
+            try {
+              const r = await apiFetch("/api/blues-archive/check", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  artistNames: [label, label.replace(/\s*\(\d+\)\s*$/, "").trim()].filter(Boolean),
+                  artistIds:   entityId ? [Number(entityId)] : [],
+                }),
+              });
+              if (!r.ok) { showToast?.("Couldn't check archive", "error"); return; }
+              const result = await r.json();
+              const hit = (entityId && result.artistsById?.[String(entityId)])
+                       || result.artists?.[String(label).trim().toLowerCase()]
+                       || result.artists?.[String(label).replace(/\s*\(\d+\)\s*$/, "").trim().toLowerCase()];
+              if (!hit) { showToast?.(`"${label}" isn't in the Blues Archive`, "info"); return; }
+              const open = () => {
+                if (typeof window._baOpenArtistFromBadge === "function") {
+                  window._baOpenArtistFromBadge(hit.id); return true;
+                }
+                return false;
+              };
+              if (open()) return;
+              if (typeof window._sdLoadModule === "function") {
+                window._sdLoadModule("/blues-archive.js")
+                  .then(() => { if (!open()) showToast?.("Profile viewer unavailable", "error"); })
+                  .catch(() => showToast?.("Couldn't load profile viewer", "error"));
+              }
+            } catch { showToast?.("Couldn't open profile", "error"); }
           })();
         }
         else if (b.key === "addLyric") {

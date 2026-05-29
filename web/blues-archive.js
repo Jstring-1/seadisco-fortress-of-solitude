@@ -178,7 +178,15 @@ function _baRenderListTable() {
   }
   const S = _baListSort;
   rowsEl.innerHTML = `
-    <table class="api-log-table" style="font-size:0.86rem;width:100%">
+    <table class="api-log-table" style="font-size:0.86rem;width:100%;table-layout:fixed">
+      <colgroup>
+        <col style="width:52px">
+        <col>
+        <col style="width:110px">
+        <col style="width:70px">
+        <col style="width:70px">
+        <col style="width:80px">
+      </colgroup>
       <thead><tr>
         ${_baSortTh("📷",          "has_photo",          S, "_baSortList", "width:48px;text-align:center")}
         ${_baSortTh("Name",       "name",               S, "_baSortList")}
@@ -231,9 +239,10 @@ function _baRenderListTable() {
         const photoHtml = photo
           ? `<img src="${escHtml(photo)}" alt="" loading="lazy" decoding="async" style="width:40px;height:40px;object-fit:cover;border-radius:4px;background:var(--border);display:block" onerror="this.style.visibility='hidden'">`
           : `<span style="width:40px;height:40px;border-radius:4px;background:rgba(255,255,255,0.04);display:inline-block" aria-hidden="true"></span>`;
+        const fullName = String(row.name || "");
         return `<tr style="cursor:pointer" onclick="_baOpenArtist(${row.id})">
           <td style="padding:0.25rem 0.4rem">${photoHtml}</td>
-          <td style="font-weight:600;color:var(--text)">${nameHtml}${discogsSearchHtml}</td>
+          <td style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullName)}">${nameHtml}${discogsSearchHtml}</td>
           <td style="font-size:0.78rem">${didHtml}</td>
           <td style="text-align:right;font-size:0.82rem">${yrHtml}</td>
           <td style="text-align:right;color:${row.lyrics_count ? "var(--accent)" : "var(--muted)"}">${row.lyrics_count || ""}</td>
@@ -1754,12 +1763,18 @@ function _baLyricRowHtml(l) {
   const yrHtml = yr
     ? `<span style="font-variant-numeric:tabular-nums" title="${escHtml(l.first_release_source ? "via " + l.first_release_source : "")}">${yr}</span>`
     : `<span style="color:#555">—</span>`;
+  // Full-text values used as title= for hover when the cell ellipses
+  // out a long title / artist / snippet. Saves the user from squinting
+  // or widening the column.
+  const fullTitle  = String(l.page_title || "");
+  const fullArtist = String(l.artist || "");
+  const fullSnip   = (l.snippet || "").replace(/\s+/g, " ");
   return `<tr data-lyric-row="${l.id}">
-    <td style="font-weight:600;color:var(--text);white-space:nowrap">${titleHtml}</td>
-    <td style="color:var(--muted);white-space:nowrap">${artistHtml}${archiveAffordance}</td>
+    <td style="font-weight:600;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullTitle)}">${titleHtml}</td>
+    <td style="color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullArtist)}">${artistHtml}${archiveAffordance}</td>
     <td style="text-align:right;font-size:0.82rem;padding-right:0.6rem;white-space:nowrap">${yrHtml}</td>
-    <td style="white-space:nowrap;color:var(--accent);cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml(l.tuning || "")}</td>
-    <td style="font-size:0.76rem;color:#888;cursor:pointer" onclick="_baOpenLyric(${l.id})">${escHtml((l.snippet || "").replace(/\s+/g, " ").slice(0, 140))}…</td>
+    <td style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--accent);cursor:pointer" onclick="_baOpenLyric(${l.id})" title="${escHtml(l.tuning || "")}">${escHtml(l.tuning || "")}</td>
+    <td style="font-size:0.7rem;color:#888;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" onclick="_baOpenLyric(${l.id})" title="${escHtml(fullSnip.slice(0, 400))}">${escHtml(fullSnip.slice(0, 140))}…</td>
     <td style="text-align:right"><a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenLyricEditor(${l.id})" style="color:var(--muted);text-decoration:none;font-size:0.78rem" title="Edit title / artist / tuning on this lyric">✎</a></td>
   </tr>`;
 }
@@ -1786,7 +1801,15 @@ function _baRenderLyricsTable() {
   }
   const S = _baLyricsListSort;
   rowsEl.innerHTML = `
-    <table class="api-log-table" style="font-size:0.84rem;width:100%">
+    <table class="api-log-table" style="font-size:0.84rem;width:100%;table-layout:fixed">
+      <colgroup>
+        <col style="width:28%">
+        <col style="width:18%">
+        <col style="width:60px">
+        <col style="width:11%">
+        <col>
+        <col style="width:32px">
+      </colgroup>
       <thead><tr>
         ${_baSortTh("Title",   "page_title",         S, "_baSortLyricsList")}
         ${_baSortTh("Artist",  "artist",             S, "_baSortLyricsList")}
@@ -1885,7 +1908,15 @@ function _baRenderReleasesTable() {
   }
   const S = _baReleasesListSort;
   rowsEl.innerHTML = `
-    <table class="api-log-table" style="font-size:0.84rem;width:100%">
+    <table class="api-log-table" style="font-size:0.84rem;width:100%;table-layout:fixed">
+      <colgroup>
+        <col style="width:60px">
+        <col>
+        <col style="width:24%">
+        <col style="width:80px">
+        <col style="width:100px">
+        <col style="width:1%">
+      </colgroup>
       <thead><tr>
         ${_baSortTh("Year",   "year",   S, "_baSortReleasesList", "width:60px;text-align:right;padding-right:0.9rem")}
         ${_baSortTh("Title",  "title",  S, "_baSortReleasesList")}
@@ -1919,12 +1950,14 @@ function _baReleaseRowHtml(row) {
     : escHtml(row.artist_name || "");
   const yr = Number.isFinite(Number(row.release_year)) ? Number(row.release_year) : null;
   const yrHtml = yr ? `<span style="font-variant-numeric:tabular-nums">${yr}</span>` : `<span style="color:var(--muted)">—</span>`;
+  const fullTitle  = String(row.release_title || "(untitled)");
+  const fullArtist = String(row.artist_name || "");
   return `<tr data-release-id="${id || ""}">
     <td style="text-align:right;font-size:0.82rem;padding-right:0.9rem;white-space:nowrap">${yrHtml}</td>
-    <td style="padding-left:0.4rem">${titleHtml}</td>
-    <td style="color:var(--text);padding-left:0.6rem">${artistHtml}</td>
-    <td style="font-size:0.78rem;color:var(--muted);padding-left:0.6rem">${escHtml(row.release_type || "")}</td>
-    <td style="font-size:0.78rem;color:var(--muted);padding-left:0.6rem">${escHtml(row.role || "")}</td>
+    <td style="padding-left:0.4rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullTitle)}">${titleHtml}</td>
+    <td style="color:var(--text);padding-left:0.6rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullArtist)}">${artistHtml}</td>
+    <td style="font-size:0.78rem;color:var(--muted);padding-left:0.6rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(row.release_type || "")}">${escHtml(row.release_type || "")}</td>
+    <td style="font-size:0.78rem;color:var(--muted);padding-left:0.6rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(row.role || "")}">${escHtml(row.role || "")}</td>
     <td></td>
   </tr>`;
 }
