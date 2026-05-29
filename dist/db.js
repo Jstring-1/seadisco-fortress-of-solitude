@@ -5005,6 +5005,9 @@ export async function listLyrics(opts) {
     if (opts.unmatchedOnly) {
         where.push(`artist_id IS NULL`);
     }
+    if (opts.unpinnedOnly) {
+        where.push(`discogs_release_id IS NULL AND discogs_master_id IS NULL`);
+    }
     const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
     const limit = Math.max(1, Math.min(500, opts.limit ?? 100));
     const offset = Math.max(0, opts.offset ?? 0);
