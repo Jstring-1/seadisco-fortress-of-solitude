@@ -1294,14 +1294,27 @@ export async function deleteBluesArtistAndLyrics(id) {
 }
 // ── Lyric first_release_year resolver: cheap path ────────────────────
 // For every lyric whose linked artist has a discogs_releases entry
-// whose title case-insensitively matches the lyric's page_title, set
-// first_release_year to the minimum year among Main-role matches.
-// Idempotent — only touches rows where first_release_year IS NULL or
-// the linked artist's release set has shifted. Returns updated count.
+// whose title matches the lyric's page_title, set first_release_year
+// to the minimum year among Main-role matches.
+//
+// Pre-WWII 78 rpm releases on Discogs are titled "A-Side / B-Side"
+// (e.g. "Crossroads Blues / Walking Blues"), and titles diverge from
+// the lyric wiki on apostrophes, parens, capitalization. So the
+// matcher tries (in order of trust):
+//   1. Exact normalized match — strip everything but [a-z0-9] from
+//      both sides. Catches apostrophe / punctuation differences.
+//   2. Either side of an A/B "X / Y" release title (split on slash)
+//      via the same normalization.
+// MIN(year) over all matching entries → assigns the earliest known
+// release year. Idempotent — only touches rows where the value would
+// actually change. force flag re-resolves rows whose year already
+// came from this path (in case the artist's release list shifted).
 export async function resolveLyricFirstReleaseYearsCheap(opts = {}) {
     const guard = opts.force
         ? ""
-        : `AND (l.first_release_year IS NULL OR l.first_release_source IN ('artist_releases'))`;
+        : `AND (l.first_release_year IS NULL OR l.first_release_source = 'artist_releases')`;
+    // norm() collapses to [a-z0-9] only so "Don't You Lie to Me" ==
+    // "Dont You Lie To Me" == "don't_you_lie_to_me" — see inline SQL.
     const r = await getPool().query(`
     WITH cand AS (
       SELECT l.id AS lyric_id,
@@ -1309,9 +1322,23 @@ export async function resolveLyricFirstReleaseYearsCheap(opts = {}) {
         FROM blues_lyrics l
         JOIN blues_artists a ON a.id = l.artist_id,
              jsonb_array_elements(COALESCE(a.discogs_releases, '[]'::jsonb)) AS rel
-       WHERE LOWER(TRIM(rel->>'title')) = LOWER(TRIM(l.page_title))
-         AND (rel->>'year') ~ '^[0-9]+$'
+       WHERE (rel->>'year') ~ '^[0-9]+$'
          AND ((rel->>'role') IS NULL OR (rel->>'role') = '' OR (rel->>'role') = 'Main')
+         AND (
+           -- Full release title matches lyric (normalized: parens
+           -- content stripped, then everything but [a-z0-9])
+           LOWER(regexp_replace(regexp_replace(COALESCE(rel->>'title',''), '\\([^)]*\\)', '', 'g'), '[^a-zA-Z0-9]', '', 'g'))
+             = LOWER(regexp_replace(regexp_replace(l.page_title, '\\([^)]*\\)', '', 'g'), '[^a-zA-Z0-9]', '', 'g'))
+           OR
+           -- A-side of "A / B" matches lyric
+           LOWER(regexp_replace(regexp_replace(COALESCE(split_part(rel->>'title','/',1),''), '\\([^)]*\\)', '', 'g'), '[^a-zA-Z0-9]', '', 'g'))
+             = LOWER(regexp_replace(regexp_replace(l.page_title, '\\([^)]*\\)', '', 'g'), '[^a-zA-Z0-9]', '', 'g'))
+           OR
+           -- B-side of "A / B" matches lyric
+           LOWER(regexp_replace(regexp_replace(COALESCE(split_part(rel->>'title','/',2),''), '\\([^)]*\\)', '', 'g'), '[^a-zA-Z0-9]', '', 'g'))
+             = LOWER(regexp_replace(regexp_replace(l.page_title, '\\([^)]*\\)', '', 'g'), '[^a-zA-Z0-9]', '', 'g'))
+         )
+         AND length(regexp_replace(regexp_replace(l.page_title, '\\([^)]*\\)', '', 'g'), '[^a-zA-Z0-9]', '', 'g')) >= 3
          ${guard}
        GROUP BY l.id
     )
