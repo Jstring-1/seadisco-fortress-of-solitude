@@ -9918,6 +9918,43 @@ app.get("/api/admin/lyrics", async (req, res) => {
         res.status(500).json({ error: String(err) });
     }
 });
+// POST /api/admin/lyrics/scrub-footers
+// One-shot cleanup pass: strip the trailing "Go to original forum
+// thread" line and any trailing "Category:…Category:…" wiki-footer
+// mash from every blues_lyrics.plaintext. Both patterns leaked
+// through the original scraper. Idempotent — running again on
+// already-cleaned rows is a no-op (no match → no UPDATE).
+// Anchored on newline so a "Category:" appearing mid-lyric (rare)
+// isn't truncated by accident.
+app.post("/api/admin/lyrics/scrub-footers", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const r = await getPool().query(`
+      WITH updated AS (
+        UPDATE blues_lyrics
+           SET plaintext = TRIM(BOTH FROM
+             regexp_replace(
+               regexp_replace(plaintext,
+                 '\\n\\s*Go to original forum thread[\\s\\S]*$',
+                 '', 'gi'),
+               '\\n\\s*[Cc]ategory:[\\s\\S]*$',
+               '', 'g')
+           )
+         WHERE plaintext IS NOT NULL
+           AND (plaintext ~* '\\nGo to original forum thread'
+                OR plaintext ~  '\\n\\s*[Cc]ategory:')
+         RETURNING id
+      )
+      SELECT COUNT(*)::int AS n FROM updated
+    `);
+        res.json({ ok: true, cleaned: r.rows[0]?.n ?? 0 });
+    }
+    catch (err) {
+        console.error("[lyrics scrub-footers]", err);
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
 // GET /api/admin/lyrics/tunings — distinct tunings + counts
 app.get("/api/admin/lyrics/tunings", async (req, res) => {
     if (!await requireAdmin(req, res))

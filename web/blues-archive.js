@@ -1124,6 +1124,40 @@ function _baLyricsApplyEmpty() {
 }
 window._baLyricsApplyEmpty = _baLyricsApplyEmpty;
 
+// One-shot sweep that strips scraper-leftover footers from every
+// blues_lyrics.plaintext: the trailing "Go to original forum thread"
+// line plus any mashed "Category:…Category:…" wiki tail. Idempotent
+// (re-running on already-cleaned rows is a no-op).
+async function _baScrubLyricFooters() {
+  const btn = document.getElementById("blues-archive-lyrics-scrub-btn");
+  if (!confirm(
+    "Strip scraper footers (\"Go to original forum thread\" and trailing Category: lines) from every lyric?\n\n" +
+    "Safe to re-run — only rows that still have a footer get touched."
+  )) return;
+  const orig = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = "Scrubbing…"; }
+  try {
+    const r = await apiFetch("/api/admin/lyrics/scrub-footers", { method: "POST" });
+    if (!r.ok) {
+      const err = await r.json().catch(() => ({}));
+      alert("Scrub failed: " + (err?.error ?? r.status));
+      return;
+    }
+    const { cleaned = 0 } = await r.json();
+    if (typeof showToast === "function") {
+      showToast(`Scrubbed footers from ${cleaned} lyric${cleaned === 1 ? "" : "s"}`, "ok");
+    } else {
+      alert(`Scrubbed ${cleaned} lyric${cleaned === 1 ? "" : "s"}`);
+    }
+    _baLoadLyrics();
+  } catch (e) {
+    alert("Scrub failed: " + (e?.message || e));
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = orig || "Scrub footers"; }
+  }
+}
+window._baScrubLyricFooters = _baScrubLyricFooters;
+
 // Clear all active filters on the Lyrics tab. Bound to the
 // "Clear filters" button that auto-shows/hides based on filter state.
 function _baLyricsClearFilters() {
