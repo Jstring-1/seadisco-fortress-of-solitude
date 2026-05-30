@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260530.1025" />
+  <link rel="stylesheet" href="/style.css?v=20260530.1029" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260530.1025"></script>
-<script defer src="/shared.js?v=20260530.1025"></script>
+<script defer src="/utils.js?v=20260530.1029"></script>
+<script defer src="/shared.js?v=20260530.1029"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -55,6 +55,7 @@
         <button class="admin-tab" onclick="switchAdminTab('users')">Users</button>
         <button class="admin-tab" onclick="switchAdminTab('content')">Content</button>
         <button class="admin-tab" onclick="switchAdminTab('system')">System</button>
+        <button class="admin-tab" onclick="switchAdminTab('cache')">Cache</button>
       </div>
 
       <!-- ── Overview KPI box (Overview group) ─────────────────────── -->
@@ -131,8 +132,8 @@
         <div id="db-stats-flat" style="margin-top:0.6rem;font-size:0.78rem;color:var(--muted)"></div>
       </div>
 
-      <!-- Genre cache-warm cron (System group — between DB and API log) -->
-      <div class="admin-tab-panel admin-grp-system" id="panel-genre-cache-warm" style="display:none">
+      <!-- Genre cache-warm cron (own Cache tab) -->
+      <div class="admin-tab-panel admin-grp-cache" id="panel-genre-cache-warm" style="display:none">
         <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
           <h2 style="margin:0">Genre cache-warm cron</h2>
           <button class="admin-refresh-btn" id="gcw-refresh-btn" onclick="_adminClickRefresh(this, loadGenreCacheWarm)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
@@ -315,8 +316,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260530.1025"></script>
-<script defer src="/blues-admin.js?v=20260530.1025"></script>
+<script defer src="/modal.js?v=20260530.1029"></script>
+<script defer src="/blues-admin.js?v=20260530.1029"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -392,8 +393,12 @@ const _adminGroups = {
     load: () => { loadAdminSubmissions(); loadAdminUnavailable(); },
   },
   'system': {
-    panels: ['panel-system-bar', 'panel-db-stats', 'panel-genre-cache-warm', 'panel-api-log'],
-    load: () => { loadDbStats(); loadGenreCacheWarm(); loadApiLog(); },
+    panels: ['panel-system-bar', 'panel-db-stats', 'panel-api-log'],
+    load: () => { loadDbStats(); loadApiLog(); },
+  },
+  'cache': {
+    panels: ['panel-genre-cache-warm'],
+    load: () => { loadGenreCacheWarm(); },
   },
   // 'blues-db' + 'lyrics' tabs removed; their content lives in the
   // Discovery Blues Archive view (/?v=blues-archive). The runtime
@@ -1031,6 +1036,9 @@ async function loadGenreCacheWarm() {
             <strong style="font-size:0.95rem;color:var(--text)">${esc(r.genre_key)}</strong>
             <span style="font-size:0.7rem;color:var(--muted)">#${r.rotation_order}</span>
             ${isToday ? `<span style="font-size:0.7rem;color:var(--accent)">· today</span>` : ""}
+            <span style="font-size:0.72rem;color:var(--muted);margin-left:auto">in cache: <strong style="color:var(--text)">${r.cached_count == null ? "—" : fmt(r.cached_count)}</strong></span>
+          </div>
+          <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.4rem">
             ${runningPill}
             ${enabledPill}${overridePill}
           </div>
