@@ -738,6 +738,17 @@ export async function initDb() {
     END $$;
   `);
   await getPool().query(`CREATE INDEX IF NOT EXISTS release_cache_seen_at_idx ON release_cache (seen_at) WHERE seen_at IS NOT NULL`);
+  // GIN index on the genres array inside data — powers the Cache
+  // panel's per-genre "in cache: N" counts and any future "browse
+  // cached blues" features. Without it those COUNT(*) queries
+  // sequential-scan the whole table; at 100k+ rows that's slow.
+  // Uses default jsonb_ops opclass — required for the ? (text-
+  // existence) operator the COUNT queries use. (jsonb_path_ops is
+  // smaller but only supports @>, which doesn't apply here.)
+  await getPool().query(
+    `CREATE INDEX IF NOT EXISTS release_cache_data_genres_idx
+       ON release_cache USING GIN ((data->'genres'))`,
+  );
 
   // ── Cache-fetch queue ───────────────────────────────────────────────
   // Generic backlog of "fetch this album from Discogs and cache it".
@@ -7015,8 +7026,20 @@ export async function listBluesArchiveReleases(opts: {
   const order   = opts.order === "asc" ? "ASC" : "DESC";
   // Tie-break by artist then title so identical sort keys stay stable.
   const orderSql = `ORDER BY ${sortCol} ${order} NULLS LAST, lower(a.name) ASC, lower(coalesce(rel->>'title','')) ASC`;
-  const fromSql = `FROM blues_artists a, jsonb_array_elements(coalesce(a.discogs_releases, '[]'::jsonb)) AS rel`;
-  const totalR = await getPool().query(`SELECT COUNT(*)::int AS n ${fromSql} ${whereSql}`, params);
+  // Count query stays narrow (no release_cache join needed). The
+  // data query LEFT JOINs release_cache so each row can carry a
+  // small cover thumb when one is cached; rows without a cached
+  // release just come back with cover_thumb=null and the UI shows
+  // a placeholder.
+  const fromCountSql = `FROM blues_artists a, jsonb_array_elements(coalesce(a.discogs_releases, '[]'::jsonb)) AS rel`;
+  const fromDataSql  = `
+    FROM blues_artists a
+    CROSS JOIN LATERAL jsonb_array_elements(coalesce(a.discogs_releases, '[]'::jsonb)) AS rel
+    LEFT JOIN release_cache rc
+      ON rc.discogs_id = NULLIF(rel->>'id','')::int
+     AND rc.type       = COALESCE(NULLIF(rel->>'type',''), 'release')
+  `;
+  const totalR = await getPool().query(`SELECT COUNT(*)::int AS n ${fromCountSql} ${whereSql}`, params);
   const total = totalR.rows[0]?.n ?? 0;
   params.push(limit, offset);
   const r = await getPool().query(
@@ -7029,8 +7052,13 @@ export async function listBluesArchiveReleases(opts: {
             COALESCE(rel->>'title','')              AS release_title,
             NULLIF(rel->>'year','')::int            AS release_year,
             rel->'label'                            AS release_label,
-            rel->>'role'                            AS role
-       ${fromSql}
+            rel->>'role'                            AS role,
+            COALESCE(
+              rc.data->'images'->0->>'thumb',
+              rc.data->'images'->0->>'uri150',
+              rc.data->'images'->0->>'uri'
+            )                                       AS cover_thumb
+       ${fromDataSql}
        ${whereSql}
        ${orderSql}
        LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -7096,6 +7124,138 @@ export async function getBluesArchiveArtist(id: number): Promise<any | null> {
     [id],
   );
   return { ...a, lyrics: lr.rows, tunings: tr.rows, releases, links: lk.rows };
+}
+
+// ── Cached blues releases (admin Discovery view) ─────────────────
+// Pulls every release_cache row whose JSONB metadata carries the
+// "Blues" genre, augmented with the per-artist count of cached
+// blues releases (so the UI can sort by "artists with the least
+// releases" for digging up obscure ones). Filters on free-text
+// search, year range, country, format, label. Sort options:
+// year, title, artist, artist_release_count (asc = obscure-first,
+// desc = prolific-first), cached_at, random.
+export interface CachedBluesFilters {
+  q?: string;
+  yearFrom?: number | null;
+  yearTo?: number | null;
+  country?: string;
+  format?: string;
+  label?: string;
+  sort?: string;
+  order?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
+}
+const _CACHED_BLUES_SORT: Record<string, string> = {
+  year:          "bc.release_year",
+  title:         "lower(bc.release_title)",
+  artist:        "lower(bc.artist_name)",
+  artist_count:  "ac.n",                   // user's "least releases" sort
+  cached_at:     "bc.cached_at",
+};
+export async function listCachedBluesReleases(opts: CachedBluesFilters = {}): Promise<{ rows: any[]; total: number }> {
+  const params: any[] = [];
+  // The base CTE is shared between count + data. Filters apply to
+  // both. Free-text matches title OR artist via ILIKE.
+  const where: string[] = [];
+  if (opts.q?.trim()) {
+    params.push(`%${opts.q.trim()}%`);
+    where.push(`(bc.release_title ILIKE $${params.length} OR bc.artist_name ILIKE $${params.length})`);
+  }
+  if (opts.yearFrom != null && Number.isFinite(opts.yearFrom)) {
+    params.push(opts.yearFrom);
+    where.push(`bc.release_year >= $${params.length}`);
+  }
+  if (opts.yearTo != null && Number.isFinite(opts.yearTo)) {
+    params.push(opts.yearTo);
+    where.push(`bc.release_year <= $${params.length}`);
+  }
+  if (opts.country?.trim()) {
+    params.push(`%${opts.country.trim()}%`);
+    where.push(`bc.country ILIKE $${params.length}`);
+  }
+  if (opts.format?.trim()) {
+    params.push(`%${opts.format.trim()}%`);
+    where.push(`bc.format_name ILIKE $${params.length}`);
+  }
+  if (opts.label?.trim()) {
+    params.push(`%${opts.label.trim()}%`);
+    where.push(`bc.label_name ILIKE $${params.length}`);
+  }
+  const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const random = opts.sort === "random";
+  const sortCol = _CACHED_BLUES_SORT[String(opts.sort ?? "")] || _CACHED_BLUES_SORT.cached_at;
+  const dir = opts.order === "asc" ? "ASC" : "DESC";
+  // For artist_count asc (least-first), nulls are obvious noise —
+  // push them last so the curator sees real artists first.
+  const orderSql = random
+    ? "ORDER BY random()"
+    : `ORDER BY ${sortCol} ${dir} NULLS LAST, bc.release_year ASC NULLS LAST, lower(bc.release_title) ASC`;
+  const limit  = Math.max(1, Math.min(200, opts.limit ?? 60));
+  const offset = Math.max(0, opts.offset ?? 0);
+
+  const cteSql = `
+    WITH blues_cache AS (
+      SELECT
+        discogs_id,
+        type,
+        data,
+        cached_at,
+        COALESCE(NULLIF(data->'artists'->0->>'name', ''), 'Unknown') AS artist_name,
+        data->>'title'                                  AS release_title,
+        NULLIF(data->>'year', '')::int                  AS release_year,
+        data->>'country'                                AS country,
+        COALESCE(
+          data->'images'->0->>'thumb',
+          data->'images'->0->>'uri150',
+          data->'images'->0->>'uri'
+        )                                               AS cover_thumb,
+        data->'formats'->0->>'name'                     AS format_name,
+        data->'labels'->0->>'name'                      AS label_name
+      FROM release_cache
+      WHERE type = 'release'
+        AND data->'genres' ? 'Blues'
+    ),
+    artist_counts AS (
+      SELECT artist_name, COUNT(*)::int AS n
+      FROM blues_cache
+      GROUP BY artist_name
+    )
+  `;
+
+  const totalR = await getPool().query(
+    `${cteSql}
+     SELECT COUNT(*)::int AS n
+       FROM blues_cache bc
+       LEFT JOIN artist_counts ac ON ac.artist_name = bc.artist_name
+     ${whereSql}`,
+    params,
+  );
+  const total = totalR.rows[0]?.n ?? 0;
+
+  params.push(limit, offset);
+  const r = await getPool().query(
+    `${cteSql}
+     SELECT
+       bc.discogs_id           AS release_id,
+       bc.type                 AS release_type,
+       bc.release_title        AS title,
+       bc.release_year         AS year,
+       bc.artist_name          AS artist,
+       bc.country              AS country,
+       bc.format_name          AS format,
+       bc.label_name           AS label,
+       bc.cover_thumb          AS cover_thumb,
+       bc.cached_at            AS cached_at,
+       ac.n                    AS artist_release_count
+     FROM blues_cache bc
+     LEFT JOIN artist_counts ac ON ac.artist_name = bc.artist_name
+     ${whereSql}
+     ${orderSql}
+     LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params,
+  );
+  return { rows: r.rows, total };
 }
 
 // ── blues_artist_links helpers ─────────────────────────────────────
