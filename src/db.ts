@@ -1020,7 +1020,10 @@ export async function initDb() {
       enabled             BOOLEAN NOT NULL DEFAULT true,
       manual_override     BOOLEAN NOT NULL DEFAULT false,
       start_year          INT NOT NULL DEFAULT 1900,
-      end_year            INT NOT NULL DEFAULT 1960,
+      -- end_year is a floor for the cron cap; the worker dynamically
+      -- bumps it to max(stored, currentYear) so the sweep always
+      -- extends through "this year" without yearly maintenance.
+      end_year            INT NOT NULL DEFAULT 2100,
       current_year        INT NOT NULL DEFAULT 1900,
       current_page        INT NOT NULL DEFAULT 1,
       running             BOOLEAN NOT NULL DEFAULT false,
@@ -1059,6 +1062,13 @@ export async function initDb() {
       [genre, order],
     );
   }
+  // One-time migration: rows seeded with end_year=1960 from the
+  // earlier schema get bumped to 2100 so the worker walks all the
+  // way through the modern era. Idempotent — no-op once the value
+  // has been changed by hand or by a previous run.
+  await getPool().query(
+    `UPDATE genre_cache_warm_state SET end_year = 2100 WHERE end_year = 1960`,
+  );
 
   // ── Pseudonym / band-member links between blues_artists rows ─────
   // Symmetric junction table — the same row covers both directions of

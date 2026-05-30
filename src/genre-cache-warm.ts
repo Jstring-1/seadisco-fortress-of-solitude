@@ -216,7 +216,12 @@ async function _runWorkerForGenre(
 
       const year = Number(state.current_year);
       const page = Number(state.current_page);
-      const endYear = Number(state.end_year);
+      // Effective cap auto-extends to "this calendar year" — a row
+      // stored as end_year=1960 (legacy) still walks all the way
+      // through 2026+. Stored values above the current year still
+      // win (so you can pre-stage e.g. end_year=2050 if you want);
+      // values below it get bumped silently. No yearly maintenance.
+      const endYear = Math.max(Number(state.end_year), new Date().getFullYear());
 
       let searchRes: any;
       try {
