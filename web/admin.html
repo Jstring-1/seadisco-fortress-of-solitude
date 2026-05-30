@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260529.2128" />
+  <link rel="stylesheet" href="/style.css?v=20260530.1025" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260529.2128"></script>
-<script defer src="/shared.js?v=20260529.2128"></script>
+<script defer src="/utils.js?v=20260530.1025"></script>
+<script defer src="/shared.js?v=20260530.1025"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -129,6 +129,17 @@
              raw "everything we have" listing. -->
         <div style="margin-top:1rem;color:var(--muted);font-size:0.82rem;font-weight:600">All tables (flat list)</div>
         <div id="db-stats-flat" style="margin-top:0.6rem;font-size:0.78rem;color:var(--muted)"></div>
+      </div>
+
+      <!-- Genre cache-warm cron (System group — between DB and API log) -->
+      <div class="admin-tab-panel admin-grp-system" id="panel-genre-cache-warm" style="display:none">
+        <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.5rem;flex-wrap:wrap">
+          <h2 style="margin:0">Genre cache-warm cron</h2>
+          <button class="admin-refresh-btn" id="gcw-refresh-btn" onclick="_adminClickRefresh(this, loadGenreCacheWarm)" title="Refresh"><span class="admin-refresh-icon">&#8635;</span></button>
+          <span id="gcw-refresh-status" class="admin-refresh-status"></span>
+          <span style="font-size:0.74rem;color:var(--muted);margin-left:auto">1a-6a Pacific. Rotates one genre per night via (dayOfYear % activeGenres). Each genre tracks its own cursor.</span>
+        </div>
+        <div id="gcw-content" style="font-size:0.82rem;color:var(--muted)">Loading...</div>
       </div>
 
       <!-- API Request Log (System group — below Database) -->
@@ -304,8 +315,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260529.2128"></script>
-<script defer src="/blues-admin.js?v=20260529.2128"></script>
+<script defer src="/modal.js?v=20260530.1025"></script>
+<script defer src="/blues-admin.js?v=20260530.1025"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -381,8 +392,8 @@ const _adminGroups = {
     load: () => { loadAdminSubmissions(); loadAdminUnavailable(); },
   },
   'system': {
-    panels: ['panel-system-bar', 'panel-db-stats', 'panel-api-log'],
-    load: () => { loadDbStats(); loadApiLog(); },
+    panels: ['panel-system-bar', 'panel-db-stats', 'panel-genre-cache-warm', 'panel-api-log'],
+    load: () => { loadDbStats(); loadGenreCacheWarm(); loadApiLog(); },
   },
   // 'blues-db' + 'lyrics' tabs removed; their content lives in the
   // Discovery Blues Archive view (/?v=blues-archive). The runtime
@@ -936,6 +947,179 @@ async function clearLocCache() {
   } catch {
     alert("Failed to clear cache.");
   }
+}
+
+// ── Genre cache-warm cron panel (multi-genre rotation) ────────────────
+// Renders one card per genre with its cursor, cycle/lifetime counters,
+// and per-genre Start/Stop/Toggle/Reset buttons. Highlights today's
+// scheduled genre. Polls every 5s while any worker is running.
+let _gcwPollTimer = null;
+async function loadGenreCacheWarm() {
+  const el = document.getElementById("gcw-content");
+  if (!el) return;
+  try {
+    const r = await apiFetch("/api/admin/genre-cache-warm/status");
+    if (!r.ok) { el.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
+    const { rows = [], release_cache_total } = await r.json();
+    if (!rows.length) { el.textContent = "(no genre rows seeded — restart the server)"; return; }
+    const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;");
+    const fmt = n => Number(n || 0).toLocaleString();
+    // Today's genre: same logic as the worker — (dayOfYear in Pacific
+    // % activeCount) over rows ordered by rotation_order. We compute
+    // it client-side so the UI can highlight "today's genre" without
+    // an extra endpoint roundtrip.
+    const active = rows.filter(r => r.enabled).sort((a, b) => a.rotation_order - b.rotation_order);
+    const todayKey = active.length
+      ? active[_gcwDayOfYearPacific() % active.length].genre_key
+      : null;
+    const anyRunning = rows.some(r => r.running);
+
+    // Top summary row + blues-only Start/Stop controls. Start/Stop
+    // always operate on Blues per the admin's preference — other
+    // genres can still be enabled/disabled + reset from their cards,
+    // they just don't have manual kick buttons.
+    const summary = `
+      <div style="display:flex;gap:0.8rem;flex-wrap:wrap;align-items:center;margin-bottom:0.4rem">
+        <span style="font-size:0.78rem;color:var(--muted)">release_cache total: <strong style="color:var(--text)">${fmt(release_cache_total)}</strong></span>
+        <span style="font-size:0.78rem;color:var(--muted)">Today's pick:
+          ${todayKey
+            ? `<strong style="color:var(--accent)">${esc(todayKey)}</strong>`
+            : `<em>(no enabled genre)</em>`}
+        </span>
+      </div>
+      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.8rem">
+        <button class="admin-btn" onclick="genreCacheWarmStart('Blues')" title="Kick the Blues worker on the next tick (within 60s), bypassing the 1a-6a window.">▶ Start Blues now</button>
+        <button class="admin-btn" onclick="genreCacheWarmStop('Blues')" title="Signal the Blues worker to wind down at the next safe boundary.">■ Stop Blues</button>
+        <span style="font-size:0.72rem;color:var(--muted);align-self:center">(other genres run only on their scheduled night — toggle/reset them on their card below)</span>
+      </div>
+    `;
+
+    // Per-genre cards in rotation order.
+    rows.sort((a, b) => a.rotation_order - b.rotation_order);
+    const cards = rows.map(r => {
+      const isToday = r.genre_key === todayKey;
+      const recentCached = Array.isArray(r.recent_cached) ? r.recent_cached : [];
+      const recentErrors = Array.isArray(r.recent_errors) ? r.recent_errors : [];
+      const runningPill = r.running
+        ? `<span style="padding:0.1rem 0.4rem;border-radius:999px;background:rgba(125,225,150,0.15);color:#7ed196;border:1px solid rgba(125,225,150,0.4);font-size:0.7rem;font-weight:600">● RUNNING</span>`
+        : `<span style="padding:0.1rem 0.4rem;border-radius:999px;background:rgba(255,255,255,0.04);color:var(--muted);border:1px solid var(--border);font-size:0.7rem">○ Idle</span>`;
+      const enabledPill = r.enabled
+        ? `<span style="color:#7ed196;font-size:0.72rem">Auto on</span>`
+        : `<span style="color:#e88;font-size:0.72rem">Auto off</span>`;
+      const overridePill = r.manual_override
+        ? `<span style="color:var(--accent);font-size:0.72rem">· Override on</span>`
+        : "";
+      const lastCachedAt = r.last_cached_at ? new Date(r.last_cached_at).toLocaleString() : "—";
+      const cycleStartedAt = r.cycle_started_at ? new Date(r.cycle_started_at).toLocaleString() : "—";
+      const recentCachedHtml = recentCached.length
+        ? `<ul style="margin:0.2rem 0 0;padding-left:1rem;font-size:0.72rem;color:var(--text)">${
+            recentCached.slice(0, 5).map(c => `<li>${esc(c.title || "")} <span style="color:var(--muted)">#${esc(c.id)}</span></li>`).join("")
+          }</ul>`
+        : `<div style="font-style:italic;color:var(--muted);font-size:0.72rem">(none yet this cycle)</div>`;
+      const recentErrorsHtml = recentErrors.length
+        ? `<ul style="margin:0.2rem 0 0;padding-left:1rem;font-size:0.72rem;color:#e88">${
+            recentErrors.slice(0, 3).map(e => `<li>${esc(e.msg || "")}</li>`).join("")
+          }</ul>`
+        : "";
+      const cardBorder = isToday
+        ? "2px solid var(--accent)"
+        : "1px solid var(--border)";
+      const safeKey = esc(r.genre_key).replace(/'/g, "\\'");
+      return `
+        <div style="border:${cardBorder};border-radius:6px;padding:0.6rem 0.7rem;background:rgba(255,255,255,0.02)">
+          <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.3rem">
+            <strong style="font-size:0.95rem;color:var(--text)">${esc(r.genre_key)}</strong>
+            <span style="font-size:0.7rem;color:var(--muted)">#${r.rotation_order}</span>
+            ${isToday ? `<span style="font-size:0.7rem;color:var(--accent)">· today</span>` : ""}
+            ${runningPill}
+            ${enabledPill}${overridePill}
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem 0.8rem;font-size:0.76rem;margin-bottom:0.4rem">
+            <div>
+              <div style="color:var(--muted)">Cursor</div>
+              <div style="color:var(--text);font-weight:600">${r.current_year} · p${r.current_page}</div>
+              <div style="color:var(--muted);font-size:0.7rem">${r.start_year}–${r.end_year}</div>
+            </div>
+            <div>
+              <div style="color:var(--muted)">Cycle #${r.cycle_count}</div>
+              <div style="color:var(--text)">Cached <strong>${fmt(r.cycle_cached)}</strong> · Skipped ${fmt(r.cycle_skipped)}</div>
+              <div style="color:var(--muted);font-size:0.7rem">Started: ${cycleStartedAt}</div>
+            </div>
+            <div>
+              <div style="color:var(--muted)">Lifetime</div>
+              <div style="color:var(--text)">Cached <strong>${fmt(r.lifetime_cached)}</strong> · Err ${fmt(r.lifetime_errors)}</div>
+              <div style="color:var(--muted);font-size:0.7rem">Last cached: ${lastCachedAt}</div>
+            </div>
+            <div>
+              <div style="color:var(--muted);margin-bottom:0.1rem">Recent</div>
+              ${recentCachedHtml}
+              ${recentErrorsHtml}
+            </div>
+          </div>
+          <div style="display:flex;gap:0.4rem;flex-wrap:wrap">
+            <button class="admin-btn" onclick="genreCacheWarmToggleAuto('${safeKey}')" title="Toggle this genre's slot in the nightly rotation.">${r.enabled ? "Disable" : "Enable"}</button>
+            <button class="admin-btn" onclick="genreCacheWarmReset('${safeKey}')" title="Reset this genre's cursor to start_year and zero its cycle counters.">Reset cursor</button>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    el.innerHTML = summary + `
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:0.6rem">${cards}</div>
+    `;
+
+    if (_gcwPollTimer) { clearTimeout(_gcwPollTimer); _gcwPollTimer = null; }
+    if (anyRunning && document.getElementById("panel-genre-cache-warm")?.style.display !== "none") {
+      _gcwPollTimer = setTimeout(loadGenreCacheWarm, 5000);
+    }
+  } catch (e) {
+    el.innerHTML = `<span style="color:#e88">Load failed: ${(e && e.message) || e}</span>`;
+  }
+}
+
+// Mirror of the worker's _dayOfYearPacific so the UI's "today" tag
+// stays in sync with what the cron actually picks.
+function _gcwDayOfYearPacific() {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Los_Angeles",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now);
+  const get = t => parseInt(parts.find(p => p.type === t)?.value || "0", 10);
+  const y = get("year"), m = get("month"), d = get("day");
+  const jan1Utc = Date.UTC(y, 0, 1);
+  const todayUtc = Date.UTC(y, m - 1, d);
+  return Math.floor((todayUtc - jan1Utc) / (24 * 3600 * 1000));
+}
+
+async function genreCacheWarmStart(genre) {
+  try {
+    const r = await apiFetch(`/api/admin/genre-cache-warm/start?genre=${encodeURIComponent(genre)}`, { method: "POST" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    loadGenreCacheWarm();
+  } catch (e) { alert("Start failed: " + ((e && e.message) || e)); }
+}
+async function genreCacheWarmStop(genre) {
+  try {
+    const r = await apiFetch(`/api/admin/genre-cache-warm/stop?genre=${encodeURIComponent(genre)}`, { method: "POST" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    loadGenreCacheWarm();
+  } catch (e) { alert("Stop failed: " + ((e && e.message) || e)); }
+}
+async function genreCacheWarmToggleAuto(genre) {
+  try {
+    const r = await apiFetch(`/api/admin/genre-cache-warm/toggle-auto?genre=${encodeURIComponent(genre)}`, { method: "POST" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    loadGenreCacheWarm();
+  } catch (e) { alert("Toggle failed: " + ((e && e.message) || e)); }
+}
+async function genreCacheWarmReset(genre) {
+  if (!confirm(`Reset cursor for "${genre}" to its start_year and zero its cycle counters? Lifetime stats are preserved.`)) return;
+  try {
+    const r = await apiFetch(`/api/admin/genre-cache-warm/reset?genre=${encodeURIComponent(genre)}`, { method: "POST" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    loadGenreCacheWarm();
+  } catch (e) { alert("Reset failed: " + ((e && e.message) || e)); }
 }
 
 // ── API Request Log ───────────────────────────────────────────────────
