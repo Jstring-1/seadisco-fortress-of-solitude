@@ -213,7 +213,7 @@ function _baRenderListTable() {
           ? "https://www.discogs.com/search/?type=artist&q=" + encodeURIComponent(row.name)
           : "";
         const discogsSearchHtml = discogsSearchHref
-          ? `<a href="${escHtml(discogsSearchHref)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Search Discogs for an artist named &quot;${escHtml(row.name || "")}&quot; — opens discogs.com in a new tab so you can grab the right id" style="margin-left:0.4rem;font-size:0.78rem;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:4px;padding:0.05rem 0.35rem;font-variant-numeric:tabular-nums">🔎 Discogs</a>`
+          ? `<a href="${escHtml(discogsSearchHref)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Search Discogs for an artist named &quot;${escHtml(row.name || "")}&quot; — opens discogs.com in a new tab so you can grab the right id" style="margin-left:0.4rem;font-size:0.78rem;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:4px;padding:0.05rem 0.35rem;font-variant-numeric:tabular-nums">🔎</a>`
           : "";
         // Discogs ID — click opens the full Edit Artist form so the
         // curator can fix / add the id (or any other field) without

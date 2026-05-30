@@ -8186,22 +8186,62 @@ app.get("/api/admin/lyrics/export.csv", async (req, res) => {
   }
 });
 
+// PDFKit's built-in Standard 14 fonts (Times-Roman, Helvetica, …)
+// only carry WinAnsiEncoding — any character outside that 256-glyph
+// table renders as a blank-square ".notdef" box. The artist + lyric
+// exports were showing these for smart quotes / curly apostrophes /
+// en-dashes / ellipses / Wikipedia's stray bullets that scraped
+// through. Transliterate the common offenders down to ASCII first;
+// anything else outside WinAnsi range gets dropped so the document
+// never renders a box. Cheap (single-pass regex), zero deps.
+function _pdfSafe(s: any): string {
+  if (s == null) return "";
+  let t = String(s);
+  // Common Unicode punctuation → ASCII equivalents.
+  const map: Record<string, string> = {
+    " ": " ",          // NBSP
+    "‘": "'", "’": "'", "‚": ",", "‛": "'",
+    "“": '"', "”": '"', "„": '"', "‟": '"',
+    "–": "-", "—": "-", "―": "-",
+    "‐": "-", "‑": "-", "‒": "-",
+    "…": "...",
+    "·": ".",          // middle dot (not the bullet we use elsewhere)
+    "•": "*",
+    "‹": "<", "›": ">",
+    "«": '"', "»": '"',
+    "′": "'", "″": '"',
+    "﻿": "",           // BOM
+  };
+  t = t.replace(/[ ‐-―‘-‟…·•‹›«»′″﻿]/g, ch => map[ch] ?? "");
+  // WinAnsi covers Latin-1 + a few extras (curly quotes, dashes,
+  // bullet) — most of the latter we've already replaced above.
+  // Anything remaining outside U+0000..U+00FF gets stripped so we
+  // never render a box. The 0x00-0x1F range is kept only for \n/\t.
+  t = t.replace(/[^\x09\x0A\x0D\x20-\x7E\xA0-\xFF]/g, "");
+  return t;
+}
+
 // GET /api/admin/lyrics/export.pdf — streamed PDF of every lyric in
-// the archive, sorted alphabetically by song title (case-insensitive).
-// One continuous flow with a page break per starting-letter section
-// so an A4 / Letter reader can jump between letters. Header on each
-// lyric: title (large) + artist · tuning · first-release year (small
-// italic). Body: plaintext. Empty plaintext rows print the header
-// only with a "(no text yet)" marker. Streamed so the response
-// starts before the full document is built — important for a 4k-row
-// run that can take a few seconds to render.
+// the archive, grouped by artist (alphabetical) with each artist's
+// lyrics sorted by title. Per artist: H1 name as a section header,
+// then each lyric: title + tuning · year meta + body. Streamed so
+// the response starts before the full document is built — important
+// for a 4k-row run that takes a few seconds to render.
+//
+// Body / title font sizes are ~80% larger than the v1 sizing — the
+// user explicitly requested bigger text for the printed/ereader
+// flow. WinAnsi-unsafe characters (smart quotes, em-dashes, etc.)
+// pass through _pdfSafe() so PDFKit's Standard 14 fonts don't
+// render them as ".notdef" boxes.
 app.get("/api/admin/lyrics/export.pdf", async (req, res) => {
   if (!await requireAdmin(req, res)) return;
   try {
     const r = await getPool().query(
       `SELECT page_title, artist, tuning, plaintext, first_release_year
          FROM blues_lyrics
-        ORDER BY lower(page_title) ASC, page_title ASC`,
+        ORDER BY lower(coalesce(artist, '~~')) ASC,
+                 lower(page_title) ASC,
+                 page_title ASC`,
     );
     const rows = r.rows;
     res.setHeader("Content-Type", "application/pdf");
@@ -8213,57 +8253,61 @@ app.get("/api/admin/lyrics/export.pdf", async (req, res) => {
       size: "LETTER",
       margins: { top: 56, bottom: 56, left: 56, right: 56 },
       info: {
-        Title: "SeaDisco Blues Archive — Lyrics",
+        Title: "SeaDisco Blues Archive - Lyrics",
         Author: "SeaDisco",
-        Subject: `${rows.length} lyrics, sorted by song title`,
+        Subject: `${rows.length} lyrics grouped by artist`,
       },
       bufferPages: true,
     });
     doc.pipe(res);
     // ── Cover page ─────────────────────────────────────────────────
-    doc.font("Times-Bold").fontSize(28).text("Blues Archive", { align: "center" });
+    doc.font("Times-Bold").fontSize(34).text("Blues Archive", { align: "center" });
     doc.moveDown(0.3);
-    doc.font("Times-Italic").fontSize(14).text("Lyrics, sorted by song title", { align: "center" });
+    doc.font("Times-Italic").fontSize(18).text("Lyrics, grouped by artist", { align: "center" });
     doc.moveDown(2);
-    doc.font("Times-Roman").fontSize(11)
+    doc.font("Times-Roman").fontSize(14)
       .text(`${rows.length.toLocaleString()} lyrics`, { align: "center" })
       .text(new Date().toISOString().slice(0, 10), { align: "center" });
-    // ── Lyric flow ─────────────────────────────────────────────────
-    // Continuous flow — no per-letter section breaks. Each lyric
-    // gets its title + meta + body, then a thin separator and a
-    // generous gap so consecutive entries are clearly delimited.
-    doc.addPage();
+    // ── Per-artist flow ────────────────────────────────────────────
+    // Each artist section starts on a fresh page so the reader's
+    // "go to page" UI is useful for hopping between artists. Within
+    // a section, lyrics flow continuously with a separator + gap.
+    let currentArtist: string | null = null;
     for (const row of rows) {
-      // If we'd start a new lyric near the bottom of the page,
-      // push to the next page so the header+first lines don't get
-      // orphaned. ~80pt = enough for a title + meta + a few lines.
-      if (doc.y > doc.page.height - doc.page.margins.bottom - 80) {
+      const artistKey = String(row.artist || "(Unknown artist)").trim() || "(Unknown artist)";
+      if (artistKey !== currentArtist) {
+        doc.addPage();
+        currentArtist = artistKey;
+        doc.font("Times-Bold").fontSize(28).fillColor("black")
+          .text(_pdfSafe(artistKey));
+        doc.moveDown(0.5);
+      } else if (doc.y > doc.page.height - doc.page.margins.bottom - 140) {
+        // Orphan-protect: leave room for title + meta + a few body
+        // lines (~140pt at the bigger font sizes).
         doc.addPage();
       }
       // Title
-      doc.font("Times-Bold").fontSize(13).fillColor("black")
-        .text(String(row.page_title || "Untitled"));
-      // Meta line: artist · tuning · year — only the parts we have.
+      doc.font("Times-Bold").fontSize(23).fillColor("black")
+        .text(_pdfSafe(row.page_title || "Untitled"));
+      // Meta line: tuning · year (artist is the section header now)
       const metaParts: string[] = [];
-      if (row.artist) metaParts.push(String(row.artist));
       if (row.tuning) metaParts.push(String(row.tuning));
       if (row.first_release_year) metaParts.push(String(row.first_release_year));
       if (metaParts.length) {
-        doc.font("Times-Italic").fontSize(9).fillColor("#555")
-          .text(metaParts.join("  ·  "));
+        doc.font("Times-Italic").fontSize(16).fillColor("#555")
+          .text(_pdfSafe(metaParts.join("  ·  ")));
       }
       doc.moveDown(0.35);
-      // Body
+      // Body — 18pt is roughly 80% larger than the prior 10pt
       const body = String(row.plaintext || "").trim();
       if (body) {
-        doc.font("Times-Roman").fontSize(10).fillColor("black")
-          .text(body, { paragraphGap: 4, lineGap: 1 });
+        doc.font("Times-Roman").fontSize(18).fillColor("black")
+          .text(_pdfSafe(body), { paragraphGap: 6, lineGap: 2 });
       } else {
-        doc.font("Times-Italic").fontSize(9).fillColor("#999")
+        doc.font("Times-Italic").fontSize(16).fillColor("#999")
           .text("(no text yet)");
       }
       doc.moveDown(1.6);
-      // Thin separator between lyrics so the eye finds the next title.
       const sepY = doc.y;
       doc.strokeColor("#ddd").lineWidth(0.5)
         .moveTo(doc.page.margins.left, sepY)
@@ -8272,7 +8316,6 @@ app.get("/api/admin/lyrics/export.pdf", async (req, res) => {
       doc.moveDown(1.4);
     }
     // ── Page numbers ───────────────────────────────────────────────
-    // Buffered so we know the total page count. Skip the cover (page 0).
     const range = doc.bufferedPageRange();
     for (let i = 0; i < range.count; i++) {
       doc.switchToPage(range.start + i);
@@ -8288,9 +8331,6 @@ app.get("/api/admin/lyrics/export.pdf", async (req, res) => {
     doc.end();
   } catch (err: any) {
     console.error("[lyrics export.pdf]", err);
-    // If we already started streaming we can't change status; just
-    // tear down the connection so the user sees an error in their
-    // download manager rather than a half-good PDF.
     if (!res.headersSent) res.status(500).json({ error: err?.message ?? String(err) });
     else res.end();
   }
@@ -8326,7 +8366,7 @@ app.get("/api/admin/blues/export.pdf", async (req, res) => {
       size: "LETTER",
       margins: { top: 56, bottom: 56, left: 56, right: 56 },
       info: {
-        Title: "SeaDisco Blues Archive — Artist Profiles",
+        Title: "SeaDisco Blues Archive - Artist Profiles",
         Author: "SeaDisco",
         Subject: `${rows.length} artists`,
       },
@@ -8336,7 +8376,7 @@ app.get("/api/admin/blues/export.pdf", async (req, res) => {
     // ── Cover page ─────────────────────────────────────────────────
     doc.font("Times-Bold").fontSize(28).text("Blues Archive", { align: "center" });
     doc.moveDown(0.3);
-    doc.font("Times-Italic").fontSize(14).text("Artist profiles, sorted A–Z", { align: "center" });
+    doc.font("Times-Italic").fontSize(14).text("Artist profiles, sorted A-Z", { align: "center" });
     doc.moveDown(2);
     doc.font("Times-Roman").fontSize(11)
       .text(`${rows.length.toLocaleString()} artists`, { align: "center" })
@@ -8355,9 +8395,9 @@ app.get("/api/admin/blues/export.pdf", async (req, res) => {
     const labelLine = (label: string, items: string[]) => {
       if (!items.length) return;
       doc.font("Times-Italic").fontSize(9).fillColor("#555")
-        .text(`${label}: `, { continued: true })
+        .text(`${_pdfSafe(label)}: `, { continued: true })
         .font("Times-Roman").fillColor("#222")
-        .text(items.join(", "));
+        .text(_pdfSafe(items.join(", ")));
     };
 
     for (const row of rows) {
@@ -8369,11 +8409,11 @@ app.get("/api/admin/blues/export.pdf", async (req, res) => {
 
       // ── Name (title) ─────────────────────────────────────────
       doc.font("Times-Bold").fontSize(18).fillColor("black")
-        .text(String(row.name || "Untitled"));
+        .text(_pdfSafe(row.name || "Untitled"));
 
       // ── Top meta line: born/died/from + first/last recording ─
       const metaParts: string[] = [];
-      const dates = [row.birth_date, row.death_date].filter(Boolean).join(" – ");
+      const dates = [row.birth_date, row.death_date].filter(Boolean).join(" - ");
       if (dates) metaParts.push(dates);
       if (row.birth_place) metaParts.push(`Born ${row.birth_place}`);
       if (row.death_place) metaParts.push(`Died ${row.death_place}`);
@@ -8394,7 +8434,7 @@ app.get("/api/admin/blues/export.pdf", async (req, res) => {
       }
       if (metaParts.length) {
         doc.font("Times-Italic").fontSize(9).fillColor("#555")
-          .text(metaParts.join("  ·  "));
+          .text(_pdfSafe(metaParts.join("  ·  ")));
       }
       doc.moveDown(0.4);
 
@@ -8411,7 +8451,7 @@ app.get("/api/admin/blues/export.pdf", async (req, res) => {
       const bio = String(row.notes || "").trim();
       if (bio) {
         doc.font("Times-Roman").fontSize(10).fillColor("black")
-          .text(bio, { paragraphGap: 4, lineGap: 1 });
+          .text(_pdfSafe(bio), { paragraphGap: 4, lineGap: 1 });
         doc.moveDown(0.5);
       }
 
@@ -8436,12 +8476,12 @@ app.get("/api/admin/blues/export.pdf", async (req, res) => {
           if (doc.y > doc.page.height - doc.page.margins.bottom - 30) {
             doc.addPage();
           }
-          const year  = rel?.year  ? String(rel.year) : "—";
+          const year  = rel?.year  ? String(rel.year) : "-";
           const title = rel?.title ? String(rel.title) : "Untitled";
-          const label = rel?.label ? `  ·  ${rel.label}` : "";
-          const type  = rel?.type  ? `  ·  ${String(rel.type).toUpperCase()}` : "";
+          const label = rel?.label ? `  -  ${rel.label}` : "";
+          const type  = rel?.type  ? `  -  ${String(rel.type).toUpperCase()}` : "";
           doc.font("Times-Roman").fontSize(9).fillColor("#222")
-            .text(`${year}   ${title}${label}${type}`);
+            .text(_pdfSafe(`${year}   ${title}${label}${type}`));
         }
         doc.moveDown(0.4);
       }
