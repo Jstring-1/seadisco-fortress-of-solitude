@@ -19,6 +19,41 @@
       .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
+  // Library badge strip — same shape as the search/records cards.
+  // Pulls from the site-wide window._collectionIds / _wantlistIds /
+  // _favoriteKeys / _inventoryIds / _listMembership snapshots populated
+  // by shared.js. Each badge: collection, wantlist, favorite,
+  // (inventory + lists when the user has any). The 🎸 Blues Archive
+  // badge is stamped on by _baStampCards after render — not here.
+  function _cbBadgesForRelease(releaseId, type) {
+    const navIcon = (typeof window._sdNavIconSvg === "function") ? window._sdNavIconSvg : (() => "");
+    let badges = "";
+    if (type === "release") {
+      const inCol  = window._collectionIds?.has(releaseId);
+      const inWant = window._wantlistIds?.has(releaseId);
+      badges += `<span class="card-badge badge-collection${inCol ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleCollectionFromCard(this,${releaseId})" title="${inCol ? "Remove from collection" : "Add to collection"}">${navIcon("collection")}</span>`;
+      badges += `<span class="card-badge badge-wantlist${inWant ? " is-active" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleWantlistFromCard(this,${releaseId})" title="${inWant ? "Remove from wantlist" : "Add to wantlist"}">${navIcon("wantlist")}</span>`;
+    }
+    const favKey = `${type}:${releaseId}`;
+    const isFav = window._favoriteKeys?.has(favKey);
+    badges += `<span class="card-badge badge-favorite${isFav ? " is-favorite" : ""}" onclick="event.preventDefault();event.stopPropagation();toggleFavoriteFromCard(this,${releaseId},'${type}')" title="${isFav ? "Remove from favorites" : "Add to favorites"}">${navIcon("favorites")}</span>`;
+    if (type === "release") {
+      const userHasInventory = (window._inventoryIds?.size ?? 0) > 0;
+      if (userHasInventory) {
+        const inInv = window._inventoryIds?.has(releaseId);
+        badges += `<span class="card-badge badge-inventory${inInv ? " is-active" : ""}" title="${inInv ? "In your inventory" : "Not in your inventory"}">${navIcon("inventory")}</span>`;
+      }
+      const userHasLists = window._listMembership && Object.keys(window._listMembership).length > 0;
+      if (userHasLists) {
+        const lists = window._listMembership?.[releaseId];
+        const inList = !!(lists && lists.length);
+        const names = inList ? lists.map(l => l.listName).join(", ") : "";
+        badges += `<span class="card-badge badge-list${inList ? " is-active" : ""}" title="${inList ? `In list: ${_esc(names)}` : "Not in any of your lists"}">${navIcon("lists")}</span>`;
+      }
+    }
+    return badges;
+  }
+
   function _readFilters() {
     return {
       q:         document.getElementById("cb-q")?.value || "",
@@ -74,50 +109,89 @@
       if (pagerEl) pagerEl.innerHTML = "";
       return;
     }
+    // Use the site-wide .card-grid + .card markup so the existing
+    // body.card-mode-wide CSS reshapes the layout for free.
     grid.innerHTML = `
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:0.6rem">
+      <div class="card-grid">
         ${_cbRows.map(_cbCardHtml).join("")}
       </div>
     `;
     _cbRenderPager();
+    // After paint: stamp 🎸 Blues Archive badges on cards whose
+    // artist matches an archive row. _baStampCards reads
+    // data-card-type and the title attribute (parses "Artist - Title"
+    // for the artist name), so the items array we pass mirrors that
+    // shape. Fire-and-forget — silent on failure.
+    const gridEl = grid.querySelector(".card-grid");
+    if (gridEl && typeof window._baStampCards === "function") {
+      const stampItems = _cbRows.map(r => ({
+        id: Number(r.release_id),
+        type: String(r.release_type || "release"),
+        title: `${String(r.artist || "")} - ${String(r.title || "")}`,
+      }));
+      window._baStampCards(stampItems, gridEl).catch(() => {});
+    }
   }
 
   function _cbCardHtml(row) {
-    const id     = Number(row.release_id);
-    const type   = String(row.release_type || "release");
-    const title  = String(row.title || "Untitled");
-    const artist = String(row.artist || "");
-    const year   = row.year ? String(row.year) : "";
-    const label  = row.label ? String(row.label) : "";
-    const format = row.format ? String(row.format) : "";
+    const id      = Number(row.release_id);
+    const type    = String(row.release_type || "release");
+    const title   = String(row.title || "Untitled");
+    const artist  = String(row.artist || "");
+    const year    = row.year ? String(row.year) : "";
+    const label   = row.label ? String(row.label) : "";
+    const format  = row.format ? String(row.format) : "";
     const country = row.country ? String(row.country) : "";
-    const count  = Number(row.artist_release_count) || 0;
-    const thumb  = row.cover_thumb ? String(row.cover_thumb) : "";
+    const count   = Number(row.artist_release_count) || 0;
+    const thumb   = row.cover_thumb ? String(row.cover_thumb) : "";
     const safeUrl = `https://www.discogs.com/${type === "master" ? "master" : "release"}/${id}`;
-    const coverHtml = thumb
-      ? `<img src="${_esc(thumb)}" alt="" loading="lazy"
-             style="width:80px;height:80px;object-fit:cover;border-radius:4px;flex:0 0 auto;background:var(--surface-raised)" />`
-      : `<div style="width:80px;height:80px;border-radius:4px;background:var(--surface-raised);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:2rem;flex:0 0 auto">♪</div>`;
-    const countPill = count > 0
-      ? `<span title="${count} cached release${count === 1 ? "" : "s"} by this artist" style="display:inline-block;padding:0.1rem 0.45rem;border:1px solid var(--border);border-radius:999px;font-size:0.72rem;color:var(--muted);font-variant-numeric:tabular-nums">${count} by artist</span>`
+    const thumbHtml = thumb
+      ? `<img src="${_esc(thumb)}" alt="" loading="lazy" />`
+      : `<div class="thumb-placeholder">♪</div>`;
+    // Meta line — year + format + country, joined with the same
+    // " · " separator the standard cards use.
+    const metaParts = [year, format, country].filter(Boolean);
+    const metaHtml = metaParts.length
+      ? `<div class="card-meta">${metaParts.map(_esc).join(" · ")}</div>`
       : "";
+    const labelHtml = label
+      ? `<div class="card-sub" title="${_esc(label)}">${_esc(label)}</div>`
+      : "";
+    // Artist-release-count chip — the headline feature of this view.
+    // Click on the count opens a filter for this artist (so the user
+    // can see all of their cached releases at once).
+    const countChip = count > 0
+      ? `<div class="card-sub" style="display:flex;align-items:center;gap:0.35rem">
+           <span style="padding:0.05rem 0.4rem;border:1px solid var(--border);border-radius:999px;font-size:0.7rem;color:var(--muted);font-variant-numeric:tabular-nums"
+                 title="${count} cached release${count === 1 ? "" : "s"} by ${_esc(artist)}">${count} by artist</span>
+         </div>`
+      : "";
+    // title attribute carries "Artist - Title" so _baStampCards can
+    // extract the artist name post-render (same convention search
+    // cards use). data-card-type lets the same helper know which
+    // strategy to apply (release/master/artist).
+    const badges = _cbBadgesForRelease(id, type);
+    const titleAttr = artist ? `${artist} - ${title}` : title;
     return `
-      <article style="display:flex;gap:0.7rem;padding:0.6rem;border:1px solid var(--border);border-radius:6px;background:rgba(255,255,255,0.02);align-items:flex-start">
-        <a href="#" onclick="event.preventDefault();event.stopPropagation();_cbOpenRelease(${id}, '${_esc(type)}', '${_esc(safeUrl)}')" title="Open ${type.toUpperCase()} popup" style="flex:0 0 auto">${coverHtml}</a>
-        <div style="min-width:0;flex:1;display:flex;flex-direction:column;gap:0.2rem">
-          <a href="#" onclick="event.preventDefault();event.stopPropagation();_cbOpenRelease(${id}, '${_esc(type)}', '${_esc(safeUrl)}')"
-             title="Open ${type.toUpperCase()} popup"
-             style="font-weight:600;color:var(--text);text-decoration:none;line-height:1.25">${_esc(title)}</a>
-          <div style="font-size:0.82rem;color:var(--accent);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_esc(artist)}</div>
-          <div style="font-size:0.74rem;color:var(--muted);display:flex;flex-wrap:wrap;gap:0.4rem;align-items:center">
-            ${year ? `<span style="font-variant-numeric:tabular-nums">${_esc(year)}</span>` : ""}
-            ${format ? `<span>${_esc(format)}</span>` : ""}
-            ${country ? `<span>${_esc(country)}</span>` : ""}
-          </div>
-          ${label ? `<div style="font-size:0.74rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_esc(label)}">${_esc(label)}</div>` : ""}
-          ${countPill}
+      <a class="card card-type-${_esc(type)}" href="#"
+         data-card-type="${_esc(type)}"
+         data-release-id="${id}"
+         onclick="event.preventDefault();event.stopPropagation();_cbOpenRelease(${id}, '${_esc(type)}', '${_esc(safeUrl)}')"
+         title="${_esc(titleAttr)}">
+        <div class="card-thumb-wrap">
+          ${thumbHtml}
+          <div class="card-thumb-badges">${badges}</div>
         </div>
-      </article>
+        <div class="card-body">
+          ${artist ? `<div class="card-artist">${_esc(artist)}</div>` : ""}
+          <div class="card-title">${_esc(title)}</div>
+          <div class="card-bottom">
+            ${labelHtml}
+            ${metaHtml}
+            ${countChip}
+          </div>
+        </div>
+      </a>
     `;
   }
 
