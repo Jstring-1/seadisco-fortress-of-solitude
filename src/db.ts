@@ -1007,6 +1007,59 @@ export async function initDb() {
       FOR EACH ROW EXECUTE FUNCTION _blues_set_updated_at();
   `);
 
+  // ── Genre cache-warm cron state ──────────────────────────────────
+  // One row per Discogs genre in the rotation. The nightly worker
+  // picks today's genre by (dayOfYear % active.length) over rows
+  // ordered by rotation_order, then walks that genre's cursor year
+  // by year. Each genre has its own cursor + counters so progress
+  // on each is independent. Idempotent: row inserts use ON CONFLICT.
+  await getPool().query(`
+    CREATE TABLE IF NOT EXISTS genre_cache_warm_state (
+      genre_key           TEXT PRIMARY KEY,
+      rotation_order      INT  NOT NULL,
+      enabled             BOOLEAN NOT NULL DEFAULT true,
+      manual_override     BOOLEAN NOT NULL DEFAULT false,
+      start_year          INT NOT NULL DEFAULT 1900,
+      end_year            INT NOT NULL DEFAULT 1960,
+      current_year        INT NOT NULL DEFAULT 1900,
+      current_page        INT NOT NULL DEFAULT 1,
+      running             BOOLEAN NOT NULL DEFAULT false,
+      started_at          TIMESTAMPTZ,
+      last_tick_at        TIMESTAMPTZ,
+      last_cached_at      TIMESTAMPTZ,
+      lifetime_searched   INT NOT NULL DEFAULT 0,
+      lifetime_cached     INT NOT NULL DEFAULT 0,
+      lifetime_skipped    INT NOT NULL DEFAULT 0,
+      lifetime_errors     INT NOT NULL DEFAULT 0,
+      cycle_searched      INT NOT NULL DEFAULT 0,
+      cycle_cached        INT NOT NULL DEFAULT 0,
+      cycle_skipped       INT NOT NULL DEFAULT 0,
+      cycle_started_at    TIMESTAMPTZ DEFAULT NOW(),
+      cycle_count         INT NOT NULL DEFAULT 0,
+      recent_errors       JSONB NOT NULL DEFAULT '[]'::jsonb,
+      recent_cached       JSONB NOT NULL DEFAULT '[]'::jsonb
+    )
+  `);
+  // Seed the rotation. ON CONFLICT preserves any admin-edited values
+  // (rotation_order, start/end years, enabled, etc.) across re-runs.
+  // Genre keys must match Discogs's exact genre strings — "Folk,
+  // World, & Country" is one genre (not three), so commas + ampersand
+  // are intentional. 5-night rotation as requested.
+  for (const [order, genre] of [
+    [1, "Blues"],
+    [2, "Folk, World, & Country"],
+    [3, "Jazz"],
+    [4, "Reggae"],
+    [5, "Latin"],
+  ] as [number, string][]) {
+    await getPool().query(
+      `INSERT INTO genre_cache_warm_state (genre_key, rotation_order)
+       VALUES ($1, $2)
+       ON CONFLICT (genre_key) DO NOTHING`,
+      [genre, order],
+    );
+  }
+
   // ── Pseudonym / band-member links between blues_artists rows ─────
   // Symmetric junction table — the same row covers both directions of
   // a link. We normalise (a_id, b_id) to (lo, hi) so a single row per
@@ -7087,6 +7140,176 @@ export async function listBluesArtistLinks(aId: number): Promise<any[]> {
     [aId],
   );
   return r.rows;
+}
+
+// ── Genre cache-warm cron state helpers ──────────────────────────
+// Per-genre rows; every helper takes a genre_key. The scheduler picks
+// today's genre via listAllGenreCacheWarmStates() + (dayOfYear %
+// activeCount) and works only that row's cursor. Per-genre enable
+// flag so individual genres can be paused without touching the others.
+export async function listAllGenreCacheWarmStates(): Promise<any[]> {
+  const r = await getPool().query(
+    `SELECT * FROM genre_cache_warm_state ORDER BY rotation_order ASC, genre_key ASC`,
+  );
+  return r.rows;
+}
+
+export async function getGenreCacheWarmState(genreKey: string): Promise<any> {
+  const r = await getPool().query(
+    `SELECT * FROM genre_cache_warm_state WHERE genre_key = $1`,
+    [genreKey],
+  );
+  return r.rows[0] || null;
+}
+
+export async function updateGenreCacheWarmState(
+  genreKey: string,
+  patch: Record<string, any>,
+): Promise<void> {
+  const allowed = new Set([
+    "rotation_order", "enabled", "manual_override",
+    "start_year", "end_year",
+    "current_year", "current_page",
+    "running", "started_at", "last_tick_at", "last_cached_at",
+    "lifetime_searched", "lifetime_cached", "lifetime_skipped", "lifetime_errors",
+    "cycle_searched", "cycle_cached", "cycle_skipped",
+    "cycle_started_at", "cycle_count",
+    "recent_errors", "recent_cached",
+  ]);
+  const sets: string[] = [];
+  const vals: any[] = [];
+  for (const [k, v] of Object.entries(patch)) {
+    if (!allowed.has(k)) continue;
+    vals.push(
+      (k === "recent_errors" || k === "recent_cached") && v != null
+        ? JSON.stringify(v)
+        : v,
+    );
+    sets.push(`${k} = $${vals.length}`);
+  }
+  if (!sets.length) return;
+  vals.push(genreKey);
+  await getPool().query(
+    `UPDATE genre_cache_warm_state SET ${sets.join(", ")} WHERE genre_key = $${vals.length}`,
+    vals,
+  );
+}
+
+// Atomic "claim a run" for one genre. Flips running false→true so
+// only one worker can be active per genre even if two scheduler
+// ticks race. Returns true if we got the lock.
+export async function tryClaimGenreCacheWarmRun(genreKey: string): Promise<boolean> {
+  const r = await getPool().query(
+    `UPDATE genre_cache_warm_state
+        SET running = true,
+            started_at = NOW(),
+            last_tick_at = NOW()
+      WHERE genre_key = $1 AND running = false
+      RETURNING 1`,
+    [genreKey],
+  );
+  return (r.rowCount ?? 0) > 0;
+}
+
+export async function releaseGenreCacheWarmRun(genreKey: string): Promise<void> {
+  await getPool().query(
+    `UPDATE genre_cache_warm_state SET running = false, last_tick_at = NOW() WHERE genre_key = $1`,
+    [genreKey],
+  );
+}
+
+// Mass release lock for stale-lock recovery at scheduler boot.
+export async function releaseAllStaleGenreCacheWarmRuns(staleMinutes: number = 10): Promise<number> {
+  const r = await getPool().query(
+    `UPDATE genre_cache_warm_state
+        SET running = false
+      WHERE running = true
+        AND (started_at IS NULL OR started_at < NOW() - ($1 || ' minutes')::interval)
+      RETURNING genre_key`,
+    [String(staleMinutes)],
+  );
+  return r.rowCount ?? 0;
+}
+
+export async function recordGenreCacheWarmHit(
+  genreKey: string,
+  title: string,
+  releaseId: number,
+): Promise<void> {
+  await getPool().query(
+    `UPDATE genre_cache_warm_state
+        SET lifetime_cached = lifetime_cached + 1,
+            cycle_cached    = cycle_cached + 1,
+            last_cached_at  = NOW(),
+            recent_cached   = (
+              jsonb_build_array(jsonb_build_object('id', $3::bigint, 'title', $2::text, 'at', NOW()))
+              || (recent_cached - 9)
+            )
+      WHERE genre_key = $1`,
+    [genreKey, title, releaseId],
+  );
+}
+
+export async function recordGenreCacheWarmSkip(genreKey: string): Promise<void> {
+  await getPool().query(
+    `UPDATE genre_cache_warm_state
+        SET lifetime_skipped = lifetime_skipped + 1,
+            cycle_skipped    = cycle_skipped + 1
+      WHERE genre_key = $1`,
+    [genreKey],
+  );
+}
+
+export async function recordGenreCacheWarmSearched(genreKey: string, n: number): Promise<void> {
+  await getPool().query(
+    `UPDATE genre_cache_warm_state
+        SET lifetime_searched = lifetime_searched + $2,
+            cycle_searched    = cycle_searched + $2
+      WHERE genre_key = $1`,
+    [genreKey, n],
+  );
+}
+
+export async function recordGenreCacheWarmError(genreKey: string, msg: string): Promise<void> {
+  await getPool().query(
+    `UPDATE genre_cache_warm_state
+        SET lifetime_errors = lifetime_errors + 1,
+            recent_errors   = (
+              jsonb_build_array(jsonb_build_object('msg', $2::text, 'at', NOW()))
+              || (recent_errors - 9)
+            )
+      WHERE genre_key = $1`,
+    [genreKey, msg.slice(0, 500)],
+  );
+}
+
+export async function resetGenreCacheWarmCycle(genreKey: string): Promise<void> {
+  await getPool().query(
+    `UPDATE genre_cache_warm_state
+        SET current_year     = start_year,
+            current_page     = 1,
+            cycle_searched   = 0,
+            cycle_cached     = 0,
+            cycle_skipped    = 0,
+            cycle_started_at = NOW(),
+            cycle_count      = cycle_count + 1
+      WHERE genre_key = $1`,
+    [genreKey],
+  );
+}
+
+// Existence check the worker uses before fetching a release. We only
+// pay the Discogs RTT if it's not already cached. (kind defaults to
+// 'release' to match how cacheRelease stores its rows.)
+export async function isReleaseCached(
+  discogsId: number,
+  type: "release" | "master" = "release",
+): Promise<boolean> {
+  const r = await getPool().query(
+    `SELECT 1 FROM release_cache WHERE discogs_id = $1 AND type = $2 LIMIT 1`,
+    [discogsId, type],
+  );
+  return (r.rowCount ?? 0) > 0;
 }
 
 
