@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260530.1058" />
+  <link rel="stylesheet" href="/style.css?v=20260530.1108" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260530.1058"></script>
-<script defer src="/shared.js?v=20260530.1058"></script>
+<script defer src="/utils.js?v=20260530.1108"></script>
+<script defer src="/shared.js?v=20260530.1108"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -316,8 +316,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260530.1058"></script>
-<script defer src="/blues-admin.js?v=20260530.1058"></script>
+<script defer src="/modal.js?v=20260530.1108"></script>
+<script defer src="/blues-admin.js?v=20260530.1108"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1006,6 +1006,20 @@ async function loadGenreCacheWarm() {
       const isToday = r.genre_key === todayKey;
       const recentCached = Array.isArray(r.recent_cached) ? r.recent_cached : [];
       const recentErrors = Array.isArray(r.recent_errors) ? r.recent_errors : [];
+      // Caches-per-minute rate from the recent_cached ring's
+      // timestamps. Needs ≥2 samples for a meaningful interval.
+      // Newest is index 0, oldest is the last. Shows on running
+      // cards only.
+      let ratePerMin = null;
+      if (r.running && recentCached.length >= 2) {
+        const newest = new Date(recentCached[0]?.at || 0).getTime();
+        const oldest = new Date(recentCached[recentCached.length - 1]?.at || 0).getTime();
+        const dtMs = newest - oldest;
+        if (dtMs > 0) ratePerMin = (recentCached.length - 1) / (dtMs / 60000);
+      }
+      const ratePill = r.running
+        ? `<span style="padding:0.1rem 0.4rem;border-radius:999px;background:rgba(255,255,255,0.04);color:var(--muted);border:1px solid var(--border);font-size:0.7rem" title="Releases cached per minute, averaged across the last ${recentCached.length} samples in recent_cached.">${ratePerMin == null ? "— / min" : `${ratePerMin.toFixed(1)} / min`}</span>`
+        : "";
       const runningPill = r.running
         ? `<span style="padding:0.1rem 0.4rem;border-radius:999px;background:rgba(125,225,150,0.15);color:#7ed196;border:1px solid rgba(125,225,150,0.4);font-size:0.7rem;font-weight:600">● RUNNING</span>`
         : `<span style="padding:0.1rem 0.4rem;border-radius:999px;background:rgba(255,255,255,0.04);color:var(--muted);border:1px solid var(--border);font-size:0.7rem">○ Idle</span>`;
@@ -1022,10 +1036,16 @@ async function loadGenreCacheWarm() {
             recentCached.slice(0, 5).map(c => `<li>${esc(c.title || "")} <span style="color:var(--muted)">#${esc(c.id)}</span></li>`).join("")
           }</ul>`
         : `<div style="font-style:italic;color:var(--muted);font-size:0.72rem">(none yet this cycle)</div>`;
+      // Errors collapsed by default so a noisy day doesn't blow the
+      // card height. <details> is browser-native: click "N recent
+      // errors" to expand. Hidden entirely when there are none.
       const recentErrorsHtml = recentErrors.length
-        ? `<ul style="margin:0.2rem 0 0;padding-left:1rem;font-size:0.72rem;color:#e88">${
-            recentErrors.slice(0, 3).map(e => `<li>${esc(e.msg || "")}</li>`).join("")
-          }</ul>`
+        ? `<details style="margin-top:0.2rem">
+             <summary style="cursor:pointer;color:#e88;font-size:0.72rem;font-weight:600">${recentErrors.length} recent error${recentErrors.length === 1 ? "" : "s"}</summary>
+             <ul style="margin:0.2rem 0 0;padding-left:1rem;font-size:0.72rem;color:#e88">${
+               recentErrors.map(e => `<li>${esc(e.msg || "")}</li>`).join("")
+             }</ul>
+           </details>`
         : "";
       const cardBorder = isToday
         ? "2px solid var(--accent)"
@@ -1041,6 +1061,7 @@ async function loadGenreCacheWarm() {
           </div>
           <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.4rem">
             ${runningPill}
+            ${ratePill}
             ${enabledPill}${overridePill}
           </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.4rem 0.8rem;font-size:0.76rem;margin-bottom:0.4rem">
