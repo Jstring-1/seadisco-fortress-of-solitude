@@ -675,6 +675,7 @@ function switchView(view, skipPushState = false) {
         gutenberg: document.getElementById("extras-tab-gutenberg"),
         chronam:   document.getElementById("extras-tab-chronam"),
         "blues-archive": document.getElementById("extras-tab-blues-archive"),
+        "cached-blues":  document.getElementById("extras-tab-cached-blues"),
       };
       for (const [k, el] of Object.entries(tabs)) {
         if (el) el.classList.toggle("rr-tab-active", k === view);
@@ -716,15 +717,24 @@ function switchView(view, skipPushState = false) {
         if (baTab) baTab.style.display = baAccess ? "" : "none";
         if (baSep) baSep.style.display = baAccess ? "" : "none";
       };
+      // Cached Blues: admin-only — same gate as Blues Archive.
+      const _syncCachedBlues = () => {
+        const access = !!window._isAdmin;
+        const sep = document.getElementById("extras-tab-cached-blues-sep");
+        const tab = tabs["cached-blues"];
+        if (tab) tab.style.display = access ? "" : "none";
+        if (sep) sep.style.display = access ? "" : "none";
+      };
       _syncYt();
       _syncGb();
       _syncChronam();
       _syncBluesArchive();
+      _syncCachedBlues();
       if (typeof window._isAdmin !== "boolean" && typeof window._ensureAdminFlag === "function") {
         // Fire the admin probe and re-sync once it resolves so the
         // YouTube / Gutenberg / Chronicling America / Blues Archive
         // tabs pop in for admin/demo without requiring a page reload.
-        window._ensureAdminFlag().then(() => { _syncYt(); _syncGb(); _syncChronam(); _syncBluesArchive(); }).catch(() => {});
+        window._ensureAdminFlag().then(() => { _syncYt(); _syncGb(); _syncChronam(); _syncBluesArchive(); _syncCachedBlues(); }).catch(() => {});
       }
     } else {
       _extrasTabs.style.display = "none";
