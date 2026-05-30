@@ -8847,13 +8847,15 @@ function _pdfSafe(s) {
     return t;
 }
 // GET /api/admin/lyrics/export.doc — every lyric as a Word-openable
-// document. Same shape and sort as the PDF (grouped by artist, sorted
-// by title within each artist). Uses the classic HTML-masquerading-
-// as-.doc trick — served with application/msword and a .doc filename,
-// Word / Pages / LibreOffice / Google Docs all open it as a real
-// document with the headings, italic meta, and paragraphs preserved.
-// Unicode-safe (no _pdfSafe pass needed — HTML handles it natively),
-// no new deps, tiny output vs the PDF.
+// plain-text document. Streamed UTF-8 text with .doc filename and
+// application/msword content type so Word / Pages / LibreOffice all
+// open it as a document. No HTML markup — the previous version used
+// HTML-masquerading-as-.doc but the markup was bleeding into the
+// rendered document in some readers. Plain text is the dependable
+// path: artist names get a "=====" underline, lyric titles a "-----",
+// italic meta becomes a parenthesised line, body flows verbatim,
+// blank-line separated lyrics, form-feed (\f) between artists so
+// Word inserts a page break.
 app.get("/api/admin/lyrics/export.doc", async (req, res) => {
     if (!await requireAdmin(req, res))
         return;
@@ -8864,72 +8866,41 @@ app.get("/api/admin/lyrics/export.doc", async (req, res) => {
                  lower(page_title) ASC,
                  page_title ASC`);
         const rows = r.rows;
-        const esc = (s) => String(s ?? "")
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;");
-        const paraHtml = (body) => 
-        // Split on blank lines for paragraphs, single newlines inside a
-        // paragraph become <br>. Mirrors how the plaintext field reads
-        // when rendered as prose.
-        body.split(/\n\s*\n+/).map(p => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("\n");
-        // Build the body incrementally so the response can stream — large
-        // archives are ~5 MB of HTML and we'd rather not buffer it all.
         res.setHeader("Content-Type", "application/msword; charset=utf-8");
         res.setHeader("Content-Disposition", `attachment; filename="seadisco-lyrics-${new Date().toISOString().slice(0, 10)}.doc"`);
-        res.write(`<!DOCTYPE html>
-<html xmlns:o="urn:schemas-microsoft-com:office:office"
-      xmlns:w="urn:schemas-microsoft-com:office:word"
-      xmlns="http://www.w3.org/TR/REC-html40">
-<head>
-  <meta charset="utf-8">
-  <title>SeaDisco Blues Archive — Lyrics</title>
-  <style>
-    body  { font-family: "Times New Roman", Times, serif; font-size: 14pt; line-height: 1.45; margin: 1in; }
-    h1    { font-size: 28pt; margin: 0 0 0.5em; page-break-before: always; }
-    h1.first { page-break-before: avoid; }
-    h2    { font-size: 18pt; margin: 1.2em 0 0.2em; }
-    .meta { font-style: italic; color: #555; font-size: 12pt; margin: 0 0 0.4em; }
-    .cover-title { text-align: center; font-size: 32pt; font-weight: bold; margin-top: 2in; }
-    .cover-sub   { text-align: center; font-style: italic; font-size: 16pt; margin-top: 0.4em; }
-    .cover-meta  { text-align: center; font-size: 12pt; margin-top: 1.5em; }
-    .sep         { border: 0; border-top: 1px solid #ddd; margin: 1.2em 0; }
-    .empty       { color: #999; font-style: italic; }
-  </style>
-</head>
-<body>
-  <div class="cover-title">Blues Archive</div>
-  <div class="cover-sub">Lyrics, grouped by artist</div>
-  <div class="cover-meta">${rows.length.toLocaleString()} lyrics · ${esc(new Date().toISOString().slice(0, 10))}</div>
-`);
+        // ── Cover ────────────────────────────────────────────────────────
+        res.write("Blues Archive\n" +
+            "Lyrics, grouped by artist\n" +
+            "\n" +
+            `${rows.length.toLocaleString()} lyrics  ${new Date().toISOString().slice(0, 10)}\n` +
+            "\n");
         let currentArtist = null;
         let firstArtist = true;
         for (const row of rows) {
             const artistKey = (String(row.artist || "").trim()) || "(Unknown artist)";
             if (artistKey !== currentArtist) {
                 currentArtist = artistKey;
-                res.write(`<h1${firstArtist ? ' class="first"' : ""}>${esc(artistKey)}</h1>\n`);
+                // Form-feed makes Word break to a new page between artists.
+                if (!firstArtist)
+                    res.write("\f\n");
                 firstArtist = false;
+                res.write(`${artistKey}\n${"=".repeat(Math.max(3, artistKey.length))}\n\n`);
             }
-            res.write(`<h2>${esc(row.page_title || "Untitled")}</h2>\n`);
+            const title = String(row.page_title || "Untitled");
+            res.write(`${title}\n${"-".repeat(Math.max(3, title.length))}\n`);
             const metaParts = [];
             if (row.tuning)
                 metaParts.push(String(row.tuning));
             if (row.first_release_year)
                 metaParts.push(String(row.first_release_year));
             if (metaParts.length) {
-                res.write(`<p class="meta">${esc(metaParts.join("  ·  "))}</p>\n`);
+                res.write(`(${metaParts.join("  ·  ")})\n`);
             }
+            res.write("\n");
             const body = String(row.plaintext || "").trim();
-            if (body) {
-                res.write(paraHtml(body) + "\n");
-            }
-            else {
-                res.write(`<p class="empty">(no text yet)</p>\n`);
-            }
-            res.write(`<hr class="sep">\n`);
+            res.write(body ? body : "(no text yet)");
+            res.write("\n\n\n");
         }
-        res.write(`</body></html>\n`);
         res.end();
     }
     catch (err) {
