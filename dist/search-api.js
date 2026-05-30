@@ -8948,7 +8948,11 @@ app.get("/api/admin/lyrics/export.pdf", async (req, res) => {
                 continue;
             doc.font("Times-Roman").fontSize(9).fillColor("#888");
             const y = doc.page.height - doc.page.margins.bottom + 20;
-            doc.text(`${i} / ${range.count - 1}`, doc.page.margins.left, y, { align: "center", width: doc.page.width - doc.page.margins.left - doc.page.margins.right });
+            // lineBreak:false is critical — without it, writing at y below
+            // the content area makes text() think the line overflowed the
+            // page and silently appends a new page after every switchToPage,
+            // pushing footers onto blank pages instead of content pages.
+            doc.text(`${i} / ${range.count - 1}`, doc.page.margins.left, y, { align: "center", width: doc.page.width - doc.page.margins.left - doc.page.margins.right, lineBreak: false });
         }
         doc.end();
     }
@@ -9116,7 +9120,12 @@ app.get("/api/admin/blues/export.pdf", async (req, res) => {
                 continue;
             doc.font("Times-Roman").fontSize(9).fillColor("#888");
             const y = doc.page.height - doc.page.margins.bottom + 20;
-            doc.text(`${i} / ${range.count - 1}`, doc.page.margins.left, y, { align: "center", width: doc.page.width - doc.page.margins.left - doc.page.margins.right });
+            // lineBreak:false is critical — without it, writing at y below
+            // the content area makes text() think the line overflowed the
+            // page and silently appends a new page. Cost on a 100-page
+            // doc: ~100 spurious blank pages with the footers landing on
+            // the WRONG (new) pages instead of the content pages.
+            doc.text(`${i} / ${range.count - 1}`, doc.page.margins.left, y, { align: "center", width: doc.page.width - doc.page.margins.left - doc.page.margins.right, lineBreak: false });
         }
         doc.end();
     }
