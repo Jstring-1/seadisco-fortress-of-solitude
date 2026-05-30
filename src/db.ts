@@ -6976,65 +6976,6 @@ export async function listBluesArchiveReleases(opts: {
   return { rows: r.rows, total };
 }
 
-// Timeline view: every release from blues_artists.discogs_releases
-// whose year falls in [fromYear, toYear] (inclusive). Joined with
-// release_cache when available so each row can carry a small cover
-// thumb URL (the cache only has rows for releases a user has opened
-// or that the cache-warm job has touched — others come back with
-// thumb=null and the UI falls back to a placeholder). Sorted by
-// year ASC then title ASC. Capped by limit (default 500 per the
-// timeline's intended 1925–1930 use case).
-export async function listBluesTimelineReleases(opts: {
-  fromYear: number;
-  toYear: number;
-  limit?: number;
-} = { fromYear: 1925, toYear: 1930 }): Promise<{ rows: any[]; total: number }> {
-  const fromY = Math.max(1900, Math.min(2100, opts.fromYear | 0));
-  const toY   = Math.max(fromY, Math.min(2100, opts.toYear | 0));
-  const limit = Math.max(1, Math.min(2000, opts.limit ?? 500));
-  const fromSql = `
-    FROM blues_artists a
-    CROSS JOIN LATERAL jsonb_array_elements(coalesce(a.discogs_releases, '[]'::jsonb)) AS rel
-    LEFT JOIN release_cache rc
-      ON rc.discogs_id = NULLIF(rel->>'id','')::int
-     AND rc.type       = COALESCE(NULLIF(rel->>'type',''), 'release')
-  `;
-  const whereSql = `
-    WHERE (rel ? 'id') AND (rel->>'id') ~ '^[0-9]+$'
-      AND (rel->>'year') ~ '^[0-9]+$'
-      AND (rel->>'year')::int BETWEEN $1 AND $2
-  `;
-  const totalR = await getPool().query(
-    `SELECT COUNT(*)::int AS n ${fromSql} ${whereSql}`,
-    [fromY, toY],
-  );
-  const total = totalR.rows[0]?.n ?? 0;
-  const r = await getPool().query(
-    `SELECT a.id          AS artist_id,
-            a.name        AS artist_name,
-            a.photo_url   AS artist_photo,
-            a.discogs_id  AS artist_discogs_id,
-            (rel->>'id')::bigint              AS release_id,
-            COALESCE(rel->>'type', 'release') AS release_type,
-            COALESCE(rel->>'title','')        AS release_title,
-            (rel->>'year')::int               AS release_year,
-            rel->'label'                      AS release_label,
-            COALESCE(
-              rc.data->'images'->0->>'thumb',
-              rc.data->'images'->0->>'uri150',
-              rc.data->'images'->0->>'uri'
-            ) AS cover_thumb
-       ${fromSql}
-       ${whereSql}
-       ORDER BY (rel->>'year')::int ASC,
-                lower(coalesce(rel->>'title','')) ASC,
-                lower(a.name) ASC
-       LIMIT $3`,
-    [fromY, toY, limit],
-  );
-  return { rows: r.rows, total };
-}
-
 // Full artist record + matched lyrics + releases sorted oldest→newest.
 // Lyrics match by artist_id (canonical FK) OR — for legacy rows not
 // yet backfilled — by case-insensitive name. The name fallback keeps
