@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260530.1040" />
+  <link rel="stylesheet" href="/style.css?v=20260530.1051" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260530.1040"></script>
-<script defer src="/shared.js?v=20260530.1040"></script>
+<script defer src="/utils.js?v=20260530.1051"></script>
+<script defer src="/shared.js?v=20260530.1051"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -316,8 +316,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260530.1040"></script>
-<script defer src="/blues-admin.js?v=20260530.1040"></script>
+<script defer src="/modal.js?v=20260530.1051"></script>
+<script defer src="/blues-admin.js?v=20260530.1051"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -965,7 +965,7 @@ async function loadGenreCacheWarm() {
   try {
     const r = await apiFetch("/api/admin/genre-cache-warm/status");
     if (!r.ok) { el.innerHTML = `<span style="color:#e88">Failed: HTTP ${r.status}</span>`; return; }
-    const { rows = [], release_cache_total } = await r.json();
+    const { rows = [], release_cache_total, rotation_anchor_doy } = await r.json();
     if (!rows.length) { el.textContent = "(no genre rows seeded — restart the server)"; return; }
     const esc = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/'/g,"&#39;");
     const fmt = n => Number(n || 0).toLocaleString();
@@ -974,28 +974,29 @@ async function loadGenreCacheWarm() {
     // it client-side so the UI can highlight "today's genre" without
     // an extra endpoint roundtrip.
     const active = rows.filter(r => r.enabled).sort((a, b) => a.rotation_order - b.rotation_order);
+    const anchor = Number.isFinite(rotation_anchor_doy) ? Number(rotation_anchor_doy) : 0;
+    const today = _gcwDayOfYearPacific();
     const todayKey = active.length
-      ? active[_gcwDayOfYearPacific() % active.length].genre_key
+      ? active[(((today - anchor) % active.length) + active.length) % active.length].genre_key
       : null;
     const anyRunning = rows.some(r => r.running);
 
-    // Top summary row + blues-only Start/Stop controls. Start/Stop
-    // always operate on Blues per the admin's preference — other
-    // genres can still be enabled/disabled + reset from their cards,
-    // they just don't have manual kick buttons.
+    // Top summary row. Start/Stop are per-card now (one set per
+    // genre); a global single-genre run lock prevents overlap server-
+    // side so Start is disabled on every other card while one genre
+    // is running.
     const summary = `
-      <div style="display:flex;gap:0.8rem;flex-wrap:wrap;align-items:center;margin-bottom:0.4rem">
+      <div style="display:flex;gap:0.8rem;flex-wrap:wrap;align-items:center;margin-bottom:0.8rem">
         <span style="font-size:0.78rem;color:var(--muted)">release_cache total: <strong style="color:var(--text)">${fmt(release_cache_total)}</strong></span>
         <span style="font-size:0.78rem;color:var(--muted)">Today's pick:
           ${todayKey
             ? `<strong style="color:var(--accent)">${esc(todayKey)}</strong>`
             : `<em>(no enabled genre)</em>`}
         </span>
-      </div>
-      <div style="display:flex;gap:0.5rem;flex-wrap:wrap;margin-bottom:0.8rem">
-        <button class="admin-btn" onclick="genreCacheWarmStart('Blues')" title="Kick the Blues worker on the next tick (within 60s), bypassing the 1a-6a window.">▶ Start Blues now</button>
-        <button class="admin-btn" onclick="genreCacheWarmStop('Blues')" title="Signal the Blues worker to wind down at the next safe boundary.">■ Stop Blues</button>
-        <span style="font-size:0.72rem;color:var(--muted);align-self:center">(other genres run only on their scheduled night — toggle/reset them on their card below)</span>
+        <button class="admin-btn" onclick="genreCacheWarmAnchorToday()" title="Re-anchor the rotation so today picks the first slot (Blues, by default). Use this if the rotation drifted onto the wrong genre.">Anchor today → ${esc(active.length ? active[0].genre_key : "?")}</button>
+        ${anyRunning
+          ? `<span style="font-size:0.72rem;color:var(--accent);margin-left:auto">One genre at a time — Start is disabled on other cards while a worker is active.</span>`
+          : ""}
       </div>
     `;
 
@@ -1065,6 +1066,9 @@ async function loadGenreCacheWarm() {
             </div>
           </div>
           <div style="display:flex;gap:0.4rem;flex-wrap:wrap">
+            ${r.running
+              ? `<button class="admin-btn" onclick="genreCacheWarmStop('${safeKey}')" title="Signal this genre's worker to wind down at the next safe boundary.">■ Stop</button>`
+              : `<button class="admin-btn" ${anyRunning ? "disabled" : ""} onclick="genreCacheWarmStart('${safeKey}')" title="${anyRunning ? "Another genre is running — stop it first." : "Kick this genre's worker immediately, bypassing the 1a-6a window."}">▶ Start now</button>`}
             <button class="admin-btn" onclick="genreCacheWarmToggleAuto('${safeKey}')" title="Toggle this genre's slot in the nightly rotation.">${r.enabled ? "Disable" : "Enable"}</button>
             <button class="admin-btn" onclick="genreCacheWarmReset('${safeKey}')" title="Reset this genre's cursor to start_year and zero its cycle counters.">Reset cursor</button>
           </div>
@@ -1103,6 +1107,11 @@ function _gcwDayOfYearPacific() {
 async function genreCacheWarmStart(genre) {
   try {
     const r = await apiFetch(`/api/admin/genre-cache-warm/start?genre=${encodeURIComponent(genre)}`, { method: "POST" });
+    if (r.status === 409) {
+      const body = await r.json().catch(() => ({}));
+      alert(body.error || "Another genre is currently running. Stop it first.");
+      return;
+    }
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     loadGenreCacheWarm();
   } catch (e) { alert("Start failed: " + ((e && e.message) || e)); }
@@ -1120,6 +1129,14 @@ async function genreCacheWarmToggleAuto(genre) {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     loadGenreCacheWarm();
   } catch (e) { alert("Toggle failed: " + ((e && e.message) || e)); }
+}
+async function genreCacheWarmAnchorToday() {
+  if (!confirm("Anchor the rotation so TODAY picks the first slot (Blues by default). Tomorrow picks the second slot, etc. Use this when the rotation has drifted onto the wrong genre.")) return;
+  try {
+    const r = await apiFetch("/api/admin/genre-cache-warm/anchor-today", { method: "POST" });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    loadGenreCacheWarm();
+  } catch (e) { alert("Anchor failed: " + ((e && e.message) || e)); }
 }
 async function genreCacheWarmReset(genre) {
   if (!confirm(`Reset cursor for "${genre}" to its start_year and zero its cycle counters? Lifetime stats are preserved.`)) return;
