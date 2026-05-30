@@ -172,8 +172,14 @@
     // strategy to apply (release/master/artist).
     const badges = _cbBadgesForRelease(id, type);
     const titleAttr = artist ? `${artist} - ${title}` : title;
+    // data-card-id + data-card-type are what shared.js's
+    // MutationObserver-driven enrichment pass (_sdEnrichWideCards)
+    // selects on; without data-card-id the cards stay sparse and
+    // tracks/images strip never get injected. Same data-release-id
+    // kept too for any release-specific helpers that key off it.
     return `
       <a class="card card-type-${_esc(type)}" href="#"
+         data-card-id="${id}"
          data-card-type="${_esc(type)}"
          data-release-id="${id}"
          onclick="event.preventDefault();event.stopPropagation();_cbOpenRelease(${id}, '${_esc(type)}', '${_esc(safeUrl)}')"
@@ -236,10 +242,16 @@
   }
   window._cbClearFilters = _cbClearFilters;
 
-  // Defer to the existing release-modal opener if blues-archive.js is
-  // loaded (which it is for admin users), else fall back to opening
-  // discogs.com directly.
+  // Cards open the release modal with skipStats:true so the
+  // marketplace-stats fetch (which goes to Discogs and burns rate
+  // limit) is bypassed — this view is local-db only. Prefer
+  // openModal directly when available so we can pass the flag;
+  // fall back to _baOpenRelease (no flag) or the discogs.com link
+  // as last-resort.
   function _cbOpenRelease(id, type, url) {
+    if (typeof window.openModal === "function") {
+      try { window.openModal(null, id, type, url, { skipStats: true }); return; } catch {}
+    }
     if (typeof window._baOpenRelease === "function") {
       try { window._baOpenRelease(id, type, url); return; } catch {}
     }
