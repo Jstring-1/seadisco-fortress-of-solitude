@@ -84,15 +84,15 @@ function initBluesArchiveView() {
     } catch {}
   })();
   // Lazy-load /blues-admin.js for admins so the bulk-Discogs job
-  // status + lyrics scrape polling auto-attach to anything already
-  // running on the server (e.g. user reloaded mid-scrape). Non-
-  // critical path — silent on failure. Polling itself is started
-  // by lyricsPollScrapeOnce + _bluesResumeBulkIfRunning once loaded.
+  // status auto-attaches to anything already running on the server.
+  // Non-critical path — silent on failure. The lyrics-scrape
+  // auto-poll was removed: the corpus is stable, no scrape runs are
+  // expected, and the polling loop wasn't self-cancelling cleanly
+  // after the scrape UI was retired (cancel code referenced the now-
+  // deleted #lyrics-scrape-btn, threw on null, the try/catch
+  // swallowed it, and the 5s setInterval kept firing forever).
   if (window._isAdmin && typeof window._sdLoadModule === "function") {
     window._sdLoadModule("/blues-admin.js").then(() => {
-      // Reattach to any in-flight lyrics scrape (start polling for
-      // live progress; the poll self-cancels when the job finishes).
-      try { window.lyricsStartPolling?.(); } catch {}
       try { window._bluesResumeBulkIfRunning?.("blues-enrich-discogs-full-btn", "/api/admin/blues/enrich-discogs-full/status", "Get all info from Discogs"); } catch {}
     }).catch(() => { /* non-critical */ });
   }
