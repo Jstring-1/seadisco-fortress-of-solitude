@@ -187,7 +187,7 @@ function mvToggleFav(dot, id) {
     });
 }
 
-function openModal(event, id, type, discogsUrl) {
+function openModal(event, id, type, discogsUrl, opts) {
   if (event) event.preventDefault();
   _markVisited(id);
   _recordHistory(id, type);
@@ -202,6 +202,10 @@ function openModal(event, id, type, discogsUrl) {
 
   const cachedItem = (typeof itemCache !== 'undefined' ? itemCache.get(String(id)) : null) ?? { type, id };
   const endpoint = type === "master" ? "master" : "release";
+  // opts.skipStats=true: bypass the marketplace-stats fetch (used by
+  // the Cached Blues view where only local-db data is desired — no
+  // Discogs rate-limit consumption for price/community fields).
+  const skipStats = !!(opts && opts.skipStats);
   Promise.all([
     apiFetch(`${API}/${endpoint}/${id}`).then(async r => {
       // Anon users get 401 on cache-miss for /release|/master. Don't
@@ -223,7 +227,9 @@ function openModal(event, id, type, discogsUrl) {
       }
       return r.json();
     }),
-    apiFetch(`${API}/marketplace-stats/${id}?type=${type}`).then(r => r.ok ? r.json() : null).catch(() => null),
+    (skipStats
+      ? Promise.resolve(null)
+      : apiFetch(`${API}/marketplace-stats/${id}?type=${type}`).then(r => r.ok ? r.json() : null).catch(() => null)),
   ])
     .then(([d, stats]) => {
       document.getElementById("modal-loading").style.display = "none";

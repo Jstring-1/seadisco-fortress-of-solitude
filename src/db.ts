@@ -7188,9 +7188,14 @@ export async function listCachedBluesReleases(opts: CachedBluesFilters = {}): Pr
   const dir = opts.order === "asc" ? "ASC" : "DESC";
   // For artist_count asc (least-first), nulls are obvious noise —
   // push them last so the curator sees real artists first.
+  // bc.discogs_id is the final tiebreaker so LIMIT/OFFSET pagination
+  // is stable: without a unique key in the ORDER BY, ties on the
+  // primary sort + release_year + title would let PostgreSQL shuffle
+  // those rows between page 1 and page 2, causing "Next page doesn't
+  // respect my sort" symptoms.
   const orderSql = random
     ? "ORDER BY random()"
-    : `ORDER BY ${sortCol} ${dir} NULLS LAST, bc.release_year ASC NULLS LAST, lower(bc.release_title) ASC`;
+    : `ORDER BY ${sortCol} ${dir} NULLS LAST, bc.release_year ASC NULLS LAST, lower(bc.release_title) ASC, bc.discogs_id ASC`;
   const limit  = Math.max(1, Math.min(200, opts.limit ?? 60));
   const offset = Math.max(0, opts.offset ?? 0);
 
