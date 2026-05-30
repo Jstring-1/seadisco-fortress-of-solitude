@@ -9383,6 +9383,26 @@ app.get("/api/admin/genre-cache-warm/status", async (req, res) => {
     try {
         const rows = await listAllGenreCacheWarmStates();
         const totalR = await getPool().query(`SELECT COUNT(*)::int AS n FROM release_cache WHERE type = 'release'`);
+        // Per-genre count: how many cached releases carry this genre on
+        // their JSONB metadata. Uses the JSONB ? operator (text-in-array)
+        // which is index-friendly under a GIN index on data->'genres' but
+        // is fine without one at our scale. ILIKE fallback for any rows
+        // whose genres array is stored as a flat string instead of an
+        // array — rare but cheap to OR in.
+        for (const row of rows) {
+            try {
+                const cntR = await getPool().query(`SELECT COUNT(*)::int AS n FROM release_cache
+            WHERE type = 'release'
+              AND (
+                (jsonb_typeof(data->'genres') = 'array' AND data->'genres' ? $1)
+                OR (jsonb_typeof(data->'genres') = 'string' AND data->>'genres' = $1)
+              )`, [row.genre_key]);
+                row.cached_count = cntR.rows[0]?.n ?? 0;
+            }
+            catch {
+                row.cached_count = null;
+            }
+        }
         res.json({
             rows,
             release_cache_total: totalR.rows[0]?.n ?? 0,
