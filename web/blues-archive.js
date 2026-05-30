@@ -1953,6 +1953,7 @@ function _baRenderReleasesTable() {
   rowsEl.innerHTML = `
     <table class="api-log-table" style="font-size:0.84rem;width:100%;table-layout:fixed">
       <colgroup>
+        <col style="width:44px">
         <col style="width:60px">
         <col>
         <col style="width:24%">
@@ -1961,6 +1962,7 @@ function _baRenderReleasesTable() {
         <col style="width:1%">
       </colgroup>
       <thead><tr>
+        <th style="width:44px"></th>
         ${_baSortTh("Year",   "year",   S, "_baSortReleasesList", "width:60px;text-align:right;padding-right:0.9rem")}
         ${_baSortTh("Title",  "title",  S, "_baSortReleasesList")}
         ${_baSortTh("Artist", "artist", S, "_baSortReleasesList")}
@@ -1995,7 +1997,17 @@ function _baReleaseRowHtml(row) {
   const yrHtml = yr ? `<span style="font-variant-numeric:tabular-nums">${yr}</span>` : `<span style="color:var(--muted)">—</span>`;
   const fullTitle  = String(row.release_title || "(untitled)");
   const fullArtist = String(row.artist_name || "");
+  // Cover thumb when release_cache has the release; placeholder
+  // otherwise. Click opens the release modal (same as Title).
+  const thumb = row.cover_thumb || "";
+  const thumbInner = thumb
+    ? `<img src="${escHtml(thumb)}" alt="" loading="lazy" style="width:36px;height:36px;object-fit:cover;border-radius:3px;display:block;background:var(--surface-raised)" />`
+    : `<div style="width:36px;height:36px;border-radius:3px;background:var(--surface-raised);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:0.9rem">♪</div>`;
+  const thumbHtml = id
+    ? `<a href="#" onclick="event.preventDefault();event.stopPropagation();_baOpenRelease(${id}, '${type}', '${escHtml(url)}')" title="Open ${type} popup">${thumbInner}</a>`
+    : thumbInner;
   return `<tr data-release-id="${id || ""}">
+    <td style="padding:0.2rem 0.3rem">${thumbHtml}</td>
     <td style="text-align:right;font-size:0.82rem;padding-right:0.9rem;white-space:nowrap">${yrHtml}</td>
     <td style="padding-left:0.4rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullTitle)}">${titleHtml}</td>
     <td style="color:var(--text);padding-left:0.6rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(fullArtist)}">${artistHtml}</td>

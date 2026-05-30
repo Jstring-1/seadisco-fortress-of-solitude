@@ -270,6 +270,7 @@ function switchView(view, skipPushState = false) {
   const gutenbergView = document.getElementById("gutenberg-view");
   const chronamView   = document.getElementById("chronam-view");
   const bluesArchiveView = document.getElementById("blues-archive-view");
+  const cachedBluesView  = document.getElementById("cached-blues-view");
   if (!skipPushState) {
     // Preserve existing query params across view switches — only `v` is
     // rewritten. Drop view-specific transient state (`tab` from LOC /
@@ -283,7 +284,7 @@ function switchView(view, skipPushState = false) {
       const tab = _cwTab || "collection";
       qs.set("v", tab);
       history.pushState({ view, tab }, "", "?" + qs.toString());
-    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive" || view === "youtube" || view === "gutenberg" || view === "chronam" || view === "blues-archive") {
+    } else if (view === "info" || view === "privacy" || view === "terms" || view === "wanted" || view === "account" || view === "loc" || view === "wiki" || view === "archive" || view === "youtube" || view === "gutenberg" || view === "chronam" || view === "blues-archive" || view === "cached-blues") {
       qs.set("v", view);
       history.pushState({ view }, "", "?" + qs.toString());
     } else {
@@ -312,6 +313,7 @@ function switchView(view, skipPushState = false) {
   if (gutenbergView) gutenbergView.style.display = "none";
   if (chronamView) chronamView.style.display = "none";
   if (bluesArchiveView) bluesArchiveView.style.display = "none";
+  if (cachedBluesView)  cachedBluesView.style.display  = "none";
 
   // Memory hygiene: empty the heaviest result grids belonging to
   // views we're not currently showing. Decoded image bitmaps inside
@@ -495,6 +497,25 @@ function switchView(view, skipPushState = false) {
     if (typeof initBluesArchiveView === "function") initBluesArchiveView();
     else if (typeof window._sdLoadModule === "function") {
       window._sdLoadModule("/blues-archive.js").then(() => window.initBluesArchiveView?.()).catch(() => {});
+    }
+  } else if (view === "cached-blues") {
+    // Admin-only — Discovery view of every release_cache row tagged
+    // Blues. Same signed-in + admin gate as blues-archive.
+    if (!_sdGateSignedInView()) return;
+    if (!window._isAdmin) {
+      if (typeof showToast === "function") {
+        showToast("Cached Blues is admin-only.", "info");
+      }
+      switchView("search", true);
+      return;
+    }
+    if (cachedBluesView) cachedBluesView.style.display = "block";
+    if (mainForm) mainForm.style.display = "none";
+    if (recordsWrap) recordsWrap.style.display = "none";
+    if (wantedWrap) wantedWrap.style.display = "none";
+    if (typeof initCachedBluesView === "function") initCachedBluesView();
+    else if (typeof window._sdLoadModule === "function") {
+      window._sdLoadModule("/cached-blues.js").then(() => window.initCachedBluesView?.()).catch(() => {});
     }
   } else if (view === "wiki") {
     if (wikiView) wikiView.style.display = "block";
