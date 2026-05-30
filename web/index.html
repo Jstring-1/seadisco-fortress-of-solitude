@@ -71,7 +71,7 @@
        <script async> tag for clerk-js so the bundle starts downloading
        before shared.js is even parsed. Saves ~300–500ms on cold loads. -->
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260530.1238" />
+  <link rel="stylesheet" href="/style.css?v=20260530.1255" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GYEHWV1B03"></script>
@@ -109,7 +109,7 @@
      across external scripts, and defer'd scripts run before DOMContentLoaded,
      so inline bootstrap calls (renderSharedHeader/renderSharedFooter below)
      are wrapped in a DCL listener to wait until shared.js has executed. -->
-<script defer src="/shared.js?v=20260530.1238"></script>
+<script defer src="/shared.js?v=20260530.1255"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ spa: true, active: "search", iconNav: true }));</script>
 <div id="search-view">
 
@@ -1111,6 +1111,42 @@ e.g.  miles davis | coltrane
   <div id="blues-archive-detail" style="display:none"></div>
 </div>
 
+<!-- Cached Blues view — admin-only Discovery surface that lists
+     every release_cache row tagged Blues, with sort + filters.
+     Lazy-loaded /cached-blues.js fetches /api/admin/cached-blues
+     and renders the card grid into #cb-content. -->
+<div id="cached-blues-view" class="content-narrow" style="display:none">
+  <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.8rem;flex-wrap:wrap">
+    <h2 style="margin:0;font-size:1.05rem">Cached Blues</h2>
+    <span style="font-size:0.78rem;color:var(--muted)">Every cached release tagged Blues. Sort by artist-release-count ascending to find obscure ones.</span>
+    <button type="button" class="archive-btn" onclick="if(typeof _cbLoad==='function')_cbLoad()" title="Refetch from /api/admin/cached-blues">↻ Refresh</button>
+    <span id="cb-status" style="font-size:0.78rem;color:var(--muted);margin-left:auto"></span>
+  </div>
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:0.4rem;margin-bottom:0.8rem">
+    <input id="cb-q" type="search" placeholder="Search title or artist…" oninput="_cbFilterChanged()" style="padding:0.4rem 0.6rem;font-size:0.86rem">
+    <input id="cb-year-from" type="number" placeholder="Year from" oninput="_cbFilterChanged()" style="padding:0.4rem 0.6rem;font-size:0.86rem">
+    <input id="cb-year-to"   type="number" placeholder="Year to" oninput="_cbFilterChanged()" style="padding:0.4rem 0.6rem;font-size:0.86rem">
+    <input id="cb-country"   type="search" placeholder="Country (e.g. US)" oninput="_cbFilterChanged()" style="padding:0.4rem 0.6rem;font-size:0.86rem">
+    <input id="cb-format"    type="search" placeholder="Format (e.g. Shellac)" oninput="_cbFilterChanged()" style="padding:0.4rem 0.6rem;font-size:0.86rem">
+    <input id="cb-label"     type="search" placeholder="Label" oninput="_cbFilterChanged()" style="padding:0.4rem 0.6rem;font-size:0.86rem">
+    <select id="cb-sort" onchange="_cbFilterChanged()" style="padding:0.4rem 0.6rem;font-size:0.86rem">
+      <option value="cached_at">Sort: Recently cached</option>
+      <option value="artist_count">Sort: Artist's release count</option>
+      <option value="year">Sort: Year</option>
+      <option value="title">Sort: Title</option>
+      <option value="artist">Sort: Artist name</option>
+      <option value="random">Sort: Random</option>
+    </select>
+    <select id="cb-order" onchange="_cbFilterChanged()" style="padding:0.4rem 0.6rem;font-size:0.86rem">
+      <option value="desc">↓ Desc / Most</option>
+      <option value="asc">↑ Asc / Least</option>
+    </select>
+    <button type="button" class="archive-btn" onclick="_cbClearFilters()" title="Reset every filter input">Clear</button>
+  </div>
+  <div id="cb-content">Loading…</div>
+  <div id="cb-pager" style="display:flex;justify-content:center;gap:0.4rem;margin-top:0.8rem;font-size:0.84rem"></div>
+</div>
+
 <!-- Reader overlay — full-viewport reading surface that hosts the
      book HTML body. Outside-click closes (no confirm; auto-bookmark
      is flushed on close so nothing is lost). -->
@@ -1641,13 +1677,13 @@ e.g.  miles davis | coltrane
      and load lazily via _sdLoadModule when switchView('account') fires
      and when the orders panel actually renders. Saves ~15 KB and 2
      round trips on every non-Account page load. -->
-<script defer src="/utils.js?v=20260530.1238"></script>
-<script defer src="/search.js?v=20260530.1238"></script>
-<script defer src="/collection.js?v=20260530.1238"></script>
+<script defer src="/utils.js?v=20260530.1255"></script>
+<script defer src="/search.js?v=20260530.1255"></script>
+<script defer src="/collection.js?v=20260530.1255"></script>
 <!-- modal.js must load BEFORE app.js so the popup-restore IIFE can find
      openWikiPopup / openModal / openVersionPopup / openVideo on URL load. -->
-<script defer src="/modal.js?v=20260530.1238"></script>
-<script defer src="/app.js?v=20260530.1238"></script>
+<script defer src="/modal.js?v=20260530.1255"></script>
+<script defer src="/app.js?v=20260530.1255"></script>
 <!-- loc.js + queue.js stay eager because the cross-source queue's
      auto-advance dispatches into _locPlay (loc.js) and openVideo
      (modal.js) without going through a view switch. archive.js,
@@ -1658,13 +1694,13 @@ e.g.  miles davis | coltrane
      dependency of account.js's loadOrdersSection). After
      window.load they're idle-preloaded so a subsequent nav into
      those views is instant. -->
-<script defer src="/loc.js?v=20260530.1238"></script>
-<script defer src="/queue.js?v=20260530.1238"></script>
+<script defer src="/loc.js?v=20260530.1255"></script>
+<script defer src="/queue.js?v=20260530.1255"></script>
 <script>
   // Pin the cache-bust version that _sdLoadModule will use when
   // pulling lazy scripts on demand. Matches the static <script>
   // version above so the SW + browser cache stay aligned.
-  window._SD_LAZY_VERSION = "20260530.1238";
+  window._SD_LAZY_VERSION = "20260530.1255";
   // Idle-preload the lazy view modules once the critical path is
   // done painting so that a subsequent nav into Archive / YouTube /
   // the inventory editor is instant. Bail if the page has already
@@ -1694,8 +1730,8 @@ e.g.  miles davis | coltrane
      service-worker registration, fetch fallback, and online/offline
      detection. With offline mode disabled (the default) these are
      near-no-ops; the app behaves identically to having no SW. -->
-<script defer src="/idb.js?v=20260530.1238"></script>
-<script defer src="/offline.js?v=20260530.1238"></script>
+<script defer src="/idb.js?v=20260530.1255"></script>
+<script defer src="/offline.js?v=20260530.1255"></script>
 
 </body>
 </html>
