@@ -46,8 +46,30 @@ export class DiscogsClient {
         }
         const fullUrl = url.toString();
         const headers = this.getAuthHeaders("GET", fullUrl);
+        // 30 second hard timeout. Prevents a stalled Discogs socket from
+        // locking any caller (sync, background cache-warm worker, search
+        // endpoints) indefinitely. AbortController fires the abort signal
+        // when the timer expires; fetch then rejects with an AbortError
+        // that propagates to the caller as a clear timeout message.
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 30_000);
         const start = Date.now();
-        const response = await fetch(fullUrl, { headers });
+        let response;
+        try {
+            response = await fetch(fullUrl, { headers, signal: controller.signal });
+        }
+        catch (err) {
+            const ms = Date.now() - start;
+            const cleanPath = path.replace(/token=[^&]+/g, "token=***");
+            logApiRequest({ service: "discogs", endpoint: `${BASE_URL}${cleanPath}`, statusCode: 0, success: false, durationMs: ms, context: "client" }).catch(() => { });
+            if (err?.name === "AbortError") {
+                throw new Error(`Discogs API timeout after 30s: ${cleanPath}`);
+            }
+            throw err;
+        }
+        finally {
+            clearTimeout(timer);
+        }
         const ms = Date.now() - start;
         const cleanPath = path.replace(/token=[^&]+/g, "token=***");
         logApiRequest({ service: "discogs", endpoint: `${BASE_URL}${cleanPath}`, statusCode: response.status, success: response.ok, durationMs: ms, context: "client" }).catch(() => { });

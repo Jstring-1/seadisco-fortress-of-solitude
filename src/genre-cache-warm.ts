@@ -101,6 +101,40 @@ function _sleep(ms: number): Promise<void> {
   return new Promise(r => setTimeout(r, ms));
 }
 
+// Discogs throws plain Error("Discogs API error 503: ...") /
+// "Discogs API timeout after 30s" / network-level fetch errors. All
+// of those are worth retrying for a long-running background job —
+// 4xx (other than 429) are permanent so we don't retry those.
+function _isTransientDiscogsError(err: any): boolean {
+  const msg = String(err?.message ?? err ?? "");
+  if (/Discogs API error (5\d\d|429)/.test(msg)) return true;
+  if (/timeout|abort/i.test(msg)) return true;
+  if (/ECONN(RESET|REFUSED)|ENOTFOUND|EAI_AGAIN|fetch failed|socket hang up|network/i.test(msg)) return true;
+  return false;
+}
+
+// Generic retry wrapper. 3 attempts total with 2s/4s exponential
+// backoff between them. Bails immediately on non-transient errors
+// (4xx other than 429) so we don't burn requests against permanent
+// failures. Non-async errors fall through to the final throw.
+async function _withRetry<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  const delays = [2000, 4000];
+  let lastErr: any;
+  for (let attempt = 0; attempt < delays.length + 1; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastErr = err;
+      if (!_isTransientDiscogsError(err) || attempt === delays.length) {
+        throw err;
+      }
+      console.warn(`[genre-cache-warm] ${label} retry ${attempt + 1}/${delays.length} after ${err?.message ?? err}`);
+      await _sleep(delays[attempt]);
+    }
+  }
+  throw lastErr;
+}
+
 // Public: signal the in-flight worker for a genre (or all genres
 // when key is undefined) to wind down. Idempotent.
 export function requestGenreCacheWarmStop(genreKey?: string): void {
@@ -186,13 +220,13 @@ async function _runWorkerForGenre(
 
       let searchRes: any;
       try {
-        searchRes = await client.search("", {
+        searchRes = await _withRetry(`search ${year} p${page}`, () => client.search("", {
           type: "release",
           genre: genreKey,
           year: String(year),
           page,
           perPage: PER_PAGE,
-        });
+        }));
       } catch (err: any) {
         await recordGenreCacheWarmError(
           genreKey,
@@ -236,7 +270,7 @@ async function _runWorkerForGenre(
         }
         try {
           await _sleep(REQ_INTERVAL_MS);
-          const full = await client.getRelease(id) as any;
+          const full = await _withRetry(`release ${id}`, () => client.getRelease(id)) as any;
           await cacheRelease(id, "release", full as object);
           const title = String(full?.title ?? r?.title ?? "(untitled)");
           await recordGenreCacheWarmHit(genreKey, title, id);
