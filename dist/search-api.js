@@ -8978,7 +8978,8 @@ app.get("/api/admin/blues/export.pdf", async (req, res) => {
               notes, discogs_id, wikipedia_suffix,
               discogs_releases
          FROM blues_artists
-        ORDER BY lower(name) ASC, name ASC`);
+        ORDER BY jsonb_array_length(coalesce(discogs_releases, '[]'::jsonb)) DESC,
+                 lower(name) ASC, name ASC`);
         const rows = r.rows;
         res.setHeader("Content-Type", "application/pdf");
         res.setHeader("Content-Disposition", `attachment; filename="seadisco-artists-${new Date().toISOString().slice(0, 10)}.pdf"`);
@@ -8996,7 +8997,7 @@ app.get("/api/admin/blues/export.pdf", async (req, res) => {
         // ── Cover page ─────────────────────────────────────────────────
         doc.font("Times-Bold").fontSize(28).text("Blues Archive", { align: "center" });
         doc.moveDown(0.3);
-        doc.font("Times-Italic").fontSize(14).text("Artist profiles, sorted A-Z", { align: "center" });
+        doc.font("Times-Italic").fontSize(14).text("Artist profiles, sorted by release count", { align: "center" });
         doc.moveDown(2);
         doc.font("Times-Roman").fontSize(11)
             .text(`${rows.length.toLocaleString()} artists`, { align: "center" })
