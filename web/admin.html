@@ -11,13 +11,13 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💿</text></svg>">
   <link rel="preconnect" href="https://clerk.seadisco.com" crossorigin />
   <!--CLERK_SCRIPT_INJECT-->
-  <link rel="stylesheet" href="/style.css?v=20260530.1108" />
+  <link rel="stylesheet" href="/style.css?v=20260530.1238" />
 </head>
 <body>
 
 <header id="site-header"></header>
-<script defer src="/utils.js?v=20260530.1108"></script>
-<script defer src="/shared.js?v=20260530.1108"></script>
+<script defer src="/utils.js?v=20260530.1238"></script>
+<script defer src="/shared.js?v=20260530.1238"></script>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedHeader({ iconNav: true }));</script>
 
 <main>
@@ -316,8 +316,8 @@
   <button id="lightbox-next" onclick="lightboxStep(event,1)">&#8594;</button>
   <div id="lightbox-counter"></div>
 </div>
-<script defer src="/modal.js?v=20260530.1108"></script>
-<script defer src="/blues-admin.js?v=20260530.1108"></script>
+<script defer src="/modal.js?v=20260530.1238"></script>
+<script defer src="/blues-admin.js?v=20260530.1238"></script>
 
 <footer></footer>
 <script>document.addEventListener("DOMContentLoaded", () => renderSharedFooter());</script>
@@ -1068,7 +1068,13 @@ async function loadGenreCacheWarm() {
             <div>
               <div style="color:var(--muted)">Cursor</div>
               <div style="color:var(--text);font-weight:600">${r.current_year} · p${r.current_page}</div>
-              <div style="color:var(--muted);font-size:0.7rem">${r.start_year}–${r.end_year}</div>
+              <div style="color:var(--muted);font-size:0.7rem">${r.start_year}–${
+                // Worker auto-extends the cap to currentYear, so the
+                // label reads "1900 – present" once we've passed the
+                // stored end_year. Avoids the misleading "1900-2100"
+                // when the stored sentinel happens to be 2100.
+                Number(r.end_year) >= new Date().getFullYear() ? "present" : r.end_year
+              }</div>
             </div>
             <div>
               <div style="color:var(--muted)">Cycle #${r.cycle_count}</div>
