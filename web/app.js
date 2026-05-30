@@ -336,6 +336,37 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+// ── Global spacebar → play/pause the mini-player ──────────────────────
+// Hijacks bare-space keydown ONLY when:
+//   - the mini-player is active (engine set OR idle-queue mode) — so
+//     space still scrolls the page when no media is loaded
+//   - no modifiers are held (ctrl/cmd/alt/shift + space stays free)
+//   - focus isn't on a form control, a button, a link, or an
+//     editable element — keeps typing/forms/native button activation
+//     intact (the user's "will this fuck up forms?" guardrail)
+// Routes through playerTogglePause() so the YT / LOC / idle-queue
+// branches stay identical to the mini-player's ▶/⏸ button.
+document.addEventListener("keydown", (e) => {
+  if (e.key !== " " && e.code !== "Space") return;
+  if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return;
+  const t = e.target || document.activeElement;
+  if (t) {
+    const tag = t.tagName;
+    if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    if (tag === "BUTTON" || tag === "A") return;
+    if (t.isContentEditable) return;
+    if (t.getAttribute && t.getAttribute("role") === "button") return;
+  }
+  const bar = document.getElementById("mini-player");
+  const isIdle = bar?.classList.contains("idle-queue");
+  const engine = window._currentEngine;
+  if (!engine && !isIdle) return; // nothing to toggle — let space scroll
+  if (typeof playerTogglePause === "function") {
+    e.preventDefault();
+    playerTogglePause();
+  }
+});
+
 // ── Per-field × clear button ────────────────────────────────────────────
 // Wrap each text input in a relative span and append a small × button
 // that appears only when the input has text. Click clears the input,
