@@ -219,6 +219,64 @@ async function _runWorkerForGenre(genreKey, adminClerkId) {
         _stopRequested.delete(genreKey);
     }
 }
+// One scheduler-tick body, shared by the auto setInterval and the
+// "Start now" endpoint so a manual kick doesn't wait up to 60s for
+// the next minute boundary. When forceGenreKey is passed, the
+// rotation pick is bypassed — used by the Blues "Start now" button
+// so blues runs *now*, not whichever genre the day-of-year points at.
+async function _tickOnce(adminClerkId, forceGenreKey) {
+    try {
+        const rows = await listAllGenreCacheWarmStates();
+        if (!rows.length)
+            return;
+        const target = forceGenreKey
+            ? rows.find(r => r.genre_key === forceGenreKey) ?? null
+            : pickTodaysGenre(rows);
+        if (!target)
+            return;
+        if (_runningGenres.has(target.genre_key))
+            return;
+        const wantToRun = (target.manual_override === true) ||
+            (target.enabled === true && _inWindowPacific());
+        if (!wantToRun)
+            return;
+        if (target.running) {
+            const startedMs = target.started_at ? new Date(target.started_at).getTime() : 0;
+            if (Date.now() - startedMs > 10 * 60 * 1000) {
+                await releaseGenreCacheWarmRun(target.genre_key);
+            }
+            else {
+                return;
+            }
+        }
+        const claimed = await tryClaimGenreCacheWarmRun(target.genre_key);
+        if (!claimed)
+            return;
+        _runningGenres.add(target.genre_key);
+        _runWorkerForGenre(target.genre_key, adminClerkId).catch(async (err) => {
+            console.error("[genre-cache-warm] worker crashed:", err);
+            await recordGenreCacheWarmError(target.genre_key, `worker crash: ${err?.message ?? String(err)}`);
+            await releaseGenreCacheWarmRun(target.genre_key);
+            _runningGenres.delete(target.genre_key);
+        });
+    }
+    catch (err) {
+        console.error("[genre-cache-warm] tick error:", err);
+    }
+}
+// Remember the adminClerkId so kickGenreCacheWarmNow() doesn't
+// need every route to re-thread it through.
+let _adminClerkIdForScheduler = null;
+// Public: kick the worker for a specific genre immediately. The
+// admin Start endpoint calls this so the user sees RUNNING flip
+// within milliseconds instead of waiting up to 60s for the next
+// setInterval tick. Idempotent — re-entry is gated by both the in-
+// memory _runningGenres set and the DB run-lock.
+export async function kickGenreCacheWarmNow(genreKey) {
+    if (!_adminClerkIdForScheduler)
+        return;
+    await _tickOnce(_adminClerkIdForScheduler, genreKey);
+}
 // Scheduler - called from app startup. Ticks every minute, picks
 // today's genre, decides whether to launch a worker for it.
 export function startGenreCacheWarmScheduler(adminClerkId) {
@@ -226,47 +284,10 @@ export function startGenreCacheWarmScheduler(adminClerkId) {
         console.warn("[genre-cache-warm] no ADMIN_CLERK_ID set - scheduler will not run");
         return;
     }
+    _adminClerkIdForScheduler = adminClerkId;
     // At boot: clear any stale running locks from a crashed restart.
     releaseAllStaleGenreCacheWarmRuns(10).catch(() => { });
-    const tick = async () => {
-        try {
-            const rows = await listAllGenreCacheWarmStates();
-            if (!rows.length)
-                return;
-            const target = pickTodaysGenre(rows);
-            if (!target)
-                return;
-            if (_runningGenres.has(target.genre_key))
-                return;
-            const wantToRun = (target.manual_override === true) ||
-                (target.enabled === true && _inWindowPacific());
-            if (!wantToRun)
-                return;
-            // Stale-lock recovery for this specific row.
-            if (target.running) {
-                const startedMs = target.started_at ? new Date(target.started_at).getTime() : 0;
-                if (Date.now() - startedMs > 10 * 60 * 1000) {
-                    await releaseGenreCacheWarmRun(target.genre_key);
-                }
-                else {
-                    return;
-                }
-            }
-            const claimed = await tryClaimGenreCacheWarmRun(target.genre_key);
-            if (!claimed)
-                return;
-            _runningGenres.add(target.genre_key);
-            _runWorkerForGenre(target.genre_key, adminClerkId).catch(async (err) => {
-                console.error("[genre-cache-warm] worker crashed:", err);
-                await recordGenreCacheWarmError(target.genre_key, `worker crash: ${err?.message ?? String(err)}`);
-                await releaseGenreCacheWarmRun(target.genre_key);
-                _runningGenres.delete(target.genre_key);
-            });
-        }
-        catch (err) {
-            console.error("[genre-cache-warm] tick error:", err);
-        }
-    };
+    const tick = () => _tickOnce(adminClerkId);
     setTimeout(tick, 15_000);
     setInterval(tick, 60_000);
 }
