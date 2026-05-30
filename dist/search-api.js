@@ -8,8 +8,9 @@ import { createRemoteJWKSet, jwtVerify } from "jose";
 import { fileURLToPath } from "url";
 import path from "path";
 import { DiscogsClient, signOAuthRequest } from "./discogs-client.js";
-import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks } from "./db.js";
+import { getPool, initDb, getAllUsersForSync, getAllUsersSyncStatus, getActiveUserCount, touchUserActivity, isUserHibernated, reactivateUser, hibernateInactiveUsers, getUserToken, setUserToken, deleteUserData, saveFeedback, getFeedback, deleteFeedback, getDiscogsUsername, getClerkUserIdByUsername, setDiscogsUsername, getSyncStatus, updateSyncProgress, upsertCollectionItems, upsertCollectionFolders, upsertWantlistItems, getCollectionPage, getWantlistPage, getAllCollectionItems, getAllWantlistItems, getCollectionIds, getWantlistIds, getCollectionFacets, getWantlistFacets, getCollectionFolderList, updateCollectionSyncedAt, updateWantlistSyncedAt, getWantedItems, resetAllSyncingStatuses, pruneAllStaleData, upsertInventoryItems, updateInventorySyncedAt, upsertUserLists, getInventoryPage, getUserListsList, logApiRequest, getApiRequestLog, getApiRequestStats, getApiHealth, getAdminOverview, getMediaStats, getDiscogsRateWindow, getJobHealth, startJobRun, finishJobRun, getJobLastRuns, getRecentJobRuns, getUserCollectionStats, getCachedRelease, cacheRelease, storeOAuthRequestToken, getOAuthRequestToken, deleteOAuthRequestToken, pruneOAuthRequestTokens, setOAuthCredentials, getOAuthCredentials, clearOAuthCredentials, setDiscogsProfile, getDiscogsProfile, deleteCollectionItem, deleteWantlistItem, updateCollectionRating, updateCollectionFolder, getCollectionInstance, getCollectionInstances, getCollectionMultiInstanceCounts, getCollectionMasterCounts, getWantlistMasterCounts, updateCollectionNotes, updateWantlistNotes, getWantlistItem, upsertRecentView, getRecentViews, deleteRecentView, clearRecentViews, saveLocItem, getLocSaves, deleteLocSave, getLocSaveIds, saveArchiveItem, getArchiveSaves, deleteArchiveSave, getArchiveSaveIds, saveYoutubeVideo, getYoutubeSaves, deleteYoutubeSave, getYoutubeSaveIds, getUserPrefs, setUserPrefs, getTrackYtOverrides, suggestTrackYtOverride, suggestTrackYtOverridesBatch, deleteTrackYtOverride, listAllTrackYtOverrides, getVideoStatusBatch, getMostContributedAlbums, getUserSubmittedAlbums, getFeedRandomAlbums, getCacheEnrichmentBatch, getTrackYtOverridesBatch, getUserTasteTuples, getUserTasteSignature, getUserSuggestionEngagement, getUserLibraryMasterIds, getUserPersonalSuggestions, getDbAdminTableSummary, getPersonalSuggestionsStats, dismissPersonalSuggestion, getDismissedSuggestionKeys, getYoutubeSearchCache, setYoutubeSearchCache, getYoutubeSearchCacheTimestamp, getArchiveSearchCache, setArchiveSearchCache, logUserSearch, logUserPlay, getUserBehaviorStats, reportYoutubeVideoUnavailable, getUnavailableYoutubeVideoIds, listYoutubeVideoUnavailable, clearYoutubeVideoUnavailable, getAiExclusionTitles, saveWikiArticle, getWikiSaves, deleteWikiSave, getWikiSaveIds, saveChronAmItem, getChronAmSaves, deleteChronAmSave, getChronAmSaveIds, getChronAmSearchCache, getChronAmSearchCacheStale, setChronAmSearchCache, getPlayQueue, appendPlayQueue, removeFromPlayQueue, clearPlayQueue, reorderPlayQueue, createPlaylist, listPlaylists, getPlaylist, renamePlaylist, deletePlaylist, replacePlaylistItems, getUncachedSuggestionRefs, mergeUserPersonalSuggestions, getRecentlyClickedSuggestionKeys, enqueueCacheFetches, dequeueCacheFetches, markCacheFetchSucceeded, markCacheFetchFailed, getCacheFetchQueueStats, renameCollectionFolder, deleteCollectionFolder, moveAllCollectionItemsBetweenFolders, getFolderContents, upsertPriceCache, appendPriceHistory, getSavedSearches, saveSavedSearch, deleteSavedSearch, pruneWantlistItems, pruneCollectionItems, getFavoriteIds, getFavorites, addFavorite, removeFavorite, getAllFavoriteCounts, upsertListItems, getListItems, getListMembership, getInventoryIds, getRandomRecords, getDefaultAddFolderId, setDefaultAddFolderId, getInventoryItem, deleteInventoryItem, getInventoryListingIdsByRelease, upsertUserOrders, updateOrdersSyncedAt, getOrdersCount, getUserOrdersPage, getUserOrder, upsertOrderMessages, getOrderMessages, markOrderViewed, getUnreadOrdersCount, getTableRowCounts, purgeNonAdminUserData, listBluesArtists, getBluesArtist, deleteBluesArtist, deleteBluesArtistAndLyrics, insertBluesArtist, updateBluesArtist, getBluesStats, deleteAllBluesArtists, getBluesArtistIdentifiers, upsertBluesArtistByDiscogsId, upsertLyric, getLyricTitlesAlreadyScraped, getLyricById, listLyrics, getLyricTunings, getLyricCount, importLyricsArtistsToBluesDb, listBluesArchive, listBluesArchiveReleases, getBluesArchiveArtist, updateLyricFields, mergeBluesArtists, getBluesArchiveStats, getRecentBluesEdits, reassignLyrics, promoteOrphanLyricToArtist, normalizeEmptyTuningsToStandard, getOrCreateBluesArtistByName, relinkOrphanLyricsToArtists, createLyric, listLyricFavoriteIds, listLyricFavoritesWithDetails, addLyricFavorite, removeLyricFavorite, listSetlists, getSetlist, createSetlist, updateSetlist, deleteSetlist, addSetlistItem, removeSetlistItem, reorderSetlistItems, resolveLyricFirstReleaseYearsCheap, addBluesArtistLink, removeBluesArtistLink, listBluesArtistLinks, listAllGenreCacheWarmStates, getGenreCacheWarmState, updateGenreCacheWarmState, resetGenreCacheWarmCycle } from "./db.js";
 import { seedBluesArtistsFromWikidata, seedBluesArtistsFromDiscogs, enrichBluesFromMusicBrainz, enrichBluesFromWikipedia, enrichBluesFromDiscogs, enrichBluesArtistFromYouTube, enrichBluesFromDiscogsArtists, previewBluesArtistFromDiscogs, resolveLyricFirstReleaseYearsDiscogs } from "./blues-db.js";
+import { startGenreCacheWarmScheduler, requestGenreCacheWarmStop } from "./genre-cache-warm.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const anthropicKey = process.env.ANTHROPIC_API_KEY ?? "";
 // Discogs OAuth 1.0a consumer credentials (register at discogs.com/settings/developers)
@@ -9372,6 +9373,144 @@ app.delete("/api/admin/blues/:id(\\d+)/links/:otherId(\\d+)", async (req, res) =
         res.status(500).json({ error: err?.message ?? String(err) });
     }
 });
+// ── Genre cache-warm cron: status + manual controls (per-genre) ───
+// All endpoints operate on a single genre row keyed by ?genre= for
+// stop/reset/start/config; status returns all genre rows plus the
+// release_cache total for the admin UI's "N total cached" tile.
+app.get("/api/admin/genre-cache-warm/status", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    try {
+        const rows = await listAllGenreCacheWarmStates();
+        const totalR = await getPool().query(`SELECT COUNT(*)::int AS n FROM release_cache WHERE type = 'release'`);
+        res.json({
+            rows,
+            release_cache_total: totalR.rows[0]?.n ?? 0,
+        });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// Helper: pull + validate the ?genre= query string against the
+// known rows so we never end up writing to a phantom genre key.
+async function _getGenreParam(req, res) {
+    const key = String(req.query.genre ?? req.body?.genre ?? "").trim();
+    if (!key) {
+        res.status(400).json({ error: "genre query param required" });
+        return null;
+    }
+    const row = await getGenreCacheWarmState(key);
+    if (!row) {
+        res.status(404).json({ error: `unknown genre: ${key}` });
+        return null;
+    }
+    return key;
+}
+// Manual start — sets manual_override=true on the selected genre
+// so the next tick picks it regardless of the time window.
+app.post("/api/admin/genre-cache-warm/start", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const key = await _getGenreParam(req, res);
+    if (!key)
+        return;
+    try {
+        await updateGenreCacheWarmState(key, { manual_override: true, enabled: true });
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// Stop the in-flight run for a genre.
+app.post("/api/admin/genre-cache-warm/stop", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const key = await _getGenreParam(req, res);
+    if (!key)
+        return;
+    try {
+        await updateGenreCacheWarmState(key, { manual_override: false });
+        requestGenreCacheWarmStop(key);
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// Toggle per-genre auto-run. Doesn't stop a current run.
+app.post("/api/admin/genre-cache-warm/toggle-auto", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const key = await _getGenreParam(req, res);
+    if (!key)
+        return;
+    try {
+        const state = await getGenreCacheWarmState(key);
+        const next = !(state?.enabled);
+        await updateGenreCacheWarmState(key, { enabled: next });
+        res.json({ ok: true, enabled: next });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// Reset cursor to start_year + zero cycle counters for a genre.
+app.post("/api/admin/genre-cache-warm/reset", async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const key = await _getGenreParam(req, res);
+    if (!key)
+        return;
+    try {
+        await resetGenreCacheWarmCycle(key);
+        res.json({ ok: true });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
+// Per-genre config edits.
+app.post("/api/admin/genre-cache-warm/config", express.json({ limit: "2kb" }), async (req, res) => {
+    if (!await requireAdmin(req, res))
+        return;
+    const key = await _getGenreParam(req, res);
+    if (!key)
+        return;
+    const body = req.body ?? {};
+    const patch = {};
+    const num = (v) => {
+        const n = parseInt(String(v), 10);
+        return Number.isFinite(n) ? n : null;
+    };
+    const startYear = num(body.start_year);
+    const endYear = num(body.end_year);
+    const curYear = num(body.current_year);
+    const curPage = num(body.current_page);
+    const rotationOrder = num(body.rotation_order);
+    if (startYear != null && startYear >= 1900 && startYear <= 2100)
+        patch.start_year = startYear;
+    if (endYear != null && endYear >= 1900 && endYear <= 2100)
+        patch.end_year = endYear;
+    if (curYear != null && curYear >= 1900 && curYear <= 2100)
+        patch.current_year = curYear;
+    if (curPage != null && curPage >= 1)
+        patch.current_page = curPage;
+    if (rotationOrder != null && rotationOrder >= 1 && rotationOrder <= 100)
+        patch.rotation_order = rotationOrder;
+    if (!Object.keys(patch).length) {
+        res.status(400).json({ error: "no valid fields" });
+        return;
+    }
+    try {
+        await updateGenreCacheWarmState(key, patch);
+        res.json({ ok: true, patch });
+    }
+    catch (err) {
+        res.status(500).json({ error: err?.message ?? String(err) });
+    }
+});
 // Trigger the Wikidata seed. Returns a summary of fetched/upserted/errors.
 // Idempotent — re-running just refreshes the Wikidata-sourced fields and
 // leaves manual edits the admin made elsewhere alone.
@@ -13386,5 +13525,14 @@ app.listen(PORT, "0.0.0.0", async () => {
         }
         startDailySyncSchedule();
         startExtrasSyncSchedule();
+        // Nightly 1am–6am Pacific cron that warms release_cache for
+        // blues releases by year. Idles when out-of-window or disabled
+        // in the admin UI. Persists progress so a restart resumes.
+        try {
+            startGenreCacheWarmScheduler(ADMIN_CLERK_ID);
+        }
+        catch (e) {
+            console.error("[startup] genre-cache-warm scheduler failed:", e);
+        }
     }
 });
